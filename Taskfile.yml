@@ -33,6 +33,7 @@ tasks:
       DEPS: >-
         age
         ansible
+        awscliv2
         direnv
         fluxcd/tap/flux
         go-task/tap/go-task
