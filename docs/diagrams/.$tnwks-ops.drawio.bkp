@@ -1,0 +1,64 @@
+<mxfile host="Electron" modified="2023-05-05T15:33:44.562Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/21.2.8 Chrome/112.0.5615.165 Electron/24.2.0 Safari/537.36" etag="nvrJ9nKHmitEWmv3Y8HX" version="21.2.8" type="device">
+  <diagram name="Page-1" id="zYHAKIV0Hsc15jxZWZTD">
+    <mxGraphModel dx="954" dy="727" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="QHseUDQ297n-9BP13_j7-1" value="Internet" style="image;aspect=fixed;perimeter=ellipsePerimeter;html=1;align=center;shadow=0;dashed=0;spacingTop=3;image=img/lib/active_directory/internet_cloud.svg;" vertex="1" parent="1">
+          <mxGeometry x="120" y="160" width="126.98" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-2" value="ISP Modem" style="image;aspect=fixed;perimeter=ellipsePerimeter;html=1;align=center;shadow=0;dashed=0;spacingTop=3;image=img/lib/active_directory/modem.svg;" vertex="1" parent="1">
+          <mxGeometry x="158" y="330" width="50" height="41.5" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-5" value="Unifi AP1" style="html=1;strokeWidth=1;shadow=0;dashed=0;shape=mxgraph.ios7.misc.wifi;fillColor=#007AFF;strokeColor=none;buttonText=;strokeColor2=#222222;fontColor=#222222;fontSize=12;verticalLabelPosition=bottom;verticalAlign=top;align=center;sketch=0;" vertex="1" parent="1">
+          <mxGeometry x="620" y="310" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-6" value="Unifi AP2" style="html=1;strokeWidth=1;shadow=0;dashed=0;shape=mxgraph.ios7.misc.wifi;fillColor=#007AFF;strokeColor=none;buttonText=;strokeColor2=#222222;fontColor=#222222;fontSize=12;verticalLabelPosition=bottom;verticalAlign=top;align=center;sketch=0;" vertex="1" parent="1">
+          <mxGeometry x="620" y="380" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-7" value="Unifi AP3" style="html=1;strokeWidth=1;shadow=0;dashed=0;shape=mxgraph.ios7.misc.wifi;fillColor=#007AFF;strokeColor=none;buttonText=;strokeColor2=#222222;fontColor=#222222;fontSize=12;verticalLabelPosition=bottom;verticalAlign=top;align=center;sketch=0;" vertex="1" parent="1">
+          <mxGeometry x="620" y="460" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-8" value="HP 1GbE Switch" style="image;aspect=fixed;perimeter=ellipsePerimeter;html=1;align=center;shadow=0;dashed=0;spacingTop=3;image=img/lib/active_directory/switch.svg;" vertex="1" parent="1">
+          <mxGeometry x="340" y="322" width="68" height="68" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-10" value="Aruba 1GbE Switch" style="image;aspect=fixed;perimeter=ellipsePerimeter;html=1;align=center;shadow=0;dashed=0;spacingTop=3;image=img/lib/active_directory/switch.svg;" vertex="1" parent="1">
+          <mxGeometry x="450" y="322" width="68" height="68" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-11" value="HP DL360p 1" style="verticalLabelPosition=bottom;html=1;verticalAlign=top;strokeWidth=1;align=center;outlineConnect=0;dashed=0;outlineConnect=0;shape=mxgraph.aws3d.dataServer;strokeColor=#5E5E5E;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="480" y="510" width="58.02" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-12" value="HP DL360p 3" style="verticalLabelPosition=bottom;html=1;verticalAlign=top;strokeWidth=1;align=center;outlineConnect=0;dashed=0;outlineConnect=0;shape=mxgraph.aws3d.dataServer;strokeColor=#5E5E5E;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="590" y="600" width="58.02" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-13" value="HP DL360p 2" style="verticalLabelPosition=bottom;html=1;verticalAlign=top;strokeWidth=1;align=center;outlineConnect=0;dashed=0;outlineConnect=0;shape=mxgraph.aws3d.dataServer;strokeColor=#5E5E5E;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="480" y="600" width="58.02" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-15" value="FreeNAS NAS" style="verticalLabelPosition=bottom;html=1;verticalAlign=top;strokeWidth=1;align=center;outlineConnect=0;dashed=0;outlineConnect=0;shape=mxgraph.aws3d.dataServer;strokeColor=#b85450;aspect=fixed;fillColor=#f8cecc;" vertex="1" parent="1">
+          <mxGeometry x="349.98" y="513" width="58.02" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-16" value="EdgeRouter Lite" style="image;aspect=fixed;perimeter=ellipsePerimeter;html=1;align=center;shadow=0;dashed=0;spacingTop=3;image=img/lib/active_directory/router.svg;" vertex="1" parent="1">
+          <mxGeometry x="60" y="420" width="65.79" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-17" value="UDM Pro" style="image;aspect=fixed;perimeter=ellipsePerimeter;html=1;align=center;shadow=0;dashed=0;spacingTop=3;image=img/lib/active_directory/router.svg;" vertex="1" parent="1">
+          <mxGeometry x="170" y="420" width="65.79" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-18" value="EdgePoint R6" style="image;aspect=fixed;perimeter=ellipsePerimeter;html=1;align=center;shadow=0;dashed=0;spacingTop=3;image=img/lib/active_directory/router.svg;" vertex="1" parent="1">
+          <mxGeometry x="60" y="520" width="65.79" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-19" value="LiteAP" style="outlineConnect=0;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;shape=mxgraph.aws3.generic_database;fillColor=#7D7C7C;gradientColor=none;" vertex="1" parent="1">
+          <mxGeometry x="200.99" y="506" width="20" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-20" value="LiteBeam 5AC" style="shape=mxgraph.cisco.wireless.antenna;html=1;pointerEvents=1;dashed=0;fillColor=#036897;strokeColor=#ffffff;strokeWidth=2;verticalLabelPosition=bottom;verticalAlign=top;align=center;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="160" y="630" width="40.99" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-21" value="airCube Wifi" style="html=1;strokeWidth=1;shadow=0;dashed=0;shape=mxgraph.ios7.misc.wifi;fillColor=#007AFF;strokeColor=none;buttonText=;strokeColor2=#222222;fontColor=#222222;fontSize=12;verticalLabelPosition=bottom;verticalAlign=top;align=center;sketch=0;" vertex="1" parent="1">
+          <mxGeometry x="260" y="650" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="QHseUDQ297n-9BP13_j7-22" value="PoE Camera x5" style="image;points=[];aspect=fixed;html=1;align=center;shadow=0;dashed=0;image=img/lib/allied_telesis/security/Surveillance_Camera_Ceiling.svg;" vertex="1" parent="1">
+          <mxGeometry x="490.41" y="204.6" width="47.71" height="45.4" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
