@@ -9,12 +9,15 @@ _... managed by Flux, Renovate, GitHub Actions, Terraform, Ansible, and Powershe
 <div align="center">
 
 [![Kubernetes](https://img.shields.io/badge/v1.26-blue?style=for-the-badge&logo=kubernetes&logoColor=white)](https://www.talos.dev/)
-[![Renovate](https://img.shields.io/github/actions/workflow/status/bjw-s/home-ops/schedule-renovate.yaml?branch=main&label=&logo=renovatebot&style=for-the-badge&color=blue)](https://github.com/bjw-s/home-ops/actions/workflows/schedule-renovate.yaml)
+[![Renovate](https://img.shields.io/github/actions/workflow/status/it3e/tnwks-ops/schedule-renovate.yaml?branch=main&label=&logo=renovatebot&style=for-the-badge&color=blue)](https://github.com/it3e/tnwks-ops/actions/workflows/schedule-renovate.yaml)
 
 </div>
 <br><br>
 
-👋 Welcome to my Home Operations repository, **tnwks** /tee-networks/. This is a mono repository for my home infrastructure that has a primary goal of housing the IaC for every single piece that is possible.  I try and build my infrastructure as close to a best-practice, modern, production environment as possible while keeping costs relatively low.
+👋 Welcome to my Home Operations repository, **tnwks** /tee-networks/. This is a mono repository that serves as the foundation for my home infrastructure.
+
+My primary goal is to have every piece of my infrastructure written as code, with preferably the least amount of effort as possible to rebuild from scratch.  I strive to build my infrastructure as close to a modern, best-practice production environment as possible, while still keeping costs realistic for the performance needed (wanted?).
+
 
  I try to adhere to Infrastructure as Code (IaC) and GitOps practices using the tools like [Ansible](https://www.ansible.com/), [Terraform](https://www.terraform.io/), [Kubernetes](https://kubernetes.io/), [Flux](https://github.com/fluxcd/flux2), [Renovate](https://github.com/renovatebot/renovate) and [GitHub Actions](https://github.com/features/actions).
 
