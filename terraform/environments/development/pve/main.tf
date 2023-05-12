@@ -6,16 +6,3 @@ terraform {
     }
   }
 }
-
-locals {
-  pve_vms = [
-    "sce-ubu01",
-    "sce-ubu02",
-    "sce-ubu03",
-  ]
-}
-
-module "pve_vm" {
-  for_each         = toset(local.pve_cms)
-  source           = "./modules/proxmox"
-}

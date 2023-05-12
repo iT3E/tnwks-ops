@@ -1,14 +1,15 @@
-resource "proxmox_vm_qemu" "talos-control-plane-node-0" {
-    name        = "${var.cluster_name}-controlplane-0"
+resource "proxmox_vm_qemu" "proxmox_vms" {
+    name        = var.vm_name
     iso         = var.iso_image_location
-    full_clone  = false
+    hagroup     = var.ha_group
+    #full_clone  = false
     target_node = "sce-pve-cl01"
     agent       = var.qemu_guest_agent
-    vmid        = "220"
-    qemu_os     = "l26" # Linux kernel type
-    memory      = "8192"
-    cores       = 4
-    sockets     = 1
+    vmid        = "0"
+    qemu_os     = var.qemu_os
+    memory      = var.vm_memory
+    cores       = var.num_cores
+    sockets     = var.num_sockets
     numa        = true
     hotplug     = "network,disk,usb"
     network {
