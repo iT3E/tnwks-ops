@@ -2,16 +2,20 @@ variable "cluster_name" {
     default = "homelab-talos-1"
 
 }
+
+variable "vm_name" {
+    description = "PVE VM name"
+}
+
 variable "worker_node_count" {
     description = "Number of worker nodes for the cluster."
     type = number
     default = 5
 }
 
-variable "worker_node_memory" {
-    description = "The amount of memory in MiB to give the worker nodes."
+variable "vm_memory" {
+    description = "The amount of memory in MiB to give the VM."
     type = number
-    default = 32768
 }
 
 variable "control_plane_node_count" {
@@ -24,11 +28,6 @@ variable "control_plane_node_count" {
     }
 }
 
-variable "control_plane_node_memory" {
-    description = "The amount of memory in MiB to give the control plane nodes."
-    type = number
-    default = 8192
-}
 
 variable "iso_image_location" {
     description = "The location of the Talos iso image on the proxmox host (<storage pool>:<content type>/<file name>.iso)."
@@ -98,4 +97,33 @@ variable "proxmox_debug" {
     description = "If the debug flag should be set when interacting with the Proxmox API."
     type = bool
     default = false
+}
+
+variable "ha_group" {
+    description = "Sets the name of the HA Group."
+}
+
+variable "qemu_os" {
+    description = "The type of OS in the guest.  Set to properly allow Proxmox to enable optimizations for the appropriate guest OS."
+    allowed_values = ["l26", "win8", "win10", "win11"]
+      # other unspecified OS
+      # wxp Microsoft Windows XP
+      # w2k Microsoft Windows 2000
+      # w2k3 Microsoft Windows 2003
+      # w2k8 Microsoft Windows 2008
+      # wvista Microsoft Windows Vista
+      # win7 Microsoft Windows 7
+      # win8 Microsoft Windows 8/2012/2012r2
+      # win10 Microsoft Windows 10/2016/2019
+      # win11 Microsoft Windows 11/2022
+      # l24 Linux 2.4 Kernel
+      # l26 Linux 2.6 - 6.X Kernel
+}
+
+variable "num_cores" {
+    description = "Sets the number of VM cores."
+}
+
+variable "num_sockets" {
+    description = "Sets the number of VM sockets."
 }
