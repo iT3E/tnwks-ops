@@ -1,8 +1,6 @@
 locals {
   pve_vms = [
-    "sce-uk8sm01",
-    "sce-uk8sm02",
-    "sce-uk8sm03",
+    "sce-opns01"
   ]
 }
 
