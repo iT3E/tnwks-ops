@@ -32,3 +32,14 @@ resource "proxmox_vm_qemu" "proxmox_vm" {
     }
   }
 }
+
+  cloudinit {
+    network {
+      config = <<-EOF
+        version: 2
+        ethernets:
+          net0:
+            dhcp4: true
+      EOF
+    }
+  }
