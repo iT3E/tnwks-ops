@@ -3,9 +3,8 @@ resource "proxmox_vm_qemu" "proxmox_vm" {
   iso         = var.iso_image_location
   hagroup     = var.ha_group
   #full_clone  = false
-  target_node = "sce-pve-cl01"
+  target_node = "sce-pve01"
   agent       = var.qemu_guest_agent
-  vmid        = "0"
   qemu_os     = var.qemu_os
   memory      = var.vm_memory
   cores       = var.num_cores
