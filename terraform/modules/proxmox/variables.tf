@@ -127,3 +127,23 @@ variable "num_cores" {
 variable "num_sockets" {
     description = "Sets the number of VM sockets."
 }
+
+variable "vm_nics" {
+  description = "The list of NIC configurations for the VM"
+  type = list(object({
+    model = string
+    bridge = string
+    tag = number
+  }))
+}
+
+variable "vm_disks" {
+  description = "The list of disk configurations for the VM"
+  type        = list(object({
+    size        = number
+    storage     = string
+    format      = string
+    interface   = string
+    cache       = string
+  }))
+}
