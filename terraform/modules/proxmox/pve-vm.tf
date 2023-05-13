@@ -1,4 +1,4 @@
-resource "proxmox_vm_qemu" "proxmox_vms" {
+resource "proxmox_vm_qemu" "proxmox_vm" {
   name        = var.vm_name
   iso         = var.iso_image_location
   hagroup     = var.ha_group

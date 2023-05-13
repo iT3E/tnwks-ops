@@ -1,8 +1,8 @@
 locals {
   pve_vms = [
-    "sce-uk8s01",
-    "sce-uk8s02",
-    "sce-uk8s03",
+    "sce-uk8sw01",
+    "sce-uk8sw02",
+    "sce-uk8sw03",
   ]
 }
 
@@ -11,7 +11,7 @@ module "pve_vm" {
   source               = "./modules/proxmox"
   vm_name              = each.value
   iso_image_location   = "ceph:iso/ubuntu20.1"
-  ha_group             = "ha_group1"
+  ha_group             = "ha_group${index(local.pve_vms, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
   network_interfaces   = [
     {
       model        = "virtio"
