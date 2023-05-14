@@ -11,6 +11,8 @@ resource "proxmox_vm_qemu" "proxmox_vm" {
   sockets     = var.num_sockets
   numa        = true
   hotplug     = "network,disk,usb"
+  sshkey      = var.vm_sshkey
+  ipconfig0   = var.vm_ipconfig0
 
   dynamic "vm_nics" {
     for_each = var.vm_nics
@@ -33,13 +35,3 @@ resource "proxmox_vm_qemu" "proxmox_vm" {
   }
 }
 
-  cloudinit {
-    network {
-      config = <<-EOF
-        version: 2
-        ethernets:
-          net0:
-            dhcp4: true
-      EOF
-    }
-  }
