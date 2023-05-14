@@ -147,3 +147,13 @@ variable "vm_disks" {
     cache       = string
   }))
 }
+
+variable "vm_sshkey" {
+  description = "Public SSH key that is added to VMs using default cloudinit configuration"
+  default = "add key and configure SOPS here!"
+}
+
+variable "vm_ipconfig0" {
+  description = "IP Address configured with default cloudinit configuration"
+  default = "ip=dhcp"
+}
