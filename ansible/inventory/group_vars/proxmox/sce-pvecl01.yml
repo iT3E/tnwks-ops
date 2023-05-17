@@ -1,0 +1,33 @@
+---
+pve_group: pvecl01
+pve_watchdog: ipmi
+pve_ssl_private_key: "{{ lookup('file', pve_group + '/' + inventory_hostname + '.key') }}"
+pve_ssl_certificate: "{{ lookup('file', pve_group + '/' + inventory_hostname + '.pem') }}"
+pve_cluster_enabled: yes
+pve_groups:
+  - name: ops
+    comment: Operations Team
+pve_users:
+  - name: admin1@pam
+    email: admin1@lab.local
+    firstname: Admin
+    lastname: User 1
+    groups: [ "ops" ]
+  - name: admin2@pam
+    email: admin2@lab.local
+    firstname: Admin
+    lastname: User 2
+    groups: [ "ops" ]
+pve_acls:
+  - path: /
+    roles: [ "Administrator" ]
+    groups: [ "ops" ]
+pve_storages:
+  - name: localdir
+    type: dir
+    content: [ "images", "iso", "backup" ]
+    path: /plop
+    maxfiles: 4
+pve_ssh_port: 22
+
+interfaces_template: "interfaces-{{ pve_group }}.j2"
