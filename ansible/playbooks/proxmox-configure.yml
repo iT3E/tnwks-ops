@@ -1,11 +1,11 @@
 ---
-- hosts: all
+- hosts: pvecl01
   become: True
   roles:
     - geerlingguy.ntp
 
 # Leave this out if you're not modifying networking through Ansible
-- hosts: pve01
+- hosts: pvecl01
   become: True
   serial: 1
   tasks:
@@ -30,7 +30,7 @@
           delay: 15
       when: _configure_interfaces is changed
 
-- hosts: pve01
+- hosts: pvecl01
   become: True
   roles:
     - lae.proxmox
