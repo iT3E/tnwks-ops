@@ -9,6 +9,7 @@ kubeconfig
 *.agekey
 *.pub
 *.key
+!ansible/inventory/group_vars/proxmox/files/*
 # Ansible
 xanmanning.k3s*
 # Terraform
