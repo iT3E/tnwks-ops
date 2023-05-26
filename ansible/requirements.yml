@@ -19,4 +19,4 @@ roles:
     version: v1.7.1
   - name: geerlingguy.ntp
     src: https://github.com/geerlingguy/ansible-role-ntp.git
-    version: v2.3.1
+    version: 2.3.1
