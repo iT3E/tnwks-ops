@@ -1,12 +1,4 @@
 ---
-- name: NTP Playbook
-  hosts: proxmox
-  become: true
-  roles:
-    - geerlingguy.ntp
-
-# Leave this out if you're not modifying networking through Ansible
-
 - name: Configure Network Playbook
   hosts: proxmox
   become: true
@@ -21,6 +13,8 @@
         src: "{{ interfaces_template }}"
         dest: /etc/network/interfaces
         mode: '0644'
+      # register: template_result
+      # changed_when: template_result.changed
       notify:
         - Run ifreload block
 
@@ -33,10 +27,3 @@
       ansible.builtin.wait_for_connection:
         delay: 15
       listen: Run ifreload block
-
-
-- name: PVE Config Playbook
-  hosts: proxmox
-  become: true
-  roles:
-    - lae.proxmox
