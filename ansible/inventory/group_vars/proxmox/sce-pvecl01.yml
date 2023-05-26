@@ -18,15 +18,15 @@ pve_acls:
     roles: [ "Administrator" ]
     groups: [ "ops" ]
 
-pve_storages:
-  - name: cephfs1
-    type: cephfs
-    content: [ "snippets", "vztmpl", "iso" ]
-    nodes: [ "lab-node01.local", "lab-node02.local" ]
-    monhost:
-      - 10.0.0.1
-      - 10.0.0.2
-      - 10.0.0.3
+# pve_storages:
+#   - name: cephfs1
+#     type: cephfs
+#     content: [ "snippets", "vztmpl", "iso" ]
+#     nodes: [ "lab-node01.local", "lab-node02.local" ]
+#     monhost:
+#       - 10.0.0.1
+#       - 10.0.0.2
+#       - 10.0.0.3
 
 pve_ssh_port: 22
 
@@ -52,22 +52,25 @@ pve_cluster_ha_groups:
 ##### Ceph Configuration #####
 
 pve_ceph_enabled: true
-pve_ceph_network: '172.10.0.0/24'
-pve_ceph_cluster_network: '172.10.1.0/24'
+pve_ceph_network: '10.15.15.0/24'
+pve_ceph_cluster_network: '10.15.15.0/24'
 pve_ceph_nodes: "ceph_nodes"
 pve_ceph_osds:
   # OSD with everything on the same device
-  - device: /dev/sdc
+  - device: /dev/sda
+    encrypted: true
+  - device: /dev/sdb
+    encrypted: true
   # OSD with block.db/WAL on another device
-  - device: /dev/sdd
-    block.db: /dev/sdb1
-  # encrypted OSD with everything on the same device
-  - device: /dev/sdc
-    encrypted: true
-  # encrypted OSD with block.db/WAL on another device
-  - device: /dev/sdd
-    block.db: /dev/sdb1
-    encrypted: true
+  # - device: /dev/sdd
+  #   block.db: /dev/sdb1
+  # # encrypted OSD with everything on the same device
+  # - device: /dev/sdc
+  #   encrypted: true
+  # # encrypted OSD with block.db/WAL on another device
+  # - device: /dev/sdd
+  #   block.db: /dev/sdb1
+  #   encrypted: true
 # Crush rules for different storage classes
 # By default 'type' is set to host, you can find valid types at
 # (https://docs.ceph.com/en/latest/rados/operations/crush-map/)
