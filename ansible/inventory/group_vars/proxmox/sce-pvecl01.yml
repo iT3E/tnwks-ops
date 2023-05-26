@@ -1,8 +1,8 @@
 ---
 pve_group: pvecl01
 pve_watchdog: ipmi
-pve_ssl_private_key: "{{ lookup('file', pve_group + '/' + inventory_hostname + '.key') }}"
-pve_ssl_certificate: "{{ lookup('file', pve_group + '/' + inventory_hostname + '.pem') }}"
+#pve_ssl_private_key: "{{ lookup('file', pve_group + '/' + inventory_hostname + '.key') }}"
+#pve_ssl_certificate: "{{ lookup('file', pve_group + '/' + inventory_hostname + '.pem') }}"
 pve_cluster_enabled: yes
 pve_groups:
   - name: ops
@@ -17,16 +17,6 @@ pve_acls:
   - path: /
     roles: [ "Administrator" ]
     groups: [ "ops" ]
-
-# pve_storages:
-#   - name: cephfs1
-#     type: cephfs
-#     content: [ "snippets", "vztmpl", "iso" ]
-#     nodes: [ "lab-node01.local", "lab-node02.local" ]
-#     monhost:
-#       - 10.0.0.1
-#       - 10.0.0.2
-#       - 10.0.0.3
 
 pve_ssh_port: 22
 
@@ -54,7 +44,6 @@ pve_cluster_ha_groups:
 pve_ceph_enabled: true
 pve_ceph_network: '10.15.15.0/24'
 pve_ceph_cluster_network: '10.15.15.0/24'
-pve_ceph_nodes: "ceph_nodes"
 pve_ceph_osds:
   # OSD with everything on the same device
   - device: /dev/sda
@@ -76,47 +65,59 @@ pve_ceph_osds:
 # (https://docs.ceph.com/en/latest/rados/operations/crush-map/)
 # listed under 'TYPES AND BUCKETS'
 pve_ceph_crush_rules:
-  - name: replicated_rule
-    type: osd # This is an example of how you can override a pre-existing rule
+  # - name: replicated_rule
+  #   type: osd # This is an example of how you can override a pre-existing rule
   - name: ssd
     class: ssd
     type: osd
-    min-size: 2
-    max-size: 8
+    # min-size: 2
+    # max-size: 8
   - name: hdd
     class: hdd
-    type: host
+    type: osd
 # 2 Ceph pools for VM disks which will also be defined as Proxmox storages
 # Using different CRUSH rules
 pve_ceph_pools:
   - name: ssd
-    pgs: 128
+    pgs: 32
     rule: ssd
     application: rbd
     storage: true
+    size: 3
+    min-size: 2
+    autoscale_mode: "on"
 # This Ceph pool uses custom size/replication values
   - name: hdd
     pgs: 32
     rule: hdd
     application: rbd
     storage: true
-    size: 2
-    min-size: 1
-# This Ceph pool uses custom autoscale mode : "off" | "on" | "warn"> (default = "warn")
-  - name: vm-storage
-    pgs: 128
-    rule: replicated_rule
-    application: rbd
+    size: 3
+    min-size: 2
     autoscale_mode: "on"
-    storage: true
+# This Ceph pool uses custom autoscale mode : "off" | "on" | "warn"> (default = "warn")
+  # - name: vm-storage
+  #   pgs: 128
+  #   rule: replicated_rule
+  #   application: rbd
+  #   autoscale_mode: "on"
+  #   storage: true
 pve_ceph_fs:
 # A CephFS filesystem not defined as a Proxmox storage
-  - name: backup
-    pgs: 64
+  - name: cephfsnostorage
+    pgs: 128
     rule: hdd
     storage: false
-    mountpoint: /srv/proxmox/backup
-
+    mountpoint: /mnt/pve/cephfs
+pve_storages:
+  - name: cephfs1
+    type: cephfs
+    content: [ "snippets", "vztmpl", "iso" ]
+    nodes: [ "sce-pve01.tnwks.local", "sce-pve02.tnwks.local", "sce-pve03.tnwks.local" ]
+    monhost:
+      - 10.15.15.50
+      - 10.15.15.51
+      - 10.15.15.52
 
 interfaces_template: "interfaces-{{ pve_group }}.j2"
 
