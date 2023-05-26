@@ -1,36 +1,42 @@
 ---
-- hosts: pvecl01
-  become: True
+- name: NTP Playbook
+  hosts: sce-pvecl01
+  become: true
   roles:
     - geerlingguy.ntp
 
 # Leave this out if you're not modifying networking through Ansible
-- hosts: pvecl01
-  become: True
+- name: Configure Network Playbook
+  hosts: sce-pvecl01
+  become: true
   serial: 1
   tasks:
     - name: Install bridge-utils
-      apt:
+      ansible.builtin.apt:
         name: bridge-utils
 
     - name: Configure /etc/network/interfaces
-      template:
+      ansible.builtin.template:
         src: "{{ interfaces_template }}"
         dest: /etc/network/interfaces
-      register: _configure_interfaces
+        mode: '0644'
+      notify:
+        - Run ifreload block
 
-    - block:
-      - name: Reboot for networking changes
-        shell: "sleep 5 && shutdown -r now 'Networking changes found, rebooting'"
-        async: 1
-        poll: 0
+  handlers:
+    - name: Run ifreload block
+      block:
+        - name: Run 'ifreload -a' for networking changes
+          ansible.builtin.command: "ifreload -a"
+          async: 1
+          poll: 0
 
-      - name: Wait for server to come back online
-        wait_for_connection:
-          delay: 15
-      when: _configure_interfaces is changed
+        - name: Wait for server to come back online
+          ansible.builtin.wait_for_connection:
+            delay: 15
 
-- hosts: pvecl01
+
+- hosts: sce-pvecl01
   become: True
   roles:
     - lae.proxmox

@@ -1,22 +1,22 @@
 ---
-pve_group: pvecl01
+pve_group: sce-pvecl01
 pve_watchdog: ipmi
 #pve_ssl_private_key: "{{ lookup('file', pve_group + '/' + inventory_hostname + '.key') }}"
 #pve_ssl_certificate: "{{ lookup('file', pve_group + '/' + inventory_hostname + '.pem') }}"
 pve_cluster_enabled: yes
-pve_groups:
-  - name: ops
-    comment: Operations Team
-pve_users:
-  - name: admin1@pam
-    email: admin1@lab.local
-    firstname: Admin
-    lastname: User 1
-    groups: [ "ops" ]
-pve_acls:
-  - path: /
-    roles: [ "Administrator" ]
-    groups: [ "ops" ]
+# pve_groups:
+#   - name: ops
+#     comment: Operations Team
+# pve_users:
+#   - name: admin1@pam
+#     email: admin1@lab.local
+#     firstname: Admin
+#     lastname: User 1
+#     groups: [ "ops" ]
+# pve_acls:
+#   - path: /
+#     roles: [ "Administrator" ]
+#     groups: [ "ops" ]
 
 pve_ssh_port: 22
 
@@ -126,3 +126,4 @@ ntp_servers:
   - time-a-g.nist.gov iburst
   - time-a-b.nist.gov iburst
   - time.nist.gov iburst
+ntp_timezone: America/Los_Angeles
