@@ -1,4 +1,9 @@
-[pvecl01]
-sce-pve01.tnwks.local
-sce-pve02.tnwks.local
-sce-pve03.tnwks.local
+---
+pvecl01:
+  hosts:
+    sce-pve01.tnwks.local:
+      ansible_host: 10.10.11.10
+    sce-pve02.tnwks.local:
+      ansible_host: 10.10.11.11
+    sce-pve03.tnwks.local:
+      ansible_host: 10.10.11.12
