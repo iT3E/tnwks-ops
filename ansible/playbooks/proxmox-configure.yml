@@ -1,0 +1,42 @@
+---
+- name: NTP Playbook
+  hosts: proxmox
+  become: true
+  roles:
+    - geerlingguy.ntp
+
+# Leave this out if you're not modifying networking through Ansible
+
+- name: Configure Network Playbook
+  hosts: proxmox
+  become: true
+  serial: 1
+  tasks:
+    - name: Install bridge-utils
+      ansible.builtin.apt:
+        name: bridge-utils
+
+    - name: Configure /etc/network/interfaces
+      ansible.builtin.template:
+        src: "{{ interfaces_template }}"
+        dest: /etc/network/interfaces
+        mode: '0644'
+      notify:
+        - Run ifreload block
+
+  handlers:
+    - name: Run 'ifreload -a' for networking changes
+      ansible.builtin.command: "ifreload -a"
+      changed_when: false
+
+    - name: Wait for server to come back online
+      ansible.builtin.wait_for_connection:
+        delay: 15
+      listen: Run ifreload block
+
+
+- name: PVE Config Playbook
+  hosts: proxmox
+  become: true
+  roles:
+    - lae.proxmox

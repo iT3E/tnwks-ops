@@ -1,0 +1,48 @@
+auto lo
+iface lo inet loopback
+
+iface eno1 inet manual
+
+auto vmbr0
+iface vmbr0 inet manual
+        bridge-ports eno4
+        bridge-stp off
+        bridge-fd 0
+        bridge-vlan-aware yes
+        bridge-vids 2-4094
+
+auto vmbr0.11
+iface vmbr0.11 inet static
+        address {{ lookup('dig', ansible_host) }}
+        gateway 10.10.11.3
+        vlan-raw-device vmbr0
+        vlan-id 11
+
+iface eno2 inet manual
+
+iface eno3 inet manual
+
+iface eno4 inet manual
+
+auto ens1
+iface ens1 inet manual
+    ovs_type OVSPort
+    ovs_bridge vmbr1
+    ovs_options other_config:rstp-enable=true other_config:rstp-path-cost=150 other_config:rstp-port-admin-edge=false other_config:rstp-port-auto-edge=false other_config:rstp-port-mcheck=true vlan_mode=native-untagged
+    ovs_mtu 9000
+
+auto ens1d1
+iface ens1d1 inet manual
+    ovs_type OVSPort
+    ovs_bridge vmbr1
+    ovs_options other_config:rstp-enable=true other_config:rstp-path-cost=150 other_config:rstp-port-admin-edge=false other_config:rstp-port-auto-edge=false other_config:rstp-port-mcheck=true vlan_mode=native-untagged
+    ovs_mtu 9000
+
+auto vmbr1
+iface vmbr1 inet static
+    address {{ lookup('dig', ansible_ceph_host) }}
+    ovs_type OVSBridge
+    ovs_ports ens1d1 ens1
+    ovs_mtu 9000
+    up ovs-vsctl set Bridge ${IFACE} rstp_enable=true other_config:rstp-priority=32768 other_config:rstp-forward-delay=4 other_config:rstp-max-age=6
+    post-up sleep 10
