@@ -1,0 +1,141 @@
+---
+pve_group: proxmox
+pve_watchdog: ipmi
+pve_run_system_upgrades: false
+pve_run_proxmox_upgrades: false
+pve_check_for_kernel_update: false
+
+#pve_ssl_private_key: "{{ lookup('file', pve_group + '/' + inventory_hostname + '.key') }}"
+#pve_ssl_certificate: "{{ lookup('file', pve_group + '/' + inventory_hostname + '.pem') }}"
+pve_cluster_enabled: yes
+pve_cluster_clustername: "sce-pvecl01"
+# pve_groups:
+#   - name: ops
+#     comment: Operations Team
+# pve_users:
+#   - name: admin1@pam
+#     email: admin1@lab.local
+#     firstname: Admin
+#     lastname: User 1
+#     groups: [ "ops" ]
+# pve_acls:
+#   - path: /
+#     roles: [ "Administrator" ]
+#     groups: [ "ops" ]
+
+pve_ssh_port: 22
+
+pve_extra_packages: [python3-jmespath]
+pve_cluster_ha_groups:
+  - name: ha_group1
+    comment: "pve01_hagroup"
+    nodes: "sce-pve01"
+    nofailback: 0
+    restricted: 0
+  - name: ha_group2
+    comment: "pve02_hagroup"
+    nodes: "sce-pve02"
+    nofailback: 0
+    restricted: 0
+  - name: ha_group3
+    comment: "pve03_hagroup"
+    nodes: "sce-pve03"
+    nofailback: 0
+    restricted: 0
+
+
+##### Ceph Configuration #####
+
+pve_ceph_enabled: true
+pve_ceph_repository_line: "deb http://download.proxmox.com/debian/ceph-quincy bullseye main"
+pve_ceph_network: '10.15.15.0/24'
+pve_ceph_cluster_network: '10.15.15.0/24'
+pve_ceph_mon_group: "{{ pve_group }}"
+pve_ceph_mgr_group: "{{ pve_ceph_mon_group }}"
+pve_ceph_mds_group: "{{ pve_group }}"
+pve_ceph_osds:
+  # OSD with everything on the same device
+  - device: /dev/sda
+    encrypted: true
+  - device: /dev/sdb
+    encrypted: true
+  # OSD with block.db/WAL on another device
+  # - device: /dev/sdd
+  #   block.db: /dev/sdb1
+  # # encrypted OSD with everything on the same device
+  # - device: /dev/sdc
+  #   encrypted: true
+  # # encrypted OSD with block.db/WAL on another device
+  # - device: /dev/sdd
+  #   block.db: /dev/sdb1
+  #   encrypted: true
+# Crush rules for different storage classes
+# By default 'type' is set to host, you can find valid types at
+# (https://docs.ceph.com/en/latest/rados/operations/crush-map/)
+# listed under 'TYPES AND BUCKETS'
+# pve_ceph_crush_rules:
+#   - name: replicated_rule
+#     type: osd # This is an example of how you can override a pre-existing rule
+#   # - name: ssd
+#   #   class: ssd
+#   #   type: osd
+#    # min-size: 2
+#    # max-size: 8
+#   - name: hdd
+#     class: hdd
+#     type: osd
+#   - name: hdd-test1
+#     class: hdd
+#     type: osd
+# 2 Ceph pools for VM disks which will also be defined as Proxmox storages
+# Using different CRUSH rules
+pve_ceph_pools:
+  # - name: ssd
+  #   pgs: 32
+  #   rule: ssd
+  #   application: rbd
+  #   storage: true
+  #   size: 3
+  #   min-size: 2
+  #   autoscale_mode: "on"
+# This Ceph pool uses custom size/replication values
+  - name: hdd
+    pgs: 32
+    rule: hdd
+    application: rbd
+    storage: true
+    size: 3
+    min-size: 2
+    autoscale_mode: "on"
+# This Ceph pool uses custom autoscale mode : "off" | "on" | "warn"> (default = "warn")
+  # - name: vm-storage
+  #   pgs: 128
+  #   rule: replicated_rule
+  #   application: rbd
+  #   autoscale_mode: "on"
+  #   storage: true
+pve_ceph_fs:
+# A CephFS filesystem not defined as a Proxmox storage
+  - name: cephfsnostorage
+    pgs: 128
+    rule: hdd
+    storage: false
+    mountpoint: /mnt/pve/cephfs
+pve_storages:
+  - name: cephfs1
+    type: cephfs
+    content: [ "snippets", "vztmpl", "iso" ]
+    nodes: [ "sce-pve01", "sce-pve02", "sce-pve03" ]
+    monhost:
+      - 10.15.15.50
+      - 10.15.15.51
+      - 10.15.15.52
+
+interfaces_template: "interfaces-sce-{{ pve_group }}.j2"
+
+ntp_manage_config: true
+ntp_servers:
+  - time-a-g.nist.gov iburst
+  - time-a-b.nist.gov iburst
+  - time.nist.gov iburst
+ntp_timezone: America/Los_Angeles
