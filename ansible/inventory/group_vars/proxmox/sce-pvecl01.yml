@@ -1,6 +1,6 @@
 ---
 pve_group: proxmox
-pve_watchdog: ipmi
+pve_watchdog: none
 pve_run_system_upgrades: false
 pve_run_proxmox_upgrades: false
 pve_check_for_kernel_update: false
@@ -26,6 +26,9 @@ pve_cluster_clustername: "sce-pvecl01"
 pve_ssh_port: 22
 
 pve_extra_packages: [python3-jmespath]
+pve_cluster_addr0: "{{ hostvars[inventory_hostname]['ansible_ceph_host'] }}"
+pve_datacenter_cfg:
+  migration: "network=10.15.15.0/24,type=secure"
 pve_cluster_ha_groups:
   - name: ha_group1
     comment: "pve01_hagroup"
