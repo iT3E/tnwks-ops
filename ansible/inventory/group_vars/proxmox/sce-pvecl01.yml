@@ -62,9 +62,9 @@ pve_ceph_osds:
     encrypted: true
   - device: /dev/sdb
     encrypted: true
-  - device: /dev/sdd
+  - device: /dev/sdc
     encrypted: true
-  - device: /dev/sde
+  - device: /dev/sdd
     encrypted: true
   # OSD with block.db/WAL on another device
   # - device: /dev/sdd
