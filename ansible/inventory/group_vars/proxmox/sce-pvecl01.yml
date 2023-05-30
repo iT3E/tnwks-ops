@@ -62,6 +62,10 @@ pve_ceph_osds:
     encrypted: true
   - device: /dev/sdb
     encrypted: true
+  - device: /dev/sdc
+    encrypted: true
+  - device: /dev/sdd
+    encrypted: true
   # OSD with block.db/WAL on another device
   # - device: /dev/sdd
   #   block.db: /dev/sdb1
@@ -76,12 +80,17 @@ pve_ceph_osds:
 # By default 'type' is set to host, you can find valid types at
 # (https://docs.ceph.com/en/latest/rados/operations/crush-map/)
 # listed under 'TYPES AND BUCKETS'
-# pve_ceph_crush_rules:
+
+#####
+#Unable to fix functionality of pve_ceph_crush_rules.  It creates successfully once, but lists as failure, then subsequent tasks fail.  Keep this commented out
+#####
+
+#pve_ceph_crush_rules:
 #   - name: replicated_rule
 #     type: osd # This is an example of how you can override a pre-existing rule
-#   # - name: ssd
-#   #   class: ssd
-#   #   type: osd
+#  - name: ssd
+#    class: ssd
+#    type: osd
 #    # min-size: 2
 #    # max-size: 8
 #   - name: hdd
@@ -92,15 +101,18 @@ pve_ceph_osds:
 #     type: osd
 # 2 Ceph pools for VM disks which will also be defined as Proxmox storages
 # Using different CRUSH rules
+
+#####
+
 pve_ceph_pools:
-  # - name: ssd
-  #   pgs: 32
-  #   rule: ssd
-  #   application: rbd
-  #   storage: true
-  #   size: 3
-  #   min-size: 2
-  #   autoscale_mode: "on"
+  - name: ssd
+    pgs: 32
+    rule: ssd
+    application: rbd
+    storage: true
+    size: 3
+    min-size: 2
+    autoscale_mode: "on"
 # This Ceph pool uses custom size/replication values
   - name: hdd
     pgs: 32
