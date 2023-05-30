@@ -13,7 +13,8 @@ iface vmbr0 inet manual
 
 auto vmbr0.11
 iface vmbr0.11 inet static
-        address {{ lookup('dig', ansible_host) }}/24
+        address {{ lookup('dig', ansible_host) }}
+        netmask 255.255.255.0
         gateway 10.10.11.3
         vlan-raw-device vmbr0
         vlan-id 11
@@ -40,7 +41,8 @@ iface ens1d1 inet manual
 
 auto vmbr1
 iface vmbr1 inet static
-    address {{ lookup('dig', ansible_ceph_host) }}/24
+    address {{ lookup('dig', ansible_ceph_host) }}
+    netmask 255.255.255.0
     ovs_type OVSBridge
     ovs_ports ens1d1 ens1
     ovs_mtu 9000
