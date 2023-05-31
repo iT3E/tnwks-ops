@@ -105,36 +105,29 @@ pve_ceph_osds:
 #####
 
 pve_ceph_pools:
-  - name: ssd
+  - name: ssd-pool
     pgs: 32
-    rule: ssd
+    rule: ssd-hostfd
     application: rbd
     storage: true
     size: 3
     min-size: 2
     autoscale_mode: "on"
-# This Ceph pool uses custom size/replication values
-  - name: hdd
+  - name: hdd-pool
     pgs: 32
-    rule: hdd
+    rule: hdd-hostfd
     application: rbd
     storage: true
     size: 3
     min-size: 2
     autoscale_mode: "on"
-# This Ceph pool uses custom autoscale mode : "off" | "on" | "warn"> (default = "warn")
-  # - name: vm-storage
-  #   pgs: 128
-  #   rule: replicated_rule
-  #   application: rbd
-  #   autoscale_mode: "on"
-  #   storage: true
+
 pve_ceph_fs:
 # A CephFS filesystem not defined as a Proxmox storage
-  - name: cephfsnostorage
-    pgs: 128
-    rule: hdd
-    storage: false
+  - name: cephfs
+    pgs: 32
+    rule: hdd-hostfd
+    storage: true
     mountpoint: /mnt/pve/cephfs
 pve_storages:
   - name: cephfs1
