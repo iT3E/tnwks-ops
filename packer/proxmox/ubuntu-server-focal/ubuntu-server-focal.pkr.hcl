@@ -19,7 +19,7 @@ variable "proxmox_api_token_secret" {
   sensitive = true
 }
 # Resource Definiation for the VM Template
-source "proxmox" "ubuntu-server-focal" {
+source "proxmox-iso" "ubuntu-server-focal" {
 
     # Proxmox Connection Settings
     proxmox_url = "${var.proxmox_api_url}"
@@ -39,9 +39,9 @@ source "proxmox" "ubuntu-server-focal" {
     # iso_file = "local:iso/ubuntu-20.04.2-live-server-amd64.iso"
     # - or -
     # (Option 2) Download ISO
-    # iso_url = "https://releases.ubuntu.com/20.04/ubuntu-20.04.3-live-server-amd64.iso"
-    # iso_checksum = "f8e3086f3cea0fb3fefb29937ab5ed9d19e767079633960ccb50e76153effc98"
-    iso_storage_pool = "local"
+    iso_url = "https://releases.ubuntu.com/20.04/ubuntu-20.04.3-live-server-amd64.iso"
+    iso_checksum = "f8e3086f3cea0fb3fefb29937ab5ed9d19e767079633960ccb50e76153effc98"
+    iso_storage_pool = "cephfs"
     unmount_iso = true
 
     # VM System Settings
@@ -53,8 +53,7 @@ source "proxmox" "ubuntu-server-focal" {
     disks {
         disk_size = "20G"
         format = "qcow2"
-        storage_pool = "local-lvm"
-        storage_pool_type = "lvm"
+        storage_pool = "ssd-pool"
         type = "virtio"
     }
 
@@ -109,7 +108,7 @@ source "proxmox" "ubuntu-server-focal" {
 build {
 
     name = "ubuntu-server-focal"
-    sources = ["source.proxmox.ubuntu-server-focal"]
+    sources = ["source.proxmox-iso.ubuntu-server-focal"]
 
     # Provisioning the VM Template for Cloud-Init Integration in Proxmox #1
     provisioner "shell" {
@@ -128,7 +127,7 @@ build {
 
     # Provisioning the VM Template for Cloud-Init Integration in Proxmox #2
     provisioner "file" {
-        source = "files/99-pve.cfg"
+        source = "packer/proxmox/ubuntu-server-focal/files/99-pve.cfg"
         destination = "/tmp/99-pve.cfg"
     }
 
