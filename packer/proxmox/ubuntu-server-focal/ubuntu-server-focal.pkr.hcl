@@ -1,72 +1,142 @@
-data "sops_file "secrets" {
-  source_file = "secrets.sops.yaml"
+# Ubuntu Server Focal
+# ---
+# Packer Template to create an Ubuntu Server (Focal) on Proxmox
+
+# Variable Definitions
+variable "proxmox_api_url" {
+  type    = string
+  default = "${env("PROXMOX_API_URL")}"
 }
 
-source "proxmox" "ubuntu" {
-    # Connection Configuration
-    proxmox_url             = "${data.sops_file.secrets.data["proxmod_url"]}"
-    username                = "${data.sops_file.secrets.data["proxmod_user"]}"
-    password                = "${data.sops_file.secrets.data["proxmod_password"]}"
-    insecure_skip_tls_verify    = "true"
-    node                    = "${data.sops_file.secrets.data["proxmod_node"]}"
+variable "proxmox_api_token_id" {
+  type    = string
+  default = "${env("PROXMOX_API_TOKEN_ID")}"
+}
 
-    # Location Configuration
-    vm_name                 = "${var.vm_name_ubuntu}"
-    #vm_id                   = "9000"
+variable "proxmox_api_token_secret" {
+  type      = string
+  default   = "${env("PROXMOX_API_TOKEN_SECRET")}"
+  sensitive = true
+}
+# Resource Definiation for the VM Template
+source "proxmox" "ubuntu-server-focal" {
 
-    # Hardware Configuration
-    sockets                 = "${var.vm_cpu_sockets}"
-    cores                   = "${var.vm_cpu_cores}"
-    memory                  = "${var.vm_mem_size}"
-    cpu_type                = "${var.vm_cpu_type}"
+    # Proxmox Connection Settings
+    proxmox_url = "${var.proxmox_api_url}"
+    username = "${var.proxmox_api_token_id}"
+    token = "${var.proxmox_api_token_secret}"
+    # (Optional) Skip TLS Verification
+    insecure_skip_tls_verify = true
 
-    # Boot Configuration
-   # boot_command           = ["<enter><enter><f6><esc><wait> ", "autoinstall ds=nocloud-net;s=http://{{ .HTTPIP }}:{{ .HTTPPort }}/", "<enter>"]
-    boot_command           = ["<enter><enter><f6><esc><wait> ", "autoinstall ds=nocloud-net;s=https://github.com/ChristianLempa/boilerplates/tree/main/", "<enter>"]
-    boot_wait              = "5s"
+    # VM General Settings
+    node = "your-proxmox-node"
+    vm_id = "100"
+    vm_name = "ubuntu-server-focal"
+    template_description = "Ubuntu Server Focal Image"
 
-    # Http directory Configuration
-    http_directory         = "packer/proxmox/ubuntu-server-focal/http"
+    # VM OS Settings
+    # (Option 1) Local ISO File
+    # iso_file = "local:iso/ubuntu-20.04.2-live-server-amd64.iso"
+    # - or -
+    # (Option 2) Download ISO
+    # iso_url = "https://releases.ubuntu.com/20.04/ubuntu-20.04.3-live-server-amd64.iso"
+    # iso_checksum = "f8e3086f3cea0fb3fefb29937ab5ed9d19e767079633960ccb50e76153effc98"
+    iso_storage_pool = "local"
+    unmount_iso = true
 
-    # ISO Configuration
-    iso_checksum            = "file:https://releases.ubuntu.com/20.04/SHA256SUMS"
-    iso_file                = "iso-store:iso/ubuntu-20.04.2-live-server-amd64.iso"
-    #iso_url                 = "https://releases.ubuntu.com/20.04.2/ubuntu-20.04.2-live-server-amd64.iso"
-    #iso_storage_pool        = "iso-store:iso"
+    # VM System Settings
+    qemu_agent = true
 
-    # VM Configuration
-    os                      = "l26"
-    vga {
-        type                =  "std"
-        memory              =  32
-    }
-
-    network_adapters {
-        model               = "${var.vm_network_adapters_model}"
-        bridge              = "${var.vm_network_adapters_bridge}"
-        vlan_tag            = "20"
-        firewall            = true
-    }
+    # VM Hard Disk Settings
+    scsi_controller = "virtio-scsi-pci"
 
     disks {
-        storage_pool      = "local-lvm"
-        storage_pool_type = "lvm-thin"
-        type              = "scsi"
-        disk_size         = "${var.vm_os_disk_size}"
-        cache_mode        = "none"
-        format            = "qcow2"
+        disk_size = "20G"
+        format = "qcow2"
+        storage_pool = "local-lvm"
+        storage_pool_type = "lvm"
+        type = "virtio"
     }
 
-    template_name         = "${var.vm_name_ubuntu}"
-    template_description  = ""
-    unmount_iso           = "true"
-    qemu_agent            = "true"
+    # VM CPU Settings
+    cores = "1"
 
-    # Communicator Configuration
-    communicator           = "ssh"
-    ssh_username           = "uadmin"
-    ssh_password           = "${var.linuxadmin_password}"
-    ssh_handshake_attempts = "20"
-    ssh_timeout           = "1h30m"
+    # VM Memory Settings
+    memory = "2048"
 
+    # VM Network Settings
+    network_adapters {
+        model = "virtio"
+        bridge = "vmbr0"
+        firewall = "false"
+    }
+
+    # VM Cloud-Init Settings
+    cloud_init = true
+    cloud_init_storage_pool = "local-lvm"
+
+    # PACKER Boot Commands
+    boot_command = [
+        "<esc><wait><esc><wait>",
+        "<f6><wait><esc><wait>",
+        "<bs><bs><bs><bs><bs>",
+        "autoinstall ds=nocloud-net;s=http://{{ .HTTPIP }}:{{ .HTTPPort }}/ ",
+        "--- <enter>"
+    ]
+    boot = "c"
+    boot_wait = "5s"
+
+    # PACKER Autoinstall Settings
+    http_directory = "http"
+    # (Optional) Bind IP Address and Port
+    # http_bind_address = "0.0.0.0"
+    # http_port_min = 8802
+    # http_port_max = 8802
+
+    ssh_username = "your-user-name"
+
+    # (Option 1) Add your Password here
+    # ssh_password = "your-password"
+    # - or -
+    # (Option 2) Add your Private SSH KEY file here
+    # ssh_private_key_file = "~/.ssh/id_rsa"
+
+    # Raise the timeout, when installation takes longer
+    ssh_timeout = "20m"
+}
+
+# Build Definition to create the VM Template
+build {
+
+    name = "ubuntu-server-focal"
+    sources = ["source.proxmox.ubuntu-server-focal"]
+
+    # Provisioning the VM Template for Cloud-Init Integration in Proxmox #1
+    provisioner "shell" {
+        inline = [
+            "while [ ! -f /var/lib/cloud/instance/boot-finished ]; do echo 'Waiting for cloud-init...'; sleep 1; done",
+            "sudo rm /etc/ssh/ssh_host_*",
+            "sudo truncate -s 0 /etc/machine-id",
+            "sudo apt -y autoremove --purge",
+            "sudo apt -y clean",
+            "sudo apt -y autoclean",
+            "sudo cloud-init clean",
+            "sudo rm -f /etc/cloud/cloud.cfg.d/subiquity-disable-cloudinit-networking.cfg",
+            "sudo sync"
+        ]
+    }
+
+    # Provisioning the VM Template for Cloud-Init Integration in Proxmox #2
+    provisioner "file" {
+        source = "files/99-pve.cfg"
+        destination = "/tmp/99-pve.cfg"
+    }
+
+    # Provisioning the VM Template for Cloud-Init Integration in Proxmox #3
+    provisioner "shell" {
+        inline = [ "sudo cp /tmp/99-pve.cfg /etc/cloud/cloud.cfg.d/99-pve.cfg" ]
+    }
+
+    # Add additional provisioning scripts here
+    # ...
 }
