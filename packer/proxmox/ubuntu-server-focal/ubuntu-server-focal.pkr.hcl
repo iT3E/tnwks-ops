@@ -18,6 +18,19 @@ variable "proxmox_api_token_secret" {
   default   = "${env("PROXMOX_API_TOKEN_SECRET")}"
   sensitive = true
 }
+
+variable "packer_ssh_username" {
+  type      = string
+  default   = "${env("PACKER_SSH_USERNAME")}"
+  sensitive = true
+}
+
+variable "packer_ssh_password" {
+  type      = string
+  default   = "${env("PACKER_SSH_PASSWORD")}"
+  sensitive = true
+}
+
 # Resource Definiation for the VM Template
 source "proxmox-iso" "ubuntu-server-focal" {
 
@@ -72,7 +85,7 @@ source "proxmox-iso" "ubuntu-server-focal" {
 
     # VM Cloud-Init Settings
     cloud_init = true
-    cloud_init_storage_pool = "local-lvm"
+    cloud_init_storage_pool = "ssd-pool"
 
     # PACKER Boot Commands
     boot_command = [
@@ -86,16 +99,16 @@ source "proxmox-iso" "ubuntu-server-focal" {
     boot_wait = "5s"
 
     # PACKER Autoinstall Settings
-    http_directory = "http"
+    # http_directory = "http"
     # (Optional) Bind IP Address and Port
-    # http_bind_address = "0.0.0.0"
-    # http_port_min = 8802
-    # http_port_max = 8802
+    http_bind_address = "0.0.0.0"
+    http_port_min = 8802
+    http_port_max = 8802
 
-    ssh_username = "your-user-name"
+    ssh_username = "${var.packer_ssh_username}"
 
     # (Option 1) Add your Password here
-    # ssh_password = "your-password"
+    ssh_password = "${var.packer_ssh_password}"
     # - or -
     # (Option 2) Add your Private SSH KEY file here
     # ssh_private_key_file = "~/.ssh/id_rsa"
