@@ -27,3 +27,8 @@ to open a port proxy on Windows PC
 ```
 netsh interface portproxy add v4tov4 listenport=8802 listenaddress=0.0.0.0 connectport=8802 connectaddress=172.22.96.2
 ```
+
+Run locally to untrack the user-data file that contains secrets
+```
+git update-index --assume-unchanged packer/proxmox/ubuntu-server-focal/http/user-data
+```
