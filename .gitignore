@@ -18,3 +18,5 @@ xanmanning.k3s*
 terraform.tfstate*
 # Draw.io
 /docs/diagrams/*.bkp
+# Packer
+packer/proxmox/ubuntu-server-focal/http/user-data
