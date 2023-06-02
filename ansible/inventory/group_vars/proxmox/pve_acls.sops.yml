@@ -4,6 +4,11 @@ pve_acls:
         - ENC[AES256_GCM,data:gbcMYOf7Yot/ZTgghw==,iv:nlm/nnlVfHF4SIj7lnrX6TX3LsZeiPcixGJPjowEAoI=,tag:uIwFPDlNUmZUk7auiN3YJA==,type:str]
       groups:
         - ENC[AES256_GCM,data:hpSl,iv:XH4C11+mehF4Uf6j9T4HPhi6jPMQD+O3dGV0PobLE6I=,tag:+k4LA9LN0udPpeY+sIqnBw==,type:str]
+    - path: ENC[AES256_GCM,data:xg==,iv:BtN5WwerrKEhUVJps0XoTQB57KfHgEEz0LwSZaWqU8E=,tag:02NT554afACjdSm22UMywg==,type:str]
+      roles:
+        - ENC[AES256_GCM,data:0oEqterfR8FSTw==,iv:D9yl0dQWTgNDNiwjQQgnxOrXSTi55l4KeSilWkoiJMw=,tag:1//7dvTM05J0uNLY1GHd9w==,type:str]
+      users:
+        - ENC[AES256_GCM,data:FxGvKgfX63OADw==,iv:IadMTsR3iwupXVEePtMnHDWL/sOPRj22h9TYNU0Omrw=,tag:Jy1Pus+ZqlJv9Zic/QcP7Q==,type:str]
 sops:
     kms: []
     gcp_kms: []
@@ -19,8 +24,8 @@ sops:
             NFhENDdBUTg3QldRQmpaQm9rTmwzT3MKqhNS9+dO6h9Do2vI/xvHNDeLcih+dyEY
             5oQD4AMzEdh6nxpugeZIJaVx70LK456saR0MVox34obqdF5CzM+ShA==
             -----END AGE ENCRYPTED FILE-----
-    lastmodified: "2023-05-26T16:35:24Z"
-    mac: ENC[AES256_GCM,data:UJg2cl0x6mwDnBw4Sel7/c+Mc2tTBhbSIPhPFgc6ic3wvjHnHO3wzjHTg7CMsK2oDKWp8BRw7eEvsHJTS3gRxjm8VJA0kveIRdqZxMEsNtHf1yWi0jgEs+luJ1txhSwEPLPn3F1LWUmcqtc7F62Uo+p6aBmsQB1HxFvSk9x25Es=,iv:hzpgAzKXjvZMa2CdjrUvaVkbNSUti995HueV2rkGozA=,tag:YiN+jtisQxKzli2zIYuX2Q==,type:str]
+    lastmodified: "2023-06-02T05:17:00Z"
+    mac: ENC[AES256_GCM,data:6NBOjYW8sWJnbdm11gU92sXVVYRjjb/sa/QAEKca9wEPu/z/Mxy4uEumayaJaBorh61oXo3O1TZPdFzOlwiRzIZdSEfHqI7eDUdP8aA6tGSZK2XbXpIv36c7tg4rN5m36RBRlpvDoNFYoOvVua3GBQ97VjrbhZZImePg8D4333A=,iv:8+fj9UyEYFSTpgJCC87d5Y1Vt/VcEVLhnDDwDxWo444=,tag:w4IuhWEcVa2DAyMEHuVk6g==,type:str]
     pgp: []
     unencrypted_suffix: _unencrypted
     version: 3.7.3
