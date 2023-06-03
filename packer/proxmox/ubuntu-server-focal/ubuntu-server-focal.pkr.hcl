@@ -42,18 +42,22 @@ source "proxmox-iso" "ubuntu-server-focal" {
     insecure_skip_tls_verify = true
 
     # VM General Settings
-    node = "sce-pve01.tnwks.local"
+    node = "sce-pve01"
     vm_name = "ubuntu-server-focal"
     template_description = "Ubuntu Server Focal Image"
 
     # VM OS Settings
     # (Option 1) Local ISO File
-    # iso_file = "local:iso/ubuntu-20.04.2-live-server-amd64.iso"
+    iso_file = "cephfs:iso/ubuntu-20.04.6-live-server-amd64.iso"
     # - or -
     # (Option 2) Download ISO
-    iso_url = "https://releases.ubuntu.com/20.04/ubuntu-20.04.6-live-server-amd64.iso"
-    iso_checksum = "b8f31413336b9393ad5d8ef0282717b2ab19f007df2e9ed5196c13d8f9153c8b"
-    iso_storage_pool = "cephfs"
+    ####
+    #Option 2 is bugged https://forum.proxmox.com/threads/pveproxy-no-space-left-on-device-problem-with-storage-api.113451/
+    #I applied fixes listed here, but still received 'no space left on device' error.  uploading iso via GUI for now..
+    #####
+    #iso_url = "https://releases.ubuntu.com/20.04/ubuntu-20.04.6-live-server-amd64.iso"
+    #iso_checksum = "b8f31413336b9393ad5d8ef0282717b2ab19f007df2e9ed5196c13d8f9153c8b"
+    #iso_storage_pool = "cephfs"
     unmount_iso = true
 
     # VM System Settings
@@ -80,6 +84,7 @@ source "proxmox-iso" "ubuntu-server-focal" {
         model = "virtio"
         bridge = "vmbr0"
         firewall = "false"
+        vlan_tag = "910"
     }
 
     # VM Cloud-Init Settings
@@ -98,7 +103,7 @@ source "proxmox-iso" "ubuntu-server-focal" {
     boot_wait = "5s"
 
     # PACKER Autoinstall Settings
-    # http_directory = "http"
+    http_directory = "packer/proxmox/ubuntu-server-focal/http"
     # (Optional) Bind IP Address and Port
     http_bind_address = "0.0.0.0"
     http_port_min = 8802
