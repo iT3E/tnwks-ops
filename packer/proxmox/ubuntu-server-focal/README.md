@@ -5,8 +5,8 @@ Since neither Packer nor HCL in general have SOPS functionality, you must first 
 export PROXMOX_API_URL=$(sops -d packer/proxmox/ubuntu-server-focal/secretvars.sops.yaml | yq eval '.proxmox_url' -)
 export PROXMOX_API_TOKEN_ID=$(sops -d packer/proxmox/ubuntu-server-focal/secretvars.sops.yaml | yq eval '.proxmox_api_token_id' -)
 export PROXMOX_API_TOKEN_SECRET=$(sops -d packer/proxmox/ubuntu-server-focal/secretvars.sops.yaml | yq eval '.proxmox_api_token_secret' -)
-export PACKER_SSH_USERNAME=$(sops -d packer/proxmox/ubuntu-server-focal/secretvars.sops.yaml | yq eval '.packer_ssh_username' -)
-export PACKER_SSH_PASSWORD=$(sops -d packer/proxmox/ubuntu-server-focal/secretvars.sops.yaml | yq eval '.packer_ssh_password' -)
+export SSH_SECONDARY_USERNAME=$(sops -d packer/proxmox/ubuntu-server-focal/secretvars.sops.yaml | yq eval '.ssh_secondary_username' -)
+export SSH_SECONDARY_PUB=$(sops -d packer/proxmox/ubuntu-server-focal/secretvars.sops.yaml | yq eval '.ssh_secondary_pub' -)
 ```
 
 the local web server to deploy the autoinstall file requires the below command if using secrets and SOPS.  Take care as this exports secrets to file 'user-data' locally
@@ -26,9 +26,4 @@ netsh advfirewall firewall add rule name="Packer HTTP Server" dir=in action=allo
 to open a port proxy on Windows PC
 ```
 netsh interface portproxy add v4tov4 listenport=8802 listenaddress=0.0.0.0 connectport=8802 connectaddress=172.22.96.2
-```
-
-Run locally to untrack the user-data file that contains secrets
-```
-git update-index --assume-unchanged packer/proxmox/ubuntu-server-focal/http/user-data
 ```
