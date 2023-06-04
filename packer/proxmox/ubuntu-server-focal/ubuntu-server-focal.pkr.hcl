@@ -19,15 +19,15 @@ variable "proxmox_api_token_secret" {
   sensitive = true
 }
 
-variable "packer_ssh_username" {
+variable "ssh_secondary_username" {
   type      = string
-  default   = "${env("PACKER_SSH_USERNAME")}"
+  default   = "${env("SSH_SECONDARY_USERNAME")}"
   sensitive = true
 }
 
-variable "packer_ssh_password" {
+variable "ssh_secondary_pub" {
   type      = string
-  default   = "${env("PACKER_SSH_PASSWORD")}"
+  default   = "${env("SSH_SECONDARY_PUB")}"
   sensitive = true
 }
 
@@ -75,9 +75,10 @@ source "proxmox-iso" "ubuntu-server-focal" {
 
     # VM CPU Settings
     cores = "1"
+    sockets = "2"
 
     # VM Memory Settings
-    memory = "2048"
+    memory = "4096"
 
     # VM Network Settings
     network_adapters {
@@ -109,13 +110,13 @@ source "proxmox-iso" "ubuntu-server-focal" {
     http_port_min = 8802
     http_port_max = 8802
 
-    ssh_username = "${var.packer_ssh_username}"
+    ssh_username = "packerbootstrap"
 
     # (Option 1) Add your Password here
-    ssh_password = "${var.packer_ssh_password}"
+    #ssh_password = "${var.packer_ssh_password}"
     # - or -
     # (Option 2) Add your Private SSH KEY file here
-    # ssh_private_key_file = "~/.ssh/id_rsa"
+    ssh_private_key_file = "~/.ssh/packer_rsa"
 
     # Raise the timeout, when installation takes longer
     ssh_timeout = "20m"
@@ -151,6 +152,25 @@ build {
     # Provisioning the VM Template for Cloud-Init Integration in Proxmox #3
     provisioner "shell" {
         inline = [ "sudo cp /tmp/99-pve.cfg /etc/cloud/cloud.cfg.d/99-pve.cfg" ]
+    }
+
+    # Provisioning the VM Template for Cloud-Init Integration in Proxmox #4
+    provisioner "shell" {
+      inline = [
+        # ...
+        # Create a new user and add the user's public key to their authorized_keys file
+        "sudo adduser --disabled-password --gecos '' ${var.ssh_secondary_username}",
+        "sudo mkdir /home/${var.ssh_secondary_username}/.ssh",
+        "echo '${var.ssh_secondary_pub}' | sudo tee /home/${var.ssh_secondary_username}/.ssh/authorized_keys",
+        "sudo chown -R ${var.ssh_secondary_username}:${var.ssh_secondary_username} /home/${var.ssh_secondary_username}/.ssh",
+        "sudo chmod 700 /home/${var.ssh_secondary_username}/.ssh",
+        "sudo chmod 600 /home/${var.ssh_secondary_username}/.ssh/authorized_keys",
+        # Add the new user to the sudoers file
+        "echo '${var.ssh_secondary_username} ALL=(ALL:ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/${var.ssh_secondary_username}",
+        # Remove the 'packerbootstrap' user
+        "cd /",
+        "echo 'sleep 60; pkill -u packerbootstrap; sleep 5; deluser --remove-home packerbootstrap' | at now",
+      ]
     }
 
     # Add additional provisioning scripts here
