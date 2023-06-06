@@ -167,9 +167,8 @@ build {
         "sudo chmod 600 /home/${var.ssh_secondary_username}/.ssh/authorized_keys",
         # Add the new user to the sudoers file
         "echo '${var.ssh_secondary_username} ALL=(ALL:ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/${var.ssh_secondary_username}",
-        # Remove the 'packerbootstrap' user
-        "cd /",
-        "echo 'sleep 60; pkill -u packerbootstrap; sleep 5; deluser --remove-home packerbootstrap' | at now",
+        "sudo sed -i '/packerbootstrap/d' /etc/sudoers.d/90-cloud-init-users",
+        "sudo rm -f /home/packerbootstrap/.ssh/authorized_keys"
       ]
     }
 

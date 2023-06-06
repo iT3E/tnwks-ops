@@ -22,12 +22,11 @@ variable "proxmox_api_token_secret" {
 variable "ssh_secondary_username" {
   type      = string
   default   = "${env("SSH_SECONDARY_USERNAME")}"
-  sensitive = true
 }
 
-variable "ssh_secondary_pub" {
+variable "ssh_secondary_vyospub" {
   type      = string
-  default   = "${env("SSH_SECONDARY_PUB")}"
+  default   = "${env("SSH_SECONDARY_VYOSPUB")}"
   sensitive = true
 }
 
@@ -90,8 +89,8 @@ source "proxmox-iso" "vyos" {
     }
 
     # VM Cloud-Init Settings
-    cloud_init = true
-    cloud_init_storage_pool = "ssd-pool"
+    cloud_init = false
+    #cloud_init_storage_pool = "ssd-pool"
 
     # PACKER Boot Commands
     boot_command = [
@@ -113,16 +112,16 @@ source "proxmox-iso" "vyos" {
       "Yes<enter><wait10><wait10><wait10><wait10><wait10><wait10><wait10>",
       "vyos<enter><wait>",
       "vyos<enter><wait>",
-      "sudo useradd -m -U packerbootstrap<enter><wait>",
       "configure<enter><wait>",
       "set interfaces ethernet eth0 address dhcp<enter><wait>",
-      "set system login user packerbootstrap authentication public-keys personal key 'AAAAB3NzaC1yc2EAAAADAQABAAACAQC5vW0AfFENV7suq4y8Y4NCz4HMy/xsaRiioQcxV4/xQyPTmATsKRdB/3Ug0ZMxlTHkQu6dpP/Wa6DcvqCXeSQAhXPCO4uDcmQVBFSeGpK+FTmIsUGv6BoMHy/2chORZXAITMyDF2HdaDAgjesAZAPqjmIxr460h6W6mwY3gKTiOlvUM8R4mZFbcUqru+iH0U1gnowt1uEYClBc7d95ShBWiZg8jt2qcIRztyAqT6XDO8GMnygPUoIjQdJAFboUGetzMkQPMZKOvBugfYPt3JRmN7SeuQrT+w+KYnIebKl2LsX6iZdeWVj7ZHOuwFwBFFSJH/p5DSEFi7erD86sQNdviwKHwcFVDpXeZGuP0UYKR71MQQhTzTv/7La503V3h2e2Q9l8zk5Jy6HFvizEu0YUrioA7sPj1kiTEMJAb7lJiAR92W/iLr/7AlMFvr985oTx4xZTOf9L68CdzZgJ36k16YIzHpFGQgWaz4iR96LsHKhcmQjgdYL60WZN5+Od+VX0CuV4/IruV4O/MRQ7C7zb9wGEMR9uu8BbHwnobLxffpNphahX+/9p8QZrMyQ3IToIop/c5LF9xEUr53mmuFhTcJOLOjNHKUpzDAakpD1sXYuxX0kMvlMkbYBdhBpCPnSOZKfUaJaEK4DLtV+Nybu3y1wHx8lDzuHbbGj679VpSw=='<enter><wait>",
-      "set system login user packerbootstrap authentication public-keys personal type 'ssh-rsa'<enter><wait>",
+      "set system name-server 8.8.8.8<enter><wait>",
+      "set system login user packerbootstrap authentication public-keys personal key AAAAB3NzaC1yc2EAAAADAQABAAACAQC5vW0AfFENV7suq4y8Y4NCz4HMy/xsaRiioQcxV4/xQyPTmATsKRdB/3Ug0ZMxlTHkQu6dpP/Wa6DcvqCXeSQAhXPCO4uDcmQVBFSeGpK+FTmIsUGv6BoMHy/2chORZXAITMyDF2HdaDAgjesAZAPqjmIxr460h6W6mwY3gKTiOlvUM8R4mZFbcUqru+iH0U1gnowt1uEYClBc7d95ShBWiZg8jt2qcIRztyAqT6XDO8GMnygPUoIjQdJAFboUGetzMkQPMZKOvBugfYPt3JRmN7SeuQrT+w+KYnIebKl2LsX6iZdeWVj7ZHOuwFwBFFSJH/p5DSEFi7erD86sQNdviwKHwcFVDpXeZGuP0UYKR71MQQhTzTv/7La503V3h2e2Q9l8zk5Jy6HFvizEu0YUrioA7sPj1kiTEMJAb7lJiAR92W/iLr/7AlMFvr985oTx4xZTOf9L68CdzZgJ36k16YIzHpFGQgWaz4iR96LsHKhcmQjgdYL60WZN5+Od+VX0CuV4/IruV4O/MRQ7C7zb9wGEMR9uu8BbHwnobLxffpNphahX+/9p8QZrMyQ3IToIop/c5LF9xEUr53mmuFhTcJOLOjNHKUpzDAakpD1sXYuxX0kMvlMkbYBdhBpCPnSOZKfUaJaEK4DLtV+Nybu3y1wHx8lDzuHbbGj679VpSw==<enter><wait>",
+      "set system login user packerbootstrap authentication public-keys personal type ssh-rsa<enter><wait>",
       "set service ssh<enter><wait>",
-      "commit<enter><wait>",
+      "commit<enter><wait5>",
       "save<enter><wait>",
       "exit<enter><wait>",
-      "exit<enter><wait5>"
+      "exit<enter><wait>"
       # "vagrant<enter><wait>",
       # "vagrant<enter><wait>",
       # "configure<enter><wait>",
@@ -160,55 +159,38 @@ build {
     sources = ["source.proxmox-iso.vyos"]
 
   # Provisioning the VM Template for Cloud-Init Integration in Proxmox #2
-  ## clones personal public vyos repo
+  ## clones personal vyos-config repo
     provisioner "shell" {
         inline = [
-          "git init",
+          "sudo mkdir -p /opt/vyos-config",
+          "sudo chown packerbootstrap /opt/vyos-config",
+          "cd /opt/vyos-config",
           "git config --global init.defaultBranch main",
-          "git remote add origin git@github.com:iT3E/vyos-config.git",
-          "git branch --set-upstream-to=origin/main main", # not 100% certain this is required
+          "git init",
+          "git remote add origin https://github.com/iT3E/vyos-config.git",
+          "git fetch origin",
           "git checkout main -f",
-          "git log"
+          "git log",
+          "sudo rm /etc/ssh/ssh_host_*",
+          "sudo truncate -s 0 /etc/machine-id",
+          "sudo apt -y autoremove --purge",
+          "sudo apt -y clean"
         ]
     }
+
   # Provisioning the VM Template for Integration in Proxmox #2
     provisioner "shell" {
+        inline_shebang = "/bin/vbash"
         inline = [
-            "set -e",
-            "set -x",
-            "sudo rm /etc/ssh/ssh_host_*",
-            "sudo truncate -s 0 /etc/machine-id",
-            "sudo apt -y autoremove --purge",
-            "sudo apt -y clean",
-            "sudo cloud-init clean",
-            "WRAPPER=/opt/vyatta/sbin/vyatta-cfg-cmd-wrapper",
-            "$WRAPPER begin",
-            "$WRAPPER delete interfaces ethernet eth0 hw-id",
-            "$WRAPPER commit",
-            "$WRAPPER save",
-            "$WRAPPER end",
-            "sudo sync"
+          "source /opt/vyatta/etc/functions/script-template",
+          "configure",
+          "set system login user ${var.ssh_secondary_username} authentication public-keys personal key ${var.ssh_secondary_vyospub}",
+          "set system login user ${var.ssh_secondary_username} authentication public-keys personal type ssh-rsa",
+          "delete system login user vyos",
+          "commit",
+          "save",
+          "exit"
         ]
-    }
-
-
-    # Provisioning the VM Template for Cloud-Init Integration in Proxmox #3
-    provisioner "shell" {
-      inline = [
-        # ...
-        # Create a new user and add the user's public key to their authorized_keys file
-        "sudo adduser --disabled-password --gecos '' ${var.ssh_secondary_username}",
-        "sudo mkdir /home/${var.ssh_secondary_username}/.ssh",
-        "echo '${var.ssh_secondary_pub}' | sudo tee /home/${var.ssh_secondary_username}/.ssh/authorized_keys",
-        "sudo chown -R ${var.ssh_secondary_username}:${var.ssh_secondary_username} /home/${var.ssh_secondary_username}/.ssh",
-        "sudo chmod 700 /home/${var.ssh_secondary_username}/.ssh",
-        "sudo chmod 600 /home/${var.ssh_secondary_username}/.ssh/authorized_keys",
-        # Add the new user to the sudoers file
-        "echo '${var.ssh_secondary_username} ALL=(ALL:ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/${var.ssh_secondary_username}",
-        # Remove the 'packerbootstrap' user
-        "cd /",
-        "echo 'sleep 60; pkill -u packerbootstrap; sleep 5; deluser --remove-home packerbootstrap' | at now",
-      ]
     }
 
     # Add additional provisioning scripts here
