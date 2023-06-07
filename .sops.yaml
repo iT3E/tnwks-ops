@@ -4,16 +4,16 @@ creation_rules:
     encrypted_regex: "^(data|stringData)$"
     key_groups:
       - age:
-          - age1l3emwjh430034a09ats7eyl9u30xzl7qam4e9h3s7t9zyncqpdsqy984t7
+          - age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
   - path_regex: ansible/.*\.sops\.ya?ml
     key_groups:
       - age:
-          - age1l3emwjh430034a09ats7eyl9u30xzl7qam4e9h3s7t9zyncqpdsqy984t7
+          - age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
   - path_regex: terraform/.*\.sops\.ya?ml
     key_groups:
       - age:
-          - age1l3emwjh430034a09ats7eyl9u30xzl7qam4e9h3s7t9zyncqpdsqy984t7
+          - age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
   - path_regex: packer/.*\.sops\.ya?ml
     key_groups:
       - age:
-          - age1l3emwjh430034a09ats7eyl9u30xzl7qam4e9h3s7t9zyncqpdsqy984t7
+          - age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
