@@ -1,7 +1,7 @@
 locals {
   pve_vms = [
-    "sce-opns01",
-    "sce-opns02"
+    "sce-vyos01",
+    "sce-vyos02"
   ]
 }
 
@@ -11,8 +11,8 @@ module "pve_vm" {
   vm_name              = each.value
   iso_image_location   = "ceph:iso/ubuntu20.1"
   ha_group             = "ha_group${index(local.pve_vms, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  memory               = "2048"
-  cores                = "1"
+  memory               = "4096"
+  cores                = "2"
   sockets              = "2"
   qemu_os              = "l26"
   agent                = 1
@@ -20,25 +20,12 @@ module "pve_vm" {
     {
       model        = "virtio"
       bridge       = "vmbr0"
-      tag          = "10"
-    },
-    {
-      model        = "virtio"
-      bridge       = "vmbr0"
-      tag          = "20"
     },
   ]
   disks = [
     {
       storage   = "local-lvm"
       size      = "20G"
-      type      = "virtio"
-      cache     = "writeback"
-      format    = "qcow2"
-    },
-    {
-      storage   = "local-lvm"
-      size      = "30G"
       type      = "virtio"
       cache     = "writeback"
       format    = "qcow2"
