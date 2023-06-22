@@ -5,11 +5,17 @@ creation_rules:
     key_groups:
       - age:
           - age1l3emwjh430034a09ats7eyl9u30xzl7qam4e9h3s7t9zyncqpdsqy984t7
+        kms:
+          - arn: arn:aws:kms:${AWS_REGION}:${AWS_ACCOUNT}:key/${AWS_KMS_SOPS_KEY}
   - path_regex: ansible/.*\.sops\.ya?ml
     key_groups:
       - age:
           - age1l3emwjh430034a09ats7eyl9u30xzl7qam4e9h3s7t9zyncqpdsqy984t7
+        kms:
+          - arn: arn:aws:kms:${AWS_REGION}:${AWS_ACCOUNT}:key/${AWS_KMS_SOPS_KEY}
   - path_regex: terraform/.*\.sops\.ya?ml
     key_groups:
       - age:
           - age1l3emwjh430034a09ats7eyl9u30xzl7qam4e9h3s7t9zyncqpdsqy984t7
+        kms:
+          - arn: arn:aws:kms:${AWS_REGION}:${AWS_ACCOUNT}:key/${AWS_KMS_SOPS_KEY}
