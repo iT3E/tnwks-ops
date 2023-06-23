@@ -30,6 +30,7 @@ data "sops_file" "secrets" {
 ##        KMS Key - Sops           ##
 ##                                 ##
 #####################################
+data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "kms_key_policy" {
   statement {
@@ -38,7 +39,19 @@ data "aws_iam_policy_document" "kms_key_policy" {
 
     principals {
       type        = "AWS"
-      identifiers = [module.iam_role.iam_role_sops.role_arn]
+      identifiers = [module.iam_role_sops.role_arn]
+    }
+
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
+  statement {
+    sid    = "AllowKeyPolicyUpdates"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = [data.aws_caller_identity.current.arn]
     }
 
     actions   = ["kms:*"]
@@ -62,21 +75,32 @@ module "kms_sops" {
 module "iam_role_itadmin" {
   source             = "../../../modules/aws/iam/roles"
   iam_role_name               = "itadmin_role"
+  assume_role_policy = data.aws_iam_policy_document.assume_role_policy_itadmin.json
 }
 
+data "aws_iam_policy_document" "assume_role_policy_itadmin" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
+  }
+}
 ########################
 ##                    ##
 ##  IAM Role - sops   ##
 ##                    ##
 ########################
 
-data "aws_iam_policy_document" "assume_role_policy" {
+data "aws_iam_policy_document" "assume_role_policy_sops" {
   statement {
     actions = ["sts:AssumeRole"]
 
     principals {
       type        = "AWS"
-      identifiers = [module.iam_role.itadmin.role_arn]
+      identifiers = [module.iam_role_itadmin.role_arn]
     }
   }
 }
@@ -84,7 +108,7 @@ data "aws_iam_policy_document" "assume_role_policy" {
 module "iam_role_sops" {
   source             = "../../../modules/aws/iam/roles"
   iam_role_name               = "sops_role"
-  assume_role_policy = data.aws_iam_policy_document.assume_role_policy.json
+  assume_role_policy = data.aws_iam_policy_document.assume_role_policy_sops.json
 }
 
 #####################################
@@ -96,7 +120,7 @@ module "iam_role_sops" {
 data "aws_iam_policy_document" "kms_access_policy" {
   statement {
     actions   = ["kms:Decrypt", "kms:Encrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
-    resources = [module.kms_sops.key_arn]
+    resources = [module.kms_sops.kms_key_arn]
   }
 }
 
