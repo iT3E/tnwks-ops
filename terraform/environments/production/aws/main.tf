@@ -103,12 +103,26 @@ data "aws_iam_policy_document" "assume_role_policy_sops" {
       identifiers = [module.iam_role_itadmin.role_arn]
     }
   }
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "AWS"
+      identifiers = [data.aws_caller_identity.current.arn]
+    }
+  }
 }
 
 module "iam_role_sops" {
   source             = "../../../modules/aws/iam/roles"
   iam_role_name               = "sops_role"
   assume_role_policy = data.aws_iam_policy_document.assume_role_policy_sops.json
+}
+
+module "sops_kms_access_policy_attachment" {
+  source     = "../../../modules/aws/iam/policy_attachments"
+  role_name  = module.iam_role_sops.iam_role_name
+  policy_arn = module.kms_access_policy.policy_arn
 }
 
 #####################################

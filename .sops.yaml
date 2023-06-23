@@ -2,15 +2,12 @@
 creation_rules:
   - path_regex: kubernetes/.*\.sops\.ya?ml
     encrypted_regex: "^(data|stringData)$"
-    age:
-      - age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
+    age: 'age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2'
+    kms: 'arn:aws:kms:us-west-2:919859941427:key/9f302670-24c3-44fc-a25c-f8b685429309+arn:aws:iam::919859941427:role/sops_role'
   - path_regex: ansible/.*\.sops\.ya?ml
-    age:
-      - age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
-        # kms:
-        #   - arn: arn:aws:kms:${AWS_REGION}:${AWS_ACCOUNT}:key/${AWS_KMS_SOPS_KEY}
+    age: 'age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2'
+    kms: 'arn:aws:kms:us-west-2:919859941427:key/9f302670-24c3-44fc-a25c-f8b685429309+arn:aws:iam::919859941427:role/sops_role'
   - path_regex: terraform/.*\.sops\.ya?ml
-    age:
-      - age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
-        # kms:
-        #   - arn: arn:aws:kms:${AWS_REGION}:${AWS_ACCOUNT}:key/${AWS_KMS_SOPS_KEY}
+    age: 'age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2'
+    kms: 'arn:aws:kms:us-west-2:919859941427:key/9f302670-24c3-44fc-a25c-f8b685429309+arn:aws:iam::919859941427:role/sops_role'
+
