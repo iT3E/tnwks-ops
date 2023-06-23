@@ -1,4 +1,4 @@
-module "iam_sops_role" {
+module "iam_role_sops" {
   source             = "modules/aws/iam/roles"
   name               = "sops_role"
   assume_role_policy = <<POLICY
