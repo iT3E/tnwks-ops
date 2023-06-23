@@ -2,6 +2,7 @@ terraform {
   cloud {
     hostname     = "app.terraform.io"
     organization = "tnwks-ops"
+    #look for PII leak here
     workspaces {
       name = "tnwks-aws-prod"
     }
@@ -21,4 +22,16 @@ terraform {
 
 data "sops_file" "secrets" {
   source_file = "secrets.sops.yaml"
+}
+
+module "kms_sops" {
+  source = "./kms/"
+}
+
+module "iam_role_itadmin" {
+  source = "./iam/roles"
+}
+
+module "iam_role_sops" {
+  source = "./iam/roles"
 }
