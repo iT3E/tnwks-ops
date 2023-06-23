@@ -1,6 +1,5 @@
-
 module "kms_sops" {
-  source = "/modules/aws/kms"
+  source = "../../../../modules/aws/kms"
   key_description = "KMS Key for SOPS"
   key_policy      = <<POLICY
   {
@@ -10,7 +9,7 @@ module "kms_sops" {
         "Sid": "EnableIAMUserPermissions",
         "Effect": "Allow",
         "Principal": {
-          "AWS": "${module.iam_role.iam_sops_role.role_arn}"
+          "AWS": "${module.iam_role.iam_role_sops.role_arn}"
         },
         "Action": "kms:*",
         "Resource": "*"
@@ -19,4 +18,3 @@ module "kms_sops" {
   }
 POLICY
 }
-
