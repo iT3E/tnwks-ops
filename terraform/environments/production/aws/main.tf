@@ -31,7 +31,6 @@ module "kms_sops" {
 module "iam_role_itadmin" {
   source = "./iam/roles"
 }
-
 module "iam_role_sops" {
   source = "./iam/roles"
 }

@@ -6,7 +6,7 @@ data "aws_iam_policy_document" "kms_access_policy" {
 }
 
 module "kms_access_policy" {
-  source          = "./modules/aws/iam/policies"
+  source          = "../../../../modules/aws/iam/policies"
   policy_name     = "kms_sops_key_policy"
   policy_json     = data.aws_iam_policy_document.kms_access_policy.json
 }
