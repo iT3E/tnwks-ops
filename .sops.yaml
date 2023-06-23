@@ -2,20 +2,15 @@
 creation_rules:
   - path_regex: kubernetes/.*\.sops\.ya?ml
     encrypted_regex: "^(data|stringData)$"
-    key_groups:
-      - age:
-          - age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
-        # kms:
-        #   - arn: arn:aws:kms:${AWS_REGION}:${AWS_ACCOUNT}:key/${AWS_KMS_SOPS_KEY}
+    age:
+      - age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
   - path_regex: ansible/.*\.sops\.ya?ml
-    key_groups:
-      - age:
-          - age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
+    age:
+      - age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
         # kms:
         #   - arn: arn:aws:kms:${AWS_REGION}:${AWS_ACCOUNT}:key/${AWS_KMS_SOPS_KEY}
   - path_regex: terraform/.*\.sops\.ya?ml
-    key_groups:
-      - age:
-          - age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
+    age:
+      - age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
         # kms:
         #   - arn: arn:aws:kms:${AWS_REGION}:${AWS_ACCOUNT}:key/${AWS_KMS_SOPS_KEY}
