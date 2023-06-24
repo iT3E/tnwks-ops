@@ -78,12 +78,12 @@ module "pve_vm_hass" {
   vm_name              = each.value
   iso_image_location   = "ceph:iso/ubuntu20.1"
   ha_group             = "ha_group${index(local.hass, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  memory               = "8192"
-  cores                = "2"
-  sockets              = "2"
+  vm_memory               = "8192"
+  num_cores                = "2"
+  num_sockets              = "2"
   qemu_os              = "l26"
-  agent                = 1
-  network_interfaces   = [
+  qemu_guest_agent                = 1
+  vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
@@ -95,7 +95,7 @@ module "pve_vm_hass" {
       tag          = "20"
     },
   ]
-  disks = [
+  vm_disks = [
     {
       storage   = "ssd-pool"
       size      = "20G"
@@ -118,12 +118,12 @@ module "pve_vm_k8s_masters" {
   vm_name              = each.value
   iso_image_location   = "ceph:iso/ubuntu20.1"
   ha_group             = "ha_group${index(local.k8s_masters, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  memory               = "8192"
-  cores                = "4"
-  sockets              = "2"
+  vm_memory               = "8192"
+  num_cores                = "4"
+  num_sockets              = "2"
   qemu_os              = "l26"
-  agent                = 1
-  network_interfaces   = [
+  qemu_guest_agent                = 1
+  vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
@@ -135,7 +135,7 @@ module "pve_vm_k8s_masters" {
       tag          = "20"
     },
   ]
-  disks = [
+  vm_disks = [
     {
       storage   = "local-lvm"
       size      = "20G"
@@ -167,12 +167,12 @@ module "pve_vm_k8s_workers" {
   vm_name              = each.value
   iso_image_location   = "ceph:iso/ubuntu20.1"
   ha_group             = "ha_group${index(local.k8s_workers, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  memory               = "24576"
-  cores                = "16"
-  sockets              = "2"
+  vm_memory               = "24576"
+  num_cores                = "16"
+  num_sockets              = "2"
   qemu_os              = "l26"
-  agent                = 1
-  network_interfaces   = [
+  qemu_guest_agent                = 1
+  vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
@@ -184,7 +184,7 @@ module "pve_vm_k8s_workers" {
       tag          = "20"
     },
   ]
-  disks = [
+  vm_disks = [
     {
       storage   = "ssd-pool"
       size      = "20G"
@@ -207,12 +207,12 @@ module "pve_vm_uisp" {
   vm_name              = each.value
   iso_image_location   = "ceph:iso/ubuntu20.1"
   ha_group             = "ha_group${index(local.uisp, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  memory               = "2048"
-  cores                = "2"
-  sockets              = "2"
+  vm_memory               = "2048"
+  num_cores                = "2"
+  num_sockets              = "2"
   qemu_os              = "l26"
-  agent                = 1
-  network_interfaces   = [
+  qemu_guest_agent                = 1
+  vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
@@ -224,7 +224,7 @@ module "pve_vm_uisp" {
       tag          = "20"
     },
   ]
-  disks = [
+  vm_disks = [
     {
       storage   = "ssd-pool"
       size      = "20G"
@@ -247,18 +247,18 @@ module "pve_vm_vyos" {
   vm_name              = each.value
   iso_image_location   = "ceph:iso/ubuntu20.1"
   ha_group             = "ha_group${index(local.vyos, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  memory               = "4096"
-  cores                = "2"
-  sockets              = "2"
+  vm_memory               = "4096"
+  num_cores                = "2"
+  num_sockets              = "2"
   qemu_os              = "l26"
-  agent                = 1
-  network_interfaces   = [
+  qemu_guest_agent                = 1
+  vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
     },
   ]
-  disks = [
+  vm_disks = [
     {
       storage   = "ssd-pool"
       size      = "20G"
@@ -281,12 +281,12 @@ module "pve_vm_ad" {
   vm_name              = each.value
   iso_image_location   = "ceph:iso/ubuntu20.1"
   ha_group             = "ha_group${index(local.ad, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  memory               = "2048"
-  cores                = "1"
-  sockets              = "2"
+  vm_memory               = "2048"
+  num_cores                = "1"
+  num_sockets              = "2"
   qemu_os              = "l26"
-  agent                = 1
-  network_interfaces   = [
+  qemu_guest_agent                = 1
+  vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
@@ -298,7 +298,7 @@ module "pve_vm_ad" {
       tag          = "20"
     },
   ]
-  disks = [
+  vm_disks = [
     {
       storage   = "ssd-pool"
       size      = "40G"
@@ -321,12 +321,12 @@ module "pve_vm_biris" {
   vm_name              = each.value
   iso_image_location   = "ceph:iso/ubuntu20.1"
   ha_group             = "ha_group${index(local.biris, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  memory               = "8192"
-  cores                = "4"
-  sockets              = "2"
+  vm_memory               = "8192"
+  num_cores                = "4"
+  num_sockets              = "2"
   qemu_os              = "l26"
-  agent                = 1
-  network_interfaces   = [
+  qemu_guest_agent                = 1
+  vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
@@ -338,7 +338,7 @@ module "pve_vm_biris" {
       tag          = "20"
     },
   ]
-  disks = [
+  vm_disks = [
     {
       storage   = "ssd-pool"
       size      = "40G"
