@@ -23,3 +23,329 @@ terraform {
 data "sops_file" "secrets" {
   source_file = "secrets.sops.yaml"
 }
+
+######################
+######################
+
+
+
+#######################################
+##                                   ##
+##              Locals               ##
+##                                   ##
+#######################################
+
+
+locals {
+  hass = [
+    "sce-hass01"
+  ]
+  k8s_masters = [
+    "sce-uk8sm01",
+    "sce-uk8sm02",
+    "sce-uk8sm03",
+  ]
+  k8s_workers = [
+    "sce-uk8sw01",
+    "sce-uk8sw02",
+    "sce-uk8sw03",
+  ]
+  uisp = [
+    "sce-uisp01"
+  ]
+  vyos = [
+    "sce-vyos01",
+    "sce-vyos02"
+  ]
+  ad = [
+    "sce-dc01",
+    "sce-dc02"
+  ]
+  biris = [
+    "sce-biris01"
+  ]
+}
+
+#######################################
+##                                   ##
+##        PVE VM - sce-hass01        ##
+##                                   ##
+#######################################
+
+module "pve_vm_hass" {
+  for_each             = toset(local.hass)
+  source               = "../../../modules/proxmox"
+  vm_name              = each.value
+  iso_image_location   = "ceph:iso/ubuntu20.1"
+  ha_group             = "ha_group${index(local.hass, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+  memory               = "8192"
+  cores                = "2"
+  sockets              = "2"
+  qemu_os              = "l26"
+  agent                = 1
+  network_interfaces   = [
+    {
+      model        = "virtio"
+      bridge       = "vmbr0"
+      tag          = "10"
+    },
+    {
+      model        = "virtio"
+      bridge       = "vmbr0"
+      tag          = "20"
+    },
+  ]
+  disks = [
+    {
+      storage   = "ssd-pool"
+      size      = "20G"
+      type      = "virtio"
+      cache     = "writeback"
+      format    = "qcow2"
+    },
+  ]
+}
+
+#######################################
+##                                   ##
+##        PVE VM - k8s_masters       ##
+##                                   ##
+#######################################
+
+module "pve_vm_k8s_masters" {
+  for_each             = toset(local.k8s_masters)
+  source               = "../../../modules/proxmox"
+  vm_name              = each.value
+  iso_image_location   = "ceph:iso/ubuntu20.1"
+  ha_group             = "ha_group${index(local.k8s_masters, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+  memory               = "8192"
+  cores                = "4"
+  sockets              = "2"
+  qemu_os              = "l26"
+  agent                = 1
+  network_interfaces   = [
+    {
+      model        = "virtio"
+      bridge       = "vmbr0"
+      tag          = "10"
+    },
+    {
+      model        = "virtio"
+      bridge       = "vmbr0"
+      tag          = "20"
+    },
+  ]
+  disks = [
+    {
+      storage   = "local-lvm"
+      size      = "20G"
+      type      = "virtio"
+      cache     = "writeback"
+      format    = "qcow2"
+    },
+    {
+      storage   = "local-lvm"
+      size      = "30G"
+      type      = "virtio"
+      cache     = "writeback"
+      format    = "qcow2"
+    },
+  ]
+}
+
+
+#######################################
+##                                   ##
+##        PVE VM - k8s_workers       ##
+##                                   ##
+#######################################
+
+
+module "pve_vm_k8s_workers" {
+  for_each             = toset(local.k8s_workers)
+  source               = "../../../modules/proxmox"
+  vm_name              = each.value
+  iso_image_location   = "ceph:iso/ubuntu20.1"
+  ha_group             = "ha_group${index(local.k8s_workers, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+  memory               = "24576"
+  cores                = "16"
+  sockets              = "2"
+  qemu_os              = "l26"
+  agent                = 1
+  network_interfaces   = [
+    {
+      model        = "virtio"
+      bridge       = "vmbr0"
+      tag          = "10"
+    },
+    {
+      model        = "virtio"
+      bridge       = "vmbr0"
+      tag          = "20"
+    },
+  ]
+  disks = [
+    {
+      storage   = "ssd-pool"
+      size      = "20G"
+      type      = "virtio"
+      cache     = "writeback"
+      format    = "qcow2"
+    },
+  ]
+}
+
+#######################################
+##                                   ##
+##          PVE VM - UISP            ##
+##                                   ##
+#######################################
+
+module "pve_vm_uisp" {
+  for_each             = toset(local.uisp)
+  source               = "../../../modules/proxmox"
+  vm_name              = each.value
+  iso_image_location   = "ceph:iso/ubuntu20.1"
+  ha_group             = "ha_group${index(local.uisp, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+  memory               = "2048"
+  cores                = "2"
+  sockets              = "2"
+  qemu_os              = "l26"
+  agent                = 1
+  network_interfaces   = [
+    {
+      model        = "virtio"
+      bridge       = "vmbr0"
+      tag          = "10"
+    },
+    {
+      model        = "virtio"
+      bridge       = "vmbr0"
+      tag          = "20"
+    },
+  ]
+  disks = [
+    {
+      storage   = "ssd-pool"
+      size      = "20G"
+      type      = "virtio"
+      cache     = "default"
+      format    = "qcow2"
+    },
+  ]
+}
+
+#######################################
+##                                   ##
+##          PVE VM - vyos            ##
+##                                   ##
+#######################################
+
+module "pve_vm_vyos" {
+  for_each             = toset(local.vyos)
+  source               = "../../../modules/proxmox"
+  vm_name              = each.value
+  iso_image_location   = "ceph:iso/ubuntu20.1"
+  ha_group             = "ha_group${index(local.vyos, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+  memory               = "4096"
+  cores                = "2"
+  sockets              = "2"
+  qemu_os              = "l26"
+  agent                = 1
+  network_interfaces   = [
+    {
+      model        = "virtio"
+      bridge       = "vmbr0"
+    },
+  ]
+  disks = [
+    {
+      storage   = "ssd-pool"
+      size      = "20G"
+      type      = "virtio"
+      cache     = "writeback"
+      format    = "qcow2"
+    },
+  ]
+}
+
+#######################################
+##                                   ##
+##         PVE VM - win-ad           ##
+##                                   ##
+#######################################
+
+module "pve_vm_ad" {
+  for_each             = toset(local.ad)
+  source               = "../../../modules/proxmox"
+  vm_name              = each.value
+  iso_image_location   = "ceph:iso/ubuntu20.1"
+  ha_group             = "ha_group${index(local.ad, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+  memory               = "2048"
+  cores                = "1"
+  sockets              = "2"
+  qemu_os              = "l26"
+  agent                = 1
+  network_interfaces   = [
+    {
+      model        = "virtio"
+      bridge       = "vmbr0"
+      tag          = "10"
+    },
+    {
+      model        = "virtio"
+      bridge       = "vmbr0"
+      tag          = "20"
+    },
+  ]
+  disks = [
+    {
+      storage   = "ssd-pool"
+      size      = "40G"
+      type      = "virtio"
+      cache     = "default"
+      format    = "qcow2"
+    },
+  ]
+}
+
+#######################################
+##                                   ##
+##        PVE VM - win-biris         ##
+##                                   ##
+#######################################
+
+module "pve_vm_biris" {
+  for_each             = toset(local.biris)
+  source               = "../../../modules/proxmox"
+  vm_name              = each.value
+  iso_image_location   = "ceph:iso/ubuntu20.1"
+  ha_group             = "ha_group${index(local.biris, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+  memory               = "8192"
+  cores                = "4"
+  sockets              = "2"
+  qemu_os              = "l26"
+  agent                = 1
+  network_interfaces   = [
+    {
+      model        = "virtio"
+      bridge       = "vmbr0"
+      tag          = "10"
+    },
+    {
+      model        = "virtio"
+      bridge       = "vmbr0"
+      tag          = "20"
+    },
+  ]
+  disks = [
+    {
+      storage   = "ssd-pool"
+      size      = "40G"
+      type      = "virtio"
+      cache     = "writeback"
+      format    = "qcow2"
+    },
+  ]
+}
+
