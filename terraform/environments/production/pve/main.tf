@@ -11,7 +11,7 @@ terraform {
    required_providers {
      proxmox = {
        source = "Telmate/proxmox"
-       version = ">= 2.9.10"
+       version = "= 2.9.14"
    }
      sops = {
        source  = "carlpett/sops"
@@ -99,6 +99,9 @@ module "pve_vm_hass" {
       cache     = "none"
       format    = "qcow2"
       iothread  = 1
+      file       = "vm-${each.value}-disk-0"
+      volume    = "ssd-pool:vm-${each.value}-disk-0"
+      backup    = true
     },
   ]
 }
@@ -136,6 +139,9 @@ module "pve_vm_k8s_masters" {
       cache     = "none"
       format    = "qcow2"
       iothread  = 1
+      file       = "vm-${each.value}-disk-0"
+      volume    = "ssd-pool:vm-${each.value}-disk-0"
+      backup    = true
     },
   ]
 }
@@ -172,9 +178,12 @@ module "pve_vm_k8s_workers" {
       storage   = "ssd-pool"
       size      = "20G"
       type      = "virtio"
-      cache     = "writeback"
+      cache     = "none"
       format    = "qcow2"
       iothread  = 1
+      file       = "vm-${each.value}-disk-0"
+      volume    = "ssd-pool:vm-${each.value}-disk-0"
+      backup    = true
     },
   ]
 }
@@ -212,6 +221,9 @@ module "pve_vm_uisp" {
       cache     = "default"
       format    = "qcow2"
       iothread  = 1
+      file       = "vm-${each.value}-disk-0"
+      volume    = "ssd-pool:vm-${each.value}-disk-0"
+      backup    = true
     },
   ]
 }
@@ -248,6 +260,9 @@ module "pve_vm_vyos" {
       cache     = "none"
       format    = "qcow2"
       iothread  = 1
+      file       = "vm-${each.value}-disk-0"
+      volume    = "ssd-pool:vm-${each.value}-disk-0"
+      backup    = true
     },
   ]
 }
@@ -285,6 +300,9 @@ module "pve_vm_ad" {
       cache     = "none"
       format    = "qcow2"
       iothread  = 1
+      file       = "vm-${each.value}-disk-0"
+      volume    = "ssd-pool:vm-${each.value}-disk-0"
+      backup    = true
     },
   ]
 }
@@ -322,6 +340,9 @@ module "pve_vm_biris" {
       cache     = "none"
       format    = "qcow2"
       iothread  = 1
+      file       = "vm-${each.value}-disk-0"
+      volume    = "ssd-pool:vm-${each.value}-disk-0"
+      backup    = true
     },
   ]
 }
