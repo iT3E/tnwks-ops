@@ -76,23 +76,19 @@ module "pve_vm_hass" {
   for_each             = toset(local.hass)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
-  iso_image_location   = "ceph:iso/ubuntu20.1"
+  clone                = "ubuntu-server-focal"
+  full_clone           = true
   ha_group             = "ha_group${index(local.hass, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  vm_memory               = "8192"
-  num_cores                = "2"
-  num_sockets              = "2"
+  vm_memory            = "8192"
+  num_cores            = "2"
+  num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent                = 1
+  qemu_guest_agent     = 1
   vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
-      tag          = "10"
-    },
-    {
-      model        = "virtio"
-      bridge       = "vmbr0"
-      tag          = "20"
+      tag          = "720"
     },
   ]
   vm_disks = [
@@ -100,8 +96,9 @@ module "pve_vm_hass" {
       storage   = "ssd-pool"
       size      = "20G"
       type      = "virtio"
-      cache     = "writeback"
+      cache     = "none"
       format    = "qcow2"
+      iothread  = 1
     },
   ]
 }
@@ -116,39 +113,29 @@ module "pve_vm_k8s_masters" {
   for_each             = toset(local.k8s_masters)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
-  iso_image_location   = "ceph:iso/ubuntu20.1"
+  clone                = "ubuntu-server-focal"
+  full_clone           = true
   ha_group             = "ha_group${index(local.k8s_masters, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  vm_memory               = "8192"
-  num_cores                = "4"
-  num_sockets              = "2"
+  vm_memory            = "8192"
+  num_cores            = "2"
+  num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent                = 1
+  qemu_guest_agent     = 1
   vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
-      tag          = "10"
-    },
-    {
-      model        = "virtio"
-      bridge       = "vmbr0"
-      tag          = "20"
+      tag          = "120"
     },
   ]
   vm_disks = [
     {
-      storage   = "local-lvm"
+      storage   = "ssd-pool"
       size      = "20G"
       type      = "virtio"
-      cache     = "writeback"
+      cache     = "none"
       format    = "qcow2"
-    },
-    {
-      storage   = "local-lvm"
-      size      = "30G"
-      type      = "virtio"
-      cache     = "writeback"
-      format    = "qcow2"
+      iothread  = 1
     },
   ]
 }
@@ -165,23 +152,19 @@ module "pve_vm_k8s_workers" {
   for_each             = toset(local.k8s_workers)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
-  iso_image_location   = "ceph:iso/ubuntu20.1"
+  clone                = "ubuntu-server-focal"
+  full_clone           = true
   ha_group             = "ha_group${index(local.k8s_workers, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  vm_memory               = "24576"
-  num_cores                = "16"
-  num_sockets              = "2"
+  vm_memory            = "24576"
+  num_cores            = "16"
+  num_sockets          = "2"
   qemu_os              = "l26"
   qemu_guest_agent                = 1
   vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
-      tag          = "10"
-    },
-    {
-      model        = "virtio"
-      bridge       = "vmbr0"
-      tag          = "20"
+      tag          = "120"
     },
   ]
   vm_disks = [
@@ -191,6 +174,7 @@ module "pve_vm_k8s_workers" {
       type      = "virtio"
       cache     = "writeback"
       format    = "qcow2"
+      iothread  = 1
     },
   ]
 }
@@ -205,23 +189,19 @@ module "pve_vm_uisp" {
   for_each             = toset(local.uisp)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
-  iso_image_location   = "ceph:iso/ubuntu20.1"
+  clone                = "ubuntu-server-focal"
+  full_clone           = true
   ha_group             = "ha_group${index(local.uisp, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  vm_memory               = "2048"
-  num_cores                = "2"
-  num_sockets              = "2"
+  vm_memory            = "2048"
+  num_cores            = "2"
+  num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent                = 1
+  qemu_guest_agent     = 1
   vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
-      tag          = "10"
-    },
-    {
-      model        = "virtio"
-      bridge       = "vmbr0"
-      tag          = "20"
+      tag          = "720"
     },
   ]
   vm_disks = [
@@ -231,6 +211,7 @@ module "pve_vm_uisp" {
       type      = "virtio"
       cache     = "default"
       format    = "qcow2"
+      iothread  = 1
     },
   ]
 }
@@ -245,13 +226,14 @@ module "pve_vm_vyos" {
   for_each             = toset(local.vyos)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
-  iso_image_location   = "ceph:iso/ubuntu20.1"
+  clone                = "VyOS"
+  full_clone           = true
   ha_group             = "ha_group${index(local.vyos, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  vm_memory               = "4096"
-  num_cores                = "2"
-  num_sockets              = "2"
+  vm_memory            = "4096"
+  num_cores            = "2"
+  num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent                = 1
+  qemu_guest_agent     = 1
   vm_nics   = [
     {
       model        = "virtio"
@@ -262,9 +244,10 @@ module "pve_vm_vyos" {
     {
       storage   = "ssd-pool"
       size      = "20G"
-      type      = "virtio"
-      cache     = "writeback"
+      type      = "scsi"
+      cache     = "none"
       format    = "qcow2"
+      iothread  = 1
     },
   ]
 }
@@ -279,23 +262,19 @@ module "pve_vm_ad" {
   for_each             = toset(local.ad)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
-  iso_image_location   = "ceph:iso/ubuntu20.1"
+  clone                = "ubuntu-server-focal"
+  full_clone           = true
   ha_group             = "ha_group${index(local.ad, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  vm_memory               = "2048"
-  num_cores                = "1"
-  num_sockets              = "2"
+  vm_memory            = "2048"
+  num_cores            = "1"
+  num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent                = 1
+  qemu_guest_agent     = 1
   vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
-      tag          = "10"
-    },
-    {
-      model        = "virtio"
-      bridge       = "vmbr0"
-      tag          = "20"
+      tag          = "110"
     },
   ]
   vm_disks = [
@@ -303,8 +282,9 @@ module "pve_vm_ad" {
       storage   = "ssd-pool"
       size      = "40G"
       type      = "virtio"
-      cache     = "default"
+      cache     = "none"
       format    = "qcow2"
+      iothread  = 1
     },
   ]
 }
@@ -319,23 +299,19 @@ module "pve_vm_biris" {
   for_each             = toset(local.biris)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
-  iso_image_location   = "ceph:iso/ubuntu20.1"
+  clone                = "ubuntu-server-focal"
+  full_clone           = true
   ha_group             = "ha_group${index(local.biris, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  vm_memory               = "8192"
-  num_cores                = "4"
-  num_sockets              = "2"
+  vm_memory            = "8192"
+  num_cores            = "4"
+  num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent                = 1
+  qemu_guest_agent     = 1
   vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
-      tag          = "10"
-    },
-    {
-      model        = "virtio"
-      bridge       = "vmbr0"
-      tag          = "20"
+      tag          = "610"
     },
   ]
   vm_disks = [
@@ -343,8 +319,9 @@ module "pve_vm_biris" {
       storage   = "ssd-pool"
       size      = "40G"
       type      = "virtio"
-      cache     = "writeback"
+      cache     = "none"
       format    = "qcow2"
+      iothread  = 1
     },
   ]
 }
