@@ -105,7 +105,11 @@ variable "ha_group" {
 
 variable "qemu_os" {
     description = "The type of OS in the guest.  Set to properly allow Proxmox to enable optimizations for the appropriate guest OS."
-    allowed_values = ["l26", "win8", "win10", "win11"]
+    validation {
+        condition     = contains(["l26", "win8", "win10", "win11"], var.qemu_os)
+        error_message = "The value of qemu_os must be one of: l26, win8, win10, win11."
+    }
+}
       # other unspecified OS
       # wxp Microsoft Windows XP
       # w2k Microsoft Windows 2000
@@ -118,7 +122,7 @@ variable "qemu_os" {
       # win11 Microsoft Windows 11/2022
       # l24 Linux 2.4 Kernel
       # l26 Linux 2.6 - 6.X Kernel
-}
+
 
 variable "num_cores" {
     description = "Sets the number of VM cores."
