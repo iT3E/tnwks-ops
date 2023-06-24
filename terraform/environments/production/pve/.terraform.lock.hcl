@@ -5,6 +5,7 @@ provider "registry.terraform.io/carlpett/sops" {
   version     = "0.7.2"
   constraints = "0.7.2"
   hashes = [
+    "h1:+A1/RJ3eNVQHDFHjol70EfC5Yh9e78WMXxh1uoxlAYQ=",
     "h1:eetjYKFBQb6nbgxjehD/gzzAmH2ru94ha2tEzXNiNy8=",
     "zh:43f218054ea3a72c9756bf989aeebb9d0f23b66fd08e9fb4ae75d4f921295e82",
     "zh:57fd326388042a6b7ecd60f740f81e5ef931546c4f068f054e7df34acf65d190",
@@ -18,9 +19,10 @@ provider "registry.terraform.io/carlpett/sops" {
 
 provider "registry.terraform.io/telmate/proxmox" {
   version     = "2.9.14"
-  constraints = "> 2.7.0, >= 2.9.10"
+  constraints = ">= 2.9.10"
   hashes = [
     "h1:H/f+LbVyPOLslHLAYnGuMMRqWFZ65K6E3V+MCYgfAyk=",
+    "h1:KWPlH228/+BiH8OOY754MTTaUkLJLN/1krSSzqiyNsE=",
     "zh:0d049d33f705e5b814d30028770c084151218439424e99684ce31d7e26a720b5",
     "zh:20b1c64ed56d81de95f3f37b82b45b4654c0de26670c0e87a474c5cce13cd015",
     "zh:2946058abd1d8e50e475b9ec39781eb02576b40dbd80f4653fade4493a4514c6",

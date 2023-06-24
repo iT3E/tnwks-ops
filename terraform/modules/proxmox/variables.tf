@@ -28,13 +28,6 @@ variable "control_plane_node_count" {
     }
 }
 
-
-variable "iso_image_location" {
-    description = "The location of the Talos iso image on the proxmox host (<storage pool>:<content type>/<file name>.iso)."
-    type = string
-    default = "cephfs:iso/talos-amd64.iso"
-}
-
 variable "boot_disk_storage_pool" {
     description = "The name of the storage pool where boot disks for the cluster nodes will be stored."
     type = string
@@ -84,7 +77,7 @@ variable "qemu_guest_agent" {
 variable "proxmox_host_node" {
     description = "The name of the proxmox node where the cluster will be deployed"
     type = string
-    default = "pve-fatman"
+    default = "sce-pve01"
 }
 
 variable "proxmox_tls_insecure" {
@@ -155,15 +148,23 @@ variable "vm_disks" {
     format      = string
     type        = string
     cache       = string
+    iothread    = number
   }))
 }
 
-variable "vm_sshkey" {
-  description = "Public SSH key that is added to VMs using default cloudinit configuration"
-  default = "add key and configure SOPS here!"
+variable "clone" {
+  description = "VM name to base the clone from"
+  default     = "ubuntu-server-focal"
+  type        = string
 }
 
-variable "vm_ipconfig0" {
-  description = "IP Address configured with default cloudinit configuration"
-  default = "ip=dhcp"
+variable "full_clone" {
+  description = "Whether to deploy as a full clone or linked clone"
+  default = "true"
+}
+
+variable "scsihw" {
+  description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
+  default     = "virtio-scsi-single"
+  type        = string
 }

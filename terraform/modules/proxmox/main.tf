@@ -9,15 +9,16 @@ terraform {
 
 resource "proxmox_vm_qemu" "proxmox_vm" {
   name        = var.vm_name
-  iso         = var.iso_image_location
   hagroup     = var.ha_group
-  #full_clone  = false
+  clone       = var.clone
+  full_clone  = var.full_clone
   target_node = "sce-pve01"
   agent       = var.qemu_guest_agent
   qemu_os     = var.qemu_os
   memory      = var.vm_memory
   cores       = var.num_cores
   sockets     = var.num_sockets
+  scsihw      = var.scsihw
   numa        = true
   hotplug     = "network,disk,usb"
 
@@ -38,6 +39,7 @@ resource "proxmox_vm_qemu" "proxmox_vm" {
       type      = disk.value["type"]
       cache     = disk.value["cache"]
       format    = disk.value["format"]
+      iothread  = disk.value["iothread"]
     }
   }
 }
