@@ -137,17 +137,23 @@ variable "vm_nics" {
   type = list(object({
     model = string
     bridge = string
-    tag = number
+    tag = optional(number)
   }))
+  default = [
+    {
+      model = "virtio"
+      bridge = "vmbr0"
+    }
+  ]
 }
 
 variable "vm_disks" {
   description = "The list of disk configurations for the VM"
   type        = list(object({
-    size        = number
+    size        = string
     storage     = string
     format      = string
-    interface   = string
+    type        = string
     cache       = string
   }))
 }

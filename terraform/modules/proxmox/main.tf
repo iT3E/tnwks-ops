@@ -20,19 +20,17 @@ resource "proxmox_vm_qemu" "proxmox_vm" {
   sockets     = var.num_sockets
   numa        = true
   hotplug     = "network,disk,usb"
-  sshkey      = var.vm_sshkey
-  ipconfig0   = var.vm_ipconfig0
 
-  dynamic "vm_nics" {
+  dynamic "network" {
     for_each = var.vm_nics
     content {
-      model        = network_interface.value["model"]
-      bridge       = network_interface.value["bridge"]
-      tag          = network_interface.value["tag"]
+      model        = network.value.model
+      bridge       = network.value.bridge
+      tag          = network.value.tag != null ? network.value.tag : null
     }
   }
 
-  dynamic "vm_disks" {
+  dynamic "disk" {
     for_each = var.vm_disks
     content {
       storage   = disk.value["storage"]
