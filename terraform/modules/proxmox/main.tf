@@ -2,7 +2,7 @@ terraform {
   required_providers {
     proxmox = {
       source  = "telmate/proxmox"
-      version = ">= 2.9.10"
+      version = "= 2.9.14"
     }
   }
 }
@@ -40,6 +40,9 @@ resource "proxmox_vm_qemu" "proxmox_vm" {
       cache     = disk.value["cache"]
       format    = disk.value["format"]
       iothread  = disk.value["iothread"]
+      file       = disk.value["file"]
+      volume    = disk.value["volume"]
+      backup    = disk.value["backup"]
     }
   }
 }

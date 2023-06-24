@@ -168,3 +168,19 @@ variable "scsihw" {
   default     = "virtio-scsi-single"
   type        = string
 }
+
+variable "file" {
+  description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
+  type        = string
+}
+
+variable "volume" {
+  description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
+  type        = string
+}
+
+variable "backup" {
+  description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
+  default     = true
+  type        = bool
+}
