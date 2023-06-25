@@ -88,12 +88,14 @@ module "pve_vm_hass" {
   num_cores            = "2"
   num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent     = 1
+  #qemu_guest_agent     = 1
+  scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
       tag          = "720"
+      mtu          = "0"
     },
   ]
   vm_disks = [
@@ -127,12 +129,14 @@ module "pve_vm_k8s_masters" {
   num_cores            = "2"
   num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent     = 1
+  #qemu_guest_agent     = 1
+  scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
       tag          = "120"
+      mtu          = "0"
     },
   ]
   vm_disks = [
@@ -168,12 +172,14 @@ module "pve_vm_k8s_workers" {
   num_cores            = "16"
   num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent                = 1
+  #qemu_guest_agent     = 1
+  scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
       tag          = "120"
+      mtu          = "0"
     },
   ]
   vm_disks = [
@@ -207,12 +213,14 @@ module "pve_vm_uisp" {
   num_cores            = "2"
   num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent     = 1
+  #qemu_guest_agent     = 1
+  scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
       tag          = "720"
+      mtu          = "0"
     },
   ]
   vm_disks = [
@@ -246,11 +254,13 @@ module "pve_vm_vyos" {
   num_cores            = "2"
   num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent     = 1
+  #qemu_guest_agent     = 1
+  scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
+      mtu          = "0"
     },
   ]
   vm_disks = [
@@ -284,12 +294,14 @@ module "pve_vm_ad" {
   num_cores            = "1"
   num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent     = 1
+  #qemu_guest_agent     = 1
+  scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
       tag          = "110"
+      mtu          = "0"
     },
   ]
   vm_disks = [
@@ -323,12 +335,14 @@ module "pve_vm_biris" {
   num_cores            = "4"
   num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent     = 1
+  #qemu_guest_agent     = 1
+  scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
       tag          = "610"
+      mtu          = "0"
     },
   ]
   vm_disks = [

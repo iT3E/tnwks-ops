@@ -29,6 +29,7 @@ resource "proxmox_vm_qemu" "proxmox_vm" {
       model        = network.value.model
       bridge       = network.value.bridge
       tag          = network.value.tag != null ? network.value.tag : null
+      mtu          = network.value.mtu
     }
   }
 
