@@ -44,7 +44,7 @@ source "proxmox-iso" "ubuntu-server-focal" {
     # VM General Settings
     node = "sce-pve01"
     vm_name = "ubuntu-server-focal"
-    template_description = "Ubuntu Server Focal Image"
+    #template_description = "Ubuntu Server Focal Image"
 
     # VM OS Settings
     # (Option 1) Local ISO File

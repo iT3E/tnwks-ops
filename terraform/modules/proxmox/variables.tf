@@ -96,6 +96,10 @@ variable "ha_group" {
     description = "Sets the name of the HA Group."
 }
 
+variable "ha_state" {
+    description = "Sets the state of the HA Group."
+}
+
 variable "qemu_os" {
     description = "The type of OS in the guest.  Set to properly allow Proxmox to enable optimizations for the appropriate guest OS."
     validation {
@@ -169,18 +173,23 @@ variable "scsihw" {
   type        = string
 }
 
-variable "file" {
-  description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
-  type        = string
+variable "target_node" {
+    description = "Target node where vms are deployed"
+    type        = string
 }
 
-variable "volume" {
-  description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
-  type        = string
-}
+# variable "file" {
+#   description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
+#   type        = string
+# }
 
-variable "backup" {
-  description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
-  default     = true
-  type        = bool
-}
+# variable "volume" {
+#   description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
+#   type        = string
+# }
+
+# variable "backup" {
+#   description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
+#   default     = true
+#   type        = bool
+# }

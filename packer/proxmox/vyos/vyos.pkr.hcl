@@ -44,7 +44,7 @@ source "proxmox-iso" "vyos" {
     # VM General Settings
     node = "sce-pve01"
     vm_name = "VyOS"
-    template_description = "VyOS Image"
+    #template_description = "VyOS Image"
 
     # VM OS Settings
     # (Option 1) Local ISO File
