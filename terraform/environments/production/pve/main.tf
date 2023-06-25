@@ -79,7 +79,7 @@ module "pve_vm_hass" {
   for_each             = toset(local.hass)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
-  target_node          = element(local.target_nodes, index(local.hass, each.value) % length(local.target_nodes))
+  target_node          = "sce-pve0${index(local.hass, each.value) + 1}"
   clone                = "ubuntu-server-focal"
   full_clone           = true
   ha_group             = "ha_group${index(local.hass, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
@@ -88,7 +88,7 @@ module "pve_vm_hass" {
   num_cores            = "2"
   num_sockets          = "2"
   qemu_os              = "l26"
-  #qemu_guest_agent     = 1
+  qemu_guest_agent     = 0
   scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
@@ -129,7 +129,7 @@ module "pve_vm_k8s_masters" {
   num_cores            = "2"
   num_sockets          = "2"
   qemu_os              = "l26"
-  #qemu_guest_agent     = 1
+  qemu_guest_agent     = 1
   scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
@@ -163,7 +163,7 @@ module "pve_vm_k8s_workers" {
   for_each             = toset(local.k8s_workers)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
-  target_node          = element(local.target_nodes, index(local.k8s_workers, each.value) % length(local.target_nodes))
+  target_node          = "sce-pve0${index(local.k8s_workers, each.value) + 1}"
   clone                = "ubuntu-server-focal"
   full_clone           = true
   ha_group             = "ha_group${index(local.k8s_workers, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
@@ -172,7 +172,7 @@ module "pve_vm_k8s_workers" {
   num_cores            = "16"
   num_sockets          = "2"
   qemu_os              = "l26"
-  #qemu_guest_agent     = 1
+  qemu_guest_agent     = 1
   scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
@@ -204,7 +204,7 @@ module "pve_vm_uisp" {
   for_each             = toset(local.uisp)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
-  target_node          = element(local.target_nodes, index(local.uisp, each.value) % length(local.target_nodes))
+  target_node          = "sce-pve0${index(local.uisp, each.value) + 1}"
   clone                = "ubuntu-server-focal"
   full_clone           = true
   ha_group             = "ha_group${index(local.uisp, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
@@ -213,7 +213,7 @@ module "pve_vm_uisp" {
   num_cores            = "2"
   num_sockets          = "2"
   qemu_os              = "l26"
-  #qemu_guest_agent     = 1
+  qemu_guest_agent     = 0
   scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
@@ -228,7 +228,7 @@ module "pve_vm_uisp" {
       storage   = "ssd-pool"
       size      = "20G"
       type      = "virtio"
-      cache     = "default"
+      cache     = "none"
       format    = "raw"
       iothread  = 1
     },
@@ -245,7 +245,7 @@ module "pve_vm_vyos" {
   for_each             = toset(local.vyos)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
-  target_node          = element(local.target_nodes, index(local.vyos, each.value) % length(local.target_nodes))
+  target_node          = "sce-pve0${index(local.vyos, each.value) + 1}"
   clone                = "VyOS"
   full_clone           = true
   ha_group             = "ha_group${index(local.vyos, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
@@ -254,7 +254,7 @@ module "pve_vm_vyos" {
   num_cores            = "2"
   num_sockets          = "2"
   qemu_os              = "l26"
-  #qemu_guest_agent     = 1
+  qemu_guest_agent     = 0
   scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
@@ -266,8 +266,8 @@ module "pve_vm_vyos" {
   vm_disks = [
     {
       storage   = "ssd-pool"
-      size      = "20G"
-      type      = "scsi"
+      size      = "10G"
+      type      = "virtio"
       cache     = "none"
       format    = "raw"
       iothread  = 1
@@ -285,7 +285,7 @@ module "pve_vm_ad" {
   for_each             = toset(local.ad)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
-  target_node          = element(local.target_nodes, index(local.ad, each.value) % length(local.target_nodes))
+  target_node          = "sce-pve0${index(local.ad, each.value) + 1}"
   clone                = "ubuntu-server-focal"
   full_clone           = true
   ha_group             = "ha_group${index(local.ad, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
@@ -294,7 +294,7 @@ module "pve_vm_ad" {
   num_cores            = "1"
   num_sockets          = "2"
   qemu_os              = "l26"
-  #qemu_guest_agent     = 1
+  qemu_guest_agent     = 1
   scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
@@ -326,7 +326,7 @@ module "pve_vm_biris" {
   for_each             = toset(local.biris)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
-  target_node          = element(local.target_nodes, index(local.biris, each.value) % length(local.target_nodes))
+  target_node          = "sce-pve0${index(local.biris, each.value) + 1}"
   clone                = "ubuntu-server-focal"
   full_clone           = true
   ha_group             = "ha_group${index(local.biris, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
@@ -335,7 +335,7 @@ module "pve_vm_biris" {
   num_cores            = "4"
   num_sockets          = "2"
   qemu_os              = "l26"
-  #qemu_guest_agent     = 1
+  qemu_guest_agent     = 1
   scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {

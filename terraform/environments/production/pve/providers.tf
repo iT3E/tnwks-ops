@@ -5,4 +5,6 @@ provider "proxmox" {
   pm_api_url          = data.sops_file.secrets.data["pm_api_url"]
   pm_debug            = true
   pm_parallel         = 25
+  # pm_log_enable       = true
+  # pm_log_file         = ""
 }
