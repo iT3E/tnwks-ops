@@ -163,12 +163,14 @@ build {
   ## clones personal vyos-config repo
     provisioner "shell" {
         inline = [
-          "sudo mkdir -p /opt/vyos-config",
-          "sudo chown packerbootstrap /opt/vyos-config",
-          "cd /opt/vyos-config",
+          #"sudo mkdir -p /opt/vyos-config",
+          #"sudo chown packerbootstrap /opt/vyos-config",
+          #"cd /opt/vyos-config",
+          "cd /config",
           "git config --global init.defaultBranch main",
           "git init",
           "git remote add origin https://github.com/iT3E/vyos-config.git",
+          "git config --global --add safe.directory /config",
           "git fetch origin",
           "git checkout main -f",
           "git log",
