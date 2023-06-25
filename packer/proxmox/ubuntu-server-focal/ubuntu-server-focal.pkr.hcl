@@ -71,6 +71,7 @@ source "proxmox-iso" "ubuntu-server-focal" {
         format = "qcow2"
         storage_pool = "ssd-pool"
         type = "virtio"
+        iothread  = true
     }
 
     # VM CPU Settings
