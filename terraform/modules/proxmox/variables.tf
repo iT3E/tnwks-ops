@@ -71,7 +71,7 @@ variable "network_bridge" {
 }
 
 variable "qemu_guest_agent" {
-  default = 1
+  default = 0
 }
 
 variable "proxmox_host_node" {
@@ -135,11 +135,13 @@ variable "vm_nics" {
     model = string
     bridge = string
     tag = optional(number)
+    mtu = number
   }))
   default = [
     {
       model = "virtio"
       bridge = "vmbr0"
+      mtu = 0
     }
   ]
 }
