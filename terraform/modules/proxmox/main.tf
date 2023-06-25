@@ -10,9 +10,10 @@ terraform {
 resource "proxmox_vm_qemu" "proxmox_vm" {
   name        = var.vm_name
   hagroup     = var.ha_group
+  hastate     = var.ha_state
   clone       = var.clone
   full_clone  = var.full_clone
-  target_node = "sce-pve01"
+  target_node = var.target_node
   agent       = var.qemu_guest_agent
   qemu_os     = var.qemu_os
   memory      = var.vm_memory
@@ -40,9 +41,6 @@ resource "proxmox_vm_qemu" "proxmox_vm" {
       cache     = disk.value["cache"]
       format    = disk.value["format"]
       iothread  = disk.value["iothread"]
-      file       = disk.value["file"]
-      volume    = disk.value["volume"]
-      backup    = disk.value["backup"]
     }
   }
 }

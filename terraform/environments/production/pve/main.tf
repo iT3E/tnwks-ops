@@ -27,8 +27,6 @@ data "sops_file" "secrets" {
 ######################
 ######################
 
-
-
 #######################################
 ##                                   ##
 ##              Locals               ##
@@ -64,6 +62,11 @@ locals {
   biris = [
     "sce-biris01"
   ]
+  target_nodes = [
+    "sce-pve01",
+    "sce-pve02",
+    "sce-pve03"
+  ]
 }
 
 #######################################
@@ -76,9 +79,11 @@ module "pve_vm_hass" {
   for_each             = toset(local.hass)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
+  target_node          = element(local.target_nodes, index(local.hass, each.value) % length(local.target_nodes))
   clone                = "ubuntu-server-focal"
   full_clone           = true
   ha_group             = "ha_group${index(local.hass, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+  ha_state             = "started"
   vm_memory            = "8192"
   num_cores            = "2"
   num_sockets          = "2"
@@ -97,11 +102,8 @@ module "pve_vm_hass" {
       size      = "20G"
       type      = "virtio"
       cache     = "none"
-      format    = "qcow2"
+      format    = "raw"
       iothread  = 1
-      file       = "vm-${each.value}-disk-0"
-      volume    = "ssd-pool:vm-${each.value}-disk-0"
-      backup    = true
     },
   ]
 }
@@ -116,9 +118,11 @@ module "pve_vm_k8s_masters" {
   for_each             = toset(local.k8s_masters)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
+  target_node          = "sce-pve0${index(local.k8s_masters, each.value) + 1}"
   clone                = "ubuntu-server-focal"
   full_clone           = true
   ha_group             = "ha_group${index(local.k8s_masters, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+  ha_state             = "started"
   vm_memory            = "8192"
   num_cores            = "2"
   num_sockets          = "2"
@@ -137,11 +141,8 @@ module "pve_vm_k8s_masters" {
       size      = "20G"
       type      = "virtio"
       cache     = "none"
-      format    = "qcow2"
+      format    = "raw"
       iothread  = 1
-      file       = "vm-${each.value}-disk-0"
-      volume    = "ssd-pool:vm-${each.value}-disk-0"
-      backup    = true
     },
   ]
 }
@@ -158,9 +159,11 @@ module "pve_vm_k8s_workers" {
   for_each             = toset(local.k8s_workers)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
+  target_node          = element(local.target_nodes, index(local.k8s_workers, each.value) % length(local.target_nodes))
   clone                = "ubuntu-server-focal"
   full_clone           = true
   ha_group             = "ha_group${index(local.k8s_workers, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+  ha_state             = "started"
   vm_memory            = "24576"
   num_cores            = "16"
   num_sockets          = "2"
@@ -179,11 +182,8 @@ module "pve_vm_k8s_workers" {
       size      = "20G"
       type      = "virtio"
       cache     = "none"
-      format    = "qcow2"
+      format    = "raw"
       iothread  = 1
-      file       = "vm-${each.value}-disk-0"
-      volume    = "ssd-pool:vm-${each.value}-disk-0"
-      backup    = true
     },
   ]
 }
@@ -198,9 +198,11 @@ module "pve_vm_uisp" {
   for_each             = toset(local.uisp)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
+  target_node          = element(local.target_nodes, index(local.uisp, each.value) % length(local.target_nodes))
   clone                = "ubuntu-server-focal"
   full_clone           = true
   ha_group             = "ha_group${index(local.uisp, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+  ha_state             = "started"
   vm_memory            = "2048"
   num_cores            = "2"
   num_sockets          = "2"
@@ -219,11 +221,8 @@ module "pve_vm_uisp" {
       size      = "20G"
       type      = "virtio"
       cache     = "default"
-      format    = "qcow2"
+      format    = "raw"
       iothread  = 1
-      file       = "vm-${each.value}-disk-0"
-      volume    = "ssd-pool:vm-${each.value}-disk-0"
-      backup    = true
     },
   ]
 }
@@ -238,9 +237,11 @@ module "pve_vm_vyos" {
   for_each             = toset(local.vyos)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
+  target_node          = element(local.target_nodes, index(local.vyos, each.value) % length(local.target_nodes))
   clone                = "VyOS"
   full_clone           = true
   ha_group             = "ha_group${index(local.vyos, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+  ha_state             = "started"
   vm_memory            = "4096"
   num_cores            = "2"
   num_sockets          = "2"
@@ -258,11 +259,8 @@ module "pve_vm_vyos" {
       size      = "20G"
       type      = "scsi"
       cache     = "none"
-      format    = "qcow2"
+      format    = "raw"
       iothread  = 1
-      file       = "vm-${each.value}-disk-0"
-      volume    = "ssd-pool:vm-${each.value}-disk-0"
-      backup    = true
     },
   ]
 }
@@ -277,9 +275,11 @@ module "pve_vm_ad" {
   for_each             = toset(local.ad)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
+  target_node          = element(local.target_nodes, index(local.ad, each.value) % length(local.target_nodes))
   clone                = "ubuntu-server-focal"
   full_clone           = true
   ha_group             = "ha_group${index(local.ad, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+  ha_state             = "started"
   vm_memory            = "2048"
   num_cores            = "1"
   num_sockets          = "2"
@@ -298,11 +298,8 @@ module "pve_vm_ad" {
       size      = "40G"
       type      = "virtio"
       cache     = "none"
-      format    = "qcow2"
+      format    = "raw"
       iothread  = 1
-      file       = "vm-${each.value}-disk-0"
-      volume    = "ssd-pool:vm-${each.value}-disk-0"
-      backup    = true
     },
   ]
 }
@@ -317,9 +314,11 @@ module "pve_vm_biris" {
   for_each             = toset(local.biris)
   source               = "../../../modules/proxmox"
   vm_name              = each.value
+  target_node          = element(local.target_nodes, index(local.biris, each.value) % length(local.target_nodes))
   clone                = "ubuntu-server-focal"
   full_clone           = true
   ha_group             = "ha_group${index(local.biris, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+  ha_state             = "started"
   vm_memory            = "8192"
   num_cores            = "4"
   num_sockets          = "2"
@@ -338,11 +337,8 @@ module "pve_vm_biris" {
       size      = "40G"
       type      = "virtio"
       cache     = "none"
-      format    = "qcow2"
+      format    = "raw"
       iothread  = 1
-      file       = "vm-${each.value}-disk-0"
-      volume    = "ssd-pool:vm-${each.value}-disk-0"
-      backup    = true
     },
   ]
 }
