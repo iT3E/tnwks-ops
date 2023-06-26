@@ -7,6 +7,12 @@ export PROXMOX_API_TOKEN_ID=$(sops -d packer/proxmox/vyos/secretvars.sops.yaml |
 export PROXMOX_API_TOKEN_SECRET=$(sops -d packer/proxmox/vyos/secretvars.sops.yaml | yq eval '.proxmox_api_token_secret' -)
 export SSH_SECONDARY_USERNAME=$(sops -d packer/proxmox/vyos/secretvars.sops.yaml | yq eval '.ssh_secondary_username' -)
 export SSH_SECONDARY_VYOSPUB=$(sops -d packer/proxmox/vyos/secretvars.sops.yaml | yq eval '.ssh_secondary_vyospub' -)
+export AGE_PRIVATE_KEY=$(sops -d packer/proxmox/vyos/secretvars.sops.yaml | yq eval '.age_private_key' -)
+```
+
+execute the below from tnwks-ops directory, but replace ./ with path.
+```
+packer build ./vyos/vyos.pkr.hcl
 ```
 
 A port forward rule is configured on PFSense to forward 8802 traffic destined for 172.22.0.0/16 to the windows PC.

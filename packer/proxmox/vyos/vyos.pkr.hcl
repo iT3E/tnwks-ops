@@ -30,6 +30,11 @@ variable "ssh_secondary_vyospub" {
   sensitive = true
 }
 
+variable "age_private_key" {
+  type      = string
+  default   = "${env("AGE_PRIVATE_KEY")}"
+  sensitive = true
+}
 
 # Resource Definiation for the VM Template
 source "proxmox-iso" "vyos" {
@@ -64,14 +69,14 @@ source "proxmox-iso" "vyos" {
     qemu_agent = true
 
     # VM Hard Disk Settings
-    scsi_controller = "virtio-scsi-pci"
+    scsi_controller = "virtio-scsi-single"
 
     disks {
         disk_size = "10G"
         format = "qcow2"
         storage_pool = "ssd-pool"
         type = "virtio"
-        iothread  = true
+        io_thread  = true
     }
 
     # VM CPU Settings
@@ -116,20 +121,17 @@ source "proxmox-iso" "vyos" {
       "configure<enter><wait>",
       "set interfaces ethernet eth0 address dhcp<enter><wait>",
       "set system name-server 8.8.8.8<enter><wait>",
-      "set system login user packerbootstrap authentication public-keys personal key AAAAB3NzaC1yc2EAAAADAQABAAACAQC5vW0AfFENV7suq4y8Y4NCz4HMy/xsaRiioQcxV4/xQyPTmATsKRdB/3Ug0ZMxlTHkQu6dpP/Wa6DcvqCXeSQAhXPCO4uDcmQVBFSeGpK+FTmIsUGv6BoMHy/2chORZXAITMyDF2HdaDAgjesAZAPqjmIxr460h6W6mwY3gKTiOlvUM8R4mZFbcUqru+iH0U1gnowt1uEYClBc7d95ShBWiZg8jt2qcIRztyAqT6XDO8GMnygPUoIjQdJAFboUGetzMkQPMZKOvBugfYPt3JRmN7SeuQrT+w+KYnIebKl2LsX6iZdeWVj7ZHOuwFwBFFSJH/p5DSEFi7erD86sQNdviwKHwcFVDpXeZGuP0UYKR71MQQhTzTv/7La503V3h2e2Q9l8zk5Jy6HFvizEu0YUrioA7sPj1kiTEMJAb7lJiAR92W/iLr/7AlMFvr985oTx4xZTOf9L68CdzZgJ36k16YIzHpFGQgWaz4iR96LsHKhcmQjgdYL60WZN5+Od+VX0CuV4/IruV4O/MRQ7C7zb9wGEMR9uu8BbHwnobLxffpNphahX+/9p8QZrMyQ3IToIop/c5LF9xEUr53mmuFhTcJOLOjNHKUpzDAakpD1sXYuxX0kMvlMkbYBdhBpCPnSOZKfUaJaEK4DLtV+Nybu3y1wHx8lDzuHbbGj679VpSw==<enter><wait>",
+      # below two commands are inconsistent.  It may require manually connecting with vyos+vyos and running these commands before provisioners kick off.
+      # the problem seems to be with the amount of charaters being entered, or possibly the end characters causing issues with <enter><wait>.
+      # 2023-06-25: latest problem was there being a character amount mismatch between what is listed here and what was in authorized_keys.  Other times
+      # the problem has been doing to capitalization.
+      "set system login user packerbootstrap authentication public-keys personal key AAAAB3NzaC1yc2EAAAADAQABAAACAQC5vW0AfFENV7suq4y8Y4NCz4HMy/xsaRiioQcxV4/xQyPTmATsKRdB/3Ug0ZMxlTHkQu6dpP/Wa6DcvqCXeSQAhXPCO4uDcmQVBFSeGpK+FTmIsUGv6BoMHy/2chORZXAITMyDF2HdaDAgjesAZAPqjmIxr460h6W6mwY3gKTiOlvUM8R4mZFbcUqru+iH0U1gnowt1uEYClBc7d95ShBWiZg8jt2qcIRztyAqT6XDO8GMnygPUoIjQdJAFboUGetzMkQPMZKOvBugfYPt3JRmN7SeuQrT+w+KYnIebKl2LsX6iZdeWVj7ZHOuwFwBFFSJH/p5DSEFi7erD86sQNdviwKHwcFVDpXeZGuP0UYKR71MQQhTzTv/7La503V3h2e2Q9l8zk5Jy6HFvizEu0YUrioA7sPj1kiTEMJAb7lJiAR92W/iLr/7AlMFvr985oTx4xZTOf9L68CdzZgJ36k16YIzHpFGQgWaz4iR96LsHKhcmQjgdYL60WZN5+Od+VX0CuV4/IruV4O/MRQ7C7zb9wGEMR9uu8BbHwnobLxffpNphahX+/9p8QZrMyQ3IToIop/c5LF9xEUr53mmuFhTcJOLOjNHKUpzDAakpD1sXYuxX0kMvlMkbYBdhBpCPnSOZKfUaJaEK4DLtV+Nybu3y1wHx8lDzuHbbGj679VpSw==<enter><wait5>",
       "set system login user packerbootstrap authentication public-keys personal type ssh-rsa<enter><wait>",
       "set service ssh<enter><wait>",
       "commit<enter><wait5>",
       "save<enter><wait>",
       "exit<enter><wait>",
       "exit<enter><wait>"
-      # "vagrant<enter><wait>",
-      # "vagrant<enter><wait>",
-      # "configure<enter><wait>",
-      # "delete system login user vyos<enter><wait>",
-      # "commit<enter><wait>",
-      # "save<enter><wait>",
-      # "exit<enter><wait>"
     ]
     boot = "c"
     boot_wait = "5s"
@@ -168,16 +170,28 @@ build {
           #"cd /opt/vyos-config",
           "cd /config",
           "git config --global init.defaultBranch main",
+          "git config --global --add safe.directory /config",
           "git init",
           "git remote add origin https://github.com/iT3E/vyos-config.git",
-          "git config --global --add safe.directory /config",
           "git fetch origin",
           "git checkout main -f",
           "git log",
           "sudo rm /etc/ssh/ssh_host_*",
           "sudo truncate -s 0 /etc/machine-id",
           "sudo apt -y autoremove --purge",
-          "sudo apt -y clean"
+          "sudo apt -y clean",
+          #install age
+          "curl -Lo age.tar.gz 'https://github.com/FiloSottile/age/releases/download/v1.1.1/age-v1.1.1-linux-amd64.tar.gz'",
+          "tar xf age.tar.gz",
+          "sudo mv age/age /usr/local/bin",
+          "sudo mv age/age-keygen /usr/local/bin",
+          "rm -rf age.tar.gz",
+          "rm -rf age",
+          #configure age
+          "sudo mkdir -p /config/secrets",
+          "echo '# created: 2023-06-06T12:37:37-07:00' | sudo tee /config/secrets/age.key",
+          "echo '# public key: age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2' | sudo tee -a /config/secrets/age.key",
+          "echo '${var.age_private_key}' | sudo tee -a /config/secrets/age.key"
         ]
     }
 
