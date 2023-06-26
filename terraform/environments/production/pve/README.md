@@ -1,3 +1,10 @@
+## Execute
+```
+cd terraform/environments/production/pve
+terraform plan
+terraform apply -auto-approve
+```
+
 ## Caveats
 Currently the caveats to the PVE terraform config are:
 
