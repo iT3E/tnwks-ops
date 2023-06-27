@@ -79,4 +79,4 @@ tasks:
     desc: Configure Proxmox post-install
     dir: "{{.ANSIBLE_DIR}}"
     cmds:
-      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/pvecl01-hosts.yml {{.ANSIBLE_PLAYBOOK_DIR}}/proxmox-configure.yml
+      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/sce-pvecl01-hosts.yml {{.ANSIBLE_PLAYBOOK_DIR}}/proxmox-configure.yml

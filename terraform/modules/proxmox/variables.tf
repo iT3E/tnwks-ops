@@ -28,13 +28,6 @@ variable "control_plane_node_count" {
     }
 }
 
-
-variable "iso_image_location" {
-    description = "The location of the Talos iso image on the proxmox host (<storage pool>:<content type>/<file name>.iso)."
-    type = string
-    default = "cephfs:iso/talos-amd64.iso"
-}
-
 variable "boot_disk_storage_pool" {
     description = "The name of the storage pool where boot disks for the cluster nodes will be stored."
     type = string
@@ -78,13 +71,13 @@ variable "network_bridge" {
 }
 
 variable "qemu_guest_agent" {
-  default = 1
+  default = 0
 }
 
 variable "proxmox_host_node" {
     description = "The name of the proxmox node where the cluster will be deployed"
     type = string
-    default = "pve-fatman"
+    default = "sce-pve01"
 }
 
 variable "proxmox_tls_insecure" {
@@ -103,9 +96,17 @@ variable "ha_group" {
     description = "Sets the name of the HA Group."
 }
 
+variable "ha_state" {
+    description = "Sets the state of the HA Group."
+}
+
 variable "qemu_os" {
     description = "The type of OS in the guest.  Set to properly allow Proxmox to enable optimizations for the appropriate guest OS."
-    allowed_values = ["l26", "win8", "win10", "win11"]
+    validation {
+        condition     = contains(["l26", "win8", "win10", "win11"], var.qemu_os)
+        error_message = "The value of qemu_os must be one of: l26, win8, win10, win11."
+    }
+}
       # other unspecified OS
       # wxp Microsoft Windows XP
       # w2k Microsoft Windows 2000
@@ -118,7 +119,7 @@ variable "qemu_os" {
       # win11 Microsoft Windows 11/2022
       # l24 Linux 2.4 Kernel
       # l26 Linux 2.6 - 6.X Kernel
-}
+
 
 variable "num_cores" {
     description = "Sets the number of VM cores."
@@ -133,27 +134,64 @@ variable "vm_nics" {
   type = list(object({
     model = string
     bridge = string
-    tag = number
+    tag = optional(number)
+    mtu = number
   }))
+  default = [
+    {
+      model = "virtio"
+      bridge = "vmbr0"
+      mtu = 0
+    }
+  ]
 }
 
 variable "vm_disks" {
   description = "The list of disk configurations for the VM"
   type        = list(object({
-    size        = number
+    size        = string
     storage     = string
     format      = string
-    interface   = string
+    type        = string
     cache       = string
+    iothread    = number
   }))
 }
 
-variable "vm_sshkey" {
-  description = "Public SSH key that is added to VMs using default cloudinit configuration"
-  default = "add key and configure SOPS here!"
+variable "clone" {
+  description = "VM name to base the clone from"
+  default     = "ubuntu-server-focal"
+  type        = string
 }
 
-variable "vm_ipconfig0" {
-  description = "IP Address configured with default cloudinit configuration"
-  default = "ip=dhcp"
+variable "full_clone" {
+  description = "Whether to deploy as a full clone or linked clone"
+  default = "true"
 }
+
+variable "scsihw" {
+  description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
+  default     = "virtio-scsi-single"
+  type        = string
+}
+
+variable "target_node" {
+    description = "Target node where vms are deployed"
+    type        = string
+}
+
+# variable "file" {
+#   description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
+#   type        = string
+# }
+
+# variable "volume" {
+#   description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
+#   type        = string
+# }
+
+# variable "backup" {
+#   description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
+#   default     = true
+#   type        = bool
+# }
