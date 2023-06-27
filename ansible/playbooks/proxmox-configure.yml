@@ -40,3 +40,13 @@
   become: true
   roles:
     - lae.proxmox
+  pre_tasks:
+    - name: Load variables from sops encrypted file
+      community.sops.load_vars:
+        file: "../inventory/group_vars/proxmox/pve_users.sops.yml"
+    - name: Load variables from sops encrypted file
+      community.sops.load_vars:
+        file: "../inventory/group_vars/proxmox/pve_groups.sops.yml"
+    - name: Load variables from sops encrypted file
+      community.sops.load_vars:
+        file: "../inventory/group_vars/proxmox/pve_acls.sops.yml"
