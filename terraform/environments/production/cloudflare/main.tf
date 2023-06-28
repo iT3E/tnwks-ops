@@ -102,3 +102,76 @@ module "cf_domain_1" {
     },
   ]
 }
+
+#####################################
+##                                 ##
+##           cf_domain_2           ##
+##                                 ##
+#####################################
+
+module "cf_domain_2" {
+  source     = "./././modules/cloudflare"
+  domain     = data.sops_file.secrets.data["cf_domain_2"]
+  account_id = cloudflare_account.tnwks.id
+
+  dns_entries = [
+    # WIP
+    {
+      name  = data.sops_file.secrets.data["cf_domain_2"]
+      value = "WIP"
+      type  = "A"
+    },
+  ]
+
+  waf_custom_rules = [
+    {
+      enabled     = true
+      description = "Firewall rule to block bots and threats determined by CF"
+      expression  = "(cf.client.bot) or (cf.threat_score gt 14)"
+      action      = "block"
+    },
+    {
+      enabled     = true
+      description = "Firewall rule to block all countries except NL/BE/DE"
+      expression  = "(ip.geoip.country ne \"US\")"
+      action      = "block"
+    },
+  ]
+}
+
+
+#####################################
+##                                 ##
+##           cf_domain_3           ##
+##                                 ##
+#####################################
+
+module "cf_domain_3" {
+  source     = "./././modules/cloudflare"
+  domain     = data.sops_file.secrets.data["cf_domain_3"]
+  account_id = cloudflare_account.tnwks.id
+
+  dns_entries = [
+    # Generic settings
+    {
+      name  = data.sops_file.secrets.data["cf_domain_3"]
+      value = data.sops_file.secrets.data["cf_domain_3_cloudfront"]
+      type  = "A"
+    },
+  ]
+
+  waf_custom_rules = [
+    {
+      enabled     = true
+      description = "Firewall rule to block bots and threats determined by CF"
+      expression  = "(cf.client.bot) or (cf.threat_score gt 14)"
+      action      = "block"
+    },
+    {
+      enabled     = true
+      description = "Firewall rule to block all countries except NL/BE/DE"
+      expression  = "(ip.geoip.country ne \"US\")"
+      action      = "block"
+    },
+  ]
+}
