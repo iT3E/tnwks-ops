@@ -88,7 +88,7 @@ module "pve_vm_hass" {
   num_cores            = "2"
   num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent     = 0
+  qemu_guest_agent     = 1
   scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
@@ -213,7 +213,7 @@ module "pve_vm_uisp" {
   num_cores            = "2"
   num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent     = 0
+  qemu_guest_agent     = 1
   scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
@@ -254,7 +254,7 @@ module "pve_vm_vyos" {
   num_cores            = "2"
   num_sockets          = "2"
   qemu_os              = "l26"
-  qemu_guest_agent     = 0
+  qemu_guest_agent     = 1
   scsihw               = "virtio-scsi-single"
   vm_nics   = [
     {
