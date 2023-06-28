@@ -10,7 +10,7 @@ terraform {
   required_providers {
     cloudflare = {
       source  = "cloudflare/cloudflare"
-      version = "4.8.0"
+      version = "4.9.0"
    }
     sops = {
       source  = "carlpett/sops"
@@ -26,20 +26,6 @@ data "sops_file" "secrets" {
 #########################
 #########################
 
-
-#####################################
-##                                 ##
-##           cf_account            ##
-##                                 ##
-#####################################
-
-resource "cloudflare_account" "tnwks" {
-  name              = "Tnwks Account"
-  type              = "standard"
-  enforce_twofactor = false
-}
-
-
 #####################################
 ##                                 ##
 ##           cf_domain_1           ##
@@ -47,9 +33,9 @@ resource "cloudflare_account" "tnwks" {
 #####################################
 
 module "cf_domain_1" {
-  source     = "./././modules/cloudflare"
+  source     = "../../../modules/cloudflare"
   domain     = data.sops_file.secrets.data["cf_domain_1"]
-  account_id = cloudflare_account.tnwks.id
+  account_id = data.sops_file.secrets.data["cf_account_id"]
 
   dns_entries = [
     # Generic settings
@@ -96,7 +82,7 @@ module "cf_domain_1" {
     },
     {
       enabled     = true
-      description = "Firewall rule to block all countries except NL/BE/DE"
+      description = "Firewall rule to block all countries except US"
       expression  = "(ip.geoip.country ne \"US\")"
       action      = "block"
     },
@@ -110,16 +96,16 @@ module "cf_domain_1" {
 #####################################
 
 module "cf_domain_2" {
-  source     = "./././modules/cloudflare"
+  source     = "../../../modules/cloudflare"
   domain     = data.sops_file.secrets.data["cf_domain_2"]
-  account_id = cloudflare_account.tnwks.id
+  account_id = data.sops_file.secrets.data["cf_account_id"]
 
   dns_entries = [
     # WIP
     {
       name  = data.sops_file.secrets.data["cf_domain_2"]
-      value = "WIP"
-      type  = "A"
+      value = data.sops_file.secrets.data["cf_domain_1"]
+      type  = "CNAME"
     },
   ]
 
@@ -132,7 +118,7 @@ module "cf_domain_2" {
     },
     {
       enabled     = true
-      description = "Firewall rule to block all countries except NL/BE/DE"
+      description = "Firewall rule to block all countries except US"
       expression  = "(ip.geoip.country ne \"US\")"
       action      = "block"
     },
@@ -147,16 +133,16 @@ module "cf_domain_2" {
 #####################################
 
 module "cf_domain_3" {
-  source     = "./././modules/cloudflare"
+  source     = "../../../modules/cloudflare"
   domain     = data.sops_file.secrets.data["cf_domain_3"]
-  account_id = cloudflare_account.tnwks.id
+  account_id = data.sops_file.secrets.data["cf_account_id"]
 
   dns_entries = [
     # Generic settings
     {
       name  = data.sops_file.secrets.data["cf_domain_3"]
       value = data.sops_file.secrets.data["cf_domain_3_cloudfront"]
-      type  = "A"
+      type  = "CNAME"
     },
   ]
 
@@ -169,7 +155,7 @@ module "cf_domain_3" {
     },
     {
       enabled     = true
-      description = "Firewall rule to block all countries except NL/BE/DE"
+      description = "Firewall rule to block all countries except US"
       expression  = "(ip.geoip.country ne \"US\")"
       action      = "block"
     },
