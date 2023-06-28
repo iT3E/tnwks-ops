@@ -324,12 +324,12 @@ verify_ansible_hosts() {
         node_id=$(echo "${var}" | awk -F"_" '{print $5}')
         node_addr="BOOTSTRAP_ANSIBLE_HOST_ADDR_${node_id}"
         node_username="BOOTSTRAP_ANSIBLE_SSH_USERNAME_${node_id}"
-        node_password="BOOTSTRAP_ANSIBLE_SUDO_PASSWORD_${node_id}"
+        #node_password="BOOTSTRAP_ANSIBLE_SUDO_PASSWORD_${node_id}"
         node_control="BOOTSTRAP_ANSIBLE_CONTROL_NODE_${node_id}"
         node_hostname="BOOTSTRAP_ANSIBLE_HOSTNAME_${node_id}"
         _has_envar "${node_addr}"
         _has_envar "${node_username}"
-        _has_envar "${node_password}" "true"
+        #_has_envar "${node_password}" "true"
         _has_envar "${node_control}"
         _has_optional_envar "${node_hostname}"
         if [[ "${!node_addr}" == "${BOOTSTRAP_KUBE_VIP_ADDR}" && "${BOOTSTRAP_KUBE_VIP_ENABLED}" == "true" ]]; then
@@ -366,7 +366,6 @@ verify_success() {
 generate_ansible_host_secrets() {
     local node_id=
     local node_username=
-    local node_password=
     local node_hostname=
     local node_control=
     default_control_node_prefix=${BOOTSTRAP_ANSIBLE_DEFAULT_CONTROL_NODE_HOSTNAME_PREFIX:-k8s-}
@@ -393,14 +392,14 @@ generate_ansible_host_secrets() {
         fi
         {
             node_username="BOOTSTRAP_ANSIBLE_SSH_USERNAME_${node_id}"
-            node_password="BOOTSTRAP_ANSIBLE_SUDO_PASSWORD_${node_id}"
             printf "kind: Secret\n"
             printf "ansible_user: %s\n" "${!node_username}"
-            printf "ansible_become_pass: %s\n" "${!node_password}"
+            printf "ansible_ssh_private_key_file: ~/.ssh/id_rsa\n"
         } > "${PROJECT_DIR}/ansible/inventory/host_vars/${node_hostname}.sops.yml"
         sops --encrypt --in-place "${PROJECT_DIR}/ansible/inventory/host_vars/${node_hostname}.sops.yml"
     done
 }
+
 
 generate_ansible_hosts() {
     local worker_node_count=
