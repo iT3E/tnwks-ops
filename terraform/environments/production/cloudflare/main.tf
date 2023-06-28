@@ -71,6 +71,12 @@ module "cf_domain_1" {
       value = "v=spf1 include:amazonses.com ~all"
       type  = "TXT"
     },
+    {
+      id    = "unms"
+      name  = "unms"
+      value = data.sops_file.secrets.data["cf_domain_1_aws_eip_unms"]
+      type  = "A"
+    },
   ]
 
   waf_custom_rules = [
