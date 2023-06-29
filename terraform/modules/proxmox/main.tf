@@ -22,6 +22,8 @@ resource "proxmox_vm_qemu" "proxmox_vm" {
   scsihw      = var.scsihw
   numa        = true
   hotplug     = "network,disk,usb"
+  ipconfig0 = var.primary_nic_ip != null ? "ip=${var.primary_nic_ip}" : null
+  ipconfig1 = var.secondary_nic_ip != null ? "ip=${var.secondary_nic_ip}" : null
 
   dynamic "network" {
     for_each = var.vm_nics
