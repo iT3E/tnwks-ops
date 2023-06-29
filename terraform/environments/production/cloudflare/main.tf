@@ -77,6 +77,11 @@ module "cf_domain_1" {
       value = data.sops_file.secrets.data["cf_domain_1_aws_eip_unms"]
       type  = "A"
     },
+    {
+      name  = "ipv4"
+      value = data.sops_file.secrets.data["cf_domain_1"]
+      type  = "CNAME"
+    },
   ]
 
   waf_custom_rules = [
