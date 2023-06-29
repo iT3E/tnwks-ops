@@ -62,6 +62,9 @@ locals {
   biris = [
     "sce-biris01"
   ]
+  testing = [
+    "sce-testing01"
+  ]
   target_nodes = [
     "sce-pve01",
     "sce-pve02",
@@ -131,12 +134,18 @@ module "pve_vm_k8s_masters" {
   qemu_os              = "l26"
   qemu_guest_agent     = 1
   scsihw               = "virtio-scsi-single"
+  secondary_nic_ip     = "${cidrhost("10.15.15.0/24", index(local.k8s_masters, each.value) + 100)}/24"
   vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
       tag          = "120"
       mtu          = "0"
+    },
+    {
+      model        = "virtio"
+      bridge       = "vmbr1"
+      mtu          = "9000"
     },
   ]
   vm_disks = [
@@ -174,12 +183,19 @@ module "pve_vm_k8s_workers" {
   qemu_os              = "l26"
   qemu_guest_agent     = 1
   scsihw               = "virtio-scsi-single"
+  secondary_nic_ip     = "${cidrhost("10.15.15.0/24", index(local.k8s_workers, each.value) + 150)}/24"
+
   vm_nics   = [
     {
       model        = "virtio"
       bridge       = "vmbr0"
       tag          = "120"
       mtu          = "0"
+    },
+    {
+      model        = "virtio"
+      bridge       = "vmbr1"
+      mtu          = "9000"
     },
   ]
   vm_disks = [
@@ -357,3 +373,51 @@ module "pve_vm_biris" {
   ]
 }
 
+
+#######################################
+##                                   ##
+##          PVE VM - testing         ##
+##                                   ##
+#######################################
+
+#module "pve_vm_testing" {
+#  for_each             = toset(local.testing)
+#  source               = "../../../modules/proxmox"
+#  vm_name              = each.value
+#  target_node          = "sce-pve0${index(local.testing, each.value) + 1}"
+#  clone                = "ubuntu-server-focal"
+#  full_clone           = true
+#  ha_group             = "ha_group${index(local.testing, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+#  ha_state             = "started"
+#  vm_memory            = "4096"
+#  num_cores            = "1"
+#  num_sockets          = "2"
+#  qemu_os              = "l26"
+#  qemu_guest_agent     = 1
+#  scsihw               = "virtio-scsi-single"
+#  secondary_nic_ip     = "10.15.15.100/24"
+#
+#  vm_nics   = [
+#    {
+#      model        = "virtio"
+#      bridge       = "vmbr0"
+#      tag          = "120"
+#      mtu          = "0"
+#    },
+#    {
+#      model        = "virtio"
+#      bridge       = "vmbr1"
+#      mtu          = "9000"
+#    },
+#  ]
+#  vm_disks = [
+#    {
+#      storage   = "ssd-pool"
+#      size      = "20G"
+#      type      = "virtio"
+#      cache     = "none"
+#      format    = "raw"
+#      iothread  = 1
+#    },
+#  ]
+#}

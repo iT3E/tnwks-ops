@@ -180,18 +180,14 @@ variable "target_node" {
     type        = string
 }
 
-# variable "file" {
-#   description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
-#   type        = string
-# }
+variable "primary_nic_ip" {
+  description = "IP address for the primary NIC"
+  type        = string
+  default     = null
+}
 
-# variable "volume" {
-#   description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
-#   type        = string
-# }
-
-# variable "backup" {
-#   description = "The SCSI controller to emulate. Options: lsi, lsi53c810, megasas, pvscsi, virtio-scsi-pci, virtio-scsi-single."
-#   default     = true
-#   type        = bool
-# }
+variable "secondary_nic_ip" {
+  description = "IP address for the secondary NIC"
+  type        = string
+  default     = null
+}
