@@ -5,10 +5,13 @@ metadata:
   name: home-kubernetes
   namespace: flux-system
 spec:
-  interval: 30m
+  interval: 10m
+  secretRef:
+    name: github-deploy-key
   ref:
     branch: main
-  url: "https://github.com/iT3E/tnwks-ops"
+  url: ssh://git@github.com/iT3E/tnwks-ops
+
   ignore: |
     # exclude all
     /*
