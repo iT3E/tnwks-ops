@@ -95,6 +95,13 @@ spec:
             - *host
     persistence:
       enabled: true
-      storageClassName: block
+      storageClassName: local-path
+      additionalPVCs:
+        - name: additional-pvc
+          enabled: true
+          storageClassName: block
+          accessModes:
+            - ReadWriteOnce
+          size: 10Gi
     testFramework:
       enabled: false
