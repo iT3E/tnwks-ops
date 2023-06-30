@@ -1,13 +1,13 @@
 ---
 collections:
   - name: community.general
-    version: 6.6.2
+    version: 7.1.0
   - name: community.sops
     version: 1.6.3
   - name: ansible.posix
     version: 1.5.4
   - name: ansible.utils
-    version: 2.9.0
+    version: 2.10.3
   - name: kubernetes.core
     version: 2.4.0
   - name: ansible.netcommon
@@ -22,3 +22,5 @@ roles:
   - name: geerlingguy.ntp
     src: https://github.com/geerlingguy/ansible-role-ntp.git
     version: 2.3.1
+  - name: githubixx.cilium_cli
+    version: 2.6.0+0.13.2
