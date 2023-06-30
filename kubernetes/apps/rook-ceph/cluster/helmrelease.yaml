@@ -139,15 +139,8 @@ spec:
 
     ingress:
       dashboard:
-        ingressClassName: "traefik"
+        ingressClassName: "nginx"
         annotations:
-          cert-manager.io/cluster-issuer: letsencrypt-production
-          # external-dns.alpha.kubernetes.io/target: ingress.${INGRESS_DOMAIN}
-          external-dns/is-public: "true"
-          # external-dns.alpha.kubernetes.io/target: ${CLOUDFLARE_TUNNEL_ID}.cfargotunnel.com
-          external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
-          traefik.ingress.kubernetes.io/router.entrypoints: websecure
-          traefik.ingress.kubernetes.io/router.middlewares: network-chain-external@kubernetescrd
         host:
           name: "rook.${CLUSTER_NAME}.${INGRESS_DOMAIN}"
           path: "/"
