@@ -15,5 +15,8 @@ spec:
       kind: HelmRelease
       name: rook-ceph
       namespace: rook-ceph
+  interval: 30m
+  retryInterval: 1m
+  timeout: 3m
   dependsOn:
     - name: 1-core-storage-rook-ceph-app
