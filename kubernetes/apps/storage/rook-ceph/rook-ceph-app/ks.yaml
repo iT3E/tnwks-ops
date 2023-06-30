@@ -5,7 +5,7 @@ metadata:
   name: 1-core-storage-rook-ceph-app
   namespace: flux-system
 spec:
-  path: ./kubernetes/apps/storage/rook-ceph/app
+  path: ./kubernetes/apps/storage/rook-ceph/rook-ceph-app/app
   prune: true
   sourceRef:
     kind: GitRepository
