@@ -95,6 +95,6 @@ spec:
             - *host
     persistence:
       enabled: true
-      storageClassName: block
+      storageClassName: local-path
     testFramework:
       enabled: false
