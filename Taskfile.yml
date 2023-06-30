@@ -32,7 +32,7 @@ tasks:
       DEPS: >-
         age
         ansible
-        awscliv2
+        awscli
         cilium-cli
         cloudflare/cloudflare/cloudflared
         direnv
