@@ -7,4 +7,3 @@ resources:
   - storage-class.yaml
   - ceph-monitor.yaml
   - ceph-prometheus.yaml
-  - volume-snapshot-class.yaml
