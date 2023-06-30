@@ -99,7 +99,13 @@ spec:
       additionalPVCs:
         - name: additional-pvc
           enabled: true
-          storageClassName: block
+          storageClassName: cephfs-test
+          accessModes:
+            - ReadWriteOnce
+          size: 10Gi
+        - name: additional-pvc
+          enabled: true
+          storageClassName: hdd-pool-test
           accessModes:
             - ReadWriteOnce
           size: 10Gi
