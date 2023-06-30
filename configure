@@ -38,8 +38,8 @@ main() {
         verify_success
     else
         # generate sops configuration file
-        envsubst < "${PROJECT_DIR}/tmpl/.sops.yaml" \
-            > "${PROJECT_DIR}/.sops.yaml"
+        # envsubst < "${PROJECT_DIR}/tmpl/.sops.yaml" \
+        #     > "${PROJECT_DIR}/.sops.yaml"
         # generate cluster settings
         envsubst < "${PROJECT_DIR}/tmpl/kubernetes/flux/cluster-settings.yaml" \
             > "${PROJECT_DIR}/kubernetes/flux/vars/cluster-settings.yaml"
