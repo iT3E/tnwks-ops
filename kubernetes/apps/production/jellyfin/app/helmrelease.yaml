@@ -45,15 +45,15 @@ spec:
     ingress:
       main:
         enabled: true
-        ingressClassName: nginx
         annotations:
           external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
           hajimari.io/icon: simple-icons:jellyfin
         hosts:
-          - host: &host "{{ .Release.Name }}.${SECRET_DOMAIN}"
+          - host: &host "jellyfin.${SECRET_DOMAIN}"
             paths:
               - path: /
                 pathType: Prefix
+        ingressClassName: nginx
         tls:
           - hosts:
               - *host
@@ -83,5 +83,3 @@ spec:
         storageClass: hdd-pool
         accessMode: ReadWriteMany
         size: 1Gi
-
-
