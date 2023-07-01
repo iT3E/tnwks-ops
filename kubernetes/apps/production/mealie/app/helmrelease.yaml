@@ -12,9 +12,6 @@ spec:
         kind: HelmRepository
         name: bjw-s-charts
         namespace: flux-system
-  dependsOn:
-    - name: rook-ceph-cluster
-      namespace: rook-ceph
   install:
     createNamespace: true
     remediation:
@@ -55,6 +52,8 @@ spec:
       config:
         enabled: true
         mountPath: /app/data
+        storageClass: ssd-pool
+        size: 5Gi
 
     service:
       main:
