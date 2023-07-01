@@ -60,7 +60,7 @@ spec:
           - name: "worker3"
             devicePathFilter: "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1"
     cephBlockPools:
-      - name: "ssd-pool"
+      - name: "ssd-pool-k8s"
         spec:
           failureDomain: "host"
           deviceClass: "ssd"
@@ -89,7 +89,7 @@ spec:
             csi.storage.k8s.io/node-stage-secret-namespace: "rook-ceph"
             csi.storage.k8s.io/fstype: "ext4"
     cephFileSystems:
-      - name: "cephfs"
+      - name: "cephfs-k8s"
         spec:
           preserveFilesystemOnDelete: true
           metadataPool:
@@ -97,7 +97,7 @@ spec:
               size: 3
               # size: 2
           dataPools:
-            - name: &fsdata0 "sce-pvecl01-fs-data0"
+            - name: &fsdata0 "hdd-pool"
               failureDomain: "host"
               replicated:
                 size: 3
@@ -117,7 +117,7 @@ spec:
         storageClass:
           enabled: true
           isDefault: false
-          name: "file"
+          name: "cephfs-k8s"
           pool: *fsdata0
           reclaimPolicy: "Delete"
           allowVolumeExpansion: true
