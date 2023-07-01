@@ -27,7 +27,7 @@ spec:
     useOperatorHostNetwork: false
     pspEnable: false
     crds:
-      enabled: false
+      enabled: true
     cephBlockPoolsVolumeSnapshotClass:
       enabled: true
       name: csi-rbdplugin-snapclass
