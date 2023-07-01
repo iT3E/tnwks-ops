@@ -4,7 +4,6 @@ kind: StorageClass
 metadata:
   name: hdd-pool
   annotations:
-    storageclass.kubernetes.io/is-default-class: "true"
 provisioner: rook-ceph.rbd.csi.ceph.com
 parameters:
   clusterID: rook-ceph
