@@ -19,4 +19,4 @@ spec:
   retryInterval: 1m
   timeout: 3m
   dependsOn:
-    - name: 1-core-storage-rook-ceph-app
+    - name: 1-core-storage-rook-ceph-operator
