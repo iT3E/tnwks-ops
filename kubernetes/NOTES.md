@@ -18,7 +18,6 @@
 
 ```
 flux suspend ks 1-core-storage-rook-ceph-operator
-flux suspend ks 1-core-storage-rook-ceph-cluster
 flux suspend ks 1-core-storage-rook-ceph-pve-cluster
 helm uninstall -n rook-ceph rook-ceph-cluster && true || true
 flux delete hr -n rook-ceph rook-ceph-cluster --silent && true || true
@@ -34,6 +33,5 @@ helm uninstall -n rook-ceph rook-ceph && true || true
 flux delete hr -n rook-ceph rook-ceph --silent && true || true
 kubectl get namespaces rook-ceph && until kubectl delete namespaces rook-ceph; do kubectl get namespaces rook-ceph -o jsonpath="{.status}"; done || true
 flux resume ks 1-core-storage-rook-ceph-operator
-flux resume ks 1-core-storage-rook-ceph-cluster
 flux resume ks 1-core-storage-rook-ceph-pve-cluster
 ```
