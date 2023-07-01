@@ -68,18 +68,18 @@ spec:
     persistence:
       config:
         enabled: true
-        storageClass: ssd-pool
+        storageClassName: ssd-pool
         accessMode: ReadWriteOnce
         size: 150Gi
 
       media:
         enabled: true
-        storageClass: hdd-pool
+        storageClassName: hdd-pool
         accessMode: ReadWriteOnce
         size: 1Gi
 
       movies:
         enabled: true
-        storageClass: hdd-pool
+        storageClassName: hdd-pool
         accessMode: ReadWriteOnce
         size: 1Gi
