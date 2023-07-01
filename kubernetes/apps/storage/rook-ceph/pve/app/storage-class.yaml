@@ -2,13 +2,13 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: hdd-pool-test
+  name: hdd-pool
   annotations:
     storageclass.kubernetes.io/is-default-class: "true"
 provisioner: rook-ceph.rbd.csi.ceph.com
 parameters:
   clusterID: rook-ceph
-  pool: hdd-pool-test
+  pool: hdd-pool
   imageFormat: "2"
   imageFeatures: layering
   csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
@@ -44,12 +44,12 @@ allowVolumeExpansion: true
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: cephfs-test
+  name: cephfs
 provisioner: rook-ceph.cephfs.csi.ceph.com
 parameters:
   clusterID: rook-ceph
-  fsName: CephFS-test
-  pool: cephfs-test-pool
+  fsName: cephfs
+  pool: hdd-pool
   csi.storage.k8s.io/provisioner-secret-name: rook-csi-cephfs-provisioner
   csi.storage.k8s.io/provisioner-secret-namespace: rook-ceph
   csi.storage.k8s.io/node-stage-secret-name: rook-csi-cephfs-node
