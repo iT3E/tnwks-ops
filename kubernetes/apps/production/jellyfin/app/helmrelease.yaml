@@ -75,11 +75,11 @@ spec:
       media:
         enabled: true
         storageClass: hdd-pool
-        accessMode: ReadWriteMany
+        accessMode: ReadWriteOnce
         size: 1Gi
 
       movies:
         enabled: true
         storageClass: hdd-pool
-        accessMode: ReadWriteMany
+        accessMode: ReadWriteOnce
         size: 1Gi
