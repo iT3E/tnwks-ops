@@ -4,5 +4,6 @@ kind: Kustomization
 resources:
   - ./namespace.yaml
   - ./mealie/ks.yaml
+  - ./jellyfin/ks.yaml
   # - ./external-dns/ks.yaml
 
