@@ -66,10 +66,10 @@ spec:
       enabled: false
 
     externalPostgresql:
-      host: ${POSTGRES_SERVER}
+      host: "${POSTGRES_SERVER}"
       port: 5432
-      username: ${POSTGRES_USER}
-      password: ${POSTGRES_PASSWORD}
+      username: "${POSTGRES_USER}"
+      password: "${POSTGRES_PASSWORD}"
       database: matrix
 
     # redis:
