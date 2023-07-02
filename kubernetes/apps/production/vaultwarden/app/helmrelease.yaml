@@ -62,6 +62,7 @@ spec:
         mountPath: /data
         retain: true
         accessMode: ReadWriteOnce
+        size: 1Gi
 
     ingress:
       main:
