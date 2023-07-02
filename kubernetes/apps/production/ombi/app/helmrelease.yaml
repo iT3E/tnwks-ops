@@ -39,6 +39,10 @@ spec:
         ingressClassName: nginx
         annotations:
           external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
+          nginx.ingress.kubernetes.io/server-snippet: |
+            if ($host = 'request.${SECRET_DOMAIN}') {
+              return 301 https://requests.${SECRET_DOMAIN}$request_uri;
+            }
         hosts:
           - host: "requests.${SECRET_DOMAIN}"
             paths:
