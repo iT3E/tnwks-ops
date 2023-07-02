@@ -31,9 +31,7 @@ spec:
       repository: vaultwarden/server
       tag: 1.27.0
     env:
-      DATA_FOLDER: "data"
-      ICON_CACHE_FOLDER: "data/icon_cache"
-      ATTACHMENTS_FOLDER: "data/attachments"
+      DATA_FOLDER: "config"
       DOMAIN: "https://vaultwarden.${SECRET_DOMAIN}"
       TZ: "${TIMEZONE}"
       SIGNUPS_ALLOWED: "false"
@@ -57,9 +55,8 @@ spec:
             port: &websocket-port 3012
 
     persistence:
-      data:
+      config:
         enabled: true
-        mountPath: /data
         retain: true
         accessMode: ReadWriteOnce
         size: 1Gi
