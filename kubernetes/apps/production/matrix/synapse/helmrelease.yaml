@@ -29,10 +29,6 @@ spec:
       media_repository:
         enabled: false
 
-    extraSecrets:
-      postgres_secrets:
-
-
     extraConfig:
       email:
         smtp_host: email-smtp.us-west-2.amazonaws.com
