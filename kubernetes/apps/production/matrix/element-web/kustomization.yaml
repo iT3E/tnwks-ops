@@ -5,3 +5,9 @@ kind: Kustomization
 namespace: production
 resources:
   - ./helmrelease.yaml
+configMapGenerator:
+  - name: matrix-element
+    files:
+      - config.json=config/config.json
+generatorOptions:
+  disableNameSuffixHash: true
