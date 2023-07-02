@@ -5,5 +5,6 @@ resources:
   - ./namespace.yaml
   - ./mealie/ks.yaml
   - ./jellyfin/ks.yaml
+  - ./matrix/ks.yaml
   # - ./external-dns/ks.yaml
 
