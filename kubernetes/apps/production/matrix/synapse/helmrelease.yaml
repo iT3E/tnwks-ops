@@ -23,7 +23,7 @@ spec:
     image:
       repository: ghcr.io/matrix-org/synapse
       tag: v1.81.0
-    serverName: synapse.${SECRET_DOMAIN}
+    serverName: matrix.${SECRET_DOMAIN}
 
     workers:
       media_repository:
