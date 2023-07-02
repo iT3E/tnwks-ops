@@ -74,10 +74,10 @@ spec:
     #    enabled: true
     #    password: ${SECRET_MATRIX_REDIS_PASSWORD}
 
-    # signingkey:
-    #   job:
-    #     enabled: false
-    #   existingSecret: matrix-synapse-signingkey
+    signingkey:
+      job:
+        enabled: false
+      existingSecret: matrix-synapse-signingkey
 
     persistence:
       enabled: true
