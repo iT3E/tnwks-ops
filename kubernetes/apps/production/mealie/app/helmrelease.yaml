@@ -29,13 +29,30 @@ spec:
       - secretRef:
           name: mealie-secrets
     env:
-      TZ: "America/Los_Angeles"
-      DB_ENGINE: postgres
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_SERVER: ${POSTGRES_SERVER}
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: mealie
+      - name: TZ
+        value: "America/Los_Angeles"
+      - name: DB_ENGINE
+        value: "postgres"
+      - name: POSTGRES_USER
+        valueFrom:
+          secretKeyRef:
+            name: mealie-secrets
+            key: POSTGRES_USER
+      - name: POSTGRES_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: mealie-secrets
+            key: POSTGRES_PASSWORD
+      - name: POSTGRES_SERVER
+        valueFrom:
+          secretKeyRef:
+            name: mealie-secrets
+            key: POSTGRES_SERVER
+      - name: POSTGRES_PORT
+        value: "5432"
+      - name: POSTGRES_DB
+        value: "mealie"
+
     image:
       repository: docker.io/hkotel/mealie
       tag: v0.5.6
