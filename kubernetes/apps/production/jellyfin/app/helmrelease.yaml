@@ -76,10 +76,14 @@ spec:
         enabled: true
         storageClass: hdd-pool
         accessMode: ReadWriteOnce
+        size: 1Gi
+        mountPath: /media
 
 
       movies:
         enabled: true
         storageClass: hdd-pool
         accessMode: ReadWriteOnce
+        size: 1Gi
+        mountPath: /movies
 
