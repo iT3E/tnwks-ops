@@ -55,11 +55,8 @@ spec:
     persistence:
       config:
         enabled: true
-        name: *app
         readOnly: true
         mountPath: /app/config.json
         subPath: config.json
         type: configMap
 
-    podAnnotations:
-      configmap.reloader.stakater.com/reload: *app
