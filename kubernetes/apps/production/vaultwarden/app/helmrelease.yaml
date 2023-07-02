@@ -43,7 +43,7 @@ spec:
       SMTP_FROM_NAME: vaultwarden
       SMTP_PORT: 587
       SMTP_SECURITY: "off"
-      DATABASE_URL: "postgresql://${POSTGRESS_USER}:${POSTGRES_PASSWORD}@${POSTGRES_SERVER}/bitwarden"
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_SERVER}/bitwarden"
 
     service:
       main:
