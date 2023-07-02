@@ -6,5 +6,6 @@ resources:
   - ./mealie/ks.yaml
   - ./jellyfin/ks.yaml
   - ./matrix/ks.yaml
+  - ./vaultwarden/ks.yaml
   # - ./external-dns/ks.yaml
 
