@@ -87,3 +87,9 @@ spec:
         size: 1Gi
         mountPath: /movies
 
+      cephfs:
+        enabled: true
+        existingClaim: jellyfin-cephfs
+        mountPath: /cephfs
+
+
