@@ -49,12 +49,12 @@ spec:
               filename=$(basename $f)
               envsubst < $f > /data/config/$filename;
             done
-        env:
-          WIREGUARD_PORT:
-            valueFrom:
-              secretKeyRef:
-                name: qbittorrent-secret
-                key: WIREGUARD_PORT
+        # env:
+        #   WIREGUARD_PORT:
+        #     valueFrom:
+        #       secretKeyRef:
+        #         name: qbittorrent-secret
+        #         key: WIREGUARD_PORT
         volumeMounts:
           - name: config
             mountPath: /data/config
