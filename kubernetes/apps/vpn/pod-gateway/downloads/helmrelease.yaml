@@ -21,14 +21,12 @@ spec:
       repository: ghcr.io/bjw-s/pod-gateway
       tag: dev@sha256:99073d1e8b7ab71bcc47e2cfc9e5c52abd20f90304ff15428399602d21de0d13
 
-    DNS: 172.16.1.1
+    DNS: 172.16.30.1
 
     service:
       vpn:
         enabled: true
         type: LoadBalancer
-        annotations:
-          io.cilium/lb-ipam-ips: "10.45.0.11"
         externalTrafficPolicy: Cluster
         ports:
           shadowsocks:
@@ -97,7 +95,7 @@ spec:
       secret.reloader.stakater.com/reload: downloads-gateway-vpnconfig
 
     routed_namespaces:
-      - downloads
+      - media
 
     settings:
       NOT_ROUTED_TO_GATEWAY_CIDRS: 10.0.0.0/8 192.168.0.0/16
@@ -107,7 +105,7 @@ spec:
       VPN_LOCAL_CIDRS: 10.0.0.0/8 192.168.0.0/16
       VPN_TRAFFIC_PORT: "2049"
       VXLAN_ID: 43
-      VXLAN_IP_NETWORK: 172.16.1
+      VXLAN_IP_NETWORK: 172.16.30
 
     webhook:
       gatewayAnnotation: setGateway
