@@ -67,7 +67,9 @@ spec:
     persistence:
       config:
         enabled: true
-        existingClaim: radarr-config
+        accessMode: ReadWriteOnce
+        size: 1Gi
+        storageClass: ssd-pool
 
       media:
         enabled: true
