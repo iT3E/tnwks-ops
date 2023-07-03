@@ -116,7 +116,7 @@ spec:
         type: pvc
         size: 1Gi
         storageClass: cephfs
-        accessMode: ReadWriteOnce
+        accessMode: ReadWriteMany
         mountPath: /data/media
 
     resources:
