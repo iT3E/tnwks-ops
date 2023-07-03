@@ -114,7 +114,7 @@ spec:
       media:
         enabled: true
         type: pvc
-        size: 1Gi
+        size: 20Gi
         storageClass: cephfs
         accessMode: ReadWriteMany
         mountPath: /data/media
