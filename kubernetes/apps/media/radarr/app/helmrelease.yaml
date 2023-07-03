@@ -38,11 +38,11 @@ spec:
       RADARR__PORT: &port 7878
       RADARR__APPLICATION_URL: "https://radarr.${SECRET_DOMAIN}"
       RADARR__LOG_LEVEL: info
-      # RADARR__API_KEY:
-      #   valueFrom:
-      #     secretKeyRef:
-      #       name: radarr-secret
-      #       key: api_key
+      RADARR__API_KEY:
+        valueFrom:
+          secretKeyRef:
+            name: radarr-secret
+            key: api_key
 
     service:
       main:
