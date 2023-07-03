@@ -131,4 +131,4 @@ spec:
         mountPath: /config/qBittorrent/data
         accessMode: ReadWriteOnce
         size: 1Gi
-        storageClass: ceph-block
+        storageClass: ssd-pool
