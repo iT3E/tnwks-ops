@@ -6,5 +6,6 @@ resources:
   - ./qbittorrent/ks.yaml
   - ./radarr/ks.yaml
   - ./prowlarr/ks.yaml
+  - ./recyclarr/ks.yaml
   # - ./external-dns/ks.yaml
 
