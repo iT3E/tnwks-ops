@@ -5,7 +5,7 @@ https://github.com/dcplaya/home-ops/blob/main/k8s/clusters/cluster-1/manifests/r
 ```bash
 export VOL_NAME=cephfs
 export SUBVOL_NAME='cephfs-subvolume'
-export SUBVOL_SIZE='5000000000000'
+export SUBVOL_SIZE='200000000000000'
 export SUBVOL_GID=100
 export SUBVOL_UID=568
 export SUBVOL_FOLDER_PERMS=775
@@ -44,7 +44,7 @@ spec:
   accessModes:
     - ReadWriteMany
   capacity:
-    storage: 5000G
+    storage: 200T
   storageClassName: "cephfs"
   csi:
     driver: rook-ceph.cephfs.csi.ceph.com
@@ -59,7 +59,7 @@ spec:
       "fsName": "cephfs"
       "pool": "hdd-pool"
       "staticVolume": "true"
-      "rootPath": /volumes/_nogroup/cephfs-subvolume/39b036a4-5195-4e94-9953-6d7558eda45b
+      "rootPath": /volumes/_nogroup/cephfs-subvolume/6bbe957a-525c-40db-86d1-5ff5a622ad71
     # volumeHandle can be anything, need not to be same
     # as PV name or volume name. keeping same for brevity
     volumeHandle: cephfs-hdd-subvolume
