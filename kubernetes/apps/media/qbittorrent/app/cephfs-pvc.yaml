@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: cephfs-hdd-subvolume
+  name: cephfs-hdd-subvolume-qbit
   namespace: media
   labels:
     backup: "false"
@@ -15,4 +15,4 @@ spec:
       storage: 200T
   volumeMode: Filesystem
   # volumeName should be same as PV name
-  volumeName: cephfs-hdd-subvolume
+  volumeName: cephfs-hdd-subvolume-qbit
