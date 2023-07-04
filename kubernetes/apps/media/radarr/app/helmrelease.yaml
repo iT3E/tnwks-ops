@@ -78,7 +78,7 @@ spec:
 
       media:
         enabled: true
-        existingClaim: qbittorrent-media
+        existingClaim: cephfs-hdd-subvolume-qbit
         mountPath: /data/media
 
       # media:
