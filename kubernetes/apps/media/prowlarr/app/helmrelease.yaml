@@ -55,16 +55,13 @@ spec:
             port: *port
 
     ingress:
-      main:
+      internal:
         enabled: true
         ingressClassName: "nginx"
         hosts:
-          - host: &host "prowlarr.${SECRET_DOMAIN}"
+          - host: &internalHost "prowlarr.tnwks.local"
             paths:
               - path: /
-        tls:
-          - hosts:
-              - *host
 
     persistence:
       config:
