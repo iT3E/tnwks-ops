@@ -71,21 +71,7 @@ spec:
         storageClass: ssd-pool
         accessMode: ReadWriteOnce
         size: 150Gi
-
-      media:
-        enabled: true
-        storageClass: hdd-pool
-        accessMode: ReadWriteOnce
-        size: 1Gi
-        mountPath: /media
-
-
-      movies:
-        enabled: true
-        storageClass: hdd-pool
-        accessMode: ReadWriteOnce
-        size: 1Gi
-        mountPath: /movies
+        retain: true
 
       cephfs:
         enabled: true
