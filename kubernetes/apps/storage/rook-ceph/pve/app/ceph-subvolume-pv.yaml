@@ -1,0 +1,30 @@
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: cephfs-hdd-subvolume
+spec:
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: 5000G
+  storageClassName: "cephfs"
+  csi:
+    driver: rook-ceph.cephfs.csi.ceph.com
+    nodeStageSecretRef:
+      # node stage secret name
+      name: rook-csi-cephfs-node
+      # node stage secret namespace where above secret is created
+      namespace: rook-ceph
+    volumeAttributes:
+      # Required options from storageclass parameters need to be added in volumeAttributes
+      "clusterID": "rook-ceph"
+      "fsName": "cephfs"
+      "pool": "cephfs_data"
+      "staticVolume": "true"
+      "rootPath": /volumes/_nogroup/cephfs-subvolume/39b036a4-5195-4e94-9953-6d7558eda45b
+    # volumeHandle can be anything, need not to be same
+    # as PV name or volume name. keeping same for brevity
+    volumeHandle: cephfs-hdd-subvolume
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
