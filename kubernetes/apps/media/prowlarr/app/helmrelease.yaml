@@ -69,6 +69,7 @@ spec:
         accessMode: ReadWriteOnce
         size: 1Gi
         storageClass: ssd-pool
+        retain: true
 
     resources:
       requests:
