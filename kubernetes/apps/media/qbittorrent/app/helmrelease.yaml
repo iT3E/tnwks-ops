@@ -89,7 +89,7 @@ spec:
         hosts:
           - host: &internalHost "qbittorrent.tnwks.local"
             paths:
-              - path:
+              - path: /
 
     persistence:
       config:
