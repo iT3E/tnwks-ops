@@ -70,6 +70,18 @@ spec:
           - hosts:
               - *host
 
+      internal:
+        enabled: true
+        ingressClassName: "nginx"
+        annotations:
+          nginx.ingress.kubernetes.io/configuration-snippet: |
+            proxy_set_header Accept-Encoding "";
+            sub_filter_once on;
+        hosts:
+          - host: &internalHost "radarr.tnwks.local"
+            paths:
+              - path: /
+
     existingClaim:
 
     persistence:
