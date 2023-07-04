@@ -25,6 +25,9 @@ spec:
       repository: ghcr.io/onedr0p/radarr-develop
       tag: 4.6.3.7516@sha256:798fe8b616da785edcb84cc871111e63c9227b970dbd33b4ac876faba4c058b8
 
+    podAnnotations:
+      setGateway: "true"
+
     podSecurityContext:
       runAsUser: 568
       runAsGroup: 568
