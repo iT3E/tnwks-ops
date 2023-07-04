@@ -82,6 +82,27 @@ module "cf_domain_1" {
       value = data.sops_file.secrets.data["cf_domain_1"]
       type  = "CNAME"
     },
+    {
+      id      = "dkim1"
+      proxied = false
+      name    = "2t67hhkulgkcugrm3l244dba4q3d3bwj._domainkey"
+      value   = "2t67hhkulgkcugrm3l244dba4q3d3bwj.dkim.amazonses.com"
+      type    = "CNAME"
+    },
+    {
+      id      = "dkim2"
+      proxied = false
+      name    = "ylx2z2nwy4jlyh5bsb26jfrvkoazaxha._domainkey"
+      value   = "ylx2z2nwy4jlyh5bsb26jfrvkoazaxha.dkim.amazonses.com"
+      type    = "CNAME"
+    },
+    {
+      id      = "dkim3"
+      proxied = false
+      name    = "u6egebawhot4h7vilecdj2egi7jsggar._domainkey"
+      value   = "u6egebawhot4h7vilecdj2egi7jsggar.dkim.amazonses.com"
+      type    = "CNAME"
+    },
   ]
 
   waf_custom_rules = [
