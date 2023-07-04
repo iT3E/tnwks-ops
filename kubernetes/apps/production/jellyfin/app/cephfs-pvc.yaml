@@ -12,7 +12,7 @@ spec:
   storageClassName: "cephfs"
   resources:
     requests:
-      storage: 200TS
+      storage: 200T
   volumeMode: Filesystem
   # volumeName should be same as PV name
   volumeName: cephfs-hdd-subvolume
