@@ -89,7 +89,7 @@ spec:
 
       cephfs:
         enabled: true
-        existingClaim: jellyfin-cephfs
+        existingClaim: cephfs-hdd-subvolume
         mountPath: /cephfs
 
 
