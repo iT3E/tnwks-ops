@@ -113,10 +113,7 @@ spec:
 
       media:
         enabled: true
-        type: pvc
-        size: 20Gi
-        storageClass: cephfs
-        accessMode: ReadWriteMany
+        existingClaim: cephfs-hdd-subvolume
         mountPath: /data/media
 
     resources:
