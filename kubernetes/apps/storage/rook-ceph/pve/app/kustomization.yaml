@@ -8,3 +8,4 @@ resources:
   - ceph-monitor.yaml
   - ceph-prometheus.yaml
   - ceph-subvolume-pv.yaml
+  - ceph-subvolume-pv-qbit.yaml
