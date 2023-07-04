@@ -113,7 +113,7 @@ spec:
 
       media:
         enabled: true
-        existingClaim: cephfs-hdd-subvolume
+        existingClaim: cephfs-hdd-subvolume-qbit
         mountPath: /data/media
 
     resources:
