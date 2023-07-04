@@ -84,6 +84,12 @@ spec:
         existingClaim: cephfs-hdd-subvolume-qbit
         mountPath: /data/media
 
+      movies-full:
+        enabled: true
+        existingClaim: cephfs-hdd-subvolume-qbit
+        mountPath: /data/media/movies-full
+
+
       # media:
       #   enabled: true
       #   type: nfs
