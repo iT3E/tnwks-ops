@@ -8,6 +8,7 @@ resources:
   - ./matrix/ks.yaml
   - ./vaultwarden/ks.yaml
   - ./ombi/ks.yaml
+  - ./ombi-f/ks.yaml
   - ./wizarr/ks.yaml
   # - ./external-dns/ks.yaml
 
