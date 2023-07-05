@@ -56,3 +56,4 @@ spec:
         enabled: true
         accessMode: ReadWriteOnce
         size: 1Gi
+        storageClass: cephfs
