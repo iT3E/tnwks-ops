@@ -121,15 +121,20 @@ The documentation that goes along with this repo can be found [over here](https:
 
 ## 🔧 Hardware
 
-| Device                      | Count | OS Disk Size         | Data Disk Size                         | Ram   | Operating System | Purpose            |
-| --------------------------- | ----- | ------------         | ------------------------               | ----- | ---------------- | ------------------ |
-| Unifi UDM Pro               | 1     | -                    | -                                      | -     | -                | Router             |
-| HP 1810g                    | 1     | -                    | -                                      | -     | -                | Switch             |
-| Aruba S2500-24P             | 1     | -                    | -                                      | -     | -                | Switch             |
-| HP DL360p G8                | 3     | 3x16GB JetFlash 780  | 3x 1.2TB HDD, 3x 960GB Samsung PM1633a | 192GB | PVE              | Hypervisor         |
-| Synology NAS RS820+         | 1     | -                    | 4x16TB w/ 2TB NVMe cache               | 16GB  | -                | NFS                |
-| CyberPower ATS PDU          | 1     | -                    | -                                      | -     | -                | PDU                |
-| CyberPower UPS              | 1     | -                    | -                                      | -     | -                | PSU                |
+| Device                      | Count | OS Disk Size      | Data Disk Size                   | Ram  | Operating System | Purpose            |
+| --------------------------- | ----- | ------------      | -------------------------------- | ---- | ---------------- | ------------------ |
+| Ubiquiti Edge Router Lite   | 1     | -                 | -                                | -    | -                | Router             |
+| Unifi UDM Pro               | 1     | -                 | -                                | -    | -                | Router             |
+| UISP EdgePoint R6           | 1     | -                 | -                                | -    | -                | Router             |
+| airMAX LiteAP 5AC           | 1     | -                 | -                                | -    | -                | AP                 |
+| airMAX LiteBeam AC Gen2     | 1     | -                 | -                                | -    | -                | AP                 |
+| UAP-AC-Pro                  | 2     | -                 | -                                | -    | -                | AP                 |
+| UAP-AC-HD                   | 1     | -                 | -                                | -    | -                | AP                 |
+| HP 1810g                    | 1     | -                 | -                                | -    | -                | Switch             |
+| Aruba S2500-24P             | 1     | -                 | -                                | -    | -                | Switch             |
+| HP DL360p G8                | 3     | 16GB JetFlash 780 | 1.2TB HDD, 960GB Samsung PM1633a | 64GB | PVE              | Hypervisor         |
+| Whitebox NAS                | 1     | 64GB SATA SSD     | 2x 2TB WD Purple HDD             | 16GB | FreeNAS          | NVR                |
+| CyberPower CP1500AVR        | 1     | -                 | -                                | -    | -                | UPS                |
 
 ---
 
