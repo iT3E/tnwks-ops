@@ -41,7 +41,7 @@ spec:
           external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
           nginx.ingress.kubernetes.io/server-snippet: |
             if ($host = '${SECRET_PREFIX}.${SECRET_DOMAIN}') {
-              return 301 https://requests.${SECRET_DOMAIN}$request_uri;
+              return 301 https://${SECRET_PREFIX}.${SECRET_DOMAIN}$request_uri;
             }
         hosts:
           - host: "${SECRET_PREFIX}.${SECRET_DOMAIN}"
