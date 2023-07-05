@@ -29,8 +29,9 @@ _... managed by Flux, Renovate, GitHub Actions, Terraform, Ansible, and Powershe
 
 ### Installation
 
-The cluster is running on [Proxmox Virtual Environment](https://www.proxmox.com/en/proxmox-ve), an open-source hypervisor built on top of Debian. [Kubernetes](https://k8s.io) is running on virtual machines within Proxmox. A [PVE Ceph Cluster](https://pve.proxmox.com/wiki/Deploy_Hyper-Converged_Ceph_Cluster) is handling my VM storage, along with an [externally-connected](https://rook.io/docs/rook/v1.11/CRDs/Cluster/external-cluster/) implementation of [Rook Ceph](https://rook.io) that is providing my K8s workloads with persistent block, object, and file storage.
+The cluster is running on VMs hosted on [Proxmox Virtual Environment](https://www.proxmox.com/en/proxmox-ve), an open-source hypervisor built on Debian. A [PVE Ceph Cluster](https://pve.proxmox.com/wiki/Deploy_Hyper-Converged_Ceph_Cluster) is handling my VM storage, along with an [externally-connected](https://rook.io/docs/rook/v1.11/CRDs/Cluster/external-cluster/) implementation of [Rook Ceph](https://rook.io) that is providing my K8s workloads with persistent block, object, and file storage.
 
+---
 
 ### Core Components
 
@@ -43,6 +44,8 @@ The cluster is running on [Proxmox Virtual Environment](https://www.proxmox.com/
 - [rook](https://github.com/rook/rook): Distributed block storage for peristent storage.
 - [sops](https://toolkit.fluxcd.io/guides/mozilla-sops/): Managed secrets for Kubernetes, Ansible and Terraform which are commited to Git.
 - [volsync](https://github.com/backube/volsync) and [snapscheduler](https://github.com/backube/snapscheduler): Backup and recovery of persistent volume claims.
+
+---
 
 ### GitOps
 
