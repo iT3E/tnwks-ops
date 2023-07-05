@@ -21,9 +21,13 @@ ceph -s
 ```
 shows recovery detail
 
-### outage 2023-07-05
+## outage 2023-07-05
 
-ceph network was not listed in /etc/hosts.  Current config:
+### Root cause:
+Power outage caused a reboot of all nodes. Ceph network was not listed in /etc/hosts on any hosts.  Updated the configs and rebooted each node.
+
+### Details:
+Current config:
 
 ```
 $ cat /etc/hosts
