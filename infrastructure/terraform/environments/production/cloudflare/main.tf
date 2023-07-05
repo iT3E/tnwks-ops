@@ -193,3 +193,39 @@ module "cf_domain_3" {
     },
   ]
 }
+
+#####################################
+##                                 ##
+##           cf_domain_4           ##
+##                                 ##
+#####################################
+
+module "cf_domain_4" {
+  source     = "../../../modules/cloudflare"
+  domain     = data.sops_file.secrets.data["cf_domain_4"]
+  account_id = data.sops_file.secrets.data["cf_account_id"]
+
+  dns_entries = [
+    # Generic settings
+    {
+      name  = "status"
+      value = "ingress.${data.sops_file.secrets.data["cf_domain_1"]}"
+      type  = "CNAME"
+    },
+  ]
+
+  waf_custom_rules = [
+    {
+      enabled     = true
+      description = "Firewall rule to block bots and threats determined by CF"
+      expression  = "(cf.client.bot) or (cf.threat_score gt 14)"
+      action      = "block"
+    },
+    {
+      enabled     = true
+      description = "Firewall rule to block all countries except US"
+      expression  = "(ip.geoip.country ne \"US\")"
+      action      = "block"
+    },
+  ]
+}
