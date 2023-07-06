@@ -5,6 +5,7 @@ metadata:
   name: cluster-apps-ingress-nginx-internal
   namespace: flux-system
 spec:
+  dependsOn:
     - name: cluster-apps-metallb-config
   path: ./kubernetes/apps/networking/ingress-nginx-internal/app
   prune: true
