@@ -18,8 +18,8 @@ spec:
 
   values:
     image:
-      repository: ghcr.io/bjw-s/pod-gateway
-      tag: dev@sha256:99073d1e8b7ab71bcc47e2cfc9e5c52abd20f90304ff15428399602d21de0d13
+      repository: ghcr.io/angelnu/pod-gateway
+      tag: v1.8.1
 
     DNS: 172.16.1.1
 
