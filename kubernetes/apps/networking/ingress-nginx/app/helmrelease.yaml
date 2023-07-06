@@ -30,6 +30,7 @@ spec:
       namespace: networking
   values:
     controller:
+      replicaCount: 2
       extraEnvs:
         - name: TZ
           value: "${TIMEZONE}"
