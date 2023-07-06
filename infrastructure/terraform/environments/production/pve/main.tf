@@ -151,7 +151,7 @@ module "pve_vm_k8s_masters" {
   vm_disks = [
     {
       storage   = "ssd-pool"
-      size      = "20G"
+      size      = "40G"
       type      = "virtio"
       cache     = "none"
       format    = "raw"
@@ -201,7 +201,7 @@ module "pve_vm_k8s_workers" {
   vm_disks = [
     {
       storage   = "ssd-pool"
-      size      = "20G"
+      size      = "40G"
       type      = "virtio"
       cache     = "none"
       format    = "raw"
