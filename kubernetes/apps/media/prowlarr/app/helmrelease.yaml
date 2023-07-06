@@ -22,8 +22,8 @@ spec:
         reloader.stakater.com/auto: "true"
 
     image:
-      repository: ghcr.io/onedr0p/prowlarr-nightly
-      tag: 1.7.1.3667@sha256:49fe1006da0552611d9cc7e6fa88b4a7ff633d6b9b9c57b1604828d9270bc9ee
+      repository: ghcr.io/onedr0p/prowlarr-develop
+      tag: 1.7.0.3623@sha256:0239381e1e358a7c9ee0521f512ae65f3aeca4550dcf5b3c0aee91fba7b2bd4a
 
     podAnnotations:
       setGateway: "true"
