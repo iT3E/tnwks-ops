@@ -52,10 +52,15 @@ spec:
             paths:
               - path: /
                 pathType: Prefix
+          - host: "req.${SECRET_DOMAIN}"
+            paths:
+              - path: /
+                pathType: Prefix
         tls:
           - hosts:
             - "requests.${SECRET_DOMAIN}"
             - "request.${SECRET_DOMAIN}"
+            - "req.${SECRET_DOMAIN}"
     persistence:
       config:
         enabled: true
