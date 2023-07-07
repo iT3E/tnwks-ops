@@ -50,16 +50,14 @@ spec:
             value: wg0
           - name: VPN_ENDPOINT_PORT
             value: "2049"
-          - name: SHADOWSOCKS
-            value: "on"
           - name: FIREWALL
             value: "off"
           - name: DOT
             value: "off"
           - name: SERVER_CITIES
-            value: Zurich
+            value: Los_Angeles CA
           - name: SERVER_HOSTNAMES
-            value: ch1.wg.ivpn.net
+            value: us-ca4.wg.ivpn.net
           - name: WIREGUARD_PRIVATE_KEY
             valueFrom:
               secretKeyRef:
@@ -82,14 +80,14 @@ spec:
             add:
               - NET_ADMIN
 
-      netshoot:
-        enabled: true
-        resources:
-          requests:
-            cpu: 5m
-            memory: 10M
-          limits:
-            memory: 10M
+      # netshoot:
+      #   enabled: true
+      #   resources:
+      #     requests:
+      #       cpu: 5m
+      #       memory: 10M
+      #     limits:
+      #       memory: 10M
 
     podAnnotations:
       configmap.reloader.stakater.com/reload: downloads-gateway-pod-gateway
