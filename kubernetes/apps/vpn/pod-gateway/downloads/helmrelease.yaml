@@ -57,7 +57,7 @@ spec:
           - name: SERVER_CITIES
             value: Montreal
           - name: SERVER_HOSTNAMES
-            value: ca-qc2.wg.ivpn.net
+            value: ca-qc1.wg.ivpn.net
           - name: WIREGUARD_PRIVATE_KEY
             valueFrom:
               secretKeyRef:
