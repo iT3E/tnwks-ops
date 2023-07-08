@@ -55,9 +55,9 @@ spec:
           - name: DOT
             value: "off"
           - name: SERVER_CITIES
-            value: Los_Angeles CA
+            value: Zurich
           - name: SERVER_HOSTNAMES
-            value: us-ca4.wg.ivpn.net
+            value: ch1.wg.ivpn.net
           - name: WIREGUARD_PRIVATE_KEY
             valueFrom:
               secretKeyRef:
