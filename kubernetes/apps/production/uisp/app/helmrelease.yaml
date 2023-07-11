@@ -68,6 +68,8 @@ spec:
             paths:
               - path: /
                 pathType: Prefix
+                service:
+                  port: 443
         tls:
           - hosts:
               - *host
