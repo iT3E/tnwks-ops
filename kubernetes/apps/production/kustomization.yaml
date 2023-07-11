@@ -10,5 +10,6 @@ resources:
   - ./ombi/ks.yaml
   - ./ombi-f/ks.yaml
   - ./wizarr/ks.yaml
+  - ./uisp/ks.yaml
   # - ./external-dns/ks.yaml
 

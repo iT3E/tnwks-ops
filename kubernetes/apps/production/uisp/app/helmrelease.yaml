@@ -1,0 +1,80 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: uisp
+  namespace: production
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: app-template
+      version: 1.5.1
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  maxHistory: 3
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  values:
+    controller:
+      type: statefulset
+      annotations:
+        reloader.stakater.com/auto: "true"
+    image:
+      repository: nico640/docker-unm
+      tag: 2.2.15
+    env:
+      TZ: ${TIMEZONE}
+      PUBLIC_HTTPS_PORT: 443
+      PUBLIC_WS_PORT: 443
+      PUID: 911
+      PGID: 911
+
+    service:
+      main:
+        type: LoadBalancer
+        externalTrafficPolicy: Cluster
+        ports:
+          netflow:
+            port: 2055
+            protocol: UDP
+
+    ingress:
+      main:
+        enabled: true
+        ingressClassName: nginx
+        annotations:
+          external-dns.alpha.kubernetes.io/target: "uisp.${SECRET_DOMAIN}"
+        hosts:
+          - host: &host "uisp.${SECRET_DOMAIN}"
+            paths:
+              - path: /
+                pathType: Prefix
+        tls:
+          - hosts:
+              - *host
+
+    volumeClaimTemplates:
+      - name: config
+        mountPath: /config
+        accessMode: ReadWriteOnce
+        size: 1Gi
+        storageClass: cephfs
+
+    resources:
+      requests:
+        cpu: 4000m
+        memory: 2Gi
+      limits:
+        cpu: 4000m
+        memory: 2Gi
