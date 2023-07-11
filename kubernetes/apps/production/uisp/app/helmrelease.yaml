@@ -45,9 +45,7 @@ spec:
       main:
         ports:
           http:
-            port: 8080
-          https:
-            port: 4343
+            port: 80
 
       netflow:
         type: LoadBalancer
