@@ -47,6 +47,7 @@ spec:
         ports:
           http:
             port: 443
+            protocol: HTTPS
 
       netflow:
         type: LoadBalancer
