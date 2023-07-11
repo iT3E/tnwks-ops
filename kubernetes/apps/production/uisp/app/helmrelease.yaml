@@ -38,7 +38,7 @@ spec:
       PUID: 911
       PGID: 911
       PUBLIC_HTTPS_PORT: 443
-      HTTP_PORT: 8080
+      HTTP_PORT: 8008
       HTTPS_PORT: 4343
 
     service:
