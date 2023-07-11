@@ -43,7 +43,6 @@ spec:
         ports:
           http:
             port: 80
-            protocol: HTTPS
 
       netflow:
         type: LoadBalancer
@@ -65,9 +64,9 @@ spec:
               - path: /
                 pathType: Prefix
 
-        tls:
-          - hosts:
-              - *host
+        # tls:
+        #   - hosts:
+        #       - *host
 
     volumeClaimTemplates:
       - name: config
