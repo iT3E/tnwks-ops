@@ -41,7 +41,7 @@ spec:
       PGID: 911
 
     service:
-      http:
+      main:
         ports:
           http:
             port: 80
