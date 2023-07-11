@@ -41,7 +41,12 @@ spec:
       PGID: 911
 
     service:
-      main:
+      http:
+        ports:
+          http:
+            port: 80
+
+      netflow:
         type: LoadBalancer
         externalTrafficPolicy: Cluster
         ports:
