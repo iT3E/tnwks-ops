@@ -65,7 +65,6 @@ spec:
               - path: /
                 pathType: Prefix
                 service:
-                  name: https
                   port: 443
 
         # tls:
