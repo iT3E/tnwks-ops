@@ -45,11 +45,6 @@ spec:
           http:
             port: 80
 
-      https:
-        ports:
-          https:
-            port: 443
-
       netflow:
         type: LoadBalancer
         externalTrafficPolicy: Cluster
