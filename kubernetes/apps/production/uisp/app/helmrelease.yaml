@@ -63,7 +63,7 @@ spec:
         hosts:
           - host: &host "uisp.${SECRET_DOMAIN}"
             paths:
-              - path: /
+              - path: /nms
                 pathType: Prefix
 
         tls:
