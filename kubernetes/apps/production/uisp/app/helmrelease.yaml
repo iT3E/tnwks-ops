@@ -47,13 +47,13 @@ spec:
             port: 443
             protocol: HTTPS
 
-      netflow:
-        type: LoadBalancer
-        externalTrafficPolicy: Cluster
-        ports:
-          netflow:
-            port: 2055
-            protocol: UDP
+      # netflow:
+      #   type: LoadBalancer
+      #   externalTrafficPolicy: Cluster
+      #   ports:
+      #     netflow:
+      #       port: 2055
+      #       protocol: UDP
 
     ingress:
       main:
