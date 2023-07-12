@@ -43,7 +43,7 @@ spec:
         ports:
           https:
             port: 443
-            targetPort: 443
+            protocol: HTTPS
 
       netflow:
         type: LoadBalancer
