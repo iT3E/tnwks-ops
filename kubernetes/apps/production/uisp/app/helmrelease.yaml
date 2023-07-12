@@ -41,8 +41,9 @@ spec:
     service:
       main:
         ports:
-          http:
+          https:
             port: 443
+            targetPort: 443
 
       netflow:
         type: LoadBalancer
@@ -58,7 +59,7 @@ spec:
         ingressClassName: nginx
         annotations:
           external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
-          ingress.kubernetes.io/ssl-redirect: "True"
+          nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
         hosts:
           - host: &host "uisp.${SECRET_DOMAIN}"
             paths:
