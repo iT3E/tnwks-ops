@@ -41,7 +41,7 @@ spec:
     service:
       main:
         ports:
-          https:
+          http:
             port: 443
             protocol: HTTPS
 
