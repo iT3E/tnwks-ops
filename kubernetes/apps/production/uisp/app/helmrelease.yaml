@@ -58,7 +58,7 @@ spec:
         ingressClassName: nginx
         annotations:
           external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
-          ingress.kubernetes.io/ssl-redirect: "False"
+          ingress.kubernetes.io/ssl-redirect: "True"
         hosts:
           - host: &host "uisp.${SECRET_DOMAIN}"
             paths:
