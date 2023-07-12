@@ -38,12 +38,14 @@ spec:
       PUID: 911
       PGID: 911
       PUBLIC_HTTPS_PORT: 443
+      HTTP_PORT: 8080
+      HTTPS_PORT: 4343
 
     service:
       main:
         ports:
           http:
-            port: 443
+            port: 8080
 
       netflow:
         type: LoadBalancer
@@ -64,6 +66,9 @@ spec:
             paths:
               - path: /
                 pathType: Prefix
+                service:
+                  name: http
+                  port: 8080
 
         tls:
           - hosts:
