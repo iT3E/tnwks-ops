@@ -59,7 +59,7 @@ spec:
         ingressClassName: nginx
         annotations:
           external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
-          nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+          #nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
         hosts:
           - host: &host "uisp.${SECRET_DOMAIN}"
             paths:
