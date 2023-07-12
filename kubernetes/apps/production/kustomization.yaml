@@ -11,5 +11,6 @@ resources:
   - ./ombi-f/ks.yaml
   - ./wizarr/ks.yaml
   - ./uisp/ks.yaml
+  - ./bookstack/ks.yaml
   # - ./external-dns/ks.yaml
 
