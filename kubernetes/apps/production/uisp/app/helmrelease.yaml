@@ -32,7 +32,7 @@ spec:
         reloader.stakater.com/auto: "true"
     image:
       repository: nico640/docker-unms
-      tag: 2.2.15
+      tag: 1.7.5
     env:
       TZ: ${TIMEZONE}
       PUID: 911
