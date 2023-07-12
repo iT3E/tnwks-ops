@@ -38,6 +38,7 @@ spec:
       PUID: 911
       PGID: 911
       PUBLIC_HTTPS_PORT: 443
+      PUBLIC_WS_PORT: 443
 
     service:
       main:
