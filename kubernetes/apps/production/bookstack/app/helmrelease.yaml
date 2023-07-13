@@ -14,6 +14,18 @@ spec:
         kind: HelmRepository
         name: bjw-s
         namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  interval: 30m
+  maxHistory: 2
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
 
   values:
     image:
@@ -29,8 +41,8 @@ spec:
           name: bookstack-secrets
 
     env:
-      TZ: ${TIMEZONE}
-      SESSION_SECURE_COOKIE: true
+      TZ: "${TIMEZONE}"
+      SESSION_SECURE_COOKIE: "true"
 
     service:
       main:
