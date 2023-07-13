@@ -15,5 +15,5 @@ spec:
       protocol: TCP
       targetPort: 3306
   selector:
-    mariadb: mariadb
-
+    app.kubernetes.io/name: mariadb
+    app.kubernetes.io/instance: mariadb
