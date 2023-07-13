@@ -39,9 +39,9 @@ spec:
       - secretRef:
           name: bookstack-secrets
 
-    env:
-      TZ: "${TIMEZONE}"
-      SESSION_SECURE_COOKIE: "true"
+    # env:
+    #   TZ: "${TIMEZONE}"
+    #   SESSION_SECURE_COOKIE: "true"
 
     service:
       main:
