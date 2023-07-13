@@ -39,9 +39,57 @@ spec:
       - secretRef:
           name: bookstack-secrets
 
-    # env:
-    #   TZ: "${TIMEZONE}"
-    #   SESSION_SECURE_COOKIE: "true"
+    env:
+      - name: TZ
+        value: "${TIMEZONE}"
+      - name: MAIL_DRIVER
+        value: "smtp"
+      - name: MAIL_ENCRYPTION
+        value: "tls"
+      - name: MAIL_PORT
+        value: 587
+      - name: MAIL_FROM_NAME
+        value: "Bookstack"
+      - name: DB_HOST
+        valueFrom:
+          secretKeyRef:
+            name: bookstack-secrets
+            key: DB_HOST
+      - name: DB_USER
+        valueFrom:
+          secretKeyRef:
+            name: bookstack-secrets
+            key: DB_USER
+      - name: DB_PASS
+        valueFrom:
+          secretKeyRef:
+            name: bookstack-secrets
+            key: DB_PASS
+      - name: DB_DATABASE
+        valueFrom:
+          secretKeyRef:
+            name: bookstack-secrets
+            key: DB_DATABASE
+      - name: MAIL_HOST
+        valueFrom:
+          secretKeyRef:
+            name: bookstack-secrets
+            key: MAIL_HOST
+      - name: MAIL_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: bookstack-secrets
+            key: MAIL_USERNAME
+      - name: MAIL_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: bookstack-secrets
+            key: MAIL_PASSWORD
+      - name: MAIL_FROM
+        valueFrom:
+          secretKeyRef:
+            name: bookstack-secrets
+            key: MAIL_FROM
 
     service:
       main:
