@@ -40,6 +40,8 @@ spec:
           name: bookstack-secrets
 
     env:
+      - name: APP_URL
+        value: "bookstack.${SECRET_DOMAIN}"
       - name: TZ
         value: "${TIMEZONE}"
       - name: MAIL_DRIVER
