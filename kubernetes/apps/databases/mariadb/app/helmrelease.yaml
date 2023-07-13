@@ -29,6 +29,8 @@ spec:
       storageClass: cephfs
     auth:
       existingSecret: mariadb-secrets
+    podLabels:
+      mariadb: mariadb
     resources:
       requests:
         cpu: 200m
