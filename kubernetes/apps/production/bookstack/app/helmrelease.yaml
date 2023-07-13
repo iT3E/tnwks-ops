@@ -108,8 +108,8 @@ spec:
         hosts:
           - host: &host "bookstack.${SECRET_DOMAIN}"
             paths:
-              - path: /*
-                pathType: ImplementationSpecific
+              - path: /
+                pathType: Prefix
         tls:
           - hosts:
               - *host
