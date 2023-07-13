@@ -41,7 +41,7 @@ spec:
 
     env:
       - name: APP_URL
-        value: "bookstack.${SECRET_DOMAIN}"
+        value: "https://bookstack.${SECRET_DOMAIN}"
       - name: TZ
         value: "${TIMEZONE}"
       - name: MAIL_DRIVER
