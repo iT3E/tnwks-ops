@@ -14,6 +14,6 @@ spec:
       port: 3306
       protocol: TCP
       targetPort: 3306
-  # selector:
-  #   postgresql: postgres
-  #   role: primary
+  selector:
+    mariadb: mariadb
+
