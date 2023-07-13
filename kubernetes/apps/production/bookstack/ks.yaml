@@ -5,6 +5,8 @@ metadata:
   name: production-apps-bookstack
   namespace: flux-system
 spec:
+  dependsOn:
+    - name: database-apps-mariadb
   path: ./kubernetes/apps/production/bookstack/app
   prune: true
   sourceRef:
