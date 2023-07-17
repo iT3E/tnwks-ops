@@ -1,0 +1,42 @@
+- alias: SmokeAlarm
+  description: ''
+  mode: single
+  trigger:
+    - type: smoke
+      platform: device
+      device_id: 2ddd65c7e4743201d82b1306da9d1358
+      entity_id: binary_sensor.zcombo_g_smoke_co_alarm_smoke_alarm_smoke_detected
+      domain: binary_sensor
+    - type: gas
+      platform: device
+      device_id: 2ddd65c7e4743201d82b1306da9d1358
+      entity_id: binary_sensor.zcombo_g_smoke_co_alarm_co_alarm_carbon_monoxide_detected
+      domain: binary_sensor
+    - type: smoke
+      platform: device
+      device_id: f8b0062f4cde4b5d96d38857e1253637
+      entity_id: binary_sensor.nodeid_26_smoke_alarm
+      domain: binary_sensor
+    - type: turned_on
+      platform: device
+      device_id: f8b0062f4cde4b5d96d38857e1253637
+      entity_id: binary_sensor.nodeid_26_co_alarm
+      domain: binary_sensor
+  condition: []
+  action:
+    - service: notify.mobile_app_pixel_5
+      data:
+        title: "Smoke Alarm! Smoke Alarm!"
+        message: "TTS"
+        data:
+          ttl: 0
+          priority: high
+          channel: alarm_stream_max
+    - service: notify.mobile_app_pixel_4a_5g
+      data:
+        title: "Smoke Alarm! Smoke Alarm!"
+        message: "Smoke Alarm! Smoke Alarm!"
+        data:
+          ttl: 0
+          priority: high
+          channel: alarm_stream_max

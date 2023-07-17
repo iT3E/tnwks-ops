@@ -1,0 +1,43 @@
+- alias: After Hours Sensor Alert1
+  description: ''
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.zwave_door_sensor1_access_control_window_door_is_open
+  condition:
+    - condition: and
+      conditions:
+        - type: is_plugged_in
+          condition: device
+          device_id: 8caa38225cf4781b20e64953b9b1d070
+          entity_id: binary_sensor.pixel_4a_5g_is_charging
+          domain: binary_sensor
+        - condition: and
+          conditions:
+            - type: is_plugged_in
+              condition: device
+              device_id: da4701a8a70f3bf8c4acb5591928ee83
+              entity_id: binary_sensor.pixel_5_is_charging
+              domain: binary_sensor
+            - condition: and
+              conditions:
+                - condition: time
+                  after: '22:00:00'
+                  before: '07:00:00'
+  action:
+    - service: notify.mobile_app_pixel_5
+      data:
+        title: "Door Sensor Alert! Door Sensor Alert!"
+        message: "TTS"
+        data:
+          ttl: 0
+          priority: high
+          channel: alarm_stream_max
+    - service: notify.mobile_app_pixel_4a_5g
+      data:
+        title: "Door Sensor Alert! Door Sensor Alert!"
+        message: "Door Sensor Alert! Door Sensor Alert!"
+        data:
+          ttl: 0
+          priority: high
+          channel: alarm_stream_max

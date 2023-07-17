@@ -1,0 +1,15 @@
+- alias: LockDoorsBothAway_P5
+  description: ''
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: device_tracker.unifi_e2_4b_a8_d8_42_99_default
+      from: Home
+      to: Away
+  condition:
+    - condition: state
+      entity_id: device_tracker.pixel_4a_5g
+      state: Away
+  action:
+    - service: script.lock_all_doors
+

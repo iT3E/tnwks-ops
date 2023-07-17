@@ -1,0 +1,27 @@
+- alias: Water Sensor Alert
+  description: ''
+  mode: single
+  trigger:
+    - type: moist
+      platform: device
+      device_id: 71fa3907eabb0abcaa4205236d5a3e63
+      entity_id: binary_sensor.zwave_water_sensor1_water_alarm_water_leak_detected
+      domain: binary_sensor
+  action:
+    - service: notify.mobile_app_pixel_5
+      data:
+        title: "Water Leak detected in Water Heater West!"
+        message: "TTS"
+        data:
+          ttl: 0
+          priority: high
+          channel: alarm_stream_max
+    - service: notify.mobile_app_pixel_4a_5g
+      data:
+        title: "Water Leak detected in Water Heater West!"
+        message: "Water Leak detected in Water Heater West!"
+        data:
+          ttl: 0
+          priority: high
+          channel: alarm_stream_max
+

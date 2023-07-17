@@ -1,0 +1,15 @@
+- alias: Octoprint Finished
+  description: ''
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.octoprint_printing_2
+      to: 'off'
+      from: 'on'
+  condition: []
+  action:
+    - service: notify.mobile_app_pixel_5
+      data:
+        message: Print Finished!
+        title: Octoprint
+  
