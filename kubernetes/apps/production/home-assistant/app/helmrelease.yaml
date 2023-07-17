@@ -78,16 +78,12 @@ spec:
       main:
         enabled: true
         ingressClassName: nginx-internal
-        annotations:
-          external-dns.alpha.kubernetes.io/target: ingress.tnwks.local
         hosts:
           - host: &host hass.tnwks.local
             paths:
               - path: /
                 pathType: Prefix
-        tls:
-          - hosts:
-              - *host
+
     probes:
       liveness:
         enabled: false
