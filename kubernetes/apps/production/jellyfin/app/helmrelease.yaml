@@ -75,6 +75,11 @@ spec:
             paths:
               - path: /
 
+    resources:
+      requests:
+        memory: 512m
+      limits:
+        memory: 6Gi
 
     podSecurityContext:
       runAsUser: 568
