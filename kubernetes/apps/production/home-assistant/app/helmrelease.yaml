@@ -28,29 +28,6 @@ spec:
     keepHistory: false
   values:
     initContainers:
-      copy-config:
-        image: ghcr.io/onedr0p/alpine:3.18.2@sha256:4b666f73ee079b4feac9527fae3b0e60b0e9883213758bdb28af852c9acb4efe
-        command:
-          - "/bin/sh"
-          - -c
-        args:
-          - |
-            for f in /data/configfiles/*; do
-              filename=$(basename $f)
-              envsubst < $f > /data/config/$filename;
-            done
-        env:
-          WIREGUARD_PORT:
-            valueFrom:
-              secretKeyRef:
-                name: qbittorrent-secret
-                key: WIREGUARD_PORT
-        volumeMounts:
-          - name: config
-            mountPath: /data/config
-          - name: configfiles
-            mountPath: /data/configfiles
-
       01-init-db:
         image: ghcr.io/onedr0p/postgres-init:14.8
         imagePullPolicy: IfNotPresent
@@ -83,7 +60,6 @@ spec:
             paths:
               - path: /
                 pathType: Prefix
-
     probes:
       liveness:
         enabled: false
