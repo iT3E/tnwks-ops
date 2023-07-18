@@ -7,3 +7,9 @@ resources:
   - ./helmrelease.yaml
 patchesStrategicMerge:
   - ./patches/addons.yaml
+configMapGenerator:
+  - name: qbittorrent-configmap
+    files:
+      - config/*
+generatorOptions:
+  disableNameSuffixHash: true
