@@ -74,47 +74,6 @@ locals {
 
 #######################################
 ##                                   ##
-##        PVE VM - sce-hass01        ##
-##                                   ##
-#######################################
-
-module "pve_vm_hass" {
-  for_each             = toset(local.hass)
-  source               = "../../../modules/proxmox"
-  vm_name              = each.value
-  target_node          = "sce-pve0${index(local.hass, each.value) + 1}"
-  clone                = "ubuntu-server-focal"
-  full_clone           = true
-  ha_group             = "ha_group${index(local.hass, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  ha_state             = "started"
-  vm_memory            = "8192"
-  num_cores            = "2"
-  num_sockets          = "2"
-  qemu_os              = "l26"
-  qemu_guest_agent     = 1
-  scsihw               = "virtio-scsi-single"
-  vm_nics   = [
-    {
-      model        = "virtio"
-      bridge       = "vmbr0"
-      tag          = "720"
-      mtu          = "0"
-    },
-  ]
-  vm_disks = [
-    {
-      storage   = "ssd-pool"
-      size      = "20G"
-      type      = "virtio"
-      cache     = "none"
-      format    = "raw"
-      iothread  = 1
-    },
-  ]
-}
-
-#######################################
-##                                   ##
 ##        PVE VM - k8s_masters       ##
 ##                                   ##
 #######################################
@@ -202,47 +161,6 @@ module "pve_vm_k8s_workers" {
     {
       storage   = "ssd-pool"
       size      = "40G"
-      type      = "virtio"
-      cache     = "none"
-      format    = "raw"
-      iothread  = 1
-    },
-  ]
-}
-
-#######################################
-##                                   ##
-##          PVE VM - UISP            ##
-##                                   ##
-#######################################
-
-module "pve_vm_uisp" {
-  for_each             = toset(local.uisp)
-  source               = "../../../modules/proxmox"
-  vm_name              = each.value
-  target_node          = "sce-pve0${index(local.uisp, each.value) + 1}"
-  clone                = "ubuntu-server-focal"
-  full_clone           = true
-  ha_group             = "ha_group${index(local.uisp, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
-  ha_state             = "started"
-  vm_memory            = "2048"
-  num_cores            = "2"
-  num_sockets          = "2"
-  qemu_os              = "l26"
-  qemu_guest_agent     = 1
-  scsihw               = "virtio-scsi-single"
-  vm_nics   = [
-    {
-      model        = "virtio"
-      bridge       = "vmbr0"
-      tag          = "720"
-      mtu          = "0"
-    },
-  ]
-  vm_disks = [
-    {
-      storage   = "ssd-pool"
-      size      = "20G"
       type      = "virtio"
       cache     = "none"
       format    = "raw"
