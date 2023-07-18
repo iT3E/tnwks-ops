@@ -4,7 +4,6 @@ kind: Kustomization
 namespace: home-automation
 resources:
   - ./helmrelease.yaml
-  - ./secrets.sops.yaml
 commonLabels:
   app.kubernetes.io/name: zwave-js-ui
   app.kubernetes.io/instance: zwave-js-ui
