@@ -35,7 +35,7 @@ spec:
         args:
           - cp /data/mosquitto_secret/* /data/external_config/ && mosquitto_passwd -U /data/external_config/mosquitto_pwd
         volumeMounts:
-          - name: mosquitto-secret
+          - name: mosquitto-secrets
             mountPath: /data/mosquitto_secret
           - name: external-config
             mountPath: /data/external_config
@@ -56,10 +56,10 @@ spec:
         name: mosquitto-configmap
         mountPath: /mosquitto/config/mosquitto.conf
         subPath: mosquitto.conf
-      mosquitto-secret:
+      mosquitto-secrets:
         enabled: true
         type: secret
-        name: mosquitto-secret
+        name: mosquitto-secrets
         mountPath: "-"
       external-config:
         enabled: true
