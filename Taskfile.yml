@@ -3,8 +3,8 @@ version: "3"
 
 vars:
   KUBERNETES_DIR: "{{.ROOT_DIR}}/kubernetes"
-  ANSIBLE_DIR: "{{.ROOT_DIR}}/ansible"
-  TERRAFORM_DIR: "{{.ROOT_DIR}}/terraform"
+  ANSIBLE_DIR: "{{.ROOT_DIR}}/infrastructure/ansible"
+  TERRAFORM_DIR: "{{.ROOT_DIR}}/infrastructure/terraform"
 
 dotenv: [".config.env"]
 
