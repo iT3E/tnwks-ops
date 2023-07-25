@@ -6,3 +6,4 @@ resources:
   - ./helmrelease.yaml
   - ./secrets.sops.yaml
   - ./dashboard
+  - ./s3-thanos-bucket.yaml

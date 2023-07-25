@@ -1,0 +1,8 @@
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: s3-thanos-bucket
+  namespace: monitoring
+spec:
+  bucketName: s3-thanos-bucket
+  storageClassName: ceph-bucket
