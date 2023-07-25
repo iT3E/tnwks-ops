@@ -118,7 +118,7 @@ spec:
       name: s3-thanos-bucket
       valuesKey: BUCKET_NAME
       targetPath: objstoreConfig.config.bucket
-    - kind: ConfigMap
+    - kind: Secret
       name: thanos-secrets
       valuesKey: BUCKET_HOST
       targetPath: objstoreConfig.config.endpoint
