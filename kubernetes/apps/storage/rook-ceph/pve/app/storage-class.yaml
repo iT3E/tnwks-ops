@@ -71,6 +71,7 @@ parameters:
   objectStoreName: external-objectstorage
   objectStoreNamespace: rook-ceph
 reclaimPolicy: Delete
+---
 
 # ---
 # apiVersion: storage.k8s.io/v1
