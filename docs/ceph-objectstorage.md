@@ -1,3 +1,4 @@
+```
 sudo ceph-authtool --create-keyring /etc/pve/priv/ceph.client.radosgw.keyring
 
 sudo ceph-authtool /etc/pve/priv/ceph.client.radosgw.keyring -n client.radosgw.sce-pve01 --gen-key
@@ -11,9 +12,9 @@ sudo ceph-authtool -n client.radosgw.sce-pve03 --cap osd 'allow rwx' --cap mon '
 sudo ceph -k /etc/pve/priv/ceph.client.admin.keyring auth add client.radosgw.sce-pve01 -i /etc/pve/priv/ceph.client.radosgw.keyring
 sudo ceph -k /etc/pve/priv/ceph.client.admin.keyring auth add client.radosgw.sce-pve02 -i /etc/pve/priv/ceph.client.radosgw.keyring
 sudo ceph -k /etc/pve/priv/ceph.client.admin.keyring auth add client.radosgw.sce-pve03 -i /etc/pve/priv/ceph.client.radosgw.keyring
-
+```
 ### Add the following lines to /etc/ceph/ceph.conf:
-
+```
 [client.radosgw.sce-pve01]
         host = sce-pve01
         keyring = /etc/pve/priv/ceph.client.radosgw.keyring
@@ -31,11 +32,15 @@ sudo ceph -k /etc/pve/priv/ceph.client.admin.keyring auth add client.radosgw.sce
         keyring = /etc/pve/priv/ceph.client.radosgw.keyring
         log file = /var/log/ceph/client.rados.$host.log
         rgw_dns_name = s3.tnwks.local
+```
 
 ### run the following on each node:
+```
 apt install radosgw
+```
 
 ### Create systemd service symlink on each node
+```
 mkdir /etc/systemd/system/ceph-radosgw.target.wants
 ln -s /lib/systemd/system/ceph-radosgw@.service /etc/systemd/system/ceph-radosgw.target.wants/ceph-radosgw@radosgw.radosgw.sce-pve01
 systemctl daemon-reload
@@ -47,9 +52,20 @@ systemctl daemon-reload
 mkdir /etc/systemd/system/ceph-radosgw.target.wants
 ln -s /lib/systemd/system/ceph-radosgw@.service /etc/systemd/system/ceph-radosgw.target.wants/ceph-radosgw@radosgw.radosgw.sce-pve03
 systemctl daemon-reload
+```
 
 ### start gateway per node
+
+```
 systemctl start ceph-radosgw@radosgw.sce-pve01
 systemctl start ceph-radosgw@radosgw.sce-pve02
 systemctl start ceph-radosgw@radosgw.sce-pve03
+```
 
+### output is generated that contains access and secret
+### add both access and secret to a k8s secret
+```
+radosgw-admin user create --uid=rgw-admin-ops-user --display-name="RGW Admin Ops User" --caps="buckets=*;users=*;usage=read;metadata=read;zone=read"
+
+echo -n "<access_key>" | base64
+```
