@@ -1,0 +1,12 @@
+apiVersion: ceph.rook.io/v1
+kind: CephObjectStore
+metadata:
+  name: external-objectstorage
+  namespace: rook-ceph
+spec:
+  gateway:
+    port: 7480
+    externalRgwEndpoints:
+      - ip: 10.15.15.50
+      - ip: 10.15.15.51
+      - ip: 10.15.15.52
