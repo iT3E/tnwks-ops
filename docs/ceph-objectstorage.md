@@ -1,3 +1,5 @@
+https://forum.proxmox.com/threads/activate-ceph-object-storage.41481/post-200630
+
 ```
 sudo ceph-authtool --create-keyring /etc/pve/priv/ceph.client.radosgw.keyring
 
