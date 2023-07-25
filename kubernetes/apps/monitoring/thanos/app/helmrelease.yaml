@@ -114,14 +114,14 @@ spec:
         enabled: true
 
   valuesFrom:
-    # - kind: ConfigMap
-    #   name: s3-thanos-bucket
-    #   valuesKey: BUCKET_NAME
-    #   targetPath: objstoreConfig.config.bucket
-    # - kind: ConfigMap
-    #   name: s3-thanos-bucket
-    #   valuesKey: BUCKET_HOST
-    #   targetPath: objstoreConfig.config.endpoint
+    - kind: ConfigMap
+      name: s3-thanos-bucket
+      valuesKey: BUCKET_NAME
+      targetPath: objstoreConfig.config.bucket
+    - kind: ConfigMap
+      name: thanos-secrets
+      valuesKey: BUCKET_HOST
+      targetPath: objstoreConfig.config.endpoint
     # - kind: ConfigMap
     #   name: s3-thanos-bucket
     #   valuesKey: BUCKET_REGION
