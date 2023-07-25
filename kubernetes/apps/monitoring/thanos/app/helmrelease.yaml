@@ -114,18 +114,18 @@ spec:
         enabled: true
 
   valuesFrom:
-    - kind: Secret
+    - kind: ConfigMap
       name: s3-thanos-bucket
       valuesKey: BUCKET_NAME
       targetPath: objstoreConfig.config.bucket
-    - kind: Secret
+    - kind: ConfigMap
       name: s3-thanos-bucket
       valuesKey: BUCKET_HOST
       targetPath: objstoreConfig.config.endpoint
-    - kind: Secret
-      name: s3-thanos-bucket
-      valuesKey: BUCKET_REGION
-      targetPath: objstoreConfig.config.region
+    # - kind: ConfigMap
+    #   name: s3-thanos-bucket
+    #   valuesKey: BUCKET_REGION
+    #   targetPath: objstoreConfig.config.region
     - kind: Secret
       name: s3-thanos-bucket
       valuesKey: AWS_ACCESS_KEY_ID
