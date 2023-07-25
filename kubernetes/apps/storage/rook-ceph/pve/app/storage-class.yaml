@@ -66,7 +66,6 @@ metadata:
    name: ceph-bucket
 # Change "rook-ceph" provisioner prefix to match the operator namespace if needed
 provisioner: rook-ceph.ceph.rook.io/bucket
-reclaimPolicy: Delete
 parameters:
   objectStoreName: external-objectstorage
   objectStoreNamespace: rook-ceph
