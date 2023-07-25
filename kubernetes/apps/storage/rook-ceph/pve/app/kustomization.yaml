@@ -9,3 +9,4 @@ resources:
   - ceph-prometheus.yaml
   - ceph-subvolume-pv-jellyfin.yaml
   - ceph-subvolume-pv-qbit.yaml
+  - ceph-objectstorage.yaml
