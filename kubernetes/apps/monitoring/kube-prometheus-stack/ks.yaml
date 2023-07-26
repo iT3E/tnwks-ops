@@ -5,12 +5,28 @@ metadata:
   name: cluster-apps-kube-prometheus-stack
   namespace: flux-system
 spec:
-  path: ./kubernetes/apps/monitoring/kube-prometheus-stack/app
+  interval: 10m
+  path: "./kubernetes/apps/monitoring/kube-prometheus-stack/app"
   prune: true
   sourceRef:
     kind: GitRepository
     name: home-kubernetes
-  wait: false # no flux ks dependents
-  interval: 30m
-  retryInterval: 1m
-  timeout: 5m
+  wait: true
+  dependsOn:
+    - name: cluster-apps-alertmanager
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cluster-apps-kube-prometheus-stack-addons
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: "kubernetes/apps/monitoring/kube-prometheus-stack/addons"
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: home-kubernetes
+  wait: true
+  dependsOn:
+    - name: cluster-apps-kube-prometheus-stack
