@@ -57,7 +57,7 @@ spec:
       secrets:
         enabled: true
         type: secret
-        name: alertmanager-secret
+        name: alertmanager-secrets
         mountPath: /etc/secrets
         readOnly: true
 
