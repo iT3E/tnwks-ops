@@ -71,3 +71,51 @@ radosgw-admin user create --uid=rgw-admin-ops-user --display-name="RGW Admin Ops
 
 echo -n "<access_key>" | base64
 ```
+
+To modify the RGW zone, you would use the radosgw-admin command line tool, for example:
+
+bash
+Copy code
+`radosgw-admin zone get > zone.json`
+This command will fetch the current configuration of the default zone and store it in a file named zone.json.
+
+You can then modify zone.json to specify your custom pools. For example:
+
+```json
+{
+    "id": "d4018b8d-8c0d-4072-8919-608726fa369e",
+    "name": "default",
+    "domain_root": ".rgw.root",
+    "control_pool": "sce-pvecl01.rgw.control",
+    "gc_pool": "default.rgw.gc",
+    "log_pool": "sce-pvecl01.rgw.log",
+    "intent_log_pool": "default.rgw.intent-log",
+    "usage_log_pool": "default.rgw.usage",
+    "user_keys_pool": "default.rgw.users.keys",
+    "user_email_pool": "default.rgw.users.email",
+    "user_swift_pool": "default.rgw.users.swift",
+    "user_uid_pool": "default.rgw.users.uid",
+    "system_key": {
+        "access_key": "",
+        "secret_key": ""
+    },
+    "placement_pools": [
+        {
+            "key": "default-placement",
+            "val": {
+                "index_pool": "sce-pvecl01.rgw.buckets.index",
+                "data_pool": "sce-pvecl01.rgw.buckets.data",
+                "data_extra_pool": "default.rgw.buckets.non-ec",
+                "index_type": 0
+            }
+        }
+    ],
+    "realm_id": "4a367028-bd8a-4c4f-a10d-29b40513f971"
+}
+```
+And then apply this new configuration using:
+
+```bash
+radosgw-admin zone set --infile=zone.json
+```
+Make sure to take a backup of your current configuration before making any changes and make sure to understand the implications of these changes.
