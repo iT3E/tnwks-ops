@@ -6,3 +6,4 @@ resources:
   - ./secrets.sops.yaml
   - ./helmrelease.yaml
   - ./prometheus-rule.yaml
+  - ./s3-loki-bucket.yaml
