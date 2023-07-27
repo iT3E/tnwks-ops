@@ -96,7 +96,8 @@ sudo systemctl restart sshd
 # Installing prometheus exporter
 https://github.com/prometheus-pve/prometheus-pve-exporter/wiki/PVE-Exporter-on-Proxmox-VE-Node-in-a-venv
 ```
-#first create user in PVE with PVEAuditor role.  This is done with ansible currently
+#first create user in PVE with PVEAuditor role.  This is done with ansible currently.
+#then create an API token which has to be done manually
 
 #run commands on each node
 sudo useradd -s /bin/false pve-exporter
@@ -113,7 +114,8 @@ sudo nano /etc/prometheus/pve.yml
 ###
 default:
     user: pve-exporter@pam
-    password: '<password>'
+    token_name: "<tokenname>"
+    token_value: "<tokensecret>"
     verify_ssl: false
 ###
 
