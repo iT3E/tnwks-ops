@@ -94,8 +94,48 @@ sudo systemctl restart sshd
 ```
 
 # Installing prometheus exporter
+https://github.com/prometheus-pve/prometheus-pve-exporter/wiki/PVE-Exporter-on-Proxmox-VE-Node-in-a-venv
 ```
-#run on each node
-sudo apt install python3-pip -y
-sudo python3 -m pip install prometheus-pve-exporter
+#first create user in PVE with PVEAuditor role.  This is done with ansible currently
+
+#run commands on each node
+sudo useradd -s /bin/false pve-exporter
+
+sudo apt update
+sudo apt install python3-venv -y
+
+sudo python3 -m venv /opt/prometheus-pve-exporter
+
+sudo /opt/prometheus-pve-exporter/bin/pip install prometheus-pve-exporter
+
+sudo mkdir -p /etc/prometheus
+sudo nano /etc/prometheus/pve.yml
+###
+default:
+    user: pve-exporter@pam
+    password: '<password>'
+    verify_ssl: false
+###
+
+sudo nano /etc/systemd/system/prometheus-pve-exporter.service
+
+###
+[Unit]
+Description=Prometheus exporter for Proxmox VE
+Documentation=https://github.com/znerol/prometheus-pve-exporter
+
+[Service]
+Restart=always
+User=pve-exporter
+ExecStart=/opt/prometheus-pve-exporter/bin/pve_exporter /etc/prometheus/pve.yml
+
+[Install]
+WantedBy=multi-user.target
+###
+
+sudo systemctl daemon-reload
+sudo systemctl start prometheus-pve-exporter
+
+#test if port is listening
+sudo ss -tuln | grep 9221
 ```
