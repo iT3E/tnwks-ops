@@ -147,7 +147,7 @@ spec:
             static_configs:
               - targets:
                   - sce-vyos01.tnwks.local:9100
-                  - 10.15.15.152:9100 #ceph
+                  - 10.15.15.50:9283 #ceph
 
           - job_name: speedtest-exporter
             scrape_interval: 60m
