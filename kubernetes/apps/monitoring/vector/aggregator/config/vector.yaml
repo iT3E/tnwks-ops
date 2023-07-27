@@ -26,6 +26,11 @@ sources:
     address: 0.0.0.0:6002
     version: "2"
 
+  pve_syslog:
+    type: syslog
+    mode: tcp
+    address: 0.0.0.0:6003
+
 # Transformations
 transforms:
   kubernetes_remap:
@@ -129,5 +134,16 @@ sinks:
     out_of_order_action: accept
     remove_label_fields: true
     remove_timestamp: true
+    labels:
+      hostname: "{{ host }}"
+
+  loki_pve:
+    type: loki
+    inputs:
+      - pve_syslog
+    endpoint: http://loki-gateway.monitoring.svc.cluster.local
+    encoding:
+      codec: json
+    out_of_order_action: rewrite_timestamp
     labels:
       hostname: "{{ host }}"
