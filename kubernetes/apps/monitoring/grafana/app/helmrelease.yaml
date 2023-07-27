@@ -131,6 +131,28 @@ spec:
           datasource:
             - name: "DS_PROMETHEUS"
               value: Prometheus
+      ceph:
+      # Ref: https://grafana.com/grafana/dashboards/2842-ceph-cluster/
+        cluster:
+          gnetId: 2842
+          revision: 17
+          datasource:
+            - name: "DS_PROMETHEUS"
+              value: Prometheus
+      # Ref: https://grafana.com/grafana/dashboards/5336-ceph-osd-single/
+        osd:
+          gnetId: 5336
+          revision: 9
+          datasource:
+            - name: "DS_PROMETHEUS"
+              value: Prometheus
+      # Ref: https://grafana.com/grafana/dashboards/5342-ceph-pools/
+        pools:
+          gnetId: 5342
+          revision: 9
+          datasource:
+            - name: "DS_PROMETHEUS"
+              value: Prometheus
 
     grafana.ini:
       analytics:
