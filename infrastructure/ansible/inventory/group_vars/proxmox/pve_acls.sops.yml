@@ -11,6 +11,11 @@ pve_acls:
         - ENC[AES256_GCM,data:Y5ZQIOggq2w=,iv:vEL+3308xBuAZxpVtdq3X2HjcRAj30U78JoA5sb7ieY=,tag:L/6TCtAFL/4ceIUZ1q4HAQ==,type:str]
       users:
         - ENC[AES256_GCM,data:FKI5vLKQakshUg==,iv:Gr6Aq1neySZiZmzJW6uB5BORgAtP2M0H+5UoBzkMaEo=,tag:wcw+yr7dPJf5O9FFmQMDqA==,type:str]
+    - path: ENC[AES256_GCM,data:zg==,iv:qArg+8MURJPm2UAcmIqEtpdqtSlkP2i5HyFhFpIbZC4=,tag:6GLYcwRoO0BJIR/m/eqGHQ==,type:str]
+      roles:
+        - ENC[AES256_GCM,data:nZdW2sIIAOo/ZQ==,iv:H7/mQYW1RqM8qHL3ms7OINkASigfeGhlr2dOigob94g=,tag:ngkVnschDGo6K0DPhK6AbQ==,type:str]
+      users:
+        - ENC[AES256_GCM,data:XhbO09/i3SqnEe2skQFPag==,iv:OFypSRQR4eDZ3PYr/psQhH0JMqsnENSqKsymuWXE980=,tag:blEgF/DNfJR86gjHAUyyFg==,type:str]
 sops:
     kms: []
     gcp_kms: []
@@ -26,8 +31,8 @@ sops:
             WDFGTkgybFVjTkZoQnI3eGJlUFhUSHMKnPOdg67oG033/BRYDuar9CTImdYGKidl
             aS1oGQo58TtXJsCK6U0+sWNaA6oFZCowmCj9yICWB2QLL9SNfGH8aw==
             -----END AGE ENCRYPTED FILE-----
-    lastmodified: "2023-06-24T07:13:48Z"
-    mac: ENC[AES256_GCM,data:TUZDi8hVeoe0Xu7LkzmBPuNe7gXXt7j2TWN5PltunhQldiwzmXdZY1vLSqJ3vI6ivJnDPWaZ13W2MimfDh5NdggdHkNiMvCoHx/R86dNHWihISBLAvBKvAZ5aIfGGs5DeK7evbqkF2san4BEVcZ2Vqfi86DbvOH/efhqmBCdZUQ=,iv:ovZ6697wxNMfhASaLQHrzwvgigSlWCgWJCigv6q1QAc=,tag:FJ+VAeIjPLGUuDOoUJpWxw==,type:str]
+    lastmodified: "2023-07-27T20:01:15Z"
+    mac: ENC[AES256_GCM,data:UfGs8cVts3bpeEjEVxh8Sn7Yt4BqIAl8oJIevjs6HIjzPtR68CfD+PV8ahwg9tx10CEjiaEPa93brdgcHLnUTXDrUY7r8/ekfB1br6kMPM9Mo0HGoXNcp9rpfmjb+gvERaGd/vANeixYMXmGYJi3kcBqf4nrmIEhhpC3N8DQg44=,iv:SldO/d8CgdT9E83ojx5W7jg93NJGy8a5gkhTKf3j0sA=,tag:XXCwOZZL0inlg/rtPzcyYw==,type:str]
     pgp: []
     unencrypted_suffix: _unencrypted
     version: 3.7.3
