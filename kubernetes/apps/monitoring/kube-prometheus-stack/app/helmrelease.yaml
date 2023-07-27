@@ -159,9 +159,9 @@ spec:
           - job_name: 'pve'
             static_configs:
               - targets:
-                - 10.10.11.10  # Proxmox VE node.
-                - 10.10.11.11  # Proxmox VE node.
-                - 10.10.11.12  # Proxmox VE node.
+                - 10.10.11.10:9221  # Proxmox VE node.
+                - 10.10.11.11:9221  # Proxmox VE node.
+                - 10.10.11.12:9221  # Proxmox VE node.
             metrics_path: /pve
             params:
               module: [default]
