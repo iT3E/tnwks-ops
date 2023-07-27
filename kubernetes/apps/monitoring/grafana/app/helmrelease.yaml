@@ -67,6 +67,14 @@ spec:
               path: /var/lib/grafana/dashboards/unpoller
             orgId: 1
             type: file
+          - name: ceph
+            disableDeletion: false
+            editable: true
+            folder: "ceph"
+            options:
+              path: /var/lib/grafana/dashboards/ceph
+            orgId: 1
+            type: file
 
     datasources:
       datasources.yaml:
