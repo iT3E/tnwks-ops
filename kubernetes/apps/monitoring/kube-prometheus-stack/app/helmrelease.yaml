@@ -125,10 +125,10 @@ spec:
     prometheus:
       ingress:
         enabled: true
-        ingressClassName: internal-nginx
+        ingressClassName: nginx-internal
         pathType: Prefix
         hosts:
-          - &host_prometheus prometheus.bjw-s.dev
+          - &host_prometheus prometheus.tnwks.local
         tls:
           - hosts:
               - *host_prometheus
