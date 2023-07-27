@@ -92,3 +92,10 @@ ssh "$username@$proxmox_host" echo "SSH authentication successful. Passwordless 
 sudo sed -i 's/^PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 sudo systemctl restart sshd
 ```
+
+# Installing prometheus exporter
+```
+#run on each node
+sudo apt install python3-pip -y
+sudo python3 -m pip install prometheus-pve-exporter
+```
