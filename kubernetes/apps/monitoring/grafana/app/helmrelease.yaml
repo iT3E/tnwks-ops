@@ -162,6 +162,15 @@ spec:
             - name: "DS_PROMETHEUS"
               value: Prometheus
 
+      pve:
+      # Ref: https://grafana.com/grafana/dashboards/10347-proxmox-via-prometheus/
+        proxmox:
+          gnetId: 10347
+          revision: 5
+          datasource:
+            - name: "DS_PROMETHEUS"
+              value: Prometheus
+
     grafana.ini:
       analytics:
         check_for_updates: false

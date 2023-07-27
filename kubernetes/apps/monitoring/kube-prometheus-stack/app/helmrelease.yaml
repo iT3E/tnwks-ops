@@ -147,7 +147,6 @@ spec:
             static_configs:
               - targets:
                   - sce-vyos01.tnwks.local:9100
-                 # - 10.15.15.50:9283 #ceph
 
           - job_name: speedtest-exporter
             scrape_interval: 60m
@@ -156,6 +155,23 @@ spec:
             static_configs:
               - targets:
                   - sce-vyos01.tnwks.local:9798
+
+          - job_name: 'pve'
+            static_configs:
+              - targets:
+                - 10.10.11.10  # Proxmox VE node.
+                - 10.10.11.11  # Proxmox VE node.
+                - 10.10.11.12  # Proxmox VE node.
+            metrics_path: /pve
+            params:
+              module: [default]
+            relabel_configs:
+              - source_labels: [__address__]
+                target_label: __param_target
+              - source_labels: [__param_target]
+                target_label: instance
+              - target_label: __address__
+                replacement: 127.0.0.1:9221  # PVE exporter.
 
         enableAdminAPI: true
         externalLabels:
