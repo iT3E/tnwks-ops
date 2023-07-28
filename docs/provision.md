@@ -148,3 +148,58 @@ sudo echo "*.* @@10.10.120.56:6003" | sudo tee /etc/rsyslog.d/99-vector.conf
 sudo systemctl restart rsyslog
 
 ```
+
+# prevent logs from being written locally:
+```
+sudo cp /etc/rsyslog.conf /etc/rsyslog.conf.bak
+sudo nano /etc/rsyslog.conf
+
+comment out lines like below:
+
+#auth,authpriv.*                 /var/log/auth.log
+#*.*;auth,authpriv.none          -/var/log/syslog
+##cron.*                         /var/log/cron.log
+#daemon.*                        -/var/log/daemon.log
+#kern.*                          -/var/log/kern.log
+#lpr.*                           -/var/log/lpr.log
+#mail.*                          -/var/log/mail.log
+#user.*                          -/var/log/user.log
+#mail.info                       -/var/log/mail.info
+#mail.warn                       -/var/log/mail.warn
+#mail.err                        /var/log/mail.err
+#*.=debug;\
+#        auth,authpriv.none;\
+#        mail.none               -/var/log/debug
+#*.=info;*.=notice;*.=warn;\
+#        auth,authpriv.none;\
+#        cron,daemon.none;\
+#        mail.none               -/var/log/messages
+#*.emerg                         :omusrmsg:*
+
+#you can use this command to automate:
+sudo sed -i -E -e 's/^(auth,authpriv.*\/var\/log\/auth.log)/#\1/' \
+-e 's/^(\*.*;auth,authpriv.none.*-\/var\/log\/syslog)/#\1/' \
+-e 's/^(cron.*\/var\/log\/cron.log)/#\1/' \
+-e 's/^(daemon.*-\/var\/log\/daemon.log)/#\1/' \
+-e 's/^(kern.*-\/var\/log\/kern.log)/#\1/' \
+-e 's/^(lpr.*-\/var\/log\/lpr.log)/#\1/' \
+-e 's/^(mail.*-\/var\/log\/mail.log)/#\1/' \
+-e 's/^(user.*-\/var\/log\/user.log)/#\1/' \
+-e 's/^(mail.info.*-\/var\/log\/mail.info)/#\1/' \
+-e 's/^(mail.warn.*-\/var\/log\/mail.warn)/#\1/' \
+-e 's/^(mail.err.*\/var\/log\/mail.err)/#\1/' \
+-e 's/^(\*=debug;.*auth,authpriv.none;.*mail.none.*-\/var\/log\/debug)/#\1/' \
+-e 's/^(\*=info;\*=notice;\*=warn;.*auth,authpriv.none;.*cron,daemon.none;.*mail.none.*-\/var\/log\/messages)/#\1/' \
+-e 's/^(\*.emerg.*:omusrmsg:.*)/#\1/' /etc/rsyslog.conf
+
+sudo systemctl restart rsyslog
+
+sudo nano /etc/systemd/journald.conf
+
+#change line containing 'Storage=auto' to:
+Storage=volatile
+
+sudo systemctl restart systemd-journald
+
+
+```
