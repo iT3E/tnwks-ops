@@ -141,3 +141,10 @@ sudo systemctl start prometheus-pve-exporter
 #test if port is listening
 sudo ss -tuln | grep 9221
 ```
+
+# shipping syslog
+```
+sudo echo "*.* @@10.10.120.56:6003" | sudo tee /etc/rsyslog.d/99-vector.conf
+sudo systemctl restart rsyslog
+
+```
