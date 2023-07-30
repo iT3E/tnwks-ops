@@ -3,7 +3,7 @@ apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
   name: postgres-testrestore
-  namespace: databases
+  namespace: databases-testrestore
   annotations:
     kyverno.io/ignore: "true"
 spec:
