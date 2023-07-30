@@ -5,6 +5,5 @@ resources:
   - ./namespace.yaml
   - ./cloudnative-pg/ks.yaml
   - ./mariadb/ks.yaml
-  - ./cloudnative-pg-testrestore/ks.yaml
 
 
