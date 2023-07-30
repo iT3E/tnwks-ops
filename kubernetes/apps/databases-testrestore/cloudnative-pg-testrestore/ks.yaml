@@ -6,7 +6,7 @@ metadata:
   name: cluster-apps-cloudnative-pg-app-testrestore
   namespace: flux-system
 spec:
-  path: ./kubernetes/apps/databases/cloudnative-pg-testrestore/app
+  path: ./kubernetes/apps/databases-testrestore/cloudnative-pg-testrestore/app
   prune: true
   sourceRef:
     kind: GitRepository
@@ -29,7 +29,7 @@ metadata:
 spec:
   dependsOn:
     - name: cluster-apps-cloudnative-pg-app-testrestore
-  path: ./kubernetes/apps/databases/cloudnative-pg-testrestore/cluster
+  path: ./kubernetes/apps/databases-testrestore/cloudnative-pg-testrestore/cluster
   prune: true
   sourceRef:
     kind: GitRepository
