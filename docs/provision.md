@@ -93,7 +93,7 @@ sudo sed -i 's/^PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 sudo systemctl restart sshd
 ```
 
-# Installing prometheus exporter
+# Installing prometheus pve-exporter
 https://github.com/prometheus-pve/prometheus-pve-exporter/wiki/PVE-Exporter-on-Proxmox-VE-Node-in-a-venv
 ```
 #first create user in PVE with PVEAuditor role.  This is done with ansible currently.
@@ -137,10 +137,45 @@ WantedBy=multi-user.target
 
 sudo systemctl daemon-reload
 sudo systemctl start prometheus-pve-exporter
+sudo systemctl enable prometheus-pve-exporter
 
 #test if port is listening
 sudo ss -tuln | grep 9221
 ```
+
+# Installing prometheus node-exporter (for additional non-pve monitors)
+### download node-exporter
+curl -s https://api.github.com/repos/prometheus/node_exporter/releases/latest| grep browser_download_url|grep linux-amd64|cut -d '"' -f 4|wget -qi -
+
+tar -xvf node_exporter*.tar.gz
+cd  node_exporter*/
+sudo cp node_exporter /usr/local/bin
+
+### confirm install
+node_exporter --version
+
+### create node_exporter service
+sudo tee /etc/systemd/system/node_exporter.service <<EOF
+[Unit]
+Description=Node Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=pve-exporter
+ExecStart=/usr/local/bin/node_exporter
+
+[Install]
+WantedBy=default.target
+EOF
+
+### reload node_exporter service
+sudo systemctl daemon-reload
+sudo systemctl start node_exporter
+sudo systemctl enable node_exporter
+
+### test if port is listening
+sudo ss -tuln | grep 9100
 
 # shipping syslog
 ```
