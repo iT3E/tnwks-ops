@@ -1,0 +1,8 @@
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: s3-cnpg-bucket
+  namespace: databases
+spec:
+  bucketName: s3-cnpg-bucket
+  storageClassName: ceph-bucket

@@ -20,36 +20,36 @@ spec:
     initdb:
       database: app
       owner: app
-  # backup:
-  #   retentionPolicy: 30d
-  #   barmanObjectStore:
-  #     wal:
-  #       compression: bzip2
-  #       maxParallel: 8
-  #     destinationPath: s3://postgresql/
-  #     endpointURL: https://truenas.${SECRET_DOMAIN}:51515
-  #     serverName: postgres-v6
-  #     s3Credentials:
-  #       accessKeyId:
-  #         name: postgres-minio
-  #         key: MINIO_ACCESS_KEY
-  #       secretAccessKey:
-  #         name: postgres-minio
-  #         key: MINIO_SECRET_KEY
+  backup:
+    retentionPolicy: 30d
+    barmanObjectStore:
+      wal:
+        compression: bzip2
+        maxParallel: 8
+      destinationPath: s3://s3-cnpg-bucket/
+      endpointURL: http://10.15.15.50:7480
+      serverName: postgres-v6
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-secrets
+          key: AWS_ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-secrets
+          key: AWS_SECRET_ACCESS_KEY
   # bootstrap:
   #   recovery:
   #     source: postgres-v5
   # externalClusters:
   #   - name: postgres-v5
   #     barmanObjectStore:
-  #       destinationPath: s3://postgresql/
-  #       endpointURL: https://truenas.${SECRET_DOMAIN}:51515
+  #       destinationPath: s3://s3-cnpg-bucket/
+  #       endpointURL: http://10.15.15.50:7480
   #       s3Credentials:
   #         accessKeyId:
-  #           name: postgres-minio
-  #           key: MINIO_ACCESS_KEY
+  #           name: cnpg-secrets
+  #           key: AWS_ACCESS_KEY_ID
   #         secretAccessKey:
-  #           name: postgres-minio
-  #           key: MINIO_SECRET_KEY
+  #           name: cnpg-secrets
+  #           key: AWS_SECRET_ACCESS_KEY
   #       wal:
   #         maxParallel: 8
