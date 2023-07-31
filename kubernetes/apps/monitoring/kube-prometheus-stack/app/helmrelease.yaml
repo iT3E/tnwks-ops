@@ -147,6 +147,9 @@ spec:
             static_configs:
               - targets:
                   - sce-vyos01.tnwks.local:9100
+                  - sce-pve01.tnwks.local:9100
+                  - sce-pve02.tnwks.local:9100
+                  - sce-pve03.tnwks.local:9100
 
           - job_name: speedtest-exporter
             scrape_interval: 60m
