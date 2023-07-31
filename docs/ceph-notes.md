@@ -1,103 +1,101 @@
-### ceph troubleshooting:
+# ceph troubleshooting:
+### shows general ceph cluster detail. will show when pg's are broken.
 
 ```
 ceph health detail
 ```
-shows general ceph cluster detail. will show when pg's are broken.
 
+### shows PG placement per OSD [1,5,4]p1 means the pg is on 3 disks, osd1, osd5, and osd4, with osd1 being the 'primary'.
 
 ```
 ceph pg ls-by-pool pool-hdd-hostfd
 ```
-shows PG placement per OSD [1,5,4]p1 means the pg is on 3 disks, osd1, osd5, and osd4, with osd1 being the 'primary'.
-
+### shows OSD mapping on all nodes.
 ```
 ceph osd tree
 ```
-shows OSD mapping on all nodes.
 
+### shows recovery detail
 ```
 ceph -s
 ```
-shows recovery detail
 
-## outage 2023-07-05
+# How to mount rbd pvc's
 
-### Root cause:
-Power outage caused a reboot of all nodes. Ceph network was not listed in /etc/hosts on any hosts.  Updated the configs and rebooted each node.
 
-### Details:
-Current config:
-
+### postgres-2:
 ```
-$ cat /etc/hosts
+sudo rbd map ssd-pool/csi-vol-c278a428-263c-4ae3-bf70-845878d83e79
+sudo mkdir /mnt/rbd-postgres
 
-127.0.0.1 localhost.localdomain localhost
-10.15.15.50 sce-pve01 10.15.15.50
-# The following lines are desirable for IPv6 capable hosts
-
-::1     ip6-localhost ip6-loopback
-fe00::0 ip6-localnet
-ff00::0 ip6-mcastprefix
-ff02::1 ip6-allnodes
-ff02::2 ip6-allrouters
-ff02::3 ip6-allhosts
-# BEGIN ANSIBLE MANAGED: Proxmox Cluster Hosts
-sce-pve01-ceph.tnwks.local sce-pve01.tnwks.local sce-pve01
-
-sce-pve02-ceph.tnwks.local sce-pve02.tnwks.local sce-pve02
-
-sce-pve03-ceph.tnwks.local sce-pve03.tnwks.local sce-pve03
-
-# END ANSIBLE MANAGED: Proxmox Cluster Hosts
+sudo mount /dev/rbd0 /mnt/rbd-postgres
 ```
 
-after editing /etc/hosts, PVE hosts were again reachable and ceph started a recovery, however recovery performance was poor. Tried the following commands, but what fully resolved was simply a reboot of each node.
+### postgres-1:
+```
+sudo rbd map ssd-pool/csi-vol-bfff4923-c872-4037-bc72-572a767adfb8
+sudo mkdir /mnt/rbd-postgres-1
+sudo mount /dev/rbd1 /mnt/rbd-postgres-1
 
-```
-killall -9 corosync
-systemctl restart pve-cluster
-systemctl restart pvedaemon
-systemctl restart pveproxy
-systemctl restart pvestatd
-```
-```
-systemctl restart ceph.target
+sudo mkdir /mnt/pve/cephfs/postgresbak_20230729/postgres-1
+sudo cp -r /mnt/rbd-postgres-1/* /mnt/pve/cephfs/postgresbak_20230729/postgres-1
 ```
 
-Ran the below command on pve01 and pve02 to try and speed up recovery, but no change.
+### postgres-3:
 ```
-ceph tell 'osd.*' injectargs --osd-max-backfills=3 --osd-recovery-max-active=9
+sudo rbd map ssd-pool/csi-vol-d9a95077-cd96-44f5-9285-bbd52b32cf89
+sudo mkdir /mnt/rbd-postgres-3
+sudo mount /dev/rbd2 /mnt/rbd-postgres-3
+
+sudo mkdir /mnt/pve/cephfs/postgresbak_20230729/postgres-3
+sudo cp -r /mnt/rbd-postgres-3/* /mnt/pve/cephfs/postgresbak_20230729/postgres-3
+
+sudo umount /dev/rbd0
+sudo umount /dev/rbd1
+sudo umount /dev/rbd2
+
+sudo rbd unmap ssd-pool/csi-vol-c278a428-263c-4ae3-bf70-845878d83e79
+sudo rbd unmap ssd-pool/csi-vol-bfff4923-c872-4037-bc72-572a767adfb8
+sudo rbd unmap ssd-pool/csi-vol-d9a95077-cd96-44f5-9285-bbd52b32cf89
 ```
 
-# Update 2023-07-27
+
+-------------------------
+
+### postgres-2:
 ```
-When running ansible again, hosts file was reset.  In an effort to save time, i've manually added back the records, but made some additional records due to new understanding of the issue:
-10.15.15.50 sce-pve01 10.15.15.50
-10.15.15.51 sce-pve02 10.15.15.51
-10.15.15.52 sce-pve03 10.15.15.52
+sudo rbd map ssd-pool/csi-vol-c278a428-263c-4ae3-bf70-845878d83e79
+sudo mount /dev/rbd0 /mnt/rbd-postgres
+```
 
-entire hosts file on each system looks like the following:
+### postgres-1:
+```
+sudo rbd map ssd-pool/csi-vol-bfff4923-c872-4037-bc72-572a767adfb8
+sudo mount /dev/rbd1 /mnt/rbd-postgres-1
 
-127.0.0.1 localhost.localdomain localhost
-10.15.15.50 sce-pve01 10.15.15.50
-10.15.15.51 sce-pve02 10.15.15.51
-10.15.15.52 sce-pve03 10.15.15.52
-# The following lines are desirable for IPv6 capable hosts
 
-::1     ip6-localhost ip6-loopback
-fe00::0 ip6-localnet
-ff00::0 ip6-mcastprefix
-ff02::1 ip6-allnodes
-ff02::2 ip6-allrouters
-ff02::3 ip6-allhosts
-# BEGIN ANSIBLE MANAGED: Proxmox Cluster Hosts
-sce-pve01-ceph.tnwks.local 10.15.15.50 sce-pve01
+sudo cp -r /mnt/rbd-postgres/* /mnt/rbd-postgres-1/
 
-sce-pve02-ceph.tnwks.local sce-pve02 sce-pve02
+sudo umount /dev/rbd0
+sudo umount /dev/rbd1
 
-sce-pve03-ceph.tnwks.local sce-pve03 sce-pve03
+sudo rbd unmap ssd-pool/csi-vol-c278a428-263c-4ae3-bf70-845878d83e79
+sudo rbd unmap ssd-pool/csi-vol-bfff4923-c872-4037-bc72-572a767adfb8
+sudo rbd unmap ssd-pool/csi-vol-d9a95077-cd96-44f5-9285-bbd52b32cf89
+```
 
-# END ANSIBLE MANAGED: Proxmox Cluster Hosts
+
+------------------------
+
+### postgres-1(new):
+```
+sudo rbd map ssd-pool/csi-vol-705f1c6a-c52d-4a75-94e5-2c3f1a38e731
+sudo mkdir /mnt/rbd-postgres-1-new
+sudo mount /dev/rbd0 /mnt/rbd-postgres-1-new
+
+sudo cp -r /mnt/pve/cephfs/postgresbak_20230729/postgres-2/* /mnt/rbd-postgres-1-new/
+
+sudo umount /dev/rbd0
+sudo rbd unmap ssd-pool/csi-vol-705f1c6a-c52d-4a75-94e5-2c3f1a38e731
 ```
 
