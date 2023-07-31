@@ -8,7 +8,6 @@ resources:
   - ./prometheusrule.yaml
   - ./service.yaml
   - ./s3-cnpg-bucket.yaml
-  - ./secrets.sops.yaml
 labels:
   - pairs:
       app.kubernetes.io/name: cloudnative-pg-cluster

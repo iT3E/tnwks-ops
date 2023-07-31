@@ -31,10 +31,10 @@ spec:
       serverName: postgres-v6
       s3Credentials:
         accessKeyId:
-          name: cnpg-secrets
+          name: s3-cnpg-bucket
           key: AWS_ACCESS_KEY_ID
         secretAccessKey:
-          name: cnpg-secrets
+          name: s3-cnpg-bucket
           key: AWS_SECRET_ACCESS_KEY
   # bootstrap:
   #   recovery:
