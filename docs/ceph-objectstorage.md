@@ -62,7 +62,53 @@ systemctl daemon-reload
 systemctl start ceph-radosgw@radosgw.sce-pve01
 systemctl start ceph-radosgw@radosgw.sce-pve02
 systemctl start ceph-radosgw@radosgw.sce-pve03
+
 ```
+### set Restart behavior on each host
+`cat /etc/systemd/system/ceph-radosgw.target.wants/ceph-radosgw@radosgw.radosgw.sce-pve01`
+```
+[Unit]
+Description=Ceph rados gateway
+PartOf=ceph-radosgw.target
+After=network-online.target local-fs.target time-sync.target
+Before=ceph-radosgw.target
+Wants=network-online.target local-fs.target time-sync.target ceph-radosgw.target
+
+[Service]
+Environment=CLUSTER=ceph
+EnvironmentFile=-/etc/default/ceph
+ExecStart=/usr/bin/radosgw -f --cluster ${CLUSTER} --name client.%i --setuser ceph --setgroup ceph
+LimitNOFILE=1048576
+LimitNPROC=1048576
+LockPersonality=true
+MemoryDenyWriteExecute=true
+NoNewPrivileges=true
+PrivateDevices=yes
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=full
+Restart=always
+RestrictSUIDSGID=true
+StartLimitBurst=5
+StartLimitInterval=30s
+TasksMax=infinity
+
+[Install]
+WantedBy=ceph-radosgw.target
+```
+### restart and enable service
+
+```
+sudo systemctl daemon-reload
+sudo systemctl start ceph-radosgw@radosgw.sce-pve01
+sudo systemctl enable ceph-radosgw@radosgw.sce-pve01
+```
+
 
 ### output is generated that contains access and secret
 ### add both access and secret to a k8s secret
