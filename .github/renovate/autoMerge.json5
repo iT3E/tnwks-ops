@@ -16,6 +16,18 @@
       "automergeType": "branch",
       "ignoreTests": true,
       "matchUpdateTypes": ["digest"]
+    },
+    {
+      "description": "Auto merge specific container images always",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": [
+        "ghcr.io/onedr0p/radarr-develop",
+        "ghcr.io/onedr0p/prowlarr-develop",
+        "ghcr.io/onedr0p/sonarr-develop"
+      ],
+      "automerge": true,
+      "automergeType": "branch",
+      "ignoreTests": true
     }
   ]
 }
