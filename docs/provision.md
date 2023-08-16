@@ -177,6 +177,22 @@ sudo systemctl enable node_exporter
 ### test if port is listening
 sudo ss -tuln | grep 9100
 
+
+# Installing RADOSGW Exporter
+### official documentation install:
+```
+git clone git@github.com:blemmenes/radosgw_usage_exporter.git
+cd radosgw_usage_exporter
+pip install requirements.txt
+```
+### actual install
+```
+curl -LJO https://github.com/blemmenes/radosgw_usage_exporter/archive/refs/heads/master.zip
+unzip radosgw_usage_exporter-main.zip
+pip install requirements.txt
+```
+
+-----------------------------------
 # shipping syslog
 ```
 sudo echo "*.* @@10.10.120.56:6003" | sudo tee /etc/rsyslog.d/99-vector.conf
