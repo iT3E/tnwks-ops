@@ -30,7 +30,9 @@ spec:
         enabled: false
 
     config:
-      enable_registration_without_verification: true
+      enable_registration: true
+      registrations_require_3pid:
+        - email
 
     extraConfig:
       email:
