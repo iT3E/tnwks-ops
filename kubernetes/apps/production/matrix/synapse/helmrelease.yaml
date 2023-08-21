@@ -31,6 +31,8 @@ spec:
 
     config:
       enableRegistration: true
+      registrations_require_3pid:
+        - email
 
     extraConfig:
       email:
