@@ -45,6 +45,8 @@ spec:
     ingress:
       enabled: true
       className: nginx
+      includeUnderscoreSynapse: true
+      includeServerName: true
       annotations:
         external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
       hosts:
