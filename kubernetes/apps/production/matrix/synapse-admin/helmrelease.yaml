@@ -1,0 +1,47 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: &app synapse-admin
+  namespace: production
+spec:
+  interval: 15m
+  chart:
+    spec:
+      chart: app-template
+      version: 1.5.1
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 5
+  upgrade:
+    remediation:
+      retries: 5
+
+  values:
+    global:
+      nameOverride: *app
+
+    image:
+      repository: awesometechnologies/synapse-admin
+      tag: 0.8.7
+
+    service:
+      main:
+        ports:
+          http:
+            port: 80
+
+    ingress:
+      main:
+        enabled: true
+        ingressClassName: "nginx-internal"
+        hosts:
+          - host: &host "synapse-admin.tnwks.local"
+            paths:
+              - path: /
+                pathType: Prefix
