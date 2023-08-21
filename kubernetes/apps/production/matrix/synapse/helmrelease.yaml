@@ -30,9 +30,9 @@ spec:
         enabled: false
 
     extraConfig:
-      enable_registration: true
-      registrations_require_3pid:
-        - email
+      # enable_registration: true
+      # registrations_require_3pid:
+      #   - email
       email:
         smtp_host: email-smtp.us-west-2.amazonaws.com
         smtp_port: 587
