@@ -29,12 +29,10 @@ spec:
       media_repository:
         enabled: false
 
-    config:
+    extraConfig:
       enable_registration: true
       registrations_require_3pid:
         - email
-
-    extraConfig:
       email:
         smtp_host: email-smtp.us-west-2.amazonaws.com
         smtp_port: 587
