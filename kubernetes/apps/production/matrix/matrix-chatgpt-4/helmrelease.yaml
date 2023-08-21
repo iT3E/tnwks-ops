@@ -40,7 +40,7 @@ spec:
       CHATGPT_API_MODEL: gpt-4
       MATRIX_DEFAULT_PREFIX: "!chatgpt"
       MATRIX_AUTOJOIN: true
-      MATRIX_ENCRYPTION: false
+      MATRIX_ENCRYPTION: true
       MATRIX_THREADS: true
       MATRIX_PREFIX_DM: false
       MATRIX_RICH_TEXT: true
