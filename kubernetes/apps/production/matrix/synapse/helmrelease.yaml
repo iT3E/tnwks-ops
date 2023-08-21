@@ -41,10 +41,6 @@ spec:
         require_transport_security: true
         notif_from: "Your Friendly %(app)s homeserver <noreply@${SECRET_DOMAIN}>"
 
-      enable_3pid_lookup: false
-      account_threepid_delegates:
-        msisdn: https://vector.im
-
 
     ingress:
       enabled: true

@@ -183,13 +183,30 @@ sudo ss -tuln | grep 9100
 ```
 git clone git@github.com:blemmenes/radosgw_usage_exporter.git
 cd radosgw_usage_exporter
-pip install requirements.txt
+pip install -r requirements.txt
 ```
 ### actual install
 ```
 curl -LJO https://github.com/blemmenes/radosgw_usage_exporter/archive/refs/heads/master.zip
 unzip radosgw_usage_exporter-main.zip
 pip install requirements.txt
+```
+
+
+### Add the following lines to each host in /etc/ceph/ceph.conf:
+```
+[client.radosgw.sce-pve01]
+        host = sce-pve01
+        keyring = /etc/pve/priv/ceph.client.radosgw.keyring
+        log file = /var/log/ceph/client.radosgw.$host.log
+        rgw_dns_name = s3.tnwks.local
+        rgw_enable_usage_log = true
+        rgw_usage_log_flush_threshold = 1024
+        rgw_usage_log_tick_interval = 30
+        rgw_usage_max_shards = 32
+        rgw_usage_max_user_shards = 8
+        rgw_admin_entry = admin
+        rgw_enable_apis = s3, admin
 ```
 
 -----------------------------------
