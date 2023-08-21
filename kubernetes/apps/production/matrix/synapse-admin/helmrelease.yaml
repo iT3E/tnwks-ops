@@ -39,9 +39,14 @@ spec:
     ingress:
       main:
         enabled: true
-        ingressClassName: "nginx-internal"
+        ingressClassName: "nginx"
+        annotations:
+          external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
         hosts:
-          - host: &host "synapse-admin.tnwks.local"
+          - host: &host "synapse-admin.${SECRET_DOMAIN}"
             paths:
               - path: /
                 pathType: Prefix
+        tls:
+          - hosts:
+              - *host
