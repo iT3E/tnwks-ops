@@ -40,45 +40,45 @@ spec:
           name: peloton-to-garmin-it-secrets
 
     env:
-      - name: P2G_APP_POLLINGINTERVALSECONDS
+      - name: P2G_APP__POLLINGINTERVALSECONDS
         value: 7200
-      - name: P2G_APP_CHECKFORUPDATES
+      - name: P2G_APP__CHECKFORUPDATES
         value: false
-      - name: P2G_PELOTON_NUMWORKOUTSTODOWNLOAD
+      - name: P2G_PELOTON__NUMWORKOUTSTODOWNLOAD
         value: 8
-      - name: P2G_GARMIN_UPLOAD
+      - name: P2G_GARMIN__UPLOAD
         value: true
         #https://philosowaffle.github.io/peloton-to-garmin/configuration/json.html#upload-strategies
-      - name: P2G_GARMIN_UPLOADSTRATEGY
+      - name: P2G_GARMIN__UPLOADSTRATEGY
         value: "2 - NativeImplV1"
-      - name: P2G_OBSERVABILITY_PROMETHEUS_ENABLED
+      - name: P2G_OBSERVABILITY__PROMETHEUS__ENABLED
         value: true
-      - name: P2G_OBSERVABILITY_PROMETHEUS_PORT
+      - name: P2G_OBSERVABILITY__PROMETHEUS__PORT
         value: 4000
 
-      - name: P2G_PELOTON_EMAIL
+      - name: P2G_PELOTON__EMAIL
         valueFrom:
           secretKeyRef:
             name: peloton-to-garmin-it-secrets
-            key: P2G_PELOTON_EMAIL
+            key: P2G_PELOTON__EMAIL
 
-      - name: P2G_PELOTON_PASSWORD
+      - name: P2G_PELOTON__PASSWORD
         valueFrom:
           secretKeyRef:
             name: peloton-to-garmin-it-secrets
-            key: P2G_PELOTON_PASSWORD
+            key: P2G_PELOTON__PASSWORD
 
-      - name: P2G_GARMIN_EMAIL
+      - name: P2G_GARMIN__EMAIL
         valueFrom:
           secretKeyRef:
             name: peloton-to-garmin-it-secrets
-            key: P2G_GARMIN_EMAIL
+            key: P2G_GARMIN__EMAIL
 
-      - name: P2G_GARMIN_PASSWORD
+      - name: P2G_GARMIN__PASSWORD
         valueFrom:
           secretKeyRef:
             name: peloton-to-garmin-it-secrets
-            key: P2G_GARMIN_PASSWORD
+            key: P2G_GARMIN__PASSWORD
 
     service:
       main:
