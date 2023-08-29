@@ -50,7 +50,7 @@ spec:
         value: true
         #https://philosowaffle.github.io/peloton-to-garmin/configuration/json.html#upload-strategies
       - name: P2G_GARMIN__UPLOADSTRATEGY
-        value: "2 - NativeImplV1"
+        value: 2
       - name: P2G_OBSERVABILITY__PROMETHEUS__ENABLED
         value: true
       - name: P2G_OBSERVABILITY__PROMETHEUS__PORT
