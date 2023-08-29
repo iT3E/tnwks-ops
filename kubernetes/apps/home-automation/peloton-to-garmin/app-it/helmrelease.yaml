@@ -1,0 +1,109 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: peloton-to-garmin-it
+  namespace: home-automation
+spec:
+  chart:
+    spec:
+      chart: app-template
+      version: 1.5.1
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  interval: 30m
+  maxHistory: 2
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+
+  values:
+    image:
+      repository: ghcr.io/philosowaffle/peloton-to-garmin
+      pullPolicy: IfNotPresent
+      tag: v3.5.1
+
+    strategy:
+      type: Recreate
+
+    envFrom:
+      - secretRef:
+          name: peloton-to-garmin-it-secrets
+
+    env:
+      - name: P2G_APP_POLLINGINTERVALSECONDS
+        value: 7200
+      - name: P2G_APP_CHECKFORUPDATES
+        value: false
+      - name: P2G_PELOTON_NUMWORKOUTSTODOWNLOAD
+        value: 8
+      - name: P2G_GARMIN_UPLOAD
+        value: true
+        #https://philosowaffle.github.io/peloton-to-garmin/configuration/json.html#upload-strategies
+      - name: P2G_GARMIN_UPLOADSTRATEGY
+        value: "2 - NativeImplV1"
+      - name: P2G_OBSERVABILITY_PROMETHEUS_ENABLED
+        value: true
+      - name: P2G_OBSERVABILITY_PROMETHEUS_PORT
+        value: 4000
+
+      - name: P2G_PELOTON_EMAIL
+        valueFrom:
+          secretKeyRef:
+            name: peloton-to-garmin-it-secrets
+            key: P2G_PELOTON_EMAIL
+
+      - name: P2G_PELOTON_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: peloton-to-garmin-it-secrets
+            key: P2G_PELOTON_PASSWORD
+
+      - name: P2G_GARMIN_EMAIL
+        valueFrom:
+          secretKeyRef:
+            name: peloton-to-garmin-it-secrets
+            key: P2G_GARMIN_EMAIL
+
+      - name: P2G_GARMIN_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: peloton-to-garmin-it-secrets
+            key: P2G_GARMIN_PASSWORD
+
+    # service:
+    #   main:
+    #     ports:
+    #       http:
+    #         port: 80
+
+    # ingress:
+    #   main:
+    #     enabled: true
+    #     ingressClassName: nginx
+    #     annotations:
+    #       external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
+    #     hosts:
+    #       - host: &host "bookstack.${SECRET_DOMAIN}"
+    #         paths:
+    #           - path: /
+    #             pathType: Prefix
+    #     tls:
+    #       - hosts:
+    #           - *host
+
+    persistence:
+      config:
+        enabled: true
+        accessMode: ReadWriteOnce
+        size: 1Gi
+        storageClass: cephfs
