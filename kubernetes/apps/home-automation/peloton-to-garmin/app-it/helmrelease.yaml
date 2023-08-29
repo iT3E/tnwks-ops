@@ -40,6 +40,8 @@ spec:
           name: peloton-to-garmin-it-secrets
 
     env:
+      - name: TZ
+        value: America/Los_Angeles
       - name: P2G_APP__POLLINGINTERVALSECONDS
         value: 7200
       - name: P2G_APP__CHECKFORUPDATES
