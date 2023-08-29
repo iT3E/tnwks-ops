@@ -86,6 +86,9 @@ spec:
           http:
             port: 80
 
+    probes:
+      startup:
+        enabled: false
     # ingress:
     #   main:
     #     enabled: true
