@@ -168,13 +168,21 @@ spec:
             metrics_path: /pve
             params:
               module: [default]
-            # relabel_configs:
-            #   - source_labels: [__address__]
-            #     target_label: __param_target
-            #   - source_labels: [__param_target]
-            #     target_label: instance
-              # - target_label: __address__
-              #   replacement: 127.0.0.1:9221  # PVE exporter.
+
+          - job_name: unms_exporter
+            # for a static target "unms.example.org", rewrite it to
+            # "exporter.example.org:9806/metrics?target=unms.example.org",
+            # but keep "unms.example.org" as instance label
+            relabel_configs:
+              - source_labels: [__address__]
+                target_label: instance
+              - source_labels: [__address__]
+                target_label: __param_target
+              - replacement: 'unms-exporter.monitoring.svc.cluster.local:9806'
+                target_label: __address__
+            static_configs:
+              - targets:
+                - uisp.tnwks.us
 
         enableAdminAPI: true
         externalLabels:
