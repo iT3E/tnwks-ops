@@ -12,5 +12,6 @@ resources:
   - ./wizarr/ks.yaml
   - ./uisp/ks.yaml
   - ./bookstack/ks.yaml
+  - ./changedetection/ks.yaml
   # - ./external-dns/ks.yaml
 
