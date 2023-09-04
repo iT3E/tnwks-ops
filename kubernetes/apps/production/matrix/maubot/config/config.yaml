@@ -4,7 +4,7 @@
 # Format examples:
 #   SQLite:   sqlite:///filename.db
 #   Postgres: postgresql://username:password@hostname/dbname
-database: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@{POSTGRES_SERVER}/maubot"
+database: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_SERVER}/maubot"
 
 # Separate database URL for the crypto database. "default" means use the same database as above.
 crypto_database: default
