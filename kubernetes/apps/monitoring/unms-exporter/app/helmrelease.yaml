@@ -19,7 +19,7 @@ spec:
   values:
     image:
       repository: quay.io/ffddorf/unms-exporter
-      tag: sha256:7200af98df05fcea2e85b29c440b24e9da32905665cec192c5f87b1714d37f4e
+      tag: sha-4c13c27@sha256:7200af98df05fcea2e85b29c440b24e9da32905665cec192c5f87b1714d37f4e
 
     env:
       UNMS_EXPORTER_TOKEN:
