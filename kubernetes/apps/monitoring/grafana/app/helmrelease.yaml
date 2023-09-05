@@ -91,6 +91,14 @@ spec:
               path: /var/lib/grafana/dashboards/haproxy
             orgId: 1
             type: file
+          - name: nginx
+            disableDeletion: false
+            editable: true
+            folder: "NGINX"
+            options:
+              path: /var/lib/grafana/dashboards/nginx
+            orgId: 1
+            type: file
 
     datasources:
       datasources.yaml:
@@ -200,6 +208,15 @@ spec:
         haproxy2full:
           gnetId: 12693
           revision: 5
+          datasource:
+            - name: "DS_PROMETHEUS"
+              value: Prometheus
+
+      nginx:
+      # Ref: https://grafana.com/grafana/dashboards/14314-kubernetes-nginx-ingress-controller-nextgen-devops-nirvana/
+        nginx-ingress:
+          gnetId: 14314
+          revision: 2
           datasource:
             - name: "DS_PROMETHEUS"
               value: Prometheus
