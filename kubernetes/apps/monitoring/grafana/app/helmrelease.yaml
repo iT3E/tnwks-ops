@@ -86,7 +86,7 @@ spec:
           - name: haproxy
             disableDeletion: false
             editable: true
-            folder: "pve"
+            folder: "HAProxy"
             options:
               path: /var/lib/grafana/dashboards/haproxy
             orgId: 1
