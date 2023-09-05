@@ -6,6 +6,7 @@ configMapGenerator:
   - name: grafana-dashboard
     files:
       - home.json
+      - unms_overview.json
 generatorOptions:
   disableNameSuffixHash: true
   annotations:

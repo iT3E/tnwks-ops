@@ -1,0 +1,891 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 64,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 21,
+        "x": 0,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "unms_interface_tx_rate",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A",
+          "useBackend": false
+        }
+      ],
+      "title": "UNMS Device Interface Traffic, Tx",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "/.*deviceName=\"(.*?)\".*ifName=\"(.*?)\".*/",
+            "renamePattern": "$1, $2"
+          }
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 21,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "unms_interface_rx_rate",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A",
+          "useBackend": false
+        }
+      ],
+      "title": "UNMS Device Interface Traffic, Rx",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "/.*deviceName=\"(.*?)\".*ifName=\"(.*?)\".*/",
+            "renamePattern": "$1, $2"
+          }
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "{__name__=\"unms_device_ram\", __replica__=\"prometheus-kube-prometheus-stack-prometheus-0\", cluster=\"sce-pvecl01\", deviceId=\"47ebed09-889f-47b6-a777-c9f009e15eab\", deviceMac=\"74:ac:b9:78:62:4f\", deviceName=\"airCube-ISP\", instance=\"uisp.tnwks.us\", job=\"unms_exporter\", prometheus=\"monitoring/kube-prometheus-stack-prometheus\", role=\"homeWiFi\", siteId=\"55ab36aa-dacd-4adb-9f45-4ac3f8971c8a\", siteName=\"3601 Bonnie Doon\"}"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "airCube-ISP"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "{__name__=\"unms_device_ram\", __replica__=\"prometheus-kube-prometheus-stack-prometheus-0\", cluster=\"sce-pvecl01\", deviceId=\"9e4ef783-2fea-4552-ae72-6483cc25ee11\", deviceMac=\"74:ac:b9:7e:6f:c8\", deviceName=\"LiteAP GPS\", instance=\"uisp.tnwks.us\", job=\"unms_exporter\", prometheus=\"monitoring/kube-prometheus-stack-prometheus\", role=\"ap\", siteId=\"904ad933-3990-40ba-9ac3-95d209c478ef\", siteName=\"Scenic\"}"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "LiteAP GPS"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "{__name__=\"unms_device_ram\", __replica__=\"prometheus-kube-prometheus-stack-prometheus-0\", cluster=\"sce-pvecl01\", deviceId=\"f142ce09-a6af-4b49-b4dc-9956e58fcf19\", deviceMac=\"74:ac:b9:80:cd:40\", deviceName=\"LiteBeam 5AC Gen2\", instance=\"uisp.tnwks.us\", job=\"unms_exporter\", prometheus=\"monitoring/kube-prometheus-stack-prometheus\", role=\"station\", siteId=\"55ab36aa-dacd-4adb-9f45-4ac3f8971c8a\", siteName=\"3601 Bonnie Doon\"}"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "LiteBeam 5AC Gen2"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "{__name__=\"unms_device_ram\", __replica__=\"prometheus-kube-prometheus-stack-prometheus-0\", cluster=\"sce-pvecl01\", deviceId=\"f51ac537-0705-4ae7-abbf-d7fabc9e4118\", deviceMac=\"74:ac:b9:a3:5b:0b\", deviceName=\"EdgePoint R6\", instance=\"uisp.tnwks.us\", job=\"unms_exporter\", prometheus=\"monitoring/kube-prometheus-stack-prometheus\", role=\"gateway\", siteId=\"904ad933-3990-40ba-9ac3-95d209c478ef\", siteName=\"Scenic\"}"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "EdgePoint R6"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 5,
+        "x": 0,
+        "y": 19
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "unms_device_ram",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A",
+          "useBackend": false
+        }
+      ],
+      "title": "UNMS Device Memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "{__name__=\"unms_device_cpu\", __replica__=\"prometheus-kube-prometheus-stack-prometheus-0\", cluster=\"sce-pvecl01\", deviceId=\"47ebed09-889f-47b6-a777-c9f009e15eab\", deviceMac=\"74:ac:b9:78:62:4f\", deviceName=\"airCube-ISP\", instance=\"uisp.tnwks.us\", job=\"unms_exporter\", prometheus=\"monitoring/kube-prometheus-stack-prometheus\", role=\"homeWiFi\", siteId=\"55ab36aa-dacd-4adb-9f45-4ac3f8971c8a\", siteName=\"3601 Bonnie Doon\"}"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "airCube-ISP"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "{__name__=\"unms_device_cpu\", __replica__=\"prometheus-kube-prometheus-stack-prometheus-0\", cluster=\"sce-pvecl01\", deviceId=\"9e4ef783-2fea-4552-ae72-6483cc25ee11\", deviceMac=\"74:ac:b9:7e:6f:c8\", deviceName=\"LiteAP GPS\", instance=\"uisp.tnwks.us\", job=\"unms_exporter\", prometheus=\"monitoring/kube-prometheus-stack-prometheus\", role=\"ap\", siteId=\"904ad933-3990-40ba-9ac3-95d209c478ef\", siteName=\"Scenic\"}"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "LiteAP GPS"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "{__name__=\"unms_device_cpu\", __replica__=\"prometheus-kube-prometheus-stack-prometheus-0\", cluster=\"sce-pvecl01\", deviceId=\"f142ce09-a6af-4b49-b4dc-9956e58fcf19\", deviceMac=\"74:ac:b9:80:cd:40\", deviceName=\"LiteBeam 5AC Gen2\", instance=\"uisp.tnwks.us\", job=\"unms_exporter\", prometheus=\"monitoring/kube-prometheus-stack-prometheus\", role=\"station\", siteId=\"55ab36aa-dacd-4adb-9f45-4ac3f8971c8a\", siteName=\"3601 Bonnie Doon\"}"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "LiteBeam 5AC Gen2"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "{__name__=\"unms_device_cpu\", __replica__=\"prometheus-kube-prometheus-stack-prometheus-0\", cluster=\"sce-pvecl01\", deviceId=\"f51ac537-0705-4ae7-abbf-d7fabc9e4118\", deviceMac=\"74:ac:b9:a3:5b:0b\", deviceName=\"EdgePoint R6\", instance=\"uisp.tnwks.us\", job=\"unms_exporter\", prometheus=\"monitoring/kube-prometheus-stack-prometheus\", role=\"gateway\", siteId=\"904ad933-3990-40ba-9ac3-95d209c478ef\", siteName=\"Scenic\"}"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "EdgePoint R6"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 7,
+        "x": 5,
+        "y": 19
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "unms_device_cpu",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A",
+          "useBackend": false
+        }
+      ],
+      "title": "UNMS Device CPU",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "{__name__=\"unms_device_enabled\", __replica__=\"prometheus-kube-prometheus-stack-prometheus-0\", cluster=\"sce-pvecl01\", deviceId=\"47ebed09-889f-47b6-a777-c9f009e15eab\", deviceMac=\"74:ac:b9:78:62:4f\", deviceName=\"airCube-ISP\", instance=\"uisp.tnwks.us\", job=\"unms_exporter\", prometheus=\"monitoring/kube-prometheus-stack-prometheus\", role=\"homeWiFi\", siteId=\"55ab36aa-dacd-4adb-9f45-4ac3f8971c8a\", siteName=\"3601 Bonnie Doon\"}"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "airCube-ISP"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "{__name__=\"unms_device_enabled\", __replica__=\"prometheus-kube-prometheus-stack-prometheus-0\", cluster=\"sce-pvecl01\", deviceId=\"9e4ef783-2fea-4552-ae72-6483cc25ee11\", deviceMac=\"74:ac:b9:7e:6f:c8\", deviceName=\"LiteAP GPS\", instance=\"uisp.tnwks.us\", job=\"unms_exporter\", prometheus=\"monitoring/kube-prometheus-stack-prometheus\", role=\"ap\", siteId=\"904ad933-3990-40ba-9ac3-95d209c478ef\", siteName=\"Scenic\"}"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "LiteAP GPS"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "{__name__=\"unms_device_enabled\", __replica__=\"prometheus-kube-prometheus-stack-prometheus-0\", cluster=\"sce-pvecl01\", deviceId=\"f142ce09-a6af-4b49-b4dc-9956e58fcf19\", deviceMac=\"74:ac:b9:80:cd:40\", deviceName=\"LiteBeam 5AC Gen2\", instance=\"uisp.tnwks.us\", job=\"unms_exporter\", prometheus=\"monitoring/kube-prometheus-stack-prometheus\", role=\"station\", siteId=\"55ab36aa-dacd-4adb-9f45-4ac3f8971c8a\", siteName=\"3601 Bonnie Doon\"}"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "LiteBeam 5AC Gen2"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "{__name__=\"unms_device_enabled\", __replica__=\"prometheus-kube-prometheus-stack-prometheus-0\", cluster=\"sce-pvecl01\", deviceId=\"f51ac537-0705-4ae7-abbf-d7fabc9e4118\", deviceMac=\"74:ac:b9:a3:5b:0b\", deviceName=\"EdgePoint R6\", instance=\"uisp.tnwks.us\", job=\"unms_exporter\", prometheus=\"monitoring/kube-prometheus-stack-prometheus\", role=\"gateway\", siteId=\"904ad933-3990-40ba-9ac3-95d209c478ef\", siteName=\"Scenic\"}"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "EdgePoint R6"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 3,
+        "x": 12,
+        "y": 19
+      },
+      "id": 6,
+      "options": {
+        "displayMode": "lcd",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "text": {},
+        "valueMode": "color"
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "unms_device_enabled{deviceName=\"airCube-ISP\"}",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "B",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "unms_device_enabled{deviceName=\"LiteAP GPS\"}",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "unms_device_enabled{deviceName=\"LiteBeam 5AC Gen2\"}",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "C",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "exemplar": false,
+          "expr": "unms_device_enabled{deviceName=\"EdgePoint R6\"}",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "D",
+          "useBackend": false
+        }
+      ],
+      "title": "UNMS Devices",
+      "transparent": true,
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 5,
+        "x": 15,
+        "y": 19
+      },
+      "id": 7,
+      "options": {
+        "displayMode": "lcd",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "valueMode": "color"
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "unms_interface_dropped",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A",
+          "useBackend": false
+        }
+      ],
+      "title": "UNMS Interface Drops",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "/.*deviceName=\"(.*?)\".*ifName=\"(.*?)\".*/",
+            "renamePattern": "$1, $2"
+          }
+        }
+      ],
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 5,
+        "x": 15,
+        "y": 27
+      },
+      "id": 8,
+      "options": {
+        "displayMode": "lcd",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "valueMode": "color"
+      },
+      "pluginVersion": "10.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "unms_interface_errors",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A",
+          "useBackend": false
+        }
+      ],
+      "title": "UNMS Device Interface Errors",
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "/.*deviceName=\"(.*?)\".*ifName=\"(.*?)\".*/",
+            "renamePattern": "$1, $2"
+          }
+        }
+      ],
+      "type": "bargauge"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "UNMS Overview",
+  "uid": "b91b8dd5-f0e1-4efa-9bf6-f93d8afdfc32",
+  "version": 2,
+  "weekStart": ""
+}
