@@ -170,20 +170,19 @@ spec:
             - name: "DS_PROMETHEUS"
               value: Prometheus
 
+      # Ref: https://grafana.com/grafana/dashboards/17600-ceph-rgw-new
+        radosgw:
+          gnetId: 17600
+          revision: 2
+          datasource:
+            - name: "DS_PROMETHEUS"
+              value: Prometheus
+
       pve:
       # Ref: https://grafana.com/grafana/dashboards/10347-proxmox-via-prometheus/
         proxmox:
           gnetId: 10347
           revision: 5
-          datasource:
-            - name: "DS_PROMETHEUS"
-              value: Prometheus
-
-      radosgw:
-      # Ref: https://grafana.com/grafana/dashboards/17600-ceph-rgw-new
-        proxmox:
-          gnetId: 17600
-          revision: 2
           datasource:
             - name: "DS_PROMETHEUS"
               value: Prometheus
