@@ -187,6 +187,15 @@ spec:
             - name: "DS_PROMETHEUS"
               value: Prometheus
 
+      haproxy:
+      # Ref: https://grafana.com/grafana/dashboards/12693-haproxy-2-full/
+        haproxy2full:
+          gnetId: 12693
+          revision: 5
+          datasource:
+            - name: "DS_PROMETHEUS"
+              value: Prometheus
+
     grafana.ini:
       analytics:
         check_for_updates: false

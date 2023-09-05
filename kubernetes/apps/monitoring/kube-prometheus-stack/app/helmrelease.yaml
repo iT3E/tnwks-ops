@@ -190,6 +190,14 @@ spec:
                 - 10.10.11.10:9089
             metrics_path: /
 
+          - job_name: 'haproxy_exporter'
+            static_configs:
+              - targets:
+                - 10.10.53.2:8404
+                - 10.10.53.8:8404
+                - 10.10.53.9:8404
+            metrics_path: /metrics
+
         enableAdminAPI: true
         externalLabels:
           cluster: sce-pvecl01
