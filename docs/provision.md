@@ -189,7 +189,7 @@ pip install -r requirements.txt
 ```
 curl -LJO https://github.com/blemmenes/radosgw_usage_exporter/archive/refs/heads/master.zip
 unzip radosgw_usage_exporter-main.zip
-pip install requirements.txt
+pip install -r requirements.txt
 ```
 
 
@@ -207,6 +207,60 @@ pip install requirements.txt
         rgw_usage_max_user_shards = 8
         rgw_admin_entry = admin
         rgw_enable_apis = s3, admin
+
+[client.radosgw.sce-pve02]
+        host = sce-pve02
+        keyring = /etc/pve/priv/ceph.client.radosgw.keyring
+        log file = /var/log/ceph/client.radosgw.$host.log
+        rgw_dns_name = s3.tnwks.local
+        rgw_enable_usage_log = true
+        rgw_usage_log_flush_threshold = 1024
+        rgw_usage_log_tick_interval = 30
+        rgw_usage_max_shards = 32
+        rgw_usage_max_user_shards = 8
+        rgw_admin_entry = admin
+        rgw_enable_apis = s3, admin
+
+[client.radosgw.sce-pve03]
+        host = sce-pve03
+        keyring = /etc/pve/priv/ceph.client.radosgw.keyring
+        log file = /var/log/ceph/client.radosgw.$host.log
+        rgw_dns_name = s3.tnwks.local
+        rgw_enable_usage_log = true
+        rgw_usage_log_flush_threshold = 1024
+        rgw_usage_log_tick_interval = 30
+        rgw_usage_max_shards = 32
+        rgw_usage_max_user_shards = 8
+        rgw_admin_entry = admin
+        rgw_enable_apis = s3, admin
+```
+### Create a service for RADOSGW Exporter
+
+```
+mkdir /usr/local/bin/radosgw_exporter`
+sudo cp /home/<username>/radosgw_usage_exporter-master/radosgw_usage_exporter.py /usr/local/bin/radosgw_exporter
+sudo nano /etc/systemd/system/radosgw_usage_exporter.service
+```
+
+```
+[Unit]
+Description=RadosGW Usage Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=pve-exporter
+ExecStart=python3 /usr/local/bin/radosgw_exporter/radosgw_usage_exporter.py -H http://s3.tnwks.local:7480 -a <ACCESS_KEY> -s <SECRET_KEY> -p 9089
+
+[Install]
+WantedBy=default.target
+```
+The access and secret keys can be found within the rgw-admin-ops user ceph secrets.
+
+```
+sudo systemctl daemon-reload
+sudo systemctl start radosgw_usage_exporter
+sudo systemctl enable radosgw_usage_exporter
 ```
 
 -----------------------------------

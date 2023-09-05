@@ -184,6 +184,14 @@ spec:
               - targets:
                 - uisp.tnwks.us
 
+          - job_name: 'radosgw_exporter'
+            static_configs:
+              - targets:
+                - 10.10.11.10:9089
+            metrics_path: /
+            params:
+              module: [default]
+
         enableAdminAPI: true
         externalLabels:
           cluster: sce-pvecl01
