@@ -83,6 +83,14 @@ spec:
               path: /var/lib/grafana/dashboards/pve
             orgId: 1
             type: file
+          - name: haproxy
+            disableDeletion: false
+            editable: true
+            folder: "pve"
+            options:
+              path: /var/lib/grafana/dashboards/haproxy
+            orgId: 1
+            type: file
 
     datasources:
       datasources.yaml:
