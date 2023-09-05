@@ -179,6 +179,15 @@ spec:
             - name: "DS_PROMETHEUS"
               value: Prometheus
 
+      radosgw:
+      # Ref: https://grafana.com/grafana/dashboards/17600-ceph-rgw-new
+        proxmox:
+          gnetId: 17600
+          revision: 2
+          datasource:
+            - name: "DS_PROMETHEUS"
+              value: Prometheus
+
     grafana.ini:
       analytics:
         check_for_updates: false
