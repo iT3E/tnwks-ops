@@ -189,6 +189,7 @@ spec:
               - targets:
                 - 10.10.11.10:9089
             metrics_path: /
+            scrape_timeout: 60s
             params:
               module: [default]
 
