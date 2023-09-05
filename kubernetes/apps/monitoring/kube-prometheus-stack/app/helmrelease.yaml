@@ -189,8 +189,6 @@ spec:
               - targets:
                 - 10.10.11.10:9089
             metrics_path: /
-            scrape_interval: 180s
-            scrape_timeout: 180s
 
         enableAdminAPI: true
         externalLabels:
