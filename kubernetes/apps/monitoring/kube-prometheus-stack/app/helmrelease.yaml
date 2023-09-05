@@ -191,8 +191,6 @@ spec:
             metrics_path: /
             scrape_interval: 180s
             scrape_timeout: 180s
-            params:
-              module: [default]
 
         enableAdminAPI: true
         externalLabels:
