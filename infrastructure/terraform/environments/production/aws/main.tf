@@ -24,12 +24,12 @@ data "sops_file" "secrets" {
   source_file = "secrets.sops.yaml"
 }
 
+## ---------------------------------------------------------------------------------------------------------------------
+## KMS KEY
+## This creates a KMS key that provides the "kms_sops" role full permissions on it, along with the terraform executor.
+##
+## ---------------------------------------------------------------------------------------------------------------------
 
-#####################################
-##                                 ##
-##        KMS Key - Sops           ##
-##                                 ##
-#####################################
 data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "kms_key_policy" {
@@ -65,12 +65,11 @@ module "kms_sops" {
   key_policy      = data.aws_iam_policy_document.kms_key_policy.json
 }
 
-
-########################
-##                    ##
-## IAM Role - itadmin ##
-##                    ##
-########################
+## ---------------------------------------------------------------------------------------------------------------------
+## IAM ROLE
+## This creates an IAM Role "itadmin" and allows the executor of this terraform to assume the role.
+##
+## ---------------------------------------------------------------------------------------------------------------------
 
 module "iam_role_itadmin" {
   source             = "../../../modules/aws/iam/roles"
@@ -88,11 +87,11 @@ data "aws_iam_policy_document" "assume_role_policy_itadmin" {
     }
   }
 }
-########################
-##                    ##
-##  IAM Role - sops   ##
-##                    ##
-########################
+## ---------------------------------------------------------------------------------------------------------------------
+## IAM ROLE
+## This creates an IAM Role "sops_role" and allows the executor of this terraform to assume the role.  Additionally one custom IAM
+## policy is attached which grants KMS usage permissions.
+## ---------------------------------------------------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "assume_role_policy_sops" {
   statement {
@@ -125,11 +124,11 @@ module "sops_kms_access_policy_attachment" {
   policy_arn = module.kms_access_policy.policy_arn
 }
 
-#####################################
-##                                 ##
-##  IAM Policy - KMS Access Sops   ##
-##                                 ##
-#####################################
+## ---------------------------------------------------------------------------------------------------------------------
+## IAM POLICY
+## This IAM Policy allows KMS usage actions.
+##
+## ---------------------------------------------------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "kms_access_policy" {
   statement {
