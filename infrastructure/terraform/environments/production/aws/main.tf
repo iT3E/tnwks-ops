@@ -67,7 +67,7 @@ module "kms_sops" {
 
 ## ---------------------------------------------------------------------------------------------------------------------
 ## IAM ROLE
-## This creates an IAM Role "itadmin" and allows the executor of this terraform to assume the role.
+## This creates an IAM Role "itadmin" and allows EC2 to assume this role.
 ##
 ## ---------------------------------------------------------------------------------------------------------------------
 
@@ -89,8 +89,8 @@ data "aws_iam_policy_document" "assume_role_policy_itadmin" {
 }
 ## ---------------------------------------------------------------------------------------------------------------------
 ## IAM ROLE
-## This creates an IAM Role "sops_role" and allows the executor of this terraform to assume the role.  Additionally one custom IAM
-## policy is attached which grants KMS usage permissions.
+## This creates an IAM Role "sops_role" and allows the executor of this terraform to assume the role, along with the
+## "itadmin" role. Additionally one custom IAM policy is attached which grants KMS usage permissions.
 ## ---------------------------------------------------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "assume_role_policy_sops" {
