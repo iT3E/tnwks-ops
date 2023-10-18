@@ -1,3 +1,10 @@
+
+## ---------------------------------------------------------------------------------------------------------------------
+## TERRAFORM
+## Contains the configuration for Terraform Cloud, along with the required providers.
+##
+## ---------------------------------------------------------------------------------------------------------------------
+
 terraform {
   cloud {
     hostname     = "app.terraform.io"
@@ -19,22 +26,41 @@ terraform {
    }
  }
 }
+## ---------------------------------------------------------------------------------------------------------------------
+## DATA
+## Contains any data blocks that will be used in multiple sections.
+##
+## ---------------------------------------------------------------------------------------------------------------------
 
 data "sops_file" "secrets" {
   source_file = "secrets.sops.yaml"
 }
 
+data "aws_caller_identity" "current" {}
+
 ## ---------------------------------------------------------------------------------------------------------------------
-## KMS KEY
-## This creates a KMS key that provides the "kms_sops" role full permissions on it, along with the terraform executor.
+## LOCALS
+## Contains any locals that will be used in multiple sections.
 ##
 ## ---------------------------------------------------------------------------------------------------------------------
 
-data "aws_caller_identity" "current" {}
+locals {
+  tags = {
+    Environment = "prod"
+    # Add more tags as needed.
+  }
+}
+
+
+## ---------------------------------------------------------------------------------------------------------------------
+## KMS KEY POLICY
+## Contains key policy which allows sops role to use the key, along with management of the key by the it-admin role.
+##
+## ---------------------------------------------------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "kms_key_policy" {
   statement {
-    sid    = "EnableIAMUserPermissions"
+    sid    = "Allow use of the key"
     effect = "Allow"
 
     principals {
@@ -51,7 +77,7 @@ data "aws_iam_policy_document" "kms_key_policy" {
 
     principals {
       type        = "AWS"
-      identifiers = [data.aws_caller_identity.current.arn]
+      identifiers = [module.iam_role_itadmin.role_arn]
     }
 
     actions   = ["kms:*"]
@@ -59,10 +85,78 @@ data "aws_iam_policy_document" "kms_key_policy" {
   }
 }
 
-module "kms_sops" {
-  source          = "../../../modules/aws/kms"
-  key_description = "KMS Key for SOPS"
-  key_policy      = data.aws_iam_policy_document.kms_key_policy.json
+## ---------------------------------------------------------------------------------------------------------------------
+## KMS KEY
+## This creates a KMS key that provides the "kms_sops" role full permissions on it, along with the terraform executor.
+##
+## ---------------------------------------------------------------------------------------------------------------------
+
+module "kms_ec2" {
+  source = "terraform-aws-modules/kms/aws"
+  version = "~> 2.0"
+
+  deletion_window_in_days = 7
+  description             = "Used by sops"
+  enable_key_rotation     = false
+  is_enabled              = true
+  key_usage               = "ENCRYPT_DECRYPT"
+  multi_region            = true
+
+  key_statements = [
+    {
+      sid    = "Allow administration of the key"
+      effect = "Allow"
+
+      principals = [
+        {
+          type        = "AWS"
+          identifiers = [module.iam_role_itadmin.role_arn]
+        }
+      ]
+
+      actions = [
+        "kms:Create*",
+        "kms:Describe*",
+        "kms:Enable*",
+        "kms:List*",
+        "kms:Put*",
+        "kms:Update*",
+        "kms:Revoke*",
+        "kms:Disable*",
+        "kms:Get*",
+        "kms:Delete*",
+        "kms:TagResource",
+        "kms:UntagResource",
+        "kms:ScheduleKeyDeletion",
+        "kms:CancelKeyDeletion",
+      ]
+
+      resources = ["*"]
+    },
+    {
+      sid    = "Allow use of the key"
+      effect = "Allow"
+
+      principals = [
+        {
+          type        = "AWS"
+          identifiers = [module.iam_role_sops.role_arn]
+        }
+      ]
+      actions = [
+        "kms:Encrypt",
+        "kms:Decrypt",
+        "kms:ReEncrypt*",
+        "kms:GenerateDataKey*",
+        "kms:DescribeKey"
+      ]
+      resources = ["*"]
+    }
+  ]
+  # Aliases
+  aliases = ["kms-sops"]
+
+  tags = local.tags
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
