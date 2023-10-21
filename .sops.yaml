@@ -3,19 +3,19 @@ creation_rules:
   - path_regex: kubernetes/.*\.sops\.ya?ml
     encrypted_regex: "^(data|stringData)$"
     age: 'age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2'
-    kms: 'arn:aws:kms:us-west-2:323952031338:key/56902c4b-1aa5-4679-b6cb-dec2db7a1c90+arn:aws:iam::323952031338:role/sops_role'
+    kms: 'arn:aws:kms:us-west-2:323952031338:key/mrk-4e456e11170a4342a518df4017e3cb0c+arn:aws:iam::323952031338:role/iam-role-sops'
     aws_profile: sso-legacy #https://old.reddit.com/r/aws/comments/zk456d/new_aws_cli_and_sso_sessions_profiles_and_legacy/
   - path_regex: ansible/.*\.sops\.ya?ml
     age: 'age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2'
-    kms: 'arn:aws:kms:us-west-2:323952031338:key/56902c4b-1aa5-4679-b6cb-dec2db7a1c90+arn:aws:iam::323952031338:role/sops_role'
+    kms: 'arn:aws:kms:us-west-2:323952031338:key/mrk-4e456e11170a4342a518df4017e3cb0c+arn:aws:iam::323952031338:role/iam-role-sops'
     aws_profile: sso-legacy
   - path_regex: terraform/.*\.sops\.ya?ml
     age: 'age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2'
-    kms: 'arn:aws:kms:us-west-2:323952031338:key/56902c4b-1aa5-4679-b6cb-dec2db7a1c90+arn:aws:iam::323952031338:role/sops_role'
+    kms: 'arn:aws:kms:us-west-2:323952031338:key/mrk-4e456e11170a4342a518df4017e3cb0c+arn:aws:iam::323952031338:role/iam-role-sops'
     aws_profile: sso-legacy
   - path_regex: packer/.*\.sops\.ya?ml
     age: 'age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2'
-    kms: 'arn:aws:kms:us-west-2:323952031338:key/56902c4b-1aa5-4679-b6cb-dec2db7a1c90+arn:aws:iam::323952031338:role/sops_role'
+    kms: 'arn:aws:kms:us-west-2:323952031338:key/mrk-4e456e11170a4342a518df4017e3cb0c+arn:aws:iam::323952031338:role/iam-role-sops'
     aws_profile: sso-legacy
 
 

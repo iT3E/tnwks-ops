@@ -51,47 +51,13 @@ locals {
   }
 }
 
-
-## ---------------------------------------------------------------------------------------------------------------------
-## KMS KEY POLICY
-## Contains key policy which allows sops role to use the key, along with management of the key by the it-admin role.
-##
-## ---------------------------------------------------------------------------------------------------------------------
-
-data "aws_iam_policy_document" "kms_key_policy" {
-  statement {
-    sid    = "Allow use of the key"
-    effect = "Allow"
-
-    principals {
-      type        = "AWS"
-      identifiers = [module.iam_role_sops.role_arn]
-    }
-
-    actions   = ["kms:*"]
-    resources = ["*"]
-  }
-  statement {
-    sid    = "AllowKeyPolicyUpdates"
-    effect = "Allow"
-
-    principals {
-      type        = "AWS"
-      identifiers = [module.iam_role_itadmin.role_arn]
-    }
-
-    actions   = ["kms:*"]
-    resources = ["*"]
-  }
-}
-
 ## ---------------------------------------------------------------------------------------------------------------------
 ## KMS KEY
 ## This creates a KMS key that provides the "kms_sops" role full permissions on it, along with the terraform executor.
 ##
 ## ---------------------------------------------------------------------------------------------------------------------
 
-module "kms_ec2" {
+module "kms_sops" {
   source = "terraform-aws-modules/kms/aws"
   version = "~> 2.0"
 
@@ -110,7 +76,8 @@ module "kms_ec2" {
       principals = [
         {
           type        = "AWS"
-          identifiers = [module.iam_role_itadmin.role_arn]
+          identifiers = ["arn:aws:sts::${data.aws_caller_identity.current.account_id}:assumed-role/AWSReservedSSO_AdministratorAccess_5fe2854a9354d357/it-admin"]
+
         }
       ]
 
@@ -140,7 +107,7 @@ module "kms_ec2" {
       principals = [
         {
           type        = "AWS"
-          identifiers = [module.iam_role_sops.role_arn]
+          identifiers = [module.iam_assumable_role_sops.iam_role_arn]
         }
       ]
       actions = [
@@ -161,61 +128,27 @@ module "kms_ec2" {
 
 ## ---------------------------------------------------------------------------------------------------------------------
 ## IAM ROLE
-## This creates an IAM Role "itadmin" and allows EC2 to assume this role.
+## Creates one IAM role that grants access to SOPS KMS key. it-admin SSO identity is allowed to assume this role.
 ##
 ## ---------------------------------------------------------------------------------------------------------------------
 
-module "iam_role_itadmin" {
-  source             = "../../../modules/aws/iam/roles"
-  iam_role_name               = "itadmin_role"
-  assume_role_policy = data.aws_iam_policy_document.assume_role_policy_itadmin.json
-}
+module "iam_assumable_role_sops" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-assumable-role"
+  version = "~> 5.0"
 
-data "aws_iam_policy_document" "assume_role_policy_itadmin" {
-  statement {
-    actions = ["sts:AssumeRole"]
+  create_role = true
+  role_name   = "iam-role-sops"
+  role_description = "Allows use of SOPS KMS key and allows assumption of role by itadmin"
+  role_requires_mfa = false
 
-    principals {
-      type        = "Service"
-      identifiers = ["ec2.amazonaws.com"]
-    }
-  }
-}
-## ---------------------------------------------------------------------------------------------------------------------
-## IAM ROLE
-## This creates an IAM Role "sops_role" and allows the executor of this terraform to assume the role, along with the
-## "itadmin" role. Additionally one custom IAM policy is attached which grants KMS usage permissions.
-## ---------------------------------------------------------------------------------------------------------------------
+  custom_role_policy_arns = [
+    module.iam_policy_kms_sops.arn
+  ]
+  trusted_role_arns = [
+    "arn:aws:sts::${data.aws_caller_identity.current.account_id}:assumed-role/AWSReservedSSO_AdministratorAccess_5fe2854a9354d357/it-admin"
+  ]
 
-data "aws_iam_policy_document" "assume_role_policy_sops" {
-  statement {
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = "AWS"
-      identifiers = [module.iam_role_itadmin.role_arn]
-    }
-  }
-  statement {
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = "AWS"
-      identifiers = [data.aws_caller_identity.current.arn]
-    }
-  }
-}
-
-module "iam_role_sops" {
-  source             = "../../../modules/aws/iam/roles"
-  iam_role_name               = "sops_role"
-  assume_role_policy = data.aws_iam_policy_document.assume_role_policy_sops.json
-}
-
-module "sops_kms_access_policy_attachment" {
-  source     = "../../../modules/aws/iam/policy_attachments"
-  role_name  = module.iam_role_sops.iam_role_name
-  policy_arn = module.kms_access_policy.policy_arn
+  tags  = local.tags
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
@@ -224,15 +157,30 @@ module "sops_kms_access_policy_attachment" {
 ##
 ## ---------------------------------------------------------------------------------------------------------------------
 
-data "aws_iam_policy_document" "kms_access_policy" {
-  statement {
-    actions   = ["kms:Decrypt", "kms:Encrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
-    resources = [module.kms_sops.kms_key_arn]
-  }
-}
+module "iam_policy_kms_sops" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-policy"
+  version = "~> 5.0"
 
-module "kms_access_policy" {
-  source          = "../../../modules/aws/iam/policies"
-  policy_name     = "kms_sops_key_policy"
-  policy_json     = data.aws_iam_policy_document.kms_access_policy.json
+  name = "iam-policy-kms-sops"
+  description = "Allows access to use SOPS KMS key"
+  policy = <<-EOF
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": [
+            "kms:Encrypt",
+            "kms:Decrypt",
+            "kms:ReEncrypt*",
+            "kms:GenerateDataKey*",
+            "kms:DescribeKey"
+            ],
+          "Resource": "${module.kms_sops.key_arn}"
+        }
+      ]
+    }
+    EOF
+
+  tags = local.tags
 }
