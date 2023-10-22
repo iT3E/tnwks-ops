@@ -9,12 +9,17 @@
 
     - `tnwks-ops-aws-init`
       - point to /infrastructure/terraform/aws/init
+      - CLI run
     - `tnwks-ops-aws-identity`
       - point to /infrastructure/terraform/aws/accounts/identity
+      - VCS run
+      - Run trigger on tnwks-ops-aws-init
     - `tnwks-ops-aws-prod`
       - point to /infrastructure/terraform/aws/accounts/prod
+      - VCS run
+      - Run trigger on tnwks-ops-aws-identity
 
-### AWS Init
+### AWS Init - Org Owner Account
   3. Create Org owner AWS Account
   4. Create AWS user with AdministratorAccess policy
   5. Generate programmatic Access Key and Secret Key for Admin User
@@ -28,7 +33,10 @@
     - IAM Identity center
     - Permission Set
     - New Org OU
-    - IAM Role for child accounts
+    - New Org AWS Account - Prod
+      - IAM Role for child accounts
+
+### AWS Init - Prod Account
   7.
 
 
