@@ -119,13 +119,18 @@ resource "tfe_oauth_client" "tfe-oauth-github" {
 resource "tfe_workspace" "tnwks-ops-aws-init" {
   name           = "tnwks-ops-aws-init"
   organization   = tfe_organization.tnwks-ops.name
-  execution_mode = "remote"
+  execution_mode = "local"
 }
 
 resource "tfe_workspace" "tnwks-ops-aws-identity" {
   name           = "tnwks-ops-aws-identity"
   organization   = tfe_organization.tnwks-ops.name
   execution_mode = "remote"
+}
+
+resource "tfe_run_trigger" "test" {
+  workspace_id  = tfe_workspace.test-workspace.id
+  sourceable_id = tfe_workspace.test-sourceable.id
 }
 
 resource "tfe_workspace" "tnwks-ops-aws-prod" {
