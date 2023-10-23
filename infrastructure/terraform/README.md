@@ -3,21 +3,22 @@
 ## Manual Steps
 
 ### Terraform Cloud Init
-  1. Create app.terraform.io Organization called `tnwks-ops` VCS workspace called `tnwks-ops-init`
-    - point this workspace at /infrastructure/terraform/tf-cloud/
-  2. Run /tf-cloud/ to create workspaces
+  1. Create app.terraform.io Organization called `tnwks-ops` CLI-driven workspace called `tnwks-ops-init`
+  2. Run /infrastructure/terraform/tf-cloud/ to:
+    - create workspaces:
+      - `tnwks-ops-aws-init`
+        - point to /infrastructure/terraform/aws/init
+        - CLI run
+      - `tnwks-ops-aws-identity`
+        - point to /infrastructure/terraform/aws/accounts/identity
+        - VCS run
+        - Run trigger on tnwks-ops-aws-init
+      - `tnwks-ops-aws-prod`
+        - point to /infrastructure/terraform/aws/accounts/prod
+        - VCS run
+        - Run trigger on tnwks-ops-aws-identity
 
-    - `tnwks-ops-aws-init`
-      - point to /infrastructure/terraform/aws/init
-      - CLI run
-    - `tnwks-ops-aws-identity`
-      - point to /infrastructure/terraform/aws/accounts/identity
-      - VCS run
-      - Run trigger on tnwks-ops-aws-init
-    - `tnwks-ops-aws-prod`
-      - point to /infrastructure/terraform/aws/accounts/prod
-      - VCS run
-      - Run trigger on tnwks-ops-aws-identity
+    - Set up Github OAUTH
 
 ### AWS Init - Org Owner Account
   3. Create Org owner AWS Account
