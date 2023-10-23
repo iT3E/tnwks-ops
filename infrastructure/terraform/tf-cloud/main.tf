@@ -116,6 +116,12 @@ resource "tfe_oauth_client" "tfe-oauth-github" {
 ##
 ## ---------------------------------------------------------------------------------------------------------------------
 
+resource "tfe_workspace" "tnwks-ops-aws-init" {
+  name           = "tnwks-ops-aws-init"
+  organization   = tfe_organization.tnwks-ops.name
+  execution_mode = "remote"
+}
+
 resource "tfe_workspace" "tnwks-ops-aws-identity" {
   name           = "tnwks-ops-aws-identity"
   organization   = tfe_organization.tnwks-ops.name
