@@ -22,15 +22,14 @@
 
 ### AWS Init - Org Owner Account
   3. Create Org owner AWS Account
-  4. Create AWS user with AdministratorAccess policy
-  5. Generate programmatic Access Key and Secret Key for Admin User
-  6. Add Admin user credentials to `tnwks-ops-aws-init` workspace.
+  5. Generate programmatic Access Key and Secret Key for Root user
+  6. Add root user credentials to `tnwks-ops-aws-init` workspace.
   7. Run tf /aws/init/ to set up:
     - Terraform OIDC user in Org owner AWS Account
-    - Wait for success, then
-      - import Admin user to tf
-      - delete Admin user
-  6. Run /aws/accounts/identity to set up below in Org owner AWS Account:
+  8. Run /aws/accounts/identity to set up below in Org owner AWS Account:
+    - Import root user and secure
+      - import access_key and change status to Inactive
+        - data block to pull access key ID for import
     - IAM Identity center
     - Permission Set
     - New Org OU
