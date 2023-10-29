@@ -73,6 +73,9 @@ spec:
             paths:
               - path: /
                 pathType: Prefix
+                services:
+                  name: main
+                  port: http
 
     podSecurityContext:
       runAsUser: 0
