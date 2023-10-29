@@ -73,7 +73,7 @@ spec:
             paths:
               - path: /
                 pathType: Prefix
-                services:
+                service:
                   name: main
                   port: http
 
