@@ -48,9 +48,9 @@ spec:
     service:
       main:
         controller: main
-          ports:
-            http:
-              port: 8384
+        ports:
+          http:
+            port: 8384
       listdisc:
         controller: listdisc
         enabled: true
