@@ -27,9 +27,20 @@ spec:
   uninstall:
     keepHistory: false
   values:
-    image:
-      repository: syncthing/syncthing
-      tag: 1.25.0
+    controllers:
+      main:
+        containers:
+          main:
+            image:
+              repository: syncthing/syncthing
+              tag: 1.25.0
+            resources:
+              requests:
+                cpu: 15m
+                memory: 64M
+              limits:
+                cpu: 100m
+                memory: 128M
 
     env:
       TZ: ${TIMEZONE}
