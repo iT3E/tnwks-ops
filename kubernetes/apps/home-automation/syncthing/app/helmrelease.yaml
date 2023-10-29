@@ -47,10 +47,12 @@ spec:
 
     service:
       main:
-        ports:
-          http:
-            port: 8384
+        controller: main
+          ports:
+            http:
+              port: 8384
       listdisc:
+        controller: listdisc
         enabled: true
         type: LoadBalancer
         ports:
