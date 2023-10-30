@@ -7,6 +7,5 @@ resources:
   - ./mosquitto/ks.yaml
   - ./zwave-js-ui/ks.yaml
   - ./peloton-to-garmin/ks.yaml
-  - ./syncthing/ks.yaml
   # - ./external-dns/ks.yaml
 
