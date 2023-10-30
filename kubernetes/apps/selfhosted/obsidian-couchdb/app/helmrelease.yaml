@@ -86,7 +86,7 @@ spec:
         enabled: true
         className: nginx-internal
         hosts:
-          - host: &host "obsidian-db.tnwks.local"
+          - host: &host "obsidian-couchdb.tnwks.local"
             paths:
               - path: /
                 service:
