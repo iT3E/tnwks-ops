@@ -128,15 +128,16 @@ resource "tfe_workspace" "tnwks-ops-aws-identity" {
   execution_mode = "remote"
 }
 
-resource "tfe_run_trigger" "test" {
-  workspace_id  = tfe_workspace.test-workspace.id
-  sourceable_id = tfe_workspace.test-sourceable.id
+resource "tfe_run_trigger" "run_trigger_aws_identity" {
+  workspace_id  = tfe_workspace.tnwks-ops-aws-identity
+  sourceable_id = tfe_workspace.tnwks-ops-aws-init
 }
 
 resource "tfe_workspace" "tnwks-ops-aws-prod" {
   name           = "tnwks-ops-aws-prod"
   organization   = tfe_organization.tnwks-ops.name
   execution_mode = "remote"
+  working_directory = "tnwks-ops/infrastructure/terraform/aws/accounts/prod"
   vcs_repo {
     identifier = "github/it3E/tnwks-ops"
     oauth_token_id = tfe_oauth_client.tfe-oauth-github.id
