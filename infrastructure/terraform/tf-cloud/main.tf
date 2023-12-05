@@ -1,15 +1,15 @@
 
-    # - `tnwks-ops-aws-init`
-    #   - point to /infrastructure/terraform/aws/init
-    #   - CLI run
-    # - `tnwks-ops-aws-identity`
-    #   - point to /infrastructure/terraform/aws/accounts/identity
-    #   - VCS run
-    #   - Run trigger on tnwks-ops-aws-init
-    # - `tnwks-ops-aws-prod`
-    #   - point to /infrastructure/terraform/aws/accounts/prod
-    #   - VCS run
-    #   - Run trigger on tnwks-ops-aws-identity
+# - `tnwks-ops-aws-init`
+#   - point to /infrastructure/terraform/aws/init
+#   - CLI run
+# - `tnwks-ops-aws-identity`
+#   - point to /infrastructure/terraform/aws/accounts/identity
+#   - VCS run
+#   - Run trigger on tnwks-ops-aws-init
+# - `tnwks-ops-aws-prod`
+#   - point to /infrastructure/terraform/aws/accounts/prod
+#   - VCS run
+#   - Run trigger on tnwks-ops-aws-identity
 
 ## ---------------------------------------------------------------------------------------------------------------------
 ## PROVIDER
@@ -18,7 +18,7 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 
 provider "tfe" {
-  token                       = data.sops_file.secrets.data["tfe_token"]
+  token = data.sops_file.secrets.data["tfe_token"]
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
@@ -35,17 +35,17 @@ terraform {
       name = "tnwks-ops-init"
     }
   }
-    required_version = "~> 1.2.0"
-   required_providers {
-     aws = {
-       source  = "hashicorp/aws"
-       version = "~> 5.0"
-     }
-     sops = {
-       source  = "carlpett/sops"
-       version = "~> 1.0.0"
-   }
- }
+  required_version = "~> 1.2.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    sops = {
+      source  = "carlpett/sops"
+      version = "~> 1.0.0"
+    }
+  }
 }
 ## ---------------------------------------------------------------------------------------------------------------------
 ## DATA
@@ -94,7 +94,6 @@ resource "tfe_workspace" "tnwks-ops-init" {
   execution_mode = "local"
 }
 
-
 ## ---------------------------------------------------------------------------------------------------------------------
 ## TF OAUTH
 ## Contains OAUTH configuration for connecting Terraform to VCS.
@@ -117,15 +116,21 @@ resource "tfe_oauth_client" "tfe-oauth-github" {
 ## ---------------------------------------------------------------------------------------------------------------------
 
 resource "tfe_workspace" "tnwks-ops-aws-init" {
-  name           = "tnwks-ops-aws-init"
-  organization   = tfe_organization.tnwks-ops.name
-  execution_mode = "local"
+  name              = "tnwks-ops-aws-init"
+  organization      = tfe_organization.tnwks-ops.name
+  execution_mode    = "local"
+  working_directory = "tnwks-ops/infrastructure/terraform/aws/init"
 }
 
 resource "tfe_workspace" "tnwks-ops-aws-identity" {
-  name           = "tnwks-ops-aws-identity"
-  organization   = tfe_organization.tnwks-ops.name
-  execution_mode = "remote"
+  name              = "tnwks-ops-aws-identity"
+  organization      = tfe_organization.tnwks-ops.name
+  execution_mode    = "remote"
+  working_directory = "tnwks-ops/infrastructure/terraform/aws/accounts/identity"
+  vcs_repo {
+    identifier     = "github/it3E/tnwks-ops"
+    oauth_token_id = tfe_oauth_client.tfe-oauth-github.id
+  }
 }
 
 resource "tfe_run_trigger" "run_trigger_aws_identity" {
@@ -134,12 +139,17 @@ resource "tfe_run_trigger" "run_trigger_aws_identity" {
 }
 
 resource "tfe_workspace" "tnwks-ops-aws-prod" {
-  name           = "tnwks-ops-aws-prod"
-  organization   = tfe_organization.tnwks-ops.name
-  execution_mode = "remote"
+  name              = "tnwks-ops-aws-prod"
+  organization      = tfe_organization.tnwks-ops.name
+  execution_mode    = "remote"
   working_directory = "tnwks-ops/infrastructure/terraform/aws/accounts/prod"
   vcs_repo {
-    identifier = "github/it3E/tnwks-ops"
+    identifier     = "github/it3E/tnwks-ops"
     oauth_token_id = tfe_oauth_client.tfe-oauth-github.id
   }
+}
+
+resource "tfe_run_trigger" "run_trigger_aws_identity" {
+  workspace_id  = tfe_workspace.tnwks-ops-aws-prod
+  sourceable_id = tfe_workspace.tnwks-ops-aws-identity
 }
