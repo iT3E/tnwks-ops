@@ -32,17 +32,17 @@ terraform {
       name = "tnwks-ops-aws-init"
     }
   }
-    required_version = "~> 1.2.0"
-   required_providers {
-     aws = {
-       source  = "hashicorp/aws"
-       version = "~> 5.0"
-     }
-     sops = {
-       source  = "carlpett/sops"
-       version = "~> 1.0.0"
-   }
- }
+  required_version = "~> 1.2.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    sops = {
+      source  = "carlpett/sops"
+      version = "~> 1.0.0"
+    }
+  }
 }
 ## ---------------------------------------------------------------------------------------------------------------------
 ## DATA
@@ -71,7 +71,7 @@ import {
 }
 
 resource "aws_iam_user" "iam-user-tnwks-admin" {
-  name  = "iam-user-tnwks-admin"
+  name = "iam-user-tnwks-admin"
 }
 
 
@@ -88,7 +88,7 @@ resource "aws_iam_openid_connect_provider" "tfc_provider" {
 }
 
 resource "aws_iam_role" "tfc_role" {
-  name = "tfc-role"
+  name = "tfc-oidc-role"
 
   assume_role_policy = <<EOF
 {
