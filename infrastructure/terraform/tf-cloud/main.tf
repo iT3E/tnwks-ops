@@ -1,16 +1,4 @@
 
-# - `tnwks-ops-aws-init`
-#   - point to /infrastructure/terraform/aws/init
-#   - CLI run
-# - `tnwks-ops-aws-identity`
-#   - point to /infrastructure/terraform/aws/accounts/identity
-#   - VCS run
-#   - Run trigger on tnwks-ops-aws-init
-# - `tnwks-ops-aws-prod`
-#   - point to /infrastructure/terraform/aws/accounts/prod
-#   - VCS run
-#   - Run trigger on tnwks-ops-aws-identity
-
 ## ---------------------------------------------------------------------------------------------------------------------
 ## PROVIDER
 ## All Terraform providers.
@@ -55,43 +43,6 @@ terraform {
 
 data "sops_file" "secrets" {
   source_file = "secrets.sops.yaml"
-}
-
-
-
-## ---------------------------------------------------------------------------------------------------------------------
-## TF ORGANIZATION
-## Contains the Terraform Organization and related configuration.
-##
-## ---------------------------------------------------------------------------------------------------------------------
-
-
-import {
-  to = tfe_organization.tnwks-ops
-  id = "tnwks-ops"
-}
-
-resource "tfe_organization" "tnwks-ops" {
-  name  = "tnwks-ops"
-  email = data.sops_file.secrets.data["tfe_org_email"]
-}
-
-
-## ---------------------------------------------------------------------------------------------------------------------
-## TF WORKSPACES - INIT
-## Contains all Terraform Workspaces used to initialize Terraform. Manually created TF Org and Init workspace are imported.
-##
-## ---------------------------------------------------------------------------------------------------------------------
-
-import {
-  to = tfe_workspace.tnwks-ops-init
-  id = "tnwks-ops"
-}
-
-resource "tfe_workspace" "tnwks-ops-init" {
-  name           = "tnwks-ops-init"
-  organization   = tfe_organization.tnwks-ops.name
-  execution_mode = "local"
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
