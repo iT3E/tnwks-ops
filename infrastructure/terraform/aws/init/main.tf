@@ -59,31 +59,6 @@ data "tls_certificate" "tfc_certificate" {
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
-## IAM USER POLICY
-## Creates a 'disable-all-access' policy and attaches it to init user. This user cannot be imported due to technical
-## limitations with Terraform.
-## ---------------------------------------------------------------------------------------------------------------------
-
-resource "aws_iam_user_policy" "lb_ro" {
-  name = "disable-all-access"
-  user = "tnwks-init-user"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "*",
-        ]
-        Effect   = "Deny"
-        Resource = "*"
-      },
-    ]
-  })
-}
-
-
-## ---------------------------------------------------------------------------------------------------------------------
 ## TERRAFORM OIDC
 ## Configures Terraform OIDC user for all future Terraform VCS Workflows.
 ##
