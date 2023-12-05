@@ -59,19 +59,27 @@ data "tls_certificate" "tfc_certificate" {
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
-## IAM USER
-## Imports IAM User that was manually created in bootstrap process.
-##
+## IAM USER POLICY
+## Creates a 'disable-all-access' policy and attaches it to init user. This user cannot be imported due to technical
+## limitations with Terraform.
 ## ---------------------------------------------------------------------------------------------------------------------
 
+resource "aws_iam_user_policy" "lb_ro" {
+  name = "disable-all-access"
+  user = "tnwks-init-user"
 
-import {
-  to = aws_iam_user.iam-user-tnwks-admin
-  id = "iam-user-tnwks-admin"
-}
-
-resource "aws_iam_user" "iam-user-tnwks-admin" {
-  name = "iam-user-tnwks-admin"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "*",
+        ]
+        Effect   = "Deny"
+        Resource = "*"
+      },
+    ]
+  })
 }
 
 
