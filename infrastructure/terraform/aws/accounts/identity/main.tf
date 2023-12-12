@@ -82,7 +82,7 @@ resource "aws_organizations_organization" "org" {
 ## limitations with Terraform.
 ## ---------------------------------------------------------------------------------------------------------------------
 
-resource "aws_iam_user_policy" "lb_ro" {
+resource "aws_iam_user_policy" "tnwks_init_user_policy" {
   name = "disable-all-access"
   user = "tnwks-init-user"
 
@@ -105,7 +105,22 @@ resource "aws_iam_user_policy" "lb_ro" {
 ## Contains the IAM Identity Center configuration.
 ##
 ## ---------------------------------------------------------------------------------------------------------------------
+data "aws_ssoadmin_instances" "ssoadmin_instance" {}
 
+resource "aws_identitystore_user" "sso_user_it_admin" {
+  identity_store_id = tolist(data.aws_ssoadmin_instances.example.identity_store_ids)[0]
+  display_name = "it-admin"
+  user_name    = "it-admin"
+
+  name {
+    given_name  = "it-admin"
+    family_name = "it-admin"
+  }
+
+  emails {
+    value = data
+  }
+}
 
 ## ---------------------------------------------------------------------------------------------------------------------
 ## PERMISSION SET
