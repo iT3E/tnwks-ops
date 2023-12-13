@@ -5,8 +5,8 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 
 provider "aws" {
-  profile                     = "sso"
-  region                      = data.sops_file.secrets.data["aws_region"]
+  profile = "sso"
+  region  = data.sops_file.secrets.data["aws_region"]
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
@@ -24,17 +24,17 @@ terraform {
       name = "tnwks-aws-identity"
     }
   }
-    required_version = ">= 1.2.2"
-   required_providers {
-     aws = {
-       source  = "hashicorp/aws"
-       version = "~> 5.0"
-     }
-     sops = {
-       source  = "carlpett/sops"
-       version = "1.0.0"
-   }
- }
+  required_version = ">= 1.2.2"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    sops = {
+      source  = "carlpett/sops"
+      version = "1.0.0"
+    }
+  }
 }
 ## ---------------------------------------------------------------------------------------------------------------------
 ## DATA
@@ -108,9 +108,9 @@ resource "aws_iam_user_policy" "tnwks_init_user_policy" {
 data "aws_ssoadmin_instances" "ssoadmin_instance" {}
 
 resource "aws_identitystore_user" "sso_user_it_admin" {
-  identity_store_id = tolist(data.aws_ssoadmin_instances.example.identity_store_ids)[0]
-  display_name = "it-admin"
-  user_name    = "it-admin"
+  identity_store_id = tolist(data.aws_ssoadmin_instances.ssoadmin_instance.identity_store_ids)[0]
+  display_name      = "it-admin"
+  user_name         = "it-admin"
 
   name {
     given_name  = "it-admin"
@@ -120,6 +120,51 @@ resource "aws_identitystore_user" "sso_user_it_admin" {
   emails {
     value = data
   }
+}
+
+resource "aws_identitystore_group" "sso_group_admin" {
+  display_name      = "admin_group"
+  identity_store_id = tolist(data.aws_ssoadmin_instances.ssoadmin_instance.identity_store_ids)[0]
+}
+
+resource "aws_identitystore_group_membership" "sso_group_membership" {
+  identity_store_id = tolist(data.aws_ssoadmin_instances.ssoadmin_instance.identity_store_ids)[0]
+  group_id          = aws_identitystore_group.sso_group_admin.group_id
+  member_id         = aws_identitystore_user.sso_group_admin.user_id
+}
+
+resource "aws_ssoadmin_permission_set" "sso_admin_permission_set" {
+  name         = "AdministratorAccess"
+  instance_arn = tolist(data.aws_ssoadmin_instances.ssoadmin_instance.identity_store_ids[0])
+}
+
+data "aws_iam_policy_document" "inline_iam_policy_adminaccess" {
+  statement {
+    sid = "0"
+    actions = [
+      "*"
+    ]
+    resources = [
+      "*"
+    ]
+  }
+}
+
+resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+  inline_policy      = data.aws_iam_policy_document.inline_iam_policy_adminaccess
+  instance_arn       = aws_ssoadmin_permission_set.sso_admin_permission_set.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.sso_admin_permission_set.arn
+}
+
+data "aws_organizations_organization" "this" {}
+
+resource "aws_ssoadmin_account_assignment" "this" {
+  instance_arn       = aws_ssoadmin_permission_set.sso_admin_permission_set.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.sso_admin_permission_set.arn
+  principal_id       = aws_identitystore_group.sso_group_admin.group_id
+  principal_type     = "GROUP"
+  target_id          = sensitive(each.value)
+  target_type        = "AWS_ACCOUNT"
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
@@ -159,7 +204,7 @@ resource "aws_identitystore_user" "sso_user_it_admin" {
 ## ---------------------------------------------------------------------------------------------------------------------
 
 module "kms_sops" {
-  source = "terraform-aws-modules/kms/aws"
+  source  = "terraform-aws-modules/kms/aws"
   version = "~> 2.0"
 
   deletion_window_in_days = 7
@@ -237,9 +282,9 @@ module "iam_assumable_role_sops" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-assumable-role"
   version = "~> 5.0"
 
-  create_role = true
-  role_name   = "iam-role-sops"
-  role_description = "Allows use of SOPS KMS key and allows assumption of role by itadmin"
+  create_role       = true
+  role_name         = "iam-role-sops"
+  role_description  = "Allows use of SOPS KMS key and allows assumption of role by itadmin"
   role_requires_mfa = false
 
   custom_role_policy_arns = [
@@ -249,7 +294,7 @@ module "iam_assumable_role_sops" {
     "arn:aws:sts::${data.aws_caller_identity.current.account_id}:assumed-role/AWSReservedSSO_AdministratorAccess_5fe2854a9354d357/it-admin"
   ]
 
-  tags  = local.tags
+  tags = local.tags
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
@@ -262,9 +307,9 @@ module "iam_policy_kms_sops" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-policy"
   version = "~> 5.0"
 
-  name = "iam-policy-kms-sops"
+  name        = "iam-policy-kms-sops"
   description = "Allows access to use SOPS KMS key"
-  policy = <<-EOF
+  policy      = <<-EOF
     {
       "Version": "2012-10-17",
       "Statement": [
