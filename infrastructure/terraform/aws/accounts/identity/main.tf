@@ -76,6 +76,13 @@ resource "aws_organizations_organization" "org" {
   feature_set = "ALL"
 }
 
+resource "aws_organizations_account" "account" {
+  name              = "tnwks-ops-aws-prod"
+  email             = data.sops_file.secrets.data["aws_account_prod_email"]
+  close_on_deletion = false
+  role_name =
+}
+
 ## ---------------------------------------------------------------------------------------------------------------------
 ## IAM USER POLICY
 ## Creates a 'disable-all-access' policy and attaches it to init user. This user cannot be imported due to technical
@@ -155,8 +162,6 @@ resource "aws_ssoadmin_permission_set_inline_policy" "this" {
   instance_arn       = aws_ssoadmin_permission_set.sso_admin_permission_set.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.sso_admin_permission_set.arn
 }
-
-data "aws_organizations_organization" "this" {}
 
 resource "aws_ssoadmin_account_assignment" "this" {
   instance_arn       = aws_ssoadmin_permission_set.sso_admin_permission_set.instance_arn
