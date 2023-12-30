@@ -4,15 +4,38 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'infrastructure/terraform/aws/init/*'
+      - 'infrastructure/terraform/aws/accounts/identity/*'
+      - 'infrastructure/terraform/aws/accounts/prod/*'
 
 env:
   TF_CLOUD_ORGANIZATION: "tnwks-ops"
   TF_API_TOKEN: "${{ secrets.TF_API_TOKEN }}"
-  TF_WORKSPACE: "learn-terraform-github-actions"
   CONFIG_DIRECTORY: "./"
 
 jobs:
+  set-workspace:
+    runs-on: ubuntu-latest
+    outputs:
+      tf_workspace: ${{ steps.set-env.outputs.tf_workspace }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Determine workspace from changed directory
+        id: set-env
+        run: |
+          if git diff --quiet HEAD^ HEAD -- 'infrastructure/terraform/aws/init/*'; then
+            echo "::set-output name=tf_workspace::tnwks-ops-aws-init"
+          elif git diff --quiet HEAD^ HEAD -- 'infrastructure/terraform/aws/accounts/identity/*'; then
+            echo "::set-output name=tf_workspace::tnwks-ops-aws-identity"
+          elif git diff --quiet HEAD^ HEAD -- 'infrastructure/terraform/aws/accounts/prod/*'; then
+            echo "::set-output name=tf_workspace::tnwks-ops-aws-prod"
+          fi
+
   terraform:
+    needs: set-workspace
     if: github.repository != 'hashicorp-education/learn-terraform-github-actions'
     name: "Terraform Apply"
     runs-on: ubuntu-latest
@@ -26,14 +49,14 @@ jobs:
         uses: hashicorp/tfc-workflows-github/actions/upload-configuration@v1.0.0
         id: apply-upload
         with:
-          workspace: ${{ env.TF_WORKSPACE }}
+          workspace: ${{ needs.set-workspace.outputs.tf_workspace }}
           directory: ${{ env.CONFIG_DIRECTORY }}
 
       - name: Create Apply Run
         uses: hashicorp/tfc-workflows-github/actions/create-run@v1.0.0
         id: apply-run
         with:
-          workspace: ${{ env.TF_WORKSPACE }}
+          workspace: ${{ needs.set-workspace.outputs.tf_workspace }}
           configuration_version: ${{ steps.apply-upload.outputs.configuration_version_id }}
 
       - name: Apply
@@ -43,3 +66,4 @@ jobs:
         with:
           run: ${{ steps.apply-run.outputs.run_id }}
           comment: "Apply Run from GitHub Actions CI ${{ github.sha }}"
+
