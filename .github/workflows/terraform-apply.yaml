@@ -36,7 +36,6 @@ jobs:
 
   terraform:
     needs: set-workspace
-    if: github.repository != 'hashicorp-education/learn-terraform-github-actions'
     name: "Terraform Apply"
     runs-on: ubuntu-latest
     permissions:
