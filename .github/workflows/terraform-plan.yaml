@@ -10,8 +10,26 @@ env:
   CONFIG_DIRECTORY: "./"
 
 jobs:
+  set-workspace:
+    runs-on: ubuntu-latest
+    outputs:
+      tf_workspace: ${{ steps.set-env.outputs.tf_workspace }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Determine workspace from changed directory
+        id: set-env
+        run: |
+          if git diff --quiet HEAD^ HEAD -- 'infrastructure/terraform/aws/init/*'; then
+            echo "::set-output name=tf_workspace::tnwks-ops-aws-init"
+          elif git diff --quiet HEAD^ HEAD -- 'infrastructure/terraform/aws/accounts/identity/*'; then
+            echo "::set-output name=tf_workspace::tnwks-ops-aws-identity"
+          elif git diff --quiet HEAD^ HEAD -- 'infrastructure/terraform/aws/accounts/prod/*'; then
+            echo "::set-output name=tf_workspace::tnwks-ops-aws-prod"
+          fi
+
   terraform:
-    if: github.repository != 'hashicorp-education/learn-terraform-github-actions'
     name: "Terraform Plan"
     runs-on: ubuntu-latest
     permissions:
