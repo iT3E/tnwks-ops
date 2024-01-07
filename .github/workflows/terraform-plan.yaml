@@ -27,12 +27,16 @@ jobs:
           echo "Files changed: $FILES_CHANGED"
           if [[ "$FILES_CHANGED" == *"infrastructure/terraform/aws/init/"* ]]; then
             echo "::set-output name=tf_workspace::tnwks-ops-aws-init"
+            echo "::set-output name=config_directory::infrastructure/terraform/aws/init/"
           elif [[ "$FILES_CHANGED" == *"infrastructure/terraform/aws/accounts/identity/"* ]]; then
             echo "::set-output name=tf_workspace::tnwks-ops-aws-identity"
+            echo "::set-output name=config_directory::infrastructure/terraform/aws/accounts/identity/"
           elif [[ "$FILES_CHANGED" == *"infrastructure/terraform/aws/accounts/prod/"* ]]; then
             echo "::set-output name=tf_workspace::tnwks-ops-aws-prod"
+            echo "::set-output name=config_directory::infrastructure/terraform/aws/accounts/prod/"
           else
-            echo "::set-output name=tf_workspace::default_workspace"
+            echo "No Terraform files changed in the watched directories."
+            exit 78 # This exit code could be used to neutral exit indicating "nothing to do".
           fi
 
   terraform:
@@ -51,7 +55,7 @@ jobs:
         id: plan-upload
         with:
           workspace: ${{ needs.set-workspace.outputs.tf_workspace }}
-          directory: ${{ env.CONFIG_DIRECTORY }}
+          directory: ${{ needs.set-workspace.outputs.config_directory }}
           speculative: true
 
       - name: Create Plan Run

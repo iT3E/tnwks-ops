@@ -73,6 +73,11 @@ resource "tfe_workspace" "tnwks-ops-aws-init" {
   working_directory = "tnwks-ops/infrastructure/terraform/aws/init"
 }
 
+resource "tfe_workspace_settings" "tnwks-ops-aws-init_workspace_settings" {
+  workspace_id   = tfe_workspace.tnwks-ops-aws-init.id
+  execution_mode = "local"
+}
+
 resource "tfe_workspace" "tnwks-ops-aws-identity" {
   name              = "tnwks-ops-aws-identity"
   organization      = tfe_organization.tnwks-ops.name
