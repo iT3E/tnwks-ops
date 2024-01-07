@@ -52,19 +52,25 @@ jobs:
         with:
           path: ${{ needs.set-workspace.outputs.config_directory }}
 
+      - name: Set up Terraform Directory
+        id: set-tf-dir
+        run: |
+          echo "CONFIG_DIRECTORY=${{ needs.set-workspace.outputs.config_directory }}" >> $GITHUB_ENV
+          echo "TF_WORKSPACE=${{ needs.set-workspace.outputs.tf_workspace }}" >> $GITHUB_ENV
+
       - name: Upload Configuration
         uses: hashicorp/tfc-workflows-github/actions/upload-configuration@v1.0.0
         id: plan-upload
         with:
-          workspace: ${{ needs.set-workspace.outputs.tf_workspace }}
-          directory: ${{ needs.set-workspace.outputs.config_directory }}
+          workspace: ${{ env.TF_WORKSPACE }}
+          directory: ${{ env.CONFIG_DIRECTORY }}
           speculative: true
 
       - name: Create Plan Run
         uses: hashicorp/tfc-workflows-github/actions/create-run@v1.0.0
         id: plan-run
         with:
-          workspace: ${{ needs.set-workspace.outputs.tf_workspace }}
+          workspace: ${{ env.TF_WORKSPACE }}
           configuration_version: ${{ steps.plan-upload.outputs.configuration_version_id }}
           plan_only: true
 
