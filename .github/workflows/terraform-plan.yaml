@@ -49,14 +49,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-        with:
-          path: ${{ needs.set-workspace.outputs.config_directory }}
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Set up Terraform Directory
         id: set-tf-dir
         run: |
           echo "CONFIG_DIRECTORY=${{ needs.set-workspace.outputs.config_directory }}" >> $GITHUB_ENV
           echo "TF_WORKSPACE=${{ needs.set-workspace.outputs.tf_workspace }}" >> $GITHUB_ENV
+
+      - name: List configuration directory contents
+        run: |
+          ls -la "${{ env.CONFIG_DIRECTORY }}"
 
       - name: Upload Configuration
         uses: hashicorp/tfc-workflows-github/actions/upload-configuration@v1.0.0
