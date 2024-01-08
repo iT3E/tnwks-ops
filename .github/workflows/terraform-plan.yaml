@@ -25,15 +25,14 @@ jobs:
           FILES_CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
           echo "Files changed: $FILES_CHANGED"
           if [[ "$FILES_CHANGED" == *"infrastructure/terraform/aws/init/"* ]]; then
-            echo "tf_workspace=tnwks-ops-aws-init" >> $GITHUB_ENV
-            echo "$tf_workspace"
-            echo "config_directory=infrastructure/terraform/aws/init/" >> $GITHUB_ENV
+            echo "tf_workspace=tnwks-ops-aws-init" >> "$GITHUB_ENV"
+            echo "config_directory=infrastructure/terraform/aws/init/" >> "$GITHUB_ENV"
           elif [[ "$FILES_CHANGED" == *"infrastructure/terraform/aws/accounts/identity/"* ]]; then
-            echo "tf_workspace=tnwks-ops-aws-identity" >> $GITHUB_ENV
-            echo "config_directory=infrastructure/terraform/aws/accounts/identity/" >> $GITHUB_ENV
+            echo "tf_workspace=tnwks-ops-aws-identity" >> "$GITHUB_ENV"
+            echo "config_directory=infrastructure/terraform/aws/accounts/identity/" >> "$GITHUB_ENV"
           elif [[ "$FILES_CHANGED" == *"infrastructure/terraform/aws/accounts/prod/"* ]]; then
-            echo "tf_workspace=tnwks-ops-aws-prod" >> $GITHUB_ENV
-            echo "config_directory=infrastructure/terraform/aws/accounts/prod/" >> $GITHUB_ENV
+            echo "tf_workspace=tnwks-ops-aws-prod" >> "$GITHUB_ENV"
+            echo "config_directory=infrastructure/terraform/aws/accounts/prod/" >> "$GITHUB_ENV"
           else
             echo "No Terraform files changed in the watched directories."
             exit 78 # This exit code could be used to neutral exit indicating "nothing to do".
