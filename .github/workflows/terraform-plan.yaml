@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tf_workspace: ${{ steps.set-env.outputs.tf_workspace }}
+      config_directory: ${{ steps.set-env.outputs.config_directory }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
