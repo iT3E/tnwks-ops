@@ -25,23 +25,20 @@ jobs:
           FILES_CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
           echo "Files changed: $FILES_CHANGED"
           if [[ "$FILES_CHANGED" == *"infrastructure/terraform/aws/init/"* ]]; then
-            echo "tf_workspace=tnwks-ops-aws-init" >> "$GITHUB_ENV"
-            echo "config_directory=infrastructure/terraform/aws/init/" >> "$GITHUB_ENV"
+            echo "tf_workspace=tnwks-ops-aws-init" >> "$GITHUB_OUTPUT"
+            echo "config_directory=infrastructure/terraform/aws/init/" >> "$GITHUB_OUTPUT"
           elif [[ "$FILES_CHANGED" == *"infrastructure/terraform/aws/accounts/identity/"* ]]; then
-            echo "tf_workspace=tnwks-ops-aws-identity" >> "$GITHUB_ENV"
-            echo "config_directory=infrastructure/terraform/aws/accounts/identity/" >> "$GITHUB_ENV"
+            echo "tf_workspace=tnwks-ops-aws-identity" >> "$GITHUB_OUTPUT"
+            echo "config_directory=infrastructure/terraform/aws/accounts/identity/" >> "$GITHUB_OUTPUT"
           elif [[ "$FILES_CHANGED" == *"infrastructure/terraform/aws/accounts/prod/"* ]]; then
-            echo "tf_workspace=tnwks-ops-aws-prod" >> "$GITHUB_ENV"
-            echo "config_directory=infrastructure/terraform/aws/accounts/prod/" >> "$GITHUB_ENV"
+            echo "tf_workspace=tnwks-ops-aws-prod" >> "$GITHUB_OUTPUT"
+            echo "config_directory=infrastructure/terraform/aws/accounts/prod/" >> "$GITHUB_OUTPUT"
           else
             echo "No Terraform files changed in the watched directories."
             exit 78 # This exit code could be used to neutral exit indicating "nothing to do".
           fi
 
-      - name: List variables as test
-        run: |
-          echo "${{ env.CONFIG_DIRECTORY }}"
-          echo "${{ env.TF_WORKSPACE }}"
+
 
   terraform:
     name: "Terraform Plan"
@@ -60,8 +57,8 @@ jobs:
         uses: hashicorp/tfc-workflows-github/actions/upload-configuration@v1.0.0
         id: plan-upload
         with:
-          workspace: ${{ env.TF_WORKSPACE }}
-          directory: ${{ env.CONFIG_DIRECTORY }}
+          workspace: ${{ needs.set-workspace.outputs.tf_workspace }}
+          directory: ${{ needs.set-workspace.outputs.config_directory }}
           speculative: true
 
       - name: Create Plan Run
