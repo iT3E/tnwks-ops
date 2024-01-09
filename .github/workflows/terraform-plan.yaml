@@ -26,10 +26,7 @@ jobs:
         run: |
           FILES_CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
           echo "Files changed: $FILES_CHANGED"
-          if [[ "$FILES_CHANGED" == *"infrastructure/terraform/aws/init/"* ]]; then
-            echo "tf_workspace=tnwks-ops-aws-init" >> "$GITHUB_OUTPUT"
-            echo "config_directory=infrastructure/terraform/aws/init/" >> "$GITHUB_OUTPUT"
-          elif [[ "$FILES_CHANGED" == *"infrastructure/terraform/aws/accounts/identity/"* ]]; then
+          if [[ "$FILES_CHANGED" == *"infrastructure/terraform/aws/accounts/identity/"* ]]; then
             echo "tf_workspace=tnwks-ops-aws-identity" >> "$GITHUB_OUTPUT"
             echo "config_directory=infrastructure/terraform/aws/accounts/identity/" >> "$GITHUB_OUTPUT"
           elif [[ "$FILES_CHANGED" == *"infrastructure/terraform/aws/accounts/prod/"* ]]; then
