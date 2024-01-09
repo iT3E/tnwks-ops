@@ -1,10 +1,3 @@
-
-# Run tf /aws/init/ to set up:
-#     - Terraform OIDC user in Org owner AWS Account
-#     - Wait for success, then
-#       - import Admin user to tf
-#       - delete Admin user
-
 ## ---------------------------------------------------------------------------------------------------------------------
 ## PROVIDER
 ## All Terraform providers.
