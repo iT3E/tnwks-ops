@@ -76,11 +76,11 @@ resource "aws_organizations_organization" "org" {
   feature_set = "ALL"
 }
 
-resource "aws_organizations_account" "account" {
+resource "aws_organizations_account" "prod_aws_account" {
   name              = "tnwks-ops-aws-prod"
   email             = data.sops_file.secrets.data["aws_account_prod_email"]
   close_on_deletion = false
-  role_name =
+  role_name         = "tnwks-org-init-role"
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
