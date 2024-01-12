@@ -45,20 +45,6 @@ data "sops_file" "secrets" {
   source_file = "secrets.sops.yaml"
 }
 
-## ---------------------------------------------------------------------------------------------------------------------
-## TF OAUTH
-## Contains OAUTH configuration for connecting Terraform to VCS.
-##
-## ---------------------------------------------------------------------------------------------------------------------
-
-resource "tfe_oauth_client" "tfe-oauth-github" {
-  name             = "tfe-oauth-github"
-  organization     = tfe_organization.tnwks-ops.name
-  api_url          = "https://api.github.com"
-  http_url         = "https://github.com"
-  oauth_token      = data.sops_file.secrets.data["tfe_oauth_github_token"]
-  service_provider = "github"
-}
 
 ## ---------------------------------------------------------------------------------------------------------------------
 ## TF WORKSPACES - AWS
@@ -83,29 +69,13 @@ resource "tfe_workspace" "tnwks-ops-aws-identity" {
   organization      = tfe_organization.tnwks-ops.name
   execution_mode    = "remote"
   working_directory = "tnwks-ops/infrastructure/terraform/aws/accounts/identity"
-  vcs_repo {
-    identifier     = "github/it3E/tnwks-ops"
-    oauth_token_id = tfe_oauth_client.tfe-oauth-github.id
-  }
 }
 
-resource "tfe_run_trigger" "run_trigger_aws_identity" {
-  workspace_id  = tfe_workspace.tnwks-ops-aws-identity
-  sourceable_id = tfe_workspace.tnwks-ops-aws-init
-}
 
 resource "tfe_workspace" "tnwks-ops-aws-prod" {
   name              = "tnwks-ops-aws-prod"
   organization      = tfe_organization.tnwks-ops.name
   execution_mode    = "remote"
   working_directory = "tnwks-ops/infrastructure/terraform/aws/accounts/prod"
-  vcs_repo {
-    identifier     = "github/it3E/tnwks-ops"
-    oauth_token_id = tfe_oauth_client.tfe-oauth-github.id
-  }
 }
 
-resource "tfe_run_trigger" "run_trigger_aws_identity" {
-  workspace_id  = tfe_workspace.tnwks-ops-aws-prod
-  sourceable_id = tfe_workspace.tnwks-ops-aws-identity
-}
