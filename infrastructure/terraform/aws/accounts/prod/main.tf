@@ -1,14 +1,12 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 ## PROVIDER
-## All Terraform providers.
-##
+## All Terraform providers. https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_accounts_access.html#orgs_manage_accounts_access-cross-account-role
+## "The scope of access for this role includes all principals in the management account,"
 ## ---------------------------------------------------------------------------------------------------------------------
 
 provider "aws" {
   assume_role {
-    role_arn     = "arn:aws:iam::ACCOUNT_ID:role/ROLE_NAME"
-    session_name = "TerraformSession"
-    external_id  = "EXTERNAL_ID"
+    role_arn = "arn:aws:iam::${data.sops_file.secrets.data["aws_prod_account_id"]}:role/tnwks-ops-org-init"
   }
 }
 
