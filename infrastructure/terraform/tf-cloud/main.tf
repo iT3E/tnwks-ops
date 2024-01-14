@@ -45,6 +45,41 @@ data "sops_file" "secrets" {
   source_file = "secrets.sops.yaml"
 }
 
+## ---------------------------------------------------------------------------------------------------------------------
+## TF CLOUD VARIABLE SET
+## Contains variable set and variables to be applied to mulitple workspaces
+##
+## ---------------------------------------------------------------------------------------------------------------------
+
+resource "tfe_variable_set" "variable_set" {
+  name         = "aws_var_set"
+  description  = "Variable set containing AWS connectivity settings"
+  organization = "tnwks-ops"
+}
+
+resource "tfe_variable" "tfe_var_aws_auth_bool" {
+  key             = "TFC_AWS_PROVIDER_AUTH"
+  value           = "true"
+  category        = "env"
+  description     = "Determines if TFC will use the OIDC role"
+  variable_set_id = tfe_variable_set.variable_set.id
+}
+
+resource "tfe_variable" "tfe_var_aws_auth_arn" {
+  key             = "TFC_AWS_RUN_ROLE_ARN"
+  value           = ""
+  category        = "env"
+  description     = "Role to be used for OIDC auth"
+  variable_set_id = tfe_variable_set.variable_set.id
+}
+
+resource "tfe_variable" "tfe_var_aws_region" {
+  key             = "AWS_REGION"
+  value           = "us-west-2"
+  category        = "env"
+  description     = "AWS region to be used"
+  variable_set_id = tfe_variable_set.variable_set.id
+}
 
 ## ---------------------------------------------------------------------------------------------------------------------
 ## TF WORKSPACES - AWS
