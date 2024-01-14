@@ -5,37 +5,15 @@ on:
     branches:
       - main
     paths:
-      - 'infrastructure/terraform/aws/init/*'
-      - 'infrastructure/terraform/aws/accounts/identity/*'
       - 'infrastructure/terraform/aws/accounts/prod/*'
 
 env:
   TF_CLOUD_ORGANIZATION: "tnwks-ops"
   TF_API_TOKEN: "${{ secrets.TF_API_TOKEN }}"
-  CONFIG_DIRECTORY: "./"
+  TF_WORKSPACE: "tnwks-ops-aws-prod"
 
 jobs:
-  set-workspace:
-    runs-on: ubuntu-latest
-    outputs:
-      tf_workspace: ${{ steps.set-env.outputs.tf_workspace }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Determine workspace from changed directory
-        id: set-env
-        run: |
-          if git diff --quiet HEAD^ HEAD -- 'infrastructure/terraform/aws/init/*'; then
-            echo "::set-output name=tf_workspace::tnwks-ops-aws-init"
-          elif git diff --quiet HEAD^ HEAD -- 'infrastructure/terraform/aws/accounts/identity/*'; then
-            echo "::set-output name=tf_workspace::tnwks-ops-aws-identity"
-          elif git diff --quiet HEAD^ HEAD -- 'infrastructure/terraform/aws/accounts/prod/*'; then
-            echo "::set-output name=tf_workspace::tnwks-ops-aws-prod"
-          fi
-
   terraform:
-    needs: set-workspace
     name: "Terraform Apply"
     runs-on: ubuntu-latest
     permissions:
@@ -48,14 +26,14 @@ jobs:
         uses: hashicorp/tfc-workflows-github/actions/upload-configuration@v1.0.0
         id: apply-upload
         with:
-          workspace: ${{ needs.set-workspace.outputs.tf_workspace }}
-          directory: ${{ env.CONFIG_DIRECTORY }}
+          workspace: ${{ env.TF_WORKSPACE }}
+          directory: "infrastructure/terraform/aws/accounts/prod/*"
 
       - name: Create Apply Run
         uses: hashicorp/tfc-workflows-github/actions/create-run@v1.0.0
         id: apply-run
         with:
-          workspace: ${{ needs.set-workspace.outputs.tf_workspace }}
+          workspace: ${{ env.TF_WORKSPACE }}
           configuration_version: ${{ steps.apply-upload.outputs.configuration_version_id }}
 
       - name: Apply
