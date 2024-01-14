@@ -1,3 +1,16 @@
+## ---------------------------------------------------------------------------------------------------------------------
+## PROVIDER
+## All Terraform providers.
+##
+## ---------------------------------------------------------------------------------------------------------------------
+
+provider "aws" {
+  assume_role {
+    role_arn     = "arn:aws:iam::ACCOUNT_ID:role/ROLE_NAME"
+    session_name = "TerraformSession"
+    external_id  = "EXTERNAL_ID"
+  }
+}
 
 ## ---------------------------------------------------------------------------------------------------------------------
 ## TERRAFORM
@@ -14,17 +27,17 @@ terraform {
       name = "tnwks-aws-prod"
     }
   }
-    required_version = ">= 1.2.2"
-   required_providers {
-     aws = {
-       source  = "hashicorp/aws"
-       version = "~> 5.0"
-     }
-     sops = {
-       source  = "carlpett/sops"
-       version = "1.0.0"
-   }
- }
+  required_version = ">= 1.2.2"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    sops = {
+      source  = "carlpett/sops"
+      version = "1.0.0"
+    }
+  }
 }
 ## ---------------------------------------------------------------------------------------------------------------------
 ## DATA
@@ -58,7 +71,7 @@ locals {
 ## ---------------------------------------------------------------------------------------------------------------------
 
 module "kms_sops" {
-  source = "terraform-aws-modules/kms/aws"
+  source  = "terraform-aws-modules/kms/aws"
   version = "~> 2.0"
 
   deletion_window_in_days = 7
@@ -136,9 +149,9 @@ module "iam_assumable_role_sops" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-assumable-role"
   version = "~> 5.0"
 
-  create_role = true
-  role_name   = "iam-role-sops"
-  role_description = "Allows use of SOPS KMS key and allows assumption of role by itadmin"
+  create_role       = true
+  role_name         = "iam-role-sops"
+  role_description  = "Allows use of SOPS KMS key and allows assumption of role by itadmin"
   role_requires_mfa = false
 
   custom_role_policy_arns = [
@@ -148,7 +161,7 @@ module "iam_assumable_role_sops" {
     "arn:aws:sts::${data.aws_caller_identity.current.account_id}:assumed-role/AWSReservedSSO_AdministratorAccess_5fe2854a9354d357/it-admin"
   ]
 
-  tags  = local.tags
+  tags = local.tags
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
@@ -161,9 +174,9 @@ module "iam_policy_kms_sops" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-policy"
   version = "~> 5.0"
 
-  name = "iam-policy-kms-sops"
+  name        = "iam-policy-kms-sops"
   description = "Allows access to use SOPS KMS key"
-  policy = <<-EOF
+  policy      = <<-EOF
     {
       "Version": "2012-10-17",
       "Statement": [
