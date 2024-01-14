@@ -16,7 +16,7 @@ env:
 jobs:
   terraform-manual-approval:
     if: github.actor != 'iT3E'
-    name: "Terraform Plan"
+    name: "Terraform Plan External User"
     environment:
         name: external-contributions
     runs-on: ubuntu-latest
