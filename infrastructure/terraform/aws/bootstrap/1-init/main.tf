@@ -10,7 +10,6 @@ provider "aws" {
   secret_key = data.sops_file.secrets.data["aws_secret_key"]
 }
 
-
 ## ---------------------------------------------------------------------------------------------------------------------
 ## TERRAFORM
 ## Contains the configuration for Terraform Cloud, along with the required providers.
@@ -37,6 +36,7 @@ terraform {
     }
   }
 }
+
 ## ---------------------------------------------------------------------------------------------------------------------
 ## DATA
 ## Contains any data blocks that will be used in multiple sections.
@@ -52,6 +52,45 @@ data "tls_certificate" "tfc_certificate" {
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
+## TF CLOUD PROJECT
+## Contains all Terraform Cloud projects.
+##
+## ---------------------------------------------------------------------------------------------------------------------
+
+resource "tfe_project" "tfe_project_aws" {
+  organization = tfe_organization.test-organization.name
+  name         = "AWS_Project"
+}
+
+## ---------------------------------------------------------------------------------------------------------------------
+## TF WORKSPACES - AWS
+## Contains all Terraform Workspaces for use with AWS.
+##
+## ---------------------------------------------------------------------------------------------------------------------
+
+resource "tfe_workspace" "tnwks-ops-aws-identity" {
+  name         = "tnwks-ops-aws-identity"
+  organization = tfe_organization.tnwks-ops.name
+  project_id   = tfe_project.tfe_project_aws.id
+}
+
+resource "tfe_workspace_settings" "tnwks-ops-aws-identity_workspace_settings" {
+  workspace_id   = tfe_workspace.tnwks-ops-aws-init.id
+  execution_mode = "remote"
+}
+
+resource "tfe_workspace" "tnwks-ops-aws-prod" {
+  name         = "tnwks-ops-aws-prod"
+  organization = tfe_organization.tnwks-ops.name
+  project_id   = tfe_project.tfe_project_aws.id
+}
+
+resource "tfe_workspace_settings" "tnwks-ops-aws-prod_workspace_settings" {
+  workspace_id   = tfe_workspace.tnwks-ops-aws-init.id
+  execution_mode = "remote"
+}
+
+## ---------------------------------------------------------------------------------------------------------------------
 ## TERRAFORM OIDC
 ## Configures Terraform OIDC user for all future Terraform VCS Workflows.
 ##
@@ -63,7 +102,7 @@ resource "aws_iam_openid_connect_provider" "tfc_provider" {
   thumbprint_list = [data.tls_certificate.tfc_certificate.certificates[0].sha1_fingerprint]
 }
 
-resource "aws_iam_role" "tfc_role" {
+resource "aws_iam_role" "tfc_oidc_role" {
   name = "tfc-oidc-role"
 
   assume_role_policy = <<EOF
@@ -81,12 +120,54 @@ resource "aws_iam_role" "tfc_role" {
          "app.terraform.io:aud": "${one(aws_iam_openid_connect_provider.tfc_provider.client_id_list)}"
        },
        "StringLike": {
-         "app.terraform.io:sub": "organization:tnwks-ops:project:Default Project:workspace:tnwks-ops-aws-identity:run_phase:*"
+         "app.terraform.io:sub": "organization:tnwks-ops:project:Default Project:workspace:tnwks-ops-aws-identity:run_phase:*",
+         "app.terraform.io:sub": "organization:tnwks-ops:project:Default Project:workspace:tnwks-ops-aws-prod:run_phase:*"
        }
      }
    }
  ]
 }
 EOF
+}
+
+## ---------------------------------------------------------------------------------------------------------------------
+## TF CLOUD VARIABLE SET
+## Contains variable set and variables to be applied to mulitple workspaces
+##
+## ---------------------------------------------------------------------------------------------------------------------
+
+resource "tfe_variable_set" "variable_set" {
+  name         = "aws_var_set"
+  description  = "Variable set containing AWS connectivity settings"
+  organization = "tnwks-ops"
+}
+
+resource "tfe_project_variable_set" "variable_set_project" {
+  variable_set_id = tfe_variable_set.variable_set.id
+  project_id      = tfe_project.tfe_project_aws.id
+}
+
+resource "tfe_variable" "tfe_var_aws_auth_bool" {
+  key             = "TFC_AWS_PROVIDER_AUTH"
+  value           = "true"
+  category        = "env"
+  description     = "Determines if TFC will use the OIDC role"
+  variable_set_id = tfe_variable_set.variable_set.id
+}
+
+resource "tfe_variable" "tfe_var_aws_auth_arn" {
+  key             = "TFC_AWS_RUN_ROLE_ARN"
+  value           = aws_iam_role.tfc_oidc_role.arn
+  category        = "env"
+  description     = "Role to be used for OIDC auth"
+  variable_set_id = tfe_variable_set.variable_set.id
+}
+
+resource "tfe_variable" "tfe_var_aws_region" {
+  key             = "AWS_REGION"
+  value           = "us-west-2"
+  category        = "env"
+  description     = "AWS region to be used"
+  variable_set_id = tfe_variable_set.variable_set.id
 }
 
