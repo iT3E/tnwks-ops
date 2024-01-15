@@ -58,7 +58,7 @@ data "tls_certificate" "tfc_certificate" {
 ## ---------------------------------------------------------------------------------------------------------------------
 
 resource "tfe_project" "tfe_project_aws" {
-  organization = tfe_organization.test-organization.name
+  organization = "tnwks-ops"
   name         = "AWS_Project"
 }
 
@@ -70,23 +70,23 @@ resource "tfe_project" "tfe_project_aws" {
 
 resource "tfe_workspace" "tnwks-ops-aws-identity" {
   name         = "tnwks-ops-aws-identity"
-  organization = tfe_organization.tnwks-ops.name
+  organization = "tnwks-ops"
   project_id   = tfe_project.tfe_project_aws.id
 }
 
 resource "tfe_workspace_settings" "tnwks-ops-aws-identity_workspace_settings" {
-  workspace_id   = tfe_workspace.tnwks-ops-aws-init.id
+  workspace_id   = tfe_workspace.tnwks-ops-aws-identity.id
   execution_mode = "remote"
 }
 
 resource "tfe_workspace" "tnwks-ops-aws-prod" {
   name         = "tnwks-ops-aws-prod"
-  organization = tfe_organization.tnwks-ops.name
+  organization = "tnwks-ops"
   project_id   = tfe_project.tfe_project_aws.id
 }
 
 resource "tfe_workspace_settings" "tnwks-ops-aws-prod_workspace_settings" {
-  workspace_id   = tfe_workspace.tnwks-ops-aws-init.id
+  workspace_id   = tfe_workspace.tnwks-ops-aws-prod.id
   execution_mode = "remote"
 }
 
@@ -104,6 +104,20 @@ resource "aws_iam_openid_connect_provider" "tfc_provider" {
 
 resource "aws_iam_role" "tfc_oidc_role" {
   name = "tfc-oidc-role"
+  inline_policy {
+    name = "my_inline_policy"
+
+    policy = jsonencode({
+      Version = "2012-10-17"
+      Statement = [
+        {
+          Action   = ["*"]
+          Effect   = "Allow"
+          Resource = "*"
+        },
+      ]
+    })
+  }
 
   assume_role_policy = <<EOF
 {
@@ -120,8 +134,10 @@ resource "aws_iam_role" "tfc_oidc_role" {
          "app.terraform.io:aud": "${one(aws_iam_openid_connect_provider.tfc_provider.client_id_list)}"
        },
        "StringLike": {
-         "app.terraform.io:sub": "organization:tnwks-ops:project:Default Project:workspace:tnwks-ops-aws-identity:run_phase:*",
-         "app.terraform.io:sub": "organization:tnwks-ops:project:Default Project:workspace:tnwks-ops-aws-prod:run_phase:*"
+         "app.terraform.io:sub": [
+          "organization:tnwks-ops:project:${tfe_project.tfe_project_aws.name}:workspace:tnwks-ops-aws-identity:run_phase:*",
+          "organization:tnwks-ops:project:${tfe_project.tfe_project_aws.name}:workspace:tnwks-ops-aws-prod:run_phase:*"
+         ]
        }
      }
    }
@@ -129,6 +145,8 @@ resource "aws_iam_role" "tfc_oidc_role" {
 }
 EOF
 }
+
+
 
 ## ---------------------------------------------------------------------------------------------------------------------
 ## TF CLOUD VARIABLE SET
@@ -171,3 +189,11 @@ resource "tfe_variable" "tfe_var_aws_region" {
   variable_set_id = tfe_variable_set.variable_set.id
 }
 
+resource "tfe_variable" "tfe_var_sens_email" {
+  key             = "aws_account_prod_email"
+  value           = data.sops_file.secrets.data["aws_account_prod_email"]
+  category        = "terraform"
+  description     = "AWS region to be used"
+  variable_set_id = tfe_variable_set.variable_set.id
+  sensitive       = true
+}

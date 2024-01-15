@@ -19,7 +19,7 @@ terraform {
     organization = "tnwks-ops"
     #look for PII leak here
     workspaces {
-      name = "tnwks-aws-identity"
+      name = "tnwks-ops-aws-identity"
     }
   }
   required_version = ">= 1.2.2"
@@ -28,10 +28,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
-    sops = {
-      source  = "carlpett/sops"
-      version = "1.0.0"
-    }
   }
 }
 ## ---------------------------------------------------------------------------------------------------------------------
@@ -39,10 +35,6 @@ terraform {
 ## Contains any data blocks that will be used in multiple sections.
 ##
 ## ---------------------------------------------------------------------------------------------------------------------
-
-data "sops_file" "secrets" {
-  source_file = "secrets.sops.yaml"
-}
 
 data "aws_caller_identity" "current" {}
 
@@ -76,7 +68,7 @@ resource "aws_organizations_organization" "org" {
 
 resource "aws_organizations_account" "prod_aws_account" {
   name              = "tnwks-ops-aws-prod"
-  email             = data.sops_file.secrets.data["aws_account_prod_email"]
+  email             = var.aws_account_prod_email
   close_on_deletion = false
   role_name         = "tnwks-org-init-role"
 }
@@ -114,7 +106,7 @@ resource "aws_iam_user_policy" "tnwks_init_user_policy" {
 data "aws_ssoadmin_instances" "ssoadmin_instance" {}
 
 resource "aws_identitystore_user" "sso_user_it_admin" {
-  identity_store_id = tolist(data.aws_ssoadmin_instances.ssoadmin_instance.identity_store_ids)[0]
+  identity_store_id = data.aws_ssoadmin_instances.ssoadmin_instance.identity_store_ids[0]
   display_name      = "it-admin"
   user_name         = "it-admin"
 
@@ -124,24 +116,24 @@ resource "aws_identitystore_user" "sso_user_it_admin" {
   }
 
   emails {
-    value = data
+    value = var.aws_account_prod_email
   }
 }
 
 resource "aws_identitystore_group" "sso_group_admin" {
   display_name      = "admin_group"
-  identity_store_id = tolist(data.aws_ssoadmin_instances.ssoadmin_instance.identity_store_ids)[0]
+  identity_store_id = data.aws_ssoadmin_instances.ssoadmin_instance.identity_store_ids[0]
 }
 
 resource "aws_identitystore_group_membership" "sso_group_membership" {
-  identity_store_id = tolist(data.aws_ssoadmin_instances.ssoadmin_instance.identity_store_ids)[0]
+  identity_store_id = data.aws_ssoadmin_instances.ssoadmin_instance.identity_store_ids[0]
   group_id          = aws_identitystore_group.sso_group_admin.group_id
-  member_id         = aws_identitystore_user.sso_group_admin.user_id
+  member_id         = aws_identitystore_user.sso_user_it_admin.user_id
 }
 
 resource "aws_ssoadmin_permission_set" "sso_admin_permission_set" {
   name         = "AdministratorAccess"
-  instance_arn = tolist(data.aws_ssoadmin_instances.ssoadmin_instance.identity_store_ids[0])
+  instance_arn = data.aws_ssoadmin_instances.ssoadmin_instance.arns
 }
 
 data "aws_iam_policy_document" "inline_iam_policy_adminaccess" {
@@ -167,7 +159,7 @@ resource "aws_ssoadmin_account_assignment" "this" {
   permission_set_arn = aws_ssoadmin_permission_set.sso_admin_permission_set.arn
   principal_id       = aws_identitystore_group.sso_group_admin.group_id
   principal_type     = "GROUP"
-  target_id          = sensitive(each.value)
+  target_id          = data.aws_caller_identity.current.account_id
   target_type        = "AWS_ACCOUNT"
 }
 
