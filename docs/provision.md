@@ -129,7 +129,7 @@ Documentation=https://github.com/znerol/prometheus-pve-exporter
 [Service]
 Restart=always
 User=pve-exporter
-ExecStart=/opt/prometheus-pve-exporter/bin/pve_exporter /etc/prometheus/pve.yml
+ExecStart=/opt/prometheus-pve-exporter/bin/pve_exporter --config.file /etc/prometheus/pve.yml
 
 [Install]
 WantedBy=multi-user.target
@@ -188,7 +188,10 @@ pip install -r requirements.txt
 ### actual install
 ```
 curl -LJO https://github.com/blemmenes/radosgw_usage_exporter/archive/refs/heads/master.zip
-unzip radosgw_usage_exporter-main.zip
+apt install unzip
+apt install pip
+unzip radosgw_usage_exporter-master.zip
+cd radosgw_usage_exporter-master
 pip install -r requirements.txt
 ```
 
@@ -237,7 +240,7 @@ pip install -r requirements.txt
 ### Create a service for RADOSGW Exporter
 
 ```
-mkdir /usr/local/bin/radosgw_exporter`
+mkdir /usr/local/bin/radosgw_exporter
 sudo cp /home/<username>/radosgw_usage_exporter-master/radosgw_usage_exporter.py /usr/local/bin/radosgw_exporter
 sudo nano /etc/systemd/system/radosgw_usage_exporter.service
 ```
@@ -255,7 +258,7 @@ ExecStart=python3 /usr/local/bin/radosgw_exporter/radosgw_usage_exporter.py -H h
 [Install]
 WantedBy=default.target
 ```
-The access and secret keys can be found within the rgw-admin-ops user ceph secrets.
+The access and secret keys can be found within the rgw-admin-ops user ceph secrets. These need to be converte from b64
 
 ```
 sudo systemctl daemon-reload

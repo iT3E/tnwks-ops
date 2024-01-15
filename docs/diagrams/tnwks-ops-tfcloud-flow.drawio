@@ -1,0 +1,93 @@
+<mxfile host="Electron" modified="2024-01-14T06:16:22.267Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/21.2.8 Chrome/112.0.5615.165 Electron/24.2.0 Safari/537.36" etag="wdIwkEmkp-l0UzCNfH2h" version="21.2.8" type="device">
+  <diagram name="Page-1" id="9zro17haOnT7xdOlwJow">
+    <mxGraphModel dx="2032" dy="647" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="DNHkhnN3piuGQ4UvAp3a-8" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="540" y="460" width="210" height="450" as="geometry" />
+        </mxCell>
+        <mxCell id="DNHkhnN3piuGQ4UvAp3a-6" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="40" y="250" width="480" height="670" as="geometry" />
+        </mxCell>
+        <mxCell id="b-uksDCO79nauFOuNBUm-3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="b-uksDCO79nauFOuNBUm-1" target="b-uksDCO79nauFOuNBUm-2" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b-uksDCO79nauFOuNBUm-1" value="MANUAL Create app.terraform.io Organization:&lt;br&gt;&lt;b&gt;tnwks-ops&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="190" y="170" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="b-uksDCO79nauFOuNBUm-5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="b-uksDCO79nauFOuNBUm-2" target="b-uksDCO79nauFOuNBUm-10" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="100" y="370" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="b-uksDCO79nauFOuNBUm-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="b-uksDCO79nauFOuNBUm-2" target="b-uksDCO79nauFOuNBUm-7" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b-uksDCO79nauFOuNBUm-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="b-uksDCO79nauFOuNBUm-2" target="b-uksDCO79nauFOuNBUm-6" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="250" y="330" />
+              <mxPoint x="426" y="330" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="b-uksDCO79nauFOuNBUm-2" value="MANUAL Create TF Workspace:&lt;br&gt;&amp;nbsp;&lt;b&gt;tnwks-ops-aws-init&lt;/b&gt;" style="whiteSpace=wrap;html=1;rounded=1;fillColor=#ffe6cc;strokeColor=#d79b00;" parent="1" vertex="1">
+          <mxGeometry x="182.5" y="280" width="135" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d5RkzDWmyZlMlEkpNMNl-7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="b-uksDCO79nauFOuNBUm-6" target="d5RkzDWmyZlMlEkpNMNl-1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="425.5" y="550" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="b-uksDCO79nauFOuNBUm-6" value="TF Workspace:&lt;br style=&quot;border-color: var(--border-color);&quot;&gt;&lt;b&gt;tnwks-ops-aws-identity&lt;/b&gt;" style="whiteSpace=wrap;html=1;rounded=1;fillColor=#f8cecc;strokeColor=#b85450;" parent="1" vertex="1">
+          <mxGeometry x="356.5" y="450" width="137" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d5RkzDWmyZlMlEkpNMNl-11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="b-uksDCO79nauFOuNBUm-7" target="d5RkzDWmyZlMlEkpNMNl-13" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="625" y="890" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="b-uksDCO79nauFOuNBUm-7" value="&lt;span style=&quot;font-weight: normal;&quot;&gt;TF Workspace:&lt;/span&gt;&lt;br style=&quot;border-color: var(--border-color);&quot;&gt;tnwks-ops-aws-prod" style="whiteSpace=wrap;html=1;rounded=1;fontStyle=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
+          <mxGeometry x="560" y="550" width="130" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="DNHkhnN3piuGQ4UvAp3a-17" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="b-uksDCO79nauFOuNBUm-10" target="DNHkhnN3piuGQ4UvAp3a-16">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b-uksDCO79nauFOuNBUm-10" value="Creates Terraform OIDC IAM Role" style="whiteSpace=wrap;html=1;rounded=1;" parent="1" vertex="1">
+          <mxGeometry x="190" y="360" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d5RkzDWmyZlMlEkpNMNl-5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="b-uksDCO79nauFOuNBUm-12" target="d5RkzDWmyZlMlEkpNMNl-4" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b-uksDCO79nauFOuNBUm-12" value="Create identity resources and AWS Organizations structure (OU)" style="whiteSpace=wrap;html=1;rounded=1;" parent="1" vertex="1">
+          <mxGeometry x="365.5" y="630" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d5RkzDWmyZlMlEkpNMNl-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="d5RkzDWmyZlMlEkpNMNl-1" target="b-uksDCO79nauFOuNBUm-12" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d5RkzDWmyZlMlEkpNMNl-1" value="Add disable IAM policy to manually created AWS user" style="whiteSpace=wrap;html=1;rounded=1;" parent="1" vertex="1">
+          <mxGeometry x="365" y="540" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d5RkzDWmyZlMlEkpNMNl-4" value="Creates new AWS Account for prod" style="whiteSpace=wrap;html=1;rounded=1;" parent="1" vertex="1">
+          <mxGeometry x="365" y="720" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d5RkzDWmyZlMlEkpNMNl-13" value="&lt;span style=&quot;font-weight: normal;&quot;&gt;Create prod resources&lt;/span&gt;" style="whiteSpace=wrap;html=1;rounded=1;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="565" y="820" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="DNHkhnN3piuGQ4UvAp3a-7" value="Manual CLI Execution" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=#6c8ebf;fillColor=#dae8fc;" vertex="1" parent="1">
+          <mxGeometry x="-10" y="260" width="140" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="DNHkhnN3piuGQ4UvAp3a-9" value="Github Actions Execution" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=#d6b656;fillColor=#fff2cc;" vertex="1" parent="1">
+          <mxGeometry x="630" y="465" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="DNHkhnN3piuGQ4UvAp3a-18" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;dashed=1;" edge="1" parent="1" source="DNHkhnN3piuGQ4UvAp3a-16" target="b-uksDCO79nauFOuNBUm-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="DNHkhnN3piuGQ4UvAp3a-16" value="Create TFC variable set with OIDC role arn in it" style="whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="190" y="450" width="120" height="60" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
