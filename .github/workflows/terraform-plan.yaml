@@ -106,7 +106,7 @@ jobs:
         id: plan-upload
         with:
           workspace: ${{ env.TF_WORKSPACE }}
-          directory: "infrastructure/terraform/aws/accounts/prod/*"
+          directory: "infrastructure/terraform/aws/accounts/prod"
           speculative: true
 
       - name: Create Plan Run
