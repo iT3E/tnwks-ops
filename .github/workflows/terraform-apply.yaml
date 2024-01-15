@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'infrastructure/terraform/aws/accounts/prod/*'
+      - 'infrastructure/terraform/aws/accounts/prod/**'
 
 env:
   TF_CLOUD_ORGANIZATION: "tnwks-ops"
@@ -27,7 +27,7 @@ jobs:
         id: apply-upload
         with:
           workspace: ${{ env.TF_WORKSPACE }}
-          directory: "infrastructure/terraform/aws/accounts/prod/*"
+          directory: "infrastructure/terraform/aws/accounts/prod"
 
       - name: Create Apply Run
         uses: hashicorp/tfc-workflows-github/actions/create-run@v1.0.0

@@ -34,7 +34,7 @@ jobs:
         id: plan-upload
         with:
           workspace: ${{ env.TF_WORKSPACE }}
-          directory: "infrastructure/terraform/aws/accounts/prod/*"
+          directory: "infrastructure/terraform/aws/accounts/prod"
           speculative: true
 
       - name: Create Plan Run
@@ -99,7 +99,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
 
       - name: Upload Configuration
         uses: hashicorp/tfc-workflows-github/actions/upload-configuration@v1.0.0
