@@ -6,7 +6,7 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 provider "aws" {
   assume_role {
-    role_arn = "arn:aws:iam::654654262098:role/tnwks-ops-org-init"
+    role_arn = "arn:aws:iam::654654262098:role/tnwks-org-init-role"
   }
 }
 
