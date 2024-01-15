@@ -5,9 +5,9 @@
 ## "The scope of access for this role includes all principals in the management account,"
 ## ---------------------------------------------------------------------------------------------------------------------
 provider "aws" {
-  # assume_role {
-  #   role_arn = "arn:aws:iam::654654262098:role/tnwks-ops-org-init"
-  # }
+  assume_role {
+    role_arn = "arn:aws:iam::654654262098:role/tnwks-ops-org-init"
+  }
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
@@ -26,12 +26,6 @@ terraform {
     }
   }
   required_version = ">= 1.2.2"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
