@@ -41,7 +41,9 @@ terraform {
 ## ---------------------------------------------------------------------------------------------------------------------
 
 data "aws_caller_identity" "current" {}
-
+data "sops_file" "secrets" {
+  source_file = "secrets.sops.yaml"
+}
 
 ## ---------------------------------------------------------------------------------------------------------------------
 ## SES
@@ -49,6 +51,7 @@ data "aws_caller_identity" "current" {}
 ##
 ## ---------------------------------------------------------------------------------------------------------------------
 
-resource "aws_ses_domain_identity" "example" {
-  domain = "example.com"
+resource "aws_sesv2_email_identity" "example" {
+  email_identity = data.sops_file.secrets.data["test_sops_var"]
 }
+
