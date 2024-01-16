@@ -30,7 +30,7 @@ spec:
     image:
       repository: ghcr.io/philosowaffle/peloton-to-garmin
       pullPolicy: IfNotPresent
-      tag: v3.6.0
+      tag: v3.6.1
 
     strategy:
       type: Recreate
