@@ -90,6 +90,8 @@ jobs:
   terraform:
     if: github.actor == 'iT3E'
     name: "Terraform Plan"
+    environment:
+      name: prod
     runs-on: ubuntu-latest
     permissions:
       contents: read
