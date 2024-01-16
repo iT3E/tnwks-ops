@@ -2,7 +2,7 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: selfhosted-apps-wizarr
+  name: selfhosted-apps-obsidian-couchdb
   namespace: flux-system
 spec:
   path: ./kubernetes/apps/selfhosted/obsidian-couchdb/app
