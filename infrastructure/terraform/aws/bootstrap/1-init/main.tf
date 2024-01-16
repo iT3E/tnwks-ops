@@ -92,7 +92,7 @@ resource "tfe_workspace_settings" "tnwks-ops-aws-prod_workspace_settings" {
 
 ## ---------------------------------------------------------------------------------------------------------------------
 ## TERRAFORM OIDC
-## Configures Terraform OIDC user for all future Terraform VCS Workflows.
+## Configures Terraform OIDC role to be used for all AWS actions.
 ##
 ## ---------------------------------------------------------------------------------------------------------------------
 
@@ -145,8 +145,6 @@ resource "aws_iam_role" "tfc_oidc_role" {
 }
 EOF
 }
-
-
 
 ## ---------------------------------------------------------------------------------------------------------------------
 ## TF CLOUD VARIABLE SET
