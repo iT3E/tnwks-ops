@@ -5,7 +5,6 @@
 ## "The scope of access for this role includes all principals in the management account,"
 ## ---------------------------------------------------------------------------------------------------------------------
 provider "aws" {
-  profile = "sso-legacy-new"
   assume_role {
     role_arn = "arn:aws:iam::654654262098:role/tnwks-org-init-role"
   }
