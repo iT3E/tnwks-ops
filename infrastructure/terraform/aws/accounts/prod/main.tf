@@ -5,17 +5,11 @@
 ## "The scope of access for this role includes all principals in the management account,"
 ## ---------------------------------------------------------------------------------------------------------------------
 provider "aws" {
-  assume_role {
-    role_arn = "arn:aws:iam::654654262098:role/tnwks-org-init-role"
-  }
+  # assume_role {
+  #   role_arn = "arn:aws:iam::654654262098:role/tnwks-org-init-role"
+  # }
 }
 
-provider "aws" {
-  alias = "sops"
-  assume_role {
-    role_arn = "arn:aws:iam::654654220436:role/iam-role-sops"
-  }
-}
 ## ---------------------------------------------------------------------------------------------------------------------
 ## TERRAFORM
 ## Contains the configuration for Terraform Cloud, along with the required providers.
@@ -52,7 +46,6 @@ terraform {
 
 data "aws_caller_identity" "current" {}
 data "sops_file" "secrets" {
-  provider    = aws.sops
   source_file = "secrets.sops.yaml"
 }
 
