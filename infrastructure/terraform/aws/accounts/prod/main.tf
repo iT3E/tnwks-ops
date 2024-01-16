@@ -56,6 +56,6 @@ data "sops_file" "secrets" {
 ## ---------------------------------------------------------------------------------------------------------------------
 
 resource "aws_sesv2_email_identity" "example" {
-  email_identity = data.sops_file.secrets.data["test_sops_var"]
+  email_identity = data.sops_file.secrets.data["sops_test_var"]
 }
 
