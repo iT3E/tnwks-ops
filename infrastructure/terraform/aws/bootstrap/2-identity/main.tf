@@ -279,12 +279,23 @@ data "aws_iam_policy_document" "custom_role_trust_policy" {
       variable = "aws:PrincipalArn"
       values   = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-reserved/sso.amazonaws.com/${data.aws_region.current.name}/AWSReservedSSO_AdministratorAccess_*"]
     }
+    condition {
+      test     = "ArnLike"
+      variable = "aws:PrincipalArn"
+      values   = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/tfc-oidc-role"]
+    }
+    condition {
+      test     = "ArnLike"
+      variable = "aws:PrincipalArn"
+      values   = ["arn:aws:iam::${aws_organizations_account.prod_aws_account.id}:role/tnwks-org-init-role"]
+    }
     principals {
       type        = "AWS"
       identifiers = ["*"]
     }
   }
 }
+
 ## ---------------------------------------------------------------------------------------------------------------------
 ## IAM POLICY
 ## This IAM Policy allows KMS usage actions.
