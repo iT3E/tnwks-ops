@@ -47,7 +47,6 @@ terraform {
 
 data "aws_caller_identity" "current" {}
 data "sops_file" "secrets" {
-  provider    = "aws"
   source_file = "secrets.sops.yaml"
 }
 
