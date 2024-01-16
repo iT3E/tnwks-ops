@@ -1,7 +1,7 @@
-##### Prerequisite:  `aws configure sso --profile sso`
+##### Prerequisite:  `aws configure sso --profile default`
 
 
-1. `aws sso login --profile sso-legacy`
+1. `aws sso login --profile default`
 
           ```
           # ---------------------------------------------------------------------------------------------
@@ -11,3 +11,6 @@
           # ---------------------------------------------------------------------------------------------
           ```
 2. `sops -e -i secrets.sops.yaml`
+
+
+- you may have to go to `C:\Users\<your_user>\.aws` and remove all contents from `credentials` file
