@@ -1,7 +1,7 @@
 ## Prereq
 ```bash
 cd /tnwks-ops/infrastructure
-aws sso login --profile sso-legacy
+aws sso login --profile default
 #run decrypt / encrypt here
 
 cd /tnwks-ops/kubernetes
