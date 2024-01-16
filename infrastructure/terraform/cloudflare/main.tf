@@ -2,21 +2,21 @@ terraform {
   cloud {
     hostname     = "app.terraform.io"
     organization = "tnwks-ops"
-  workspaces {
-    name = "tnwks-cloudflare-prod"
+    workspaces {
+      name = "tnwks-cloudflare-prod_old"
+    }
   }
-}
-    required_version = ">= 1.2.2"
+  required_version = ">= 1.2.2"
   required_providers {
     cloudflare = {
       source  = "cloudflare/cloudflare"
       version = "4.18.0"
-   }
+    }
     sops = {
       source  = "carlpett/sops"
       version = "1.0.0"
+    }
   }
- }
 }
 
 data "sops_file" "secrets" {
@@ -33,7 +33,7 @@ data "sops_file" "secrets" {
 #####################################
 
 module "cf_domain_1" {
-  source     = "../../../modules/cloudflare"
+  source     = "../modules/cloudflare"
   domain     = data.sops_file.secrets.data["cf_domain_1"]
   account_id = data.sops_file.secrets.data["cf_account_id"]
 
@@ -85,22 +85,22 @@ module "cf_domain_1" {
     {
       id      = "dkim1"
       proxied = false
-      name    = "2t67hhkulgkcugrm3l244dba4q3d3bwj._domainkey"
-      value   = "2t67hhkulgkcugrm3l244dba4q3d3bwj.dkim.amazonses.com"
+      name    = "ys7i3eaaalsfrw2i4rsp3xldunp2tolm._domainkey.tnwks.us"
+      value   = "ys7i3eaaalsfrw2i4rsp3xldunp2tolm.dkim.amazonses.com"
       type    = "CNAME"
     },
     {
       id      = "dkim2"
       proxied = false
-      name    = "ylx2z2nwy4jlyh5bsb26jfrvkoazaxha._domainkey"
-      value   = "ylx2z2nwy4jlyh5bsb26jfrvkoazaxha.dkim.amazonses.com"
+      name    = "c6sfao5fu2qj7nvqldbg3xiolwrcvciv._domainkey.tnwks.us"
+      value   = "c6sfao5fu2qj7nvqldbg3xiolwrcvciv.dkim.amazonses.com"
       type    = "CNAME"
     },
     {
       id      = "dkim3"
       proxied = false
-      name    = "u6egebawhot4h7vilecdj2egi7jsggar._domainkey"
-      value   = "u6egebawhot4h7vilecdj2egi7jsggar.dkim.amazonses.com"
+      name    = "63kkuuq7bcccxechn2ogtp7ts7beltmy._domainkey.tnwks.us"
+      value   = "63kkuuq7bcccxechn2ogtp7ts7beltmy.dkim.amazonses.com"
       type    = "CNAME"
     },
   ]
@@ -128,7 +128,7 @@ module "cf_domain_1" {
 #####################################
 
 module "cf_domain_2" {
-  source     = "../../../modules/cloudflare"
+  source     = "../modules/cloudflare"
   domain     = data.sops_file.secrets.data["cf_domain_2"]
   account_id = data.sops_file.secrets.data["cf_account_id"]
 
@@ -165,7 +165,7 @@ module "cf_domain_2" {
 #####################################
 
 module "cf_domain_3" {
-  source     = "../../../modules/cloudflare"
+  source     = "../modules/cloudflare"
   domain     = data.sops_file.secrets.data["cf_domain_3"]
   account_id = data.sops_file.secrets.data["cf_account_id"]
 
@@ -201,7 +201,7 @@ module "cf_domain_3" {
 #####################################
 
 module "cf_domain_4" {
-  source     = "../../../modules/cloudflare"
+  source     = "../modules/cloudflare"
   domain     = data.sops_file.secrets.data["cf_domain_4"]
   account_id = data.sops_file.secrets.data["cf_account_id"]
 
