@@ -5,9 +5,10 @@
 ## "The scope of access for this role includes all principals in the management account,"
 ## ---------------------------------------------------------------------------------------------------------------------
 provider "aws" {
-  # assume_role {
-  #   role_arn = "arn:aws:iam::654654262098:role/tnwks-org-init-role"
-  # }
+  profile = "sso-legacy-new"
+  assume_role {
+    role_arn = "arn:aws:iam::654654262098:role/tnwks-org-init-role"
+  }
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
@@ -46,6 +47,7 @@ terraform {
 
 data "aws_caller_identity" "current" {}
 data "sops_file" "secrets" {
+  provider    = "aws"
   source_file = "secrets.sops.yaml"
 }
 
