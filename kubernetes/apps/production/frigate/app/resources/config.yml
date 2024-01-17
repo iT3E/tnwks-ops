@@ -66,6 +66,18 @@ go2rtc:
     frigate_basement_1_lq: rtspx://unifi-protect.turbo.ac:7441/M5bhAT4dLAKZfmTD
 
 cameras:
+  frigate_wyze:
+    ffmpeg:
+      inputs:
+        - path: rtsp://localhost:8554/frigate_groom
+          roles: ["detect"]
+#        - path: rtsp://localhost:8554/frigate_study_hq
+#          roles: ["record"]
+    detect:
+      width: 1280
+      height: 720
+      fps: 10
+
   frigate_porch:
     ffmpeg:
       inputs:
