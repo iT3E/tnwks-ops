@@ -50,7 +50,7 @@ objects:
 
 go2rtc:
   streams:
-    frigate_groom: rtsp://wyzertsp:wyzertsp@10.10.91.109/live
+    frigate_groom: rtsp://{FRIGATE_WYZE_RTSP_USERNAME}:{FRIGATE_WYZE_RTSP_PASSWORD}@10.10.91.109/live
 
 cameras:
   frigate_wyze:
