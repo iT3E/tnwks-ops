@@ -51,19 +51,33 @@ objects:
 go2rtc:
   streams:
     frigate_groom: rtsp://{FRIGATE_WYZE_RTSP_USERNAME}:{FRIGATE_WYZE_RTSP_PASSWORD}@10.10.91.109/live
+    frigate_sv3c_east: rtsp://{FRIGATE_SV3C_EAST_RTSP_USERNAME}:{FRIGATE_SV3C_EAST_RTSP_PASSWORD}@10.10.60.35/11
 
 cameras:
   frigate_wyze:
     ffmpeg:
       inputs:
         - path: rtsp://localhost:8554/frigate_groom
-          roles: ["record"]
+          roles: ["detect", "record"]
 #        - path: rtsp://localhost:8554/frigate_study_hq
 #          roles: ["record"]
+
     detect:
       width: 1280
       height: 720
       fps: 10
+
+  frigate_sv3c_east:
+    ffmpeg:
+      inputs:
+        - path: rtsp://localhost:8554/frigate_sv3c_east
+          roles: ["detect", "record"]
+
+    detect:
+      width: 1280
+      height: 720
+      fps: 10
+
 
   # frigate_porch:
   #   ffmpeg:
