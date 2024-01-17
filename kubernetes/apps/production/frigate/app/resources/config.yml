@@ -31,10 +31,10 @@ snapshots:
     default: 2
 
 record:
-  enabled: false
+  enabled: true
   retain:
     days: 2
-    mode: all
+    mode: active_objects
   events:
     retain:
       default: 2
