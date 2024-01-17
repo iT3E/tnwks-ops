@@ -57,7 +57,7 @@ cameras:
     ffmpeg:
       inputs:
         - path: rtsp://localhost:8554/frigate_groom
-          roles: ["detect"]
+          roles: ["record"]
 #        - path: rtsp://localhost:8554/frigate_study_hq
 #          roles: ["record"]
     detect:
