@@ -61,15 +61,6 @@ spec:
               limits:
                 memory: 8Gi
         pod:
-          affinity:
-            podAntiAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                - labelSelector:
-                    matchExpressions:
-                      - key: app.kubernetes.io/name
-                        operator: In
-                        values: ["plex"]
-                  topologyKey: kubernetes.io/hostname
           nodeSelector:
             google.feature.node.kubernetes.io/coral: "true"
     service:
