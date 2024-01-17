@@ -31,7 +31,7 @@ snapshots:
     default: 2
 
 record:
-  enabled: true
+  enabled: false
   retain:
     days: 2
     mode: all
