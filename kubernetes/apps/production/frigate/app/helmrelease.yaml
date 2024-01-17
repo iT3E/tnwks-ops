@@ -82,7 +82,7 @@ spec:
     ingress:
       main:
         enabled: true
-        className: internal
+        className: nginx-internal
         hosts:
           - host: &host "{{ .Release.Name }}.tnwks.local"
             paths:
