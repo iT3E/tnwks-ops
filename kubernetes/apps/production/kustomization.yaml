@@ -13,5 +13,6 @@ resources:
   - ./uisp/ks.yaml
   - ./bookstack/ks.yaml
   - ./changedetection/ks.yaml
+  - ./frigate/ks.yaml
   # - ./external-dns/ks.yaml
 
