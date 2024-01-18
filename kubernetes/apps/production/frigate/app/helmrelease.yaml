@@ -74,6 +74,7 @@ spec:
             port: 8555
             protocol: TCP
       mainudp:
+        controller: main
         ports:
           webrtc-udp:
             port: 8555
