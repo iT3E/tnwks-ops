@@ -66,7 +66,7 @@ go2rtc:
     frigate_amcrest_balc_lq: rtsp://{FRIGATE_AMCREST_BALC_RTSP_USERNAME}:{FRIGATE_AMCREST_BALC_RTSP_PASSWORD}@10.10.60.31/cam/realmonitor?channel=1&subtype=1
     frigate_loryta_pool_hq: rtsp://{FRIGATE_LORYTA_POOL_RTSP_USERNAME}:{FRIGATE_LORYTA_POOL_RTSP_PASSWORD}@10.10.60.30/
     frigate_loryta_pool_lq: rtsp://{FRIGATE_LORYTA_POOL_RTSP_USERNAME}:{FRIGATE_LORYTA_POOL_RTSP_PASSWORD}@10.10.60.30/cam/realmonitor?channel=1&subtype=1
-    frigate_loryta_fdoor_hq: rtsp://{FRIGATE_LORYTA_FDOOR_RTSP_USERNAME}:{FRIGATE_LORYTA_FDOOR_RTSP_PASSWORD}@10.10.60.100/
+    frigate_loryta_fdoor_hq: rtsp://{FRIGATE_LORYTA_FDOOR_RTSP_USERNAME}:{FRIGATE_LORYTA_FDOOR_RTSP_PASSWORD}@10.10.60.100/cam/realmonitor?channel=1&subtype=0
     frigate_loryta_fdoor_lq: rtsp://{FRIGATE_LORYTA_FDOOR_RTSP_USERNAME}:{FRIGATE_LORYTA_FDOOR_RTSP_PASSWORD}@10.10.60.100/cam/realmonitor?channel=1&subtype=1
 
 
