@@ -175,7 +175,6 @@ cameras:
           roles:
           roles: ["record"]
         - path: rtsp://localhost:8554/frigate_loryta_fdoor_lq
-          roles:
           roles: ["detect"]
 
     detect:
