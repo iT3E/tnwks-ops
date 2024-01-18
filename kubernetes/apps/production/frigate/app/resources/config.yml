@@ -174,7 +174,6 @@ cameras:
     ffmpeg:
       inputs:
         - path: rtsp://localhost:8554/frigate_loryta_fdoor_hq
-          roles:
           roles: ["record"]
         - path: rtsp://localhost:8554/frigate_loryta_fdoor_lq
           roles: ["detect"]
