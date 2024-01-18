@@ -50,28 +50,135 @@ objects:
 
 go2rtc:
   streams:
-    frigate_groom: rtsp://{FRIGATE_WYZE_RTSP_USERNAME}:{FRIGATE_WYZE_RTSP_PASSWORD}@10.10.91.109/live
-    frigate_sv3c_east: rtsp://{FRIGATE_SV3C_EAST_RTSP_USERNAME}:{FRIGATE_SV3C_EAST_RTSP_PASSWORD}@10.10.60.35/11
+    frigate_wyze_groom: rtsp://{FRIGATE_WYZE_RTSP_USERNAME}:{FRIGATE_WYZE_RTSP_PASSWORD}@10.10.91.109/live
+    frigate_wyze_rroom: rtsp://{FRIGATE_WYZE_RTSP_USERNAME}:{FRIGATE_WYZE_RTSP_PASSWORD}@10.10.91.179/live
+    frigate_wyze_baby: rtsp://{FRIGATE_WYZE_RTSP_USERNAME}:{FRIGATE_WYZE_RTSP_PASSWORD}@10.10.91.105/live
+    frigate_sv3c_east_hq: rtsp://{FRIGATE_SV3C_EAST_RTSP_USERNAME}:{FRIGATE_SV3C_EAST_RTSP_PASSWORD}@10.10.60.35/11
+    frigate_sv3c_east_lq: rtsp://{FRIGATE_SV3C_EAST_RTSP_USERNAME}:{FRIGATE_SV3C_EAST_RTSP_PASSWORD}@10.10.60.35/12
+    frigate_sv3c_west_hq: rtsp://{FRIGATE_SV3C_WEST_RTSP_USERNAME}:{FRIGATE_SV3C_WEST_RTSP_PASSWORD}@10.10.60.34/11
+    frigate_sv3c_west_lq: rtsp://{FRIGATE_SV3C_WEST_RTSP_USERNAME}:{FRIGATE_SV3C_WEST_RTSP_PASSWORD}@10.10.60.34/12
+    frigate_reolink_south_hq: rtsp://{FRIGATE_REOLINK_SOUTH_RTSP_USERNAME}:{FRIGATE_REOLINK_SOUTH_RTSP_PASSWORD}@10.10.60.33/
+    frigate_reolink_south_lq: rtsp://{FRIGATE_REOLINK_SOUTH_RTSP_USERNAME}:{FRIGATE_REOLINK_SOUTH_RTSP_PASSWORD}@10.10.60.33/h264Preview_01_sub
+    frigate_amcrest_kitchen_hq: rtsp://{FRIGATE_AMCREST_KITCHEN_RTSP_USERNAME}:{FRIGATE_AMCREST_KITCHEN_RTSP_PASSWORD}@10.10.60.32/
+    frigate_amcrest_kitchen_lq: rtsp://{FRIGATE_AMCREST_KITCHEN_RTSP_USERNAME}:{FRIGATE_AMCREST_KITCHEN_RTSP_PASSWORD}@10.10.60.32/cam/realmonitor?channel=1&subtype=1
+    frigate_amcrest_balc_hq: rtsp://{FRIGATE_AMCREST_BALC_RTSP_USERNAME}:{FRIGATE_AMCREST_BALC_RTSP_PASSWORD}@10.10.60.31/
+    frigate_amcrest_balc_lq: rtsp://{FRIGATE_AMCREST_BALC_RTSP_USERNAME}:{FRIGATE_AMCREST_BALC_RTSP_PASSWORD}@10.10.60.31/cam/realmonitor?channel=1&subtype=1
+    frigate_loryta_pool_hq: rtsp://{FRIGATE_LORYTA_POOL_RTSP_USERNAME}:{FRIGATE_LORYTA_POOL_RTSP_PASSWORD}@10.10.60.30/
+    frigate_loryta_pool_lq: rtsp://{FRIGATE_LORYTA_POOL_RTSP_USERNAME}:{FRIGATE_LORYTA_POOL_RTSP_PASSWORD}@10.10.60.30/cam/realmonitor?channel=1&subtype=1
+    frigate_loryta_fdoor_hq: rtsp://{FRIGATE_LORYTA_FDOOR_RTSP_USERNAME}:{FRIGATE_LORYTA_FDOOR_RTSP_PASSWORD}@10.10.60.100/
+    frigate_loryta_fdoor_lq: rtsp://{FRIGATE_LORYTA_FDOOR_RTSP_USERNAME}:{FRIGATE_LORYTA_FDOOR_RTSP_PASSWORD}@10.10.60.100/cam/realmonitor?channel=1&subtype=1
+
+
 
 cameras:
-  frigate_wyze:
+  frigate_wyze_groom:
     ffmpeg:
       inputs:
-        - path: rtsp://localhost:8554/frigate_groom
+        - path: rtsp://localhost:8554/frigate_wyze_groom
           roles: ["detect", "record"]
-#        - path: rtsp://localhost:8554/frigate_study_hq
-#          roles: ["record"]
 
     detect:
       width: 1280
       height: 720
       fps: 10
 
+  frigate_wyze_rroom:
+    ffmpeg:
+      inputs:
+        - path: rtsp://localhost:8554/frigate_wyze_rroom
+          roles: ["record"]
+
+  frigate_wyze_baby:
+    ffmpeg:
+      inputs:
+        - path: rtsp://localhost:8554/frigate_wyze_baby
+          roles: ["record"]
+
   frigate_sv3c_east:
     ffmpeg:
       inputs:
-        - path: rtsp://localhost:8554/frigate_sv3c_east
-          roles: ["detect", "record"]
+        - path: rtsp://localhost:8554/frigate_sv3c_east_lq
+          roles: ["detect"]
+        - path: rtsp://localhost:8554/frigate_sv3c_east_hq
+          roles: ["record"]
+
+    detect:
+      width: 1280
+      height: 720
+      fps: 10
+
+  frigate_sv3c_west:
+    ffmpeg:
+      inputs:
+        - path: rtsp://localhost:8554/frigate_sv3c_west_lq
+          roles: ["detect"]
+        - path: rtsp://localhost:8554/frigate_sv3c_west_hq
+          roles: ["record"]
+
+    detect:
+      width: 1280
+      height: 720
+      fps: 10
+
+  frigate_reolink_south:
+    ffmpeg:
+      inputs:
+        - path: rtsp://localhost:8554/frigate_reolink_south_lq
+          roles: ["detect"]
+        - path: rtsp://localhost:8554/frigate_reolink_south_hq
+          roles: ["record"]
+
+    detect:
+      width: 1280
+      height: 720
+      fps: 10
+
+  frigate_amcrest_kitchen:
+    ffmpeg:
+      inputs:
+        - path: rtsp://localhost:8554/frigate_amcrest_kitchen_lq
+          roles: ["detect"]
+        - path: rtsp://localhost:8554/frigate_amcrest_kitchen_hq
+          roles: ["record"]
+
+    detect:
+      width: 1280
+      height: 720
+      fps: 10
+
+  frigate_amcrest_balc:
+    ffmpeg:
+      inputs:
+        - path: rtsp://localhost:8554/frigate_amcrest_balc_lq
+          roles: ["detect"]
+        - path: rtsp://localhost:8554/frigate_amcrest_balc_hq
+          roles: ["record"]
+
+    detect:
+      width: 1280
+      height: 720
+      fps: 10
+
+  frigate_loryta_pool:
+    ffmpeg:
+      inputs:
+        - path: rtsp://localhost:8554/frigate_loryta_pool_lq
+          roles: ["detect"]
+        - path: rtsp://localhost:8554/frigate_loryta_pool_hq
+          roles: ["record"]
+
+    detect:
+      width: 1280
+      height: 720
+      fps: 10
+
+  frigate_loryta_fdoor:
+    ffmpeg:
+      inputs:
+        - path: rtsp://localhost:8554/frigate_loryta_fdoor_lq
+          roles: ["detect"]
+        - path: rtsp://localhost:8554/frigate_loryta_fdoor_hq
+          roles: ["record"]
 
     detect:
       width: 1280
