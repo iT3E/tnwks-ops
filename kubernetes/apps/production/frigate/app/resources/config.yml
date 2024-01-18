@@ -20,7 +20,6 @@ detectors:
 
 ffmpeg:
   global_args: ["-hide_banner", "-loglevel", "warning"]
-  hwaccel_args: preset-vaapi
   output_args:
     record: preset-record-generic-audio-copy
 
