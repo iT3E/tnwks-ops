@@ -57,7 +57,7 @@ spec:
               privileged: true
             resources:
               requests:
-                cpu: 500m
+                cpu: 5000m
               limits:
                 memory: 8Gi
         pod:
