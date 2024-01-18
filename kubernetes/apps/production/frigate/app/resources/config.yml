@@ -71,6 +71,10 @@ go2rtc:
     frigate_loryta_fdoor_hq: rtsp://{FRIGATE_LORYTA_FDOOR_RTSP_USERNAME}:{FRIGATE_LORYTA_FDOOR_RTSP_PASSWORD}@10.10.60.100/cam/realmonitor?channel=1&subtype=0
     frigate_loryta_fdoor_lq: rtsp://{FRIGATE_LORYTA_FDOOR_RTSP_USERNAME}:{FRIGATE_LORYTA_FDOOR_RTSP_PASSWORD}@10.10.60.100/cam/realmonitor?channel=1&subtype=1
 
+  webrtc:
+    candidates:
+      - frigate.production.svc.cluster.local:8555
+      - stun:8555
 
 
 cameras:
