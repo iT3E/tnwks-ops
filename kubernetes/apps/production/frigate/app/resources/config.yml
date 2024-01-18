@@ -75,12 +75,7 @@ cameras:
     ffmpeg:
       inputs:
         - path: rtsp://localhost:8554/frigate_wyze_groom
-          roles: ["detect", "record"]
-
-    detect:
-      width: 1280
-      height: 720
-      fps: 10
+          roles: ["record"]
 
   frigate_wyze_rroom:
     ffmpeg:
@@ -103,8 +98,8 @@ cameras:
           roles: ["record"]
 
     detect:
-      width: 1280
-      height: 720
+      width: 640
+      height: 360
       fps: 10
 
   frigate_sv3c_west:
@@ -116,8 +111,8 @@ cameras:
           roles: ["record"]
 
     detect:
-      width: 1280
-      height: 720
+      width: 640
+      height: 360
       fps: 10
 
   frigate_reolink_south:
@@ -129,8 +124,8 @@ cameras:
           roles: ["record"]
 
     detect:
-      width: 1280
-      height: 720
+      width: 640
+      height: 360
       fps: 10
 
   frigate_amcrest_kitchen:
@@ -142,8 +137,8 @@ cameras:
           roles: ["record"]
 
     detect:
-      width: 1280
-      height: 720
+      width: 640
+      height: 480
       fps: 10
 
   frigate_amcrest_balc:
@@ -155,8 +150,8 @@ cameras:
           roles: ["record"]
 
     detect:
-      width: 1280
-      height: 720
+      width: 640
+      height: 480
       fps: 10
 
   frigate_loryta_pool:
@@ -168,8 +163,8 @@ cameras:
           roles: ["record"]
 
     detect:
-      width: 1280
-      height: 720
+      width: 704
+      height: 480
       fps: 10
 
   frigate_loryta_fdoor:
@@ -181,10 +176,9 @@ cameras:
           roles: ["record"]
 
     detect:
-      width: 1280
-      height: 720
+      width: 704
+      height: 480
       fps: 10
-
 
   # frigate_porch:
   #   ffmpeg:
