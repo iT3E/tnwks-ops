@@ -74,6 +74,7 @@ go2rtc:
   webrtc:
     candidates:
       - frigate.production.svc.cluster.local:8555
+      - frigate.tnwks.local:8555
       - stun:8555
 
 
