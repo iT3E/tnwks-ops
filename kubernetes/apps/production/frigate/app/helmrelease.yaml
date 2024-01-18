@@ -70,9 +70,6 @@ spec:
             port: *port
           rtsp:
             port: 8554
-          webrtc-tcp:
-            port: 8555
-            protocol: TCP
           webrtc-udp:
             port: 8555
             protocol: UDP
