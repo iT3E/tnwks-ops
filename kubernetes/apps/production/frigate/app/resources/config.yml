@@ -102,6 +102,8 @@ cameras:
       width: 640
       height: 360
       fps: 10
+    live:
+      stream_name: frigate_sv3c_east_hq
 
   frigate_sv3c_west:
     ffmpeg:
@@ -115,6 +117,8 @@ cameras:
       width: 640
       height: 360
       fps: 10
+    live:
+      stream_name: frigate_sv3c_west_hq
 
   frigate_reolink_south:
     ffmpeg:
@@ -128,6 +132,8 @@ cameras:
       width: 640
       height: 360
       fps: 10
+    live:
+      stream_name: frigate_reolink_south_hq
 
   frigate_amcrest_kitchen:
     ffmpeg:
@@ -141,6 +147,8 @@ cameras:
       width: 640
       height: 480
       fps: 10
+    live:
+      stream_name: frigate_amcrest_kitchen_hq
 
   frigate_amcrest_balc:
     ffmpeg:
@@ -154,6 +162,8 @@ cameras:
       width: 640
       height: 480
       fps: 10
+    live:
+      stream_name: frigate_amcrest_balc_hq
 
   frigate_loryta_pool:
     ffmpeg:
@@ -170,7 +180,7 @@ cameras:
     live:
       stream_name: frigate_loryta_pool_hq
 
-  frigate_loryta_fdoor_hq:
+  frigate_loryta_fdoor:
     ffmpeg:
       inputs:
         - path: rtsp://localhost:8554/frigate_loryta_fdoor_hq
@@ -182,6 +192,9 @@ cameras:
       width: 704
       height: 480
       fps: 10
+    live:
+      stream_name: frigate_loryta_fdoor_hq
+
 
   # frigate_porch:
   #   ffmpeg:
