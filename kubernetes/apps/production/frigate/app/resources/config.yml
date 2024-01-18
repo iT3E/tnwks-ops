@@ -1,4 +1,5 @@
 ---
+# yaml-language-server: $schema=http://frigate.tnwks.us/api/config/schema.json
 logger:
   default: info
   # logs:
@@ -170,10 +171,10 @@ cameras:
   frigate_loryta_fdoor:
     ffmpeg:
       inputs:
-        - path: rtsp://localhost:8554/frigate_loryta_fdoor_lq
-          roles: ["detect"]
         - path: rtsp://localhost:8554/frigate_loryta_fdoor_hq
           roles: ["record"]
+        - path: rtsp://localhost:8554/frigate_loryta_fdoor_lq
+          roles: ["detect"]
 
     detect:
       width: 704
