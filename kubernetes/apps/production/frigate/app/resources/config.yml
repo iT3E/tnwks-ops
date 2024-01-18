@@ -173,8 +173,8 @@ cameras:
       inputs:
         - path: rtsp://localhost:8554/frigate_loryta_fdoor_hq
           roles: ["record"]
-        - path: rtsp://localhost:8554/frigate_loryta_fdoor_lq
-          roles: ["detect"]
+        # - path: rtsp://localhost:8554/frigate_loryta_fdoor_lq
+        #   roles: ["detect"]
 
     detect:
       width: 704
