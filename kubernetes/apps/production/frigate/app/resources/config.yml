@@ -77,18 +77,24 @@ cameras:
       inputs:
         - path: rtsp://localhost:8554/frigate_wyze_groom
           roles: ["record"]
+    detect:
+      enabled: False
 
   frigate_wyze_rroom:
     ffmpeg:
       inputs:
         - path: rtsp://localhost:8554/frigate_wyze_rroom
           roles: ["record"]
+    detect:
+      enabled: False
 
   frigate_wyze_baby:
     ffmpeg:
       inputs:
         - path: rtsp://localhost:8554/frigate_wyze_baby
           roles: ["record"]
+    detect:
+      enabled: False
 
   frigate_sv3c_east:
     ffmpeg:
