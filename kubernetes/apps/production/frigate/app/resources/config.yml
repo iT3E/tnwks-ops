@@ -167,6 +167,8 @@ cameras:
       width: 704
       height: 480
       fps: 10
+    live:
+      stream_name: frigate_loryta_pool_hq
 
   frigate_loryta_fdoor_hq:
     ffmpeg:
