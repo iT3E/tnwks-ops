@@ -176,10 +176,10 @@ cameras:
         # - path: rtsp://localhost:8554/frigate_loryta_fdoor_lq
         #   roles: ["detect"]
 
-    detect:
-      width: 704
-      height: 480
-      fps: 10
+    # detect:
+    #   width: 704
+    #   height: 480
+    #   fps: 10
 
   # frigate_porch:
   #   ffmpeg:
