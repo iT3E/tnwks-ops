@@ -4,7 +4,7 @@ terraform {
     organization = "tnwks-ops"
     #look for PII leak here
     workspaces {
-      name = "tnwks-pve-prod"
+      name = "tnwks-pve-prod_old"
     }
   }
   required_version = ">= 1.2.2"
@@ -59,8 +59,9 @@ locals {
     "sce-dc01",
     "sce-dc02"
   ]
-  biris = [
-    "sce-biris01"
+  kasm = [
+    "sce-kasm01",
+    "sce-kasm02"
   ]
   testing = [
     "sce-testing01"
@@ -80,7 +81,7 @@ locals {
 
 module "pve_vm_k8s_masters" {
   for_each         = toset(local.k8s_masters)
-  source           = "../../../modules/proxmox"
+  source           = "../modules/proxmox"
   vm_name          = each.value
   target_node      = "sce-pve0${index(local.k8s_masters, each.value) + 1}"
   clone            = "ubuntu-server-focal"
@@ -129,7 +130,7 @@ module "pve_vm_k8s_masters" {
 
 module "pve_vm_k8s_workers" {
   for_each         = toset(local.k8s_workers)
-  source           = "../../../modules/proxmox"
+  source           = "../modules/proxmox"
   vm_name          = each.value
   target_node      = "sce-pve0${index(local.k8s_workers, each.value) + 1}"
   clone            = "ubuntu-server-focal"
@@ -177,7 +178,7 @@ module "pve_vm_k8s_workers" {
 
 module "pve_vm_vyos" {
   for_each         = toset(local.vyos)
-  source           = "../../../modules/proxmox"
+  source           = "../modules/proxmox"
   vm_name          = each.value
   target_node      = "sce-pve0${index(local.vyos, each.value) + 1}"
   clone            = "VyOS"
@@ -217,7 +218,7 @@ module "pve_vm_vyos" {
 
 module "pve_vm_ad" {
   for_each         = toset(local.ad)
-  source           = "../../../modules/proxmox"
+  source           = "../modules/proxmox"
   vm_name          = each.value
   target_node      = "sce-pve0${index(local.ad, each.value) + 1}"
   clone            = "ubuntu-server-focal"
@@ -235,6 +236,47 @@ module "pve_vm_ad" {
       model  = "virtio"
       bridge = "vmbr0"
       tag    = "110"
+      mtu    = "0"
+    },
+  ]
+  vm_disks = [
+    {
+      storage  = "ssd-pool"
+      size     = "40G"
+      type     = "virtio"
+      cache    = "none"
+      format   = "raw"
+      iothread = 1
+    },
+  ]
+}
+
+#######################################
+##                                   ##
+##        PVE VM - KASM host         ##
+##                                   ##
+#######################################
+
+module "pve_vm_kasm" {
+  for_each         = toset(local.kasm)
+  source           = "../modules/proxmox"
+  vm_name          = each.value
+  target_node      = "sce-pve0${index(local.kasm, each.value) + 1}"
+  clone            = "ubuntu-server-focal"
+  full_clone       = true
+  ha_group         = "ha_group${index(local.kasm, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
+  ha_state         = "started"
+  vm_memory        = "4096"
+  num_cores        = "2"
+  num_sockets      = "2"
+  qemu_os          = "l26"
+  qemu_guest_agent = 1
+  scsihw           = "virtio-scsi-single"
+  vm_nics = [
+    {
+      model  = "virtio"
+      bridge = "vmbr0"
+      tag    = "910"
       mtu    = "0"
     },
   ]
