@@ -9,8 +9,9 @@ kubeconfig
 *.agekey
 *.pub
 *.key
-!ansible/inventory/group_vars/proxmox/files/pvecl01/*
 # Ansible
+!ansible/inventory/group_vars/proxmox/files/pvecl01/*
+/infrastructure/ansible/roles/install_common/files/kasm_release
 xanmanning.k3s*
 # Terraform
 .terraform
