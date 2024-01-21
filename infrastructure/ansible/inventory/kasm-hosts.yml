@@ -1,0 +1,7 @@
+---
+kasm:
+  hosts:
+    sce-kasm01:
+      ansible_host: sce-pve01.tnwks.local
+    sce-kasm02:
+      ansible_host: sce-pve02.tnwks.local

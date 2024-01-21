@@ -1,0 +1,3 @@
+- hosts: kasm
+  roles:
+    - uninstall

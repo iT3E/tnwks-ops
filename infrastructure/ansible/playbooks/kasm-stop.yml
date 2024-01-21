@@ -1,0 +1,11 @@
+---
+- name: Kasm-stop
+  hosts: kasm
+  serial: 1
+  gather_facts: false
+  tasks:
+    - name: Stop Kasm Services
+      ansible.builtin.command: /opt/kasm/bin/stop
+      register: stop_output
+      changed_when: '"done" in stop_output.stderr'
+      become: true
