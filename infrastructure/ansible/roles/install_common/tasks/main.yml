@@ -10,7 +10,8 @@
     kasm_installed: "{{ kasm_path.stat.exists }}"
 
 - set_fact:
-    web_ip: "{{ hostvars[group_names[0] + '_web_' + inventory_hostname.split('_')[2]].ansible_default_ipv4.address }}"
+    web_ip: "{{ hostvars[inventory_hostname.split('_')[0] + '_web_' + inventory_hostname.split('_')[2]].ansible_default_ipv4.address }}"
+    #web_ip: "{{ hostvars[group_names[0] + '_web_' + inventory_hostname.split('_')[2]].ansible_default_ipv4.address }}"
     # IP of the host that ansible is being ran against
     target_ip: "{{ ansible_default_ipv4.address }}"
   when: not default_web
@@ -145,6 +146,23 @@
     - "'proxy' in group_names[1].split('_')"
     - not kasm_installed
 
+- name: Add Docker GPG apt Key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add Docker Repository
+  apt_repository:
+    repo: deb https://download.docker.com/linux/ubuntu focal stable
+    state: present
+
+- name: Update apt and install docker-ce
+  become: true
+  apt:
+    name: docker-ce
+    state: latest
+    update_cache: true
+
 - name: enable the docker service to run at boot
   service:
     name: docker
@@ -169,35 +187,35 @@
       - "admin@kasm.local password: {{ admin_password }}"
   run_once: true
 
-- name: Write credentials to inventory
-  run_once: true
-  delegate_to: localhost
-  ansible.builtin.template:
-    src: "{{ inventory_file }}"
-    dest: "{{ inventory_file }}"
+# - name: Write credentials to inventory
+#   run_once: true
+#   delegate_to: localhost
+#   ansible.builtin.template:
+#     src: "{{ inventory_file }}"
+#     dest: "{{ inventory_file }}"
 
-- name: Set credentials to active
-  run_once: true
-  delegate_to: localhost
-  ansible.builtin.replace:
-    dest: "{{ inventory_file }}"
-    regexp: "{{ item.from }}"
-    replace: "{{ item.to }}"
-  loop:
-    - {from: "#user_password", to: "user_password"}
-    - {from: "#admin_password", to: "admin_password"}
-    - {from: "#database_password", to: "database_password"}
-    - {from: "#redis_password", to: "redis_password"}
-    - {from: "#manager_token", to: "manager_token"}
-    - {from: "#registration_token", to: "registration_token"}
+# - name: Set credentials to active
+#   run_once: true
+#   delegate_to: localhost
+#   ansible.builtin.replace:
+#     dest: "{{ inventory_file }}"
+#     regexp: "{{ item.from }}"
+#     replace: "{{ item.to }}"
+#   loop:
+#     - {from: "#user_password", to: "user_password"}
+#     - {from: "#admin_password", to: "admin_password"}
+#     - {from: "#database_password", to: "database_password"}
+#     - {from: "#redis_password", to: "redis_password"}
+#     - {from: "#manager_token", to: "manager_token"}
+#     - {from: "#registration_token", to: "registration_token"}
 
-- name: Turn off remote db init
-  run_once: true
-  delegate_to: localhost
-  ansible.builtin.replace:
-    dest: "{{ inventory_file }}"
-    regexp: "init_remote_db: true"
-    replace: "init_remote_db: false"
-  when:
-    - init_remote_db
-    - database_hostname
+# - name: Turn off remote db init
+#   run_once: true
+#   delegate_to: localhost
+#   ansible.builtin.replace:
+#     dest: "{{ inventory_file }}"
+#     regexp: "init_remote_db: true"
+#     replace: "init_remote_db: false"
+#   when:
+#     - init_remote_db
+#     - database_hostname

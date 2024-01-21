@@ -1,4 +1,5 @@
-- hosts: kasm
+- name: Kasm Install
+  hosts: kasm
   roles:
-    - install_common
+    - ../roles/install_common
   any_errors_fatal: true
