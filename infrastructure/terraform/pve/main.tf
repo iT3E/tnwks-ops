@@ -60,8 +60,7 @@ locals {
     "sce-dc02"
   ]
   kasm = [
-    "sce-kasm01",
-    "sce-kasm02"
+    "sce-kasm03"
   ]
   testing = [
     "sce-testing01"
@@ -266,7 +265,7 @@ module "pve_vm_kasm" {
   full_clone       = true
   ha_group         = "ha_group${index(local.kasm, each.value) + 1}" #ha groups must be pre-created in pve, with correct naming scheme, along with each having 'priorities' mapped to individual physical hosts
   ha_state         = "started"
-  vm_memory        = "4096"
+  vm_memory        = "8192"
   num_cores        = "2"
   num_sockets      = "2"
   qemu_os          = "l26"
