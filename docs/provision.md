@@ -1,4 +1,5 @@
 # Manual tasks performed that need to be automated
+
 ## disable swap
 
 ```
@@ -9,27 +10,34 @@ sudo sed -i '/\/dev\/pve\/swap/s/^/#/' /etc/fstab
 ```
 
 ## increase drive space of root
+
 ```
 sudo lvresize -l +100%FREE /dev/pve/root
 ```
+
 ## add pve-no-subscription to apt sources
+
 echo "deb http://download.proxmox.com/debian/pve bullseye pve-no-subscription" >> /etc/apt/sources.list
 
 ## add ceph quincy rather than pacific to apt sources
+
 sed -i 's/pacific/quincy/' /etc/apt/sources.list.d/ceph.list
 
 ## create OSDs on each system
+
 ```
 pveceph osd create /dev/sda
 pveceph osd create /dev/sdb
 ```
 
 ## create mds on each system
+
 ```
 pveceph mds create
 ```
 
 ## create a ceph file system on one
+
 ```
 pveceph fs create --pg_num 128 --add-storage
 ```
@@ -94,7 +102,9 @@ sudo systemctl restart sshd
 ```
 
 # Installing prometheus pve-exporter
+
 https://github.com/prometheus-pve/prometheus-pve-exporter/wiki/PVE-Exporter-on-Proxmox-VE-Node-in-a-venv
+
 ```
 #first create user in PVE with PVEAuditor role.  This is done with ansible currently.
 #then create an API token which has to be done manually
@@ -144,17 +154,21 @@ sudo ss -tuln | grep 9221
 ```
 
 # Installing prometheus node-exporter (for additional non-pve monitors)
+
 ### download node-exporter
+
 curl -s https://api.github.com/repos/prometheus/node_exporter/releases/latest| grep browser_download_url|grep linux-amd64|cut -d '"' -f 4|wget -qi -
 
 tar -xvf node_exporter*.tar.gz
-cd  node_exporter*/
+cd node_exporter*/
 sudo cp node_exporter /usr/local/bin
 
 ### confirm install
+
 node_exporter --version
 
 ### create node_exporter service
+
 sudo tee /etc/systemd/system/node_exporter.service <<EOF
 [Unit]
 Description=Node Exporter
@@ -170,33 +184,38 @@ WantedBy=default.target
 EOF
 
 ### reload node_exporter service
+
 sudo systemctl daemon-reload
 sudo systemctl start node_exporter
 sudo systemctl enable node_exporter
 
 ### test if port is listening
+
 sudo ss -tuln | grep 9100
 
-
 # Installing RADOSGW Exporter
+
 ### official documentation install:
+
 ```
 git clone git@github.com:blemmenes/radosgw_usage_exporter.git
 cd radosgw_usage_exporter
 pip install -r requirements.txt
 ```
+
 ### actual install
+
 ```
 curl -LJO https://github.com/blemmenes/radosgw_usage_exporter/archive/refs/heads/master.zip
-apt install unzip
-apt install pip
-unzip radosgw_usage_exporter-master.zip
+sudo apt install unzip
+sudo apt install pip
+sudo unzip radosgw_usage_exporter-master.zip
 cd radosgw_usage_exporter-master
-pip install -r requirements.txt
+sudo pip install -r requirements.txt
 ```
 
-
 ### Add the following lines to each host in /etc/ceph/ceph.conf:
+
 ```
 [client.radosgw.sce-pve01]
         host = sce-pve01
@@ -237,6 +256,7 @@ pip install -r requirements.txt
         rgw_admin_entry = admin
         rgw_enable_apis = s3, admin
 ```
+
 ### Create a service for RADOSGW Exporter
 
 ```
@@ -258,6 +278,7 @@ ExecStart=python3 /usr/local/bin/radosgw_exporter/radosgw_usage_exporter.py -H h
 [Install]
 WantedBy=default.target
 ```
+
 The access and secret keys can be found within the rgw-admin-ops user ceph secrets. These need to be converte from b64
 
 ```
@@ -266,8 +287,10 @@ sudo systemctl start radosgw_usage_exporter
 sudo systemctl enable radosgw_usage_exporter
 ```
 
------------------------------------
+---
+
 # shipping syslog
+
 ```
 sudo echo "*.* @@10.10.120.56:6003" | sudo tee /etc/rsyslog.d/99-vector.conf
 sudo systemctl restart rsyslog
@@ -275,6 +298,7 @@ sudo systemctl restart rsyslog
 ```
 
 # prevent logs from being written locally:
+
 ```
 sudo cp /etc/rsyslog.conf /etc/rsyslog.conf.bak
 sudo nano /etc/rsyslog.conf
@@ -319,7 +343,7 @@ sudo sed -i -E -e 's/^(auth,authpriv.*\/var\/log\/auth.log)/#\1/' \
 
 sudo systemctl restart rsyslog
 
-sudo nano /etc/systemd/journald.conf
+sudo vim /etc/systemd/journald.conf
 
 #change line containing 'Storage=auto' to:
 Storage=volatile
