@@ -23,7 +23,7 @@ spec:
 
     image:
       repository: ghcr.io/onedr0p/radarr-develop
-      tag: 5.1.2.8207@sha256:7e026aae3fa4ac9d4066a0533fdbfaa35a0ccdc41033bc4f2460aa9401ecfb46
+      tag: 5.4.6.8723@sha256:b6ba6b4acdd68a5ec47678533122ca297e23d5faa518ce66e7fff0e2b696e369
 
     # podAnnotations:
     #   setGateway: "true"
