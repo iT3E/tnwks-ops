@@ -37,7 +37,7 @@ spec:
 
     env:
       CHATGPT_CONTEXT: thread
-      CHATGPT_API_MODEL: gpt-4-0125-preview
+      CHATGPT_API_MODEL: gpt-4-turbo-2024-04-09
       MATRIX_DEFAULT_PREFIX: "!chatgpt"
       MATRIX_AUTOJOIN: true
       MATRIX_ENCRYPTION: true
