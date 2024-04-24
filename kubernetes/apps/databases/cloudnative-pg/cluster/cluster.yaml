@@ -32,10 +32,10 @@ spec:
       s3Credentials:
         accessKeyId:
           name: s3-creds
-          key: AWS_ACCESS_KEY_ID
+          key: ACCESS_KEY_ID
         secretAccessKey:
           name: s3-creds
-          key: AWS_SECRET_ACCESS_KEY
+          key: ACCESS_SECRET_KEY
   bootstrap:
     recovery:
       source: postgres-v6
@@ -48,9 +48,9 @@ spec:
         s3Credentials:
           accessKeyId:
             name: s3-creds
-            key: AWS_ACCESS_KEY_ID
+            key: ACCESS_KEY_ID
           secretAccessKey:
             name: s3-creds
-            key: AWS_SECRET_ACCESS_KEY
+            key: ACCESS_SECRET_KEY
         wal:
           maxParallel: 8
