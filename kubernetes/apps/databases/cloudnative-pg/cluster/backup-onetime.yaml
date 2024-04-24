@@ -4,4 +4,4 @@ metadata:
   name: backup-onetime
 spec:
   cluster:
-    name: postgres-v7
+    name: postgres
