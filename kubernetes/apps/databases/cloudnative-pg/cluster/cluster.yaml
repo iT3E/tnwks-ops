@@ -44,6 +44,7 @@ spec:
       barmanObjectStore:
         destinationPath: s3://s3-cnpg-bucket/
         endpointURL: http://10.15.15.50:7480
+        serverName: postgres-v6
         s3Credentials:
           accessKeyId:
             name: s3-cnpg-bucket
