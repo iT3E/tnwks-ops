@@ -28,7 +28,7 @@ spec:
         maxParallel: 8
       destinationPath: s3://s3-cnpg-bucket/
       endpointURL: http://10.15.15.50:7480
-      serverName: postgres-v7
+      serverName: postgres-v8
       s3Credentials:
         accessKeyId:
           name: s3-creds
