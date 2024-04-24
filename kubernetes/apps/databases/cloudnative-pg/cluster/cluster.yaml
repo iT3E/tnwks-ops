@@ -16,10 +16,10 @@ spec:
     name: postgres-superuser
   monitoring:
     enablePodMonitor: true
-  bootstrap:
-    initdb:
-      database: app
-      owner: app
+  # bootstrap:
+  #   initdb:
+  #     database: app
+  #     owner: app
   backup:
     retentionPolicy: 30d
     barmanObjectStore:
