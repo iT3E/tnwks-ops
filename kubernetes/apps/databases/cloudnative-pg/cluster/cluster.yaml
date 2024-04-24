@@ -38,6 +38,8 @@ spec:
           key: ACCESS_SECRET_KEY
   bootstrap:
     recovery:
+      database: app
+      owner: app
       source: postgres-v6
   externalClusters:
     - name: postgres-v6
