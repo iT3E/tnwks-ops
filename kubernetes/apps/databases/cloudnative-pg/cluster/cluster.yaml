@@ -31,10 +31,10 @@ spec:
       serverName: postgres-v7
       s3Credentials:
         accessKeyId:
-          name: s3-cnpg-bucket
+          name: s3-creds
           key: AWS_ACCESS_KEY_ID
         secretAccessKey:
-          name: s3-cnpg-bucket
+          name: s3-creds
           key: AWS_SECRET_ACCESS_KEY
   bootstrap:
     recovery:
@@ -47,10 +47,10 @@ spec:
         serverName: postgres-v6
         s3Credentials:
           accessKeyId:
-            name: s3-cnpg-bucket
+            name: s3-creds
             key: AWS_ACCESS_KEY_ID
           secretAccessKey:
-            name: s3-cnpg-bucket
+            name: s3-creds
             key: AWS_SECRET_ACCESS_KEY
         wal:
           maxParallel: 8
