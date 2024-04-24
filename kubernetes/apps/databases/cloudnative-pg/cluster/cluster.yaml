@@ -46,10 +46,10 @@ spec:
         endpointURL: http://10.15.15.50:7480
         s3Credentials:
           accessKeyId:
-            name: cnpg-secrets
+            name: s3-cnpg-bucket
             key: AWS_ACCESS_KEY_ID
           secretAccessKey:
-            name: cnpg-secrets
+            name: s3-cnpg-bucket
             key: AWS_SECRET_ACCESS_KEY
         wal:
           maxParallel: 8
