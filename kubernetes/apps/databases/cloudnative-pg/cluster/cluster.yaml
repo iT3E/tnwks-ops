@@ -40,9 +40,9 @@ spec:
     recovery:
       database: app
       owner: app
-      source: postgres-v8
+      source: postgres-v6
   externalClusters:
-    - name: postgres-v8
+    - name: postgres-v6
       barmanObjectStore:
         destinationPath: s3://s3-cnpg-bucket/
         endpointURL: http://10.15.15.50:7480
