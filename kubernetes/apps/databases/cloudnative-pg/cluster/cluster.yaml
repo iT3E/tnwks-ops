@@ -36,23 +36,23 @@ spec:
         secretAccessKey:
           name: s3-creds
           key: ACCESS_SECRET_KEY
-  bootstrap:
-    recovery:
-      database: app
-      owner: app
-      source: postgres-v6
-  externalClusters:
-    - name: postgres-v6
-      barmanObjectStore:
-        destinationPath: s3://s3-cnpg-bucket/
-        endpointURL: http://10.15.15.50:7480
-        serverName: postgres-v6
-        s3Credentials:
-          accessKeyId:
-            name: s3-creds
-            key: ACCESS_KEY_ID
-          secretAccessKey:
-            name: s3-creds
-            key: ACCESS_SECRET_KEY
-        wal:
-          maxParallel: 8
+  # bootstrap:
+  #   recovery:
+  #     database: app
+  #     owner: app
+  #     source: postgres-v6
+  # externalClusters:
+  #   - name: postgres-v6
+  #     barmanObjectStore:
+  #       destinationPath: s3://s3-cnpg-bucket/
+  #       endpointURL: http://10.15.15.50:7480
+  #       serverName: postgres-v6
+  #       s3Credentials:
+  #         accessKeyId:
+  #           name: s3-creds
+  #           key: ACCESS_KEY_ID
+  #         secretAccessKey:
+  #           name: s3-creds
+  #           key: ACCESS_SECRET_KEY
+  #       wal:
+  #         maxParallel: 8
