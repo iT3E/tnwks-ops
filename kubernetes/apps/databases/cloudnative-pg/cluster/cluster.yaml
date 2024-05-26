@@ -36,11 +36,11 @@ spec:
         secretAccessKey:
           name: s3-creds
           key: ACCESS_SECRET_KEY
-  # bootstrap:
-  #   recovery:
-  #     # database: app
-  #     # owner: app
-  #     source: postgres-v10
+  bootstrap:
+    recovery:
+      # database: app
+      # owner: app
+      source: postgres-v10
   externalClusters:
     - name: postgres-v10
       barmanObjectStore:
