@@ -28,20 +28,19 @@ spec:
     keepHistory: false
 
   values:
-
     affinity:
       nodeAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
           nodeSelectorTerms:
-          - matchExpressions:
-            - key: node-role.kubernetes.io/control-plane
-              operator: DoesNotExist
+            - matchExpressions:
+                - key: node-role.kubernetes.io/control-plane
+                  operator: DoesNotExist
 
     controller:
       type: statefulset
     image:
-      repository: ghcr.io/onedr0p/jellyfin
-      tag: 10.8.11@sha256:926e2a9f6677a0c7b12feba29f36c954154869318d6a52df72f72ff9c74cf494
+      repository: jellyfin/jellyfin
+      tag: 10.9.3
     env:
       TZ: "America/Los_Angeles"
 
@@ -100,5 +99,3 @@ spec:
         enabled: true
         existingClaim: cephfs-hdd-subvolume
         mountPath: /cephfs
-
-
