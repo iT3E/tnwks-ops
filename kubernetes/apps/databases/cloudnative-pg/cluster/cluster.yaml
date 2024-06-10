@@ -28,7 +28,7 @@ spec:
         maxParallel: 8
       destinationPath: s3://s3-cnpg-bucket/
       endpointURL: http://10.15.15.50:7480
-      serverName: postgres-v13
+      serverName: postgres-v12
       s3Credentials:
         accessKeyId:
           name: s3-creds
@@ -40,13 +40,13 @@ spec:
     recovery:
       # database: app
       # owner: app
-      source: postgres-v12
+      source: postgres-v11
   externalClusters:
-    - name: postgres-v12
+    - name: postgres-v11
       barmanObjectStore:
         destinationPath: s3://s3-cnpg-bucket/
         endpointURL: http://10.15.15.50:7480
-        serverName: postgres-v12
+        serverName: postgres-v11
         s3Credentials:
           accessKeyId:
             name: s3-creds
