@@ -32,14 +32,14 @@ spec:
           init-config:
             image:
               repository: docker.io/library/eclipse-mosquitto
-              tag: 2.0.18@sha256:6f630d2b82b05ada353910f43c45d05df74e85b1f3cf77f7f9b8105d62a41f5c
+              tag: 2.0.18@sha256:bb3fe59118773e119925f9acf61092306f02b4148eda6ccbb2fa0fd2a3317190
             command: ["/bin/sh", "-c"]
             args: ["cp /tmp/secret/* /mosquitto/external_config/ && mosquitto_passwd -U /mosquitto/external_config/mosquitto_pwd"]
         containers:
           main:
             image:
               repository: docker.io/library/eclipse-mosquitto
-              tag: 2.0.18@sha256:6f630d2b82b05ada353910f43c45d05df74e85b1f3cf77f7f9b8105d62a41f5c
+              tag: 2.0.18@sha256:bb3fe59118773e119925f9acf61092306f02b4148eda6ccbb2fa0fd2a3317190
             securityContext:
               allowPrivilegeEscalation: false
               readOnlyRootFilesystem: true
