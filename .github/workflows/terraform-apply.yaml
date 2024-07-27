@@ -23,21 +23,21 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Upload Configuration
-        uses: hashicorp/tfc-workflows-github/actions/upload-configuration@34866d21f6856cca1fbca7c09c5644203aa83890 # v1.3.0
+        uses: hashicorp/tfc-workflows-github/actions/upload-configuration@5bd1031f2e8da1d8db16b35519ecc5b15a99cf20 # v1.3.1
         id: apply-upload
         with:
           workspace: ${{ env.TF_WORKSPACE }}
           directory: "infrastructure/terraform/aws/accounts/prod"
 
       - name: Create Apply Run
-        uses: hashicorp/tfc-workflows-github/actions/create-run@34866d21f6856cca1fbca7c09c5644203aa83890 # v1.3.0
+        uses: hashicorp/tfc-workflows-github/actions/create-run@5bd1031f2e8da1d8db16b35519ecc5b15a99cf20 # v1.3.1
         id: apply-run
         with:
           workspace: ${{ env.TF_WORKSPACE }}
           configuration_version: ${{ steps.apply-upload.outputs.configuration_version_id }}
 
       - name: Apply
-        uses: hashicorp/tfc-workflows-github/actions/apply-run@34866d21f6856cca1fbca7c09c5644203aa83890 # v1.3.0
+        uses: hashicorp/tfc-workflows-github/actions/apply-run@5bd1031f2e8da1d8db16b35519ecc5b15a99cf20 # v1.3.1
         if: fromJSON(steps.apply-run.outputs.payload).data.attributes.actions.IsConfirmable
         id: apply
         with:
