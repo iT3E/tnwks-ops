@@ -40,7 +40,7 @@ spec:
         reloader.stakater.com/auto: "true"
     image:
       repository: ghcr.io/onedr0p/home-assistant
-      tag: 2023.11.3@sha256:7f0778711bf9bb84f2e51bf13fdd1974afe5142843b75ca975edbfb33d2cec11
+      tag: 2024.8.0@sha256:dfbd75acb4acb454d40c5461f653f2c0c9b356d5eafb0e276bf53f8595a1b545
     env:
       TZ: America/New_York
       POSTGRES_HOST: ${POSTGRES_SERVER}
