@@ -30,6 +30,9 @@ spec:
       type: statefulset
       annotations:
         reloader.stakater.com/auto: "true"
+      startupProbe:
+        failureThreshhold: 50
+        periodSeconds: 10
     image:
       repository: nico640/docker-unms
       tag: 2.2.15
