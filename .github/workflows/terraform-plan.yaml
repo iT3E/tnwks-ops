@@ -30,7 +30,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Upload Configuration
-        uses: hashicorp/tfc-workflows-github/actions/upload-configuration@5bd1031f2e8da1d8db16b35519ecc5b15a99cf20 # v1.3.1
+        uses: hashicorp/tfc-workflows-github/actions/upload-configuration@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
         id: plan-upload
         with:
           workspace: ${{ env.TF_WORKSPACE }}
@@ -38,7 +38,7 @@ jobs:
           speculative: true
 
       - name: Create Plan Run
-        uses: hashicorp/tfc-workflows-github/actions/create-run@5bd1031f2e8da1d8db16b35519ecc5b15a99cf20 # v1.3.1
+        uses: hashicorp/tfc-workflows-github/actions/create-run@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
         id: plan-run
         with:
           workspace: ${{ env.TF_WORKSPACE }}
@@ -46,7 +46,7 @@ jobs:
           plan_only: true
 
       - name: Get Plan Output
-        uses: hashicorp/tfc-workflows-github/actions/plan-output@5bd1031f2e8da1d8db16b35519ecc5b15a99cf20 # v1.3.1
+        uses: hashicorp/tfc-workflows-github/actions/plan-output@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
         id: plan-output
         with:
           plan: ${{ fromJSON(steps.plan-run.outputs.payload).data.relationships.plan.data.id }}
@@ -101,7 +101,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Upload Configuration
-        uses: hashicorp/tfc-workflows-github/actions/upload-configuration@5bd1031f2e8da1d8db16b35519ecc5b15a99cf20 # v1.3.1
+        uses: hashicorp/tfc-workflows-github/actions/upload-configuration@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
         id: plan-upload
         with:
           workspace: ${{ env.TF_WORKSPACE }}
@@ -109,7 +109,7 @@ jobs:
           speculative: true
 
       - name: Create Plan Run
-        uses: hashicorp/tfc-workflows-github/actions/create-run@5bd1031f2e8da1d8db16b35519ecc5b15a99cf20 # v1.3.1
+        uses: hashicorp/tfc-workflows-github/actions/create-run@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
         id: plan-run
         with:
           workspace: ${{ env.TF_WORKSPACE }}
@@ -117,7 +117,7 @@ jobs:
           plan_only: true
 
       - name: Get Plan Output
-        uses: hashicorp/tfc-workflows-github/actions/plan-output@5bd1031f2e8da1d8db16b35519ecc5b15a99cf20 # v1.3.1
+        uses: hashicorp/tfc-workflows-github/actions/plan-output@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
         id: plan-output
         with:
           plan: ${{ fromJSON(steps.plan-run.outputs.payload).data.relationships.plan.data.id }}
