@@ -30,7 +30,7 @@ spec:
     image:
       repository: ghcr.io/linuxserver/bookstack
       pullPolicy: IfNotPresent
-      tag: 23.10.20231030
+      tag: 24.12.20241223
 
     strategy:
       type: Recreate
