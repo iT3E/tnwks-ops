@@ -32,7 +32,7 @@ spec:
         reloader.stakater.com/auto: "true"
     image:
       repository: ghcr.io/wizarrrr/wizarr
-      tag: 3.5.2@sha256:cffdf26745db2a4d3f215ae38deef387625842a431882fd8f2c9c18033b06398
+      tag: v2025.10.3@sha256:ea47cfbee25eecc3439ef58b8907c3aa5790b102eeb057cb17c4041e2c1d1dfb
     env:
       TZ: ${TIMEZONE}
       APP_URL: https://invite.${SECRET_DOMAIN}
