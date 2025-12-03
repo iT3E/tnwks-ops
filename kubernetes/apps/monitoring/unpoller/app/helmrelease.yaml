@@ -19,7 +19,7 @@ spec:
   values:
     image:
       repository: ghcr.io/unpoller/unpoller
-      tag: v2.9.4@sha256:20c161781ac544a7548c8dd533f13498201746efdf0853d4625a1dbfd5652a19
+      tag: v2.16.0@sha256:bfe3eee9396919165f8dfe8282dfc7d30b27308748e0d6bb5c90aabc4dd36e3e
 
     env:
       UP_UNIFI_DEFAULT_ROLE: tnwks-ops
