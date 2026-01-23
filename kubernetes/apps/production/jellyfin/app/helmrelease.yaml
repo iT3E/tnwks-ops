@@ -40,7 +40,7 @@ spec:
       type: statefulset
     image:
       repository: jellyfin/jellyfin
-      tag: 10.9.3
+      tag: 10.11.6
     env:
       TZ: "America/Los_Angeles"
 
