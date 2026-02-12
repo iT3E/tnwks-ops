@@ -35,7 +35,7 @@ spec:
         periodSeconds: 10
     image:
       repository: nico640/docker-unms
-      tag: 2.2.15
+      tag: 2.4.220
     env:
       TZ: ${TIMEZONE}
       PUID: 911
