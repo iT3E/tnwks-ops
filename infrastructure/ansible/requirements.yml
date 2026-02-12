@@ -18,7 +18,7 @@ roles:
     version: v3.4.2
   - name: lae.proxmox
     src: https://github.com/lae/ansible-role-proxmox.git
-    version: v1.7.1
+    version: v1.10.0
   - name: geerlingguy.ntp
     src: https://github.com/geerlingguy/ansible-role-ntp.git
     version: 2.3.3
