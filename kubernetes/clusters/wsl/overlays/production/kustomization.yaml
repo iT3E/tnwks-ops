@@ -1,6 +1,12 @@
 ---
-# Local overlay: production namespace
-# Excludes frigate (needs Coral USB) and uisp (heavy, not relevant for local sim)
+# WSL cluster overlay: production namespace
+#
+# frigate is included — the Coral TPU is plugged into the desktop and
+# passed through Windows -> WSL -> Docker -> Talos. See
+# docs/usb-passthrough.md for the chain.
+#
+# uisp is omitted from the WSL cluster — it's a heavy single-instance
+# device-management workload that lives on the MS-01 cluster.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -14,5 +20,4 @@ resources:
   - ../../../../apps/production/wizarr/ks.yaml
   - ../../../../apps/production/bookstack/ks.yaml
   - ../../../../apps/production/changedetection/ks.yaml
-  # frigate excluded — needs Coral USB
-  # uisp excluded — heavy resource footprint, prod-only
+  - ../../../../apps/production/frigate/ks.yaml

@@ -1,6 +1,9 @@
 ---
-# Local overlay: home-automation namespace
-# Excludes zwave-js-ui (needs a Z-Wave USB stick — not available in Docker mode)
+# WSL cluster overlay: home-automation namespace
+#
+# zwave-js-ui is included — the Aeotec Z-Stick is plugged into the desktop
+# and passed through Windows -> WSL -> Docker -> Talos. See
+# docs/usb-passthrough.md for the chain.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -8,4 +11,4 @@ resources:
   - ../../../../apps/home-automation/home-assistant/ks.yaml
   - ../../../../apps/home-automation/mosquitto/ks.yaml
   - ../../../../apps/home-automation/peloton-to-garmin/ks.yaml
-  # zwave-js-ui excluded — requires hardware
+  - ../../../../apps/home-automation/zwave-js-ui/ks.yaml

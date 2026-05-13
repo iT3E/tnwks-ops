@@ -13,7 +13,10 @@ resources:
   - ../../apps/selfhosted
   - ../../apps/tools
 
-  # Trimmed overlays (omit hardware-dependent apps)
+  # VPN gateway — qbittorrent and the *arr stack route through pod-gateway
+  - ../../apps/vpn
+
+  # Trimmed overlays (some apps tweaked for WSL)
   - ./overlays/home-automation
   - ./overlays/networking
   - ./overlays/production
@@ -21,12 +24,12 @@ resources:
   # Cluster settings
   - ./cluster-settings.yaml
 
-# Excluded namespaces from local entirely:
-#   - storage/rook-ceph (in-cluster Ceph requires real disks; local uses local-path)
-#   - vpn/pod-gateway   (pointless for sim)
+# Excluded namespaces from the WSL cluster:
+#   - storage/rook-ceph (in-cluster Ceph requires real disks; WSL uses local-path)
 #
 # Apps excluded inside the overlays above:
-#   - home-automation/zwave-js-ui    (needs Z-Wave USB)
-#   - networking/cloudflared         (no real tunnel for sim)
-#   - production/frigate             (needs Coral USB)
-#   - production/uisp                (heavy footprint, prod-only)
+#   - networking/cloudflared (public tunnel terminates on the MS-01 cluster)
+#   - production/uisp        (lives on MS-01)
+#
+# USB-attached apps (zwave-js-ui, frigate) are INCLUDED — they require
+# usbipd-win passthrough from the Windows host. See docs/usb-passthrough.md.

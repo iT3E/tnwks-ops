@@ -1,6 +1,7 @@
 ---
-# Local overlay: networking namespace
-# Excludes cloudflared (no real Cloudflare tunnel for sim)
+# WSL cluster overlay: networking namespace
+# Excludes cloudflared — the production Cloudflare tunnel terminates on the
+# MS-01 cluster. The WSL cluster is reachable on the LAN only.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -9,4 +10,3 @@ resources:
   - ../../../../apps/networking/ingress-nginx/ks.yaml
   - ../../../../apps/networking/ingress-nginx-internal/ks.yaml
   - ../../../../apps/networking/k8s-gateway/ks.yaml
-  # cloudflared excluded — no production tunnel for local sim
