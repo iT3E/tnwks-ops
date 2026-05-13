@@ -39,7 +39,7 @@ machine:
       - name: ceph
 
 cluster:
-  name: homelab
+  name: homelab-ms-01
   network:
     cni:
       name: none
