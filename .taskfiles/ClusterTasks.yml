@@ -28,6 +28,22 @@ tasks:
     cmds:
       - flux reconcile -n flux-system kustomization cluster --with-source
 
+  reconcile:local:
+    desc: Force flux reconciliation on the local cluster
+    env:
+      KUBECONFIG: "{{.HOME}}/.kube/config-homelab-local"
+    cmds:
+      - flux reconcile source git flux-system
+      - flux reconcile kustomization flux-system --with-source
+
+  reconcile:prod:
+    desc: Force flux reconciliation on the prod cluster
+    env:
+      KUBECONFIG: "{{.HOME}}/.kube/config-homelab"
+    cmds:
+      - flux reconcile source git flux-system
+      - flux reconcile kustomization flux-system --with-source
+
   hr-restart:
     desc: Restart all failed Helm Releases
     cmds:

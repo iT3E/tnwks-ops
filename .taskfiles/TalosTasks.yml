@@ -1,0 +1,19 @@
+---
+version: "3"
+
+tasks:
+  reset:local:
+    desc: Destroy and recreate the local Talos Docker cluster
+    cmds:
+      - talosctl cluster destroy --name homelab-local || true
+      - ansible-playbook -i {{.ANSIBLE_DIR}}/inventory/local.yml {{.ANSIBLE_DIR}}/playbooks/01-talos-bootstrap.yml
+
+  status:local:
+    desc: Show status of the local Talos cluster
+    cmds:
+      - talosctl cluster show --name homelab-local
+
+  destroy:local:
+    desc: Destroy the local Talos Docker cluster (no recreate)
+    cmds:
+      - talosctl cluster destroy --name homelab-local

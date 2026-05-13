@@ -1,0 +1,26 @@
+---
+version: "3"
+
+vars:
+  ANSIBLE_PLAYBOOK_DIR: "{{.ANSIBLE_DIR}}/playbooks"
+  ANSIBLE_INVENTORY_DIR: "{{.ANSIBLE_DIR}}/inventory"
+
+env:
+  ANSIBLE_CONFIG: "{{.ANSIBLE_DIR}}/ansible.cfg"
+
+tasks:
+  local:
+    desc: Bootstrap the local Talos cluster (Talos → Flux → SOPS)
+    dir: "{{.ANSIBLE_DIR}}"
+    cmds:
+      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/local.yml {{.ANSIBLE_PLAYBOOK_DIR}}/01-talos-bootstrap.yml
+      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/local.yml {{.ANSIBLE_PLAYBOOK_DIR}}/03-sops-keys.yml
+      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/local.yml {{.ANSIBLE_PLAYBOOK_DIR}}/02-flux-install.yml
+
+  prod:
+    desc: Bootstrap the prod Talos cluster (Talos → Flux → SOPS)
+    dir: "{{.ANSIBLE_DIR}}"
+    cmds:
+      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/prod.yml {{.ANSIBLE_PLAYBOOK_DIR}}/01-talos-bootstrap.yml
+      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/prod.yml {{.ANSIBLE_PLAYBOOK_DIR}}/03-sops-keys.yml
+      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/prod.yml {{.ANSIBLE_PLAYBOOK_DIR}}/02-flux-install.yml
