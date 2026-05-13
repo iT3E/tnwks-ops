@@ -2,151 +2,123 @@
 
 ## My Home Operations repository
 
-_... managed by Flux, Renovate, GitHub Actions, Terraform, Ansible, and Powershell_ :robot:
+_... managed by Flux, Renovate, GitHub Actions, Terraform, Ansible_ :robot:
+
+[![Talos](https://img.shields.io/badge/Talos%20Linux-blue?style=for-the-badge&logo=kubernetes&logoColor=white)](https://www.talos.dev)
+[![Renovate](https://img.shields.io/github/actions/workflow/status/iT3E/tnwks-ops/release.yaml?branch=main&label=&logo=renovatebot&style=for-the-badge&color=blue)](https://github.com/iT3E/tnwks-ops/actions/workflows/release.yaml)
 
 </div>
+<br>
 
-<div align="center">
-
-[![Kubernetes](https://img.shields.io/badge/v1.27.3-blue?style=for-the-badge&logo=kubernetes&logoColor=white)](https://k8s.io/)
-[![Renovate](https://img.shields.io/github/actions/workflow/status/iT3E/tnwks-ops/release.yaml?branch=master&label=&logo=renovatebot&style=for-the-badge&color=blue)](https://github.com/iT3E/tnwks-ops/actions/workflows/release.yaml)
-
-[![Home-Internet](https://img.shields.io/uptimerobot/status/m794729136-a0c7c0a6dabf661ccbf287ee?color=brightgreeen&label=Home%20Internet&style=for-the-badge&logo=v&logoColor=white)](https://status.devbu.io)&nbsp;&nbsp;&nbsp;
-[![Status-Page](https://img.shields.io/uptimerobot/status/m794729136-a0c7c0a6dabf661ccbf287ee?color=brightgreeen&label=Status%20Page&style=for-the-badge&logo=statuspage&logoColor=white)](https://status.it3e.xyz)&nbsp;&nbsp;&nbsp;
-
-
-
-</div>
-<br><br>
-
-👋 Welcome to my Home Operations repository, **tnwks** /tee-networks/. This is a mono repository that serves as the foundation for my home infrastructure.
-
- I try to adhere to Infrastructure as Code (IaC) and GitOps practices using the tools like [Ansible](https://www.ansible.com/), [Terraform](https://www.terraform.io/), [Kubernetes](https://kubernetes.io/), [Flux](https://github.com/fluxcd/flux2), [Renovate](https://github.com/renovatebot/renovate) and [GitHub Actions](https://github.com/features/actions).
+Welcome to **tnwks** /tee-networks/. This monorepo is the source of truth for
+my home infrastructure. IaC + GitOps via [Talos](https://www.talos.dev),
+[Kubernetes](https://kubernetes.io/), [Flux](https://github.com/fluxcd/flux2),
+[Ansible](https://www.ansible.com/), [Terraform](https://www.terraform.io/),
+[Renovate](https://github.com/renovatebot/renovate), and
+[GitHub Actions](https://github.com/features/actions).
 
 ---
 
-## ⛵ Kubernetes
+## Multi-Cluster Architecture
 
-### Installation
+This repo supports two clusters from a single source of truth:
 
-The cluster is running on VMs hosted on [Proxmox Virtual Environment](https://www.proxmox.com/en/proxmox-ve), an open-source hypervisor built on Debian. A [PVE Ceph Cluster](https://pve.proxmox.com/wiki/Deploy_Hyper-Converged_Ceph_Cluster) is handling my VM storage, along with an [externally-connected](https://rook.io/docs/rook/v1.11/CRDs/Cluster/external-cluster/) implementation of [Rook Ceph](https://rook.io) that is providing my K8s workloads with persistent block, object, and file storage.
+| Cluster | Purpose | Hardware | Storage |
+|---------|---------|----------|---------|
+| **`local`** | WSL2 sim for GitOps iteration | Talos in Docker (1 CP + 2 workers) | local-path |
+| **`prod`** | Real homelab | 3x Minisforum MS-01 i9-13900H, bare-metal Talos | Rook Ceph (3x 1TB NVMe) + democratic-csi NFS |
 
----
+Both share the same `kubernetes/apps/` and `kubernetes/flux/` configs.
+Per-cluster differences (storage class, IP ranges, DNS) live in
+`kubernetes/clusters/{local,prod}/cluster-settings.yaml` and are resolved
+via Flux variable substitution.
 
-### Core Components
-
-- [actions-runner-controller](https://github.com/actions/actions-runner-controller): Self-hosted Github runners.
-- [cilium](https://cilium.io): Internal Kubernetes networking plugin.
-- [cert-manager](https://cert-manager.io/docs/): Creates SSL certificates for services in my Kubernetes cluster.
-- [external-dns](https://github.com/kubernetes-sigs/external-dns): Automatically manages DNS records from my cluster in a cloud DNS provider.
-- [external-secrets](https://github.com/external-secrets/external-secrets/): Managed Kubernetes secrets using [1Password Connect](https://github.com/1Password/connect).
-- [ingress-nginx](https://github.com/kubernetes/ingress-nginx/): Ingress controller to expose HTTP traffic to pods over DNS.
-- [rook](https://github.com/rook/rook): Distributed block storage for peristent storage.
-- [sops](https://toolkit.fluxcd.io/guides/mozilla-sops/): Managed secrets for Kubernetes, Ansible and Terraform which are commited to Git.
-- [volsync](https://github.com/backube/volsync) and [snapscheduler](https://github.com/backube/snapscheduler): Backup and recovery of persistent volume claims.
-
----
-
-### GitOps
-
-[Flux](https://github.com/fluxcd/flux2) watches my [kubernetes](./kubernetes/) folder (see Directories below) and makes the changes to my cluster based on the YAML manifests.
-
-The way Flux works for me here is it will recursively search the [kubernetes/apps](./kubernetes/apps) folder until it finds the most top level `kustomization.yaml` per directory and then apply all the resources listed in it. That aforementioned `kustomization.yaml` will generally only have a namespace resource and one or many Flux kustomizations. Those Flux kustomizations will generally have a `HelmRelease` or other resources related to the application underneath it which will be applied.
-
-[Renovate](https://github.com/renovatebot/renovate) watches my **entire** repository looking for dependency updates, when they are found a PR is automatically created. When some PRs are merged [Flux](https://github.com/fluxcd/flux2) applies the changes to my cluster.
-
-### Directories
-
-This Git repository contains the following directories under [kubernetes](./kubernetes/).
-
-```sh
-📁 kubernetes      # Kubernetes cluster defined as code
-├─📁 bootstrap     # Flux installation
-├─📁 flux          # Main Flux configuration of repository
-└─📁 apps          # Apps deployed into my cluster grouped by namespace (see below)
+```
+tnwks-ops/
+├── README.md
+├── Taskfile.yml
+├── .sops.yaml
+├── talos/                       # Machine configs
+│   ├── local/                   # talosctl cluster create config
+│   └── prod/                    # MS-01 controlplane + worker + patches
+├── infrastructure/
+│   ├── ansible/                 # Bootstrap playbooks (talos, flux, sops)
+│   ├── terraform/aws/           # Active
+│   ├── terraform/cloudflare/    # Active
+│   └── _archive/                # Legacy PVE/Proxmox terraform + packer
+├── kubernetes/
+│   ├── apps/                    # Shared app manifests (cross-cluster)
+│   ├── bootstrap/               # Initial Flux + helm install
+│   ├── flux/                    # Flux config (GitRepository, vars)
+│   └── clusters/
+│       ├── local/               # Local overlay (excludes hardware apps)
+│       └── prod/                # Full prod stack
+└── docs/
+    ├── bootstrap-local.md
+    ├── bootstrap-prod.md
+    └── disaster-recovery.md
 ```
 
-### Cluster layout
+---
 
-Below is a a high level look at the layout of how my directory structure with Flux works. In this brief example you are able to see that `authelia` will not be able to run until `glauth` and `cloudnative-pg` are running. It also shows that the `Cluster` custom resource depends on the `cloudnative-pg` Helm chart. This is needed because `cloudnative-pg` installs the `Cluster` custom resource definition in the Helm chart.
+## Getting started
 
-```python
-# Key: <kind> :: <metadata.name>
-GitRepository :: k8s-gitops
-    Kustomization :: cluster
-        Kustomization :: cluster-apps
-            Kustomization :: cluster-apps-authelia
-                DependsOn:
-                    Kustomization :: cluster-apps-glauth
-                    Kustomization :: cluster-apps-cloudnative-pg-cluster
-                HelmRelease :: authelia
-            Kustomization :: cluster-apps-glauth
-                HelmRelease :: glauth
-            Kustomization :: cluster-apps-cloudnative-pg
-                HelmRelease :: cloudnative-pg
-            Kustomization :: cluster-apps-cloudnative-pg-cluster
-                DependsOn:
-                    Kustomization :: cluster-apps-cloudnative-pg
-                Cluster :: postgres
+### Local sim cluster
+
+```bash
+export GITHUB_TOKEN=$(op read 'op://Private/GitHub Flux Token/credential')
+task bootstrap:local
 ```
 
-### Networking
+Detailed steps in [docs/bootstrap-local.md](./docs/bootstrap-local.md).
 
-| Name                                         | CIDR            |
-| -------------------------------------------- | --------------- |
-| Kubernetes Nodes VLAN                        | `10.0.0.0/24`   |
-| Kubernetes external services (Cilium w/ BGP) | `7.0.0.0/8`     |
-| Kubernetes pods                              | `10.244.0.0/16` |
-| Kubernetes services                          | `10.245.0.0/16` |
+### Production cluster
 
-- [Cilium](https://cilium.io) is configured with the `io.cilium/lb-ipam-ips` annotation to expose Kubernetes services with their own IP over BGP which is configured on my router.
-- [cloudflared](https://github.com/cloudflare/cloudflared) provides a [secure tunnel](https://www.cloudflare.com/products/tunnel/) for [Cloudflare](https://www.cloudflare.com/) to ingress traffic from the Internet into my Kubernetes cluster.
+See [docs/bootstrap-prod.md](./docs/bootstrap-prod.md) — currently a skeleton,
+will be filled in once MS-01 hardware is racked.
 
----
+### Disaster recovery
 
-## 🌐 DNS
-
-### Internal DNS
-
-[blocky](https://github.com/0xERR0R/blocky) provides the first hop of DNS resolution inside my network. DNS requests to my public domain are forwarded to [k8s-gateway](https://github.com/ori-edge/k8s_gateway) which checks to see if it's present in my cluster; if not, it talks out to [1.1.1.1](https://1.1.1.1) which is configured as my primary DNS provider.
-
-### External DNS
-
-[external-dns](https://github.com/kubernetes-sigs/external-dns) is deployed in my cluster and configured to sync DNS records to [Cloudflare](https://www.cloudflare.com/). The only ingresses this `external-dns` instance looks at to gather DNS records to put in `Cloudflare` are ones that have an annotation of `external-dns.alpha.kubernetes.io/target`.
+See [docs/disaster-recovery.md](./docs/disaster-recovery.md).
 
 ---
 
-### 📖 Docs
+## Networking
 
-The documentation that goes along with this repo can be found [over here](https://it3e.github.io/tnwks-ops/).
+| Name | CIDR |
+|------|------|
+| Node VLAN (910) | `10.10.91.0/24` |
+| Pod CIDR | `10.42.0.0/16` |
+| Service CIDR | `10.43.0.0/16` |
+| LoadBalancer pool | `10.10.91.50–60` (Cilium L2/BGP) |
 
----
+[Cilium](https://cilium.io) provides the CNI and L2/BGP for LoadBalancer IPs
+(MetalLB has been removed). [cloudflared](https://github.com/cloudflare/cloudflared)
+provides the public ingress tunnel into the prod cluster.
 
-## 🔧 Hardware
+## DNS
 
-| Device                      | Count | OS Disk Size      | Data Disk Size                   | Ram  | Operating System | Purpose            |
-| --------------------------- | ----- | ------------      | -------------------------------- | ---- | ---------------- | ------------------ |
-| Ubiquiti Edge Router Lite   | 1     | -                 | -                                | -    | -                | Router             |
-| Unifi UDM Pro               | 1     | -                 | -                                | -    | -                | Router             |
-| UISP EdgePoint R6           | 1     | -                 | -                                | -    | -                | Router             |
-| airMAX LiteAP 5AC           | 1     | -                 | -                                | -    | -                | AP                 |
-| airMAX LiteBeam AC Gen2     | 1     | -                 | -                                | -    | -                | AP                 |
-| UAP-AC-Pro                  | 2     | -                 | -                                | -    | -                | AP                 |
-| UAP-AC-HD                   | 1     | -                 | -                                | -    | -                | AP                 |
-| HP 1810g                    | 1     | -                 | -                                | -    | -                | Switch             |
-| Aruba S2500-24P             | 1     | -                 | -                                | -    | -                | Switch             |
-| HP DL360p G8                | 3     | 16GB JetFlash 780 | 1.2TB HDD, 960GB Samsung PM1633a | 64GB | PVE              | Hypervisor         |
-| Whitebox NAS                | 1     | 64GB SATA SSD     | 2x 2TB WD Purple HDD             | 16GB | FreeNAS          | NVR                |
-| CyberPower CP1500AVR        | 1     | -                 | -                                | -    | -                | UPS                |
+- **Internal:** `tnwks.local` (resolved via [k8s-gateway](https://github.com/ori-edge/k8s_gateway)
+  and [blocky](https://github.com/0xERR0R/blocky))
+- **External:** `it3e.xyz` (managed by [external-dns](https://github.com/kubernetes-sigs/external-dns)
+  against Cloudflare; only ingresses tagged with the
+  `external-dns.alpha.kubernetes.io/target` annotation are exported)
 
 ---
 
-## 🤝 Gratitude and Thanks
+## Core Components
 
-Thanks to all the people who donate their time to the [Kubernetes @Home](https://discord.gg/k8s-at-home) Discord community. A lot of inspiration for my cluster comes from the people that have shared their clusters using the [k8s-at-home](https://github.com/topics/k8s-at-home) GitHub topic. Be sure to check out the [Kubernetes @Home search](https://nanne.dev/k8s-at-home-search/) for ideas on how to deploy applications or get ideas on what you can deploy.
+| Component | Purpose |
+|-----------|---------|
+| [cilium](https://cilium.io) | CNI + L2/BGP LB |
+| [cert-manager](https://cert-manager.io/docs/) | TLS via Let's Encrypt |
+| [external-dns](https://github.com/kubernetes-sigs/external-dns) | Cloudflare DNS sync |
+| [external-secrets](https://github.com/external-secrets/external-secrets/) | 1Password Connect → K8s secrets |
+| [ingress-nginx](https://github.com/kubernetes/ingress-nginx/) | HTTP ingress |
+| [rook](https://github.com/rook/rook) | In-cluster Ceph (block, FS, S3) |
+| [sops](https://toolkit.fluxcd.io/guides/mozilla-sops/) | In-repo secret encryption |
+| [volsync](https://github.com/backube/volsync) + [snapscheduler](https://github.com/backube/snapscheduler) | PVC backup |
 
----
+## License
 
-### 🔏 License
-
-See [LICENSE](https://github.com/bjw-s/home-ops/blob/main/LICENSE)
+See [LICENSE](./LICENSE).
