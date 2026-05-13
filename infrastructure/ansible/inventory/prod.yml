@@ -1,0 +1,28 @@
+---
+# Prod cluster inventory — 3x Minisforum MS-01 (i9-13900H) on bare metal.
+# All MS-01 nodes run as controlplane + worker (no dedicated workers).
+#
+# TODO: Fill in real IPs on VLAN 910 (10.10.91.0/24) when hardware arrives.
+
+all:
+  vars:
+    talos_target: prod
+    cluster_name: homelab
+    # TODO: Set to actual VIP on 10.10.91.0/24 once Cilium L2 announces it
+    cluster_endpoint: "https://10.10.91.1:6443"
+  children:
+    talos_controlplane:
+      hosts:
+        # TODO: Replace placeholders with real IPs after MS-01 provisioning
+        ms01-cp1:
+          ansible_host: 10.10.91.11  # TODO
+        ms01-cp2:
+          ansible_host: 10.10.91.12  # TODO
+        ms01-cp3:
+          ansible_host: 10.10.91.13  # TODO
+    # All MS-01 nodes are also workers (allowSchedulingOnControlPlanes: true)
+    talos_workers:
+      hosts:
+        ms01-cp1:
+        ms01-cp2:
+        ms01-cp3:

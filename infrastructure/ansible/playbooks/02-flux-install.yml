@@ -1,0 +1,68 @@
+---
+# Phase 2 of bootstrap: install Flux and bootstrap against the GitHub repo
+#
+# Requires:
+#   - kubeconfig at ~/.kube/config-{cluster_name} (set by 01-talos-bootstrap.yml)
+#   - sops-age secret in flux-system namespace (set by 03-sops-keys.yml)
+#   - GITHUB_TOKEN environment variable (or 1Password CLI configured)
+#
+# Run via:
+#   ansible-playbook -i inventory/local.yml playbooks/02-flux-install.yml
+#   ansible-playbook -i inventory/prod.yml  playbooks/02-flux-install.yml
+
+- name: Bootstrap Flux against GitHub repo
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    cluster_target: "{{ talos_target | default('local') }}"
+    cluster_name: "{{ 'homelab-local' if cluster_target == 'local' else 'homelab' }}"
+    cluster_path: "kubernetes/clusters/{{ cluster_target }}"
+    kubeconfig_path: "{{ ansible_env.HOME }}/.kube/config-{{ cluster_name }}"
+    github_owner: "iT3E"
+    github_repo: "tnwks-ops"
+    github_branch: "main"
+
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+    GITHUB_TOKEN: "{{ lookup('env', 'GITHUB_TOKEN') }}"
+
+  tasks:
+    - name: Ensure flux CLI is installed
+      ansible.builtin.command: flux version --client
+      register: flux_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install flux CLI if missing
+      ansible.builtin.shell: |
+        curl -s https://fluxcd.io/install.sh | sudo bash
+      when: flux_check.rc != 0
+
+    - name: Verify GITHUB_TOKEN is set
+      ansible.builtin.fail:
+        msg: |
+          GITHUB_TOKEN environment variable is required.
+          Try: export GITHUB_TOKEN=$(op read 'op://Private/GitHub Flux Token/credential')
+      when: lookup('env', 'GITHUB_TOKEN') | length == 0
+
+    - name: Verify cluster is reachable
+      ansible.builtin.command: kubectl cluster-info
+      changed_when: false
+
+    - name: Run flux bootstrap github
+      ansible.builtin.command: >-
+        flux bootstrap github
+        --owner={{ github_owner }}
+        --repository={{ github_repo }}
+        --branch={{ github_branch }}
+        --path={{ cluster_path }}
+        --personal
+        --components-extra=image-reflector-controller,image-automation-controller
+      register: flux_bootstrap
+      changed_when: "'unchanged' not in flux_bootstrap.stdout"
+
+    - name: Show flux bootstrap result
+      ansible.builtin.debug:
+        var: flux_bootstrap.stdout_lines
