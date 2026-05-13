@@ -1,0 +1,22 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-settings
+  namespace: flux-system
+data:
+  CLUSTER_NAME: "homelab"
+  CLUSTER_DOMAIN: "it3e.xyz"
+  STORAGE_CLASS_DEFAULT: "ceph-block"
+  STORAGE_CLASS_BULK: "nfs-bulk"
+  # TODO: Assign LB range from 10.10.91.0/24 when Cilium BGP is configured
+  LB_RANGE: "10.10.91.50-10.10.91.60"
+  SOPS_AGE_PUBKEY: "# TODO: Ivan provides per cluster"
+  TIMEZONE: "America/Los_Angeles"
+  METALLB_LB_RANGE: "10.10.91.50-10.10.91.60"
+  METALLB_K8S_GATEWAY_ADDR: "10.10.91.50"
+  METALLB_INGRESS_ADDR: "10.10.91.51"
+  # TODO: Set KUBE_VIP_ADDR to actual VIP on 10.10.91.0/24 (VLAN 910)
+  KUBE_VIP_ADDR: "10.10.91.1"
+  CLUSTER_CIDR: "10.42.0.0/16"
+  SERVICE_CIDR: "10.43.0.0/16"

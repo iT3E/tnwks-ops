@@ -1,0 +1,28 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # Core infrastructure
+  - ../../apps/cert-manager/kustomization.yaml
+  - ../../apps/databases/kustomization.yaml
+  - ../../apps/default/kustomization.yaml
+  - ../../apps/flux-system/kustomization.yaml
+  - ../../apps/kube-system/kustomization.yaml
+
+  # Storage (prod-only: in-cluster Rook Ceph)
+  - ../../apps/storage/rook-ceph/rook-ceph-operator/kustomization.yaml
+
+  # Networking (full stack including cloudflared)
+  - ../../apps/networking/kustomization.yaml
+
+  # Apps (full stack)
+  - ../../apps/home-automation/kustomization.yaml
+  - ../../apps/media/kustomization.yaml
+  - ../../apps/monitoring/kustomization.yaml
+  - ../../apps/production/kustomization.yaml
+  - ../../apps/selfhosted/kustomization.yaml
+  - ../../apps/tools/kustomization.yaml
+  - ../../apps/vpn/kustomization.yaml
+
+  # Cluster settings overlay
+  - ./cluster-settings.yaml

@@ -1,0 +1,34 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # Core infrastructure
+  - ../../apps/cert-manager/kustomization.yaml
+  - ../../apps/databases/kustomization.yaml
+  - ../../apps/default/kustomization.yaml
+  - ../../apps/flux-system/kustomization.yaml
+  - ../../apps/kube-system/kustomization.yaml
+
+  # Apps (subset safe for local simulation)
+  - ../../apps/home-automation/kustomization.yaml
+  - ../../apps/media/kustomization.yaml
+  - ../../apps/monitoring/kustomization.yaml
+  - ../../apps/production/kustomization.yaml
+  - ../../apps/selfhosted/kustomization.yaml
+  - ../../apps/tools/kustomization.yaml
+
+  # Networking (subset — no metallb, no cloudflared)
+  - ../../apps/networking/kustomization.yaml
+
+  # Cluster settings overlay
+  - ./cluster-settings.yaml
+
+# Excluded from local (require hardware or real infrastructure):
+#   - ../../apps/storage/rook-ceph (uses local-path instead)
+#   - ../../apps/vpn/pod-gateway (pointless for sim)
+#   - ../../apps/system-upgrade (Talos has its own upgrade flow)
+#
+# Apps present but should be skipped via Flux kustomization patches:
+#   - production/frigate (needs Coral USB)
+#   - home-automation/zwave-js-ui (needs Z-Wave USB)
+#   - networking/cloudflared (no real tunnel for sim)
