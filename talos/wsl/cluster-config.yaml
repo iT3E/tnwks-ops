@@ -1,20 +1,20 @@
-# talosctl cluster create configuration for local Docker-mode cluster
+# talosctl cluster create configuration for the WSL Docker-mode cluster
 #
 # Usage:
 #   talosctl cluster create \
-#     --name homelab-local \
+#     --name homelab-wsl \
 #     --controlplanes 1 \
 #     --workers 2 \
 #     --cpus 2.0 \
 #     --memory 2048 \
 #     --kubernetes-version 1.30.0 \
-#     --config-patch @talos/local/cluster-config.yaml
+#     --config-patch @talos/wsl/cluster-config.yaml
 #
 # This creates a 3-node cluster (1 CP + 2 workers) in Docker containers.
 # CNI is disabled so Cilium can be installed via Flux post-bootstrap.
 
 cluster:
-  name: homelab-local
+  name: homelab-wsl
   network:
     cni:
       name: none

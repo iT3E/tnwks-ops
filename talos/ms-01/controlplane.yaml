@@ -2,11 +2,11 @@
 # TODO: Fill in when MS-01 hardware arrives
 #
 # All 3 MS-01 nodes run as controlplane + worker (no dedicated workers).
-# Generate secrets first: talosctl gen secrets -o talos/prod/secrets.yaml
-# Then generate configs: talosctl gen config homelab https://<VIP>:6443 \
-#   --config-patch-control-plane @talos/prod/controlplane.yaml \
-#   --config-patch @talos/prod/patches/cni-none.yaml \
-#   --config-patch @talos/prod/patches/cluster-discovery.yaml
+# Generate secrets first: talosctl gen secrets -o talos/ms-01/secrets.yaml
+# Then generate configs: talosctl gen config homelab-ms-01 https://<VIP>:6443 \
+#   --config-patch-control-plane @talos/ms-01/controlplane.yaml \
+#   --config-patch @talos/ms-01/patches/cni-none.yaml \
+#   --config-patch @talos/ms-01/patches/cluster-discovery.yaml
 
 version: v1alpha1
 machine:
@@ -55,7 +55,7 @@ machine:
       - name: ceph
 
 cluster:
-  name: homelab
+  name: homelab-ms-01
   network:
     cni:
       name: none

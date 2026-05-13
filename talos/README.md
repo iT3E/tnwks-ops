@@ -1,16 +1,19 @@
 # Talos Machine Configs
 
-This directory contains Talos Linux machine configurations for both the local
-(Docker-mode) development cluster and the production bare-metal MS-01 cluster.
+Two clusters, both running Talos Linux:
+
+- **WSL cluster** — Talos in Docker on the WSL2 desktop; runs real workloads
+  alongside the MS-01 cluster (USB-passthrough hosts for Coral, Z-Wave)
+- **MS-01 cluster** — bare-metal Talos on 3x Minisforum MS-01 i9-13900H
 
 ## Directory Layout
 
 ```
 talos/
-├── local/
+├── wsl/
 │   ├── cluster-config.yaml   # talosctl cluster create configuration
 │   └── README.md             # Bootstrap notes for Docker mode
-└── prod/
+└── ms-01/
     ├── controlplane.yaml     # MS-01 control plane machineconfig
     ├── worker.yaml           # MS-01 worker machineconfig
     ├── patches/              # Machineconfig patches
@@ -21,18 +24,18 @@ talos/
 
 ## Usage
 
-### Local (Docker mode)
+### WSL cluster (Docker mode)
 
 ```bash
-task bootstrap:local
+task bootstrap:wsl
 # or manually:
-talosctl cluster create --config talos/local/cluster-config.yaml
+talosctl cluster create --config talos/wsl/cluster-config.yaml
 ```
 
-### Prod (Bare metal)
+### MS-01 cluster (bare metal)
 
 ```bash
-task bootstrap:prod
+task bootstrap:ms-01
 # or manually:
-talosctl apply-config --nodes <IP> --file talos/prod/controlplane.yaml
+talosctl apply-config --nodes <IP> --file talos/ms-01/controlplane.yaml
 ```

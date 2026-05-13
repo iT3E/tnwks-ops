@@ -1,4 +1,4 @@
-# Production Talos Cluster (Bare Metal MS-01)
+# MS-01 Talos Cluster (Bare Metal)
 
 3x Minisforum MS-01 (i9-13900H) running Talos Linux on bare metal.
 
@@ -22,9 +22,9 @@
 ```bash
 # PXE-boot or USB-boot all 3 nodes with Talos ISO
 # Then apply configs:
-talosctl apply-config --nodes <ms01-cp1-ip> --file talos/prod/controlplane.yaml
-talosctl apply-config --nodes <ms01-cp2-ip> --file talos/prod/controlplane.yaml
-talosctl apply-config --nodes <ms01-cp3-ip> --file talos/prod/controlplane.yaml
+talosctl apply-config --nodes <ms01-cp1-ip> --file talos/ms-01/controlplane.yaml
+talosctl apply-config --nodes <ms01-cp2-ip> --file talos/ms-01/controlplane.yaml
+talosctl apply-config --nodes <ms01-cp3-ip> --file talos/ms-01/controlplane.yaml
 
 # Bootstrap etcd on first node
 talosctl bootstrap --nodes <ms01-cp1-ip>
@@ -38,3 +38,11 @@ talosctl kubeconfig --nodes <ms01-cp1-ip> --force
 - [ ] Fill in actual IPs when hardware arrives
 - [ ] Generate secrets with `talosctl gen secrets`
 - [ ] Apply machine-specific patches (hostname, install disk)
+
+## USB-attached apps
+
+USB passthrough for Frigate (Coral TPU) and zwave-js-ui (Aeotec Z-Stick) on
+this cluster is straightforward — just plug the dongles into one of the
+MS-01s. Talos exposes them as `/dev/bus/usb/...`, and the pods claim them
+via the existing `securityContext` / hostPath patterns. See
+[docs/usb-passthrough.md](../../docs/usb-passthrough.md).
