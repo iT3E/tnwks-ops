@@ -84,7 +84,7 @@ spec:
         enabled: true
         className: nginx-internal
         hosts:
-          - host: &host "{{ .Release.Name }}.tnwks.local"
+          - host: &host "{{ .Release.Name }}.${CLUSTER_DOMAIN}"
             paths:
               - path: /
                 service:
@@ -94,7 +94,7 @@ spec:
       config:
         accessMode: ReadWriteOnce
         size: 1Gi
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
         enabled: true
         globalMounts:
           - path: /data
@@ -123,6 +123,6 @@ spec:
         enabled: true
         accessMode: ReadWriteOnce
         size: 1Gi
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
         globalMounts:
           - path: /media

@@ -36,7 +36,7 @@ spec:
           value: "${TIMEZONE}"
       service:
         annotations:
-        loadBalancerIP: "10.10.120.52"
+        loadBalancerIP: "${INGRESS_INTERNAL_ADDR}"
         externalTrafficPolicy: Local
       publishService:
         enabled: true

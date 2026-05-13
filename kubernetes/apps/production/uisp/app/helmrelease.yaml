@@ -72,7 +72,7 @@ spec:
         mountPath: /config
         accessMode: ReadWriteOnce
         size: 5Gi
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
 
     resources:
       requests:

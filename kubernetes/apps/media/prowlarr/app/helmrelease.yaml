@@ -59,7 +59,7 @@ spec:
         enabled: true
         ingressClassName: "nginx"
         hosts:
-          - host: &internalHost "prowlarr.tnwks.local"
+          - host: &internalHost "prowlarr.${INTERNAL_DOMAIN}"
             paths:
               - path: /
 

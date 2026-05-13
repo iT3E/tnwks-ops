@@ -5,7 +5,7 @@ metadata:
   name: mariadb-lb
   namespace: databases
   annotations:
-    coredns.io/hostname: mariadb.tnwks.local
+    coredns.io/hostname: mariadb.${INTERNAL_DOMAIN}
 spec:
   type: LoadBalancer
   externalTrafficPolicy: Local

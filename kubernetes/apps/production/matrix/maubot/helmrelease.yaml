@@ -72,7 +72,7 @@ spec:
     persistence:
       data:
         enabled: true
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
         size: 5Gi
         accessMode: ReadWriteOnce
       config:

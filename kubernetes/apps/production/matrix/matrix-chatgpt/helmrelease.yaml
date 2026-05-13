@@ -56,7 +56,7 @@ spec:
     persistence:
       config:
         enabled: true
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
         mountPath: /storage
 
     probes:

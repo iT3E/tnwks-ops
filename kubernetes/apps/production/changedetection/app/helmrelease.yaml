@@ -48,7 +48,7 @@ spec:
         enabled: true
         ingressClassName: "nginx-internal"
         hosts:
-          - host: &internalHost "changedetection.tnwks.local"
+          - host: &internalHost "changedetection.${INTERNAL_DOMAIN}"
             paths:
               - path: /
 
@@ -62,7 +62,7 @@ spec:
         mountPath: /datastore
         accessMode: ReadWriteOnce
         size: 1Gi
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
     resources:
       requests:
         cpu: 10m

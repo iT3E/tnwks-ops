@@ -67,7 +67,7 @@ spec:
         enabled: true
         accessMode: ReadWriteOnce
         size: 1Gi
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
         globalMounts:
           - path: /data
       config-file:

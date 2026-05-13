@@ -67,7 +67,7 @@ spec:
             proxy_set_header Accept-Encoding "";
             sub_filter_once on;
         hosts:
-          - host: &internalHost "radarr.tnwks.local"
+          - host: &internalHost "radarr.${INTERNAL_DOMAIN}"
             paths:
               - path: /
 

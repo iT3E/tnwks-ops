@@ -26,7 +26,7 @@ spec:
     keepHistory: false
   values:
     global:
-      storageClass: cephfs
+      storageClass: "${STORAGE_CLASS_DEFAULT}"
     auth:
       existingSecret: mariadb-secrets
     podLabels:

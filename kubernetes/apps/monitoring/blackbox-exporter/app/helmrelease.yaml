@@ -45,7 +45,7 @@ spec:
       enabled: true
       className: nginx-internal
       hosts:
-        - host: &host "blackbox-exporter.tnwks.local"
+        - host: &host "blackbox-exporter.${INTERNAL_DOMAIN}"
           paths:
             - path: /
               pathType: Prefix

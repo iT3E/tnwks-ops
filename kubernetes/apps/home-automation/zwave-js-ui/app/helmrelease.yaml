@@ -65,7 +65,7 @@ spec:
         enabled: true
         ingressClassName: nginx-internal
         hosts:
-          - host: &host "zwave.tnwks.local"
+          - host: &host "zwave.${INTERNAL_DOMAIN}"
             paths:
               - path: /
                 pathType: Prefix
@@ -76,7 +76,7 @@ spec:
         mountPath: /usr/src/app/store
         accessMode: ReadWriteOnce
         size: 1Gi
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
     persistence:
       usb:
         enabled: true

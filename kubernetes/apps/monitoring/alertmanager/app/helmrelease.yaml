@@ -39,7 +39,7 @@ spec:
         enabled: true
         ingressClassName: nginx-internal
         hosts:
-          - host: &host alertmanager.tnwks.local
+          - host: &host alertmanager.${INTERNAL_DOMAIN}
             paths:
               - path: /
                 pathType: Prefix
@@ -73,4 +73,4 @@ spec:
         mountPath: /alertmanager
         accessMode: ReadWriteOnce
         size: 50Mi
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"

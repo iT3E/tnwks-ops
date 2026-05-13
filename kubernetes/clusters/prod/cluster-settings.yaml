@@ -5,18 +5,40 @@ metadata:
   name: cluster-settings
   namespace: flux-system
 data:
+  # Identity
   CLUSTER_NAME: "homelab"
   CLUSTER_DOMAIN: "it3e.xyz"
+  # Legacy alias used by existing manifests that reference ${SECRET_DOMAIN}.
+  # Matches the value in cluster-secrets.sops.yaml.
+  SECRET_DOMAIN: "it3e.xyz"
+  # Internal LAN domain — used for the nginx-internal ingress class hostnames
+  INTERNAL_DOMAIN: "tnwks.local"
+
+  # Storage classes
+  # ceph-block: in-cluster Rook RBD (RWO, replicated across 3x 1TB NVMe)
+  # nfs-bulk:   democratic-csi NFS to TerraMaster (RWX, bulk media)
   STORAGE_CLASS_DEFAULT: "ceph-block"
   STORAGE_CLASS_BULK: "nfs-bulk"
-  # TODO: Assign LB range from 10.10.91.0/24 when Cilium BGP is configured
+
+  # Bulk media PVC size (TerraMaster NFS share)
+  BULK_PVC_SIZE: "10Ti"
+
+  # Load balancer / IP allocation (Cilium L2/BGP on VLAN 910)
+  # TODO: Confirm range when Cilium BGP policy is finalized
   LB_RANGE: "10.10.91.50-10.10.91.60"
-  SOPS_AGE_PUBKEY: "# TODO: Ivan provides per cluster"
-  TIMEZONE: "America/Los_Angeles"
   METALLB_LB_RANGE: "10.10.91.50-10.10.91.60"
   METALLB_K8S_GATEWAY_ADDR: "10.10.91.50"
   METALLB_INGRESS_ADDR: "10.10.91.51"
+  INGRESS_INTERNAL_ADDR: "10.10.91.52"
   # TODO: Set KUBE_VIP_ADDR to actual VIP on 10.10.91.0/24 (VLAN 910)
   KUBE_VIP_ADDR: "10.10.91.1"
+
+  # SOPS
+  SOPS_AGE_PUBKEY: "# TODO: Ivan provides per cluster"
+
+  # Cluster networking
   CLUSTER_CIDR: "10.42.0.0/16"
   SERVICE_CIDR: "10.43.0.0/16"
+
+  # Misc
+  TIMEZONE: "America/Los_Angeles"

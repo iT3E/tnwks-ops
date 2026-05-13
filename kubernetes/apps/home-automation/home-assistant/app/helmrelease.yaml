@@ -56,7 +56,7 @@ spec:
         enabled: true
         ingressClassName: nginx-internal
         hosts:
-          - host: &host hass.tnwks.local
+          - host: &host hass.${INTERNAL_DOMAIN}
             paths:
               - path: /
                 pathType: Prefix
@@ -77,7 +77,7 @@ spec:
         mountPath: /config
         accessMode: ReadWriteOnce
         size: 5Gi
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
     resources:
       requests:
         cpu: 10m

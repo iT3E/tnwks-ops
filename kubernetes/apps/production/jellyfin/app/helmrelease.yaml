@@ -70,7 +70,7 @@ spec:
         enabled: true
         ingressClassName: "nginx-internal"
         hosts:
-          - host: &internalHost "jellyfin.tnwks.local"
+          - host: &internalHost "jellyfin.${INTERNAL_DOMAIN}"
             paths:
               - path: /
 

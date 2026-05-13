@@ -60,7 +60,7 @@ spec:
           enabled: true
           className: nginx
           hosts:
-            - &host "hubble.tnwks.local"
+            - &host "hubble.${INTERNAL_DOMAIN}"
           tls:
             - hosts:
                 - *host

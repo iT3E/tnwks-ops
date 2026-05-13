@@ -5,16 +5,37 @@ metadata:
   name: cluster-settings
   namespace: flux-system
 data:
+  # Identity
   CLUSTER_NAME: "homelab-local"
   CLUSTER_DOMAIN: "tnwks.local"
+  # Legacy alias used by existing manifests that reference ${SECRET_DOMAIN}.
+  # Overrides the value from cluster-secrets.sops.yaml on this cluster.
+  SECRET_DOMAIN: "tnwks.local"
+  # Internal LAN domain — same as CLUSTER_DOMAIN on local sim
+  INTERNAL_DOMAIN: "tnwks.local"
+
+  # Storage classes
   STORAGE_CLASS_DEFAULT: "local-path"
   STORAGE_CLASS_BULK: "local-path"
+
+  # Bulk PVC sizes — local uses small sizes since local-path is whatever the host has
+  BULK_PVC_SIZE: "10Gi"
+
+  # Load balancer / IP allocation (local has no LB controller; Services pend)
   LB_RANGE: ""
-  SOPS_AGE_PUBKEY: "# TODO: Ivan provides per cluster"
-  TIMEZONE: "America/Los_Angeles"
+  # Placeholder IPs — services using these will pend in local (no LB controller)
   METALLB_LB_RANGE: ""
-  METALLB_K8S_GATEWAY_ADDR: ""
-  METALLB_INGRESS_ADDR: ""
+  METALLB_K8S_GATEWAY_ADDR: "127.0.0.1"
+  METALLB_INGRESS_ADDR: "127.0.0.1"
+  INGRESS_INTERNAL_ADDR: "127.0.0.1"
   KUBE_VIP_ADDR: "127.0.0.1"
+
+  # SOPS — public key set via cluster bootstrap (sops-age secret)
+  SOPS_AGE_PUBKEY: "# TODO: Ivan provides per cluster"
+
+  # Cluster networking
   CLUSTER_CIDR: "10.42.0.0/16"
   SERVICE_CIDR: "10.43.0.0/16"
+
+  # Misc
+  TIMEZONE: "America/Los_Angeles"

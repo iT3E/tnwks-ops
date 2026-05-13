@@ -308,5 +308,5 @@ spec:
             - *host
     persistence:
       enabled: true
-      storageClassName: cephfs
+      storageClassName: "${STORAGE_CLASS_DEFAULT}"
 
