@@ -3,20 +3,20 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   # Core infrastructure (full from shared apps)
-  - ../../apps/cert-manager/kustomization.yaml
-  - ../../apps/databases/kustomization.yaml
-  - ../../apps/default/kustomization.yaml
-  - ../../apps/flux-system/kustomization.yaml
-  - ../../apps/kube-system/kustomization.yaml
-  - ../../apps/media/kustomization.yaml
-  - ../../apps/monitoring/kustomization.yaml
-  - ../../apps/selfhosted/kustomization.yaml
-  - ../../apps/tools/kustomization.yaml
+  - ../../apps/cert-manager
+  - ../../apps/databases
+  - ../../apps/default
+  - ../../apps/flux-system
+  - ../../apps/kube-system
+  - ../../apps/media
+  - ../../apps/monitoring
+  - ../../apps/selfhosted
+  - ../../apps/tools
 
   # Trimmed overlays (omit hardware-dependent apps)
-  - ./overlays/home-automation.yaml
-  - ./overlays/networking.yaml
-  - ./overlays/production.yaml
+  - ./overlays/home-automation
+  - ./overlays/networking
+  - ./overlays/production
 
   # Cluster settings
   - ./cluster-settings.yaml
