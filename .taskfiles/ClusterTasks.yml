@@ -28,18 +28,18 @@ tasks:
     cmds:
       - flux reconcile -n flux-system kustomization cluster --with-source
 
-  reconcile:local:
-    desc: Force flux reconciliation on the local cluster
+  reconcile:wsl:
+    desc: Force flux reconciliation on the WSL cluster
     env:
-      KUBECONFIG: "{{.HOME}}/.kube/config-homelab-local"
+      KUBECONFIG: "{{.HOME}}/.kube/config-homelab-wsl"
     cmds:
       - flux reconcile source git flux-system
       - flux reconcile kustomization flux-system --with-source
 
-  reconcile:prod:
-    desc: Force flux reconciliation on the prod cluster
+  reconcile:ms-01:
+    desc: Force flux reconciliation on the MS-01 cluster
     env:
-      KUBECONFIG: "{{.HOME}}/.kube/config-homelab"
+      KUBECONFIG: "{{.HOME}}/.kube/config-homelab-ms-01"
     cmds:
       - flux reconcile source git flux-system
       - flux reconcile kustomization flux-system --with-source
