@@ -1,8 +1,8 @@
-# Bootstrap: Prod Talos Cluster (MS-01)
+# Bootstrap: MS-01 Talos Cluster
 
 > **Status: SKELETON — fill in once MS-01 hardware is on the bench.**
 
-End-to-end procedure for spinning up the production Talos cluster on the
+End-to-end procedure for spinning up the MS-01 Talos cluster on the
 3x Minisforum MS-01 (i9-13900H) bare-metal nodes.
 
 ## Hardware assumptions
@@ -20,9 +20,9 @@ Network: VLAN 910 (10.10.91.0/24).
 - [ ] Rack and cable all 3 MS-01 nodes
 - [ ] Configure switch trunk on VLAN 910
 - [ ] Assign static IPs (10.10.91.11–13) and update
-      `infrastructure/ansible/inventory/prod.yml`
+      `infrastructure/ansible/inventory/ms-01.yml`
 - [ ] Decide and document the cluster VIP (probably 10.10.91.10) and update
-      `KUBE_VIP_ADDR` in `kubernetes/clusters/prod/cluster-settings.yaml`
+      `KUBE_VIP_ADDR` in `kubernetes/clusters/ms-01/cluster-settings.yaml`
 - [ ] Reserve LB range in DHCP and update `LB_RANGE`/`METALLB_*_ADDR` in
       cluster-settings
 - [ ] Decide actual Ceph device path on MS-01 — confirm `/dev/nvme1n1`
@@ -32,21 +32,21 @@ Network: VLAN 910 (10.10.91.0/24).
 
 ```bash
 # 1. Generate Talos secrets bundle (one-time)
-talosctl gen secrets -o talos/prod/secrets.yaml
+talosctl gen secrets -o talos/ms-01/secrets.yaml
 # Encrypt and commit secrets.yaml — DO NOT commit plaintext
-sops --encrypt --in-place talos/prod/secrets.yaml
+sops --encrypt --in-place talos/ms-01/secrets.yaml
 
 # 2. PXE-boot or USB-boot all 3 MS-01s with Talos ISO
 
-# 3. Run the prod bootstrap chain
+# 3. Run the bootstrap chain
 export GITHUB_TOKEN=$(op read 'op://Private/GitHub Flux Token/credential')
-task bootstrap:prod
+task bootstrap:ms-01
 ```
 
 ## Verify
 
 ```bash
-export KUBECONFIG=~/.kube/config-homelab
+export KUBECONFIG=~/.kube/config-homelab-ms-01
 
 kubectl get nodes -o wide
 kubectl get cephcluster -A          # should show HEALTH_OK after ~10 min
@@ -70,6 +70,12 @@ spec:
 EOF
 kubectl get pvc test
 ```
+
+## USB-attached apps
+
+Coral TPU (Frigate) and Aeotec Z-Stick (zwave-js-ui) are deployed on this
+cluster too. USB passthrough is native — plug each dongle into one of the
+MS-01s and Talos exposes it. See [usb-passthrough.md](./usb-passthrough.md).
 
 ## Disaster recovery
 

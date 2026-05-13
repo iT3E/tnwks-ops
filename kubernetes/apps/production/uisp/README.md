@@ -13,8 +13,9 @@ the cluster as part of the multi-cluster restructure (2026-05-12).
 - StatefulSet because UISP holds device state in `/config`
 - `8 CPU / 4Gi` resource pin matches the legacy footprint
 - HTTPS-only — backend protocol annotation set on ingress
+- Deployed only on the MS-01 cluster (omitted from the WSL overlay)
 - Persistent config volume uses `${STORAGE_CLASS_DEFAULT}`
-  (ceph-block in prod, local-path in local sim)
+  (`ceph-block` on MS-01)
 
 ## Container image
 

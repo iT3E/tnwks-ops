@@ -1,5 +1,5 @@
 ---
-# In-cluster Rook Ceph cluster for prod homelab.
+# In-cluster Rook Ceph cluster for the MS-01 cluster.
 # Deploys OSDs on the 1TB NVMe in each of the 3 MS-01 nodes.
 # Reference: https://rook.io/docs/rook/latest-release/CRDs/Cluster/ceph-cluster-crd/
 apiVersion: ceph.rook.io/v1

@@ -9,7 +9,7 @@ resources:
   - ../../apps/flux-system
   - ../../apps/kube-system
 
-  # Storage (prod-only: in-cluster Rook Ceph)
+  # Storage: in-cluster Rook Ceph (this cluster only — WSL uses local-path)
   - ../../apps/storage/rook-ceph/rook-ceph-operator
   - ../../apps/storage/rook-ceph/cluster
 
