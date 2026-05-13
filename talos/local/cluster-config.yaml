@@ -1,0 +1,42 @@
+# talosctl cluster create configuration for local Docker-mode cluster
+#
+# Usage:
+#   talosctl cluster create \
+#     --name homelab-local \
+#     --controlplanes 1 \
+#     --workers 2 \
+#     --cpus 2.0 \
+#     --memory 2048 \
+#     --kubernetes-version 1.30.0 \
+#     --config-patch @talos/local/cluster-config.yaml
+#
+# This creates a 3-node cluster (1 CP + 2 workers) in Docker containers.
+# CNI is disabled so Cilium can be installed via Flux post-bootstrap.
+
+cluster:
+  name: homelab-local
+  network:
+    cni:
+      name: none
+    podSubnets:
+      - 10.42.0.0/16
+    serviceSubnets:
+      - 10.43.0.0/16
+  proxy:
+    disabled: true
+  discovery:
+    enabled: true
+    registries:
+      kubernetes:
+        disabled: false
+      service:
+        disabled: true
+
+machine:
+  kubelet:
+    extraArgs:
+      rotate-server-certificates: "true"
+  features:
+    kubePrism:
+      enabled: true
+      port: 7445

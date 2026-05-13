@@ -1,0 +1,58 @@
+# Talos worker machineconfig for MS-01 bare-metal nodes
+# NOTE: Currently all 3 MS-01 nodes run as controlplane + worker
+# (allowSchedulingOnControlPlanes: true in controlplane.yaml).
+# This file exists as a skeleton if dedicated workers are added later.
+#
+# TODO: Fill in when/if dedicated worker nodes are added
+
+version: v1alpha1
+machine:
+  type: worker
+  install:
+    disk: /dev/nvme0n1
+    image: ghcr.io/siderolabs/installer:latest
+    wipe: false
+  network:
+    interfaces:
+      - interface: eth0
+        dhcp: true
+        vlan:
+          vlanId: 910
+  kubelet:
+    extraArgs:
+      rotate-server-certificates: "true"
+    extraMounts:
+      - destination: /var/lib/rook
+        type: bind
+        source: /var/lib/rook
+        options:
+          - bind
+          - rshared
+          - rw
+  features:
+    kubePrism:
+      enabled: true
+      port: 7445
+  kernel:
+    modules:
+      - name: rbd
+      - name: ceph
+
+cluster:
+  name: homelab
+  network:
+    cni:
+      name: none
+    podSubnets:
+      - 10.42.0.0/16
+    serviceSubnets:
+      - 10.43.0.0/16
+  proxy:
+    disabled: true
+  discovery:
+    enabled: true
+    registries:
+      kubernetes:
+        disabled: false
+      service:
+        disabled: true
