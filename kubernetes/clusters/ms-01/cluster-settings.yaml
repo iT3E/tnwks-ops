@@ -6,7 +6,7 @@ metadata:
   namespace: flux-system
 data:
   # Identity
-  CLUSTER_NAME: "homelab"
+  CLUSTER_NAME: "homelab-ms-01"
   CLUSTER_DOMAIN: "it3e.xyz"
   # Legacy alias used by existing manifests that reference ${SECRET_DOMAIN}.
   # Matches the value in cluster-secrets.sops.yaml.

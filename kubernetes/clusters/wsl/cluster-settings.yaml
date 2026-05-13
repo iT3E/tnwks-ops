@@ -6,24 +6,23 @@ metadata:
   namespace: flux-system
 data:
   # Identity
-  CLUSTER_NAME: "homelab-local"
+  CLUSTER_NAME: "homelab-wsl"
   CLUSTER_DOMAIN: "tnwks.local"
   # Legacy alias used by existing manifests that reference ${SECRET_DOMAIN}.
   # Overrides the value from cluster-secrets.sops.yaml on this cluster.
   SECRET_DOMAIN: "tnwks.local"
-  # Internal LAN domain — same as CLUSTER_DOMAIN on local sim
+  # Internal LAN domain — same as CLUSTER_DOMAIN on the WSL cluster
   INTERNAL_DOMAIN: "tnwks.local"
 
   # Storage classes
   STORAGE_CLASS_DEFAULT: "local-path"
   STORAGE_CLASS_BULK: "local-path"
 
-  # Bulk PVC sizes — local uses small sizes since local-path is whatever the host has
+  # Bulk PVC size — WSL uses smaller sizes (local-path is whatever the host has)
   BULK_PVC_SIZE: "10Gi"
 
-  # Load balancer / IP allocation (local has no LB controller; Services pend)
+  # Load balancer / IP allocation (no LB controller on WSL; Services pend)
   LB_RANGE: ""
-  # Placeholder IPs — services using these will pend in local (no LB controller)
   METALLB_LB_RANGE: ""
   METALLB_K8S_GATEWAY_ADDR: "127.0.0.1"
   METALLB_INGRESS_ADDR: "127.0.0.1"
