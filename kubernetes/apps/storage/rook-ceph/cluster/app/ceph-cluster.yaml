@@ -1,0 +1,104 @@
+---
+# In-cluster Rook Ceph cluster for prod homelab.
+# Deploys OSDs on the 1TB NVMe in each of the 3 MS-01 nodes.
+# Reference: https://rook.io/docs/rook/latest-release/CRDs/Cluster/ceph-cluster-crd/
+apiVersion: ceph.rook.io/v1
+kind: CephCluster
+metadata:
+  name: rook-ceph
+  namespace: rook-ceph
+spec:
+  cephVersion:
+    # Renovate: tracks https://quay.io/repository/ceph/ceph?tab=tags
+    image: quay.io/ceph/ceph:v18.2.2
+    allowUnsupported: false
+  dataDirHostPath: /var/lib/rook
+  skipUpgradeChecks: false
+  continueUpgradeAfterChecksEvenIfNotHealthy: false
+  waitTimeoutForHealthyOSDInMinutes: 10
+
+  mon:
+    count: 3
+    allowMultiplePerNode: false
+  mgr:
+    count: 2
+    allowMultiplePerNode: false
+    modules:
+      - name: pg_autoscaler
+        enabled: true
+
+  dashboard:
+    enabled: true
+    ssl: false
+    urlPrefix: /
+
+  monitoring:
+    enabled: true
+
+  network:
+    connections:
+      compression:
+        enabled: false
+      requireMsgr2: true
+
+  crashCollector:
+    disable: false
+  logCollector:
+    enabled: true
+    periodicity: daily
+    maxLogSize: 500M
+
+  cleanupPolicy:
+    confirmation: ""
+    sanitizeDisks:
+      method: quick
+      dataSource: zero
+      iteration: 1
+    allowUninstallWithVolumes: false
+
+  # OSD topology: each MS-01 has one dedicated 1TB NVMe for Ceph
+  # TODO: Confirm the device path matches actual hardware once MS-01 nodes
+  # are provisioned (likely /dev/nvme1n1 if /dev/nvme0n1 is the OS disk).
+  storage:
+    useAllNodes: true
+    useAllDevices: false
+    deviceFilter: "^nvme1n.*"
+    config:
+      osdsPerDevice: "1"
+      encryptedDevice: "false"
+
+  resources:
+    mgr:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+    mon:
+      requests:
+        cpu: "1"
+        memory: "1Gi"
+    osd:
+      requests:
+        cpu: "1"
+        memory: "4Gi"
+
+  priorityClassNames:
+    mon: system-node-critical
+    osd: system-node-critical
+    mgr: system-cluster-critical
+
+  disruptionManagement:
+    managePodBudgets: true
+    osdMaintenanceTimeout: 30
+    pgHealthCheckTimeout: 0
+
+  healthCheck:
+    daemonHealth:
+      mon:
+        disabled: false
+        interval: 45s
+      osd:
+        disabled: false
+        interval: 60s
+      status:
+        disabled: false
+        interval: 60s

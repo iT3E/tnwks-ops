@@ -1,0 +1,32 @@
+---
+# CephFS filesystem — provides RWX volumes for shared workloads
+# (e.g., media app config that needs simultaneous read access).
+apiVersion: ceph.rook.io/v1
+kind: CephFilesystem
+metadata:
+  name: ceph-filesystem
+  namespace: rook-ceph
+spec:
+  metadataPool:
+    failureDomain: host
+    replicated:
+      size: 3
+      requireSafeReplicaSize: true
+  dataPools:
+    - name: data0
+      failureDomain: host
+      replicated:
+        size: 3
+        requireSafeReplicaSize: true
+      parameters:
+        compression_mode: none
+  preserveFilesystemOnDelete: true
+  metadataServer:
+    activeCount: 1
+    activeStandby: true
+    resources:
+      requests:
+        cpu: "1"
+        memory: "1Gi"
+      limits:
+        memory: "4Gi"

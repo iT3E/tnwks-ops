@@ -27,11 +27,16 @@ spec:
     keepHistory: false
   values:
     fullnameOverride: k8s-gateway
-    domain: "${SECRET_DOMAIN}"
+    # Advertise both the external (CLUSTER_DOMAIN) and internal (INTERNAL_DOMAIN)
+    # zones from the cluster. In prod these resolve different DNS suffixes;
+    # in local they're the same value (tnwks.local).
+    domain: "${CLUSTER_DOMAIN}"
+    extraArgs:
+      - --domain=${INTERNAL_DOMAIN}
     ttl: 1
     service:
       type: LoadBalancer
       port: 53
       annotations:
-        metallb.universe.tf/loadBalancerIPs: "${METALLB_K8S_GATEWAY_ADDR}"
+        io.cilium/lb-ipam-ips: "${METALLB_K8S_GATEWAY_ADDR}"
       externalTrafficPolicy: Local

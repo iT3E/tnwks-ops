@@ -11,6 +11,7 @@ resources:
 
   # Storage (prod-only: in-cluster Rook Ceph)
   - ../../apps/storage/rook-ceph/rook-ceph-operator/kustomization.yaml
+  - ../../apps/storage/rook-ceph/cluster/kustomization.yaml
 
   # Networking (full stack including cloudflared)
   - ../../apps/networking/kustomization.yaml
