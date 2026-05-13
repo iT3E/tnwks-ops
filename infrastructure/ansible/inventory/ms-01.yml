@@ -1,13 +1,13 @@
 ---
-# Prod cluster inventory — 3x Minisforum MS-01 (i9-13900H) on bare metal.
+# MS-01 cluster inventory — 3x Minisforum MS-01 (i9-13900H) on bare metal.
 # All MS-01 nodes run as controlplane + worker (no dedicated workers).
 #
 # TODO: Fill in real IPs on VLAN 910 (10.10.91.0/24) when hardware arrives.
 
 all:
   vars:
-    talos_target: prod
-    cluster_name: homelab
+    talos_target: ms-01
+    cluster_name: homelab-ms-01
     # TODO: Set to actual VIP on 10.10.91.0/24 once Cilium L2 announces it
     cluster_endpoint: "https://10.10.91.1:6443"
   children:

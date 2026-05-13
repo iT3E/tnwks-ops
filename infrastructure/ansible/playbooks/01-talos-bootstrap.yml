@@ -1,14 +1,14 @@
 ---
 # Phase 1 of bootstrap: stand up the Talos cluster
 #
-# For local: runs `talosctl cluster create` against Docker
-# For prod:  applies machineconfigs to MS-01 nodes via talosctl
+# For wsl:   runs `talosctl cluster create` against Docker
+# For ms-01: applies machineconfigs to MS-01 nodes via talosctl
 #
 # Idempotent — checks if the cluster already exists before recreating.
 #
 # Run via:
-#   ansible-playbook -i inventory/local.yml playbooks/01-talos-bootstrap.yml
-#   ansible-playbook -i inventory/prod.yml  playbooks/01-talos-bootstrap.yml
+#   ansible-playbook -i inventory/wsl.yml   playbooks/01-talos-bootstrap.yml
+#   ansible-playbook -i inventory/ms-01.yml playbooks/01-talos-bootstrap.yml
 
 - name: Bootstrap Talos cluster
   hosts: localhost
@@ -16,8 +16,8 @@
   gather_facts: false
 
   vars:
-    cluster_target: "{{ talos_target | default('local') }}"
-    cluster_name: "{{ 'homelab-local' if cluster_target == 'local' else 'homelab' }}"
+    cluster_target: "{{ talos_target | default('wsl') }}"
+    cluster_name: "homelab-{{ cluster_target }}"
     talos_dir: "{{ playbook_dir }}/../../../talos/{{ cluster_target }}"
     kubeconfig_path: "{{ ansible_env.HOME }}/.kube/config-{{ cluster_name }}"
 
@@ -34,15 +34,15 @@
         state: directory
         mode: "0755"
 
-    # ─── LOCAL (Docker mode) ────────────────────────────────────────────
-    - name: Check if local Talos cluster already exists
+    # ─── WSL (Docker mode) ──────────────────────────────────────────────
+    - name: Check if WSL Talos cluster already exists
       ansible.builtin.command: talosctl cluster show --name {{ cluster_name }}
       register: cluster_status
       changed_when: false
       failed_when: false
-      when: cluster_target == 'local'
+      when: cluster_target == 'wsl'
 
-    - name: Create local Talos Docker cluster
+    - name: Create WSL Talos Docker cluster
       ansible.builtin.command: >-
         talosctl cluster create
         --name {{ cluster_name }}
@@ -53,24 +53,25 @@
         --kubernetes-version 1.30.0
         --config-patch @{{ talos_dir }}/cluster-config.yaml
       when:
-        - cluster_target == 'local'
+        - cluster_target == 'wsl'
         - cluster_status.rc != 0
       register: cluster_create
 
-    - name: Fetch local kubeconfig
+    - name: Fetch WSL kubeconfig
       ansible.builtin.command: >-
         talosctl kubeconfig {{ kubeconfig_path }} --force
-      when: cluster_target == 'local'
+      when: cluster_target == 'wsl'
       changed_when: true
 
-    # ─── PROD (Bare metal MS-01) ────────────────────────────────────────
-    - name: Verify prod node IPs are configured
+    # ─── MS-01 (Bare metal) ─────────────────────────────────────────────
+    - name: Verify MS-01 node IPs are configured
       ansible.builtin.fail:
         msg: |
-          Prod inventory has placeholder IPs. Update infrastructure/ansible/inventory/prod.yml
-          with real MS-01 IPs before running this playbook.
+          MS-01 inventory has placeholder IPs. Update
+          infrastructure/ansible/inventory/ms-01.yml with real MS-01 IPs
+          before running this playbook.
       when:
-        - cluster_target == 'prod'
+        - cluster_target == 'ms-01'
         - groups['talos_controlplane'] is not defined or groups['talos_controlplane'] | length == 0
 
     - name: Apply controlplane config to each MS-01 node
@@ -80,14 +81,14 @@
         --nodes {{ item }}
         --file {{ talos_dir }}/controlplane.yaml
       loop: "{{ groups['talos_controlplane'] | default([]) }}"
-      when: cluster_target == 'prod'
+      when: cluster_target == 'ms-01'
       changed_when: true
 
     - name: Bootstrap etcd on first controlplane
       ansible.builtin.command: >-
         talosctl bootstrap --nodes {{ groups['talos_controlplane'][0] }}
       when:
-        - cluster_target == 'prod'
+        - cluster_target == 'ms-01'
         - groups['talos_controlplane'] | default([]) | length > 0
       changed_when: true
       register: bootstrap_result
@@ -95,13 +96,13 @@
         - bootstrap_result.rc != 0
         - "'AlreadyExists' not in bootstrap_result.stderr"
 
-    - name: Fetch prod kubeconfig
+    - name: Fetch MS-01 kubeconfig
       ansible.builtin.command: >-
         talosctl kubeconfig {{ kubeconfig_path }}
         --nodes {{ groups['talos_controlplane'][0] }}
         --force
       when:
-        - cluster_target == 'prod'
+        - cluster_target == 'ms-01'
         - groups['talos_controlplane'] | default([]) | length > 0
       changed_when: true
 

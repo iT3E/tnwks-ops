@@ -12,8 +12,8 @@
 # encrypted secrets in the repo become unrecoverable for this cluster.
 #
 # Run via:
-#   ansible-playbook -i inventory/local.yml playbooks/03-sops-keys.yml
-#   ansible-playbook -i inventory/prod.yml  playbooks/03-sops-keys.yml
+#   ansible-playbook -i inventory/wsl.yml   playbooks/03-sops-keys.yml
+#   ansible-playbook -i inventory/ms-01.yml playbooks/03-sops-keys.yml
 
 - name: Provision SOPS age keys
   hosts: localhost
@@ -21,8 +21,8 @@
   gather_facts: false
 
   vars:
-    cluster_target: "{{ talos_target | default('local') }}"
-    cluster_name: "{{ 'homelab-local' if cluster_target == 'local' else 'homelab' }}"
+    cluster_target: "{{ talos_target | default('wsl') }}"
+    cluster_name: "homelab-{{ cluster_target }}"
     age_key_dir: "{{ ansible_env.HOME }}/.config/sops/age"
     age_key_file: "{{ age_key_dir }}/{{ cluster_name }}.txt"
     kubeconfig_path: "{{ ansible_env.HOME }}/.kube/config-{{ cluster_name }}"

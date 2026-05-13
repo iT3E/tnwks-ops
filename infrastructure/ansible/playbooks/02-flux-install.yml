@@ -7,8 +7,8 @@
 #   - GITHUB_TOKEN environment variable (or 1Password CLI configured)
 #
 # Run via:
-#   ansible-playbook -i inventory/local.yml playbooks/02-flux-install.yml
-#   ansible-playbook -i inventory/prod.yml  playbooks/02-flux-install.yml
+#   ansible-playbook -i inventory/wsl.yml   playbooks/02-flux-install.yml
+#   ansible-playbook -i inventory/ms-01.yml playbooks/02-flux-install.yml
 
 - name: Bootstrap Flux against GitHub repo
   hosts: localhost
@@ -16,8 +16,8 @@
   gather_facts: false
 
   vars:
-    cluster_target: "{{ talos_target | default('local') }}"
-    cluster_name: "{{ 'homelab-local' if cluster_target == 'local' else 'homelab' }}"
+    cluster_target: "{{ talos_target | default('wsl') }}"
+    cluster_name: "homelab-{{ cluster_target }}"
     cluster_path: "kubernetes/clusters/{{ cluster_target }}"
     kubeconfig_path: "{{ ansible_env.HOME }}/.kube/config-{{ cluster_name }}"
     github_owner: "iT3E"

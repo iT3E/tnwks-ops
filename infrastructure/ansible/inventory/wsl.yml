@@ -1,11 +1,11 @@
 ---
-# Local cluster inventory — Talos in Docker mode on this workstation.
+# WSL cluster inventory — Talos in Docker mode on the desktop workstation.
 # All operations run against localhost.
 
 all:
   vars:
-    talos_target: local
-    cluster_name: homelab-local
+    talos_target: wsl
+    cluster_name: homelab-wsl
   hosts:
     localhost:
       ansible_connection: local
