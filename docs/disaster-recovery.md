@@ -44,7 +44,7 @@ talosctl --nodes <each-node> dashboard
 # manually wipe /dev/nvme1n1 with: dd if=/dev/zero of=/dev/nvme1n1 bs=1M count=100
 
 # Re-apply CephCluster manifest via flux
-task flux:reconcile:ms-01
+task cluster:reconcile:ms-01
 ```
 
 Restore PVC data from VolSync backups (TODO).

@@ -69,7 +69,7 @@ task cluster:resources
 ## Iterate
 
 ```bash
-task flux:reconcile:wsl
+task cluster:reconcile:wsl
 ```
 
 ## Teardown / reset

@@ -28,10 +28,12 @@ Two peer production clusters, one source of truth:
 | **`wsl`** | Talos in Docker on the WSL2 desktop (1 CP + 2 workers) | local-path | Hosts USB-attached apps (Frigate / Coral, zwave-js-ui / Z-Stick) via [usbipd-win](./docs/usb-passthrough.md) |
 | **`ms-01`** | 3x Minisforum MS-01 i9-13900H, bare-metal Talos | Rook Ceph (3x 1TB NVMe) + democratic-csi NFS | Full stack including the public Cloudflare tunnel |
 
-Both share the same `kubernetes/apps/` and `kubernetes/flux/` configs.
-Per-cluster differences (storage class, IP ranges, DNS) live in
-`kubernetes/clusters/{wsl,ms-01}/cluster-settings.yaml` and are resolved
-via Flux variable substitution.
+Both share the manifests under `kubernetes/apps/` and the Flux machinery
+under `kubernetes/flux/meta/`. Per-cluster differences (storage class,
+IP ranges, DNS) live in `kubernetes/clusters/{wsl,ms-01}/cluster-settings.yaml`
+and are resolved via Flux variable substitution. `flux bootstrap github`
+is run with `--path=kubernetes/clusters/<name>` so each cluster gets its
+own entry point.
 
 ```
 tnwks-ops/
@@ -47,12 +49,19 @@ tnwks-ops/
 │   ├── terraform/cloudflare/    # Active
 │   └── _archive/                # Legacy PVE/Proxmox terraform + packer
 ├── kubernetes/
-│   ├── apps/                    # Shared app manifests (both clusters)
-│   ├── bootstrap/               # Initial Flux + helm install
-│   ├── flux/                    # Flux config (GitRepository, vars)
+│   ├── apps/                    # Shared app manifests (namespaced)
+│   ├── bootstrap/               # Optional manual Flux install (legacy)
+│   ├── flux/meta/               # Shared HelmRepositories / GitRepositories
 │   └── clusters/
-│       ├── wsl/                 # WSL overlay (omits cloudflared, uisp, rook-ceph)
-│       └── ms-01/               # MS-01 overlay (full stack)
+│       ├── wsl/                 # Flux entry point — trims to local-path
+│       │   ├── flux-system/     # Created by `flux bootstrap`
+│       │   ├── cluster-settings.yaml
+│       │   ├── cluster-secrets.sops.yaml
+│       │   ├── meta.yaml        # Flux Kustomization → ../../flux/meta
+│       │   ├── apps.yaml        # Flux Kustomization → ./apps
+│       │   └── apps/            # Trimmed namespace overlays
+│       └── ms-01/               # Flux entry point — full stack + Rook Ceph
+│           └── (same shape; apps/ pulls shared apps + storage)
 └── docs/
     ├── bootstrap-wsl.md
     ├── bootstrap-ms-01.md
