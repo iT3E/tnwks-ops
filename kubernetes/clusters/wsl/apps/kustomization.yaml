@@ -1,0 +1,30 @@
+---
+# WSL cluster apps: shared namespaces, with trimmed overlays for any
+# namespace that excludes apps not viable on Docker-mode Talos.
+#
+# Trimmed (per-namespace overlay below):
+#   - home-automation  (zwave-js-ui kept, USB passthrough required)
+#   - networking       (cloudflared excluded — public tunnel is MS-01-only)
+#   - production       (frigate kept, USB passthrough required; uisp excluded)
+#
+# Excluded entirely:
+#   - storage          (Rook Ceph needs real disks; WSL uses local-path)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # Shared namespaces — used as-is
+  - ../../../apps/cert-manager
+  - ../../../apps/databases
+  - ../../../apps/default
+  - ../../../apps/flux-system
+  - ../../../apps/kube-system
+  - ../../../apps/media
+  - ../../../apps/monitoring
+  - ../../../apps/selfhosted
+  - ../../../apps/tools
+  - ../../../apps/vpn
+
+  # Trimmed namespaces — per-namespace overlays sit alongside this file
+  - ./home-automation
+  - ./networking
+  - ./production

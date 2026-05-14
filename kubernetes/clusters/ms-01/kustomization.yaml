@@ -1,29 +1,17 @@
 ---
+# Flux entry point for the MS-01 cluster.
+#
+# Loaded by `flux bootstrap github --path=kubernetes/clusters/ms-01`.
+# Contains:
+#   - flux-system/    Flux components + GitRepository (managed by `flux bootstrap`)
+#   - cluster-settings.yaml + cluster-secrets.sops.yaml  Per-cluster vars
+#   - meta.yaml       Flux Kustomization → ../../flux/meta (HelmRepositories etc.)
+#   - apps.yaml       Flux Kustomization → ./apps (which fans out to ../../apps)
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  # Core infrastructure
-  - ../../apps/cert-manager
-  - ../../apps/databases
-  - ../../apps/default
-  - ../../apps/flux-system
-  - ../../apps/kube-system
-
-  # Storage: in-cluster Rook Ceph (this cluster only — WSL uses local-path)
-  - ../../apps/storage/rook-ceph/rook-ceph-operator
-  - ../../apps/storage/rook-ceph/cluster
-
-  # Networking (full stack including cloudflared)
-  - ../../apps/networking
-
-  # Apps (full stack)
-  - ../../apps/home-automation
-  - ../../apps/media
-  - ../../apps/monitoring
-  - ../../apps/production
-  - ../../apps/selfhosted
-  - ../../apps/tools
-  - ../../apps/vpn
-
-  # Cluster settings overlay
+  - ./flux-system
   - ./cluster-settings.yaml
+  - ./cluster-secrets.sops.yaml
+  - ./meta.yaml
+  - ./apps.yaml

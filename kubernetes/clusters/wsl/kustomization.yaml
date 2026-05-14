@@ -1,35 +1,11 @@
 ---
+# Flux entry point for the WSL cluster.
+# Loaded by `flux bootstrap github --path=kubernetes/clusters/wsl`.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  # Core infrastructure (full from shared apps)
-  - ../../apps/cert-manager
-  - ../../apps/databases
-  - ../../apps/default
-  - ../../apps/flux-system
-  - ../../apps/kube-system
-  - ../../apps/media
-  - ../../apps/monitoring
-  - ../../apps/selfhosted
-  - ../../apps/tools
-
-  # VPN gateway — qbittorrent and the *arr stack route through pod-gateway
-  - ../../apps/vpn
-
-  # Trimmed overlays (some apps tweaked for WSL)
-  - ./overlays/home-automation
-  - ./overlays/networking
-  - ./overlays/production
-
-  # Cluster settings
+  - ./flux-system
   - ./cluster-settings.yaml
-
-# Excluded namespaces from the WSL cluster:
-#   - storage/rook-ceph (in-cluster Ceph requires real disks; WSL uses local-path)
-#
-# Apps excluded inside the overlays above:
-#   - networking/cloudflared (public tunnel terminates on the MS-01 cluster)
-#   - production/uisp        (lives on MS-01)
-#
-# USB-attached apps (zwave-js-ui, frigate) are INCLUDED — they require
-# usbipd-win passthrough from the Windows host. See docs/usb-passthrough.md.
+  - ./cluster-secrets.sops.yaml
+  - ./meta.yaml
+  - ./apps.yaml

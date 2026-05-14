@@ -6,11 +6,14 @@ metadata:
   namespace: flux-system
 spec:
   interval: 30m
-  path: ./kubernetes/apps
+  path: ./kubernetes/clusters/ms-01/apps
   prune: true
+  wait: false
+  dependsOn:
+    - name: cluster-meta
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: flux-system
   decryption:
     provider: sops
     secretRef:
@@ -22,6 +25,9 @@ spec:
       - kind: Secret
         name: cluster-secrets
   patches:
+    # Cascade the per-cluster substitution into every nested Flux Kustomization
+    # so leaf ks.yaml files don't need to repeat decryption/postBuild config.
+    # Opt out per-Kustomization by labelling: substitution.flux.home.arpa/disabled=true
     - patch: |-
         apiVersion: kustomize.toolkit.fluxcd.io/v1
         kind: Kustomization

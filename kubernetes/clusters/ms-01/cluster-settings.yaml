@@ -33,9 +33,6 @@ data:
   # TODO: Set KUBE_VIP_ADDR to actual VIP on 10.10.91.0/24 (VLAN 910)
   KUBE_VIP_ADDR: "10.10.91.1"
 
-  # SOPS
-  SOPS_AGE_PUBKEY: "# TODO: Ivan provides per cluster"
-
   # Cluster networking
   CLUSTER_CIDR: "10.42.0.0/16"
   SERVICE_CIDR: "10.43.0.0/16"

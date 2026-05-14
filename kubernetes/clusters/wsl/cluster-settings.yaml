@@ -29,9 +29,6 @@ data:
   INGRESS_INTERNAL_ADDR: "127.0.0.1"
   KUBE_VIP_ADDR: "127.0.0.1"
 
-  # SOPS — public key set via cluster bootstrap (sops-age secret)
-  SOPS_AGE_PUBKEY: "# TODO: Ivan provides per cluster"
-
   # Cluster networking
   CLUSTER_CIDR: "10.42.0.0/16"
   SERVICE_CIDR: "10.43.0.0/16"
