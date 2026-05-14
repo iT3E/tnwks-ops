@@ -1,16 +1,15 @@
 ---
-# Flux entry point for the MS-01 cluster.
+# Aggregator for the user-managed files in this cluster's entry point.
+# Excludes ./flux-system/ — that directory is created and managed by
+# `flux bootstrap github --path=kubernetes/clusters/ms-01`. After bootstrap,
+# add `- ../` to flux-system/kustomization.yaml so Flux pulls these in.
 #
-# Loaded by `flux bootstrap github --path=kubernetes/clusters/ms-01`.
-# Contains:
-#   - flux-system/    Flux components + GitRepository (managed by `flux bootstrap`)
-#   - cluster-settings.yaml + cluster-secrets.sops.yaml  Per-cluster vars
-#   - meta.yaml       Flux Kustomization → ../../flux/meta (HelmRepositories etc.)
-#   - apps.yaml       Flux Kustomization → ./apps (which fans out to ../../apps)
+#   cluster-settings.yaml + cluster-secrets.sops.yaml  Per-cluster vars
+#   meta.yaml   Flux Kustomization → ../../flux/meta (HelmRepositories etc.)
+#   apps.yaml   Flux Kustomization → ./apps (fans out to ../../apps + storage)
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ./flux-system
   - ./cluster-settings.yaml
   - ./cluster-secrets.sops.yaml
   - ./meta.yaml
