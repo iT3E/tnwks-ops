@@ -18,7 +18,8 @@
 - name: Provision SOPS age keys
   hosts: localhost
   connection: local
-  gather_facts: false
+  gather_facts: true
+  become: false
 
   vars:
     cluster_target: "{{ talos_target | default('wsl') }}"

@@ -13,7 +13,8 @@
 - name: Bootstrap Flux against GitHub repo
   hosts: localhost
   connection: local
-  gather_facts: false
+  gather_facts: true
+  become: false
 
   vars:
     cluster_target: "{{ talos_target | default('wsl') }}"
