@@ -33,5 +33,13 @@ data:
   CLUSTER_CIDR: "10.42.0.0/16"
   SERVICE_CIDR: "10.43.0.0/16"
 
+  # Cilium feature flags
+  # Hubble UI ingress is off — no LB controller on WSL, ingress would pend.
+  # ServiceMonitor is on — kube-prometheus-stack is deployed, just later in
+  # the reconcile order. The cilium-bootstrap playbook sets it to false on
+  # the very first helm install (before CRDs exist); Flux re-enables it.
+  CILIUM_HUBBLE_UI_INGRESS_ENABLED: "false"
+  CILIUM_SERVICEMONITOR_ENABLED: "true"
+
   # Misc
   TIMEZONE: "America/Los_Angeles"

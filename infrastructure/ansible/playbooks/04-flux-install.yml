@@ -1,14 +1,15 @@
 ---
-# Phase 2 of bootstrap: install Flux and bootstrap against the GitHub repo
+# Phase 4 of bootstrap: install Flux and bootstrap against the GitHub repo
 #
 # Requires:
-#   - kubeconfig at ~/.kube/config-{cluster_name} (set by 01-talos-bootstrap.yml)
-#   - sops-age secret in flux-system namespace (set by 03-sops-keys.yml)
+#   - kubeconfig at ~/.kube/config-{cluster_name}  (set by 01-talos-bootstrap.yml)
+#   - Cilium CNI installed                          (set by 02-cilium-bootstrap.yml)
+#   - sops-age secret in flux-system namespace     (set by 03-sops-keys.yml)
 #   - GITHUB_TOKEN environment variable (or 1Password CLI configured)
 #
 # Run via:
-#   ansible-playbook -i inventory/wsl.yml   playbooks/02-flux-install.yml
-#   ansible-playbook -i inventory/ms-01.yml playbooks/02-flux-install.yml
+#   ansible-playbook -i inventory/wsl.yml   playbooks/04-flux-install.yml
+#   ansible-playbook -i inventory/ms-01.yml playbooks/04-flux-install.yml
 
 - name: Bootstrap Flux against GitHub repo
   hosts: localhost
@@ -23,7 +24,7 @@
     kubeconfig_path: "{{ ansible_env.HOME }}/.kube/config-{{ cluster_name }}"
     github_owner: "iT3E"
     github_repo: "tnwks-ops"
-    github_branch: "main"
+    github_branch: "{{ flux_branch | default('main') }}"
 
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"

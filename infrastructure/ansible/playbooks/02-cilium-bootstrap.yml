@@ -1,0 +1,116 @@
+---
+# Phase 2 of bootstrap: install Cilium directly so Flux pods can be scheduled.
+#
+# Talos ships with no CNI (cluster-config.yaml: cni.name=none), so pods stay
+# Pending until something installs Cilium. Flux can't install Cilium itself
+# because its own pods need a CNI to start — chicken and egg.
+#
+# This playbook breaks the cycle by installing Cilium via helm with a value
+# set that intentionally undershoots the in-repo HelmRelease (no
+# ServiceMonitor — kube-prometheus-stack hasn't deployed its CRDs yet; no
+# Hubble UI ingress — ingress-nginx isn't up yet). When Flux comes online and
+# reconciles the HelmRelease at kubernetes/apps/kube-system/cilium/, it
+# adopts the existing release and turns those features on once their
+# dependencies exist.
+#
+# Run via:
+#   ansible-playbook -i inventory/wsl.yml   playbooks/02-cilium-bootstrap.yml
+#   ansible-playbook -i inventory/ms-01.yml playbooks/02-cilium-bootstrap.yml
+
+- name: Bootstrap Cilium CNI
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: false
+
+  vars:
+    cluster_target: "{{ talos_target | default('wsl') }}"
+    cluster_name: "homelab-{{ cluster_target }}"
+    kubeconfig_path: "{{ ansible_env.HOME }}/.kube/config-{{ cluster_name }}"
+    cilium_chart_version: "1.14.4"
+    cilium_namespace: kube-system
+
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+
+  tasks:
+    - name: Ensure helm CLI is installed
+      ansible.builtin.command: helm version --short
+      register: helm_check
+      changed_when: false
+      failed_when: false
+
+    - name: Fail if helm is missing
+      ansible.builtin.fail:
+        msg: |
+          helm is required. Install with:
+            brew install helm
+      when: helm_check.rc != 0
+
+    - name: Verify cluster is reachable
+      ansible.builtin.command: kubectl cluster-info
+      changed_when: false
+
+    - name: Add cilium helm repo
+      ansible.builtin.command: helm repo add cilium https://helm.cilium.io
+      register: repo_add
+      changed_when: "'has been added' in repo_add.stdout"
+      failed_when:
+        - repo_add.rc != 0
+        - "'already exists' not in repo_add.stderr"
+
+    - name: Update helm repos
+      ansible.builtin.command: helm repo update cilium
+      changed_when: false
+
+    # The values below mirror kubernetes/apps/kube-system/cilium/app/helmrelease.yaml
+    # with two overrides for the bootstrap window:
+    #   * hubble.ui.ingress.enabled: false  (ingress-nginx isn't up yet)
+    #   * *.serviceMonitor.enabled: false   (kube-prometheus-stack CRDs aren't installed)
+    # Flux will re-enable both via the HelmRelease once their dependencies exist.
+    - name: Install or upgrade Cilium
+      ansible.builtin.command: >-
+        helm upgrade --install cilium cilium/cilium
+        --namespace {{ cilium_namespace }}
+        --version {{ cilium_chart_version }}
+        --set bpf.masquerade=true
+        --set cluster.name={{ cluster_name }}
+        --set cluster.id=1
+        --set containerRuntime.integration=containerd
+        --set containerRuntime.socketPath=/run/containerd/containerd.sock
+        --set hubble.enabled=true
+        --set hubble.relay.enabled=true
+        --set hubble.ui.enabled=true
+        --set hubble.ui.ingress.enabled=false
+        --set ipam.mode=kubernetes
+        --set k8sServiceHost=localhost
+        --set k8sServicePort=7445
+        --set kubeProxyReplacement=true
+        --set kubeProxyReplacementHealthzBindAddr=0.0.0.0:10256
+        --set operator.replicas=1
+        --set autoDirectNodeRoutes=true
+        --set ipv4NativeRoutingCIDR={{ cluster_cidr | default('10.42.0.0/16') }}
+        --set tunnel=disabled
+      register: cilium_install
+      changed_when: "'has been upgraded' in cilium_install.stdout or 'has been installed' in cilium_install.stdout"
+
+    - name: Wait for Cilium DaemonSet to be ready
+      ansible.builtin.command: >-
+        kubectl -n {{ cilium_namespace }} rollout status ds/cilium
+        --timeout=300s
+      changed_when: false
+
+    - name: Wait for cilium-operator to be ready
+      ansible.builtin.command: >-
+        kubectl -n {{ cilium_namespace }} rollout status deploy/cilium-operator
+        --timeout=180s
+      changed_when: false
+
+    - name: Show node status
+      ansible.builtin.command: kubectl get nodes
+      register: node_status
+      changed_when: false
+
+    - name: Print node status
+      ansible.builtin.debug:
+        var: node_status.stdout_lines

@@ -44,16 +44,24 @@ export GITHUB_TOKEN=$(op read 'op://Private/GitHub Flux Token/credential')
 task bootstrap:wsl
 ```
 
-This runs three Ansible playbooks in sequence:
-1. **`01-talos-bootstrap.yml`** — `talosctl cluster create` against Docker
-   (1 controlplane + 2 workers); fetches kubeconfig to `~/.kube/config-homelab-wsl`
-2. **`03-sops-keys.yml`** — generates an age key at
+This runs four Ansible playbooks in sequence:
+1. **`01-talos-bootstrap.yml`** — `talosctl cluster create docker`
+   (1 controlplane + 2 workers); fetches kubeconfig to `~/.kube/config-homelab-wsl`.
+   Talos ships with no CNI, so nodes will register as `NotReady`.
+2. **`02-cilium-bootstrap.yml`** — `helm install cilium` with values that
+   match the in-repo `HelmRelease`, but with ServiceMonitor and Hubble UI
+   ingress turned off (their dependencies — kube-prometheus-stack CRDs and
+   ingress-nginx — aren't deployed yet). Flux re-enables both later. After
+   this step, nodes go `Ready` and pods can be scheduled.
+3. **`03-sops-keys.yml`** — generates an age key at
    `~/.config/sops/age/homelab-wsl.txt` and creates the `sops-age` Secret.
    **Back this key up to 1Password immediately.**
-3. **`02-flux-install.yml`** — `flux bootstrap github` against
-   `kubernetes/clusters/wsl/`
+4. **`04-flux-install.yml`** — `flux bootstrap github` against
+   `kubernetes/clusters/wsl/`. Requires `GITHUB_TOKEN` with `repo` scope
+   (or fine-grained: Contents RW + Administration RW + Metadata R on this
+   repo).
 
-After step 3, **everything is GitOps**. Push to the tracked branch and
+After step 4, **everything is GitOps**. Push to the tracked branch and
 Flux reconciles.
 
 ## Verify

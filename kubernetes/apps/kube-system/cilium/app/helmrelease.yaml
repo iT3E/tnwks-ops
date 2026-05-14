@@ -46,18 +46,18 @@ spec:
           - icmp
           - http
         serviceMonitor:
-          enabled: true
+          enabled: ${CILIUM_SERVICEMONITOR_ENABLED}
       relay:
         enabled: true
         rollOutPods: true
         prometheus:
           serviceMonitor:
-            enabled: true
+            enabled: ${CILIUM_SERVICEMONITOR_ENABLED}
       ui:
         enabled: true
         rollOutPods: true
         ingress:
-          enabled: true
+          enabled: ${CILIUM_HUBBLE_UI_INGRESS_ENABLED}
           className: nginx
           hosts:
             - &host "hubble.${INTERNAL_DOMAIN}"
@@ -66,21 +66,23 @@ spec:
                 - *host
     ipam:
       mode: kubernetes
-    k8sServiceHost: "${KUBE_VIP_ADDR}"
-    k8sServicePort: 6443
-    kubeProxyReplacement: strict
+    # Both clusters use Talos kube-prism (localhost:7445) for pod->apiserver,
+    # so no per-cluster KUBE_VIP_ADDR substitution is needed here.
+    k8sServiceHost: localhost
+    k8sServicePort: 7445
+    kubeProxyReplacement: true
     kubeProxyReplacementHealthzBindAddr: 0.0.0.0:10256
     operator:
       replicas: 1
       rollOutPods: true
       prometheus:
-        enabled: true
+        enabled: ${CILIUM_SERVICEMONITOR_ENABLED}
         serviceMonitor:
-          enabled: true
+          enabled: ${CILIUM_SERVICEMONITOR_ENABLED}
     prometheus:
-      enabled: true
+      enabled: ${CILIUM_SERVICEMONITOR_ENABLED}
       serviceMonitor:
-        enabled: true
+        enabled: ${CILIUM_SERVICEMONITOR_ENABLED}
     rollOutCiliumPods: true
     autoDirectNodeRoutes: true
     ipv4NativeRoutingCIDR: ${CLUSTER_CIDR}
