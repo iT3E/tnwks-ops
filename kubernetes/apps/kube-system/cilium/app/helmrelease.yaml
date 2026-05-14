@@ -29,11 +29,11 @@ spec:
     bpf:
       masquerade: true
     cluster:
-      name: home-cluster
+      name: ${CLUSTER_NAME}
       id: 1
     containerRuntime:
       integration: containerd
-      socketPath: /var/run/k3s/containerd/containerd.sock
+      socketPath: /run/containerd/containerd.sock
     hubble:
       enabled: true
       metrics:
