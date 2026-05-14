@@ -3,14 +3,14 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: production-apps-matrix-synapse
+  name: matrix-synapse
   namespace: flux-system
 spec:
   path: ./kubernetes/apps/production/matrix/synapse
   prune: true
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: flux-system
   interval: 30m
   retryInterval: 1m
   timeout: 3m
@@ -19,14 +19,14 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: production-apps-matrix-element-web
+  name: matrix-element-web
   namespace: flux-system
 spec:
   path: ./kubernetes/apps/production/matrix/element-web
   prune: true
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: flux-system
   interval: 30m
   retryInterval: 1m
   timeout: 3m
@@ -35,14 +35,14 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: production-apps-matrix-chatgpt
+  name: matrix-chatgpt
   namespace: flux-system
 spec:
   path: ./kubernetes/apps/production/matrix/matrix-chatgpt
   prune: true
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: flux-system
   interval: 30m
   retryInterval: 1m
   timeout: 3m
@@ -51,14 +51,14 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: production-apps-matrix-chatgpt-4
+  name: matrix-chatgpt-4
   namespace: flux-system
 spec:
   path: ./kubernetes/apps/production/matrix/matrix-chatgpt-4
   prune: true
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: flux-system
   interval: 30m
   retryInterval: 1m
   timeout: 3m
@@ -67,14 +67,14 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: production-apps-synapse-admin
+  name: synapse-admin
   namespace: flux-system
 spec:
   path: ./kubernetes/apps/production/matrix/synapse-admin
   prune: true
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: flux-system
   interval: 30m
   retryInterval: 1m
   timeout: 3m
@@ -83,14 +83,14 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: production-apps-matrix-maubot
+  name: matrix-maubot
   namespace: flux-system
 spec:
   path: ./kubernetes/apps/production/matrix/maubot
   prune: true
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: flux-system
   interval: 30m
   retryInterval: 1m
   timeout: 3m
