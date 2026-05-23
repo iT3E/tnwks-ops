@@ -1,6 +1,6 @@
 ---
 # Phase 1 of bootstrap: stand up the Talos cluster
-# (followed by 02-cilium, 03-sops, 04-flux)
+# (followed by 02-cni, 03-sops, 04-flux)
 #
 # For wsl:   runs `talosctl cluster create` against Docker
 # For ms-01: applies machineconfigs to MS-01 nodes via talosctl

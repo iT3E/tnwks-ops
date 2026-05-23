@@ -9,7 +9,7 @@ spec:
   chart:
     spec:
       chart: cilium
-      version: 1.14.4
+      version: ${CILIUM_VERSION}
       sourceRef:
         kind: HelmRepository
         name: cilium
@@ -31,9 +31,6 @@ spec:
     cluster:
       name: ${CLUSTER_NAME}
       id: 1
-    containerRuntime:
-      integration: containerd
-      socketPath: /run/containerd/containerd.sock
     hubble:
       enabled: true
       metrics:
@@ -86,4 +83,4 @@ spec:
     rollOutCiliumPods: true
     autoDirectNodeRoutes: true
     ipv4NativeRoutingCIDR: ${CLUSTER_CIDR}
-    tunnel: "disabled"
+    routingMode: native

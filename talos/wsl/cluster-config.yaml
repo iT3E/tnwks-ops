@@ -10,7 +10,16 @@
 #     --config-patch @talos/wsl/cluster-config.yaml
 #
 # This creates a 3-node cluster (1 CP + 2 workers) in Docker containers.
-# CNI is disabled so Cilium can be installed via Flux post-bootstrap.
+#
+# CNI is disabled so Flannel is installed via the bootstrap playbook
+# post-cluster-create. (MS-01 uses Cilium, but Cilium can't run on
+# Talos-in-Docker on WSL2 — the clean-cilium-state init container
+# requests CAP_SYS_MODULE which the WSL2 kernel rejects in nested
+# containers regardless of bounding set or privileged flag. See the
+# upstream issues referenced in docs/bootstrap-wsl.md.)
+#
+# kube-proxy is kept enabled on WSL because Flannel doesn't replace it.
+# (MS-01 disables kube-proxy because Cilium does the replacement there.)
 
 cluster:
   network:
@@ -20,8 +29,6 @@ cluster:
       - 10.42.0.0/16
     serviceSubnets:
       - 10.43.0.0/16
-  proxy:
-    disabled: true
   discovery:
     enabled: true
     registries:

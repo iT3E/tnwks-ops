@@ -10,6 +10,7 @@ resources:
   - ./cloudnative-pg.yaml
   - ./descheduler.yaml
   - ./external-dns.yaml
+  - ./flannel.yaml
   - ./grafana.yaml
   - ./hajimari.yaml
   - ./ingress-nginx.yaml

@@ -1,8 +1,10 @@
 ---
-# MS-01 cluster apps: shared apps + Rook Ceph (MS-01-only, real disks needed).
+# MS-01 cluster apps: shared apps + Cilium CNI + Rook Ceph (MS-01-only,
+# real disks needed). WSL gets Flannel via its own overlay.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../apps
+  - ../../../apps/kube-system/cilium/ks.yaml
   - ../../../apps/storage/rook-ceph/rook-ceph-operator
   - ../../../apps/storage/rook-ceph/cluster

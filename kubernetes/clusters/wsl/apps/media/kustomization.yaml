@@ -1,0 +1,13 @@
+---
+# WSL cluster overlay: media namespace
+# Excludes qbittorrent and prowlarr — both depend on pod-gateway
+# (vpn namespace), which is excluded on WSL because pod-gateway uses
+# CiliumNetworkPolicy to enforce VPN-only egress and Flannel can't
+# enforce CiliumNetworkPolicy.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../apps/media/namespace.yaml
+  - ../../../../apps/media/radarr/ks.yaml
+  - ../../../../apps/media/recyclarr/ks.yaml
+  - ../../../../apps/media/sonarr/ks.yaml

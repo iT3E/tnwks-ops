@@ -3,7 +3,7 @@
 #
 # Requires:
 #   - kubeconfig at ~/.kube/config-{cluster_name}  (set by 01-talos-bootstrap.yml)
-#   - Cilium CNI installed                          (set by 02-cilium-bootstrap.yml)
+#   - CNI installed                                 (set by 02-cni-bootstrap.yml)
 #   - sops-age secret in flux-system namespace     (set by 03-sops-keys.yml)
 #   - GITHUB_TOKEN environment variable (or 1Password CLI configured)
 #

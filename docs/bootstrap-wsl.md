@@ -48,10 +48,9 @@ This runs four Ansible playbooks in sequence:
 1. **`01-talos-bootstrap.yml`** — `talosctl cluster create docker`
    (1 controlplane + 2 workers); fetches kubeconfig to `~/.kube/config-homelab-wsl`.
    Talos ships with no CNI, so nodes will register as `NotReady`.
-2. **`02-cilium-bootstrap.yml`** — `helm install cilium` with values that
-   match the in-repo `HelmRelease`, but with ServiceMonitor and Hubble UI
-   ingress turned off (their dependencies — kube-prometheus-stack CRDs and
-   ingress-nginx — aren't deployed yet). Flux re-enables both later. After
+2. **`02-cni-bootstrap.yml`** — `helm install` Flannel on WSL (or Cilium
+   on MS-01). The CNI choice is read from
+   `kubernetes/clusters/wsl/cluster-settings.yaml` (`CNI: flannel`). After
    this step, nodes go `Ready` and pods can be scheduled.
 3. **`03-sops-keys.yml`** — generates an age key at
    `~/.config/sops/age/homelab-wsl.txt` and creates the `sops-age` Secret.
@@ -63,6 +62,48 @@ This runs four Ansible playbooks in sequence:
 
 After step 4, **everything is GitOps**. Push to the tracked branch and
 Flux reconciles.
+
+## Why Flannel on WSL instead of Cilium
+
+MS-01 runs Cilium. WSL runs Flannel. The split exists because Cilium
+fundamentally cannot run on Talos-in-Docker on WSL2:
+
+- Cilium's `clean-cilium-state` init container requests `CAP_SYS_MODULE`
+  (along with `CAP_SYS_ADMIN`, `CAP_NET_ADMIN`, `CAP_SYS_RESOURCE`).
+- The WSL2 kernel rejects `SYS_MODULE` cap requests in nested containers
+  with `EPERM`, even when the outer container is privileged and the
+  bounding set is widened via Talos `baseRuntimeSpecOverrides`.
+- runc fails before Cilium's logic runs, regardless of Cilium version.
+  Reproduced empirically with a 5-line busybox pod requesting just
+  `SYS_MODULE`. All other caps work fine after widening the bounding
+  set; only `SYS_MODULE` is rejected.
+- Cilium has acknowledged the desire to drop this requirement
+  ([cilium#13768](https://github.com/cilium/cilium/issues/13768),
+  open since 2020) but no fix has shipped. The community-suggested
+  workaround (custom WSL2 kernel) addresses different runtime issues
+  (iptables/conntrack modules), not the cap-apply error at startup.
+
+### Implications of the split
+
+| Capability | WSL (Flannel) | MS-01 (Cilium) |
+|---|---|---|
+| Pod networking | ✓ | ✓ |
+| Service routing | ✓ (via kube-proxy) | ✓ (Cilium replaces kube-proxy) |
+| `NetworkPolicy` enforcement | ✗ Flannel doesn't enforce | ✓ |
+| `CiliumNetworkPolicy` | ✗ CRD absent | ✓ |
+| Hubble flow logs / UI | ✗ | ✓ |
+| L2/BGP LB | ✗ (no LB on WSL anyway) | ✓ |
+
+### Apps excluded from WSL because of this
+
+- **`vpn/pod-gateway`** — relies on `CiliumNetworkPolicy` to force
+  qbittorrent/*arr egress through the VPN. Without enforcement, traffic
+  could leak via the host network (DMCA exposure for qbittorrent).
+- **`media/qbittorrent`** and **`media/prowlarr`** — both depend on
+  `pod-gateway` for VPN routing.
+
+`sonarr`, `radarr`, and `recyclarr` *are* deployed on WSL — they're
+indexers/coordinators that don't push traffic over the VPN.
 
 ## Verify
 

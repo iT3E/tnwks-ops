@@ -2,13 +2,21 @@
 # WSL cluster apps: shared namespaces, with trimmed overlays for any
 # namespace that excludes apps not viable on Docker-mode Talos.
 #
+# CNI: Flannel (Cilium can't run on Talos-in-Docker on WSL2 — the
+# clean-cilium-state init requests CAP_SYS_MODULE which the WSL2 kernel
+# rejects in nested containers). MS-01 uses Cilium.
+#
 # Trimmed (per-namespace overlay below):
 #   - home-automation  (zwave-js-ui kept, USB passthrough required)
+#   - media            (qbittorrent + prowlarr excluded — depend on pod-gateway)
 #   - networking       (cloudflared excluded — public tunnel is MS-01-only)
 #   - production       (frigate kept, USB passthrough required; uisp excluded)
 #
 # Excluded entirely:
 #   - storage          (Rook Ceph needs real disks; WSL uses local-path)
+#   - vpn              (pod-gateway uses CiliumNetworkPolicy for VPN egress
+#                       enforcement — Flannel can't enforce it, and DMCA risk
+#                       from misrouted qbittorrent traffic isn't acceptable)
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -18,13 +26,13 @@ resources:
   - ../../../apps/default
   - ../../../apps/flux-system
   - ../../../apps/kube-system
-  - ../../../apps/media
+  - ../../../apps/kube-system/flannel/ks.yaml
   - ../../../apps/monitoring
   - ../../../apps/selfhosted
   - ../../../apps/tools
-  - ../../../apps/vpn
 
   # Trimmed namespaces — per-namespace overlays sit alongside this file
   - ./home-automation
+  - ./media
   - ./networking
   - ./production
