@@ -4,13 +4,14 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: databases
 resources:
-  - ./backup-onetime.yaml
   - ./cluster.yaml
-  - ./prometheusrule.yaml
   - ./service.yaml
-  - ./scheduled-backup.yaml
-# s3-cnpg-bucket.yaml uses ObjectBucketClaim which only exists when Rook
-# is installed. Added back per-cluster via kubernetes/clusters/ms-01/apps/.
+# PrometheusRule lives in cluster-prometheusrules/ behind its own
+# Kustomization that depends on kube-prometheus-stack so the CRD
+# exists before apply.
+# Backup machinery (ScheduledBackup, BackupOnetime, ObjectBucketClaim)
+# lives in cluster-backup/ and is wired in only on MS-01 where Rook S3
+# is available.
 labels:
   - pairs:
       app.kubernetes.io/name: cloudnative-pg-cluster
