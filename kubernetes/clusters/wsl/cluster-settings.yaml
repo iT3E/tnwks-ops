@@ -24,6 +24,10 @@ data:
   BULK_PVC_SIZE: "10Gi"
   BULK_PVC_ACCESS_MODE: "ReadWriteOnce"
 
+  # cnpg postgres cluster sizing — small on WSL (single-instance, modest disk).
+  CNPG_INSTANCES: "1"
+  CNPG_INSTANCE_SIZE: "5Gi"
+
   # Load balancer / IP allocation (no LB controller on WSL; Services pend)
   LB_RANGE: ""
   METALLB_LB_RANGE: ""

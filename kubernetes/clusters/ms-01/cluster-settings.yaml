@@ -24,6 +24,10 @@ data:
   BULK_PVC_SIZE: "10Ti"
   BULK_PVC_ACCESS_MODE: "ReadWriteMany"
 
+  # cnpg postgres cluster sizing — HA on MS-01 with real disks.
+  CNPG_INSTANCES: "3"
+  CNPG_INSTANCE_SIZE: "50Gi"
+
   # Load balancer / IP allocation (Cilium L2/BGP on VLAN 910)
   # TODO: Confirm range when Cilium BGP policy is finalized
   LB_RANGE: "10.10.91.50-10.10.91.60"

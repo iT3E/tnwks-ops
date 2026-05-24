@@ -7,52 +7,25 @@ metadata:
   annotations:
     kyverno.io/ignore: "true"
 spec:
-  instances: 3
+  instances: ${CNPG_INSTANCES}
   primaryUpdateStrategy: unsupervised
   storage:
-    size: 50Gi
+    size: ${CNPG_INSTANCE_SIZE}
     storageClass: ${STORAGE_CLASS_DEFAULT}
   superuserSecret:
     name: postgres-superuser
   monitoring:
-    enablePodMonitor: true
-  # bootstrap:
-  #   initdb:
-  #     database: app
-  #     owner: app
-  backup:
-    retentionPolicy: 30d
-    barmanObjectStore:
-      wal:
-        compression: bzip2
-        maxParallel: 8
-      destinationPath: s3://s3-cnpg-bucket/
-      endpointURL: http://10.15.15.50:7480
-      serverName: postgres-v12
-      s3Credentials:
-        accessKeyId:
-          name: s3-creds
-          key: ACCESS_KEY_ID
-        secretAccessKey:
-          name: s3-creds
-          key: ACCESS_SECRET_KEY
+    enablePodMonitor: ${SERVICE_MONITOR_ENABLED}
+  # Annotations on the generated `postgres-app` Secret tell stakater/reflector
+  # to mirror it into namespaces that need the credentials (e.g. mealie in
+  # production/). The reflected Secret keeps the same name + keys.
+  inheritedMetadata:
+    annotations:
+      reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
+      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "production"
+      reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
+      reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: "production"
   bootstrap:
-    recovery:
-      # database: app
-      # owner: app
-      source: postgres-v11
-  externalClusters:
-    - name: postgres-v11
-      barmanObjectStore:
-        destinationPath: s3://s3-cnpg-bucket/
-        endpointURL: http://10.15.15.50:7480
-        serverName: postgres-v11
-        s3Credentials:
-          accessKeyId:
-            name: s3-creds
-            key: ACCESS_KEY_ID
-          secretAccessKey:
-            name: s3-creds
-            key: ACCESS_SECRET_KEY
-        wal:
-          maxParallel: 8
+    initdb:
+      database: app
+      owner: app

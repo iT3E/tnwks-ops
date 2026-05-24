@@ -25,33 +25,36 @@ spec:
   uninstall:
     keepHistory: false
   values:
-    envFrom:
-      - secretRef:
-          name: mealie-secrets
     env:
       - name: TZ
-        value: "America/Los_Angeles"
+        value: "${TIMEZONE}"
       - name: DB_ENGINE
         value: "postgres"
+      # cnpg generates the `postgres-app` Secret in the databases
+      # namespace with all the connection bits; cross-namespace fetch
+      # via the postgres-app Secret mirrored into this namespace by
+      # external-secrets / reflector. For now we point at the cnpg
+      # services + DB credentials directly.
       - name: POSTGRES_USER
         valueFrom:
           secretKeyRef:
-            name: mealie-secrets
-            key: POSTGRES_USER
+            name: postgres-app
+            key: username
       - name: POSTGRES_PASSWORD
         valueFrom:
           secretKeyRef:
-            name: mealie-secrets
-            key: POSTGRES_PASSWORD
+            name: postgres-app
+            key: password
       - name: POSTGRES_SERVER
-        valueFrom:
-          secretKeyRef:
-            name: mealie-secrets
-            key: POSTGRES_SERVER
+        # cnpg's read-write Service. Cross-namespace via FQDN.
+        value: "postgres-rw.databases.svc.cluster.local"
       - name: POSTGRES_PORT
         value: "5432"
       - name: POSTGRES_DB
-        value: "mealie"
+        valueFrom:
+          secretKeyRef:
+            name: postgres-app
+            key: dbname
 
     image:
       repository: docker.io/hkotel/mealie
