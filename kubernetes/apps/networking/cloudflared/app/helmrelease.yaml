@@ -57,7 +57,7 @@ spec:
             port: 8080
     serviceMonitor:
       main:
-        enabled: true
+        enabled: ${SERVICE_MONITOR_ENABLED}
         endpoints:
           - port: http
             scheme: http
