@@ -90,7 +90,7 @@ spec:
     persistence:
       config:
         enabled: true
-        storageClass: ssd-pool
+        storageClass: ${STORAGE_CLASS_DEFAULT}
         accessMode: ReadWriteOnce
         size: 150Gi
         retain: true

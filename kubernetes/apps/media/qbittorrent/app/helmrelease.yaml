@@ -125,4 +125,4 @@ spec:
         mountPath: /config/qBittorrent/data
         accessMode: ReadWriteOnce
         size: 1Gi
-        storageClass: ssd-pool
+        storageClass: ${STORAGE_CLASS_DEFAULT}

@@ -78,7 +78,7 @@ spec:
       config:
         enabled: true
         mountPath: /app/data
-        storageClass: ssd-pool
+        storageClass: ${STORAGE_CLASS_DEFAULT}
         size: 5Gi
 
     service:

@@ -71,7 +71,7 @@ spec:
         enabled: true
         accessMode: ReadWriteOnce
         size: 1Gi
-        storageClass: ssd-pool
+        storageClass: ${STORAGE_CLASS_DEFAULT}
         retain: true
 
       media:

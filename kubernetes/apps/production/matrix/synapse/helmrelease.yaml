@@ -79,5 +79,5 @@ spec:
     persistence:
       enabled: true
       size: 8Gi
-      storageClass: ssd-pool
+      storageClass: ${STORAGE_CLASS_DEFAULT}
       accessMode: ReadWriteOnce
