@@ -18,6 +18,5 @@ resources:
   - ../../../../apps/production/ombi/ks.yaml
   - ../../../../apps/production/ombi-f/ks.yaml
   - ../../../../apps/production/wizarr/ks.yaml
-  - ../../../../apps/production/bookstack/ks.yaml
   - ../../../../apps/production/changedetection/ks.yaml
   - ../../../../apps/production/frigate/ks.yaml

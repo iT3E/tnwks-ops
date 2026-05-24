@@ -31,12 +31,12 @@ resources:
   - ../../../apps/flux-system
   - ../../../apps/kube-system
   - ../../../apps/kube-system/flannel/ks.yaml
-  - ../../../apps/media
   - ../../../apps/monitoring
   - ../../../apps/selfhosted
   - ../../../apps/tools
 
   # Trimmed namespaces — per-namespace overlays sit alongside this file
   - ./home-automation
+  - ./media
   - ./networking
   - ./production
