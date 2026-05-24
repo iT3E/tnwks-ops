@@ -25,7 +25,6 @@ metadata:
 spec:
   dependsOn:
     - name: ingress-nginx-certificates
-    - name: metallb-config
   path: ./kubernetes/apps/networking/ingress-nginx/app
   prune: true
   sourceRef:
