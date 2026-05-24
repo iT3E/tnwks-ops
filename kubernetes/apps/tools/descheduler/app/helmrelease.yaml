@@ -61,6 +61,6 @@ spec:
     service:
       enabled: true
     serviceMonitor:
-      enabled: true
+      enabled: ${SERVICE_MONITOR_ENABLED}
     leaderElection:
       enabled: true

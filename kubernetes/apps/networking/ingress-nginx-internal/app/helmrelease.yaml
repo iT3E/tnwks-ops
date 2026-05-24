@@ -51,9 +51,9 @@ spec:
         proxy-body-size: "100M"
         ssl-protocols: "TLSv1.3 TLSv1.2"
       metrics:
-        enabled: true
+        enabled: ${SERVICE_MONITOR_ENABLED}
         serviceMonitor:
-          enabled: true
+          enabled: ${SERVICE_MONITOR_ENABLED}
           namespace: networking
           namespaceSelector:
             any: true
