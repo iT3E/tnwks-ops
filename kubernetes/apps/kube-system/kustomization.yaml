@@ -6,6 +6,7 @@ kind: Kustomization
 resources:
   - ./namespace.yaml
   - ./metrics-server/ks.yaml
+  - ./reflector/ks.yaml
   - ./reloader/ks.yaml
 # local-path-provisioner is WSL-only (MS-01 uses Rook Ceph). Added back
 # via kubernetes/clusters/wsl/apps/kustomization.yaml.
