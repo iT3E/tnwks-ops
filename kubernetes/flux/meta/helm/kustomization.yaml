@@ -9,6 +9,7 @@ resources:
   - ./cilium.yaml
   - ./cloudnative-pg.yaml
   - ./descheduler.yaml
+  - ./emberstack.yaml
   - ./external-dns.yaml
   - ./flannel.yaml
   - ./grafana.yaml
