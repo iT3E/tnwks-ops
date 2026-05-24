@@ -1,6 +1,7 @@
 ---
 # MS-01 cluster apps: shared apps + Cilium CNI + Rook Ceph (MS-01-only,
-# real disks needed). WSL gets Flannel via its own overlay.
+# real disks needed) + Ceph-RGW-backed ObjectBucketClaims. WSL gets
+# Flannel via its own overlay and skips the Ceph-dependent bits.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -8,3 +9,8 @@ resources:
   - ../../../apps/kube-system/cilium/ks.yaml
   - ../../../apps/storage/rook-ceph/rook-ceph-operator
   - ../../../apps/storage/rook-ceph/cluster
+  # ObjectBucketClaims rely on the objectbucket.io CRD installed by Rook,
+  # so they're added per-cluster here rather than in the shared app paths.
+  - ../../../apps/databases/cloudnative-pg/cluster/s3-cnpg-bucket.yaml
+  - ../../../apps/monitoring/thanos/app/s3-thanos-bucket.yaml
+  - ../../../apps/monitoring/loki/app/s3-loki-bucket.yaml
