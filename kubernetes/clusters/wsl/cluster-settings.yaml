@@ -18,8 +18,11 @@ data:
   STORAGE_CLASS_DEFAULT: "local-path"
   STORAGE_CLASS_BULK: "local-path"
 
-  # Bulk PVC size — WSL uses smaller sizes (local-path is whatever the host has)
+  # Bulk PVC size — WSL uses smaller sizes (local-path is whatever the host has).
+  # local-path only supports ReadWriteOnce; on WSL we accept that limitation
+  # since the cluster is single-host (no RWX needed in practice).
   BULK_PVC_SIZE: "10Gi"
+  BULK_PVC_ACCESS_MODE: "ReadWriteOnce"
 
   # Load balancer / IP allocation (no LB controller on WSL; Services pend)
   LB_RANGE: ""

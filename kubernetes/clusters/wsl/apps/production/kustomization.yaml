@@ -13,7 +13,6 @@ resources:
   - ../../../../apps/production/namespace.yaml
   - ../../../../apps/production/mealie/ks.yaml
   - ../../../../apps/production/jellyfin/ks.yaml
-  - ../../../../apps/production/matrix/ks.yaml
   - ../../../../apps/production/vaultwarden/ks.yaml
   - ../../../../apps/production/ombi/ks.yaml
   - ../../../../apps/production/ombi-f/ks.yaml

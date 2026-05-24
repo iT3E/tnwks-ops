@@ -26,9 +26,6 @@ spec:
       repository: ghcr.io/onedr0p/qbittorrent
       tag: 4.6.1@sha256:796f135bcb572a3fb3138b0c65034535c0a7b1dcb83940fe12e00cad1b47fcbb
 
-    podAnnotations:
-      setGateway: "true"
-
     podSecurityContext:
       runAsUser: 568
       runAsGroup: 568
@@ -49,24 +46,73 @@ spec:
               filename=$(basename $f)
               envsubst < $f > /data/config/$filename;
             done
-        # env:
-        #   WIREGUARD_PORT:
-        #     valueFrom:
-        #       secretKeyRef:
-        #         name: qbittorrent-secret
-        #         key: WIREGUARD_PORT
         volumeMounts:
           - name: config
             mountPath: /data/config
           - name: configfiles
             mountPath: /data/configfiles
 
+    # gluetun sidecar holds the iVPN WireGuard tunnel. qbittorrent shares the
+    # pod's network namespace; all its traffic is forced through the tunnel.
+    # If gluetun's tunnel drops, qbittorrent loses network — fail-closed.
+    additionalContainers:
+      gluetun:
+        image: ghcr.io/qdm12/gluetun:v3.39.1
+        securityContext:
+          capabilities:
+            add: ["NET_ADMIN"]
+        env:
+          - name: VPN_SERVICE_PROVIDER
+            value: ivpn
+          - name: VPN_TYPE
+            value: wireguard
+          - name: WIREGUARD_PRIVATE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: qbittorrent-vpn-secret
+                key: WIREGUARD_PRIVATE_KEY
+          - name: WIREGUARD_PUBLIC_KEY
+            valueFrom:
+              secretKeyRef:
+                name: qbittorrent-vpn-secret
+                key: WIREGUARD_PUBLIC_KEY
+          - name: WIREGUARD_PRESHARED_KEY
+            valueFrom:
+              secretKeyRef:
+                name: qbittorrent-vpn-secret
+                key: WIREGUARD_PRESHARED_KEY
+                optional: true
+          - name: WIREGUARD_ADDRESSES
+            valueFrom:
+              secretKeyRef:
+                name: qbittorrent-vpn-secret
+                key: WIREGUARD_ADDRESSES
+          - name: WIREGUARD_ENDPOINT_IP
+            valueFrom:
+              secretKeyRef:
+                name: qbittorrent-vpn-secret
+                key: WIREGUARD_ENDPOINT_IP
+          - name: WIREGUARD_ENDPOINT_PORT
+            valueFrom:
+              secretKeyRef:
+                name: qbittorrent-vpn-secret
+                key: WIREGUARD_ENDPOINT_PORT
+                optional: true
+          - name: SERVER_COUNTRIES
+            value: "" # leave empty when WIREGUARD_ENDPOINT_IP is set
+          - name: TZ
+            value: "${TIMEZONE}"
+          - name: FIREWALL_INPUT_PORTS
+            # qbittorrent webUI port must be reachable from the cluster network
+            # so the Service / Ingress can forward to it.
+            value: "8080"
+          - name: HEALTH_VPN_DURATION_INITIAL
+            value: "30s"
+
     env:
       UMASK: "022"
       QBITTORRENT__PORT: &port 8080
       QBITTORRENT__USE_PROFILE: "true"
-
-    hostname: qbittorrent
 
     service:
       main:

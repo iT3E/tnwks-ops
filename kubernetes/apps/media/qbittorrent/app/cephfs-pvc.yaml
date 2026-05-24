@@ -8,7 +8,7 @@ metadata:
     backup: "false"
 spec:
   accessModes:
-    - ReadWriteMany
+    - ${BULK_PVC_ACCESS_MODE}
   storageClassName: "${STORAGE_CLASS_BULK}"
   resources:
     requests:

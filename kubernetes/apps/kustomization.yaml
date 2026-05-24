@@ -20,4 +20,3 @@ resources:
   - ./production
   - ./selfhosted
   - ./tools
-  - ./vpn
