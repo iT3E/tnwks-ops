@@ -5,7 +5,6 @@ resources:
   - ./namespace.yaml
   - ./mealie/ks.yaml
   - ./jellyfin/ks.yaml
-  - ./matrix/ks.yaml
   - ./vaultwarden/ks.yaml
   - ./ombi/ks.yaml
   - ./ombi-f/ks.yaml

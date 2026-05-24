@@ -12,5 +12,3 @@ spec:
     kind: GitRepository
     name: flux-system
   wait: false # no flux ks dependents
-  dependsOn:
-    - name: pod-gateway-downloads

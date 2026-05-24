@@ -22,6 +22,7 @@ data:
 
   # Bulk media PVC size (TerraMaster NFS share)
   BULK_PVC_SIZE: "10Ti"
+  BULK_PVC_ACCESS_MODE: "ReadWriteMany"
 
   # Load balancer / IP allocation (Cilium L2/BGP on VLAN 910)
   # TODO: Confirm range when Cilium BGP policy is finalized
