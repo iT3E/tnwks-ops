@@ -45,6 +45,6 @@ spec:
     txtOwnerId: default
     domainFilters: ["${SECRET_DOMAIN}"]
     serviceMonitor:
-      enabled: true
+      enabled: ${SERVICE_MONITOR_ENABLED}
     podAnnotations:
       secret.reloader.stakater.com/reload: external-dns-secret

@@ -39,5 +39,11 @@ data:
   CNI: "flannel"
   FLANNEL_VERSION: "v0.28.4"
 
+  # ServiceMonitor / PodMonitor toggle. Set to "false" until
+  # kube-prometheus-stack has reconciled and installed the
+  # monitoring.coreos.com CRDs; flip to "true" thereafter so apps that
+  # ship ServiceMonitor resources can re-enable scraping.
+  SERVICE_MONITOR_ENABLED: "false"
+
   # Misc
   TIMEZONE: "America/Los_Angeles"

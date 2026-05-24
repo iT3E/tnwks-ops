@@ -38,6 +38,6 @@ spec:
       limits:
         memory: 512Mi
     metrics:
-      enabled: true
+      enabled: ${SERVICE_MONITOR_ENABLED}
       serviceMonitor:
-        enabled: true
+        enabled: ${SERVICE_MONITOR_ENABLED}

@@ -44,5 +44,10 @@ data:
   CILIUM_HUBBLE_UI_INGRESS_ENABLED: "true"
   CILIUM_SERVICEMONITOR_ENABLED: "true"
 
+  # Global ServiceMonitor / PodMonitor toggle for apps that ship those
+  # resources via their charts. Off during initial bootstrap; flip to
+  # "true" once kube-prometheus-stack is reconciled.
+  SERVICE_MONITOR_ENABLED: "false"
+
   # Misc
   TIMEZONE: "America/Los_Angeles"
