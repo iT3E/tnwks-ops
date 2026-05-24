@@ -1,11 +1,20 @@
 ---
 # WSL cluster overlay: networking namespace
-# Excludes cloudflared — the production Cloudflare tunnel terminates on the
-# MS-01 cluster. The WSL cluster is reachable on the LAN only.
+#
+# Includes cloudflared. WSL has no LoadBalancer controller, so cloudflared
+# (which connects outbound to Cloudflare's edge and tunnels inbound traffic
+# to in-cluster Services) is the path for public ingress.
+#
+# Each cluster runs its own Cloudflare tunnel — the tunnel ID is in
+# clusters/<target>/cluster-secrets.sops.yaml. When the inactive cluster
+# is shut down its tunnel just disconnects; DNS records (managed by
+# external-dns via the cloudflared DNSEndpoint) re-publish on the active
+# cluster's startup.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../../apps/networking/namespace.yaml
+  - ../../../../apps/networking/cloudflared/ks.yaml
   - ../../../../apps/networking/external-dns/ks.yaml
   - ../../../../apps/networking/ingress-nginx/ks.yaml
   - ../../../../apps/networking/ingress-nginx-internal/ks.yaml
