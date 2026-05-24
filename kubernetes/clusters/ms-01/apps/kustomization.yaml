@@ -9,6 +9,13 @@ resources:
   - ../../../apps/kube-system/cilium/ks.yaml
   - ../../../apps/storage/rook-ceph/rook-ceph-operator
   - ../../../apps/storage/rook-ceph/cluster
+  # MS-01-only: loki, thanos, vector, and the cnpg postgres cluster all
+  # depend on Rook S3 buckets (or chain to something that does). They
+  # live behind their own Kustomizations.
+  - ../../../apps/monitoring/loki/ks.yaml
+  - ../../../apps/monitoring/thanos/ks.yaml
+  - ../../../apps/monitoring/vector/ks.yaml
+  - ../../../apps/databases/cloudnative-pg/ks-cluster.yaml
   # ObjectBucketClaims rely on the objectbucket.io CRD installed by Rook,
   # so they're added per-cluster here rather than in the shared app paths.
   - ../../../apps/databases/cloudnative-pg/cluster/s3-cnpg-bucket.yaml
