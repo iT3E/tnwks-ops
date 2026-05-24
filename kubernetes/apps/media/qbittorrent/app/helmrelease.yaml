@@ -57,7 +57,7 @@ spec:
     # If gluetun's tunnel drops, qbittorrent loses network — fail-closed.
     additionalContainers:
       gluetun:
-        image: ghcr.io/qdm12/gluetun:v3.39.1
+        image: ghcr.io/qdm12/gluetun:v3.41.1
         securityContext:
           capabilities:
             add: ["NET_ADMIN"]
