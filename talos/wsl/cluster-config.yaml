@@ -4,10 +4,14 @@
 #   talosctl cluster create docker \
 #     --name homelab-wsl \
 #     --workers 2 \
-#     --cpus-controlplanes 2.0 --cpus-workers 2.0 \
-#     --memory-controlplanes 2GiB --memory-workers 2GiB \
+#     --cpus-controlplanes 4.0 --cpus-workers 4.0 \
+#     --memory-controlplanes 4GiB --memory-workers 8GiB \
 #     --kubernetes-version 1.34.0 \
 #     --config-patch @talos/wsl/cluster-config.yaml
+#
+# WSL2 VM ceiling: needs to accommodate ~20GiB Talos + Docker + WSL
+# services. Set `memory=24GB` in C:\Users\<user>\.wslconfig and run
+# `wsl --shutdown` from PowerShell before recreating.
 #
 # This creates a 3-node cluster (1 CP + 2 workers) in Docker containers.
 #

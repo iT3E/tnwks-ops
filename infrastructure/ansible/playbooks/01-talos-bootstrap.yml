@@ -44,15 +44,22 @@
       changed_when: false
       when: cluster_target == 'wsl'
 
+    # Resource sizing notes (host has 64GiB RAM):
+    #   * 4 CPU / 4 GiB on the CP — etcd + apiserver + flux-system pods that
+    #     don't tolerate the worker taint comfortably fit here.
+    #   * 4 CPU / 8 GiB per worker — Prometheus, matrix-synapse, jellyfin
+    #     each want 0.5-1.5 GiB resident; 2 GiB was the original choke point.
+    #   * Total Talos footprint ~20 GiB, plus Docker daemon + WSL services,
+    #     so the host's `.wslconfig` should grant the WSL VM at least 24 GiB.
     - name: Create WSL Talos Docker cluster
       ansible.builtin.command: >-
         talosctl cluster create docker
         --name {{ cluster_name }}
         --workers 2
-        --cpus-controlplanes 2.0
-        --cpus-workers 2.0
-        --memory-controlplanes 2GiB
-        --memory-workers 2GiB
+        --cpus-controlplanes 4.0
+        --cpus-workers 4.0
+        --memory-controlplanes 4GiB
+        --memory-workers 8GiB
         --kubernetes-version 1.34.0
         --config-patch @{{ talos_dir }}/cluster-config.yaml
       when:
