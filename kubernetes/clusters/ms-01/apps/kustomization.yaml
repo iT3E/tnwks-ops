@@ -20,6 +20,8 @@ resources:
   # pod scheduling (Coral TPU, Aeotec Z-Stick). Its worker DaemonSet
   # probes hang on Talos-in-Docker WSL2 sysfs.
   - ../../../apps/tools/node-feature-discovery/ks.yaml
+  # mealie hardcodes postgres connection — needs cnpg-cluster (MS-01-only).
+  - ../../../apps/production/mealie/ks.yaml
   # ObjectBucketClaims rely on the objectbucket.io CRD installed by Rook,
   # so they're added per-cluster here rather than in the shared app paths.
   - ../../../apps/databases/cloudnative-pg/cluster/s3-cnpg-bucket.yaml

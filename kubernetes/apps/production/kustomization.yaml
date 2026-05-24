@@ -3,7 +3,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ./namespace.yaml
-  - ./mealie/ks.yaml
   - ./jellyfin/ks.yaml
   - ./vaultwarden/ks.yaml
   - ./ombi/ks.yaml
@@ -13,4 +12,7 @@ resources:
   - ./changedetection/ks.yaml
   - ./frigate/ks.yaml
   # - ./external-dns/ks.yaml
+# mealie is MS-01-only — it requires postgres which only exists on
+# MS-01 via cnpg-cluster. Added back via
+# kubernetes/clusters/ms-01/apps/kustomization.yaml.
 
