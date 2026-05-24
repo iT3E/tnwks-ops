@@ -5,8 +5,8 @@ Ubiquiti UISP (formerly UNMS) running on Kubernetes via the
 
 ## Status
 
-Active — Ivan moved this back from the temporary VyOS Podman host onto
-the cluster as part of the multi-cluster restructure (2026-05-12).
+Active — moved back from the temporary VyOS Podman host onto the
+cluster as part of the multi-cluster restructure (2026-05-12).
 
 ## Notes
 

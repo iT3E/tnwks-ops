@@ -120,7 +120,7 @@ machine-config patch can mount the host's `/dev/bus/usb` into the node
 filesystem. **TBD.**
 
 > **Honest status:** none of options A/B/C have been validated end-to-end on
-> hardware yet. The first time Ivan plugs the dongles in, fill in the exact
+> hardware yet. The first time the dongles get plugged in, fill in the exact
 > commands here.
 
 ---
