@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: matrix-chatgpt
@@ -56,7 +56,7 @@ spec:
     persistence:
       config:
         enabled: true
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
         mountPath: /storage
 
     probes:

@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: ingress-nginx-internal
@@ -25,9 +25,6 @@ spec:
       retries: 3
   uninstall:
     keepHistory: false
-  dependsOn:
-    - name: cloudflared
-      namespace: networking
   values:
     controller:
       replicaCount: 2
@@ -36,7 +33,7 @@ spec:
           value: "${TIMEZONE}"
       service:
         annotations:
-        loadBalancerIP: "10.10.120.52"
+        loadBalancerIP: "${INGRESS_INTERNAL_ADDR}"
         externalTrafficPolicy: Local
       publishService:
         enabled: true
@@ -54,9 +51,9 @@ spec:
         proxy-body-size: "100M"
         ssl-protocols: "TLSv1.3 TLSv1.2"
       metrics:
-        enabled: true
+        enabled: ${SERVICE_MONITOR_ENABLED}
         serviceMonitor:
-          enabled: true
+          enabled: ${SERVICE_MONITOR_ENABLED}
           namespace: networking
           namespaceSelector:
             any: true

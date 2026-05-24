@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: metrics-server
@@ -32,6 +32,6 @@ spec:
       - --kubelet-use-node-status-port
       - --metric-resolution=15s
     metrics:
-      enabled: true
+      enabled: ${SERVICE_MONITOR_ENABLED}
     serviceMonitor:
-      enabled: true
+      enabled: ${SERVICE_MONITOR_ENABLED}

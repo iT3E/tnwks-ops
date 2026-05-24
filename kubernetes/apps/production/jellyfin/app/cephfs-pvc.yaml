@@ -8,11 +8,9 @@ metadata:
     backup: "false"
 spec:
   accessModes:
-  - ReadWriteMany
-  storageClassName: "cephfs"
+    - ReadWriteMany
+  storageClassName: "${STORAGE_CLASS_BULK}"
   resources:
     requests:
-      storage: 200T
+      storage: "${BULK_PVC_SIZE}"
   volumeMode: Filesystem
-  # volumeName should be same as PV name
-  volumeName: cephfs-hdd-subvolume

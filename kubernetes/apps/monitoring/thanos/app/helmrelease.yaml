@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: thanos
@@ -39,7 +39,7 @@ spec:
       enabled: true
       ingress:
         enabled: true
-        hostname: "thanos.tnwks.local"
+        hostname: "thanos.${INTERNAL_DOMAIN}"
         ingressClassName: "nginx-internal"
         tls: true
 
@@ -68,7 +68,7 @@ spec:
         #   memory: 270M
       persistence:
         enabled: true
-        storageClass: "cephfs"
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
         size: 15Gi
 
     storegateway:
@@ -81,7 +81,7 @@ spec:
         #   memory: 226M
       persistence:
         enabled: true
-        storageClass: "cephfs"
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
         size: 1Gi
 
     ruler:
@@ -99,7 +99,7 @@ spec:
         enabled: true
       persistence:
         enabled: true
-        storageClass: "cephfs"
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
         size: 512Mi
       resources:
         requests:

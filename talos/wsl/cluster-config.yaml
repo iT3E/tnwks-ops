@@ -1,0 +1,48 @@
+# talosctl cluster create configuration for the WSL Docker-mode cluster
+#
+# Usage:
+#   talosctl cluster create docker \
+#     --name homelab-wsl \
+#     --workers 2 \
+#     --cpus-controlplanes 4.0 --cpus-workers 4.0 \
+#     --memory-controlplanes 4GiB --memory-workers 8GiB \
+#     --kubernetes-version 1.34.0 \
+#     --config-patch @talos/wsl/cluster-config.yaml
+#
+# WSL2 VM ceiling: needs to accommodate ~20GiB Talos + Docker + WSL
+# services. Set `memory=24GB` in C:\Users\<user>\.wslconfig and run
+# `wsl --shutdown` from PowerShell before recreating.
+#
+# This creates a 3-node cluster (1 CP + 2 workers) in Docker containers.
+#
+# CNI is disabled so Flannel is installed via the bootstrap playbook
+# post-cluster-create. (MS-01 uses Cilium, but Cilium can't run on
+# Talos-in-Docker on WSL2 — the clean-cilium-state init container
+# requests CAP_SYS_MODULE which the WSL2 kernel rejects in nested
+# containers regardless of bounding set or privileged flag. See the
+# upstream issues referenced in docs/bootstrap-wsl.md.)
+#
+# kube-proxy is kept enabled on WSL because Flannel doesn't replace it.
+# (MS-01 disables kube-proxy because Cilium does the replacement there.)
+
+cluster:
+  network:
+    cni:
+      name: none
+    podSubnets:
+      - 10.42.0.0/16
+    serviceSubnets:
+      - 10.43.0.0/16
+  discovery:
+    enabled: true
+    registries:
+      kubernetes:
+        disabled: false
+      service:
+        disabled: true
+
+machine:
+  features:
+    kubePrism:
+      enabled: true
+      port: 7445

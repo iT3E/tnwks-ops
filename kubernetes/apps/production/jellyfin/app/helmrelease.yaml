@@ -1,6 +1,6 @@
 ---
-# yaml-language-server: $schema=https://kubernetes-schemas.devbu.io/helmrelease_v2beta1.json
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+# yaml-language-server: $schema=https://kubernetes-schemas.devbu.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: jellyfin
@@ -70,7 +70,7 @@ spec:
         enabled: true
         ingressClassName: "nginx-internal"
         hosts:
-          - host: &internalHost "jellyfin.tnwks.local"
+          - host: &internalHost "jellyfin.${INTERNAL_DOMAIN}"
             paths:
               - path: /
 
@@ -90,7 +90,7 @@ spec:
     persistence:
       config:
         enabled: true
-        storageClass: ssd-pool
+        storageClass: ${STORAGE_CLASS_DEFAULT}
         accessMode: ReadWriteOnce
         size: 150Gi
         retain: true

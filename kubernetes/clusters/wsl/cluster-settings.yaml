@@ -1,0 +1,49 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-settings
+  namespace: flux-system
+data:
+  # Identity
+  CLUSTER_NAME: "homelab-wsl"
+  CLUSTER_DOMAIN: "tnwks.local"
+  # Legacy alias used by existing manifests that reference ${SECRET_DOMAIN}.
+  # Overrides the value from cluster-secrets.sops.yaml on this cluster.
+  SECRET_DOMAIN: "tnwks.local"
+  # Internal LAN domain — same as CLUSTER_DOMAIN on the WSL cluster
+  INTERNAL_DOMAIN: "tnwks.local"
+
+  # Storage classes
+  STORAGE_CLASS_DEFAULT: "local-path"
+  STORAGE_CLASS_BULK: "local-path"
+
+  # Bulk PVC size — WSL uses smaller sizes (local-path is whatever the host has)
+  BULK_PVC_SIZE: "10Gi"
+
+  # Load balancer / IP allocation (no LB controller on WSL; Services pend)
+  LB_RANGE: ""
+  METALLB_LB_RANGE: ""
+  METALLB_K8S_GATEWAY_ADDR: "127.0.0.1"
+  METALLB_INGRESS_ADDR: "127.0.0.1"
+  INGRESS_INTERNAL_ADDR: "127.0.0.1"
+  KUBE_VIP_ADDR: "127.0.0.1"
+
+  # Cluster networking
+  CLUSTER_CIDR: "10.42.0.0/16"
+  SERVICE_CIDR: "10.43.0.0/16"
+
+  # CNI — WSL uses Flannel. The Cilium HelmRelease is filtered out of the
+  # WSL apps overlay (it can't run on Talos-in-Docker on WSL2 — Cilium issue
+  # #13768, CAP_SYS_MODULE rejected in nested containers).
+  CNI: "flannel"
+  FLANNEL_VERSION: "v0.28.4"
+
+  # ServiceMonitor / PodMonitor toggle. Set to "false" until
+  # kube-prometheus-stack has reconciled and installed the
+  # monitoring.coreos.com CRDs; flip to "true" thereafter so apps that
+  # ship ServiceMonitor resources can re-enable scraping.
+  SERVICE_MONITOR_ENABLED: "false"
+
+  # Misc
+  TIMEZONE: "America/Los_Angeles"

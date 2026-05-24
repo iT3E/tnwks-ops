@@ -8,8 +8,9 @@ resources:
   - ./cluster.yaml
   - ./prometheusrule.yaml
   - ./service.yaml
-  - ./s3-cnpg-bucket.yaml
   - ./scheduled-backup.yaml
+# s3-cnpg-bucket.yaml uses ObjectBucketClaim which only exists when Rook
+# is installed. Added back per-cluster via kubernetes/clusters/ms-01/apps/.
 labels:
   - pairs:
       app.kubernetes.io/name: cloudnative-pg-cluster

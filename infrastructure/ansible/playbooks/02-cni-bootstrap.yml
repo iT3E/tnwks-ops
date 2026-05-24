@@ -1,0 +1,172 @@
+---
+# Phase 2 of bootstrap: install the CNI directly so Flux pods can be
+# scheduled.
+#
+# Talos ships with no CNI (cluster-config.yaml: cni.name=none), so pods
+# stay Pending until something installs one. Flux can't install the CNI
+# itself because its own pods need a CNI to start — chicken and egg.
+#
+# Which CNI gets installed is read from the cluster-settings ConfigMap
+# at kubernetes/clusters/<target>/cluster-settings.yaml:
+#
+#   CNI: cilium    -> ms-01 (bare metal, full Cilium)
+#   CNI: flannel   -> wsl   (Cilium can't run on Talos-in-Docker on
+#                            WSL2; clean-cilium-state requests
+#                            CAP_SYS_MODULE which the kernel rejects
+#                            in nested containers — Cilium issue #13768)
+#
+# For Cilium we install with two overrides versus the in-repo HelmRelease:
+# ServiceMonitor disabled (kube-prometheus-stack CRDs aren't deployed
+# yet) and Hubble UI ingress disabled (ingress-nginx isn't up yet). Flux
+# re-enables both via the HelmRelease once their dependencies exist.
+#
+# Run via:
+#   ansible-playbook -i inventory/wsl.yml   playbooks/02-cni-bootstrap.yml
+#   ansible-playbook -i inventory/ms-01.yml playbooks/02-cni-bootstrap.yml
+
+- name: Bootstrap CNI
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: false
+
+  vars:
+    cluster_target: "{{ talos_target | default('wsl') }}"
+    cluster_name: "homelab-{{ cluster_target }}"
+    kubeconfig_path: "{{ ansible_env.HOME }}/.kube/config-{{ cluster_name }}"
+    cluster_settings_path: "{{ playbook_dir }}/../../../kubernetes/clusters/{{ cluster_target }}/cluster-settings.yaml"
+    cni_namespace: kube-system
+
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+
+  tasks:
+    - name: Load cluster-settings
+      ansible.builtin.include_vars:
+        file: "{{ cluster_settings_path }}"
+        name: cluster_settings_doc
+
+    - name: Set CNI facts from cluster-settings
+      ansible.builtin.set_fact:
+        cni_kind: "{{ cluster_settings_doc.data.CNI }}"
+        cluster_pod_cidr: "{{ cluster_settings_doc.data.CLUSTER_CIDR }}"
+        cilium_chart_version: "{{ cluster_settings_doc.data.CILIUM_VERSION | default('') }}"
+        flannel_chart_version: "{{ cluster_settings_doc.data.FLANNEL_VERSION | default('') }}"
+
+    - name: Validate CNI choice
+      ansible.builtin.fail:
+        msg: |
+          Unknown CNI '{{ cni_kind }}' in {{ cluster_settings_path }}.
+          Expected one of: cilium, flannel.
+      when: cni_kind not in ['cilium', 'flannel']
+
+    - name: Ensure helm CLI is installed
+      ansible.builtin.command: helm version --short
+      register: helm_check
+      changed_when: false
+      failed_when: false
+
+    - name: Fail if helm is missing
+      ansible.builtin.fail:
+        msg: |
+          helm is required. Install with:
+            brew install helm
+      when: helm_check.rc != 0
+
+    - name: Verify cluster is reachable
+      ansible.builtin.command: kubectl cluster-info
+      changed_when: false
+
+    # ─── Cilium (ms-01) ────────────────────────────────────────────────
+    - name: Add cilium helm repo
+      ansible.builtin.command: helm repo add cilium https://helm.cilium.io
+      register: cilium_repo_add
+      changed_when: "'has been added' in cilium_repo_add.stdout"
+      failed_when:
+        - cilium_repo_add.rc != 0
+        - "'already exists' not in cilium_repo_add.stderr"
+      when: cni_kind == 'cilium'
+
+    - name: Update cilium helm repo
+      ansible.builtin.command: helm repo update cilium
+      changed_when: false
+      when: cni_kind == 'cilium'
+
+    - name: Install or upgrade Cilium
+      ansible.builtin.command: >-
+        helm upgrade --install cilium cilium/cilium
+        --namespace {{ cni_namespace }}
+        --version {{ cilium_chart_version }}
+        --set bpf.masquerade=true
+        --set cluster.name={{ cluster_name }}
+        --set cluster.id=1
+        --set hubble.enabled=true
+        --set hubble.relay.enabled=true
+        --set hubble.ui.enabled=true
+        --set hubble.ui.ingress.enabled=false
+        --set ipam.mode=kubernetes
+        --set k8sServiceHost=localhost
+        --set k8sServicePort=7445
+        --set kubeProxyReplacement=true
+        --set kubeProxyReplacementHealthzBindAddr=0.0.0.0:10256
+        --set operator.replicas=1
+        --set autoDirectNodeRoutes=true
+        --set ipv4NativeRoutingCIDR={{ cluster_pod_cidr }}
+        --set routingMode=native
+      register: cilium_install
+      changed_when: "'has been upgraded' in cilium_install.stdout or 'has been installed' in cilium_install.stdout"
+      when: cni_kind == 'cilium'
+
+    - name: Wait for Cilium DaemonSet to be ready
+      ansible.builtin.command: >-
+        kubectl -n {{ cni_namespace }} rollout status ds/cilium --timeout=300s
+      changed_when: false
+      when: cni_kind == 'cilium'
+
+    - name: Wait for cilium-operator to be ready
+      ansible.builtin.command: >-
+        kubectl -n {{ cni_namespace }} rollout status deploy/cilium-operator --timeout=180s
+      changed_when: false
+      when: cni_kind == 'cilium'
+
+    # ─── Flannel (wsl) ─────────────────────────────────────────────────
+    - name: Add flannel helm repo
+      ansible.builtin.command: helm repo add flannel https://flannel-io.github.io/flannel/
+      register: flannel_repo_add
+      changed_when: "'has been added' in flannel_repo_add.stdout"
+      failed_when:
+        - flannel_repo_add.rc != 0
+        - "'already exists' not in flannel_repo_add.stderr"
+      when: cni_kind == 'flannel'
+
+    - name: Update flannel helm repo
+      ansible.builtin.command: helm repo update flannel
+      changed_when: false
+      when: cni_kind == 'flannel'
+
+    - name: Install or upgrade Flannel
+      ansible.builtin.command: >-
+        helm upgrade --install flannel flannel/flannel
+        --namespace {{ cni_namespace }}
+        --version {{ flannel_chart_version }}
+        --set podCidr={{ cluster_pod_cidr }}
+        --set flannel.backend=vxlan
+      register: flannel_install
+      changed_when: "'has been upgraded' in flannel_install.stdout or 'has been installed' in flannel_install.stdout"
+      when: cni_kind == 'flannel'
+
+    - name: Wait for Flannel DaemonSet to be ready
+      ansible.builtin.command: >-
+        kubectl -n {{ cni_namespace }} rollout status ds/kube-flannel-ds --timeout=300s
+      changed_when: false
+      when: cni_kind == 'flannel'
+
+    # ─── Verify ────────────────────────────────────────────────────────
+    - name: Show node status
+      ansible.builtin.command: kubectl get nodes
+      register: node_status
+      changed_when: false
+
+    - name: Print node status
+      ansible.builtin.debug:
+        var: node_status.stdout_lines

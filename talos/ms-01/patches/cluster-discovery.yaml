@@ -1,0 +1,10 @@
+# Enable cluster discovery via Kubernetes API (disable service discovery)
+# This allows nodes to find each other without external dependencies
+cluster:
+  discovery:
+    enabled: true
+    registries:
+      kubernetes:
+        disabled: false
+      service:
+        disabled: true

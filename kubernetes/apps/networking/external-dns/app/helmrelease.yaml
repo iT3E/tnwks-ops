@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: &app external-dns
@@ -45,6 +45,6 @@ spec:
     txtOwnerId: default
     domainFilters: ["${SECRET_DOMAIN}"]
     serviceMonitor:
-      enabled: true
+      enabled: ${SERVICE_MONITOR_ENABLED}
     podAnnotations:
       secret.reloader.stakater.com/reload: external-dns-secret

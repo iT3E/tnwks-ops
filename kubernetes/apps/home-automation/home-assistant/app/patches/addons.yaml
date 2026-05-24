@@ -1,6 +1,6 @@
 ---
-# yaml-language-server: $schema=https://kubernetes-schemas.devbu.io/helm.toolkit.fluxcd.io/helmrelease_v2beta1.json
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+# yaml-language-server: $schema=https://kubernetes-schemas.devbu.io/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: home-assistant
@@ -27,7 +27,7 @@ spec:
           enabled: true
           ingressClassName: nginx-internal
           hosts:
-            - host: &host hass-code.tnwks.local
+            - host: &host hass-code.${INTERNAL_DOMAIN}
               paths:
                 - path: /
                   pathType: Prefix
