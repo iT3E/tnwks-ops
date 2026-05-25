@@ -4,12 +4,22 @@
     {
       "description": "Flux Group",
       "groupName": "Flux",
-      "matchPackagePatterns": ["flux"],
+      "matchPackageNames": ["/flux/"],
       "matchDatasources": ["docker", "github-tags"],
       "versioning": "semver",
       "group": {
         "commitMessageTopic": "{{{groupName}}} group"
       },
+      "separateMinorPatch": true
+    },
+    {
+      // Bumping bjw-s `app-template` is a fleet-wide schema change. Group
+      // every chart bump into one PR so the canary→sweep migration can be
+      // reviewed and merged as a single, cohesive change.
+      "description": "bjw-s app-template fleet group",
+      "groupName": "bjw-s app-template",
+      "matchDatasources": ["helm"],
+      "matchPackageNames": ["app-template"],
       "separateMinorPatch": true
     }
   ]
