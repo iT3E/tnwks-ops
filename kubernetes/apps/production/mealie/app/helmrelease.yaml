@@ -30,18 +30,17 @@ spec:
         containers:
           app:
             image:
-              repository: docker.io/hkotel/mealie
-              tag: v0.5.6
+              repository: ghcr.io/mealie-recipes/mealie
+              tag: v3.3.2
             env:
               - name: TZ
                 value: "${TIMEZONE}"
+              - name: ALLOW_SIGNUP
+                value: "false"
+              - name: BASE_URL
+                value: "https://recipes.${SECRET_DOMAIN}"
               - name: DB_ENGINE
                 value: "postgres"
-              # cnpg generates the `postgres-app` Secret in the databases
-              # namespace with all the connection bits; cross-namespace fetch
-              # via the postgres-app Secret mirrored into this namespace by
-              # external-secrets / reflector. For now we point at the cnpg
-              # services + DB credentials directly.
               - name: POSTGRES_USER
                 valueFrom:
                   secretKeyRef:
@@ -53,13 +52,9 @@ spec:
                     name: postgres-app
                     key: password
               - name: POSTGRES_SERVER
-                # cnpg's read-write Service. Cross-namespace via FQDN.
                 value: "postgres-rw.databases.svc.cluster.local"
               - name: POSTGRES_PORT
                 value: "5432"
-              # cnpg's `postgres-app` Secret only carries username/password/pgpass.
-              # The DB name comes from cluster.yaml's `bootstrap.initdb.database`
-              # field (`app`).
               - name: POSTGRES_DB
                 value: "app"
     service:
@@ -67,7 +62,7 @@ spec:
         controller: mealie
         ports:
           http:
-            port: 80
+            port: 9000
     persistence:
       config:
         enabled: true
