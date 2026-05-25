@@ -43,7 +43,7 @@ spec:
       existingSecret: grafana-admin-secret
     env:
       GF_EXPLORE_ENABLED: true
-      GF_SERVER_ROOT_URL: "https://grafana.${SECRET_DOMAIN}"
+      GF_SERVER_ROOT_URL: "https://grafana.${INTERNAL_DOMAIN}"
 
     dashboardProviders:
       dashboardproviders.yaml:
@@ -255,7 +255,7 @@ spec:
         allow_embedding: true
         cookie_samesite: grafana
       server:
-        root_url: https://grafana.${SECRET_DOMAIN}
+        root_url: https://grafana.${INTERNAL_DOMAIN}
 
     imageRenderer:
       enabled: true
@@ -303,12 +303,11 @@ spec:
 
     ingress:
       enabled: true
-      ingressClassName: nginx
+      ingressClassName: nginx-internal
       annotations:
-        external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
         hajimari.io/icon: simple-icons:grafana
       hosts:
-        - &host "grafana.${SECRET_DOMAIN}"
+        - &host "grafana.${INTERNAL_DOMAIN}"
       tls:
         - hosts:
             - *host
