@@ -1,0 +1,9 @@
+---
+# Which socat instances to install. Each maps to a 'case' arm in
+# tnwks-lan-bridge.sh: http→ingress 80, https→ingress 443, mqtt→1883.
+# 'dns' is intentionally omitted by default — netsh portproxy is TCP-only,
+# so the LAN-side DNS path goes via VyOS, not via this bridge.
+wsl_lan_bridge_instances:
+  - http
+  - https
+  - mqtt

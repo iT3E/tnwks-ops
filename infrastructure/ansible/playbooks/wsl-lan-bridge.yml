@@ -1,0 +1,14 @@
+---
+# Install + enable the LAN-bridge socat units on the WSL host.
+# Pairs with the Windows-side Sync-TnwksLanBridge.ps1; together they
+# expose *.tnwks.local services to the LAN.
+#
+#   ansible-playbook -i ./ansible/inventory/wsl.yml ./ansible/playbooks/wsl-lan-bridge.yml
+#
+# Run from infrastructure/ so ansible.cfg's relative paths resolve.
+
+- hosts: localhost
+  become: true
+  gather_facts: false
+  roles:
+    - ../roles/wsl_lan_bridge

@@ -1,0 +1,46 @@
+---
+# wsl_lan_bridge — install socat, the bridge script, and the templated
+# systemd unit, then enable+start one instance per LAN-exposed port.
+# See docs/wsl-lan-exposure.md for why this chain exists.
+
+- name: Install socat
+  ansible.builtin.apt:
+    name: socat
+    state: present
+
+- name: Install tnwks-lan-bridge script
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../wsl-host/tnwks-lan-bridge.sh"
+    dest: /usr/local/bin/tnwks-lan-bridge
+    owner: root
+    group: root
+    mode: "0755"
+  register: bridge_script
+
+- name: Install tnwks-lan-bridge templated systemd unit
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../wsl-host/tnwks-lan-bridge@.service"
+    dest: /etc/systemd/system/tnwks-lan-bridge@.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: bridge_unit
+
+- name: Reload systemd if the unit file changed
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: bridge_unit.changed
+
+- name: Enable and start tnwks-lan-bridge instances
+  ansible.builtin.systemd:
+    name: "tnwks-lan-bridge@{{ item }}.service"
+    enabled: true
+    state: started
+  loop: "{{ wsl_lan_bridge_instances }}"
+
+- name: Restart tnwks-lan-bridge instances if script or unit changed
+  ansible.builtin.systemd:
+    name: "tnwks-lan-bridge@{{ item }}.service"
+    state: restarted
+  loop: "{{ wsl_lan_bridge_instances }}"
+  when: bridge_script.changed or bridge_unit.changed
