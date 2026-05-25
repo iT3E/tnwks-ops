@@ -36,9 +36,13 @@ record:
   retain:
     days: 2
     mode: active_objects
-  events:
+  alerts:
     retain:
-      default: 2
+      days: 2
+      mode: active_objects
+  detections:
+    retain:
+      days: 2
       mode: active_objects
 
 objects:
@@ -114,7 +118,8 @@ cameras:
       height: 360
       fps: 10
     live:
-      stream_name: frigate_sv3c_east_hq
+      streams:
+        main: frigate_sv3c_east_hq
 
   frigate_sv3c_west:
     ffmpeg:
@@ -129,7 +134,8 @@ cameras:
       height: 360
       fps: 10
     live:
-      stream_name: frigate_sv3c_west_hq
+      streams:
+        main: frigate_sv3c_west_hq
 
   frigate_reolink_south:
     ffmpeg:
@@ -144,7 +150,8 @@ cameras:
       height: 360
       fps: 10
     live:
-      stream_name: frigate_reolink_south_hq
+      streams:
+        main: frigate_reolink_south_hq
 
   frigate_amcrest_kitchen:
     ffmpeg:
@@ -159,7 +166,8 @@ cameras:
       height: 480
       fps: 10
     live:
-      stream_name: frigate_amcrest_kitchen_hq
+      streams:
+        main: frigate_amcrest_kitchen_hq
 
   frigate_amcrest_balc:
     ffmpeg:
@@ -174,7 +182,8 @@ cameras:
       height: 480
       fps: 10
     live:
-      stream_name: frigate_amcrest_balc_hq
+      streams:
+        main: frigate_amcrest_balc_hq
 
   frigate_loryta_pool:
     ffmpeg:
@@ -189,7 +198,8 @@ cameras:
       height: 480
       fps: 10
     live:
-      stream_name: frigate_loryta_pool_hq
+      streams:
+        main: frigate_loryta_pool_hq
 
   frigate_loryta_fdoor:
     ffmpeg:
@@ -204,7 +214,8 @@ cameras:
       height: 480
       fps: 10
     live:
-      stream_name: frigate_loryta_fdoor_hq
+      streams:
+        main: frigate_loryta_fdoor_hq
 
 
   # frigate_porch:
