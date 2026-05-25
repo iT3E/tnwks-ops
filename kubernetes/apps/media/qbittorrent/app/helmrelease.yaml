@@ -58,6 +58,11 @@ spec:
       gluetun:
         image: ghcr.io/qdm12/gluetun:v3.39.1
         securityContext:
+          # gluetun manages iptables + creates the wg0 interface; needs to
+          # run as root with NET_ADMIN. The pod-level podSecurityContext
+          # forces uid 568, so explicitly override here.
+          runAsUser: 0
+          runAsGroup: 0
           capabilities:
             add: ["NET_ADMIN"]
         env:
