@@ -32,9 +32,9 @@ spec:
         reloader.stakater.com/auto: "true"
     image:
       repository: ghcr.io/wizarrrr/wizarr
-      # SHA pin removed — the original digest was GC'd by ghcr.io.
-      # Renovate will re-pin to a current digest on next run.
-      tag: 3.5.2
+      # 3.5.2 was GC'd from ghcr.io entirely (tag and digest gone).
+      # Wizarr's 4.x line has been out for a while; bump to current.
+      tag: 4.2.0
     env:
       TZ: ${TIMEZONE}
       APP_URL: https://invite.${SECRET_DOMAIN}
