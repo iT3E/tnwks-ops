@@ -38,6 +38,23 @@ spec:
               globalMounts:
                 - path: /config/qBittorrent/data
         initContainers:
+          # fsGroupChangePolicy: OnRootMismatch isn't chowning intermediate
+          # dirs kubelet creates to host nested mounts (/config/qBittorrent
+          # comes through as root:root despite fsGroup=568), so the app
+          # container — running as 568 — can't write its top-level profile.
+          # Explicitly chown /config recursively before the app starts.
+          00-chown-config:
+            image:
+              repository: public.ecr.aws/docker/library/busybox
+              tag: "1.38.0"
+            command:
+              - "/bin/sh"
+              - -c
+            args:
+              - chown -R 568:568 /config
+            securityContext:
+              runAsUser: 0
+              runAsGroup: 0
           copy-config:
             # No env-var substitution is needed in the bundled config files,
             # so a plain busybox `cp` is sufficient. The previous
@@ -142,6 +159,8 @@ spec:
         type: emptyDir
         advancedMounts:
           qbittorrent:
+            00-chown-config:
+              - path: /config
             app:
               - path: /config
       config:
