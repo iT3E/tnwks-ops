@@ -63,22 +63,15 @@ from the LAN side.
 ## One-time setup on the WSL distro
 
 ```bash
-sudo apt-get install -y socat
-
-sudo install -m 0755 \
-  infrastructure/wsl-host/tnwks-lan-bridge.sh \
-  /usr/local/bin/tnwks-lan-bridge
-
-sudo install -m 0644 \
-  infrastructure/wsl-host/tnwks-lan-bridge@.service \
-  /etc/systemd/system/tnwks-lan-bridge@.service
-
-sudo systemctl daemon-reload
-sudo systemctl enable --now \
-  tnwks-lan-bridge@http.service \
-  tnwks-lan-bridge@https.service \
-  tnwks-lan-bridge@mqtt.service
+cd infrastructure/
+ansible-playbook -i ./ansible/inventory/wsl.yml ./ansible/playbooks/wsl-lan-bridge.yml
 ```
+
+The `wsl_lan_bridge` role installs `socat`, drops
+`tnwks-lan-bridge` into `/usr/local/bin/`, the templated systemd unit
+into `/etc/systemd/system/`, and enables+starts one instance per
+LAN-exposed port (`http`, `https`, `mqtt`). Idempotent — only restarts
+units when the script or unit file actually changes.
 
 Verify each unit is active:
 
