@@ -17,7 +17,6 @@ spec:
         namespace: flux-system
   values:
     defaultPodOptions:
-      restartPolicy: OnFailure
       securityContext:
         runAsUser: 568
         runAsGroup: 568
