@@ -1,18 +1,17 @@
 ---
-# yaml-language-server: $schema=https://kubernetes-schemas.devbu.io/kustomization_v1beta2.json
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: database-apps-cloudnative-pg-app
+  name: cloudnative-pg-app
   namespace: flux-system
 spec:
   path: ./kubernetes/apps/databases/cloudnative-pg/app
   prune: true
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: flux-system
   healthChecks:
-    - apiVersion: helm.toolkit.fluxcd.io/v2beta1
+    - apiVersion: helm.toolkit.fluxcd.io/v2
       kind: HelmRelease
       name: cloudnative-pg
       namespace: databases
@@ -20,21 +19,46 @@ spec:
   retryInterval: 1m
   timeout: 3m
 ---
-# yaml-language-server: $schema=https://kubernetes-schemas.devbu.io/kustomization_v1beta2.json
+# Defines the actual postgres Cluster resource (1 instance on WSL,
+# 3 on MS-01 via cluster-settings parameterization). Fresh-init only,
+# no recovery. S3 backup + ScheduledBackup are MS-01-only and live
+# under the cluster-backup/ subpath, included in the MS-01 overlay.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: database-apps-cloudnative-pg-cluster
+  name: cloudnative-pg-cluster
   namespace: flux-system
 spec:
   dependsOn:
-    - name: database-apps-cloudnative-pg-app
+    - name: cloudnative-pg-app
   path: ./kubernetes/apps/databases/cloudnative-pg/cluster
   prune: true
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: flux-system
   wait: true
+  interval: 30m
+  retryInterval: 1m
+  timeout: 3m
+---
+# PrometheusRule needs the monitoring.coreos.com CRD which
+# kube-prometheus-stack provides; lives in its own Kustomization with
+# the right dependency.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cloudnative-pg-cluster-prometheusrules
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: cloudnative-pg-cluster
+    - name: kube-prometheus-stack
+  path: ./kubernetes/apps/databases/cloudnative-pg/cluster-prometheusrules
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
   interval: 30m
   retryInterval: 1m
   timeout: 3m

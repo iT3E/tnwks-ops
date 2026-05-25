@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: alertmanager
@@ -9,7 +9,7 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 2.0.3
+      version: 1.5.1
       interval: 30m
       sourceRef:
         kind: HelmRepository
@@ -23,7 +23,7 @@ spec:
 
     image:
       repository: quay.io/prometheus/alertmanager
-      tag: main@sha256:5b64cc395b9191d73bca80153d6a37b50ff5d3ddb71ab83c3801718cd766f3e0
+      tag: v0.32.1
 
     podAnnotations:
       reloader.stakater.com/auto: "true"
@@ -39,7 +39,7 @@ spec:
         enabled: true
         ingressClassName: nginx-internal
         hosts:
-          - host: &host alertmanager.tnwks.local
+          - host: &host alertmanager.${INTERNAL_DOMAIN}
             paths:
               - path: /
                 pathType: Prefix
@@ -73,4 +73,4 @@ spec:
         mountPath: /alertmanager
         accessMode: ReadWriteOnce
         size: 50Mi
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"

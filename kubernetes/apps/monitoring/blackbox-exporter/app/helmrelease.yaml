@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: blackbox-exporter
@@ -45,7 +45,7 @@ spec:
       enabled: true
       className: nginx-internal
       hosts:
-        - host: &host "blackbox-exporter.tnwks.local"
+        - host: &host "blackbox-exporter.${INTERNAL_DOMAIN}"
           paths:
             - path: /
               pathType: Prefix

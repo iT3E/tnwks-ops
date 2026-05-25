@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: uisp
@@ -35,7 +35,7 @@ spec:
         periodSeconds: 10
     image:
       repository: nico640/docker-unms
-      tag: 2.2.15
+      tag: 3.0.159
     env:
       TZ: ${TIMEZONE}
       PUID: 911
@@ -72,7 +72,7 @@ spec:
         mountPath: /config
         accessMode: ReadWriteOnce
         size: 5Gi
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
 
     resources:
       requests:

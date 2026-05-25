@@ -1,0 +1,34 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: flannel
+  namespace: kube-system
+spec:
+  interval: 15m
+  chart:
+    spec:
+      chart: flannel
+      version: v0.28.4
+      sourceRef:
+        kind: HelmRepository
+        name: flannel
+        namespace: flux-system
+  maxHistory: 2
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  values:
+    podCidr: ${CLUSTER_CIDR}
+    flannel:
+      backend: vxlan
+      args:
+        - --ip-masq
+        - --kube-subnet-mgr

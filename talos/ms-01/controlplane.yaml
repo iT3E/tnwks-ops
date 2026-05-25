@@ -1,0 +1,78 @@
+# Talos controlplane machineconfig for MS-01 bare-metal nodes
+# TODO: Fill in when MS-01 hardware arrives
+#
+# All 3 MS-01 nodes run as controlplane + worker (no dedicated workers).
+# Generate secrets first: talosctl gen secrets -o talos/ms-01/secrets.yaml
+# Then generate configs: talosctl gen config homelab-ms-01 https://<VIP>:6443 \
+#   --config-patch-control-plane @talos/ms-01/controlplane.yaml \
+#   --config-patch @talos/ms-01/patches/cni-none.yaml \
+#   --config-patch @talos/ms-01/patches/cluster-discovery.yaml
+
+version: v1alpha1
+machine:
+  type: controlplane
+  install:
+    # TODO: Set to actual NVMe OS disk path on MS-01
+    disk: /dev/nvme0n1
+    image: ghcr.io/siderolabs/installer:latest
+    wipe: false
+  network:
+    # TODO: Set static IPs on VLAN 910 (10.10.91.0/24)
+    interfaces:
+      - interface: eth0
+        dhcp: true
+        # TODO: Replace with static config:
+        # addresses:
+        #   - 10.10.91.X/24
+        # routes:
+        #   - network: 0.0.0.0/0
+        #     gateway: 10.10.91.1
+        vlan:
+          vlanId: 910
+  kubelet:
+    extraArgs:
+      rotate-server-certificates: "true"
+    extraMounts:
+      # Required for Rook Ceph OSD on second NVMe
+      - destination: /var/lib/rook
+        type: bind
+        source: /var/lib/rook
+        options:
+          - bind
+          - rshared
+          - rw
+  features:
+    kubePrism:
+      enabled: true
+      port: 7445
+    hostDNS:
+      enabled: true
+      forwardKubeDNSToHost: true
+  kernel:
+    modules:
+      # Required for Rook Ceph
+      - name: rbd
+      - name: ceph
+
+cluster:
+  name: homelab-ms-01
+  network:
+    cni:
+      name: none
+    podSubnets:
+      - 10.42.0.0/16
+    serviceSubnets:
+      - 10.43.0.0/16
+  proxy:
+    disabled: true
+  # TODO: Set controlPlaneEndpoint to VIP
+  controlPlane:
+    endpoint: https://10.10.91.1:6443
+  discovery:
+    enabled: true
+    registries:
+      kubernetes:
+        disabled: false
+      service:
+        disabled: true
+  allowSchedulingOnControlPlanes: true

@@ -14,8 +14,10 @@ env:
 
 includes:
   ansible: .taskfiles/AnsibleTasks.yml
+  bootstrap: .taskfiles/BootstrapTasks.yml
   cluster: .taskfiles/ClusterTasks.yml
   precommit: .taskfiles/PrecommitTasks.yml
+  talos: .taskfiles/TalosTasks.yml
   terraform: .taskfiles/TerraformTasks.yml
 
 tasks:
