@@ -56,7 +56,7 @@ spec:
     # If gluetun's tunnel drops, qbittorrent loses network — fail-closed.
     additionalContainers:
       gluetun:
-        image: ghcr.io/qdm12/gluetun:v3.39.1
+        image: ghcr.io/qdm12/gluetun:v3.41.1
         securityContext:
           # gluetun manages iptables + creates the wg0 interface; needs to
           # run as root with NET_ADMIN. The pod-level podSecurityContext
