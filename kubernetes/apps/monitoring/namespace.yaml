@@ -5,3 +5,8 @@ metadata:
   name: monitoring
   labels:
     kustomize.toolkit.fluxcd.io/prune: disabled
+    # node-exporter and blackbox-exporter need hostPath/hostNetwork/hostPID,
+    # all forbidden under PSA baseline. Other pods in this namespace are
+    # not auto-elevated — PSA only enforces the upper bound.
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: latest
