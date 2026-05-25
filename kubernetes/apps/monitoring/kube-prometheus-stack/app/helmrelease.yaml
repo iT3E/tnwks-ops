@@ -234,27 +234,17 @@ spec:
         # uid:gid 1000:2000 hits `permission denied:
         # /prometheus/queries.active` and crashloops). EmptyDir works.
         # 2-day retention loses data on pod restart but for a dev cluster
-        # that's fine — and the thanos sidecar still ships history.
-        # MS-01 overlay should kustomize-patch this back to a real PVC
-        # against ceph-block when MS-01 is bootstrapped.
+        # that's fine. MS-01 overlay should kustomize-patch this back to
+        # a real PVC against ceph-block when MS-01 is bootstrapped.
         storageSpec: {}
-        thanos:
-          image: quay.io/thanos/thanos:v0.32.5@sha256:3e5c47dd3a0bfc6c595036c1c49c7ca95979a89c1fb93ee4cdee3bf5d296f944
-          # Chart 60+ nests the existing-secret reference under
-          # existingSecret rather than the flat name/key shape.
-          objectStorageConfig:
-            existingSecret:
-              name: thanos-objstore-secret
-              key: objstore.yml
-          # renovate: datasource=docker depName=quay.io/thanos/thanos
-          version: "v0.32.5"
+        # thanos sidecar is intentionally absent here. The thanos chart
+        # itself is gated MS-01-only (see apps/monitoring/kustomization
+        # — loki/thanos/vector are added in clusters/ms-01/apps), so the
+        # WSL base must not ship a sidecar that tries to mount a
+        # non-existent thanos-objstore-secret. The MS-01 overlay should
+        # patch the prometheus block to add `thanos:` and the matching
+        # thanosService/thanosServiceMonitor when MS-01 comes online.
         walCompression: true
-
-      thanosService:
-        enabled: true
-
-      thanosServiceMonitor:
-        enabled: true
 
   postRenderers:
     - kustomize:
