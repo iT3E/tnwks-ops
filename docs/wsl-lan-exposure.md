@@ -25,6 +25,28 @@ Why each hop exists:
   MetalLB VIPs live on the docker bridge, not on `127.0.0.1`, so we need a
   user-space bridge.
 
+### Why the Scheduled Task (and not just one netsh command)?
+
+A single `netsh interface portproxy add` *would* be sufficient if the
+`connectaddress` it points at was stable. It isn't: WSL2's default NAT
+networking mode assigns the WSL VM a fresh IP from the Hyper-V vSwitch on
+every WSL restart and after Windows host reboots. A portproxy rule that
+worked yesterday will silently forward into a black hole tomorrow.
+
+`Sync-TnwksLanBridge.ps1` is what re-derives the current WSL IP (via
+`wsl.exe -d Ubuntu -- hostname -I`) and rewrites the portproxy entries.
+The Scheduled Task registered by `Register-TnwksLanBridgeTask.ps1` runs
+that script at user logon and on Hyper-V `vmswitch` NIC-up events so the
+chain self-heals without manual intervention.
+
+> **Alternative we explicitly didn't take:** WSL2's *mirrored* networking
+> mode (Windows 11 22H2+, `[wsl2] networkingMode=mirrored` in
+> `.wslconfig`) collapses Windows and WSL onto a shared loopback, which
+> would make the portproxy a one-shot. We've stayed on default NAT for
+> compatibility with Talos-in-Docker's bridge networking — switching
+> modes is a separate, larger experiment we haven't validated yet. If
+> that ever changes, the Scheduled Task can go away.
+
 ## Current MetalLB allocations (homelab-wsl)
 
 | Service                              | VIP        | Ports            |
