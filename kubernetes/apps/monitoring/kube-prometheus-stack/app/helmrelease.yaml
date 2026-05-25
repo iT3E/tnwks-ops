@@ -11,7 +11,7 @@ spec:
   chart:
     spec:
       chart: kube-prometheus-stack
-      version: 54.2.2
+      version: 85.3.3
       sourceRef:
         kind: HelmRepository
         name: prometheus-community
@@ -20,6 +20,14 @@ spec:
   values:
     crds:
       enabled: true
+      # Helm itself never upgrades CRDs. Chart 60+ ships an opt-in
+      # CRD upgrade Job that runs as a helm hook so prometheus-operator
+      # CRDs actually move when the chart version moves; without it
+      # the operator pod crashloops on schema mismatches after big
+      # jumps (e.g. 54 → 85).
+      upgradeJob:
+        enabled: true
+        forceConflicts: true
 
     ###
     ### Component values
@@ -232,9 +240,12 @@ spec:
         storageSpec: {}
         thanos:
           image: quay.io/thanos/thanos:v0.32.5@sha256:3e5c47dd3a0bfc6c595036c1c49c7ca95979a89c1fb93ee4cdee3bf5d296f944
+          # Chart 60+ nests the existing-secret reference under
+          # existingSecret rather than the flat name/key shape.
           objectStorageConfig:
-            name: thanos-objstore-secret
-            key: objstore.yml
+            existingSecret:
+              name: thanos-objstore-secret
+              key: objstore.yml
           # renovate: datasource=docker depName=quay.io/thanos/thanos
           version: "v0.32.5"
         walCompression: true
