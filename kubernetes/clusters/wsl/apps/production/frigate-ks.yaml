@@ -1,0 +1,30 @@
+---
+# WSL overlay for frigate: replace the NFD-style coral nodeSelector
+# (only set on the MS-01 cluster) with a hostname pin to
+# homelab-wsl-worker-2, the node with the Coral TPU passed through via
+# --device=/dev/bus/usb. Without this, the upstream selector matches no
+# WSL node and the pod stays Pending.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: frigate
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/production/frigate/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 3m
+  patches:
+    - target:
+        kind: HelmRelease
+        name: frigate
+      patch: |
+        - op: replace
+          path: /spec/values/defaultPodOptions/nodeSelector
+          value:
+            kubernetes.io/hostname: homelab-wsl-worker-2

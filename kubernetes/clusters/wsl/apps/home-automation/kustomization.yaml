@@ -11,4 +11,6 @@ resources:
   # home-assistant depends on cnpg-cluster which is MS-01-only.
   - ../../../../apps/home-automation/mosquitto/ks.yaml
   - ../../../../apps/home-automation/peloton-to-garmin/ks.yaml
-  - ../../../../apps/home-automation/zwave-js-ui/ks.yaml
+  # zwave-js-ui: WSL-specific Flux Kustomization with patches to pin to
+  # homelab-wsl-worker-2 and re-point the USB hostPath to /dev/ttyACM0.
+  - ./zwave-js-ui-ks.yaml
