@@ -10,7 +10,7 @@ metadata:
 spec:
   cephVersion:
     # Renovate: tracks https://quay.io/repository/ceph/ceph?tab=tags
-    image: quay.io/ceph/ceph:v18.2.2
+    image: quay.io/ceph/ceph:v18.2.8
     allowUnsupported: false
   dataDirHostPath: /var/lib/rook
   skipUpgradeChecks: false
