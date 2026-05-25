@@ -50,11 +50,11 @@ spec:
         value: "postgres-rw.databases.svc.cluster.local"
       - name: POSTGRES_PORT
         value: "5432"
+      # cnpg's `postgres-app` Secret only carries username/password/pgpass.
+      # The DB name comes from cluster.yaml's `bootstrap.initdb.database`
+      # field (`app`).
       - name: POSTGRES_DB
-        valueFrom:
-          secretKeyRef:
-            name: postgres-app
-            key: dbname
+        value: "app"
 
     image:
       repository: docker.io/hkotel/mealie
