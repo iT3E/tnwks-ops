@@ -36,16 +36,15 @@ spec:
 
     initContainers:
       copy-config:
-        image: ghcr.io/onedr0p/alpine:3.18.4@sha256:b0b6f6f42bf9649ccaf0e98cd74d5e123471e2c4a4db4a5ee417b18dde9973a9
+        # No env-var substitution is needed in the bundled config files,
+        # so a plain busybox `cp` is sufficient. The previous
+        # ghcr.io/onedr0p/alpine image was GC'd from ghcr.
+        image: public.ecr.aws/docker/library/busybox:1.37.0
         command:
           - "/bin/sh"
           - -c
         args:
-          - |
-            for f in /data/configfiles/*; do
-              filename=$(basename $f)
-              envsubst < $f > /data/config/$filename;
-            done
+          - cp /data/configfiles/* /data/config/
         volumeMounts:
           - name: config
             mountPath: /data/config
