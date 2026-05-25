@@ -37,9 +37,17 @@ spec:
         externalTrafficPolicy: Local
       publishService:
         enabled: true
+      # Without an explicit ingressClass + controllerValue, this controller
+      # uses the chart default (`nginx` / `k8s.io/ingress-nginx`) — the same
+      # values the public ingress-nginx uses — so both controllers watch all
+      # Ingresses regardless of class. Pin the internal controller to only
+      # the `nginx-internal` class so status fields (.status.loadBalancer.ingress)
+      # are populated correctly per ingress.
+      ingressClass: "nginx-internal"
       ingressClassResource:
         name: "nginx-internal"
         default: false
+        controllerValue: "k8s.io/ingress-nginx-internal"
       config:
         client-header-timeout: 120
         client-body-buffer-size: "100M"
