@@ -5,3 +5,7 @@ metadata:
   name: home-automation
   labels:
     kustomize.toolkit.fluxcd.io/prune: disabled
+    # zwave-js-ui needs hostPath + securityContext.privileged for the
+    # USB Z-Stick passthrough, both forbidden under PSA baseline.
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: latest
