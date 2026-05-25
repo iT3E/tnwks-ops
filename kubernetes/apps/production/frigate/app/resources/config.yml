@@ -14,16 +14,10 @@ mqtt:
 database:
   path: /data/frigate.db
 
-# Coral USB is connected via usbipd → Docker --device /dev/bus/usb, but
-# Talos has no udev so the device doesn't re-enumerate after libedgetpu's
-# firmware upload (stays at bootloader VID 1a6e:089a, never flips to
-# runtime 18d1:9302). That makes load_delegate("libedgetpu.so.1.0") fail,
-# the detector subprocess dies, and frigate's watchdog tears the whole
-# app down. Run on CPU until we move the Coral to bare-metal.
 detectors:
-  cpu:
-    type: cpu
-    num_threads: 3
+  coral:
+    type: edgetpu
+    device: usb
 
 ffmpeg:
   global_args: ["-hide_banner", "-loglevel", "warning"]
