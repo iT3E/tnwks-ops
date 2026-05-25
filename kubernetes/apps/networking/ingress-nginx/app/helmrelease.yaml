@@ -50,6 +50,12 @@ spec:
         keep-alive-requests: 10000
         proxy-body-size: "100M"
         ssl-protocols: "TLSv1.3 TLSv1.2"
+        # ingress-nginx 1.9+ disables snippet annotations by default after
+        # CVE-2024-7646. We use server-snippet on ombi/sonarr/radarr for
+        # legacy hostname redirects; flip this back on rather than rip
+        # them out. Re-evaluate when those apps are reworked.
+        allow-snippet-annotations: "true"
+        annotations-risk-level: "Critical"
       metrics:
         enabled: ${SERVICE_MONITOR_ENABLED}
         serviceMonitor:
