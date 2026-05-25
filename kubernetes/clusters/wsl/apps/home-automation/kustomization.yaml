@@ -1,0 +1,14 @@
+---
+# WSL cluster overlay: home-automation namespace
+#
+# zwave-js-ui is included — the Aeotec Z-Stick is plugged into the desktop
+# and passed through Windows -> WSL -> Docker -> Talos. See
+# docs/usb-passthrough.md for the chain.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../apps/home-automation/namespace.yaml
+  # home-assistant depends on cnpg-cluster which is MS-01-only.
+  - ../../../../apps/home-automation/mosquitto/ks.yaml
+  - ../../../../apps/home-automation/peloton-to-garmin/ks.yaml
+  - ../../../../apps/home-automation/zwave-js-ui/ks.yaml

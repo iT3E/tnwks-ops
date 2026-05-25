@@ -1,0 +1,59 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-settings
+  namespace: flux-system
+data:
+  # Identity
+  CLUSTER_NAME: "homelab-ms-01"
+  CLUSTER_DOMAIN: "it3e.xyz"
+  # Legacy alias used by existing manifests that reference ${SECRET_DOMAIN}.
+  # Matches the value in cluster-secrets.sops.yaml.
+  SECRET_DOMAIN: "it3e.xyz"
+  # Internal LAN domain — used for the nginx-internal ingress class hostnames
+  INTERNAL_DOMAIN: "tnwks.local"
+
+  # Storage classes
+  # ceph-block: in-cluster Rook RBD (RWO, replicated across 3x 1TB NVMe)
+  # nfs-bulk:   democratic-csi NFS to TerraMaster (RWX, bulk media)
+  STORAGE_CLASS_DEFAULT: "ceph-block"
+  STORAGE_CLASS_BULK: "nfs-bulk"
+
+  # Bulk media PVC size (TerraMaster NFS share)
+  BULK_PVC_SIZE: "10Ti"
+  BULK_PVC_ACCESS_MODE: "ReadWriteMany"
+
+  # cnpg postgres cluster sizing — HA on MS-01 with real disks.
+  CNPG_INSTANCES: "3"
+  CNPG_INSTANCE_SIZE: "50Gi"
+
+  # Load balancer / IP allocation (Cilium L2/BGP on VLAN 910)
+  # TODO: Confirm range when Cilium BGP policy is finalized
+  LB_RANGE: "10.10.91.50-10.10.91.60"
+  METALLB_LB_RANGE: "10.10.91.50-10.10.91.60"
+  METALLB_K8S_GATEWAY_ADDR: "10.10.91.50"
+  METALLB_INGRESS_ADDR: "10.10.91.51"
+  INGRESS_INTERNAL_ADDR: "10.10.91.52"
+  MQTT_LB_ADDR: "10.10.91.53"
+  # TODO: Set KUBE_VIP_ADDR to actual VIP on 10.10.91.0/24 (VLAN 910)
+  KUBE_VIP_ADDR: "10.10.91.1"
+
+  # Cluster networking
+  CLUSTER_CIDR: "10.42.0.0/16"
+  SERVICE_CIDR: "10.43.0.0/16"
+
+  # CNI — Cilium with kube-proxy replacement, Hubble UI exposed via internal
+  # ingress, ServiceMonitors on for kube-prometheus-stack scrape.
+  CNI: "cilium"
+  CILIUM_VERSION: "1.19.4"
+  CILIUM_HUBBLE_UI_INGRESS_ENABLED: "true"
+  CILIUM_SERVICEMONITOR_ENABLED: "true"
+
+  # Global ServiceMonitor / PodMonitor toggle for apps that ship those
+  # resources via their charts. Off during initial bootstrap; flip to
+  # "true" once kube-prometheus-stack is reconciled.
+  SERVICE_MONITOR_ENABLED: "false"
+
+  # Misc
+  TIMEZONE: "America/Los_Angeles"

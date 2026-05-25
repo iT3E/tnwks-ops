@@ -1,0 +1,23 @@
+---
+# MS-01-only: postgres backup machinery (ObjectBucketClaim,
+# ScheduledBackup, BackupOnetime). Depends on cnpg-cluster and on
+# Rook Ceph RGW being available. Wired in only via the MS-01
+# cluster overlay.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cloudnative-pg-cluster-backup
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: cloudnative-pg-cluster
+    - name: rook-ceph-cluster
+  path: ./kubernetes/apps/databases/cloudnative-pg/cluster-backup
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 3m

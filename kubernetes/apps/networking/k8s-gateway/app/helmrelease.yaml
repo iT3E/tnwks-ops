@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: k8s-gateway
@@ -9,7 +9,7 @@ spec:
   chart:
     spec:
       chart: k8s-gateway
-      version: 2.0.4
+      version: 2.4.0
       sourceRef:
         kind: HelmRepository
         name: k8s-gateway
@@ -27,11 +27,19 @@ spec:
     keepHistory: false
   values:
     fullnameOverride: k8s-gateway
-    domain: "${SECRET_DOMAIN}"
+    # Advertise both the external (CLUSTER_DOMAIN) and internal (INTERNAL_DOMAIN)
+    # zones from the cluster. In prod these resolve different DNS suffixes;
+    # in local they're the same value (tnwks.local).
+    domain: "${CLUSTER_DOMAIN}"
+    extraArgs:
+      - --domain=${INTERNAL_DOMAIN}
     ttl: 1
     service:
       type: LoadBalancer
       port: 53
-      annotations:
-        metallb.universe.tf/loadBalancerIPs: "${METALLB_K8S_GATEWAY_ADDR}"
+      # Both Cilium LB-IPAM (MS-01) and MetalLB (WSL) honor `loadBalancerIP`
+      # in the Service spec. Cilium also accepts the
+      # `io.cilium/lb-ipam-ips` annotation; MetalLB ignores it. Using the
+      # spec field keeps a single value working across both clusters.
+      loadBalancerIP: "${METALLB_K8S_GATEWAY_ADDR}"
       externalTrafficPolicy: Local

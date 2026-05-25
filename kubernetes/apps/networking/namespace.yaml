@@ -5,3 +5,7 @@ metadata:
   name: networking
   labels:
     kustomize.toolkit.fluxcd.io/prune: disabled
+    # MetalLB speaker (and similar L2/host-networked controllers) need
+    # hostNetwork + NET_RAW + hostPort, all forbidden under PSA baseline.
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: latest

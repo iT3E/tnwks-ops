@@ -6,3 +6,7 @@ metadata:
   labels:
     kustomize.toolkit.fluxcd.io/prune: disabled
     routed-gateway: "true"
+    # gluetun (qbittorrent VPN sidecar) needs NET_ADMIN, which is
+    # forbidden under PSA baseline. Bump to privileged for this ns.
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: latest
