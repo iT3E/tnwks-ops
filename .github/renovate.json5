@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:base",
+    "config:recommended",
     "docker:enableMajor",
     ":disableRateLimiting",
     ":dependencyDashboard",
@@ -21,30 +21,39 @@
   "suppressNotifications": ["prIgnoreNotification"],
   "rebaseWhen": "conflicted",
   "schedule": ["before 7am"],
+  // Cap the volume during the modernization sweep so reviews stay tractable.
+  // Tighten further (or remove) once the bulk catch-up settles.
+  "prHourlyLimit": 4,
+  "prConcurrentLimit": 12,
   "pre-commit": {
     "enabled": true
   },
   "flux": {
-    "fileMatch": ["kubernetes/.+\\.ya?ml$"]
-  },
-  "helm-values": {
-    "fileMatch": ["kubernetes/.+\\.ya?ml$"]
-  },
-  "kubernetes": {
-    "fileMatch": [
-      "ansible/.+\\.ya?ml(\\.j2)?$",
-      "kubernetes/.+\\.ya?ml$"
+    "managerFilePatterns": [
+      "/kubernetes/.+\\.ya?ml$/"
     ]
   },
-  "regexManagers": [
+  "helm-values": {
+    "managerFilePatterns": [
+      "/kubernetes/.+\\.ya?ml$/"
+    ]
+  },
+  "kubernetes": {
+    "managerFilePatterns": [
+      "/ansible/.+\\.ya?ml(\\.j2)?$/",
+      "/kubernetes/.+\\.ya?ml$/"
+    ]
+  },
+  "customManagers": [
     {
-      "description": "Process various other dependencies",
-      "fileMatch": [
-        "ansible/.+\\.ya?ml(\\.j2)?$",
-        "kubernetes/.+\\.ya?ml$"
+      "customType": "regex",
+      "description": "Process generic # renovate: datasource=… depName=… version comments",
+      "managerFilePatterns": [
+        "/ansible/.+\\.ya?ml(\\.j2)?$/",
+        "/kubernetes/.+\\.ya?ml$/"
       ],
       "matchStrings": [
-        "datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( registryUrl=(?<registryUrl>\\S+))?\n.*?\"(?<currentValue>.*)\"\n"
+        "datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( registryUrl=(?<registryUrl>\\S+))?\\n.*?[\"']?(?<currentValue>[^\"'\\s]+)[\"']?\\n"
       ],
       "datasourceTemplate": "{{#if datasource}}{{{datasource}}}{{else}}github-releases{{/if}}"
     }

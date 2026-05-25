@@ -1,6 +1,6 @@
 ---
 # yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2beta2.json
-apiVersion: helm.toolkit.fluxcd.io/v2beta2
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: frigate
@@ -32,7 +32,7 @@ spec:
           main:
             image:
               repository: ghcr.io/blakeblackshear/frigate
-              tag: 0.13.0-rc1@sha256:24dce42044a0f9631813beea9d49afb266e9bef77ed6972cd1486e14463d7dc6
+              tag: 0.17.0-rc1@sha256:c758ec715d23d44d0cadde9d1ff884ca80f7364992de7e2401cf29ebb3f3d5f1
             env:
               TZ: America/Los_Angeles
             envFrom:
@@ -84,7 +84,7 @@ spec:
         enabled: true
         className: nginx-internal
         hosts:
-          - host: &host "{{ .Release.Name }}.tnwks.local"
+          - host: &host "{{ .Release.Name }}.${CLUSTER_DOMAIN}"
             paths:
               - path: /
                 service:
@@ -94,7 +94,7 @@ spec:
       config:
         accessMode: ReadWriteOnce
         size: 1Gi
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
         enabled: true
         globalMounts:
           - path: /data
@@ -123,6 +123,6 @@ spec:
         enabled: true
         accessMode: ReadWriteOnce
         size: 1Gi
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
         globalMounts:
           - path: /media

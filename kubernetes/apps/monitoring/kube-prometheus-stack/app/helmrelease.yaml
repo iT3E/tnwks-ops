@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: kube-prometheus-stack
@@ -11,7 +11,7 @@ spec:
   chart:
     spec:
       chart: kube-prometheus-stack
-      version: 54.2.2
+      version: 85.3.3
       sourceRef:
         kind: HelmRepository
         name: prometheus-community
@@ -20,6 +20,14 @@ spec:
   values:
     crds:
       enabled: true
+      # Helm itself never upgrades CRDs. Chart 60+ ships an opt-in
+      # CRD upgrade Job that runs as a helm hook so prometheus-operator
+      # CRDs actually move when the chart version moves; without it
+      # the operator pod crashloops on schema mismatches after big
+      # jumps (e.g. 54 → 85).
+      upgradeJob:
+        enabled: true
+        forceConflicts: true
 
     ###
     ### Component values
@@ -128,7 +136,7 @@ spec:
         ingressClassName: nginx-internal
         pathType: Prefix
         hosts:
-          - &host_prometheus prometheus.tnwks.local
+          - &host_prometheus prometheus.${INTERNAL_DOMAIN}
         tls:
           - hosts:
               - *host_prometheus
@@ -140,16 +148,19 @@ spec:
             port: 9093
             apiVersion: v2
         additionalScrapeConfigs:
+          # TODO(restructure): legacy hardware scrape targets — these PVE/VyOS
+          # hosts are being decommissioned with the MS-01 migration.
+          # Replace with MS-01 node hostnames once the new cluster is online.
           - job_name: node-exporter
             scrape_interval: 1m
             scrape_timeout: 10s
             honor_timestamps: true
             static_configs:
               - targets:
-                  - sce-vyos01.tnwks.local:9100
-                  - sce-pve01.tnwks.local:9100
-                  - sce-pve02.tnwks.local:9100
-                  - sce-pve03.tnwks.local:9100
+                  - sce-vyos01.${INTERNAL_DOMAIN}:9100
+                  - sce-pve01.${INTERNAL_DOMAIN}:9100
+                  - sce-pve02.${INTERNAL_DOMAIN}:9100
+                  - sce-pve03.${INTERNAL_DOMAIN}:9100
 
           - job_name: speedtest-exporter
             scrape_interval: 60m
@@ -157,8 +168,10 @@ spec:
             honor_timestamps: true
             static_configs:
               - targets:
-                  - sce-vyos01.tnwks.local:9798
+                  - sce-vyos01.${INTERNAL_DOMAIN}:9798
 
+          # TODO(restructure): PVE Proxmox endpoints — remove once migration
+          # to bare-metal MS-01 + Talos is complete.
           - job_name: 'pve'
             static_configs:
               - targets:
@@ -216,27 +229,22 @@ spec:
         ruleSelectorNilUsesHelmValues: false
         scrapeInterval: 1m
         serviceMonitorSelectorNilUsesHelmValues: false
-        storageSpec:
-          volumeClaimTemplate:
-            spec:
-              storageClassName: cephfs
-              resources:
-                requests:
-                  storage: 10Gi
-        thanos:
-          image: quay.io/thanos/thanos:v0.32.5@sha256:3e5c47dd3a0bfc6c595036c1c49c7ca95979a89c1fb93ee4cdee3bf5d296f944
-          objectStorageConfig:
-            name: thanos-objstore-secret
-            key: objstore.yml
-          # renovate: datasource=docker depName=quay.io/thanos/thanos
-          version: "v0.32.5"
+        # storageSpec: empty {} = emptyDir. On WSL kubelet doesn't honor
+        # fsGroupChangePolicy on local-path PVCs (the prometheus container
+        # uid:gid 1000:2000 hits `permission denied:
+        # /prometheus/queries.active` and crashloops). EmptyDir works.
+        # 2-day retention loses data on pod restart but for a dev cluster
+        # that's fine. MS-01 overlay should kustomize-patch this back to
+        # a real PVC against ceph-block when MS-01 is bootstrapped.
+        storageSpec: {}
+        # thanos sidecar is intentionally absent here. The thanos chart
+        # itself is gated MS-01-only (see apps/monitoring/kustomization
+        # — loki/thanos/vector are added in clusters/ms-01/apps), so the
+        # WSL base must not ship a sidecar that tries to mount a
+        # non-existent thanos-objstore-secret. The MS-01 overlay should
+        # patch the prometheus block to add `thanos:` and the matching
+        # thanosService/thanosServiceMonitor when MS-01 comes online.
         walCompression: true
-
-      thanosService:
-        enabled: true
-
-      thanosServiceMonitor:
-        enabled: true
 
   postRenderers:
     - kustomize:

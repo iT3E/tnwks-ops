@@ -1,0 +1,15 @@
+[Unit]
+Description=tnwks LAN bridge (%i) — socat 0.0.0.0:%i → MetalLB VIP
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/usr/local/bin/tnwks-lan-bridge %i
+Restart=always
+RestartSec=2
+# Run as root because :80/:443/:53 are privileged ports.
+User=root
+
+[Install]
+WantedBy=multi-user.target

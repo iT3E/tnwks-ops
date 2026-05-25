@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: grafana
@@ -308,5 +308,5 @@ spec:
             - *host
     persistence:
       enabled: true
-      storageClassName: cephfs
+      storageClassName: "${STORAGE_CLASS_DEFAULT}"
 

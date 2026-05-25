@@ -1,0 +1,12 @@
+---
+# MS-01-only: depends on Rook Ceph RGW for the S3 backup destination
+# (s3-cnpg-bucket OBC) and on the Cluster's barmanObjectStore config
+# being set in cluster.yaml — both of which are MS-01-only. Wired in
+# via kubernetes/clusters/ms-01/apps/kustomization.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: databases
+resources:
+  - ./s3-cnpg-bucket.yaml
+  - ./scheduled-backup.yaml
+  - ./backup-onetime.yaml

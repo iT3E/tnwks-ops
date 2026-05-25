@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: cloudflared
@@ -9,7 +9,7 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 2.0.3
+      version: 1.5.1
       sourceRef:
         kind: HelmRepository
         name: bjw-s
@@ -33,7 +33,7 @@ spec:
         reloader.stakater.com/auto: "true"
     image:
       repository: docker.io/cloudflare/cloudflared
-      tag: 2023.10.0
+      tag: 2026.5.1
     env:
       NO_AUTOUPDATE: "true"
       TUNNEL_CRED_FILE: /etc/cloudflared/creds/credentials.json
@@ -57,7 +57,7 @@ spec:
             port: 8080
     serviceMonitor:
       main:
-        enabled: true
+        enabled: ${SERVICE_MONITOR_ENABLED}
         endpoints:
           - port: http
             scheme: http
