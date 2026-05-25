@@ -1,7 +1,9 @@
 ---
+# PrometheusRule is rendered by a separate flux Kustomization
+# (see ../ks.yaml: cert-manager-prometheusrules) that depends on
+# kube-prometheus-stack so the CRD exists before apply.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: cert-manager
 resources:
   - ./helmrelease.yaml
-  - ./prometheusrule.yaml

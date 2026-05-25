@@ -6,4 +6,8 @@ resources:
   - ./namespace.yaml
   # Flux-Kustomizations
   - ./descheduler/ks.yaml
-  - ./node-feature-discovery/ks.yaml
+# node-feature-discovery is MS-01-only — its worker DaemonSet probes
+# sysfs/PCI/USB to label nodes for hardware-aware scheduling (Coral TPU,
+# Aeotec Z-Stick). On Talos-in-Docker on WSL2 the probes hang on the
+# virtualized sysfs and the install times out. Added back per-cluster
+# via kubernetes/clusters/ms-01/apps/kustomization.yaml.

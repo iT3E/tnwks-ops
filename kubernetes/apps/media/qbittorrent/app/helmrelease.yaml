@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: qbittorrent
@@ -9,7 +9,7 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 2.0.3
+      version: 1.5.1
       interval: 30m
       sourceRef:
         kind: HelmRepository
@@ -24,10 +24,7 @@ spec:
 
     image:
       repository: ghcr.io/onedr0p/qbittorrent
-      tag: 4.6.1@sha256:796f135bcb572a3fb3138b0c65034535c0a7b1dcb83940fe12e00cad1b47fcbb
-
-    podAnnotations:
-      setGateway: "true"
+      tag: 4.6.7@sha256:5391f94b321d563c3b44136a5e799b7e4e4888926c1c31d3081a1cf3e74a9aec
 
     podSecurityContext:
       runAsUser: 568
@@ -39,34 +36,87 @@ spec:
 
     initContainers:
       copy-config:
-        image: ghcr.io/onedr0p/alpine:3.18.4@sha256:b0b6f6f42bf9649ccaf0e98cd74d5e123471e2c4a4db4a5ee417b18dde9973a9
+        # No env-var substitution is needed in the bundled config files,
+        # so a plain busybox `cp` is sufficient. The previous
+        # ghcr.io/onedr0p/alpine image was GC'd from ghcr.
+        image: public.ecr.aws/docker/library/busybox:1.38.0
         command:
           - "/bin/sh"
           - -c
         args:
-          - |
-            for f in /data/configfiles/*; do
-              filename=$(basename $f)
-              envsubst < $f > /data/config/$filename;
-            done
-        # env:
-        #   WIREGUARD_PORT:
-        #     valueFrom:
-        #       secretKeyRef:
-        #         name: qbittorrent-secret
-        #         key: WIREGUARD_PORT
+          - cp /data/configfiles/* /data/config/
         volumeMounts:
           - name: config
             mountPath: /data/config
           - name: configfiles
             mountPath: /data/configfiles
 
+    # gluetun sidecar holds the iVPN WireGuard tunnel. qbittorrent shares the
+    # pod's network namespace; all its traffic is forced through the tunnel.
+    # If gluetun's tunnel drops, qbittorrent loses network — fail-closed.
+    additionalContainers:
+      gluetun:
+        image: ghcr.io/qdm12/gluetun:v3.41.1
+        securityContext:
+          # gluetun manages iptables + creates the wg0 interface; needs to
+          # run as root with NET_ADMIN. The pod-level podSecurityContext
+          # forces uid 568, so explicitly override here.
+          runAsUser: 0
+          runAsGroup: 0
+          capabilities:
+            add: ["NET_ADMIN"]
+        env:
+          - name: VPN_SERVICE_PROVIDER
+            value: ivpn
+          - name: VPN_TYPE
+            value: wireguard
+          - name: WIREGUARD_PRIVATE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: qbittorrent-vpn-secret
+                key: WIREGUARD_PRIVATE_KEY
+          - name: WIREGUARD_PUBLIC_KEY
+            valueFrom:
+              secretKeyRef:
+                name: qbittorrent-vpn-secret
+                key: WIREGUARD_PUBLIC_KEY
+          - name: WIREGUARD_PRESHARED_KEY
+            valueFrom:
+              secretKeyRef:
+                name: qbittorrent-vpn-secret
+                key: WIREGUARD_PRESHARED_KEY
+                optional: true
+          - name: WIREGUARD_ADDRESSES
+            valueFrom:
+              secretKeyRef:
+                name: qbittorrent-vpn-secret
+                key: WIREGUARD_ADDRESSES
+          - name: WIREGUARD_ENDPOINT_IP
+            valueFrom:
+              secretKeyRef:
+                name: qbittorrent-vpn-secret
+                key: WIREGUARD_ENDPOINT_IP
+          - name: WIREGUARD_ENDPOINT_PORT
+            valueFrom:
+              secretKeyRef:
+                name: qbittorrent-vpn-secret
+                key: WIREGUARD_ENDPOINT_PORT
+                optional: true
+          - name: SERVER_COUNTRIES
+            value: "" # leave empty when WIREGUARD_ENDPOINT_IP is set
+          - name: TZ
+            value: "${TIMEZONE}"
+          - name: FIREWALL_INPUT_PORTS
+            # qbittorrent webUI port must be reachable from the cluster network
+            # so the Service / Ingress can forward to it.
+            value: "8080"
+          - name: HEALTH_VPN_DURATION_INITIAL
+            value: "30s"
+
     env:
       UMASK: "022"
       QBITTORRENT__PORT: &port 8080
       QBITTORRENT__USE_PROFILE: "true"
-
-    hostname: qbittorrent
 
     service:
       main:
@@ -77,17 +127,11 @@ spec:
     ingress:
       internal:
         enabled: true
-        ingressClassName: "nginx"
-        annotations:
-          nginx.ingress.kubernetes.io/configuration-snippet: |
-            proxy_hide_header "x-webkit-csp";
-            proxy_hide_header "content-security-policy";
-            proxy_hide_header "X-Frame-Options";
-            proxy_set_header Accept-Encoding "";
-            sub_filter '</head>' '<link rel="stylesheet" type="text/css" href="https://theme-park.bjw-s.dev/css/base/qbittorrent/nord.css"></head>';
-            sub_filter_once on;
+        # Internal-only — qbittorrent webUI must NEVER be exposed publicly.
+        # The traffic itself egresses through the gluetun sidecar.
+        ingressClassName: "nginx-internal"
         hosts:
-          - host: &internalHost "qbittorrent.tnwks.local"
+          - host: &internalHost "qbittorrent.${INTERNAL_DOMAIN}"
             paths:
               - path: /
 
@@ -125,4 +169,4 @@ spec:
         mountPath: /config/qBittorrent/data
         accessMode: ReadWriteOnce
         size: 1Gi
-        storageClass: ssd-pool
+        storageClass: ${STORAGE_CLASS_DEFAULT}

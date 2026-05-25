@@ -1,0 +1,8 @@
+# Disable default CNI so Cilium can be installed via Flux
+# Applied to all nodes (controlplane and worker)
+cluster:
+  network:
+    cni:
+      name: none
+  proxy:
+    disabled: true

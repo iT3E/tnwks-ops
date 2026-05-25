@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: ombi-f
@@ -30,7 +30,7 @@ spec:
   values:
     image:
       repository: ghcr.io/linuxserver/ombi
-      tag: 4.43.5
+      tag: 4.53.5
     env:
       TZ: "${TIMEZONE}"
     ingress:
@@ -52,4 +52,4 @@ spec:
         enabled: true
         accessMode: ReadWriteOnce
         size: 1Gi
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"

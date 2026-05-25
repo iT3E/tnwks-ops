@@ -1,0 +1,22 @@
+---
+# Aggregator for shared namespaces deployed on every cluster.
+# Per-cluster apps overlays under kubernetes/clusters/<cluster>/apps/
+# reference either this directly (ms-01) or individual namespaces (wsl).
+#
+# storage/ is intentionally omitted — Rook Ceph is MS-01-only and is added
+# back via kubernetes/clusters/ms-01/apps/kustomization.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./cert-manager
+  - ./databases
+  - ./default
+  - ./flux-system
+  - ./home-automation
+  - ./kube-system
+  - ./media
+  - ./monitoring
+  - ./networking
+  - ./production
+  - ./selfhosted
+  - ./tools

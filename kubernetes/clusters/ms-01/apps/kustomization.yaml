@@ -1,0 +1,28 @@
+---
+# MS-01 cluster apps: shared apps + Cilium CNI + Rook Ceph (MS-01-only,
+# real disks needed) + Ceph-RGW-backed ObjectBucketClaims. WSL gets
+# Flannel via its own overlay and skips the Ceph-dependent bits.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../apps
+  - ../../../apps/kube-system/cilium/ks.yaml
+  - ../../../apps/storage/rook-ceph/rook-ceph-operator
+  - ../../../apps/storage/rook-ceph/cluster
+  # MS-01-only: loki, thanos, vector. They depend on Rook S3 buckets.
+  - ../../../apps/monitoring/loki/ks.yaml
+  - ../../../apps/monitoring/thanos/ks.yaml
+  - ../../../apps/monitoring/vector/ks.yaml
+  # node-feature-discovery is MS-01-only too — needed for hardware-aware
+  # pod scheduling (Coral TPU, Aeotec Z-Stick). Its worker DaemonSet
+  # probes hang on Talos-in-Docker WSL2 sysfs.
+  - ../../../apps/tools/node-feature-discovery/ks.yaml
+  # cnpg backup machinery (ObjectBucketClaim + ScheduledBackup +
+  # BackupOnetime) — needs Rook S3. The cluster.yaml spec on MS-01
+  # also needs a kustomize patch to add the `backup.barmanObjectStore`
+  # block back; TODO when MS-01 is racked and backups are needed.
+  - ../../../apps/databases/cloudnative-pg/ks-cluster-backup.yaml
+  # ObjectBucketClaims for thanos/loki (cnpg's bucket is created via
+  # the ks-cluster-backup path above).
+  - ../../../apps/monitoring/thanos/app/s3-thanos-bucket.yaml
+  - ../../../apps/monitoring/loki/app/s3-loki-bucket.yaml
