@@ -39,7 +39,7 @@ spec:
         # No env-var substitution is needed in the bundled config files,
         # so a plain busybox `cp` is sufficient. The previous
         # ghcr.io/onedr0p/alpine image was GC'd from ghcr.
-        image: public.ecr.aws/docker/library/busybox:1.37.0
+        image: public.ecr.aws/docker/library/busybox:1.38.0
         command:
           - "/bin/sh"
           - -c
