@@ -10,7 +10,7 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 1.5.1
+      version: 3.7.3
       sourceRef:
         kind: HelmRepository
         name: bjw-s
@@ -27,44 +27,52 @@ spec:
   uninstall:
     keepHistory: false
   values:
-    image:
-      repository: vaultwarden/server
-      tag: 1.36.0
-    env:
-      DATA_FOLDER: "config"
-      DOMAIN: "https://vaultwarden.${SECRET_DOMAIN}"
-      TZ: "${TIMEZONE}"
-      SIGNUPS_ALLOWED: "false"
-      WEBSOCKET_ENABLED: "true"
-      WEBSOCKET_ADDRESS: 0.0.0.0
-      WEBSOCKET_PORT: 3012
-      SMTP_HOST: "email-smtp.us-west-2.amazonaws.com"
-      SMTP_FROM: vaultwarden@${SECRET_DOMAIN}
-      SMTP_FROM_NAME: vaultwarden
-      SMTP_PORT: 587
-      SMTP_SECURITY: "off"
-      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_SERVER}/bitwarden"
-
+    controllers:
+      vaultwarden:
+        containers:
+          app:
+            image:
+              repository: vaultwarden/server
+              tag: 1.36.0
+            env:
+              DATA_FOLDER: "config"
+              DOMAIN: "https://vaultwarden.${SECRET_DOMAIN}"
+              TZ: "${TIMEZONE}"
+              SIGNUPS_ALLOWED: "false"
+              WEBSOCKET_ENABLED: "true"
+              WEBSOCKET_ADDRESS: 0.0.0.0
+              WEBSOCKET_PORT: 3012
+              SMTP_HOST: "email-smtp.us-west-2.amazonaws.com"
+              SMTP_FROM: vaultwarden@${SECRET_DOMAIN}
+              SMTP_FROM_NAME: vaultwarden
+              SMTP_PORT: 587
+              SMTP_SECURITY: "off"
+              DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_SERVER}/bitwarden"
+            resources:
+              requests:
+                cpu: 100m
+                memory: 100Mi
+              limits:
+                memory: 2Gi
     service:
-      main:
+      app:
+        controller: vaultwarden
         ports:
           http:
             port: &port 80
           websocket:
-            enabled: true
             port: &websocket-port 3012
-
     persistence:
       config:
         enabled: true
-        retain: true
         accessMode: ReadWriteOnce
         size: 1Gi
-
+        retain: true
+        globalMounts:
+          - path: /config
     ingress:
-      main:
-        enabled: true
-        ingressClassName: "nginx"
+      app:
+        className: nginx
         annotations:
           external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
           hajimari.io/icon: mdi:lock
@@ -74,21 +82,18 @@ spec:
               - path: /
                 pathType: Prefix
                 service:
-                  port: *port
+                  identifier: app
+                  port: http
               - path: /notifications/hub/negotiate
                 pathType: Prefix
                 service:
-                  port: *port
+                  identifier: app
+                  port: http
               - path: /notifications/hub
                 pathType: Prefix
                 service:
-                  port: *websocket-port
+                  identifier: app
+                  port: websocket
         tls:
           - hosts:
               - *host
-    resources:
-      requests:
-        cpu: 100m
-        memory: 100Mi
-      limits:
-        memory: 2Gi

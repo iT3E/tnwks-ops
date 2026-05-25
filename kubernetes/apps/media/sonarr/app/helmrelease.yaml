@@ -9,54 +9,68 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 1.5.1
+      version: 3.7.3
       interval: 30m
       sourceRef:
         kind: HelmRepository
         name: bjw-s
         namespace: flux-system
-
   values:
-    controller:
-      annotations:
-        reloader.stakater.com/auto: "true"
-
-    image:
-      repository: ghcr.io/onedr0p/sonarr-develop
-      tag: 4.0.14.2938@sha256:75da01d2da78d226cd89352fbab919f2eb26ea9a8d6c592bf812dde5f8949243
-
-    # podAnnotations:
-    #   setGateway: "true"
-
-    podSecurityContext:
-      runAsUser: 568
-      runAsGroup: 568
-      fsGroup: 568
-      fsGroupChangePolicy: "OnRootMismatch"
-      supplementalGroups:
-        - 65539
-
-    env:
-      SONARR__INSTANCE_NAME: Sonarr
-      SONARR__PORT: &port 8989
-      SONARR__APPLICATION_URL: "https://sonarr.${INTERNAL_DOMAIN}"
-      SONARR__LOG_LEVEL: info
-      SONARR__API_KEY:
-        valueFrom:
-          secretKeyRef:
-            name: sonarr-secret
-            key: API_KEY
-
+    defaultPodOptions:
+      securityContext:
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+        fsGroupChangePolicy: "OnRootMismatch"
+        supplementalGroups:
+          - 65539
+    controllers:
+      sonarr:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: ghcr.io/onedr0p/sonarr-develop
+              tag: 4.0.14.2938@sha256:75da01d2da78d226cd89352fbab919f2eb26ea9a8d6c592bf812dde5f8949243
+            env:
+              SONARR__INSTANCE_NAME: Sonarr
+              SONARR__PORT: &port 8989
+              SONARR__APPLICATION_URL: "https://sonarr.${INTERNAL_DOMAIN}"
+              SONARR__LOG_LEVEL: info
+              SONARR__API_KEY:
+                valueFrom:
+                  secretKeyRef:
+                    name: sonarr-secret
+                    key: API_KEY
+            resources:
+              requests:
+                cpu: 20m
+                memory: 323M
+              limits:
+                memory: 323M
     service:
-      main:
+      app:
+        controller: sonarr
         ports:
           http:
             port: *port
-
+    persistence:
+      config:
+        enabled: true
+        accessMode: ReadWriteOnce
+        size: 1Gi
+        storageClass: ${STORAGE_CLASS_DEFAULT}
+        retain: true
+        globalMounts:
+          - path: /config
+      media:
+        existingClaim: cephfs-hdd-subvolume-qbit
+        globalMounts:
+          - path: /data/media
     ingress:
       internal:
-        enabled: true
-        ingressClassName: "nginx"
+        className: nginx
         annotations:
           nginx.ingress.kubernetes.io/configuration-snippet: |
             proxy_set_header Accept-Encoding "";
@@ -65,23 +79,7 @@ spec:
           - host: &internalHost "sonarr.${INTERNAL_DOMAIN}"
             paths:
               - path: /
-
-    persistence:
-      config:
-        enabled: true
-        accessMode: ReadWriteOnce
-        size: 1Gi
-        storageClass: ${STORAGE_CLASS_DEFAULT}
-        retain: true
-
-      media:
-        enabled: true
-        existingClaim: cephfs-hdd-subvolume-qbit
-        mountPath: /data/media
-
-    resources:
-      requests:
-        cpu: 20m
-        memory: 323M
-      limits:
-        memory: 323M
+                pathType: Prefix
+                service:
+                  identifier: app
+                  port: http

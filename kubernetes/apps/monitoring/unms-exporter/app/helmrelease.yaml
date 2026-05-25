@@ -9,44 +9,45 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 1.5.1
+      version: 3.7.3
       interval: 30m
       sourceRef:
         kind: HelmRepository
         name: bjw-s
         namespace: flux-system
-
   values:
-    image:
-      repository: quay.io/ffddorf/unms-exporter
-      tag: sha-4c13c27@sha256:7200af98df05fcea2e85b29c440b24e9da32905665cec192c5f87b1714d37f4e
-
-    env:
-      UNMS_EXPORTER_TOKEN:
-        valueFrom:
-          secretKeyRef:
-            name: unms-exporter-secrets
-            key: UNMS_EXPORTER_TOKEN
-
+    controllers:
+      unms-exporter:
+        containers:
+          app:
+            image:
+              repository: quay.io/ffddorf/unms-exporter
+              tag: sha-4c13c27@sha256:7200af98df05fcea2e85b29c440b24e9da32905665cec192c5f87b1714d37f4e
+            env:
+              UNMS_EXPORTER_TOKEN:
+                valueFrom:
+                  secretKeyRef:
+                    name: unms-exporter-secrets
+                    key: UNMS_EXPORTER_TOKEN
+            resources:
+              requests:
+                cpu: 10m
+                memory: 100Mi
+              limits:
+                memory: 500Mi
     service:
-      main:
+      app:
+        controller: unms-exporter
         ports:
           http:
             port: 9806
-
     serviceMonitor:
-      main:
+      app:
         enabled: ${SERVICE_MONITOR_ENABLED}
+        serviceName: unms-exporter
         endpoints:
           - port: http
             scheme: http
             path: /metrics
             interval: 2m
             scrapeTimeout: 5s
-
-    resources:
-      requests:
-        cpu: 10m
-        memory: 100Mi
-      limits:
-        memory: 500Mi

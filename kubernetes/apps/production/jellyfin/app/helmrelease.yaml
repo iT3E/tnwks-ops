@@ -10,7 +10,7 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 1.5.1
+      version: 3.7.3
       sourceRef:
         kind: HelmRepository
         name: bjw-s
@@ -26,33 +26,58 @@ spec:
       retries: 3
   uninstall:
     keepHistory: false
-
   values:
-    affinity:
-      nodeAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-            - matchExpressions:
-                - key: node-role.kubernetes.io/control-plane
-                  operator: DoesNotExist
-
-    controller:
-      type: statefulset
-    image:
-      repository: jellyfin/jellyfin
-      tag: 10.11.10
-    env:
-      TZ: "America/Los_Angeles"
-
+    defaultPodOptions:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      securityContext:
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+        fsGroupChangePolicy: "OnRootMismatch"
+        supplementalGroups: [44, 109, 10000]
+    controllers:
+      jellyfin:
+        type: statefulset
+        containers:
+          app:
+            image:
+              repository: jellyfin/jellyfin
+              tag: 10.11.10
+            env:
+              TZ: "America/Los_Angeles"
+            resources:
+              requests:
+                memory: 512Mi
+              limits:
+                memory: 6Gi
     service:
-      main:
+      app:
+        controller: jellyfin
         ports:
           http:
             port: 8096
-
-    ingress:
-      main:
+    persistence:
+      config:
         enabled: true
+        storageClass: ${STORAGE_CLASS_DEFAULT}
+        accessMode: ReadWriteOnce
+        size: 150Gi
+        retain: true
+        globalMounts:
+          - path: /config
+      cephfs:
+        existingClaim: cephfs-hdd-subvolume
+        globalMounts:
+          - path: /cephfs
+    ingress:
+      app:
+        className: nginx
         annotations:
           external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
           hajimari.io/icon: simple-icons:jellyfin
@@ -61,41 +86,19 @@ spec:
             paths:
               - path: /
                 pathType: Prefix
-        ingressClassName: nginx
+                service:
+                  identifier: app
+                  port: http
         tls:
           - hosts:
               - *host
-
       internal:
-        enabled: true
-        ingressClassName: "nginx-internal"
+        className: nginx-internal
         hosts:
           - host: &internalHost "jellyfin.${INTERNAL_DOMAIN}"
             paths:
               - path: /
-
-    resources:
-      requests:
-        memory: 512m
-      limits:
-        memory: 6Gi
-
-    podSecurityContext:
-      runAsUser: 568
-      runAsGroup: 568
-      fsGroup: 568
-      fsGroupChangePolicy: "OnRootMismatch"
-      supplementalGroups: [44, 109, 10000]
-
-    persistence:
-      config:
-        enabled: true
-        storageClass: ${STORAGE_CLASS_DEFAULT}
-        accessMode: ReadWriteOnce
-        size: 150Gi
-        retain: true
-
-      cephfs:
-        enabled: true
-        existingClaim: cephfs-hdd-subvolume
-        mountPath: /cephfs
+                pathType: Prefix
+                service:
+                  identifier: app
+                  port: http

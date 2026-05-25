@@ -9,49 +9,50 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 1.5.1
+      version: 3.7.3
       interval: 30m
       sourceRef:
         kind: HelmRepository
         name: bjw-s
         namespace: flux-system
-
   values:
-    image:
-      repository: ghcr.io/unpoller/unpoller
-      tag: v2.9.4@sha256:20c161781ac544a7548c8dd533f13498201746efdf0853d4625a1dbfd5652a19
-
-    env:
-      UP_UNIFI_DEFAULT_ROLE: tnwks-ops
-      UP_UNIFI_DEFAULT_URL: https://unifi:8443
-      UP_UNIFI_DEFAULT_VERIFY_SSL: false
-      UP_UNIFI_DEFAULT_USER: unifipoller
-      UP_UNIFI_DEFAULT_PASS:
-        valueFrom:
-          secretKeyRef:
-            name: unpoller-secrets
-            key: unifipoller_password
-      UP_INFLUXDB_DISABLE: true
-
+    controllers:
+      unpoller:
+        containers:
+          app:
+            image:
+              repository: ghcr.io/unpoller/unpoller
+              tag: v2.9.4@sha256:20c161781ac544a7548c8dd533f13498201746efdf0853d4625a1dbfd5652a19
+            env:
+              UP_UNIFI_DEFAULT_ROLE: tnwks-ops
+              UP_UNIFI_DEFAULT_URL: https://unifi:8443
+              UP_UNIFI_DEFAULT_VERIFY_SSL: false
+              UP_UNIFI_DEFAULT_USER: unifipoller
+              UP_UNIFI_DEFAULT_PASS:
+                valueFrom:
+                  secretKeyRef:
+                    name: unpoller-secrets
+                    key: unifipoller_password
+              UP_INFLUXDB_DISABLE: true
+            resources:
+              requests:
+                cpu: 10m
+                memory: 100Mi
+              limits:
+                memory: 500Mi
     service:
-      main:
+      app:
+        controller: unpoller
         ports:
           http:
             port: 9130
-
     serviceMonitor:
-      main:
+      app:
         enabled: ${SERVICE_MONITOR_ENABLED}
+        serviceName: unpoller
         endpoints:
           - port: http
             scheme: http
             path: /metrics
             interval: 2m # Unifi API only polls at 2m intervals
             scrapeTimeout: 5s
-
-    resources:
-      requests:
-        cpu: 10m
-        memory: 100Mi
-      limits:
-        memory: 500Mi

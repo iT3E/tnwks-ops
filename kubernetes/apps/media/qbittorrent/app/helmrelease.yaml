@@ -9,164 +9,169 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 1.5.1
+      version: 3.7.3
       interval: 30m
       sourceRef:
         kind: HelmRepository
         name: bjw-s
         namespace: flux-system
-
   values:
-    controller:
-      type: statefulset
-      annotations:
-        reloader.stakater.com/auto: "true"
-
-    image:
-      repository: ghcr.io/onedr0p/qbittorrent
-      tag: 4.6.7@sha256:5391f94b321d563c3b44136a5e799b7e4e4888926c1c31d3081a1cf3e74a9aec
-
-    podSecurityContext:
-      runAsUser: 568
-      runAsGroup: 568
-      fsGroup: 568
-      fsGroupChangePolicy: "OnRootMismatch"
-      supplementalGroups:
-        - 65539
-
-    initContainers:
-      copy-config:
-        # No env-var substitution is needed in the bundled config files,
-        # so a plain busybox `cp` is sufficient. The previous
-        # ghcr.io/onedr0p/alpine image was GC'd from ghcr.
-        image: public.ecr.aws/docker/library/busybox:1.38.0
-        command:
-          - "/bin/sh"
-          - -c
-        args:
-          - cp /data/configfiles/* /data/config/
-        volumeMounts:
-          - name: config
-            mountPath: /data/config
-          - name: configfiles
-            mountPath: /data/configfiles
-
-    # gluetun sidecar holds the iVPN WireGuard tunnel. qbittorrent shares the
-    # pod's network namespace; all its traffic is forced through the tunnel.
-    # If gluetun's tunnel drops, qbittorrent loses network — fail-closed.
-    additionalContainers:
-      gluetun:
-        image: ghcr.io/qdm12/gluetun:v3.41.1
-        securityContext:
-          # gluetun manages iptables + creates the wg0 interface; needs to
-          # run as root with NET_ADMIN. The pod-level podSecurityContext
-          # forces uid 568, so explicitly override here.
-          runAsUser: 0
-          runAsGroup: 0
-          capabilities:
-            add: ["NET_ADMIN"]
-        env:
-          - name: VPN_SERVICE_PROVIDER
-            value: ivpn
-          - name: VPN_TYPE
-            value: wireguard
-          - name: WIREGUARD_PRIVATE_KEY
-            valueFrom:
-              secretKeyRef:
-                name: qbittorrent-vpn-secret
-                key: WIREGUARD_PRIVATE_KEY
-          - name: WIREGUARD_PUBLIC_KEY
-            valueFrom:
-              secretKeyRef:
-                name: qbittorrent-vpn-secret
-                key: WIREGUARD_PUBLIC_KEY
-          - name: WIREGUARD_PRESHARED_KEY
-            valueFrom:
-              secretKeyRef:
-                name: qbittorrent-vpn-secret
-                key: WIREGUARD_PRESHARED_KEY
-                optional: true
-          - name: WIREGUARD_ADDRESSES
-            valueFrom:
-              secretKeyRef:
-                name: qbittorrent-vpn-secret
-                key: WIREGUARD_ADDRESSES
-          - name: WIREGUARD_ENDPOINT_IP
-            valueFrom:
-              secretKeyRef:
-                name: qbittorrent-vpn-secret
-                key: WIREGUARD_ENDPOINT_IP
-          - name: WIREGUARD_ENDPOINT_PORT
-            valueFrom:
-              secretKeyRef:
-                name: qbittorrent-vpn-secret
-                key: WIREGUARD_ENDPOINT_PORT
-                optional: true
-          - name: SERVER_COUNTRIES
-            value: "" # leave empty when WIREGUARD_ENDPOINT_IP is set
-          - name: TZ
-            value: "${TIMEZONE}"
-          - name: FIREWALL_INPUT_PORTS
-            # qbittorrent webUI port must be reachable from the cluster network
-            # so the Service / Ingress can forward to it.
-            value: "8080"
-          - name: HEALTH_VPN_DURATION_INITIAL
-            value: "30s"
-
-    env:
-      UMASK: "022"
-      QBITTORRENT__PORT: &port 8080
-      QBITTORRENT__USE_PROFILE: "true"
-
+    defaultPodOptions:
+      securityContext:
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+        fsGroupChangePolicy: "OnRootMismatch"
+        supplementalGroups:
+          - 65539
+    controllers:
+      qbittorrent:
+        type: statefulset
+        annotations:
+          reloader.stakater.com/auto: "true"
+        statefulset:
+          volumeClaimTemplates:
+            - name: data
+              accessMode: ReadWriteOnce
+              size: 1Gi
+              storageClass: ${STORAGE_CLASS_DEFAULT}
+              globalMounts:
+                - path: /config/qBittorrent/data
+        initContainers:
+          copy-config:
+            # No env-var substitution is needed in the bundled config files,
+            # so a plain busybox `cp` is sufficient. The previous
+            # ghcr.io/onedr0p/alpine image was GC'd from ghcr.
+            image:
+              repository: public.ecr.aws/docker/library/busybox
+              tag: "1.38.0"
+            command:
+              - "/bin/sh"
+              - -c
+            args:
+              - cp /data/configfiles/* /data/config/
+        containers:
+          app:
+            image:
+              repository: ghcr.io/onedr0p/qbittorrent
+              tag: 4.6.7@sha256:5391f94b321d563c3b44136a5e799b7e4e4888926c1c31d3081a1cf3e74a9aec
+            env:
+              UMASK: "022"
+              QBITTORRENT__PORT: &port 8080
+              QBITTORRENT__USE_PROFILE: "true"
+            resources:
+              requests:
+                cpu: 49m
+                memory: 1222Mi
+              limits:
+                memory: 1222Mi
+          # gluetun sidecar holds the iVPN WireGuard tunnel. qbittorrent shares the
+          # pod's network namespace; all its traffic is forced through the tunnel.
+          # If gluetun's tunnel drops, qbittorrent loses network — fail-closed.
+          gluetun:
+            image:
+              repository: ghcr.io/qdm12/gluetun
+              tag: v3.41.1
+            securityContext:
+              # gluetun manages iptables + creates the wg0 interface; needs to
+              # run as root with NET_ADMIN. The pod-level securityContext
+              # forces uid 568, so explicitly override here.
+              runAsUser: 0
+              runAsGroup: 0
+              capabilities:
+                add: ["NET_ADMIN"]
+            env:
+              - name: VPN_SERVICE_PROVIDER
+                value: ivpn
+              - name: VPN_TYPE
+                value: wireguard
+              - name: WIREGUARD_PRIVATE_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: qbittorrent-vpn-secret
+                    key: WIREGUARD_PRIVATE_KEY
+              - name: WIREGUARD_PUBLIC_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: qbittorrent-vpn-secret
+                    key: WIREGUARD_PUBLIC_KEY
+              - name: WIREGUARD_PRESHARED_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: qbittorrent-vpn-secret
+                    key: WIREGUARD_PRESHARED_KEY
+              - name: WIREGUARD_ADDRESSES
+                valueFrom:
+                  secretKeyRef:
+                    name: qbittorrent-vpn-secret
+                    key: WIREGUARD_ADDRESSES
+              - name: WIREGUARD_ENDPOINT_IP
+                valueFrom:
+                  secretKeyRef:
+                    name: qbittorrent-vpn-secret
+                    key: WIREGUARD_ENDPOINT_IP
+              - name: WIREGUARD_ENDPOINT_PORT
+                valueFrom:
+                  secretKeyRef:
+                    name: qbittorrent-vpn-secret
+                    key: WIREGUARD_ENDPOINT_PORT
+              - name: SERVER_COUNTRIES
+                value: "" # leave empty when WIREGUARD_ENDPOINT_IP is set
+              - name: TZ
+                value: "${TIMEZONE}"
+              - name: FIREWALL_INPUT_PORTS
+                # qbittorrent webUI port must be reachable from the cluster network
+                # so the Service / Ingress can forward to it.
+                value: "8080"
+              - name: HEALTH_VPN_DURATION_INITIAL
+                value: "30s"
     service:
-      main:
+      app:
+        controller: qbittorrent
         ports:
           http:
             port: *port
-
+    persistence:
+      config:
+        type: emptyDir
+        advancedMounts:
+          qbittorrent:
+            app:
+              - path: /config/qBittorrent/config
+      cache:
+        type: emptyDir
+        advancedMounts:
+          qbittorrent:
+            app:
+              - path: /config/qBittorrent/cache
+      configfiles:
+        type: configMap
+        name: qbittorrent-configmap
+        advancedMounts:
+          qbittorrent:
+            copy-config:
+              - path: /data/configfiles
+            app: []
+      config-target:
+        type: emptyDir
+        advancedMounts:
+          qbittorrent:
+            copy-config:
+              - path: /data/config
+      media:
+        existingClaim: cephfs-hdd-subvolume-qbit
+        globalMounts:
+          - path: /data/media
     ingress:
       internal:
-        enabled: true
         # Internal-only — qbittorrent webUI must NEVER be exposed publicly.
         # The traffic itself egresses through the gluetun sidecar.
-        ingressClassName: "nginx-internal"
+        className: nginx-internal
         hosts:
           - host: &internalHost "qbittorrent.${INTERNAL_DOMAIN}"
             paths:
               - path: /
-
-    persistence:
-      config:
-        enabled: true
-        type: emptyDir
-        mountPath: /config/qBittorrent/config
-
-      cache:
-        enabled: true
-        type: emptyDir
-        mountPath: /config/qBittorrent/cache
-
-      configfiles:
-        enabled: true
-        type: configMap
-        name: qbittorrent-configmap
-        mountPath: "-"
-
-      media:
-        enabled: true
-        existingClaim: cephfs-hdd-subvolume-qbit
-        mountPath: /data/media
-
-    resources:
-      requests:
-        cpu: 49m
-        memory: 1222Mi
-      limits:
-        memory: 1222Mi
-
-    volumeClaimTemplates:
-      - name: data
-        mountPath: /config/qBittorrent/data
-        accessMode: ReadWriteOnce
-        size: 1Gi
-        storageClass: ${STORAGE_CLASS_DEFAULT}
+                pathType: Prefix
+                service:
+                  identifier: app
+                  port: http

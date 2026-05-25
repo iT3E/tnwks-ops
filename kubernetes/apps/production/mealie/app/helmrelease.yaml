@@ -7,7 +7,7 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 1.5.1
+      version: 3.7.3
       sourceRef:
         kind: HelmRepository
         name: bjw-s
@@ -25,43 +25,60 @@ spec:
   uninstall:
     keepHistory: false
   values:
-    env:
-      - name: TZ
-        value: "${TIMEZONE}"
-      - name: DB_ENGINE
-        value: "postgres"
-      # cnpg generates the `postgres-app` Secret in the databases
-      # namespace with all the connection bits; cross-namespace fetch
-      # via the postgres-app Secret mirrored into this namespace by
-      # external-secrets / reflector. For now we point at the cnpg
-      # services + DB credentials directly.
-      - name: POSTGRES_USER
-        valueFrom:
-          secretKeyRef:
-            name: postgres-app
-            key: username
-      - name: POSTGRES_PASSWORD
-        valueFrom:
-          secretKeyRef:
-            name: postgres-app
-            key: password
-      - name: POSTGRES_SERVER
-        # cnpg's read-write Service. Cross-namespace via FQDN.
-        value: "postgres-rw.databases.svc.cluster.local"
-      - name: POSTGRES_PORT
-        value: "5432"
-      # cnpg's `postgres-app` Secret only carries username/password/pgpass.
-      # The DB name comes from cluster.yaml's `bootstrap.initdb.database`
-      # field (`app`).
-      - name: POSTGRES_DB
-        value: "app"
-
-    image:
-      repository: docker.io/hkotel/mealie
-      tag: v0.5.6
-    ingress:
-      main:
+    controllers:
+      mealie:
+        containers:
+          app:
+            image:
+              repository: docker.io/hkotel/mealie
+              tag: v0.5.6
+            env:
+              - name: TZ
+                value: "${TIMEZONE}"
+              - name: DB_ENGINE
+                value: "postgres"
+              # cnpg generates the `postgres-app` Secret in the databases
+              # namespace with all the connection bits; cross-namespace fetch
+              # via the postgres-app Secret mirrored into this namespace by
+              # external-secrets / reflector. For now we point at the cnpg
+              # services + DB credentials directly.
+              - name: POSTGRES_USER
+                valueFrom:
+                  secretKeyRef:
+                    name: postgres-app
+                    key: username
+              - name: POSTGRES_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: postgres-app
+                    key: password
+              - name: POSTGRES_SERVER
+                # cnpg's read-write Service. Cross-namespace via FQDN.
+                value: "postgres-rw.databases.svc.cluster.local"
+              - name: POSTGRES_PORT
+                value: "5432"
+              # cnpg's `postgres-app` Secret only carries username/password/pgpass.
+              # The DB name comes from cluster.yaml's `bootstrap.initdb.database`
+              # field (`app`).
+              - name: POSTGRES_DB
+                value: "app"
+    service:
+      app:
+        controller: mealie
+        ports:
+          http:
+            port: 80
+    persistence:
+      config:
         enabled: true
+        accessMode: ReadWriteOnce
+        size: 5Gi
+        storageClass: ${STORAGE_CLASS_DEFAULT}
+        globalMounts:
+          - path: /app/data
+    ingress:
+      app:
+        className: nginx
         annotations:
           external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
           hajimari.io/appName: Recipes
@@ -72,21 +89,9 @@ spec:
             paths:
               - path: /
                 pathType: Prefix
-        ingressClassName: nginx
+                service:
+                  identifier: app
+                  port: http
         tls:
           - hosts:
               - *host
-
-    persistence:
-      config:
-        enabled: true
-        mountPath: /app/data
-        storageClass: ${STORAGE_CLASS_DEFAULT}
-        size: 5Gi
-
-    service:
-      main:
-        ports:
-          http:
-            port: 80
-
