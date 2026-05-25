@@ -46,7 +46,7 @@ data:
   # CNI — Cilium with kube-proxy replacement, Hubble UI exposed via internal
   # ingress, ServiceMonitors on for kube-prometheus-stack scrape.
   CNI: "cilium"
-  CILIUM_VERSION: "1.17.16"
+  CILIUM_VERSION: "1.19.4"
   CILIUM_HUBBLE_UI_INGRESS_ENABLED: "true"
   CILIUM_SERVICEMONITOR_ENABLED: "true"
 
