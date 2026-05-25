@@ -33,9 +33,6 @@ snapshots:
 
 record:
   enabled: true
-  retain:
-    days: 2
-    mode: active_objects
   alerts:
     retain:
       days: 2
