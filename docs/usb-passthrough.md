@@ -75,53 +75,94 @@ and re-attach.
 ## Step 2. WSL2 → Docker (Talos node container)
 
 `talosctl cluster create` does not accept `--device` flags directly — Talos
-provisions the node containers itself with a fixed config. Two options to
-get USB through:
+provisions the node containers itself with a fixed config. The validated
+workflow is to **stop, remove, and re-`docker run`** the chosen worker
+with `--device` flags pointing at the host USB devices.
 
-### Option A (preferred): post-create container update
+PVC data is safe: Talos uses six **named volumes** on the node container
+for `/var`, `/usr/libexec/kubernetes`, `/opt`, `/system/state`, `/etc/cni`
+and `/etc/kubernetes`. Named volumes survive `docker rm` — re-mount the
+same volume names on the replacement container and local-path PVCs,
+kubelet state, and the machine config all carry over.
 
-After `task bootstrap:wsl` brings the cluster up, the node containers exist
-under names like `homelab-wsl-controlplane-1`, `homelab-wsl-worker-1`, etc.
-
-Stop the worker that will host the USB workloads, recreate it with the
-`--device` flags pointing at the host USB devices, and restart:
+> Drain the node first (`kubectl drain --delete-emptydir-data
+> --ignore-daemonsets`) so pods reschedule cleanly. Anything backed by
+> local-path on this worker stays put — drain just relocates pods that
+> can move.
 
 ```bash
-# Find the worker that should claim the USB devices
-docker ps --filter name=homelab-wsl-worker --format '{{.Names}}'
+NODE=homelab-wsl-worker-2
 
-# Inspect existing config (so you can replicate it)
-docker inspect homelab-wsl-worker-1 > /tmp/worker-1.json
+# Drain the node
+kubectl cordon "$NODE"
+kubectl drain "$NODE" --ignore-daemonsets --delete-emptydir-data --force --timeout=120s
 
-# Stop it
-docker stop homelab-wsl-worker-1
+# Capture current container config (volumes, env, network IP, labels, etc.)
+docker inspect "$NODE" > /tmp/$NODE.json
 
-# Recreate with device passthrough
-# TBD: exact command — fill in once first hardware boot validates the
-# minimum set of flags needed. The known starting point is:
-#   docker run -d --privileged \
-#     --device=/dev/bus/usb \
-#     --device=/dev/serial/by-id/usb-0658_0200-if00 \
-#     <other flags from inspect>
+# Pull volume names + env (USERDATA contains the full base64 machine config)
+python3 -c "
+import json
+d = json.load(open('/tmp/$NODE.json'))[0]
+print('Volumes:')
+for m in d['Mounts']:
+    if m['Type'] == 'volume':
+        print(f'  -v {m[\"Name\"]}:{m[\"Destination\"]}')
+print()
+print('Network IP:', d['NetworkSettings']['Networks']['homelab-wsl']['IPAMConfig']['IPv4Address'])
+print('Image:', d['Config']['Image'])
+"
 ```
 
-### Option B: cluster-create wrapper script
+Then stop, remove, and recreate. Substitute the six volume mount lines
+from the inspect dump above:
 
-Write a wrapper that runs `talosctl cluster create`, sleeps until the
-node containers exist, then calls `docker update` to add device mappings.
-**TBD** — not implemented yet. Document the exact command set here once
-proven on hardware.
+```bash
+docker stop "$NODE" && docker rm "$NODE"
 
-### Option C: privileged containers + bind mount of `/dev`
+docker run -d \
+  --name "$NODE" --hostname "$NODE" \
+  --privileged --read-only --restart no \
+  --shm-size 67108864 --memory 8589934592 --cpus 4 \
+  --security-opt seccomp=unconfined --security-opt label=disable \
+  --sysctl net.ipv6.conf.all.disable_ipv6=0 \
+  --network homelab-wsl --ip 10.5.0.4 \
+  --label org.opencontainers.image.source=https://github.com/siderolabs/talos \
+  --label talos.cluster.name=homelab-wsl \
+  --label talos.owned=true --label talos.type=worker \
+  --tmpfs /run --tmpfs /system --tmpfs /tmp \
+  -v <var-volume>:/var \
+  -v <kubelet-volume>:/usr/libexec/kubernetes \
+  -v <opt-volume>:/opt \
+  -v <state-volume>:/system/state \
+  -v <cni-volume>:/etc/cni \
+  -v <k8s-volume>:/etc/kubernetes \
+  --device=/dev/bus/usb \
+  --device=/dev/serial/by-id/usb-0658_0200-if00 \
+  -e PLATFORM=container -e TALOSSKU=4CPU-8192RAM \
+  -e PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+  -e USERDATA="<base64 from original inspect>" \
+  ghcr.io/siderolabs/talos:v1.13.2
 
-Talos's Docker provisioner supports `--with-init-node` and arbitrary
-container args. Worth investigating whether `--user-disk` or a custom
-machine-config patch can mount the host's `/dev/bus/usb` into the node
-filesystem. **TBD.**
+# Wait for node to come back Ready
+kubectl get node "$NODE" -w
+kubectl uncordon "$NODE"
+```
 
-> **Honest status:** none of options A/B/C have been validated end-to-end on
-> hardware yet. The first time the dongles get plugged in, fill in the exact
-> commands here.
+### Verify the device made it through
+
+```bash
+talosctl -n 10.5.0.4 ls /dev/bus/usb       # should list 001, 002 ...
+talosctl -n 10.5.0.4 ls /dev | grep ttyACM # Z-Stick lands here
+```
+
+> **Why `/dev/ttyACM0` and not `/dev/serial/by-id/...`?** Talos doesn't
+> populate udev's `/dev/serial/by-id/` symlinks. Docker resolves the
+> host symlink at container start, so the device node arrives as
+> `/dev/ttyACM0` inside the Talos container. The WSL overlay
+> (`kubernetes/clusters/wsl/apps/home-automation/zwave-js-ui-ks.yaml`)
+> patches the zwave-js-ui hostPath accordingly. The MS-01 cluster keeps
+> the upstream by-id path because udev runs there.
 
 ---
 
@@ -150,7 +191,7 @@ persistence:
 
 ### zwave-js-ui (Z-Stick)
 
-`kubernetes/apps/home-automation/zwave-js-ui/app/helmrelease.yaml`:
+`kubernetes/apps/home-automation/zwave-js-ui/app/helmrelease.yaml` (MS-01):
 
 ```yaml
 securityContext:
@@ -163,9 +204,23 @@ persistence:
     hostPathType: CharDevice
 ```
 
-> The `usb-0658_0200-if00` symlink is created by udev rules on Linux. On
-> Talos the path may differ — verify with
-> `talosctl -n <node> ls /dev/serial/by-id` after Step 2.
+The WSL overlay patches this to `/dev/ttyACM0` and pins the pod to
+`homelab-wsl-worker-2`:
+
+```
+kubernetes/clusters/wsl/apps/home-automation/zwave-js-ui-ks.yaml
+```
+
+### Per-cluster nodeSelector divergence
+
+The MS-01 HelmReleases use NFD labels (frigate: `coral=true`) and
+hostnames (`sce-uk8sw03`) that don't apply on the WSL cluster. Each WSL
+overlay carries a `kustomize.toolkit.fluxcd.io/v1` Kustomization wrapper
+with `spec.patches` that overrides `defaultPodOptions.nodeSelector` to
+pin to `homelab-wsl-worker-2`. See:
+
+- `kubernetes/clusters/wsl/apps/production/frigate-ks.yaml`
+- `kubernetes/clusters/wsl/apps/home-automation/zwave-js-ui-ks.yaml`
 
 ### DaemonSet alternative
 

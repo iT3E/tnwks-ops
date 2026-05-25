@@ -18,4 +18,6 @@ resources:
   - ../../../../apps/production/ombi-f/ks.yaml
   - ../../../../apps/production/wizarr/ks.yaml
   - ../../../../apps/production/changedetection/ks.yaml
-  - ../../../../apps/production/frigate/ks.yaml
+  # frigate: WSL-specific Flux Kustomization with a patch to replace the
+  # NFD coral nodeSelector with a hostname pin to homelab-wsl-worker-2.
+  - ./frigate-ks.yaml

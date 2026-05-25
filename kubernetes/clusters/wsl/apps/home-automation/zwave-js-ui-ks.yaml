@@ -1,0 +1,35 @@
+---
+# WSL overlay for zwave-js-ui: pin to homelab-wsl-worker-2 (the only node
+# with the Aeotec Z-Stick passed through via --device) and re-point the
+# usb hostPath at /dev/ttyACM0. Talos doesn't populate udev's
+# /dev/serial/by-id/ symlinks, but Docker resolves the host symlink at
+# container start so the device node arrives as /dev/ttyACM0.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: zwave-js-ui
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/home-automation/zwave-js-ui/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+  patches:
+    - target:
+        kind: HelmRelease
+        name: zwave-js-ui
+      patch: |
+        - op: replace
+          path: /spec/values/defaultPodOptions/nodeSelector/kubernetes.io~1hostname
+          value: homelab-wsl-worker-2
+        - op: replace
+          path: /spec/values/persistence/usb/hostPath
+          value: /dev/ttyACM0
+        - op: replace
+          path: /spec/values/persistence/usb/globalMounts/0/path
+          value: /dev/ttyACM0
