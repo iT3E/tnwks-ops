@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: local-path-provisioner
@@ -29,7 +29,7 @@ spec:
       repository: public.ecr.aws/docker/library/busybox
       tag: latest
     storageClass:
-      defaultClass: false
+      defaultClass: true
     nodePathMap:
       - node: DEFAULT_PATH_FOR_NON_LISTED_NODES
         paths: ["/var/lib/rancher/k3s/storage"]

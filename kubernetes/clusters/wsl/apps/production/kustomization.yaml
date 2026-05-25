@@ -1,0 +1,21 @@
+---
+# WSL cluster overlay: production namespace
+#
+# frigate is included — the Coral TPU is plugged into the desktop and
+# passed through Windows -> WSL -> Docker -> Talos. See
+# docs/usb-passthrough.md for the chain.
+#
+# uisp is omitted from the WSL cluster — it's a heavy single-instance
+# device-management workload that lives on the MS-01 cluster.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../apps/production/namespace.yaml
+  - ../../../../apps/production/jellyfin/ks.yaml
+  - ../../../../apps/production/mealie/ks.yaml
+  - ../../../../apps/production/vaultwarden/ks.yaml
+  - ../../../../apps/production/ombi/ks.yaml
+  - ../../../../apps/production/ombi-f/ks.yaml
+  - ../../../../apps/production/wizarr/ks.yaml
+  - ../../../../apps/production/changedetection/ks.yaml
+  - ../../../../apps/production/frigate/ks.yaml

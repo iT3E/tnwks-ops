@@ -6,4 +6,5 @@ resources:
   - ./secrets.sops.yaml
   - ./helmrelease.yaml
   - ./prometheus-rule.yaml
-  - ./s3-loki-bucket.yaml
+# s3-loki-bucket.yaml uses ObjectBucketClaim which only exists when Rook
+# is installed. Added back per-cluster via kubernetes/clusters/ms-01/apps/.

@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: loki
@@ -9,7 +9,7 @@ spec:
   chart:
     spec:
       chart: loki
-      version: 5.38.0
+      version: 7.0.0
       sourceRef:
         kind: HelmRepository
         name: grafana
@@ -121,7 +121,7 @@ spec:
       image:
         registry: ghcr.io
         repository: nginxinc/nginx-unprivileged
-        tag: 1.25-alpine
+        tag: 1.27-alpine
       ingress:
         enabled: true
         ingressClassName: "nginx-internal"
@@ -129,7 +129,7 @@ spec:
           nginx.ingress.kubernetes.io/whitelist-source-range: |
             10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
         hosts:
-          - host: &host "loki.tnwks.local"
+          - host: &host "loki.${INTERNAL_DOMAIN}"
             paths:
               - path: /
                 pathType: Prefix
@@ -150,7 +150,7 @@ spec:
                 topologyKey: kubernetes.io/hostname
       persistence:
         size: 20Gi
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
 
     read:
       replicas: 3
@@ -189,7 +189,7 @@ spec:
           emptyDir: {}
       persistence:
         size: 20Gi
-        storageClass: cephfs
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
 
     monitoring:
       dashboards:

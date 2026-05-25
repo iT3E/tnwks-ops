@@ -6,4 +6,5 @@ resources:
   - ./helmrelease.yaml
   - ./secrets.sops.yaml
   - ./dashboard
-  - ./s3-thanos-bucket.yaml
+# s3-thanos-bucket.yaml uses ObjectBucketClaim which only exists when Rook
+# is installed. Added back per-cluster via kubernetes/clusters/ms-01/apps/.
