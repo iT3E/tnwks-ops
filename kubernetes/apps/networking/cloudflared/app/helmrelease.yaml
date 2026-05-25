@@ -9,7 +9,7 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 1.5.1
+      version: 3.7.3
       sourceRef:
         kind: HelmRepository
         name: bjw-s
@@ -26,77 +26,86 @@ spec:
   uninstall:
     keepHistory: false
   values:
-    controller:
-      replicas: 1
-      strategy: RollingUpdate
-      annotations:
-        reloader.stakater.com/auto: "true"
-    image:
-      repository: docker.io/cloudflare/cloudflared
-      tag: 2026.5.1
-    env:
-      NO_AUTOUPDATE: "true"
-      TUNNEL_CRED_FILE: /etc/cloudflared/creds/credentials.json
-      TUNNEL_METRICS: 0.0.0.0:8080
-      TUNNEL_TRANSPORT_PROTOCOL: auto
-      TUNNEL_ID:
-        valueFrom:
-          secretKeyRef:
-            name: cloudflared-secret
-            key: TUNNEL_ID
-    args:
-      - tunnel
-      - --config
-      - /etc/cloudflared/config/config.yaml
-      - run
-      - "$(TUNNEL_ID)"
+    controllers:
+      cloudflared:
+        replicas: 1
+        strategy: RollingUpdate
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: docker.io/cloudflare/cloudflared
+              tag: 2026.5.1
+            env:
+              NO_AUTOUPDATE: "true"
+              TUNNEL_CRED_FILE: /etc/cloudflared/creds/credentials.json
+              TUNNEL_METRICS: 0.0.0.0:8080
+              TUNNEL_TRANSPORT_PROTOCOL: auto
+              TUNNEL_ID:
+                valueFrom:
+                  secretKeyRef:
+                    name: cloudflared-secret
+                    key: TUNNEL_ID
+            args:
+              - tunnel
+              - --config
+              - /etc/cloudflared/config/config.yaml
+              - run
+              - "$(TUNNEL_ID)"
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /ready
+                    port: 8080
+                  initialDelaySeconds: 0
+                  periodSeconds: 10
+                  timeoutSeconds: 1
+                  failureThreshold: 3
+              readiness: *probes
+              startup:
+                enabled: false
+            resources:
+              requests:
+                cpu: 5m
+                memory: 10Mi
+              limits:
+                memory: 256Mi
     service:
-      main:
+      app:
+        controller: cloudflared
         ports:
           http:
             port: 8080
     serviceMonitor:
-      main:
+      app:
         enabled: ${SERVICE_MONITOR_ENABLED}
+        serviceName: cloudflared
         endpoints:
           - port: http
             scheme: http
             path: /metrics
             interval: 1m
             scrapeTimeout: 30s
-    probes:
-      liveness: &probes
-        enabled: true
-        custom: true
-        spec:
-          httpGet:
-            path: /ready
-            port: http
-          initialDelaySeconds: 0
-          periodSeconds: 10
-          timeoutSeconds: 1
-          failureThreshold: 3
-      readiness: *probes
-      startup:
-        enabled: false
     persistence:
       config:
-        enabled: true
         type: configMap
         name: cloudflared-configmap
-        subPath: config.yaml
-        mountPath: /etc/cloudflared/config/config.yaml
-        readOnly: true
+        advancedMounts:
+          cloudflared:
+            app:
+              - subPath: config.yaml
+                path: /etc/cloudflared/config/config.yaml
+                readOnly: true
       creds:
-        enabled: true
         type: secret
         name: cloudflared-secret
-        subPath: credentials.json
-        mountPath: /etc/cloudflared/creds/credentials.json
-        readOnly: true
-    resources:
-      requests:
-        cpu: 5m
-        memory: 10Mi
-      limits:
-        memory: 256Mi
+        advancedMounts:
+          cloudflared:
+            app:
+              - subPath: credentials.json
+                path: /etc/cloudflared/creds/credentials.json
+                readOnly: true

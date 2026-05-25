@@ -9,59 +9,72 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 1.5.1
+      version: 3.7.3
       interval: 30m
       sourceRef:
         kind: HelmRepository
         name: bjw-s
         namespace: flux-system
-
   values:
-    controller:
-      annotations:
-        reloader.stakater.com/auto: "true"
-
-    image:
-      repository: ghcr.io/onedr0p/radarr-develop
-      tag: 5.20.1.9773@sha256:8187c129a78fdfe15b1603db9175abd2be0e1ca2e99ea3733987c3ae941da165
-
-    # podAnnotations:
-    #   setGateway: "true"
-
-    podSecurityContext:
-      runAsUser: 568
-      runAsGroup: 568
-      fsGroup: 568
-      fsGroupChangePolicy: "OnRootMismatch"
-      supplementalGroups:
-        - 65539
-
-    dnsConfig:
-      options:
-        - name: ndots
-          value: "1"
-
-    env:
-      RADARR__INSTANCE_NAME: Radarr
-      RADARR__PORT: &port 7878
-      RADARR__APPLICATION_URL: "https://radarr.${SECRET_DOMAIN}"
-      RADARR__LOG_LEVEL: info
-      RADARR__API_KEY:
-        valueFrom:
-          secretKeyRef:
-            name: radarr-secret
-            key: API_KEY
-
+    defaultPodOptions:
+      securityContext:
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+        fsGroupChangePolicy: "OnRootMismatch"
+        supplementalGroups:
+          - 65539
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
+    controllers:
+      radarr:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: ghcr.io/onedr0p/radarr-develop
+              tag: 5.20.1.9773@sha256:8187c129a78fdfe15b1603db9175abd2be0e1ca2e99ea3733987c3ae941da165
+            env:
+              RADARR__INSTANCE_NAME: Radarr
+              RADARR__PORT: &port 7878
+              RADARR__APPLICATION_URL: "https://radarr.${SECRET_DOMAIN}"
+              RADARR__LOG_LEVEL: info
+              RADARR__API_KEY:
+                valueFrom:
+                  secretKeyRef:
+                    name: radarr-secret
+                    key: API_KEY
+            resources:
+              requests:
+                cpu: 14m
+                memory: 431M
+              limits:
+                memory: 431M
     service:
-      main:
+      app:
+        controller: radarr
         ports:
           http:
             port: *port
-
+    persistence:
+      config:
+        enabled: true
+        accessMode: ReadWriteOnce
+        size: 1Gi
+        storageClass: ${STORAGE_CLASS_DEFAULT}
+        retain: true
+        globalMounts:
+          - path: /config
+      media:
+        existingClaim: cephfs-hdd-subvolume-qbit
+        globalMounts:
+          - path: /data/media
     ingress:
       internal:
-        enabled: true
-        ingressClassName: "nginx"
+        className: nginx
         annotations:
           nginx.ingress.kubernetes.io/configuration-snippet: |
             proxy_set_header Accept-Encoding "";
@@ -70,32 +83,7 @@ spec:
           - host: &internalHost "radarr.${INTERNAL_DOMAIN}"
             paths:
               - path: /
-
-    existingClaim:
-
-    persistence:
-      config:
-        enabled: true
-        accessMode: ReadWriteOnce
-        size: 1Gi
-        storageClass: ${STORAGE_CLASS_DEFAULT}
-        retain: true
-
-      media:
-        enabled: true
-        existingClaim: cephfs-hdd-subvolume-qbit
-        mountPath: /data/media
-
-      # media:
-      #   enabled: true
-      #   type: nfs
-      #   server: "nas.bjw-s.tech"
-      #   path: /volume1/Media
-      #   mountPath: /data/media
-
-    resources:
-      requests:
-        cpu: 14m
-        memory: 431M
-      limits:
-        memory: 431M
+                pathType: Prefix
+                service:
+                  identifier: app
+                  port: http

@@ -9,60 +9,55 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 1.5.1
+      version: 3.7.3
       interval: 30m
       sourceRef:
         kind: HelmRepository
         name: bjw-s
         namespace: flux-system
-
   values:
-    controller:
-      annotations:
-        reloader.stakater.com/auto: "true"
-
-    image:
-      repository: ghcr.io/onedr0p/prowlarr-develop
-      tag: 1.32.2.4987@sha256:f3c0edbd19d744c8306ae8f72e75f0fb54ff662e9f7b22a4d9029e5c0b7f075c
-
-    podAnnotations:
-      setGateway: "true"
-
-    podSecurityContext:
-      runAsUser: 568
-      runAsGroup: 568
-      fsGroup: 568
-      fsGroupChangePolicy: "OnRootMismatch"
-
-    env:
-      PROWLARR__INSTANCE_NAME: Prowlarr
-      PROWLARR__PORT: &port 9696
-      PROWLARR__LOG_LEVEL: info
-      PROWLARR__ANALYTICS_ENABLED: "False"
-      PROWLARR__AUTHENTICATION_METHOD: External
-      PROWLARR__API_KEY:
-        valueFrom:
-          secretKeyRef:
-            name: prowlarr-secret
-            key: API_KEY
-
-    hostname: prowlarr
-
+    defaultPodOptions:
+      hostname: prowlarr
+      securityContext:
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+        fsGroupChangePolicy: "OnRootMismatch"
+    controllers:
+      prowlarr:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        pod:
+          annotations:
+            setGateway: "true"
+        containers:
+          app:
+            image:
+              repository: ghcr.io/onedr0p/prowlarr-develop
+              tag: 1.32.2.4987@sha256:f3c0edbd19d744c8306ae8f72e75f0fb54ff662e9f7b22a4d9029e5c0b7f075c
+            env:
+              PROWLARR__INSTANCE_NAME: Prowlarr
+              PROWLARR__PORT: &port 9696
+              PROWLARR__LOG_LEVEL: info
+              PROWLARR__ANALYTICS_ENABLED: "False"
+              PROWLARR__AUTHENTICATION_METHOD: External
+              PROWLARR__API_KEY:
+                valueFrom:
+                  secretKeyRef:
+                    name: prowlarr-secret
+                    key: API_KEY
+            resources:
+              requests:
+                cpu: 18m
+                memory: 160Mi
+              limits:
+                memory: 160Mi
     service:
-      main:
+      app:
+        controller: prowlarr
         ports:
           http:
             port: *port
-
-    ingress:
-      internal:
-        enabled: true
-        ingressClassName: "nginx"
-        hosts:
-          - host: &internalHost "prowlarr.${INTERNAL_DOMAIN}"
-            paths:
-              - path: /
-
     persistence:
       config:
         enabled: true
@@ -70,10 +65,16 @@ spec:
         size: 1Gi
         storageClass: ${STORAGE_CLASS_DEFAULT}
         retain: true
-
-    resources:
-      requests:
-        cpu: 18m
-        memory: 160Mi
-      limits:
-        memory: 160Mi
+        globalMounts:
+          - path: /config
+    ingress:
+      internal:
+        className: nginx
+        hosts:
+          - host: &internalHost "prowlarr.${INTERNAL_DOMAIN}"
+            paths:
+              - path: /
+                pathType: Prefix
+                service:
+                  identifier: app
+                  port: http

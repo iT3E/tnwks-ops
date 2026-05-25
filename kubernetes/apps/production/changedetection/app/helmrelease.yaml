@@ -10,7 +10,7 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 1.5.1
+      version: 3.7.3
       sourceRef:
         kind: HelmRepository
         name: bjw-s
@@ -26,46 +26,54 @@ spec:
   uninstall:
     keepHistory: false
   values:
-    controller:
-      type: statefulset
-    image:
-      repository: ghcr.io/dgtlmoon/changedetection.io
-      tag: "0.55.5"
-    env:
-      TZ: ${TIMEZONE}
-      PORT: &port 5000
-      PUID: 568
-      PGID: 568
-      BASE_URL: https://changedetection.${SECRET_DOMAIN}
+    defaultPodOptions:
+      securityContext:
+        runAsUser: 568
+        runAsGroup: 568
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+    controllers:
+      changedetection:
+        type: statefulset
+        statefulset:
+          volumeClaimTemplates:
+            - name: config
+              accessMode: ReadWriteOnce
+              size: 1Gi
+              storageClass: "${STORAGE_CLASS_DEFAULT}"
+              globalMounts:
+                - path: /datastore
+        containers:
+          app:
+            image:
+              repository: ghcr.io/dgtlmoon/changedetection.io
+              tag: "0.55.5"
+            env:
+              TZ: ${TIMEZONE}
+              PORT: &port 5000
+              PUID: 568
+              PGID: 568
+              BASE_URL: https://changedetection.${SECRET_DOMAIN}
+            resources:
+              requests:
+                cpu: 10m
+                memory: 100Mi
+              limits:
+                memory: 500Mi
     service:
-      main:
+      app:
+        controller: changedetection
         ports:
           http:
             port: *port
-
     ingress:
       internal:
-        enabled: true
-        ingressClassName: "nginx-internal"
+        className: nginx-internal
         hosts:
           - host: &internalHost "changedetection.${INTERNAL_DOMAIN}"
             paths:
               - path: /
-
-    podSecurityContext:
-      runAsUser: 568
-      runAsGroup: 568
-      fsGroup: 568
-      fsGroupChangePolicy: OnRootMismatch
-    volumeClaimTemplates:
-      - name: config
-        mountPath: /datastore
-        accessMode: ReadWriteOnce
-        size: 1Gi
-        storageClass: "${STORAGE_CLASS_DEFAULT}"
-    resources:
-      requests:
-        cpu: 10m
-        memory: 100Mi
-      limits:
-        memory: 500Mi
+                pathType: Prefix
+                service:
+                  identifier: app
+                  port: http
