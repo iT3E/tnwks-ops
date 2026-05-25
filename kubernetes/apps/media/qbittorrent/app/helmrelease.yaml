@@ -132,6 +132,18 @@ spec:
           http:
             port: *port
     persistence:
+      # qbittorrent writes its top-level profile under /config (e.g.
+      # /config/qBittorrent/qBittorrent.conf, /config/.cache/...). The
+      # nested mounts below cover /config/qBittorrent/{config,cache,data},
+      # but the intermediate /config dir created by kubelet to host them
+      # is owned root:root and unwritable by uid 568. A top-level
+      # emptyDir mount at /config lets fsGroup=568 take effect there.
+      home:
+        type: emptyDir
+        advancedMounts:
+          qbittorrent:
+            app:
+              - path: /config
       config:
         type: emptyDir
         advancedMounts:
