@@ -33,6 +33,12 @@ spec:
   values:
     deploymentStrategy:
       type: Recreate
+    # init-chown-data runs busybox chown as root over the PVC. On WSL
+    # local-path PVCs that EPERMs against existing files owned by the
+    # grafana uid (472), and the pod CrashLoops. Modern grafana sets
+    # its own ownership via fsGroup; we don't need the init container.
+    initChownData:
+      enabled: false
     admin:
       existingSecret: grafana-admin-secret
     env:
