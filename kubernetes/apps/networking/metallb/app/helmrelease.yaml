@@ -33,3 +33,10 @@ spec:
       # No frr/bgp needed.
       frr:
         enabled: false
+    # MetalLB 0.16 made frr-k8s the default BGP backend (frrk8s.enabled=true)
+    # and the chart unconditionally renders the frr-k8s subchart's
+    # ServiceMonitor template, which dereferences values that don't exist
+    # in our minimal config. Disable the whole subchart since L2 mode
+    # doesn't need any BGP backend.
+    frrk8s:
+      enabled: false
