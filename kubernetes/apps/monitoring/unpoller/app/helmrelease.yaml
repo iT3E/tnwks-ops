@@ -22,7 +22,7 @@ spec:
           app:
             image:
               repository: ghcr.io/unpoller/unpoller
-              tag: v2.9.4@sha256:20c161781ac544a7548c8dd533f13498201746efdf0853d4625a1dbfd5652a19
+              tag: v3.2.0@sha256:bf7bdcc59fcdaa4699687007aa3ec24ddb3c9d9521f392d8c7aa2bea1bdb781a
             env:
               UP_UNIFI_DEFAULT_ROLE: tnwks-ops
               UP_UNIFI_DEFAULT_URL: https://unifi:8443
