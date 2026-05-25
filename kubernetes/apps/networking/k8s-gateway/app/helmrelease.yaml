@@ -37,6 +37,9 @@ spec:
     service:
       type: LoadBalancer
       port: 53
-      annotations:
-        io.cilium/lb-ipam-ips: "${METALLB_K8S_GATEWAY_ADDR}"
+      # Both Cilium LB-IPAM (MS-01) and MetalLB (WSL) honor `loadBalancerIP`
+      # in the Service spec. Cilium also accepts the
+      # `io.cilium/lb-ipam-ips` annotation; MetalLB ignores it. Using the
+      # spec field keeps a single value working across both clusters.
+      loadBalancerIP: "${METALLB_K8S_GATEWAY_ADDR}"
       externalTrafficPolicy: Local

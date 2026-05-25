@@ -1,9 +1,12 @@
 ---
 # WSL cluster overlay: networking namespace
 #
-# Includes cloudflared. WSL has no LoadBalancer controller, so cloudflared
-# (which connects outbound to Cloudflare's edge and tunnels inbound traffic
-# to in-cluster Services) is the path for public ingress.
+# Public ingress: cloudflared (in-cluster ClusterIP → Cloudflare edge tunnel),
+# so external traffic doesn't depend on a LoadBalancer IP.
+#
+# Internal LB: MetalLB in L2 mode, advertising VIPs from the docker bridge
+# subnet (10.5.0.0/24). MS-01 will use Cilium L2 announcements instead, so
+# MetalLB is wired in at the WSL overlay only — not the shared apps tree.
 #
 # Each cluster runs its own Cloudflare tunnel — the tunnel ID is in
 # clusters/<target>/cluster-secrets.sops.yaml. When the inactive cluster
@@ -14,6 +17,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../../apps/networking/namespace.yaml
+  - ../../../../apps/networking/metallb/ks.yaml
   - ../../../../apps/networking/cloudflared/ks.yaml
   - ../../../../apps/networking/external-dns/ks.yaml
   - ../../../../apps/networking/ingress-nginx/ks.yaml

@@ -28,12 +28,15 @@ data:
   CNPG_INSTANCES: "1"
   CNPG_INSTANCE_SIZE: "5Gi"
 
-  # Load balancer / IP allocation (no LB controller on WSL; Services pend)
-  LB_RANGE: ""
-  METALLB_LB_RANGE: ""
-  METALLB_K8S_GATEWAY_ADDR: "127.0.0.1"
-  METALLB_INGRESS_ADDR: "127.0.0.1"
-  INGRESS_INTERNAL_ADDR: "127.0.0.1"
+  # Load balancer / IP allocation
+  # MetalLB advertises VIPs from the homelab-wsl docker bridge subnet
+  # (10.5.0.0/24). Reachable from this WSL host directly; reachable from
+  # the Windows host or LAN only via netsh portproxy on Windows.
+  LB_RANGE: "10.5.0.200-10.5.0.220"
+  METALLB_LB_RANGE: "10.5.0.200-10.5.0.220"
+  METALLB_K8S_GATEWAY_ADDR: "10.5.0.201"
+  METALLB_INGRESS_ADDR: "10.5.0.202"
+  INGRESS_INTERNAL_ADDR: "10.5.0.200"
   KUBE_VIP_ADDR: "127.0.0.1"
 
   # Cluster networking
