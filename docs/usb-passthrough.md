@@ -59,6 +59,24 @@ usbipd attach --wsl --busid 2-3
 usbipd attach --wsl --busid 4-1
 ```
 
+> **Coral gotcha — bind after firmware loads, not before.** When the
+> Coral first appears on Windows it shows VID/PID `1a6e:089a` (DFU
+> bootloader). Windows itself completes the firmware load, after which
+> `usbipd list` flips it to `18d1:9302` (Google runtime). **You must
+> bind/attach at the runtime VID.** If you bind/attach while it's still
+> at `1a6e:089a`, `attach --wsl` causes a USB reset that sends the
+> device back into bootloader mode, and nothing inside WSL/Talos has
+> the Edge TPU runtime to upload firmware again — `libedgetpu` in the
+> Frigate pod will fail with `Failed to load delegate from
+> libedgetpu.so.1.0`. If you get stuck in this state:
+>
+> ```powershell
+> usbipd detach --busid 1-19
+> usbipd list   # wait for it to show 18d1:9302
+> usbipd bind --busid 1-19 --force
+> usbipd attach --wsl --busid 1-19
+> ```
+
 ### Verify in WSL
 
 ```bash
@@ -163,6 +181,20 @@ talosctl -n 10.5.0.4 ls /dev | grep ttyACM # Z-Stick lands here
 > (`kubernetes/clusters/wsl/apps/home-automation/zwave-js-ui-ks.yaml`)
 > patches the zwave-js-ui hostPath accordingly. The MS-01 cluster keeps
 > the upstream by-id path because udev runs there.
+
+> **`--device` is a snapshot, not a live mount.** Docker's `--device`
+> flag captures the host's device-node major/minor at container start
+> and cgroup-allows that exact one. If the underlying USB device
+> disconnects/reconnects later (USB reset, suspend, replug, or a
+> usbipd `detach`/`attach` cycle), the host renumbers it but the Talos
+> container still has the stale node. The pod will then either see a
+> dangling /dev entry or open the wrong device. The fix is to recreate
+> the worker container **after** the device is in its final, stable
+> state on the host — for the Coral that means after Windows has
+> loaded firmware and `lsusb` shows `18d1:9302` in WSL. A long-term
+> alternative is bind-mounting `/dev/bus/usb` (`-v /dev/bus/usb:/dev/bus/usb`)
+> instead of `--device`, but that needs validation against Talos's
+> read-only rootfs constraints.
 
 ---
 
