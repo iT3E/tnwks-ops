@@ -9,7 +9,7 @@ spec:
   chart:
     spec:
       chart: prometheus-blackbox-exporter
-      version: 8.6.1
+      version: 11.10.0
       sourceRef:
         kind: HelmRepository
         name: prometheus-community
@@ -25,6 +25,16 @@ spec:
       sysctls:
         - name: net.ipv4.ping_group_range
           value: "0 2147483647"
+
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      runAsNonRoot: true
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+        add: ["NET_RAW"]
 
     config:
       modules:
@@ -52,6 +62,19 @@ spec:
       tls:
         - hosts:
             - *host
+
+    serviceMonitor:
+      enabled: true
+      defaults:
+        labels:
+          release: prometheus
+        interval: 1m
+        scrapeTimeout: 30s
+      targets:
+        - module: icmp
+          name: ping-cloudflare
+          url: 1.1.1.1
+          interval: 30s
 
     prometheusRule:
       enabled: true
@@ -83,63 +106,3 @@ spec:
           annotations:
             description: |-
               The host {{"{{ $labels.target }}"}} is currently unreachable
-
-    pspEnabled: false
-
-    securityContext:
-      readOnlyRootFilesystem: true
-      allowPrivilegeEscalation: false
-      capabilities:
-        add: ["NET_RAW"]
-
-    serviceMonitor:
-      enabled: true
-      defaults:
-        labels:
-          release: prometheus
-        interval: 1m
-        scrapeTimeout: 30s
-      targets:
-        # # PiKVM
-        # - module: http_2xx
-        #   name: pikvm-http
-        #   url: "http://pikvm.bjw-s.tech"
-        # - module: icmp
-        #   name: pikvm-icmp
-        #   url: diego.bjw-s.tech
-
-        # # Robot vacuums
-        # - module: icmp
-        #   name: valetudo-living-room-icmp
-        #   url: livingroom-vacuum.bjw-s.tech
-        # - module: http_2xx
-        #   name: valetudo-living-room-http
-        #   url: "http://livingroom-vacuum.bjw-s.tech"
-        # - module: icmp
-        #   name: valetudo-upstairs-icmp
-        #   url: upstairs-vacuum.bjw-s.tech
-        # - module: http_2xx
-        #   name: valetudo-upstairs-http
-        #   url: "http://upstairs-vacuum.bjw-s.tech"
-
-        # # Wallmount tablets
-        # - module: http_2xx
-        #   name: hallway-tablet-http
-        #   url: "http://hallway-tablet.bjw-s.tech:2323"
-        # - module: icmp
-        #   name: hallway-tablet-icmp
-        #   url: hallway-tablet.bjw-s.tech
-
-        # # Other devices
-        # - module: icmp
-        #   name: zigbee-controller-icmp
-        #   url: hallway-zigbee-adapter.bjw-s.tech
-
-        # - module: icmp
-        #   name: nas-icmp
-        #   url: nas.bjw-s.tech
-
-        - module: icmp
-          name: ping-cloudflare
-          url: 1.1.1.1
-          scrape_interval: 30s
