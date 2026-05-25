@@ -2,14 +2,14 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: cluster-apps-cert-manager
+  name: cert-manager
   namespace: flux-system
 spec:
   path: ./kubernetes/apps/cert-manager/cert-manager/app
   prune: true
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: flux-system
   wait: true
   interval: 30m
   retryInterval: 1m
@@ -18,17 +18,38 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: cluster-apps-cert-manager-issuers
+  name: cert-manager-issuers
   namespace: flux-system
 spec:
   dependsOn:
-    - name: cluster-apps-cert-manager
+    - name: cert-manager
   path: ./kubernetes/apps/cert-manager/cert-manager/issuers
   prune: true
   sourceRef:
     kind: GitRepository
-    name: home-kubernetes
+    name: flux-system
   wait: true
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+---
+# PrometheusRule needs the monitoring.coreos.com CRD which kube-prometheus-stack
+# provides, so it lives in its own Kustomization with the right dependency.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cert-manager-prometheusrules
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: cert-manager
+    - name: kube-prometheus-stack
+  path: ./kubernetes/apps/cert-manager/cert-manager/prometheusrules
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
   interval: 30m
   retryInterval: 1m
   timeout: 5m

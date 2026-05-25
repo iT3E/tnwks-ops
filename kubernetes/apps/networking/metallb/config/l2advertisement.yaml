@@ -1,0 +1,12 @@
+---
+# L2 mode: speaker pods ARP-respond on the node's primary interface.
+# On WSL Talos-in-Docker that's eth0 inside the node containers, attached
+# to the homelab-wsl docker bridge.
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: default
+  namespace: networking
+spec:
+  ipAddressPools:
+    - default-pool

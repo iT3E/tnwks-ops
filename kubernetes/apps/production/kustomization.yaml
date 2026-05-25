@@ -3,15 +3,13 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ./namespace.yaml
-  - ./mealie/ks.yaml
   - ./jellyfin/ks.yaml
-  - ./matrix/ks.yaml
+  - ./mealie/ks.yaml
   - ./vaultwarden/ks.yaml
   - ./ombi/ks.yaml
   - ./ombi-f/ks.yaml
   - ./wizarr/ks.yaml
   - ./uisp/ks.yaml
-  - ./bookstack/ks.yaml
   - ./changedetection/ks.yaml
   - ./frigate/ks.yaml
   # - ./external-dns/ks.yaml

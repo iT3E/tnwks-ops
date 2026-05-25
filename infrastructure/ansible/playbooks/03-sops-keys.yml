@@ -1,0 +1,94 @@
+---
+# Phase 3 of bootstrap: provision SOPS age keys into the cluster
+#
+# Generates a per-cluster age keypair (if not already present) and creates
+# the sops-age secret in flux-system namespace so Flux can decrypt manifests.
+#
+# Key location:    ~/.config/sops/age/{cluster_name}.txt
+# Cluster secret:  sops-age in flux-system namespace
+#
+# BACKUP: After this playbook runs, copy the age key file to your password
+# manager (1Password) under 'SOPS Age Key — {cluster_name}'. If lost, all
+# encrypted secrets in the repo become unrecoverable for this cluster.
+#
+# Run via:
+#   ansible-playbook -i inventory/wsl.yml   playbooks/03-sops-keys.yml
+#   ansible-playbook -i inventory/ms-01.yml playbooks/03-sops-keys.yml
+
+- name: Provision SOPS age keys
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: false
+
+  vars:
+    cluster_target: "{{ talos_target | default('wsl') }}"
+    cluster_name: "homelab-{{ cluster_target }}"
+    age_key_dir: "{{ ansible_env.HOME }}/.config/sops/age"
+    age_key_file: "{{ age_key_dir }}/{{ cluster_name }}.txt"
+    kubeconfig_path: "{{ ansible_env.HOME }}/.kube/config-{{ cluster_name }}"
+
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+
+  tasks:
+    - name: Ensure age-keygen is available
+      ansible.builtin.command: age-keygen --version
+      register: age_check
+      changed_when: false
+      failed_when: age_check.rc != 0
+
+    - name: Ensure age key directory exists
+      ansible.builtin.file:
+        path: "{{ age_key_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Check if age key already exists
+      ansible.builtin.stat:
+        path: "{{ age_key_file }}"
+      register: age_key_stat
+
+    - name: Generate new age key for cluster
+      ansible.builtin.command: age-keygen -o {{ age_key_file }}
+      when: not age_key_stat.stat.exists
+
+    - name: Set strict perms on age key
+      ansible.builtin.file:
+        path: "{{ age_key_file }}"
+        mode: "0600"
+
+    - name: Read age public key
+      ansible.builtin.shell: |
+        grep '^# public key:' {{ age_key_file }} | awk '{print $4}'
+      register: age_pubkey
+      changed_when: false
+
+    - name: Ensure flux-system namespace exists
+      ansible.builtin.command: kubectl create namespace flux-system --dry-run=client -o yaml
+      register: ns_yaml
+      changed_when: false
+
+    - name: Apply flux-system namespace
+      ansible.builtin.shell: |
+        echo '{{ ns_yaml.stdout }}' | kubectl apply -f -
+      changed_when: true
+
+    - name: Create sops-age secret in flux-system
+      ansible.builtin.shell: |
+        kubectl create secret generic sops-age \
+          --namespace=flux-system \
+          --from-file=age.agekey={{ age_key_file }} \
+          --dry-run=client -o yaml | kubectl apply -f -
+      changed_when: true
+
+    - name: Print backup reminder
+      ansible.builtin.debug:
+        msg:
+          - "════════════════════════════════════════════════════════════"
+          - "Age public key for {{ cluster_name }}: {{ age_pubkey.stdout }}"
+          - "Private key file:   {{ age_key_file }}"
+          - ""
+          - "IMPORTANT: Back up {{ age_key_file }} to 1Password NOW."
+          - "If lost, encrypted secrets cannot be recovered."
+          - "════════════════════════════════════════════════════════════"
