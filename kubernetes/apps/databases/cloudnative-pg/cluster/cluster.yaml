@@ -29,3 +29,8 @@ spec:
     initdb:
       database: app
       owner: app
+      # Extra databases owned by `app`. cnpg's `postInitApplicationSQL`
+      # runs once on first cluster boot, creating any per-app databases
+      # we want to keep schema-isolated.
+      postInitApplicationSQL:
+        - CREATE DATABASE bitwarden OWNER app;

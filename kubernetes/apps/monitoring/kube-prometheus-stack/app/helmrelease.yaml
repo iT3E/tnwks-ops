@@ -221,24 +221,15 @@ spec:
         ruleSelectorNilUsesHelmValues: false
         scrapeInterval: 1m
         serviceMonitorSelectorNilUsesHelmValues: false
-        # fsGroupChangePolicy: Always — without this, kubelet's
-        # OnRootMismatch default doesn't recursively chown the local-path
-        # PVC dir on Talos, leading to "permission denied" on
-        # /prometheus/queries.active when the prometheus container
-        # (UID 1000:2000) tries to write.
-        securityContext:
-          fsGroup: 2000
-          runAsGroup: 2000
-          runAsNonRoot: true
-          runAsUser: 1000
-          fsGroupChangePolicy: Always
-        storageSpec:
-          volumeClaimTemplate:
-            spec:
-              storageClassName: "${STORAGE_CLASS_DEFAULT}"
-              resources:
-                requests:
-                  storage: 10Gi
+        # storageSpec: empty {} = emptyDir. On WSL kubelet doesn't honor
+        # fsGroupChangePolicy on local-path PVCs (the prometheus container
+        # uid:gid 1000:2000 hits `permission denied:
+        # /prometheus/queries.active` and crashloops). EmptyDir works.
+        # 2-day retention loses data on pod restart but for a dev cluster
+        # that's fine — and the thanos sidecar still ships history.
+        # MS-01 overlay should kustomize-patch this back to a real PVC
+        # against ceph-block when MS-01 is bootstrapped.
+        storageSpec: {}
         thanos:
           image: quay.io/thanos/thanos:v0.32.5@sha256:3e5c47dd3a0bfc6c595036c1c49c7ca95979a89c1fb93ee4cdee3bf5d296f944
           objectStorageConfig:
