@@ -1,0 +1,32 @@
+---
+# RGW object store — S3-compatible buckets for Loki, Thanos, CNPG backups.
+apiVersion: ceph.rook.io/v1
+kind: CephObjectStore
+metadata:
+  name: ceph-objectstore
+  namespace: rook-ceph
+spec:
+  metadataPool:
+    failureDomain: host
+    replicated:
+      size: 3
+      requireSafeReplicaSize: true
+  dataPool:
+    failureDomain: host
+    replicated:
+      size: 3
+      requireSafeReplicaSize: true
+  preservePoolsOnDelete: false
+  gateway:
+    port: 80
+    instances: 2
+    resources:
+      requests:
+        cpu: "1"
+        memory: "1Gi"
+      limits:
+        memory: "2Gi"
+  healthCheck:
+    bucket:
+      disabled: false
+      interval: 60s

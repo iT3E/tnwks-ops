@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- .gitkeep
+- gotk-components.yaml
+- gotk-sync.yaml
+# Add SOPS decryption to the bootstrap-generated flux-system Kustomization
+# so cluster-secrets.sops.yaml gets decrypted before being applied as a Secret
+# (otherwise the Secret keeps the ENC[...] strings and substituteFrom in
+# downstream Kustomizations templates the encrypted text into manifests).
+patches:
+- patch: |-
+    - op: add
+      path: /spec/decryption
+      value:
+        provider: sops
+        secretRef:
+          name: sops-age
+  target:
+    group: kustomize.toolkit.fluxcd.io
+    kind: Kustomization
+    name: flux-system

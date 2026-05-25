@@ -1,0 +1,60 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-settings
+  namespace: flux-system
+data:
+  # Identity
+  CLUSTER_NAME: "homelab-wsl"
+  CLUSTER_DOMAIN: "tnwks.local"
+  # Legacy alias used by existing manifests that reference ${SECRET_DOMAIN}.
+  # Overrides the value from cluster-secrets.sops.yaml on this cluster.
+  SECRET_DOMAIN: "tnwks.local"
+  # Internal LAN domain — same as CLUSTER_DOMAIN on the WSL cluster
+  INTERNAL_DOMAIN: "tnwks.local"
+
+  # Storage classes
+  STORAGE_CLASS_DEFAULT: "local-path"
+  STORAGE_CLASS_BULK: "local-path"
+
+  # Bulk PVC size — WSL uses smaller sizes (local-path is whatever the host has).
+  # local-path only supports ReadWriteOnce; on WSL we accept that limitation
+  # since the cluster is single-host (no RWX needed in practice).
+  BULK_PVC_SIZE: "10Gi"
+  BULK_PVC_ACCESS_MODE: "ReadWriteOnce"
+
+  # cnpg postgres cluster sizing — small on WSL (single-instance, modest disk).
+  CNPG_INSTANCES: "1"
+  CNPG_INSTANCE_SIZE: "5Gi"
+
+  # Load balancer / IP allocation
+  # MetalLB advertises VIPs from the homelab-wsl docker bridge subnet
+  # (10.5.0.0/24). Reachable from this WSL host directly; reachable from
+  # the Windows host or LAN only via netsh portproxy on Windows.
+  LB_RANGE: "10.5.0.200-10.5.0.220"
+  METALLB_LB_RANGE: "10.5.0.200-10.5.0.220"
+  METALLB_K8S_GATEWAY_ADDR: "10.5.0.201"
+  METALLB_INGRESS_ADDR: "10.5.0.202"
+  INGRESS_INTERNAL_ADDR: "10.5.0.200"
+  MQTT_LB_ADDR: "10.5.0.203"
+  KUBE_VIP_ADDR: "127.0.0.1"
+
+  # Cluster networking
+  CLUSTER_CIDR: "10.42.0.0/16"
+  SERVICE_CIDR: "10.43.0.0/16"
+
+  # CNI — WSL uses Flannel. The Cilium HelmRelease is filtered out of the
+  # WSL apps overlay (it can't run on Talos-in-Docker on WSL2 — Cilium issue
+  # #13768, CAP_SYS_MODULE rejected in nested containers).
+  CNI: "flannel"
+  FLANNEL_VERSION: "v0.28.4"
+
+  # ServiceMonitor / PodMonitor toggle. Set to "false" until
+  # kube-prometheus-stack has reconciled and installed the
+  # monitoring.coreos.com CRDs; flip to "true" thereafter so apps that
+  # ship ServiceMonitor resources can re-enable scraping.
+  SERVICE_MONITOR_ENABLED: "false"
+
+  # Misc
+  TIMEZONE: "America/Los_Angeles"

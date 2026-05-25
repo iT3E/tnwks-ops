@@ -24,7 +24,7 @@ terraform {
       name = "tnwks-ops-aws-init"
     }
   }
-  required_version = "~> 1.6.0"
+  required_version = "~> 1.15.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -32,7 +32,7 @@ terraform {
     }
     sops = {
       source  = "carlpett/sops"
-      version = "~> 1.0.0"
+      version = "~> 1.4.0"
     }
   }
 }

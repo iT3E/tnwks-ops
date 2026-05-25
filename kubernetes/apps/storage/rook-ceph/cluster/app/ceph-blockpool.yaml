@@ -1,0 +1,17 @@
+---
+# RBD block pool — 3-way replicated across MS-01 nodes.
+# Backs the ceph-block StorageClass for app workloads (RWO).
+apiVersion: ceph.rook.io/v1
+kind: CephBlockPool
+metadata:
+  name: replicapool
+  namespace: rook-ceph
+spec:
+  failureDomain: host
+  replicated:
+    size: 3
+    requireSafeReplicaSize: true
+  parameters:
+    compression_mode: none
+  mirroring:
+    enabled: false

@@ -1,0 +1,12 @@
+---
+# Aggregator for the user-managed files in this cluster's entry point.
+# Excludes ./flux-system/ — that directory is created and managed by
+# `flux bootstrap github --path=kubernetes/clusters/wsl`. After bootstrap,
+# add `- ../` to flux-system/kustomization.yaml so Flux pulls these in.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./cluster-settings.yaml
+  - ./cluster-secrets.sops.yaml
+  - ./meta.yaml
+  - ./apps.yaml

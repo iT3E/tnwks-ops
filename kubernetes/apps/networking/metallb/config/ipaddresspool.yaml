@@ -1,0 +1,11 @@
+---
+# IPAddressPool carved out of the docker bridge subnet.
+# Range comes from cluster-settings (METALLB_LB_RANGE).
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: default-pool
+  namespace: networking
+spec:
+  addresses:
+    - "${METALLB_LB_RANGE}"

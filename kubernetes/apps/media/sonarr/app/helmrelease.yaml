@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: sonarr
@@ -9,7 +9,7 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 2.0.3
+      version: 1.5.1
       interval: 30m
       sourceRef:
         kind: HelmRepository
@@ -39,7 +39,7 @@ spec:
     env:
       SONARR__INSTANCE_NAME: Sonarr
       SONARR__PORT: &port 8989
-      SONARR__APPLICATION_URL: "https://sonarr.tnwks.local"
+      SONARR__APPLICATION_URL: "https://sonarr.${INTERNAL_DOMAIN}"
       SONARR__LOG_LEVEL: info
       SONARR__API_KEY:
         valueFrom:
@@ -62,7 +62,7 @@ spec:
             proxy_set_header Accept-Encoding "";
             sub_filter_once on;
         hosts:
-          - host: &internalHost "sonarr.tnwks.local"
+          - host: &internalHost "sonarr.${INTERNAL_DOMAIN}"
             paths:
               - path: /
 
@@ -71,7 +71,7 @@ spec:
         enabled: true
         accessMode: ReadWriteOnce
         size: 1Gi
-        storageClass: ssd-pool
+        storageClass: ${STORAGE_CLASS_DEFAULT}
         retain: true
 
       media:

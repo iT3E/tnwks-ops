@@ -1,5 +1,5 @@
 ---
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: ingress-nginx-internal
@@ -9,7 +9,7 @@ spec:
   chart:
     spec:
       chart: ingress-nginx
-      version: 4.8.3
+      version: 4.15.1
       sourceRef:
         kind: HelmRepository
         name: ingress-nginx
@@ -25,9 +25,6 @@ spec:
       retries: 3
   uninstall:
     keepHistory: false
-  dependsOn:
-    - name: cloudflared
-      namespace: networking
   values:
     controller:
       replicaCount: 2
@@ -36,13 +33,21 @@ spec:
           value: "${TIMEZONE}"
       service:
         annotations:
-        loadBalancerIP: "10.10.120.52"
+        loadBalancerIP: "${INGRESS_INTERNAL_ADDR}"
         externalTrafficPolicy: Local
       publishService:
         enabled: true
+      # Without an explicit ingressClass + controllerValue, this controller
+      # uses the chart default (`nginx` / `k8s.io/ingress-nginx`) — the same
+      # values the public ingress-nginx uses — so both controllers watch all
+      # Ingresses regardless of class. Pin the internal controller to only
+      # the `nginx-internal` class so status fields (.status.loadBalancer.ingress)
+      # are populated correctly per ingress.
+      ingressClass: "nginx-internal"
       ingressClassResource:
         name: "nginx-internal"
         default: false
+        controllerValue: "k8s.io/ingress-nginx-internal"
       config:
         client-header-timeout: 120
         client-body-buffer-size: "100M"
@@ -54,9 +59,9 @@ spec:
         proxy-body-size: "100M"
         ssl-protocols: "TLSv1.3 TLSv1.2"
       metrics:
-        enabled: true
+        enabled: ${SERVICE_MONITOR_ENABLED}
         serviceMonitor:
-          enabled: true
+          enabled: ${SERVICE_MONITOR_ENABLED}
           namespace: networking
           namespaceSelector:
             any: true
