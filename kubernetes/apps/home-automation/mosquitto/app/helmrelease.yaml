@@ -59,6 +59,7 @@ spec:
     service:
       main:
         type: LoadBalancer
+        loadBalancerIP: "${MQTT_LB_ADDR}"
         ports:
           http:
             port: 1883
