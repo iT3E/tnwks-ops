@@ -256,6 +256,19 @@ spec:
         cookie_samesite: grafana
       server:
         root_url: https://grafana.${INTERNAL_DOMAIN}
+      auth.proxy:
+        enabled: true
+        header_name: X-Auth-Request-User
+        header_property: username
+        headers: "Email:X-Auth-Request-Email Groups:X-Auth-Request-Groups"
+        auto_sign_up: true
+        enable_login_token: true
+      auth:
+        # Keep local admin login as fallback while oauth2-proxy is being rolled out.
+        disable_login_form: false
+      users:
+        auto_assign_org: true
+        auto_assign_org_role: Admin
 
     imageRenderer:
       enabled: true
@@ -306,6 +319,9 @@ spec:
       ingressClassName: nginx-internal
       annotations:
         hajimari.io/icon: simple-icons:grafana
+        nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local:80/oauth2/auth"
+        nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${INTERNAL_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
+        nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User,X-Auth-Request-Groups,X-Auth-Request-Email"
       hosts:
         - &host "grafana.${INTERNAL_DOMAIN}"
       tls:
