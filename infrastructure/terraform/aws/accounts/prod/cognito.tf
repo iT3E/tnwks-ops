@@ -121,7 +121,7 @@ resource "terraform_data" "cognito_mfa" {
   }
 
   provisioner "local-exec" {
-    when = destroy
+    when    = destroy
     command = <<-EOT
       set -eu
       creds=$(aws sts assume-role \
@@ -163,6 +163,31 @@ resource "aws_cognito_user_group" "agents" {
   user_pool_id = aws_cognito_user_pool.tnwks_auth.id
   description  = "Machine-to-machine clients"
   precedence   = 20
+}
+
+## ---------------------------------------------------------------------------------------------------------------------
+## USERS
+## Human admin(s). Email is sourced from secrets.sops.yaml so the value
+## doesn't land in the public repo. Cognito sends an invitation email on
+## create (admin_create_user_config -> allow_admin_create_user_only = true).
+## ---------------------------------------------------------------------------------------------------------------------
+
+resource "aws_cognito_user" "admin" {
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+  username     = data.sops_file.secrets.data["admin_email"]
+
+  attributes = {
+    email          = data.sops_file.secrets.data["admin_email"]
+    email_verified = true
+  }
+
+  desired_delivery_mediums = ["EMAIL"]
+}
+
+resource "aws_cognito_user_in_group" "admin_in_admins" {
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+  group_name   = aws_cognito_user_group.admins.name
+  username     = aws_cognito_user.admin.username
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
