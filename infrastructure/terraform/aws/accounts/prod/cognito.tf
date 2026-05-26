@@ -95,7 +95,7 @@ resource "terraform_data" "cognito_mfa" {
   provisioner "local-exec" {
     when    = create
     command = <<-EOT
-      set -euo pipefail
+      set -eu
       aws cognito-idp set-user-pool-mfa-config \
         --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
         --mfa-configuration ON \
