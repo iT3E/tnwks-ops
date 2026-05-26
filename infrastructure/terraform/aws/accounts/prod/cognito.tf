@@ -82,12 +82,13 @@ locals {
   cognito_mfa = {
     relying_party_id  = "internal.tnwks.us"
     user_verification = "required"
-    # SINGLE_FACTOR makes WebAuthn a first-auth factor (passwordless, one-step
-    # biometric). The PASSWORD path in sign_in_policy still requires TOTP MFA
-    # via this pool's mfa_configuration=ON + software_token_mfa.
-    # (The other valid value is MULTI_FACTOR_WITH_USER_VERIFICATION, which
-    # makes WebAuthn act as a second factor instead.)
-    factor_configuration = "SINGLE_FACTOR"
+    # Cognito only accepts MULTI_FACTOR_WITH_USER_VERIFICATION or SINGLE_FACTOR
+    # here, and SINGLE_FACTOR is rejected with InvalidParameterException when
+    # mfa_configuration=ON AND WebAuthn is in allowed_first_auth_factors —
+    # AWS won't let one path be passwordless while another path is MFA-required
+    # on the same pool. Since we want password-path TOTP enforcement, WebAuthn
+    # has to act as a second factor here (biometric MFA after password).
+    factor_configuration = "MULTI_FACTOR_WITH_USER_VERIFICATION"
   }
 
   # Same role the AWS provider assumes in main.tf — TFC dynamic credentials
