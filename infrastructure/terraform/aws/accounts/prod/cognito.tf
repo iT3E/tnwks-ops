@@ -80,9 +80,12 @@ resource "aws_cognito_user_pool" "tnwks_auth" {
 
 locals {
   cognito_mfa = {
-    relying_party_id     = "internal.tnwks.us"
-    user_verification    = "required"
-    factor_configuration = "MULTI_FACTOR_WITH_USER_VERIFICATION"
+    relying_party_id  = "internal.tnwks.us"
+    user_verification = "required"
+    # ONLY_USER_VERIFICATION makes WebAuthn a first-auth factor (passwordless,
+    # one-step biometric). The PASSWORD path in sign_in_policy still requires
+    # TOTP MFA via this pool's mfa_configuration=ON + software_token_mfa.
+    factor_configuration = "ONLY_USER_VERIFICATION"
   }
 
   # Same role the AWS provider assumes in main.tf — TFC dynamic credentials
