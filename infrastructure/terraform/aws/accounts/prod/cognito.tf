@@ -20,12 +20,16 @@ resource "aws_cognito_user_pool" "tnwks_auth" {
     temporary_password_validity_days = 7
   }
 
-  # MFA + WebAuthn + sign-in policy are configured out-of-band — see COGNITO.md.
-  # The provider's web_authn_configuration block is missing the FactorConfiguration
-  # field (hashicorp/terraform-provider-aws#47598), so AWS rejects every apply that
-  # tries to enable MFA with WebAuthn as a first-factor. Once that lands, fold these
-  # back into the resource and drop the lifecycle ignores below.
+  # MFA + WebAuthn are configured by the terraform_data.cognito_mfa resource
+  # via SetUserPoolMfaConfig — the provider's web_authn_configuration block
+  # is missing the FactorConfiguration field
+  # (hashicorp/terraform-provider-aws#47598), so a native MFA apply is rejected
+  # by AWS. sign_in_policy stays here because the provider handles it safely.
   mfa_configuration = "OFF"
+
+  sign_in_policy {
+    allowed_first_auth_factors = ["PASSWORD", "WEB_AUTHN"]
+  }
 
   account_recovery_setting {
     recovery_mechanism {
@@ -58,8 +62,51 @@ resource "aws_cognito_user_pool" "tnwks_auth" {
       mfa_configuration,
       software_token_mfa_configuration,
       web_authn_configuration,
-      sign_in_policy,
     ]
+  }
+}
+
+## ---------------------------------------------------------------------------------------------------------------------
+## MFA CONFIGURATION
+## Workaround for hashicorp/terraform-provider-aws#47598 (provider's
+## web_authn_configuration block is missing the FactorConfiguration field).
+## Calls SetUserPoolMfaConfig via the AWS CLI on every change; that API only
+## mutates MFA-related fields, so it's safe to use without a read-modify-write.
+## On destroy, reverts MFA to OFF so deletion isn't blocked.
+##
+## TFC dynamic credentials inject AWS_ACCESS_KEY_ID/SECRET/SESSION_TOKEN into
+## the run env (TFC_AWS_PROVIDER_AUTH=true), which local-exec inherits.
+## ---------------------------------------------------------------------------------------------------------------------
+
+locals {
+  cognito_mfa = {
+    relying_party_id     = "internal.tnwks.us"
+    user_verification    = "required"
+    factor_configuration = "MULTI_FACTOR_WITH_USER_VERIFICATION"
+  }
+}
+
+resource "terraform_data" "cognito_mfa" {
+  triggers_replace = [
+    aws_cognito_user_pool.tnwks_auth.id,
+    local.cognito_mfa,
+  ]
+
+  provisioner "local-exec" {
+    when    = create
+    command = <<-EOT
+      set -euo pipefail
+      aws cognito-idp set-user-pool-mfa-config \
+        --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
+        --mfa-configuration ON \
+        --software-token-mfa-configuration Enabled=true \
+        --web-authn-configuration RelyingPartyId=${local.cognito_mfa.relying_party_id},UserVerification=${local.cognito_mfa.user_verification},FactorConfiguration=${local.cognito_mfa.factor_configuration}
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = "aws cognito-idp set-user-pool-mfa-config --user-pool-id ${self.triggers_replace[0]} --mfa-configuration OFF"
   }
 }
 

@@ -18,8 +18,8 @@ pool that backs authentication for `*.internal.tnwks.us` services
     `tnwks-api/write`, with secret
 - **Hosted UI domain:** prefix `tnwks-auth.auth.us-west-2.amazoncognito.com`
 - **MFA:** required, TOTP + WebAuthn passkeys; passwordless first-factor
-  login allowed *(configured out-of-band — see [Enable MFA](#enable-mfa-one-time)
-  below)*
+  login allowed *(applied via [terraform_data + AWS CLI](#mfa-configuration)
+  due to a provider gap)*
 - **Password policy:** 12+ chars, mixed case, numbers, symbols
 - **Token lifetimes:** access 24h, id 24h, refresh 30d
 - **Sign-up:** disabled (admin-create only)
@@ -38,38 +38,22 @@ pool that backs authentication for `*.internal.tnwks.us` services
 | `cognito_agent_client_secret`         | sensitive  |
 | `cognito_hosted_ui_domain`            |            |
 
-## Enable MFA (one-time)
+## MFA configuration
 
-Terraform creates the pool with `mfa_configuration = "OFF"` because the AWS
-provider's `web_authn_configuration` block is missing the `FactorConfiguration`
-field that AWS requires when WebAuthn is an allowed first-auth-factor — tracked
-in [hashicorp/terraform-provider-aws#47598](https://github.com/hashicorp/terraform-provider-aws/issues/47598).
-Run this once after the first apply:
+MFA + WebAuthn passkeys are enabled by `terraform_data.cognito_mfa` in
+`cognito.tf`, which calls `aws cognito-idp set-user-pool-mfa-config` via a
+local-exec provisioner. The CLI shell-out exists because the AWS provider's
+`web_authn_configuration` block is missing the `FactorConfiguration`
+argument that AWS requires when WebAuthn is a first-auth-factor — see
+[hashicorp/terraform-provider-aws#47598](https://github.com/hashicorp/terraform-provider-aws/issues/47598).
 
-```bash
-POOL_ID="$(terraform output -raw cognito_user_pool_id)"
+To change MFA settings (relying party ID, user verification, factor
+configuration), edit the `local.cognito_mfa` map in `cognito.tf` and apply.
+The trigger hash will fire the provisioner again.
 
-aws cognito-idp set-user-pool-mfa-config \
-  --user-pool-id "$POOL_ID" \
-  --mfa-configuration ON \
-  --software-token-mfa-configuration Enabled=true \
-  --web-authn-configuration RelyingPartyId=internal.tnwks.us,UserVerification=required
-
-aws cognito-idp update-user-pool \
-  --user-pool-id "$POOL_ID" \
-  --policies '{
-    "SignInPolicy": {
-      "AllowedFirstAuthFactors": ["PASSWORD", "WEB_AUTHN"]
-    }
-  }'
-```
-
-The pool resource has `lifecycle.ignore_changes` on `mfa_configuration`,
-`software_token_mfa_configuration`, `web_authn_configuration`, and
-`sign_in_policy` so subsequent Terraform plans won't try to revert this.
-
-When the upstream provider gains `factor_configuration` support, fold these
-back into `cognito.tf` and drop the lifecycle ignores.
+When the upstream provider gains `factor_configuration` support, fold the
+fields back into `aws_cognito_user_pool` and drop both the
+`terraform_data.cognito_mfa` resource and the lifecycle ignores.
 
 ## Adding a user
 
