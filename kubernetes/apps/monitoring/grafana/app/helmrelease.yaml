@@ -322,6 +322,10 @@ spec:
         nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local:80/oauth2/auth"
         nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${INTERNAL_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
         nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User,X-Auth-Request-Groups,X-Auth-Request-Email"
+        # Cognito-backed sessions are split across multiple cookies; the
+        # subrequest header chunk overflows nginx's default 4k buffer.
+        nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+        nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
       hosts:
         - &host "grafana.${INTERNAL_DOMAIN}"
       tls:

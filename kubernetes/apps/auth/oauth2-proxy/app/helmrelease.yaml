@@ -38,11 +38,18 @@ spec:
         upstreams = ["static://200"]
         email_domains = ["*"]
         scope = "openid email profile"
-        pass_access_token = true
-        pass_authorization_header = true
+        # Keep the cookie under nginx's default 4kB buffer. Cognito's id_token
+        # alone is ~1.5kB; storing access + id + refresh blows past the limit
+        # and forces oauth2-proxy to split the cookie, which the auth-subrequest
+        # path can't reassemble before its buffer fills (502 at /oauth2/auth).
+        # Grafana only consumes user-headers, so we skip the bearer bits.
+        pass_access_token = false
+        pass_authorization_header = false
         pass_user_headers = true
         set_xauthrequest = true
-        set_authorization_header = true
+        set_authorization_header = false
+        skip_jwt_bearer_tokens = false
+        session_store_type = "cookie"
         reverse_proxy = true
         whitelist_domains = [".${INTERNAL_DOMAIN}"]
         cookie_domains = [".${INTERNAL_DOMAIN}"]
@@ -56,6 +63,13 @@ spec:
     ingress:
       enabled: true
       className: nginx-internal
+      annotations:
+        # Cognito JWTs are large; oauth2-proxy splits the session cookie
+        # into _oauth2_proxy_{0,1,...} chunks. The combined Set-Cookie
+        # headers on /oauth2/callback overflow nginx's default 4k proxy
+        # buffer and surface as 502 to the browser. Bump both.
+        nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+        nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
       hosts:
         - oauth2.${INTERNAL_DOMAIN}
       tls:
