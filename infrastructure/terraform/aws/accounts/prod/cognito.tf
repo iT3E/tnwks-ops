@@ -418,8 +418,15 @@ resource "aws_cognito_user_pool_client" "onboard" {
 
   generate_secret = false
 
-  callback_urls = ["https://onboard.tnwks.us/callback"]
-  logout_urls   = ["https://onboard.tnwks.us/"]
+  # Second callback_url is the post-enrollment landing for the
+  # /passkeys/add managed-login flow. Same pattern as the oauth2-proxy
+  # client — /passkeys/add validates the redirect_uri param against
+  # callback_urls and otherwise responds with "Invalid request".
+  callback_urls = [
+    "https://onboard.tnwks.us/callback",
+    "https://onboard.tnwks.us/done",
+  ]
+  logout_urls = ["https://onboard.tnwks.us/"]
 
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_flows_user_pool_client = true
