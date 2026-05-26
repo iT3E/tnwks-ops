@@ -278,6 +278,86 @@ resource "aws_cognito_user_pool_client" "oauth2_proxy" {
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
+## MANAGED LOGIN BRANDING - oauth2-proxy
+## Opts the oauth2-proxy app client into the Managed Login experience (vs the
+## classic Hosted UI). Managed Login prompts users to enroll a passkey after a
+## successful password sign-in, so subsequent logins on new devices complete
+## with WebAuthn alone.
+##
+## aws_cognito_managed_login_branding is only available in provider 6.12.0+
+## (we're on ~> 5.0), so we drive it via the AWS CLI on every change — same
+## pattern as terraform_data.cognito_mfa above. UseCognitoProvidedValues=true
+## keeps the default look; no assets or settings to manage in TF.
+## ---------------------------------------------------------------------------------------------------------------------
+
+resource "terraform_data" "oauth2_proxy_managed_login" {
+  triggers_replace = [
+    aws_cognito_user_pool.tnwks_auth.id,
+    aws_cognito_user_pool_client.oauth2_proxy.id,
+    data.aws_region.current.name,
+    local.cognito_mfa_role_arn,
+  ]
+
+  provisioner "local-exec" {
+    when    = create
+    command = <<-EOT
+      set -eu
+      creds=$(aws sts assume-role \
+        --role-arn ${local.cognito_mfa_role_arn} \
+        --role-session-name tfc-managed-login \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
+      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
+      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
+      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
+      # CreateManagedLoginBranding errors with ManagedLoginBrandingExistsException
+      # if a branding already exists for the client; check first so re-applies
+      # are idempotent.
+      existing=$(aws cognito-idp describe-managed-login-branding-by-client \
+        --region ${data.aws_region.current.name} \
+        --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
+        --client-id ${aws_cognito_user_pool_client.oauth2_proxy.id} \
+        --query 'ManagedLoginBranding.ManagedLoginBrandingId' \
+        --output text 2>/dev/null) || existing=""
+      if [ -z "$existing" ] || [ "$existing" = "None" ]; then
+        aws cognito-idp create-managed-login-branding \
+          --region ${data.aws_region.current.name} \
+          --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
+          --client-id ${aws_cognito_user_pool_client.oauth2_proxy.id} \
+          --use-cognito-provided-values
+      fi
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      set -eu
+      creds=$(aws sts assume-role \
+        --role-arn ${self.triggers_replace[3]} \
+        --role-session-name tfc-managed-login \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
+      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
+      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
+      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
+      branding_id=$(aws cognito-idp describe-managed-login-branding-by-client \
+        --region ${self.triggers_replace[2]} \
+        --user-pool-id ${self.triggers_replace[0]} \
+        --client-id ${self.triggers_replace[1]} \
+        --query 'ManagedLoginBranding.ManagedLoginBrandingId' \
+        --output text 2>/dev/null) || branding_id=""
+      if [ -n "$branding_id" ] && [ "$branding_id" != "None" ]; then
+        aws cognito-idp delete-managed-login-branding \
+          --region ${self.triggers_replace[2]} \
+          --user-pool-id ${self.triggers_replace[0]} \
+          --managed-login-branding-id "$branding_id"
+      fi
+    EOT
+  }
+}
+
+## ---------------------------------------------------------------------------------------------------------------------
 ## APP CLIENT - agent-ori
 ## ---------------------------------------------------------------------------------------------------------------------
 
