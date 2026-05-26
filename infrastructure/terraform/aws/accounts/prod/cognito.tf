@@ -416,6 +416,12 @@ resource "aws_cognito_user_pool_client" "agent_ori" {
 resource "aws_cognito_user_pool_domain" "tnwks_auth" {
   domain       = "tnwks-auth"
   user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+
+  # version 2 = Managed Login (newer hosted UI, supports passkey enrollment
+  # at /passkeys/add). version 1 = classic Hosted UI which doesn't have
+  # the passkey endpoints — /passkeys/add returns "URL doesn't exist on the
+  # authorization server" without this.
+  managed_login_version = 2
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
