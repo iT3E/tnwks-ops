@@ -45,6 +45,7 @@ terraform {
 ## ---------------------------------------------------------------------------------------------------------------------
 
 data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 data "sops_file" "secrets" {
   source_file = "secrets.sops.yaml"
 }
