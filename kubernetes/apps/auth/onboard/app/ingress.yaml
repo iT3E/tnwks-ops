@@ -8,7 +8,7 @@ metadata:
     # Public site — onboard.tnwks.us is intentionally reachable without
     # authentication so invitees can land here. Cognito enforces who can
     # actually sign in. No oauth2-proxy auth-subrequest annotations.
-    external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
+    external-dns.alpha.kubernetes.io/target: "ingress.tnwks.us"
 spec:
   ingressClassName: nginx
   tls:
