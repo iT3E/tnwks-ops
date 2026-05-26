@@ -258,8 +258,11 @@ spec:
         root_url: https://grafana.${INTERNAL_DOMAIN}
       auth.proxy:
         enabled: true
-        header_name: X-Auth-Request-User
-        header_property: username
+        # X-Auth-Request-User from oauth2-proxy is the Cognito `sub` (a GUID).
+        # Use the email header as the Grafana login instead so accounts have a
+        # human-readable handle.
+        header_name: X-Auth-Request-Email
+        header_property: email
         headers: "Email:X-Auth-Request-Email Groups:X-Auth-Request-Groups"
         auto_sign_up: true
         enable_login_token: true
