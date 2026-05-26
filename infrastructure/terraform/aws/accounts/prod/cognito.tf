@@ -409,6 +409,41 @@ resource "aws_cognito_user_pool_client" "agent_ori" {
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
+## ACM CERT (us-east-1) for custom Cognito hosted-UI domain
+## auth.tnwks.us — Cognito custom domains require the cert to live in us-east-1
+## regardless of the user pool's region. Validation goes through Cloudflare DNS;
+## the validation CNAMEs are exposed via outputs and added in the cloudflare TF
+## workspace in a follow-up PR. Once validated, a separate PR replaces the
+## prefix-domain aws_cognito_user_pool_domain with the custom-domain version.
+## ---------------------------------------------------------------------------------------------------------------------
+
+resource "aws_acm_certificate" "auth_tnwks_us" {
+  provider          = aws.us_east_1
+  domain_name       = "auth.tnwks.us"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+output "auth_acm_certificate_arn" {
+  description = "ARN of the us-east-1 ACM cert for auth.tnwks.us. Consumed by aws_cognito_user_pool_domain in a follow-up apply."
+  value       = aws_acm_certificate.auth_tnwks_us.arn
+}
+
+output "auth_acm_validation_records" {
+  description = "DNS validation CNAMEs to add in the cloudflare workspace so ACM can issue the cert."
+  value = [
+    for o in aws_acm_certificate.auth_tnwks_us.domain_validation_options : {
+      name  = o.resource_record_name
+      type  = o.resource_record_type
+      value = o.resource_record_value
+    }
+  ]
+}
+
+## ---------------------------------------------------------------------------------------------------------------------
 ## HOSTED UI DOMAIN (prefix)
 ## tnwks-auth.auth.us-east-1.amazoncognito.com
 ## ---------------------------------------------------------------------------------------------------------------------
