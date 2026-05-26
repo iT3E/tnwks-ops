@@ -20,23 +20,12 @@ resource "aws_cognito_user_pool" "tnwks_auth" {
     temporary_password_validity_days = 7
   }
 
-  mfa_configuration = "ON"
-
-  software_token_mfa_configuration {
-    enabled = true
-  }
-
-  # user_verification must be "required" when MFA is on AND WebAuthn is an
-  # allowed first-auth-factor — otherwise a passkey wouldn't count as MFA.
-  web_authn_configuration {
-    relying_party_id  = "internal.tnwks.us"
-    user_verification = "required"
-  }
-
-  # Allow passkey-only first-factor login in addition to password.
-  sign_in_policy {
-    allowed_first_auth_factors = ["PASSWORD", "WEB_AUTHN"]
-  }
+  # MFA + WebAuthn + sign-in policy are configured out-of-band — see COGNITO.md.
+  # The provider's web_authn_configuration block is missing the FactorConfiguration
+  # field (hashicorp/terraform-provider-aws#47598), so AWS rejects every apply that
+  # tries to enable MFA with WebAuthn as a first-factor. Once that lands, fold these
+  # back into the resource and drop the lifecycle ignores below.
+  mfa_configuration = "OFF"
 
   account_recovery_setting {
     recovery_mechanism {
@@ -63,6 +52,15 @@ resource "aws_cognito_user_pool" "tnwks_auth" {
   }
 
   deletion_protection = "ACTIVE"
+
+  lifecycle {
+    ignore_changes = [
+      mfa_configuration,
+      software_token_mfa_configuration,
+      web_authn_configuration,
+      sign_in_policy,
+    ]
+  }
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------

@@ -16,9 +16,10 @@ pool that backs authentication for `*.internal.tnwks.us` services
     `openid email profile`, with secret
   - `agent-ori` — client_credentials, scopes `tnwks-api/read`,
     `tnwks-api/write`, with secret
-- **Hosted UI domain:** prefix `tnwks-auth.auth.us-east-1.amazoncognito.com`
+- **Hosted UI domain:** prefix `tnwks-auth.auth.us-west-2.amazoncognito.com`
 - **MFA:** required, TOTP + WebAuthn passkeys; passwordless first-factor
-  login allowed
+  login allowed *(configured out-of-band — see [Enable MFA](#enable-mfa-one-time)
+  below)*
 - **Password policy:** 12+ chars, mixed case, numbers, symbols
 - **Token lifetimes:** access 24h, id 24h, refresh 30d
 - **Sign-up:** disabled (admin-create only)
@@ -36,6 +37,39 @@ pool that backs authentication for `*.internal.tnwks.us` services
 | `cognito_agent_client_id`             |            |
 | `cognito_agent_client_secret`         | sensitive  |
 | `cognito_hosted_ui_domain`            |            |
+
+## Enable MFA (one-time)
+
+Terraform creates the pool with `mfa_configuration = "OFF"` because the AWS
+provider's `web_authn_configuration` block is missing the `FactorConfiguration`
+field that AWS requires when WebAuthn is an allowed first-auth-factor — tracked
+in [hashicorp/terraform-provider-aws#47598](https://github.com/hashicorp/terraform-provider-aws/issues/47598).
+Run this once after the first apply:
+
+```bash
+POOL_ID="$(terraform output -raw cognito_user_pool_id)"
+
+aws cognito-idp set-user-pool-mfa-config \
+  --user-pool-id "$POOL_ID" \
+  --mfa-configuration ON \
+  --software-token-mfa-configuration Enabled=true \
+  --web-authn-configuration RelyingPartyId=internal.tnwks.us,UserVerification=required
+
+aws cognito-idp update-user-pool \
+  --user-pool-id "$POOL_ID" \
+  --policies '{
+    "SignInPolicy": {
+      "AllowedFirstAuthFactors": ["PASSWORD", "WEB_AUTHN"]
+    }
+  }'
+```
+
+The pool resource has `lifecycle.ignore_changes` on `mfa_configuration`,
+`software_token_mfa_configuration`, `web_authn_configuration`, and
+`sign_in_policy` so subsequent Terraform plans won't try to revert this.
+
+When the upstream provider gains `factor_configuration` support, fold these
+back into `cognito.tf` and drop the lifecycle ignores.
 
 ## Adding a user
 
