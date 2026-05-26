@@ -44,6 +44,36 @@ resource "aws_cognito_user_pool" "tnwks_auth" {
 
   admin_create_user_config {
     allow_admin_create_user_only = true
+
+    # AWS requires {username} and {####} placeholders in email_message AND
+    # sms_message; without both the apply is rejected. {####} is replaced
+    # with the temp password, {username} with the Cognito username (== email).
+    # We never deliver via SMS (desired_delivery_mediums = ["EMAIL"]) but the
+    # API requires sms_message anyway.
+    #
+    # The passkey link deliberately doesn't pass client_id/redirect_uri:
+    # embedding aws_cognito_user_pool_client.oauth2_proxy.id here would create
+    # a pool↔client dependency cycle. The bare /passkeys/add URL works fine —
+    # Cognito just doesn't auto-redirect after enrollment.
+    invite_message_template {
+      email_subject = "Welcome to tnwks — finish setting up your account"
+      sms_message   = "Your tnwks username is {username} and temporary password is {####}"
+      email_message = <<-EOT
+        <p>Hi,</p>
+        <p>You've been invited to tnwks internal services. Onboarding is two steps:</p>
+        <p><strong>Step 1 — Sign in.</strong><br/>
+        Visit <a href="https://grafana.internal.tnwks.us/">https://grafana.internal.tnwks.us/</a> and sign in with:</p>
+        <ul>
+          <li>Username: <code>{username}</code></li>
+          <li>Temporary password: <code>{####}</code></li>
+        </ul>
+        <p>You'll be prompted to set a permanent password on first sign-in.</p>
+        <p><strong>Step 2 — Add a passkey (recommended).</strong><br/>
+        After you finish step 1, in the <em>same browser session</em>, open this link to register a passkey (Touch ID, Windows Hello, or a hardware key):</p>
+        <p><a href="https://auth.tnwks.us/passkeys/add">Register a passkey</a></p>
+        <p>Once registered, future sign-ins use your fingerprint, face, or key — you won't need to type the password again.</p>
+      EOT
+    }
   }
 
   schema {
