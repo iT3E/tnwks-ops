@@ -28,11 +28,33 @@ spec:
     helperImage:
       repository: public.ecr.aws/docker/library/busybox
       tag: latest
-    storageClass:
-      defaultClass: true
-    nodePathMap:
-      - node: DEFAULT_PATH_FOR_NON_LISTED_NODES
-        paths: ["/var/lib/rancher/k3s/storage"]
+    # Two StorageClasses on this cluster:
+    #   local-path       — default, on the Talos node container's overlay (C:)
+    #   local-path-bulk  — pinned to homelab-wsl-worker-2 with a bind-mount of
+    #                      Windows E: at /mnt/e for bulk video / archive PVCs.
+    # The chart treats `storageClassConfigs` as exclusive with the top-level
+    # `storageClass` block — only entries in the map are created.
+    storageClassConfigs:
+      local-path:
+        storageClass:
+          create: true
+          defaultClass: true
+          defaultVolumeType: hostPath
+          reclaimPolicy: Delete
+          volumeBindingMode: WaitForFirstConsumer
+        nodePathMap:
+          - node: DEFAULT_PATH_FOR_NON_LISTED_NODES
+            paths: ["/var/lib/rancher/k3s/storage"]
+      local-path-bulk:
+        storageClass:
+          create: true
+          defaultClass: false
+          defaultVolumeType: hostPath
+          reclaimPolicy: Delete
+          volumeBindingMode: WaitForFirstConsumer
+        nodePathMap:
+          - node: homelab-wsl-worker-2
+            paths: ["/mnt/e/k8s-storage"]
     # NOTE: Do not enable Flux variable substitution on this HelmRelease
     configmap:
       setup: |-

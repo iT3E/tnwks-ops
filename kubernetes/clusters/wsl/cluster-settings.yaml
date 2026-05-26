@@ -15,6 +15,13 @@ data:
   INTERNAL_DOMAIN: "tnwks.local"
 
   # Storage classes
+  #   local-path       — default, on the Talos node container's overlay (C:)
+  #   local-path-bulk  — pinned to homelab-wsl-worker-2, backed by Windows E:
+  #                      via a /mnt/e bind-mount. Used directly by apps that
+  #                      need real disk (e.g. frigate recordings); not yet
+  #                      wired into STORAGE_CLASS_BULK because flipping that
+  #                      variable would invalidate existing qbit/jellyfin
+  #                      PVCs (storageClassName is immutable).
   STORAGE_CLASS_DEFAULT: "local-path"
   STORAGE_CLASS_BULK: "local-path"
 
