@@ -32,10 +32,13 @@ resource "cloudflare_zone_settings_override" "cloudflare_settings" {
     security_level = "medium"
     # /speed/optimization
     brotli = "on"
+    # Cloudflare deprecated Auto Minify in Aug 2024; the API still reports the
+    # field but Cloudflare flipped it off out-of-band. Match reality so plans
+    # don't keep trying to push it back on.
     minify {
-      css  = "on"
-      js   = "on"
-      html = "on"
+      css  = "off"
+      js   = "off"
+      html = "off"
     }
     rocket_loader = "on"
     # /caching/configuration
