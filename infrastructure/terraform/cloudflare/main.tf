@@ -103,6 +103,26 @@ module "cf_domain_1" {
       value   = "63kkuuq7bcccxechn2ogtp7ts7beltmy.dkim.amazonses.com"
       type    = "CNAME"
     },
+    # Apex placeholder A record. Cognito custom-domain creation refuses to
+    # proceed when the parent zone has no A record at the apex; a documentation
+    # IP (RFC 5737) satisfies the check without conflicting with anything.
+    {
+      id      = "apex_placeholder"
+      name    = data.sops_file.secrets.data["cf_domain_1"]
+      value   = "192.0.2.1"
+      type    = "A"
+      proxied = false
+    },
+    # ACM DNS validation for the auth.tnwks.us cert (us-east-1) backing the
+    # Cognito custom domain. Validation values were emitted by the prod AWS
+    # workspace as auth_acm_validation_records.
+    {
+      id      = "acm_auth_tnwks_validation"
+      name    = "_5e54535c3306e92b67d89fc23dc5cc03.auth.tnwks.us"
+      value   = "_1437828207dd71206b7612bed3acfdaf.jkddzztszm.acm-validations.aws"
+      type    = "CNAME"
+      proxied = false
+    },
   ]
 
   waf_custom_rules = [
