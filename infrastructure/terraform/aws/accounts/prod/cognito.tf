@@ -257,8 +257,13 @@ resource "aws_cognito_user_pool_client" "oauth2_proxy" {
 
   generate_secret = true
 
-  callback_urls = ["https://oauth2.internal.tnwks.us/oauth2/callback"]
-  logout_urls   = ["https://oauth2.internal.tnwks.us/oauth2/sign_out"]
+  # Second callback_url is the post-enrollment landing for the
+  # /passkeys/add managed-login flow.
+  callback_urls = [
+    "https://oauth2.internal.tnwks.us/oauth2/callback",
+    "https://grafana.internal.tnwks.us/",
+  ]
+  logout_urls = ["https://oauth2.internal.tnwks.us/oauth2/sign_out"]
 
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_flows_user_pool_client = true
@@ -266,7 +271,11 @@ resource "aws_cognito_user_pool_client" "oauth2_proxy" {
 
   supported_identity_providers = ["COGNITO"]
 
+  # ALLOW_USER_AUTH enables choice-based auth, which is the only flow that
+  # supports passkeys per AWS docs. ALLOW_USER_SRP_AUTH stays as the OIDC
+  # path oauth2-proxy uses today.
   explicit_auth_flows = [
+    "ALLOW_USER_AUTH",
     "ALLOW_USER_SRP_AUTH",
     "ALLOW_REFRESH_TOKEN_AUTH",
   ]
