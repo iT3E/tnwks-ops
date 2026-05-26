@@ -168,13 +168,30 @@ resource "aws_cognito_user_group" "agents" {
 ## ---------------------------------------------------------------------------------------------------------------------
 ## USERS
 ## Human admin(s). Email is sourced from secrets.sops.yaml so the value
-## doesn't land in the public repo. Cognito sends an invitation email on
-## create (admin_create_user_config -> allow_admin_create_user_only = true).
+## doesn't land in the public repo.
+##
+## Pool's sign_in_policy enables PASSWORD as a first-auth factor, so
+## AdminCreateUser requires a TemporaryPassword (AWS won't generate one
+## itself). We hand in a random_password — the user changes it on first
+## login. The temp password is in TF state only; not output.
 ## ---------------------------------------------------------------------------------------------------------------------
 
+resource "random_password" "admin_temp" {
+  length           = 24
+  special          = true
+  override_special = "!@#$%^&*()-_=+"
+
+  # Rotate the temp password whenever the username changes (e.g. a new
+  # admin), but keep it stable otherwise so re-applies don't flap.
+  keepers = {
+    username = data.sops_file.secrets.data["admin_email"]
+  }
+}
+
 resource "aws_cognito_user" "admin" {
-  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
-  username     = data.sops_file.secrets.data["admin_email"]
+  user_pool_id       = aws_cognito_user_pool.tnwks_auth.id
+  username           = data.sops_file.secrets.data["admin_email"]
+  temporary_password = random_password.admin_temp.result
 
   attributes = {
     email          = data.sops_file.secrets.data["admin_email"]
@@ -182,6 +199,12 @@ resource "aws_cognito_user" "admin" {
   }
 
   desired_delivery_mediums = ["EMAIL"]
+
+  # On re-applies the user has already rotated this password; don't
+  # try to reset it back to the temp value.
+  lifecycle {
+    ignore_changes = [temporary_password]
+  }
 }
 
 resource "aws_cognito_user_in_group" "admin_in_admins" {
