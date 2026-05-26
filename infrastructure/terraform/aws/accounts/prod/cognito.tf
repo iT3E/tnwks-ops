@@ -84,7 +84,11 @@ resource "aws_cognito_user_pool" "tnwks_auth" {
 
 locals {
   cognito_mfa = {
-    relying_party_id  = "internal.tnwks.us"
+    # tnwks.us (parent zone) so a credential registered through the auth.tnwks.us
+    # custom domain works for both internal.tnwks.us subdomains and any future
+    # public services on tnwks.us. WebAuthn requires the page origin to equal
+    # the RPID or be a subdomain of it.
+    relying_party_id  = "tnwks.us"
     user_verification = "required"
     # MULTI_FACTOR_WITH_USER_VERIFICATION: passkey acts as MFA (second factor
     # after password). The other valid value is SINGLE_FACTOR (passwordless),
@@ -444,19 +448,42 @@ output "auth_acm_validation_records" {
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
-## HOSTED UI DOMAIN (prefix)
-## tnwks-auth.auth.us-east-1.amazoncognito.com
+## ACM CERT VALIDATION
+## Gates the custom-domain user pool domain on ACM cert issuance. The
+## validation CNAME lives in the cloudflare workspace; this resource just
+## blocks until ACM polls it and flips the cert to ISSUED.
+## ---------------------------------------------------------------------------------------------------------------------
+
+resource "aws_acm_certificate_validation" "auth_tnwks_us" {
+  provider                = aws.us_east_1
+  certificate_arn         = aws_acm_certificate.auth_tnwks_us.arn
+  validation_record_fqdns = [for o in aws_acm_certificate.auth_tnwks_us.domain_validation_options : o.resource_record_name]
+}
+
+## ---------------------------------------------------------------------------------------------------------------------
+## HOSTED UI DOMAIN (custom)
+## auth.tnwks.us — Managed Login on a domain we control so WebAuthn RPID
+## can be tnwks.us (covers internal.tnwks.us and any public *.tnwks.us
+## services on the same credential).
 ## ---------------------------------------------------------------------------------------------------------------------
 
 resource "aws_cognito_user_pool_domain" "tnwks_auth" {
-  domain       = "tnwks-auth"
-  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+  domain          = "auth.tnwks.us"
+  user_pool_id    = aws_cognito_user_pool.tnwks_auth.id
+  certificate_arn = aws_acm_certificate.auth_tnwks_us.arn
 
   # version 2 = Managed Login (newer hosted UI, supports passkey enrollment
   # at /passkeys/add). version 1 = classic Hosted UI which doesn't have
   # the passkey endpoints — /passkeys/add returns "URL doesn't exist on the
   # authorization server" without this.
   managed_login_version = 2
+
+  depends_on = [aws_acm_certificate_validation.auth_tnwks_us]
+}
+
+output "cognito_custom_domain_cloudfront_distribution" {
+  description = "CloudFront distribution Cognito assigns to the custom domain. Consumed by the cloudflare workspace as the CNAME target for auth.tnwks.us."
+  value       = aws_cognito_user_pool_domain.tnwks_auth.cloudfront_distribution
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
@@ -502,5 +529,5 @@ output "cognito_agent_client_secret" {
 
 output "cognito_hosted_ui_domain" {
   description = "Fully-qualified hosted UI domain."
-  value       = "${aws_cognito_user_pool_domain.tnwks_auth.domain}.auth.${data.aws_region.current.name}.amazoncognito.com"
+  value       = aws_cognito_user_pool_domain.tnwks_auth.domain
 }
