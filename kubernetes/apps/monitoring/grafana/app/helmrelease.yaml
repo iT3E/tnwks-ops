@@ -269,6 +269,13 @@ spec:
       auth:
         # Keep local admin login as fallback while oauth2-proxy is being rolled out.
         disable_login_form: false
+        # With auth.proxy enabled, Grafana never owns the session — oauth2-proxy
+        # re-injects X-Auth-Request-Email on the next request, so the in-app
+        # sign-out button silently re-creates the user. Send logout to Cognito's
+        # /logout endpoint, which ends the SSO session and then redirects to the
+        # client's registered logout_url (oauth2-proxy /oauth2/sign_out), which
+        # in turn clears the proxy cookie. End-to-end logout in one hop.
+        signout_redirect_url: https://auth.tnwks.us/logout?client_id=${OAUTH2_PROXY_CLIENT_ID}&logout_uri=https%3A%2F%2Foauth2.${INTERNAL_DOMAIN}%2Foauth2%2Fsign_out
       users:
         auto_assign_org: true
         auto_assign_org_role: Admin
