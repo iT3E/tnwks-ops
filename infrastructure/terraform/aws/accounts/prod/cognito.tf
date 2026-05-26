@@ -220,6 +220,9 @@ resource "random_password" "admin_temp" {
   keepers = {
     username     = data.sops_file.secrets.data["admin_email"]
     auth_posture = "passkey-as-mfa-with-totp"
+    # Bump invite_template when the email body changes to force a fresh
+    # invitation send to the existing admin so they see the new template.
+    invite_template = "v1-passkey-step"
   }
 }
 
