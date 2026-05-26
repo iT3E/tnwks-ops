@@ -26,9 +26,11 @@ resource "aws_cognito_user_pool" "tnwks_auth" {
     enabled = true
   }
 
+  # user_verification must be "required" when MFA is on AND WebAuthn is an
+  # allowed first-auth-factor — otherwise a passkey wouldn't count as MFA.
   web_authn_configuration {
     relying_party_id  = "internal.tnwks.us"
-    user_verification = "preferred"
+    user_verification = "required"
   }
 
   # Allow passkey-only first-factor login in addition to password.
@@ -239,5 +241,5 @@ output "cognito_agent_client_secret" {
 
 output "cognito_hosted_ui_domain" {
   description = "Fully-qualified hosted UI domain."
-  value       = "${aws_cognito_user_pool_domain.tnwks_auth.domain}.auth.us-east-1.amazoncognito.com"
+  value       = "${aws_cognito_user_pool_domain.tnwks_auth.domain}.auth.${data.aws_region.current.name}.amazoncognito.com"
 }
