@@ -20,11 +20,11 @@ ff02::1 ip6-allnodes
 ff02::2 ip6-allrouters
 ff02::3 ip6-allhosts
 # BEGIN ANSIBLE MANAGED: Proxmox Cluster Hosts
-sce-pve01-ceph.tnwks.local sce-pve01.tnwks.local sce-pve01
+sce-pve01-ceph.internal.tnwks.us sce-pve01.internal.tnwks.us sce-pve01
 
-sce-pve02-ceph.tnwks.local sce-pve02.tnwks.local sce-pve02
+sce-pve02-ceph.internal.tnwks.us sce-pve02.internal.tnwks.us sce-pve02
 
-sce-pve03-ceph.tnwks.local sce-pve03.tnwks.local sce-pve03
+sce-pve03-ceph.internal.tnwks.us sce-pve03.internal.tnwks.us sce-pve03
 
 # END ANSIBLE MANAGED: Proxmox Cluster Hosts
 ```
@@ -69,11 +69,11 @@ ff02::1 ip6-allnodes
 ff02::2 ip6-allrouters
 ff02::3 ip6-allhosts
 # BEGIN ANSIBLE MANAGED: Proxmox Cluster Hosts
-sce-pve01-ceph.tnwks.local 10.15.15.50 sce-pve01
+sce-pve01-ceph.internal.tnwks.us 10.15.15.50 sce-pve01
 
-sce-pve02-ceph.tnwks.local sce-pve02 sce-pve02
+sce-pve02-ceph.internal.tnwks.us sce-pve02 sce-pve02
 
-sce-pve03-ceph.tnwks.local sce-pve03 sce-pve03
+sce-pve03-ceph.internal.tnwks.us sce-pve03 sce-pve03
 
 # END ANSIBLE MANAGED: Proxmox Cluster Hosts
 ```

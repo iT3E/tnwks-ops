@@ -119,7 +119,7 @@ ingress tunnel into the MS-01 cluster.
 
 ## DNS
 
-- **Internal:** `tnwks.local` (resolved via [k8s-gateway](https://github.com/ori-edge/k8s_gateway)
+- **Internal:** `internal.tnwks.us` (resolved via [k8s-gateway](https://github.com/ori-edge/k8s_gateway)
   and [blocky](https://github.com/0xERR0R/blocky))
 - **External:** `it3e.xyz` (managed by [external-dns](https://github.com/kubernetes-sigs/external-dns)
   against Cloudflare; only ingresses tagged with the

@@ -21,19 +21,19 @@ sudo ceph -k /etc/pve/priv/ceph.client.admin.keyring auth add client.radosgw.sce
         host = sce-pve01
         keyring = /etc/pve/priv/ceph.client.radosgw.keyring
         log file = /var/log/ceph/client.radosgw.$host.log
-        rgw_dns_name = s3.tnwks.local
+        rgw_dns_name = s3.internal.tnwks.us
 
 [client.radosgw.sce-pve02]
         host = sce-pve02
         keyring = /etc/pve/priv/ceph.client.radosgw.keyring
         log file = /var/log/ceph/client.radosgw.$host.log
-        rgw_dns_name = s3.tnwks.local
+        rgw_dns_name = s3.internal.tnwks.us
 
 [client.radosgw.sce-pve03]
         host = sce-pve03
         keyring = /etc/pve/priv/ceph.client.radosgw.keyring
         log file = /var/log/ceph/client.rados.$host.log
-        rgw_dns_name = s3.tnwks.local
+        rgw_dns_name = s3.internal.tnwks.us
 ```
 
 ### run the following on each node:

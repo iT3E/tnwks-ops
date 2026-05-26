@@ -29,7 +29,7 @@ spec:
     fullnameOverride: k8s-gateway
     # Advertise both the external (CLUSTER_DOMAIN) and internal (INTERNAL_DOMAIN)
     # zones from the cluster. In prod these resolve different DNS suffixes;
-    # in local they're the same value (tnwks.local).
+    # in local they're the same value (internal.tnwks.us).
     domain: "${CLUSTER_DOMAIN}"
     extraArgs:
       - --domain=${INTERNAL_DOMAIN}

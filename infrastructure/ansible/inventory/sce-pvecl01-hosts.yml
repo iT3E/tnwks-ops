@@ -2,11 +2,11 @@
 proxmox:
   hosts:
     sce-pve01:
-      ansible_host: sce-pve01.tnwks.local
-      ansible_ceph_host: sce-pve01-ceph.tnwks.local
+      ansible_host: sce-pve01.internal.tnwks.us
+      ansible_ceph_host: sce-pve01-ceph.internal.tnwks.us
     sce-pve02:
-      ansible_host: sce-pve02.tnwks.local
-      ansible_ceph_host: sce-pve02-ceph.tnwks.local
+      ansible_host: sce-pve02.internal.tnwks.us
+      ansible_ceph_host: sce-pve02-ceph.internal.tnwks.us
     sce-pve03:
-      ansible_host: sce-pve03.tnwks.local
-      ansible_ceph_host: sce-pve03-ceph.tnwks.local
+      ansible_host: sce-pve03.internal.tnwks.us
+      ansible_ceph_host: sce-pve03-ceph.internal.tnwks.us

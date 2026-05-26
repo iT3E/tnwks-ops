@@ -12,7 +12,7 @@ data:
   # Matches the value in cluster-secrets.sops.yaml.
   SECRET_DOMAIN: "it3e.xyz"
   # Internal LAN domain — used for the nginx-internal ingress class hostnames
-  INTERNAL_DOMAIN: "tnwks.local"
+  INTERNAL_DOMAIN: "internal.tnwks.us"
 
   # Storage classes
   # ceph-block: in-cluster Rook RBD (RWO, replicated across 3x 1TB NVMe)

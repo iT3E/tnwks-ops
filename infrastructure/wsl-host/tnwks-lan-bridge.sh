@@ -4,7 +4,7 @@
 # the LAN to 127.0.0.1 (which WSL2 mirrors into eth0:port automatically).
 #
 # Chain:
-#   LAN device → VyOS DNS resolves *.tnwks.local → <windows-ip>
+#   LAN device → VyOS DNS resolves *.internal.tnwks.us → <windows-ip>
 #   <windows-ip>:80/443/1883/53-UDP
 #     → netsh portproxy → 127.0.0.1:port (WSL2 localhost forwarding)
 #     → socat (this script) → MetalLB IP

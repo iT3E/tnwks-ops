@@ -221,7 +221,7 @@ sudo pip install -r requirements.txt
         host = sce-pve01
         keyring = /etc/pve/priv/ceph.client.radosgw.keyring
         log file = /var/log/ceph/client.radosgw.$host.log
-        rgw_dns_name = s3.tnwks.local
+        rgw_dns_name = s3.internal.tnwks.us
         rgw_enable_usage_log = true
         rgw_usage_log_flush_threshold = 1024
         rgw_usage_log_tick_interval = 30
@@ -234,7 +234,7 @@ sudo pip install -r requirements.txt
         host = sce-pve02
         keyring = /etc/pve/priv/ceph.client.radosgw.keyring
         log file = /var/log/ceph/client.radosgw.$host.log
-        rgw_dns_name = s3.tnwks.local
+        rgw_dns_name = s3.internal.tnwks.us
         rgw_enable_usage_log = true
         rgw_usage_log_flush_threshold = 1024
         rgw_usage_log_tick_interval = 30
@@ -247,7 +247,7 @@ sudo pip install -r requirements.txt
         host = sce-pve03
         keyring = /etc/pve/priv/ceph.client.radosgw.keyring
         log file = /var/log/ceph/client.radosgw.$host.log
-        rgw_dns_name = s3.tnwks.local
+        rgw_dns_name = s3.internal.tnwks.us
         rgw_enable_usage_log = true
         rgw_usage_log_flush_threshold = 1024
         rgw_usage_log_tick_interval = 30
@@ -273,7 +273,7 @@ After=network-online.target
 
 [Service]
 User=pve-exporter
-ExecStart=python3 /usr/local/bin/radosgw_exporter/radosgw_usage_exporter.py -H http://s3.tnwks.local:7480 -a <ACCESS_KEY> -s <SECRET_KEY> -p 9089
+ExecStart=python3 /usr/local/bin/radosgw_exporter/radosgw_usage_exporter.py -H http://s3.internal.tnwks.us:7480 -a <ACCESS_KEY> -s <SECRET_KEY> -p 9089
 
 [Install]
 WantedBy=default.target

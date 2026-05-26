@@ -140,7 +140,7 @@ cluster. Per-cluster differences live in
 | `STORAGE_CLASS_BULK` | `local-path` | `nfs-bulk` |
 | `BULK_PVC_SIZE` | `10Gi` | `10Ti` |
 | LB allocation | (none — Services pend) | Cilium L2/BGP on `10.10.91.0/24` |
-| Ingress hostnames | `*.tnwks.local` | `*.it3e.xyz` (external), `*.tnwks.local` (internal) |
+| Ingress hostnames | `*.internal.tnwks.us` | `*.it3e.xyz` (external), `*.internal.tnwks.us` (internal) |
 
 Apps not deployed on the WSL cluster:
 - `storage/rook-ceph` — no real disks (`local-path` is the default class)

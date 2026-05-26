@@ -2,12 +2,12 @@
 
 The `homelab-wsl` cluster runs inside a Talos-in-Docker setup on a Windows host.
 MetalLB advertises VIPs on the docker bridge subnet `10.5.0.0/24`, which is only
-reachable from inside that WSL distro. To make `*.tnwks.local` services
+reachable from inside that WSL distro. To make `*.internal.tnwks.us` services
 accessible to the rest of the LAN, we chain three forwarders together:
 
 ```
 LAN device
-  → VyOS DNS rewrites *.tnwks.local → <windows-host-ip>
+  → VyOS DNS rewrites *.internal.tnwks.us → <windows-host-ip>
   → Windows: netsh portproxy on :80/:443/:1883 → 127.0.0.1
   → WSL2 localhost-forwarding maps 127.0.0.1 → eth0 inside the WSL distro
   → socat (systemd unit) bridges 0.0.0.0:port → MetalLB VIP
@@ -102,17 +102,17 @@ Get-ScheduledTask -TaskName tnwks-lan-bridge-sync
 
 ## VyOS DNS rewrite
 
-On the VyOS box, point all `*.tnwks.local` lookups at the Windows host. With
+On the VyOS box, point all `*.internal.tnwks.us` lookups at the Windows host. With
 the dnsmasq-style forwarding-options set:
 
 ```
-set service dns forwarding domain 'tnwks.local' addresses '10.10.91.142'
+set service dns forwarding domain 'internal.tnwks.us' addresses '10.10.91.142'
 commit ; save
 ```
 
 (Replace `10.10.91.142` with the current Windows host IPv4 if it changes.)
 
-If you'd rather have the LAN hit `k8s-gateway` directly for `tnwks.local`, you
+If you'd rather have the LAN hit `k8s-gateway` directly for `internal.tnwks.us`, you
 can instead add a TCP-only forwarder for port 53 — but `k8s-gateway` only
 listens on UDP, and netsh portproxy is TCP-only, so the cleanest path is to
 keep DNS authority on VyOS and have the Windows host only forward HTTP(S) +
@@ -120,9 +120,9 @@ MQTT.
 
 ## What to do when something doesn't work
 
-- LAN device gets `NXDOMAIN` for `prometheus.tnwks.local`: VyOS forward rule
+- LAN device gets `NXDOMAIN` for `prometheus.internal.tnwks.us`: VyOS forward rule
   missing or stale; check `show dns forwarding statistics`.
-- `curl https://prometheus.tnwks.local` from the LAN times out: portproxy is
+- `curl https://prometheus.internal.tnwks.us` from the LAN times out: portproxy is
   pointing at a stale WSL IP. Run the Scheduled Task once
   (`Start-ScheduledTask -TaskName tnwks-lan-bridge-sync`) or just reboot.
 - Connection refused on the Windows host: the socat units inside WSL aren't

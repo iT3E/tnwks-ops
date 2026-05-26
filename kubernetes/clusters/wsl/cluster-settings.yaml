@@ -7,12 +7,12 @@ metadata:
 data:
   # Identity
   CLUSTER_NAME: "homelab-wsl"
-  CLUSTER_DOMAIN: "tnwks.local"
+  CLUSTER_DOMAIN: "internal.tnwks.us"
   # Legacy alias used by existing manifests that reference ${SECRET_DOMAIN}.
   # Overrides the value from cluster-secrets.sops.yaml on this cluster.
-  SECRET_DOMAIN: "tnwks.local"
+  SECRET_DOMAIN: "internal.tnwks.us"
   # Internal LAN domain — same as CLUSTER_DOMAIN on the WSL cluster
-  INTERNAL_DOMAIN: "tnwks.local"
+  INTERNAL_DOMAIN: "internal.tnwks.us"
 
   # Storage classes
   #   local-path       — default, on the Talos node container's overlay (C:)
