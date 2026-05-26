@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - ./namespace.yaml
   - ./oauth2-proxy/ks.yaml
+  - ./onboard/ks.yaml

@@ -1,0 +1,14 @@
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: onboard-tnwks-us
+  namespace: auth
+spec:
+  secretName: onboard-tnwks-us-tls
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  commonName: onboard.tnwks.us
+  dnsNames:
+    - onboard.tnwks.us

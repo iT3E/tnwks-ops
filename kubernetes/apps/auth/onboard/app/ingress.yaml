@@ -1,0 +1,28 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: onboard
+  namespace: auth
+  annotations:
+    # Public site — onboard.tnwks.us is intentionally reachable without
+    # authentication so invitees can land here. Cognito enforces who can
+    # actually sign in. No oauth2-proxy auth-subrequest annotations.
+    external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - onboard.tnwks.us
+      secretName: onboard-tnwks-us-tls
+  rules:
+    - host: onboard.tnwks.us
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: onboard
+                port:
+                  name: http
