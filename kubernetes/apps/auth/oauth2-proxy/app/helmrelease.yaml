@@ -1,0 +1,71 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: oauth2-proxy
+  namespace: auth
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: oauth2-proxy
+      version: 10.6.0
+      sourceRef:
+        kind: HelmRepository
+        name: oauth2-proxy
+        namespace: flux-system
+  maxHistory: 2
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  values:
+    replicaCount: 1
+    config:
+      clientID: ${OAUTH2_PROXY_CLIENT_ID}
+      clientSecret: ${OAUTH2_PROXY_CLIENT_SECRET}
+      cookieSecret: ${OAUTH2_PROXY_COOKIE_SECRET}
+      configFile: |-
+        provider = "oidc"
+        oidc_issuer_url = "${COGNITO_OIDC_ISSUER_URL}"
+        redirect_url = "https://oauth2.${INTERNAL_DOMAIN}/oauth2/callback"
+        upstreams = ["static://200"]
+        email_domains = ["*"]
+        scope = "openid email profile"
+        pass_access_token = true
+        pass_authorization_header = true
+        pass_user_headers = true
+        set_xauthrequest = true
+        set_authorization_header = true
+        reverse_proxy = true
+        whitelist_domains = [".${INTERNAL_DOMAIN}"]
+        cookie_domains = [".${INTERNAL_DOMAIN}"]
+        cookie_expire = "720h"
+        cookie_refresh = "23h"
+        cookie_secure = true
+        cookie_samesite = "lax"
+        skip_provider_button = true
+    extraArgs:
+      provider: oidc
+    ingress:
+      enabled: true
+      className: nginx-internal
+      hosts:
+        - oauth2.${INTERNAL_DOMAIN}
+      tls:
+        - hosts:
+            - oauth2.${INTERNAL_DOMAIN}
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 128Mi
+    metrics:
+      enabled: false
