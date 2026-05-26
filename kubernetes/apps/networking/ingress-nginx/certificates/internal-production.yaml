@@ -1,0 +1,15 @@
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-tnwks-us-production
+  namespace: networking
+spec:
+  secretName: internal-tnwks-us-production-tls
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  commonName: internal.tnwks.us
+  dnsNames:
+    - internal.tnwks.us
+    - "*.internal.tnwks.us"

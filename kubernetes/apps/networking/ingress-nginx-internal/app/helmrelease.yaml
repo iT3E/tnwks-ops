@@ -31,6 +31,8 @@ spec:
       extraEnvs:
         - name: TZ
           value: "${TIMEZONE}"
+      extraArgs:
+        default-ssl-certificate: "networking/internal-tnwks-us-production-tls"
       service:
         annotations:
         loadBalancerIP: "${INGRESS_INTERNAL_ADDR}"
