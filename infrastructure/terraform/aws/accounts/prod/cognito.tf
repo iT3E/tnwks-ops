@@ -27,8 +27,12 @@ resource "aws_cognito_user_pool" "tnwks_auth" {
   # by AWS. sign_in_policy stays here because the provider handles it safely.
   mfa_configuration = "OFF"
 
+  # WebAuthn-only: passkey-with-user-verification is multi-factor in a single
+  # ceremony (something-you-have + something-you-are/know) and is phishing-
+  # resistant in a way that password+TOTP isn't. Recovery if all passkeys are
+  # lost: admin (us) resets the user via TF/console, user re-enrolls.
   sign_in_policy {
-    allowed_first_auth_factors = ["PASSWORD", "WEB_AUTHN"]
+    allowed_first_auth_factors = ["WEB_AUTHN"]
   }
 
   account_recovery_setting {
@@ -82,13 +86,11 @@ locals {
   cognito_mfa = {
     relying_party_id  = "internal.tnwks.us"
     user_verification = "required"
-    # Cognito only accepts MULTI_FACTOR_WITH_USER_VERIFICATION or SINGLE_FACTOR
-    # here, and SINGLE_FACTOR is rejected with InvalidParameterException when
-    # mfa_configuration=ON AND WebAuthn is in allowed_first_auth_factors —
-    # AWS won't let one path be passwordless while another path is MFA-required
-    # on the same pool. Since we want password-path TOTP enforcement, WebAuthn
-    # has to act as a second factor here (biometric MFA after password).
-    factor_configuration = "MULTI_FACTOR_WITH_USER_VERIFICATION"
+    # SINGLE_FACTOR: passkey-with-UV is multi-factor in one ceremony, no
+    # need for additional MFA on top. Pool is WebAuthn-only (no PASSWORD in
+    # allowed_first_auth_factors) so the AWS rule that blocks SINGLE_FACTOR
+    # while MFA is required doesn't apply here.
+    factor_configuration = "SINGLE_FACTOR"
   }
 
   # Same role the AWS provider assumes in main.tf — TFC dynamic credentials
@@ -120,8 +122,7 @@ resource "terraform_data" "cognito_mfa" {
       aws cognito-idp set-user-pool-mfa-config \
         --region ${data.aws_region.current.name} \
         --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
-        --mfa-configuration ON \
-        --software-token-mfa-configuration Enabled=true \
+        --mfa-configuration OFF \
         --web-authn-configuration RelyingPartyId=${local.cognito_mfa.relying_party_id},UserVerification=${local.cognito_mfa.user_verification},FactorConfiguration=${local.cognito_mfa.factor_configuration}
     EOT
   }
@@ -188,9 +189,11 @@ resource "random_password" "admin_temp" {
   override_special = "!@#$%^&*()-_=+"
 
   # Rotate the temp password whenever the username changes (e.g. a new
-  # admin), but keep it stable otherwise so re-applies don't flap.
+  # admin) or when the pool's auth posture changes (forces a fresh user +
+  # invitation email so enrollment starts clean).
   keepers = {
-    username = data.sops_file.secrets.data["admin_email"]
+    username     = data.sops_file.secrets.data["admin_email"]
+    auth_posture = "webauthn-only"
   }
 }
 
@@ -208,8 +211,15 @@ resource "aws_cognito_user" "admin" {
 
   # On re-applies the user has already rotated this password; don't
   # try to reset it back to the temp value.
+  # replace_triggered_by ties user replacement to random_password.admin_temp,
+  # so changing the random_password.keepers (auth_posture, username) forces a
+  # fresh user + invitation email — which is what we want when flipping the
+  # pool's auth posture (e.g. password+TOTP -> WebAuthn-only).
   lifecycle {
     ignore_changes = [temporary_password]
+    replace_triggered_by = [
+      random_password.admin_temp,
+    ]
   }
 }
 
