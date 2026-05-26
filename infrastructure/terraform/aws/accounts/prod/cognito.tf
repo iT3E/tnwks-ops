@@ -127,24 +127,14 @@ resource "terraform_data" "cognito_mfa" {
     EOT
   }
 
-  provisioner "local-exec" {
-    when    = destroy
-    command = <<-EOT
-      set -eu
-      creds=$(aws sts assume-role \
-        --role-arn ${self.triggers_replace[3]} \
-        --role-session-name tfc-cognito-mfa \
-        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
-        --output text)
-      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
-      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
-      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
-      aws cognito-idp set-user-pool-mfa-config \
-        --region ${self.triggers_replace[2]} \
-        --user-pool-id ${self.triggers_replace[0]} \
-        --mfa-configuration OFF
-    EOT
-  }
+  # No destroy provisioner: replacement of this resource (e.g. when changing
+  # local.cognito_mfa) was setting MFA=OFF *before* the create-side ran, which
+  # in turn made aws_cognito_user_pool.tnwks_auth's UpdateUserPool fail with
+  # "Cannot turn MFA functionality ON, once the user pool has been created"
+  # because the provider tried to push the (TF-state) mfa_configuration back
+  # in the same plan. The create provisioner is authoritative for the pool's
+  # MFA config either way; on real destroy the pool itself is deletion-
+  # protected, so a parting MFA=OFF call serves no purpose.
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
