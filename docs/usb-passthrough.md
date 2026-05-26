@@ -93,79 +93,31 @@ and re-attach.
 ## Step 2. WSL2 → Docker (Talos node container)
 
 `talosctl cluster create` does not accept `--device` flags directly — Talos
-provisions the node containers itself with a fixed config. The validated
-workflow is to **stop, remove, and re-`docker run`** the chosen worker
-with `--device` flags pointing at the host USB devices.
-
-PVC data is safe: Talos uses six **named volumes** on the node container
-for `/var`, `/usr/libexec/kubernetes`, `/opt`, `/system/state`, `/etc/cni`
-and `/etc/kubernetes`. Named volumes survive `docker rm` — re-mount the
-same volume names on the replacement container and local-path PVCs,
-kubelet state, and the machine config all carry over.
-
-> Drain the node first (`kubectl drain --delete-emptydir-data
-> --ignore-daemonsets`) so pods reschedule cleanly. Anything backed by
-> local-path on this worker stays put — drain just relocates pods that
-> can move.
+provisions the node containers itself with a fixed config. The bootstrap
+playbook handles this declaratively: after `talosctl cluster create`
+runs, it inspects worker-2, captures its named volumes + env (which hold
+the base64 machine config in `USERDATA`), and recreates the container
+via `community.docker.docker_container` with the USB devices and
+`/mnt/e/k8s-storage` bind-mount layered on top.
 
 ```bash
-NODE=homelab-wsl-worker-2
-
-# Drain the node
-kubectl cordon "$NODE"
-kubectl drain "$NODE" --ignore-daemonsets --delete-emptydir-data --force --timeout=120s
-
-# Capture current container config (volumes, env, network IP, labels, etc.)
-docker inspect "$NODE" > /tmp/$NODE.json
-
-# Pull volume names + env (USERDATA contains the full base64 machine config)
-python3 -c "
-import json
-d = json.load(open('/tmp/$NODE.json'))[0]
-print('Volumes:')
-for m in d['Mounts']:
-    if m['Type'] == 'volume':
-        print(f'  -v {m[\"Name\"]}:{m[\"Destination\"]}')
-print()
-print('Network IP:', d['NetworkSettings']['Networks']['homelab-wsl']['IPAMConfig']['IPv4Address'])
-print('Image:', d['Config']['Image'])
-"
+cd infrastructure
+ansible-playbook -i ansible/inventory/wsl.yml ansible/playbooks/01-talos-bootstrap.yml
 ```
 
-Then stop, remove, and recreate. Substitute the six volume mount lines
-from the inspect dump above:
+The augmentation step is idempotent — re-runs are a no-op once
+worker-2 already has the devices and bind-mount. It also skips
+gracefully on hosts where the USB devices haven't been attached yet
+(see Step 1) or where `/mnt/e` isn't mounted, leaving worker-2 at the
+stock `talosctl` config. PVC data, kubelet state, and the machine
+config carry over because Talos uses **named volumes** on the node
+container for `/var`, `/usr/libexec/kubernetes`, `/opt`,
+`/system/state`, `/etc/cni`, and `/etc/kubernetes` — these survive
+`docker rm` and are re-attached on the replacement container.
 
-```bash
-docker stop "$NODE" && docker rm "$NODE"
-
-docker run -d \
-  --name "$NODE" --hostname "$NODE" \
-  --privileged --read-only --restart no \
-  --shm-size 67108864 --memory 8589934592 --cpus 4 \
-  --security-opt seccomp=unconfined --security-opt label=disable \
-  --sysctl net.ipv6.conf.all.disable_ipv6=0 \
-  --network homelab-wsl --ip 10.5.0.4 \
-  --label org.opencontainers.image.source=https://github.com/siderolabs/talos \
-  --label talos.cluster.name=homelab-wsl \
-  --label talos.owned=true --label talos.type=worker \
-  --tmpfs /run --tmpfs /system --tmpfs /tmp \
-  -v <var-volume>:/var \
-  -v <kubelet-volume>:/usr/libexec/kubernetes \
-  -v <opt-volume>:/opt \
-  -v <state-volume>:/system/state \
-  -v <cni-volume>:/etc/cni \
-  -v <k8s-volume>:/etc/kubernetes \
-  --device=/dev/bus/usb \
-  --device=/dev/serial/by-id/usb-0658_0200-if00 \
-  -e PLATFORM=container -e TALOSSKU=4CPU-8192RAM \
-  -e PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-  -e USERDATA="<base64 from original inspect>" \
-  ghcr.io/siderolabs/talos:v1.13.2
-
-# Wait for node to come back Ready
-kubectl get node "$NODE" -w
-kubectl uncordon "$NODE"
-```
+The playbook drains worker-2 first so pods reschedule cleanly. Anything
+backed by `local-path` on this worker stays put (its PVC data is on the
+named volume); drain just relocates pods that can move.
 
 ### Verify the device made it through
 

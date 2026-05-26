@@ -75,6 +75,177 @@
       when: cluster_target == 'wsl'
       changed_when: true
 
+    # ─── WSL: augment worker-2 with USB + bulk storage ──────────────────
+    # `talosctl cluster create docker` doesn't accept --device flags or
+    # extra bind-mounts, so the worker-2 container needs a one-time
+    # rebuild to attach:
+    #   - /dev/bus/usb (Coral TPU; busid changes when firmware reloads)
+    #   - /dev/serial/by-id/usb-0658_0200-if00 (Aeotec Z-Stick)
+    #   - /mnt/e/k8s-storage (bulk PVC backing for local-path-bulk SC)
+    # Named volumes from the original talosctl-built container are
+    # preserved verbatim so PVC data, kubelet state, and the machine
+    # config carry over.
+    #
+    # Idempotent: re-runs are no-ops if the container already exposes
+    # all three. Skipped entirely on hosts where the bulk-storage path
+    # or USB devices aren't present (e.g. CI / fresh clones).
+    - name: Configure worker-2 augmentations (USB + bulk storage)
+      when: cluster_target == 'wsl'
+      vars:
+        worker_name: "{{ cluster_name }}-worker-2"
+        bulk_host_path: /mnt/e/k8s-storage
+        zstick_path: /dev/serial/by-id/usb-0658_0200-if00
+      block:
+        - name: Check whether bulk-storage host path exists
+          ansible.builtin.stat:
+            path: "{{ bulk_host_path }}"
+          register: bulk_path_stat
+
+        - name: Ensure bulk-storage host path exists
+          ansible.builtin.file:
+            path: "{{ bulk_host_path }}"
+            state: directory
+            mode: "0777"
+          when: not bulk_path_stat.stat.exists
+
+        - name: Check whether Coral USB tree is present on host
+          ansible.builtin.stat:
+            path: /dev/bus/usb
+          register: usb_bus_stat
+
+        - name: Check whether Z-Stick is present on host
+          ansible.builtin.stat:
+            path: "{{ zstick_path }}"
+          register: zstick_stat
+
+        - name: Skip augmentation when neither USB nor bulk path is available
+          ansible.builtin.debug:
+            msg: |
+              Neither USB devices nor bulk-storage path detected on host.
+              worker-2 left at stock talosctl config. Re-run after
+              `usbipd attach` or after E: is mounted.
+          when:
+            - not usb_bus_stat.stat.exists
+            - not zstick_stat.stat.exists
+            - not bulk_path_stat.stat.exists
+
+        - name: Inspect current worker-2 container
+          community.docker.docker_container_info:
+            name: "{{ worker_name }}"
+          register: w2_info
+
+        - name: Build desired device list
+          ansible.builtin.set_fact:
+            w2_devices: >-
+              {{
+                ([ '/dev/bus/usb:/dev/bus/usb:rwm' ] if usb_bus_stat.stat.exists else [])
+                + ([ zstick_path ~ ':' ~ zstick_path ~ ':rwm' ] if zstick_stat.stat.exists else [])
+              }}
+
+        - name: Build desired bind-mount list
+          ansible.builtin.set_fact:
+            w2_bind_mounts: >-
+              {{ [ bulk_host_path ~ ':' ~ bulk_host_path ] if bulk_path_stat.stat.exists else [] }}
+
+        - name: Detect whether worker-2 already has the desired augmentations
+          ansible.builtin.set_fact:
+            w2_has_usb: >-
+              {{ usb_bus_stat.stat.exists | bool
+                 and (w2_info.container.HostConfig.Devices | default([]))
+                       | selectattr('PathOnHost', 'equalto', '/dev/bus/usb')
+                       | list | length > 0 }}
+            w2_has_bulk: >-
+              {{ bulk_path_stat.stat.exists | bool
+                 and (w2_info.container.HostConfig.Binds | default([]))
+                       | select('match', '^' ~ bulk_host_path ~ ':')
+                       | list | length > 0 }}
+
+        - name: Recreate worker-2 with USB devices + bulk-storage bind-mount
+          when:
+            - w2_info.exists
+            - (usb_bus_stat.stat.exists and not w2_has_usb)
+              or (bulk_path_stat.stat.exists and not w2_has_bulk)
+          block:
+            - name: Capture original named volumes from worker-2
+              ansible.builtin.set_fact:
+                w2_volume_args: >-
+                  {{ w2_info.container.Mounts
+                     | selectattr('Type', 'equalto', 'volume')
+                     | map(attribute='Name')
+                     | zip(w2_info.container.Mounts
+                           | selectattr('Type', 'equalto', 'volume')
+                           | map(attribute='Destination'))
+                     | map('join', ':')
+                     | list }}
+
+            - name: Capture original env vars from worker-2 (preserves USERDATA / PLATFORM / TALOSSKU)
+              ansible.builtin.set_fact:
+                w2_env: >-
+                  {{ dict(w2_info.container.Config.Env
+                          | map('split', '=', 1)
+                          | map('list')) }}
+
+            - name: Drain worker-2 before recreate
+              ansible.builtin.command: >-
+                kubectl drain {{ worker_name }}
+                --ignore-daemonsets --delete-emptydir-data
+                --force --timeout=120s
+              changed_when: true
+              failed_when: false
+
+            - name: Stop and remove existing worker-2 container
+              community.docker.docker_container:
+                name: "{{ worker_name }}"
+                state: absent
+
+            - name: Recreate worker-2 container with augmentations
+              community.docker.docker_container:
+                name: "{{ worker_name }}"
+                hostname: "{{ worker_name }}"
+                image: "{{ w2_info.container.Config.Image }}"
+                state: started
+                restart_policy: "no"
+                privileged: true
+                read_only: true
+                shm_size: 64M
+                memory: 8G
+                cpus: 4
+                security_opts:
+                  - seccomp=unconfined
+                  - label=disable
+                sysctls:
+                  net.ipv6.conf.all.disable_ipv6: "0"
+                networks:
+                  - name: "{{ cluster_name }}"
+                    ipv4_address: "{{ w2_info.container.NetworkSettings.Networks[cluster_name].IPAMConfig.IPv4Address }}"
+                purge_networks: true
+                labels:
+                  org.opencontainers.image.source: https://github.com/siderolabs/talos
+                  talos.cluster.name: "{{ cluster_name }}"
+                  talos.owned: "true"
+                  talos.type: worker
+                tmpfs:
+                  - /run
+                  - /system
+                  - /tmp
+                volumes: "{{ w2_volume_args + w2_bind_mounts }}"
+                devices: "{{ w2_devices }}"
+                env:
+                  PLATFORM: "{{ w2_env.PLATFORM }}"
+                  TALOSSKU: "{{ w2_env.TALOSSKU }}"
+                  PATH: "{{ w2_env.PATH }}"
+                  USERDATA: "{{ w2_env.USERDATA }}"
+
+            - name: Wait for worker-2 to be Ready
+              ansible.builtin.command: >-
+                kubectl wait --for=condition=Ready
+                node/{{ worker_name }} --timeout=180s
+              changed_when: false
+
+            - name: Uncordon worker-2
+              ansible.builtin.command: kubectl uncordon {{ worker_name }}
+              changed_when: true
+
     # ─── MS-01 (Bare metal) ─────────────────────────────────────────────
     - name: Verify MS-01 node IPs are configured
       ansible.builtin.fail:
