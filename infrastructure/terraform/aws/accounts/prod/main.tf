@@ -35,6 +35,10 @@ terraform {
       source  = "carlpett/sops"
       version = "~> 1.4.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
   }
 }
 
