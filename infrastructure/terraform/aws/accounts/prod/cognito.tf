@@ -84,6 +84,11 @@ locals {
     user_verification    = "required"
     factor_configuration = "MULTI_FACTOR_WITH_USER_VERIFICATION"
   }
+
+  # Same role the AWS provider assumes in main.tf — TFC dynamic credentials
+  # land in the org management account, so the local-exec has to re-assume
+  # this role to reach the prod account where the user pool lives.
+  cognito_mfa_role_arn = "arn:aws:iam::654654262098:role/tnwks-org-init-role"
 }
 
 resource "terraform_data" "cognito_mfa" {
@@ -91,12 +96,21 @@ resource "terraform_data" "cognito_mfa" {
     aws_cognito_user_pool.tnwks_auth.id,
     local.cognito_mfa,
     data.aws_region.current.name,
+    local.cognito_mfa_role_arn,
   ]
 
   provisioner "local-exec" {
     when    = create
     command = <<-EOT
       set -eu
+      creds=$(aws sts assume-role \
+        --role-arn ${local.cognito_mfa_role_arn} \
+        --role-session-name tfc-cognito-mfa \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
+      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
+      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
+      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
       aws cognito-idp set-user-pool-mfa-config \
         --region ${data.aws_region.current.name} \
         --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
@@ -107,8 +121,22 @@ resource "terraform_data" "cognito_mfa" {
   }
 
   provisioner "local-exec" {
-    when    = destroy
-    command = "aws cognito-idp set-user-pool-mfa-config --region ${self.triggers_replace[2]} --user-pool-id ${self.triggers_replace[0]} --mfa-configuration OFF"
+    when = destroy
+    command = <<-EOT
+      set -eu
+      creds=$(aws sts assume-role \
+        --role-arn ${self.triggers_replace[3]} \
+        --role-session-name tfc-cognito-mfa \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
+      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
+      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
+      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
+      aws cognito-idp set-user-pool-mfa-config \
+        --region ${self.triggers_replace[2]} \
+        --user-pool-id ${self.triggers_replace[0]} \
+        --mfa-configuration OFF
+    EOT
   }
 }
 
