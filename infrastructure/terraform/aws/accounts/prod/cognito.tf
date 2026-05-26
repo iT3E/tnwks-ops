@@ -90,6 +90,7 @@ resource "terraform_data" "cognito_mfa" {
   triggers_replace = [
     aws_cognito_user_pool.tnwks_auth.id,
     local.cognito_mfa,
+    data.aws_region.current.name,
   ]
 
   provisioner "local-exec" {
@@ -97,6 +98,7 @@ resource "terraform_data" "cognito_mfa" {
     command = <<-EOT
       set -eu
       aws cognito-idp set-user-pool-mfa-config \
+        --region ${data.aws_region.current.name} \
         --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
         --mfa-configuration ON \
         --software-token-mfa-configuration Enabled=true \
@@ -106,7 +108,7 @@ resource "terraform_data" "cognito_mfa" {
 
   provisioner "local-exec" {
     when    = destroy
-    command = "aws cognito-idp set-user-pool-mfa-config --user-pool-id ${self.triggers_replace[0]} --mfa-configuration OFF"
+    command = "aws cognito-idp set-user-pool-mfa-config --region ${self.triggers_replace[2]} --user-pool-id ${self.triggers_replace[0]} --mfa-configuration OFF"
   }
 }
 
