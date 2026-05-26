@@ -60,18 +60,12 @@ resource "aws_cognito_user_pool" "tnwks_auth" {
       sms_message   = "Your tnwks username is {username} and temporary password is {####}"
       email_message = <<-EOT
         <p>Hi,</p>
-        <p>You've been invited to tnwks internal services. Onboarding is two steps:</p>
-        <p><strong>Step 1 — Sign in.</strong><br/>
-        Visit <a href="https://grafana.internal.tnwks.us/">https://grafana.internal.tnwks.us/</a> and sign in with:</p>
+        <p>You've been invited to tnwks. To finish setting up your account, visit <a href="https://onboard.tnwks.us/">https://onboard.tnwks.us/</a> and sign in with:</p>
         <ul>
           <li>Username: <code>{username}</code></li>
           <li>Temporary password: <code>{####}</code></li>
         </ul>
-        <p>You'll be prompted to set a permanent password on first sign-in.</p>
-        <p><strong>Step 2 — Add a passkey (recommended).</strong><br/>
-        After you finish step 1, in the <em>same browser session</em>, open this link to register a passkey (Touch ID, Windows Hello, or a hardware key):</p>
-        <p><a href="https://auth.tnwks.us/passkeys/add">Register a passkey</a></p>
-        <p>Once registered, future sign-ins use your fingerprint, face, or key — you won't need to type the password again.</p>
+        <p>You'll be prompted to set a permanent password and then guided through registering a passkey (Touch ID, Windows Hello, or a hardware key) so future sign-ins are one touch.</p>
       EOT
     }
   }
@@ -222,7 +216,7 @@ resource "random_password" "admin_temp" {
     auth_posture = "passkey-as-mfa-with-totp"
     # Bump invite_template when the email body changes to force a fresh
     # invitation send to the existing admin so they see the new template.
-    invite_template = "v1-passkey-step"
+    invite_template = "v2-onboard-tnwks-us"
   }
 }
 
@@ -412,6 +406,47 @@ resource "terraform_data" "oauth2_proxy_managed_login" {
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
+## APP CLIENT - onboard
+## Public PKCE client for the static onboarding site at onboard.tnwks.us.
+## No client secret (browser app); ALLOW_USER_AUTH so passkey/choice-based
+## sign-in works the same as the oauth2-proxy client.
+## ---------------------------------------------------------------------------------------------------------------------
+
+resource "aws_cognito_user_pool_client" "onboard" {
+  name         = "onboard"
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+
+  generate_secret = false
+
+  callback_urls = ["https://onboard.tnwks.us/callback"]
+  logout_urls   = ["https://onboard.tnwks.us/"]
+
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_scopes                 = ["openid", "email", "profile"]
+
+  supported_identity_providers = ["COGNITO"]
+
+  explicit_auth_flows = [
+    "ALLOW_USER_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH",
+  ]
+
+  access_token_validity  = 1
+  id_token_validity      = 1
+  refresh_token_validity = 30
+
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
+
+  prevent_user_existence_errors = "ENABLED"
+  enable_token_revocation       = true
+}
+
+## ---------------------------------------------------------------------------------------------------------------------
 ## APP CLIENT - agent-ori
 ## ---------------------------------------------------------------------------------------------------------------------
 
@@ -547,6 +582,11 @@ output "cognito_oauth2_proxy_client_secret" {
   description = "App client secret for oauth2-proxy."
   value       = aws_cognito_user_pool_client.oauth2_proxy.client_secret
   sensitive   = true
+}
+
+output "cognito_onboard_client_id" {
+  description = "App client ID for the static onboarding site (onboard.tnwks.us). Public value — copied into kubernetes/apps/auth/onboard/app/static/config.js."
+  value       = aws_cognito_user_pool_client.onboard.id
 }
 
 output "cognito_agent_client_id" {

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Welcome — tnwks</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span>tnwks onboarding</span>
+      </div>
+      <div class="card" id="card">
+        <h1 id="title">Setting up your account…</h1>
+        <p class="subtitle" id="subtitle">
+          <span class="spinner"></span>One moment.
+        </p>
+      </div>
+      <footer>
+        Need help? Reply to your invitation email and we'll sort it out.
+      </footer>
+    </main>
+    <script src="/config.js"></script>
+    <script src="/app.js"></script>
+    <script>
+      (async () => {
+        const card = document.getElementById("card");
+        try {
+          if (!window.Onboard.hasValidSession()) {
+            await window.Onboard.startAuthRedirect();
+            return;
+          }
+          card.innerHTML = `
+            <h1>You're signed in. One step left.</h1>
+            <p class="subtitle">Add a passkey so you don't have to type your password every time.</p>
+            <ul class="steps">
+              <li class="step done">
+                <div class="step-marker">✓</div>
+                <div class="step-body">
+                  <div class="step-title">Account ready</div>
+                  <p class="step-meta">Signed in with your tnwks credentials.</p>
+                </div>
+              </li>
+              <li class="step active">
+                <div class="step-marker">2</div>
+                <div class="step-body">
+                  <div class="step-title">Add a passkey</div>
+                  <p class="step-meta">Touch ID, Windows Hello, or a hardware key — whatever your device offers.</p>
+                </div>
+              </li>
+            </ul>
+            <a class="cta" id="passkey-cta">Add a passkey</a>
+            <a class="cta-secondary" id="logout-link">Sign out</a>
+          `;
+          document.getElementById("passkey-cta").href =
+            window.Onboard.passkeyAddUrl();
+          const logoutLink = document.getElementById("logout-link");
+          logoutLink.href = window.Onboard.logoutUrl();
+          logoutLink.addEventListener("click", () =>
+            window.Onboard.clearSession(),
+          );
+        } catch (err) {
+          card.innerHTML = `
+            <div class="error">${(err && err.message) || "Something went wrong."}</div>
+            <a class="cta" href="/">Try again</a>
+          `;
+        }
+      })();
+    </script>
+  </body>
+</html>

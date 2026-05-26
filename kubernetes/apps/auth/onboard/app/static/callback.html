@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Signing you in… — tnwks</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span>tnwks onboarding</span>
+      </div>
+      <div class="card" id="card">
+        <h1>Finishing sign-in…</h1>
+        <p class="subtitle"><span class="spinner"></span>One moment.</p>
+      </div>
+    </main>
+    <script src="/config.js"></script>
+    <script src="/app.js"></script>
+    <script>
+      (async () => {
+        const card = document.getElementById("card");
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get("code");
+        const error = url.searchParams.get("error");
+        const errorDescription = url.searchParams.get("error_description");
+        const state = url.searchParams.get("state");
+        const expectedState = sessionStorage.getItem("onboard.pkce_state");
+
+        function showError(message) {
+          card.innerHTML = `
+            <div class="error">${message}</div>
+            <a class="cta" href="/">Try again</a>
+          `;
+        }
+
+        if (error) {
+          showError(`${error}: ${errorDescription || "no details"}`);
+          return;
+        }
+        if (!code) {
+          showError("Missing authorization code in callback URL.");
+          return;
+        }
+        if (!expectedState || state !== expectedState) {
+          showError(
+            "State mismatch — the sign-in flow may have been started in a different tab. Please try again.",
+          );
+          return;
+        }
+
+        try {
+          await window.Onboard.exchangeCodeForTokens(code);
+          window.location.replace("/");
+        } catch (err) {
+          showError((err && err.message) || "Token exchange failed.");
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>You're all set — tnwks</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span>tnwks onboarding</span>
+      </div>
+      <div class="card">
+        <h1>You're all set.</h1>
+        <p class="subtitle">
+          Your passkey is registered. From now on, signing in is one touch.
+        </p>
+        <ul class="steps">
+          <li class="step done">
+            <div class="step-marker">✓</div>
+            <div class="step-body">
+              <div class="step-title">Account ready</div>
+              <p class="step-meta">Signed in with your tnwks credentials.</p>
+            </div>
+          </li>
+          <li class="step done">
+            <div class="step-marker">✓</div>
+            <div class="step-body">
+              <div class="step-title">Passkey registered</div>
+              <p class="step-meta">
+                Future sign-ins will use your fingerprint, face, or key.
+              </p>
+            </div>
+          </li>
+        </ul>
+        <a class="cta" id="logout-cta" href="#">Sign out and finish</a>
+      </div>
+      <footer>
+        You can close this tab — the rest is up to you.
+      </footer>
+    </main>
+    <script src="/config.js"></script>
+    <script src="/app.js"></script>
+    <script>
+      const a = document.getElementById("logout-cta");
+      a.href = window.Onboard.logoutUrl();
+      a.addEventListener("click", () => window.Onboard.clearSession());
+    </script>
+  </body>
+</html>

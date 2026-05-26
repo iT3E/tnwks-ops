@@ -1,0 +1,23 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: auth
+resources:
+  - ./certificate.yaml
+  - ./deployment.yaml
+  - ./service.yaml
+  - ./ingress.yaml
+configMapGenerator:
+  - name: onboard-static
+    files:
+      - index.html=./static/index.html
+      - callback.html=./static/callback.html
+      - done.html=./static/done.html
+      - app.js=./static/app.js
+      - styles.css=./static/styles.css
+      - config.js=./static/config.js
+  - name: onboard-nginx
+    files:
+      - default.conf=./nginx/default.conf
+generatorOptions:
+  disableNameSuffixHash: false
