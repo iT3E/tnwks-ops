@@ -4,7 +4,7 @@
 // cognito_onboard_client_id output).
 window.ONBOARD_CONFIG = {
   cognitoDomain: "auth.tnwks.us",
-  clientId: "REPLACE_WITH_ONBOARD_CLIENT_ID",
+  clientId: "lh02s535c1ov7s9su7nbs5u1c",
   redirectUri: "https://onboard.tnwks.us/callback",
   rpId: "tnwks.us",
 };
