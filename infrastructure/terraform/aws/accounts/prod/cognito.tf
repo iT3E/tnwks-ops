@@ -27,12 +27,12 @@ resource "aws_cognito_user_pool" "tnwks_auth" {
   # by AWS. sign_in_policy stays here because the provider handles it safely.
   mfa_configuration = "OFF"
 
-  # WebAuthn-only: passkey-with-user-verification is multi-factor in a single
-  # ceremony (something-you-have + something-you-are/know) and is phishing-
-  # resistant in a way that password+TOTP isn't. Recovery if all passkeys are
-  # lost: admin (us) resets the user via TF/console, user re-enrolls.
+  # Cognito requires PASSWORD to remain in allowed_first_auth_factors —
+  # AWS rejects pool updates that remove it ("Password should be configured
+  # as one of the allowed first auth factors"). This is a Cognito limitation,
+  # not a TF provider gap.
   sign_in_policy {
-    allowed_first_auth_factors = ["WEB_AUTHN"]
+    allowed_first_auth_factors = ["PASSWORD", "WEB_AUTHN"]
   }
 
   account_recovery_setting {
@@ -86,11 +86,12 @@ locals {
   cognito_mfa = {
     relying_party_id  = "internal.tnwks.us"
     user_verification = "required"
-    # SINGLE_FACTOR: passkey-with-UV is multi-factor in one ceremony, no
-    # need for additional MFA on top. Pool is WebAuthn-only (no PASSWORD in
-    # allowed_first_auth_factors) so the AWS rule that blocks SINGLE_FACTOR
-    # while MFA is required doesn't apply here.
-    factor_configuration = "SINGLE_FACTOR"
+    # MULTI_FACTOR_WITH_USER_VERIFICATION: passkey acts as MFA (second factor
+    # after password). The other valid value is SINGLE_FACTOR (passwordless),
+    # but AWS rejects that whenever PASSWORD is also a first-auth factor +
+    # MFA is ON, which it must be for password-path TOTP to be enforced.
+    # See [[cognito-passwordless-and-mfa-incompatible]].
+    factor_configuration = "MULTI_FACTOR_WITH_USER_VERIFICATION"
   }
 
   # Same role the AWS provider assumes in main.tf — TFC dynamic credentials
@@ -122,7 +123,8 @@ resource "terraform_data" "cognito_mfa" {
       aws cognito-idp set-user-pool-mfa-config \
         --region ${data.aws_region.current.name} \
         --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
-        --mfa-configuration OFF \
+        --mfa-configuration ON \
+        --software-token-mfa-configuration Enabled=true \
         --web-authn-configuration RelyingPartyId=${local.cognito_mfa.relying_party_id},UserVerification=${local.cognito_mfa.user_verification},FactorConfiguration=${local.cognito_mfa.factor_configuration}
     EOT
   }
@@ -183,7 +185,7 @@ resource "random_password" "admin_temp" {
   # invitation email so enrollment starts clean).
   keepers = {
     username     = data.sops_file.secrets.data["admin_email"]
-    auth_posture = "webauthn-only"
+    auth_posture = "passkey-as-mfa-with-totp"
   }
 }
 
