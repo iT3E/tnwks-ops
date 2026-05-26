@@ -123,6 +123,18 @@ module "cf_domain_1" {
       type    = "CNAME"
       proxied = false
     },
+    # auth.tnwks.us → Cognito custom-domain CloudFront distribution. Value
+    # comes from the prod AWS workspace output
+    # cognito_custom_domain_cloudfront_distribution. Must not be proxied:
+    # Cloudflare's proxy would terminate TLS with the wrong cert (Cloudflare's,
+    # not the auth.tnwks.us ACM cert ATTACHED to the CloudFront distro).
+    {
+      id      = "cognito_custom_domain"
+      name    = "auth.tnwks.us"
+      value   = "d2sskyx0g75op2.cloudfront.net"
+      type    = "CNAME"
+      proxied = false
+    },
   ]
 
   waf_custom_rules = [
