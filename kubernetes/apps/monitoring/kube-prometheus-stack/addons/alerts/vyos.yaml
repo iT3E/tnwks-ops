@@ -71,13 +71,13 @@ spec:
             description: "sce-vyos01 has been down for 2 minutes — network routing may be impacted"
 
         - alert: VyOSInterfaceDown
-          expr: node_network_up{instance="sce-vyos01",device=~"eth[0-3]"} == 0
+          expr: node_network_up{instance="sce-vyos01",device="eth1"} == 0
           for: 2m
           labels:
-            severity: warning
+            severity: critical
           annotations:
-            summary: "VyOS physical interface {{ $labels.device }} is down"
-            description: "Interface {{ $labels.device }} on sce-vyos01 has been down for 2 minutes"
+            summary: "VyOS trunk interface eth1 is down"
+            description: "eth1 on sce-vyos01 is the trunk to the switch — all VLAN traffic is impacted"
 
         - alert: VyOSHighNetworkErrors
           expr: rate(node_network_receive_errs_total{instance="sce-vyos01",device=~"eth.*"}[5m]) > 10
