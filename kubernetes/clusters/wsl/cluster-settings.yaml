@@ -63,5 +63,8 @@ data:
   # ship ServiceMonitor resources can re-enable scraping.
   SERVICE_MONITOR_ENABLED: "false"
 
+  # Windows host (WSL gateway) — windows_exporter target
+  WINDOWS_HOST_IP: "172.26.80.1"
+
   # Misc
   TIMEZONE: "America/Los_Angeles"

@@ -170,17 +170,14 @@ spec:
               - targets:
                   - sce-vyos01.${INTERNAL_DOMAIN}:9798
 
-          # TODO(restructure): PVE Proxmox endpoints — remove once migration
-          # to bare-metal MS-01 + Talos is complete.
-          - job_name: 'pve'
+          - job_name: windows-exporter
+            scrape_interval: 30s
+            scrape_timeout: 10s
             static_configs:
               - targets:
-                - 10.10.11.10:9221  # Proxmox VE node.
-                - 10.10.11.11:9221  # Proxmox VE node.
-                - 10.10.11.12:9221  # Proxmox VE node.
-            metrics_path: /pve
-            params:
-              module: [default]
+                  - ${WINDOWS_HOST_IP}:9182
+                labels:
+                  instance: DESKTOP-HKE05KI
 
           - job_name: unms_exporter
             # for a static target "unms.example.org", rewrite it to
@@ -197,19 +194,6 @@ spec:
               - targets:
                 - uisp.tnwks.us
 
-          - job_name: 'radosgw_exporter'
-            static_configs:
-              - targets:
-                - 10.10.11.10:9089
-            metrics_path: /
-
-          - job_name: 'haproxy_exporter'
-            static_configs:
-              - targets:
-                - 10.10.53.2:8404
-                - 10.10.53.8:8404
-                - 10.10.53.9:8404
-            metrics_path: /metrics
 
         enableAdminAPI: true
         externalLabels:

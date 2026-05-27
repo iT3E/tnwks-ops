@@ -81,20 +81,12 @@ spec:
               path: /var/lib/grafana/dashboards/ceph
             orgId: 1
             type: file
-          - name: pve
+          - name: windows
             disableDeletion: false
             editable: true
-            folder: "pve"
+            folder: "Windows"
             options:
-              path: /var/lib/grafana/dashboards/pve
-            orgId: 1
-            type: file
-          - name: haproxy
-            disableDeletion: false
-            editable: true
-            folder: "HAProxy"
-            options:
-              path: /var/lib/grafana/dashboards/haproxy
+              path: /var/lib/grafana/dashboards/windows
             orgId: 1
             type: file
           - name: nginx
@@ -114,7 +106,7 @@ spec:
             isDefault: true
             name: Prometheus
             type: prometheus
-            url: http://thanos-query.monitoring:9090
+            url: http://kube-prometheus-stack-prometheus.monitoring:9090
           - access: proxy
             name: Loki
             type: loki
@@ -192,28 +184,12 @@ spec:
             - name: "DS_PROMETHEUS"
               value: Prometheus
 
-      # Ref: https://grafana.com/grafana/dashboards/17600-ceph-rgw-new
-        radosgw:
-          gnetId: 17600
+
+      windows:
+      # Ref: https://grafana.com/grafana/dashboards/14694-windows-exporter-dashboard/
+        windows-exporter:
+          gnetId: 14694
           revision: 2
-          datasource:
-            - name: "DS_PROMETHEUS"
-              value: Prometheus
-
-      pve:
-      # Ref: https://grafana.com/grafana/dashboards/10347-proxmox-via-prometheus/
-        proxmox:
-          gnetId: 10347
-          revision: 5
-          datasource:
-            - name: "DS_PROMETHEUS"
-              value: Prometheus
-
-      haproxy:
-      # Ref: https://grafana.com/grafana/dashboards/12693-haproxy-2-full/
-        haproxy2full:
-          gnetId: 12693
-          revision: 5
           datasource:
             - name: "DS_PROMETHEUS"
               value: Prometheus
