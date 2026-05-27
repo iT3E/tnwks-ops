@@ -37,6 +37,21 @@ spec:
             image:
               repository: quay.io/prometheus/alertmanager
               tag: v0.32.1
+            probes:
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /-/healthy
+                    port: 9093
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /-/ready
+                    port: 9093
             resources:
               requests:
                 cpu: 11m

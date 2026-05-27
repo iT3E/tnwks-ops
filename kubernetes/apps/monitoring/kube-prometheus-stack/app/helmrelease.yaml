@@ -145,7 +145,7 @@ spec:
         alertingEndpoints:
           - namespace: monitoring
             name: alertmanager
-            port: 9093
+            port: http
             apiVersion: v2
         additionalScrapeConfigs:
           # TODO(restructure): legacy hardware scrape targets — these PVE/VyOS
