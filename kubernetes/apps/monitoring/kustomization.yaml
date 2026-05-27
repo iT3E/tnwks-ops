@@ -12,6 +12,7 @@ resources:
   - ./node-exporter/ks.yaml
   - ./unpoller/ks.yaml
   - ./unms-exporter/ks.yaml
+  - ./snmp-exporter/ks.yaml
 # loki, thanos, and vector are MS-01 only (loki + thanos need Rook Ceph
 # S3 buckets, vector-aggregator dependsOn loki). Added back via
 # kubernetes/clusters/ms-01/apps/kustomization.yaml.

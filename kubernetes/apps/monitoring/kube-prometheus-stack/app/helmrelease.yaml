@@ -158,6 +158,32 @@ spec:
                 labels:
                   instance: DESKTOP-HKE05KI
 
+          - job_name: vyos
+            scrape_interval: 30s
+            scrape_timeout: 10s
+            static_configs:
+              - targets:
+                  - 10.10.91.1:9100
+                labels:
+                  instance: sce-vyos01
+
+          - job_name: edgerouter
+            scrape_interval: 60s
+            scrape_timeout: 15s
+            metrics_path: /snmp
+            params:
+              module: [if_mib]
+              target: [172.16.1.1]
+            static_configs:
+              - targets:
+                  - snmp-exporter.monitoring.svc.cluster.local:9116
+                labels:
+                  instance: edgerouter-lite
+            relabel_configs:
+              - source_labels: []
+                target_label: __address__
+                replacement: snmp-exporter.monitoring.svc.cluster.local:9116
+
           - job_name: unms_exporter
             # for a static target "unms.example.org", rewrite it to
             # "exporter.example.org:9806/metrics?target=unms.example.org",
