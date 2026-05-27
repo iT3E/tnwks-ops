@@ -1,0 +1,44 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: edgerouter-alerts
+spec:
+  groups:
+    - name: edgerouter
+      rules:
+        - alert: EdgeRouterDown
+          expr: up{job="edgerouter",instance="edgerouter-lite"} == 0
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            summary: "EdgeRouter Lite unreachable — WAN gateway down"
+            description: "EdgeRouter at 172.16.1.1 has been unresponsive for 3 minutes. Internet connectivity likely impacted."
+
+        - alert: EdgeRouterWANDown
+          expr: ifOperStatus{instance="edgerouter-lite",ifName="eth0"} != 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "EdgeRouter WAN interface (eth0) is down"
+            description: "WAN port on EdgeRouter is not operational — internet is down"
+
+        - alert: EdgeRouterHighErrors
+          expr: rate(ifInErrors{instance="edgerouter-lite"}[5m]) + rate(ifOutErrors{instance="edgerouter-lite"}[5m]) > 10
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "EdgeRouter interface {{ $labels.ifName }} seeing errors"
+            description: "{{ $labels.ifName }} averaging {{ $value | humanize }} errors/sec"
+
+        - alert: EdgeRouterHighDiscards
+          expr: rate(ifInDiscards{instance="edgerouter-lite"}[5m]) + rate(ifOutDiscards{instance="edgerouter-lite"}[5m]) > 50
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "EdgeRouter interface {{ $labels.ifName }} dropping packets"
+            description: "{{ $labels.ifName }} averaging {{ $value | humanize }} discards/sec — possible congestion"

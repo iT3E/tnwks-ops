@@ -1,0 +1,53 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: windows-alerts
+spec:
+  groups:
+    - name: windows
+      rules:
+        - alert: WindowsHostHighCPU
+          expr: 1 - avg(rate(windows_cpu_time_total{mode="idle",instance="DESKTOP-HKE05KI"}[10m])) > 0.9
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Windows host CPU above 90% for 15m"
+            description: "DESKTOP-HKE05KI CPU at {{ $value | humanizePercentage }}"
+
+        - alert: WindowsHostHighMemory
+          expr: 1 - (windows_os_physical_memory_free_bytes{instance="DESKTOP-HKE05KI"} / windows_cs_physical_memory_bytes{instance="DESKTOP-HKE05KI"}) > 0.9
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Windows host memory above 90%"
+            description: "DESKTOP-HKE05KI memory at {{ $value | humanizePercentage }}"
+
+        - alert: WindowsHostCriticalMemory
+          expr: 1 - (windows_os_physical_memory_free_bytes{instance="DESKTOP-HKE05KI"} / windows_cs_physical_memory_bytes{instance="DESKTOP-HKE05KI"}) > 0.95
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Windows host memory above 95%"
+            description: "DESKTOP-HKE05KI memory at {{ $value | humanizePercentage }} — risk of OOM"
+
+        - alert: WindowsDiskCritical
+          expr: 1 - (windows_logical_disk_free_bytes{instance="DESKTOP-HKE05KI"} / windows_logical_disk_size_bytes{instance="DESKTOP-HKE05KI"}) > 0.9
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Windows disk {{ $labels.volume }} above 90% full"
+            description: "{{ $labels.volume }} at {{ $value | humanizePercentage }}"
+
+        - alert: WindowsHostDown
+          expr: up{job="windows-exporter",instance="DESKTOP-HKE05KI"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Windows host unreachable"
+            description: "DESKTOP-HKE05KI has been down for 5 minutes"

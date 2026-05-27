@@ -1,0 +1,89 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vyos-alerts
+spec:
+  groups:
+    - name: vyos
+      rules:
+        - alert: VyOSHighCPU
+          expr: 1 - avg(rate(node_cpu_seconds_total{mode="idle",instance="sce-vyos01"}[10m])) > 0.85
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "VyOS CPU above 85% for 15m"
+            description: "sce-vyos01 CPU at {{ $value | humanizePercentage }}"
+
+        - alert: VyOSCriticalCPU
+          expr: 1 - avg(rate(node_cpu_seconds_total{mode="idle",instance="sce-vyos01"}[5m])) > 0.95
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "VyOS CPU above 95% — router under heavy load"
+            description: "sce-vyos01 CPU at {{ $value | humanizePercentage }}"
+
+        - alert: VyOSHighMemory
+          expr: 1 - (node_memory_MemAvailable_bytes{instance="sce-vyos01"} / node_memory_MemTotal_bytes{instance="sce-vyos01"}) > 0.85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "VyOS memory above 85%"
+            description: "sce-vyos01 memory at {{ $value | humanizePercentage }}"
+
+        - alert: VyOSConntrackHigh
+          expr: node_nf_conntrack_entries{instance="sce-vyos01"} / node_nf_conntrack_entries_limit{instance="sce-vyos01"} > 0.75
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "VyOS conntrack table above 75%"
+            description: "{{ $value | humanizePercentage }} of conntrack limit used — consider increasing nf_conntrack_max"
+
+        - alert: VyOSConntrackCritical
+          expr: node_nf_conntrack_entries{instance="sce-vyos01"} / node_nf_conntrack_entries_limit{instance="sce-vyos01"} > 0.9
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "VyOS conntrack table above 90% — new connections may be dropped"
+            description: "{{ $value | humanizePercentage }} of conntrack limit"
+
+        - alert: VyOSDiskFull
+          expr: 1 - (node_filesystem_avail_bytes{instance="sce-vyos01",mountpoint="/"} / node_filesystem_size_bytes{instance="sce-vyos01",mountpoint="/"}) > 0.85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "VyOS root filesystem above 85%"
+            description: "sce-vyos01 / at {{ $value | humanizePercentage }}"
+
+        - alert: VyOSDown
+          expr: up{job="vyos",instance="sce-vyos01"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "VyOS router unreachable"
+            description: "sce-vyos01 has been down for 2 minutes — network routing may be impacted"
+
+        - alert: VyOSInterfaceDown
+          expr: node_network_up{instance="sce-vyos01",device=~"eth[0-3]"} == 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "VyOS physical interface {{ $labels.device }} is down"
+            description: "Interface {{ $labels.device }} on sce-vyos01 has been down for 2 minutes"
+
+        - alert: VyOSHighNetworkErrors
+          expr: rate(node_network_receive_errs_total{instance="sce-vyos01",device=~"eth.*"}[5m]) > 10
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "VyOS interface {{ $labels.device }} seeing errors"
+            description: "{{ $labels.device }} averaging {{ $value | humanize }} errors/sec over 10 minutes"

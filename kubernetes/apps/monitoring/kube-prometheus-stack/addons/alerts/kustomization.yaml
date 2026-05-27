@@ -4,3 +4,6 @@ kind: Kustomization
 namespace: monitoring
 resources:
   - ./oomkilled.yaml
+  - ./windows.yaml
+  - ./vyos.yaml
+  - ./edgerouter.yaml
