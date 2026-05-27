@@ -2,7 +2,7 @@ receivers:
   - name: "null"
   - name: "telegram"
     telegram_configs:
-      - bot_token_file: /etc/secrets/telegram_bot_token
+      - bot_token: "8736939617:AAG3XsfuXgbvjBYdWtPFoz8wWsOwPQmfvAg"
         chat_id: -5257099089
         send_resolved: true
         parse_mode: HTML
