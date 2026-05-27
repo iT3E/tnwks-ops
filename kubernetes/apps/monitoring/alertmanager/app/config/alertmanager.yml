@@ -1,38 +1,20 @@
 receivers:
   - name: "null"
-  - name: "pushover"
-    pushover_configs:
-      - html: true
-        token_file: /etc/secrets/pushover_api_token
-        user_key_file: /etc/secrets/pushover_api_userkey
+  - name: "telegram"
+    telegram_configs:
+      - bot_token_file: /etc/secrets/telegram_bot_token
+        chat_id: 8524513370
         send_resolved: true
-        priority: |-
-          {{ if eq .Status "firing" }}1{{ else }}0{{ end }}
-        url_title: View in Alert Manager
-        title: |-
-          [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }}
+        parse_mode: HTML
         message: |-
+          {{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} <b>[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}]</b> {{ .CommonLabels.alertname }}
           {{- range .Alerts }}
-            {{- if ne .Labels.severity "" }}
-              <b>Severity:</b> <i>{{ .Labels.severity }}</i>
-            {{- else }}
-              <b>Severity:</b> <i>N/A</i>
-            {{- end }}
-            {{- if ne .Annotations.description "" }}
-              <b>Description:</b> <i>{{ .Annotations.description }}</i>
-            {{- else if ne .Annotations.summary "" }}
-              <b>Summary:</b> <i>{{ .Annotations.summary }}</i>
-            {{- else if ne .Annotations.message "" }}
-              <b>Message:</b> <i>{{ .Annotations.message }}</i>
-            {{- else }}
-              <b>Description:</b> <i>N/A</i>
-            {{- end }}
-            {{- if gt (len .Labels.SortedPairs) 0 }}
-              <b>Details:</b>
-              {{- range .Labels.SortedPairs }}
-                • <b>{{ .Name }}:</b> <i>{{ .Value }}</i>
-              {{- end }}
-            {{- end }}
+          {{- if ne .Annotations.description "" }}
+          {{ .Annotations.description }}
+          {{- else if ne .Annotations.summary "" }}
+          {{ .Annotations.summary }}
+          {{- end }}
+          <b>Severity:</b> {{ .Labels.severity }}
           {{- end }}
 
 route:
@@ -40,12 +22,12 @@ route:
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 6h
-  receiver: "pushover"
+  receiver: "telegram"
   routes:
     - receiver: "null"
       matchers:
         - alertname =~ "InfoInhibitor|Watchdog"
-    - receiver: "pushover"
+    - receiver: "telegram"
       matchers:
         - severity = critical
       continue: true
