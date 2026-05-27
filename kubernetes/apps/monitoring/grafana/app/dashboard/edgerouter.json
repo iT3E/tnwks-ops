@@ -1,0 +1,92 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "Uptime",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "expr": "sysUpTime{instance=\"edgerouter-lite\"} / 100", "refId": "A" }],
+      "options": { "colorMode": "value", "graphMode": "none", "textMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "dtdurations", "thresholds": { "steps": [{ "color": "green", "value": null }] } }, "overrides": [] }
+    },
+    {
+      "gridPos": { "h": 4, "w": 18, "x": 6, "y": 0 },
+      "id": 2,
+      "title": "Interface Status",
+      "type": "table",
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "expr": "ifOperStatus{instance=\"edgerouter-lite\"}", "format": "table", "instant": true, "refId": "A" }],
+      "transformations": [
+        { "id": "filterFieldsByName", "options": { "include": { "names": ["ifDescr", "ifName", "Value"] } } },
+        { "id": "organize", "options": { "renameByName": { "Value": "Status (1=up)" } } }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+    {
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 },
+      "id": 10,
+      "title": "Interface Traffic (bps)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        { "expr": "rate(ifHCInOctets{instance=\"edgerouter-lite\"}[5m]) * 8", "legendFormat": "{{ifName}} rx", "refId": "A" },
+        { "expr": "-rate(ifHCOutOctets{instance=\"edgerouter-lite\"}[5m]) * 8", "legendFormat": "{{ifName}} tx", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bps", "custom": { "fillOpacity": 15, "lineWidth": 2 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } }
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "id": 20,
+      "title": "Interface Errors",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        { "expr": "rate(ifInErrors{instance=\"edgerouter-lite\"}[5m])", "legendFormat": "{{ifName}} in_err", "refId": "A" },
+        { "expr": "rate(ifOutErrors{instance=\"edgerouter-lite\"}[5m])", "legendFormat": "{{ifName}} out_err", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "pps", "custom": { "fillOpacity": 10 } }, "overrides": [] }
+    },
+    {
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "id": 21,
+      "title": "Interface Discards",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        { "expr": "rate(ifInDiscards{instance=\"edgerouter-lite\"}[5m])", "legendFormat": "{{ifName}} in_disc", "refId": "A" },
+        { "expr": "rate(ifOutDiscards{instance=\"edgerouter-lite\"}[5m])", "legendFormat": "{{ifName}} out_disc", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "pps", "custom": { "fillOpacity": 10 } }, "overrides": [] }
+    },
+    {
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+      "id": 30,
+      "title": "Unicast Packets/sec",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        { "expr": "rate(ifHCInUcastPkts{instance=\"edgerouter-lite\"}[5m])", "legendFormat": "{{ifName}} rx", "refId": "A" },
+        { "expr": "-rate(ifHCOutUcastPkts{instance=\"edgerouter-lite\"}[5m])", "legendFormat": "{{ifName}} tx", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "pps", "custom": { "fillOpacity": 15, "lineWidth": 1 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean"] } }
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": ["network", "edgerouter"],
+  "templating": { "list": [] },
+  "time": { "from": "now-3h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "EdgeRouter Lite — WAN Gateway",
+  "uid": "edgerouter-lite",
+  "version": 1
+}

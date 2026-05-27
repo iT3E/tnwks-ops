@@ -37,11 +37,6 @@ spec:
             image:
               repository: quay.io/prometheus/alertmanager
               tag: v0.32.1
-            args:
-              - --log.level=debug
-              - --config.file=/etc/alertmanager/alertmanager.yml
-              - --storage.path=/alertmanager
-            probes:
             resources:
               requests:
                 cpu: 11m

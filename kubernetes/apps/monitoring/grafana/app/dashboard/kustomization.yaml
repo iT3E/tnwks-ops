@@ -7,6 +7,8 @@ configMapGenerator:
     files:
       - home.json
       - unms_overview.json
+      - vyos.json
+      - edgerouter.json
 generatorOptions:
   disableNameSuffixHash: true
   annotations:
