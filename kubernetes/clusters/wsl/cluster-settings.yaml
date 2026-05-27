@@ -61,7 +61,7 @@ data:
   # kube-prometheus-stack has reconciled and installed the
   # monitoring.coreos.com CRDs; flip to "true" thereafter so apps that
   # ship ServiceMonitor resources can re-enable scraping.
-  SERVICE_MONITOR_ENABLED: "false"
+  SERVICE_MONITOR_ENABLED: "true"
 
   # Windows host (WSL gateway) — windows_exporter target
   WINDOWS_HOST_IP: "172.26.80.1"
