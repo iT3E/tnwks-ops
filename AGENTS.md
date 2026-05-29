@@ -69,6 +69,26 @@ All changes go through a PR and are squash-merged to `main` — no direct
 pushes. There is no central "deploy" step; validation happens in whatever
 system actually owns the change:
 
+> **`main` is the single source of truth for cluster state, and Flux is the
+> only thing that mutates the cluster.** This is a fix-forward repo: get as
+> confident as you can *before* the PR using **non-mutating** checks, then
+> merge and let Flux reconcile. If it breaks, fix forward in a follow-up
+> commit — never reach into the cluster to patch around it.
+>
+> Pre-merge confidence is built **without touching live state**:
+> `kustomize build` (or `flux build`), `kubectl apply --dry-run=server`,
+> `sops -d` to confirm a secret decrypts, and registry/CRD/version checks.
+>
+> **Do NOT** `kubectl apply`/`create`/`patch`/`delete`, `helm install`, or
+> otherwise hand-apply a feature branch onto the cluster to "test" it — that
+> creates drift `main` can't describe and resources Flux will later prune or
+> fight. The same rule covers live workarounds: don't `kubectl patch` a
+> resource, hand-create a database, or annotate a Secret to make something
+> work. If a step genuinely cannot be expressed in git (e.g. CNPG
+> `postInitApplicationSQL` only runs at first boot), find the declarative
+> equivalent that reconciles on a running cluster (e.g. the CNPG `Database`
+> CRD) rather than running the imperative command by hand.
+
 - **Kubernetes (`kubernetes/**`)** — Flux reconciles on the next interval
   (30m) after the squash-merge lands. To validate immediately, force a
   sync and inspect the affected resources:

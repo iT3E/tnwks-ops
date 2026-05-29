@@ -1,0 +1,23 @@
+---
+# Declarative database creation via the CNPG Database CRD (operator >= 1.25).
+#
+# `postInitApplicationSQL` (see cluster.yaml) only runs once, at first cluster
+# boot — it cannot create a new database on an already-running cluster. The
+# Database resource reconciles continuously, so adding a database to an
+# existing cluster is pure GitOps: Flux applies this, the operator ensures the
+# database exists. `ensure: present` is idempotent and safe on fresh clusters
+# too (postInitApplicationSQL creates it first, the operator then validates).
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: litellm
+  namespace: databases
+spec:
+  cluster:
+    name: postgres
+  name: litellm
+  owner: app
+  ensure: present
+  # Keep the database if this resource is ever removed — never let a manifest
+  # deletion drop application data.
+  databaseReclaimPolicy: retain

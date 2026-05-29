@@ -18,13 +18,13 @@ spec:
     enablePodMonitor: ${SERVICE_MONITOR_ENABLED}
   # Annotations on the generated `postgres-app` Secret tell stakater/reflector
   # to mirror it into namespaces that need the credentials (e.g. mealie in
-  # production/). The reflected Secret keeps the same name + keys.
+  # production/, litellm in ai/). The reflected Secret keeps the same name + keys.
   inheritedMetadata:
     annotations:
       reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
-      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "production"
+      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "production,ai"
       reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
-      reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: "production"
+      reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: "production,ai"
   bootstrap:
     initdb:
       database: app
@@ -34,3 +34,4 @@ spec:
       # we want to keep schema-isolated.
       postInitApplicationSQL:
         - CREATE DATABASE bitwarden OWNER app;
+        - CREATE DATABASE litellm OWNER app;
