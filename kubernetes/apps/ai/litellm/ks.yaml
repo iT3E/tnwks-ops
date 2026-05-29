@@ -11,6 +11,11 @@ spec:
     kind: GitRepository
     name: flux-system
   wait: false # no flux ks dependents
+  # Gate on the CNPG cluster Kustomization: it owns both the `litellm`
+  # Database (created by the operator) and the `postgres-app` secret that
+  # reflector mirrors into the `ai` namespace. litellm needs both at startup.
+  dependsOn:
+    - name: cloudnative-pg-cluster
   decryption:
     provider: sops
     secretRef:
