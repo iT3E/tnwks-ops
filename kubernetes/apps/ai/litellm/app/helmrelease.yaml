@@ -33,7 +33,10 @@ spec:
           app:
             image:
               repository: ghcr.io/berriai/litellm
-              tag: v1.86.2-stable
+              # litellm's rolling stable tag — pinned semver `main-vX.Y.Z`
+              # tags exist but lag releases; `main-stable` is the documented
+              # production tag and is what upstream recommends for deployments.
+              tag: main-stable
             args:
               - --config
               - /etc/litellm/config.yaml
@@ -83,9 +86,9 @@ spec:
             resources:
               requests:
                 cpu: 50m
-                memory: 256Mi
+                memory: 512Mi
               limits:
-                memory: 1Gi
+                memory: 2Gi
     service:
       app:
         controller: litellm
