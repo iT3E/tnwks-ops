@@ -66,5 +66,12 @@ data:
   # Windows host (WSL gateway) — windows_exporter target
   WINDOWS_HOST_IP: "172.26.80.1"
 
+  # Ollama — runs as a native process on the WSL host (not in k8s), listening
+  # on 0.0.0.0:11434. Pods reach it via the homelab-wsl docker bridge gateway
+  # (10.5.0.1), which is the WSL host's address on that bridge. Verified
+  # reachable from a pod with `curl http://10.5.0.1:11434/api/version`.
+  # (host.docker.internal does not resolve inside Talos-in-Docker node pods.)
+  OLLAMA_BASE_URL: "http://10.5.0.1:11434"
+
   # Misc
   TIMEZONE: "America/Los_Angeles"
