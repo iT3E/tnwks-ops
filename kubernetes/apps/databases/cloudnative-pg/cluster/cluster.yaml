@@ -11,7 +11,12 @@ spec:
   primaryUpdateStrategy: unsupervised
   storage:
     size: ${CNPG_INSTANCE_SIZE}
-    storageClass: ${STORAGE_CLASS_DEFAULT}
+    # Postgres needs Linux permission semantics (initdb chmods
+    # postgresql.conf). On WSL, ${STORAGE_CLASS_DEFAULT} (=local-path on
+    # /mnt/e Windows DrvFs bind-mount) breaks initdb with EPERM, so we
+    # use a separate SC variable that points at an ext4 path on the WSL
+    # cluster and still maps to the cluster default elsewhere.
+    storageClass: ${STORAGE_CLASS_DATABASE}
   superuserSecret:
     name: postgres-superuser
   monitoring:

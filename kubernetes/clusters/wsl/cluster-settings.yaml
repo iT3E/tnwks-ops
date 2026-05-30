@@ -24,6 +24,12 @@ data:
   #                      PVCs (storageClassName is immutable).
   STORAGE_CLASS_DEFAULT: "local-path"
   STORAGE_CLASS_BULK: "local-path"
+  # Database (postgres) storage. Must support Linux permission semantics
+  # (initdb chmods config files). The default local-path SC sits on a
+  # Windows DrvFs bind-mount which doesn't, so postgres uses local-path-ext4
+  # — pinned to homelab-wsl-worker-1 on the WSL ext4.vhdx (still C:, but
+  # postgres data is small and this avoids the DrvFs permission wall).
+  STORAGE_CLASS_DATABASE: "local-path-ext4"
 
   # Bulk PVC size — WSL uses smaller sizes (local-path is whatever the host has).
   # local-path only supports ReadWriteOnce; on WSL we accept that limitation

@@ -28,13 +28,19 @@ spec:
     helperImage:
       repository: public.ecr.aws/docker/library/busybox
       tag: latest
-    # Two StorageClasses on this cluster — both pinned to homelab-wsl-worker-2,
-    # which is the only node with the Windows E: bind-mount at /mnt/e/k8s-storage:
-    #   local-path       — default, /mnt/e/k8s-storage/default
-    #   local-path-bulk  — /mnt/e/k8s-storage (bulk video / archive PVCs;
-    #                      frigate-media's PV is here and stays put)
-    # local-path is a subdir under the same bind-mount the worker-2 container
-    # has into Windows E:, so all PVCs avoid the WSL ext4.vhdx on C:.
+    # Three StorageClasses on this cluster:
+    #   local-path       — DEFAULT. /mnt/e/k8s-storage/default on worker-2.
+    #                      Use for almost everything; PVCs avoid the WSL
+    #                      ext4.vhdx on C:.
+    #   local-path-bulk  — /mnt/e/k8s-storage on worker-2. Bulk video/archive
+    #                      (frigate-media etc.). Same bind-mount as default.
+    #   local-path-ext4  — /var/lib/rancher/k3s/storage on worker-1. The WSL
+    #                      ext4.vhdx (C:). Used only by workloads that can't
+    #                      live on the Windows DrvFs bind-mount because they
+    #                      need real Linux permissions semantics (chmod /
+    #                      setuid). Postgres is the canonical case: initdb
+    #                      fails on /mnt/e with "could not change permissions
+    #                      of postgresql.conf: Operation not permitted".
     # The chart treats `storageClassConfigs` as exclusive with the top-level
     # `storageClass` block — only entries in the map are created.
     storageClassConfigs:
@@ -58,6 +64,16 @@ spec:
         nodePathMap:
           - node: homelab-wsl-worker-2
             paths: ["/mnt/e/k8s-storage"]
+      local-path-ext4:
+        storageClass:
+          create: true
+          defaultClass: false
+          defaultVolumeType: hostPath
+          reclaimPolicy: Delete
+          volumeBindingMode: WaitForFirstConsumer
+        nodePathMap:
+          - node: homelab-wsl-worker-1
+            paths: ["/var/lib/rancher/k3s/storage"]
     # NOTE: Do not enable Flux variable substitution on this HelmRelease
     configmap:
       setup: |-
