@@ -19,6 +19,9 @@ data:
   # nfs-bulk:   democratic-csi NFS to TerraMaster (RWX, bulk media)
   STORAGE_CLASS_DEFAULT: "ceph-block"
   STORAGE_CLASS_BULK: "nfs-bulk"
+  # Database SC — on MS-01 ceph-block respects all Linux permission
+  # semantics, so cnpg/postgres uses the same SC as everything else.
+  STORAGE_CLASS_DATABASE: "ceph-block"
 
   # Bulk media PVC size (TerraMaster NFS share)
   BULK_PVC_SIZE: "10Ti"
