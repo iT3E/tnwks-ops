@@ -1,0 +1,48 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nfs-ganesha-config
+  namespace: storage
+data:
+  # Static NFS-Ganesha config. The nfs-provisioner image's built-in config only
+  # exports a metadata-only PSEUDO root (it's meant for dynamic per-PVC
+  # exports); we bypass the provisioner entrypoint and run ganesha.nfsd directly
+  # against this config to statically export /export over NFSv4, read-write.
+  ganesha.conf: |
+    NFS_CORE_PARAM {
+      # NFSv4 only — no rpcbind/mountd/NLM, so clients need just port 2049.
+      Enable_NLM = false;
+      Enable_RQUOTA = false;
+      Protocols = 4;
+      # The image has no kernel NFS; nothing else is listening, but be explicit.
+      NFS_Port = 2049;
+    }
+
+    NFSV4 {
+      # Shorter grace period — single server, no clustered state to recover.
+      Graceless = true;
+      # Pseudo filesystem root; the export below grafts in at /export.
+      Lease_Lifetime = 60;
+    }
+
+    EXPORT {
+      Export_Id = 1;
+      # Pseudo path clients mount: nfs:<ip>:/export
+      Pseudo = /export;
+      Path = /export;
+      Access_Type = RW;
+      Squash = No_Root_Squash;
+      # NFSv4 doesn't use the transport-level Sec by default; allow sys auth.
+      SecType = sys;
+      Protocols = 4;
+      Transports = TCP;
+      FSAL {
+        # Userspace VFS backend — serves a normal directory tree, no kernel nfsd.
+        Name = VFS;
+      }
+    }
+
+    LOG {
+      Default_Log_Level = WARN;
+    }

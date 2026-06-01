@@ -121,5 +121,8 @@ spec:
             emptyDir: {}
           - name: sites
             nfs:
-              server: nfs-server.storage.svc.cluster.local
+              # nfs-server (ganesha) fixed ClusterIP — referenced by IP, not
+              # DNS: the kubelet-level NFS mount uses the node resolver, which
+              # can't resolve cluster service names. See the Service manifest.
+              server: 10.43.255.254
               path: /export

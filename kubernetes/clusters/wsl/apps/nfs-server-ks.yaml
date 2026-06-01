@@ -1,14 +1,20 @@
 ---
-# WSL overlay for nfs-server: pin the pod to homelab-wsl-worker-2.
+# WSL overlay for nfs-server: pin to worker-1 and back the PVC with
+# local-path-ext4.
 #
-# The `local-path` StorageClass on WSL is configured with an explicit
-# nodePathMap that only lists worker-2 (path /mnt/e/k8s-storage/default) and
-# has no DEFAULT_PATH_FOR_NON_LISTED_NODES, so its PVC can only be provisioned
-# on worker-2. Without this pin the scheduler may place the pod on worker-1 and
-# provisioning fails with "config doesn't contain node homelab-wsl-worker-1".
+# nfs-ganesha's VFS FSAL needs name_to_handle_at / open_by_handle_at on the
+# backing filesystem. The default `local-path` SC stores data under
+# /mnt/e/k8s-storage (a Windows DrvFs/9p bind-mount) which does NOT support
+# file handles — ganesha fails with "vfs_lookup_path: Could not get handle for
+# path /export, error Operation not supported (95)".
 #
-# Only the nfs-server pod (which owns the local-path PVC) needs the pin —
-# nginx and the runner reach the share over the network via the Service.
+# local-path-ext4 sits on a real ext4 VHDX (handle support) but is pinned to
+# homelab-wsl-worker-1, so the nfs-server pod must run there too. This is the
+# same DrvFs wall that pushes postgres onto local-path-ext4 (see
+# cluster-settings STORAGE_CLASS_DATABASE).
+#
+# Only the nfs-server pod (PVC owner) needs the pin — nginx and the runner
+# reach the share over the network via the fixed Service ClusterIP.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -37,4 +43,11 @@ spec:
         - op: add
           path: /spec/template/spec/nodeSelector
           value:
-            kubernetes.io/hostname: homelab-wsl-worker-2
+            kubernetes.io/hostname: homelab-wsl-worker-1
+    - target:
+        kind: PersistentVolumeClaim
+        name: nfs-server-data
+      patch: |
+        - op: replace
+          path: /spec/storageClassName
+          value: local-path-ext4
