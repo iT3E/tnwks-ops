@@ -26,6 +26,17 @@ data:
             try_files $uri $uri/ /index.html;
         }
 
+        # Private data files: /<project>/private/* holds JSON (e.g. budget.json)
+        # gated by oauth2-proxy at the ingress. These are DATA, not SPA routes —
+        # they must NOT fall back to index.html (that would hand an authed client
+        # an HTML page instead of a 404 for a missing/renamed file). Must precede
+        # the per-project SPA block below: nginx evaluates regex locations in
+        # order, first match wins. Auth itself is enforced one layer up by the
+        # ingress; this block only governs static-file resolution.
+        location ~ ^/[^/]+/private(/|$) {
+            try_files $uri =404;
+        }
+
         # Per-project SPA fallback: requests under /<project>/ that don't map
         # to a real file fall back to that project's index.html so Angular
         # client-side routing works at sites.tnwks.us/<project>/.

@@ -1,4 +1,11 @@
 ---
+# PUBLIC ingress — everything under sites.${SECRET_DOMAIN}/ that is NOT a
+# /<project>/private/ path. Deliberately has NO oauth2-proxy auth annotations:
+# the trip pages, assets, and SPA routes are all world-readable.
+#
+# nginx-ingress routes by longest-matching path, so the more specific
+# /<project>/private prefixes on the `sites-private` ingress below win for those
+# requests; this ingress catches everything else.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -19,6 +26,58 @@ spec:
         paths:
           - path: /
             pathType: Prefix
+            backend:
+              service:
+                name: sites
+                port:
+                  name: http
+---
+# PRIVATE ingress — gates /<project>/private/* behind oauth2-proxy via the
+# nginx auth-subrequest. Reusable for any project on the platform: the path
+# pattern is the generic /<project>/private prefix, not one project's slug.
+#
+# A separate Ingress (rather than auth annotations on the public one) keeps the
+# auth surface surgically scoped to the private prefix — the public ingress
+# stays annotation-free so a misconfigured auth-url can never take the whole
+# site down. Both target the same `sites` Service.
+#
+# No external-dns target annotation here: the public `sites` ingress above
+# already owns the sites.${SECRET_DOMAIN} DNS record. A second claim on the same
+# host would make external-dns fight itself over ownership.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sites-private
+  namespace: production
+  annotations:
+    # Auth subrequest: nginx asks oauth2-proxy (cluster-internal Service) whether
+    # the request carries a valid session. 202 → allow; 401 → run auth-signin.
+    nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local/oauth2/auth"
+    # On 401, redirect the browser to the PUBLIC oauth2 host so an external
+    # visitor on sites.${SECRET_DOMAIN} can actually reach the sign-in flow.
+    # rd= returns them to the page they were on after Cognito completes.
+    nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${SECRET_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
+    # Cognito sessions span multiple cookies; the auth-subrequest header chunk
+    # overflows nginx's default 4k buffer. Match what Grafana/oauth2-proxy use.
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+    # The path below is a regex (any project slug + /private/...). No rewrite —
+    # the original URI passes through to nginx, which serves the file from NFS.
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - "sites.${SECRET_DOMAIN}"
+  rules:
+    - host: "sites.${SECRET_DOMAIN}"
+      http:
+        paths:
+          # Matches /<project>/private and everything beneath it, for ANY single
+          # project slug. use-regex (above) makes ingress-nginx treat this as a
+          # regex; ImplementationSpecific defers path semantics to the controller.
+          - path: /[^/]+/private(/.*)?$
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: sites

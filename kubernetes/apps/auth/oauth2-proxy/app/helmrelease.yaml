@@ -34,7 +34,13 @@ spec:
       configFile: |-
         provider = "oidc"
         oidc_issuer_url = "${COGNITO_OIDC_ISSUER_URL}"
-        redirect_url = "https://oauth2.${INTERNAL_DOMAIN}/oauth2/callback"
+        # No static redirect_url. This single oauth2-proxy now fronts two entry
+        # hosts — oauth2.internal.tnwks.us (internal apps like Grafana) and the
+        # public oauth2.tnwks.us (the sites platform). With reverse_proxy=true
+        # below, oauth2-proxy derives the callback per-request from the
+        # X-Forwarded-* headers ingress-nginx sets, so each host gets its own
+        # /oauth2/callback. Both callbacks are registered on the Cognito app
+        # client (see infrastructure/terraform/.../cognito.tf).
         upstreams = ["static://200"]
         email_domains = ["*"]
         scope = "openid email profile"
@@ -51,8 +57,18 @@ spec:
         skip_jwt_bearer_tokens = false
         session_store_type = "cookie"
         reverse_proxy = true
-        whitelist_domains = [".${INTERNAL_DOMAIN}"]
-        cookie_domains = [".${INTERNAL_DOMAIN}"]
+        # Broadened from .${INTERNAL_DOMAIN} to .${SECRET_DOMAIN} (the apex,
+        # tnwks.us). .${INTERNAL_DOMAIN} is a strict subset, so internal apps
+        # (Grafana et al.) keep working unchanged — but the sites platform lives
+        # at sites.${SECRET_DOMAIN}, which is a sibling of internal.* not a child,
+        # so the old cookie domain would never reach it (auth loop). The apex
+        # covers both subtrees with one session cookie.
+        #   - whitelist_domains: lets oauth2-proxy honor rd= redirects back to
+        #     any *.tnwks.us host (else it rejects them as open-redirects).
+        #   - cookie_domains: sets the session cookie on .tnwks.us so it's sent
+        #     to both internal.tnwks.us and sites.tnwks.us.
+        whitelist_domains = [".${SECRET_DOMAIN}"]
+        cookie_domains = [".${SECRET_DOMAIN}"]
         cookie_expire = "720h"
         cookie_refresh = "23h"
         cookie_secure = true

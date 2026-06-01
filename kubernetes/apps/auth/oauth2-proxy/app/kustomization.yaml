@@ -4,3 +4,4 @@ kind: Kustomization
 namespace: auth
 resources:
   - ./helmrelease.yaml
+  - ./ingress-public.yaml
