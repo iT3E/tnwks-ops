@@ -11,8 +11,8 @@ spec:
     kind: GitRepository
     name: flux-system
   wait: false
-  # Needs the ARC CRDs/webhook (controller) and the NFS export it mounts at
-  # /sites (nfs-server, storage namespace).
+  # Needs the scale-set controller (AutoscalingRunnerSet CRD + listener) and
+  # the NFS export it mounts at /sites (nfs-server, storage namespace).
   dependsOn:
     - name: actions-runner-controller
     - name: nfs-server

@@ -10,13 +10,13 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
-  # The runner Kustomization depends on the controller's CRDs/webhook, so
-  # block until the HelmRelease is healthy.
+  # The runner scale set Kustomization installs an AutoscalingRunnerSet CRD
+  # provided by this controller, so block until the controller is healthy.
   wait: true
   healthChecks:
     - apiVersion: helm.toolkit.fluxcd.io/v2
       kind: HelmRelease
-      name: actions-runner-controller
+      name: gha-runner-scale-set-controller
       namespace: tools
   decryption:
     provider: sops
