@@ -91,10 +91,38 @@ $defaultUid = (Get-ChildItem HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxs
 Log "Current DefaultUid: $defaultUid"
 
 # --- Quiesce -----------------------------------------------------------------
+# `--move` requires the ENTIRE WSL VM stopped. Anything that touches the distro
+# keeps its VHD open and the VM auto-restarts:
+#   - a process running INSIDE the distro (e.g. an interactive shell, Claude
+#     Code, an SSH session), OR
+#   - a Windows process whose CWD is a \\wsl$\<distro> / \\wsl.localhost path
+#     (that mounts the 9p FS and revives the VM).
+# So this script must be launched from a PLAIN WINDOWS path (e.g. C:\ or your
+# Windows home), NOT from inside WSL and NOT from a \\wsl$ working directory.
+Log "Verifying this process is not running from a \\wsl$ path..."
+$cwd = (Get-Location).Path
+if ($cwd -like '\\wsl$*' -or $cwd -like '\\wsl.localhost*' -or $cwd -like '\\\\wsl*') {
+    throw "ABORT: current directory is '$cwd' (a WSL UNC path). That keeps the distro's VHD open so --move will fail with WSL_E_DISTRO_NOT_STOPPED. cd to a Windows path (e.g. C:\) and re-run."
+}
+
 Log "Shutting WSL down (cluster goes offline now)..."
 & wsl.exe --shutdown
-Start-Sleep -Seconds 8
-Log "Shutdown issued."
+
+# Poll until the VM is actually Stopped, rather than a blind sleep. `wsl -l -v`
+# (or --running) reports running distros; wait until none remain.
+$stopped = $false
+for ($i = 0; $i -lt 30; $i++) {
+    Start-Sleep -Seconds 2
+    $running = (& wsl.exe --list --running --quiet 2>$null) -join "`n"
+    # strip NULs that wsl.exe emits as UTF-16
+    $running = ($running -replace "`0", '').Trim()
+    if ([string]::IsNullOrWhiteSpace($running)) { $stopped = $true; break }
+    Log "  still running after $((($i+1)*2))s: $($running -replace "`r?`n", ', ')"
+}
+if (-not $stopped) {
+    throw "ABORT: WSL VM did not stop within 60s after --shutdown. Something is holding the distro open (a WSL shell, Claude Code, or a \\wsl$ path). Close all WSL sessions/Explorer windows and re-run from a Windows path."
+}
+Log "WSL VM confirmed Stopped."
 
 # --- Move --------------------------------------------------------------------
 Log "Running: wsl --manage $Distro --move `"$DestDir`"  (this is the long step)"
