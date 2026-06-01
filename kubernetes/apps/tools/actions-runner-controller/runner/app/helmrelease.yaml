@@ -45,16 +45,65 @@ spec:
     controllerServiceAccount:
       namespace: tools
       name: gha-runner-scale-set-controller-gha-rs-controller
-    # Default to dind-less "kubernetes-novolume" would require hooks; the
-    # Angular build just needs node + the NFS share, so use the plain runner
-    # pod template and mount the shared export at /sites.
+    # Docker-in-Docker. The chart's `containerMode: dind` shortcut can't be
+    # combined with a custom template, and we need a custom template for the
+    # NFS mount — so the full dind pod spec is written out here (per the
+    # chart's documented dind template) with the /sites NFS volume added to
+    # the runner container.
     template:
       spec:
+        initContainers:
+          # Seed the runner's externals into a shared volume so the dind
+          # sidecar and runner agree on hook tooling.
+          - name: init-dind-externals
+            image: ghcr.io/actions/actions-runner:latest
+            command: ["cp", "-r", "/home/runner/externals/.", "/home/runner/tmpDir/"]
+            volumeMounts:
+              - name: dind-externals
+                mountPath: /home/runner/tmpDir
+          # Native sidecar (restartPolicy: Always) running the Docker daemon.
+          - name: dind
+            image: docker:dind
+            args:
+              - dockerd
+              - --host=unix:///var/run/docker.sock
+              - --group=$(DOCKER_GROUP_GID)
+            env:
+              - name: DOCKER_GROUP_GID
+                value: "123"
+            securityContext:
+              privileged: true
+            restartPolicy: Always
+            startupProbe:
+              exec:
+                command: ["docker", "info"]
+              initialDelaySeconds: 0
+              failureThreshold: 24
+              periodSeconds: 5
+            volumeMounts:
+              - name: work
+                mountPath: /home/runner/_work
+              - name: dind-sock
+                mountPath: /var/run
+              - name: dind-externals
+                mountPath: /home/runner/externals
         containers:
           - name: runner
             image: ghcr.io/actions/actions-runner:latest
             command: ["/home/runner/run.sh"]
+            env:
+              - name: DOCKER_HOST
+                value: unix:///var/run/docker.sock
+              - name: RUNNER_WAIT_FOR_DOCKER_IN_SECONDS
+                value: "120"
             volumeMounts:
+              - name: work
+                mountPath: /home/runner/_work
+              - name: dind-sock
+                mountPath: /var/run
+              # Shared NFS export served by nfs-server (storage namespace);
+              # build jobs publish their dist/ output straight onto the volume
+              # nginx serves.
               - name: sites
                 mountPath: /sites
             resources:
@@ -64,9 +113,12 @@ spec:
               limits:
                 memory: 2Gi
         volumes:
-          # Shared NFS export served by nfs-server (storage namespace); build
-          # jobs publish their dist/ output straight onto the volume nginx
-          # serves.
+          - name: work
+            emptyDir: {}
+          - name: dind-sock
+            emptyDir: {}
+          - name: dind-externals
+            emptyDir: {}
           - name: sites
             nfs:
               server: nfs-server.storage.svc.cluster.local
