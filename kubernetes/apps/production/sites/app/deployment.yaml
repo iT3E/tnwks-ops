@@ -55,8 +55,10 @@ spec:
       volumes:
         - name: sites
           nfs:
-            # nfs-server (ganesha) in the storage namespace exports /export.
-            server: nfs-server.storage.svc.cluster.local
+            # nfs-server (ganesha) fixed ClusterIP — referenced by IP, not DNS,
+            # because the kubelet-level NFS mount uses the node resolver, which
+            # can't resolve cluster service names. See the Service manifest.
+            server: 10.43.255.254
             path: /export
             readOnly: true
         - name: nginx-config

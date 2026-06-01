@@ -6,6 +6,8 @@ metadata:
   namespace: storage
   labels:
     app.kubernetes.io/name: nfs-server
+  annotations:
+    reloader.stakater.com/auto: "true"
 spec:
   # NFS state (the exported tree) lives on a single RWO PVC, so this must stay
   # single-replica — Recreate avoids two pods racing for the volume.
@@ -23,30 +25,25 @@ spec:
       containers:
         - name: nfs-server
           # Userspace NFS-Ganesha (vfs FSAL) from the kubernetes-sigs
-          # nfs-ganesha-server-and-external-provisioner project. Runs entirely
-          # in userspace — no host nfsd kernel module (unlike erichough /
-          # volume-nfs), which WSL2's Talos-in-Docker kernel doesn't load.
-          # Exports /export over NFSv4 on 2049. v4.0.8 is the newest tag
-          # actually published to registry.k8s.io (master references an
-          # unpromoted v6.5).
+          # nfs-ganesha image — no host nfsd kernel module (unlike erichough /
+          # volume-nfs), which WSL2's Talos-in-Docker kernel can't load.
           image: registry.k8s.io/sig-storage/nfs-provisioner:v4.0.8
-          args:
-            # The binary doubles as a dynamic provisioner; the arg is harmless
-            # for our static single-export use and keeps ganesha's default
-            # NFSv4-only export of /export.
-            - "-provisioner=tnwks.us/nfs"
-          env:
-            - name: POD_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
+          # Bypass the provisioner entrypoint (it only exports a metadata-only
+          # PSEUDO root and needs cluster RBAC for dynamic provisioning we don't
+          # use). Run ganesha.nfsd directly against our static config instead.
+          command:
+            - /usr/local/bin/ganesha.nfsd
+            - -F # foreground
+            - -L
+            - /dev/stdout # log to stdout
+            - -p
+            - /tmp/ganesha.pid # default /usr/local/var/run/ganesha is not writable
+            - -f
+            - /etc/ganesha/ganesha.conf
           ports:
             - name: nfs
               containerPort: 2049
               protocol: TCP
-            - name: nfs-udp
-              containerPort: 2049
-              protocol: UDP
           securityContext:
             # Userspace ganesha needs no privileged/kernel modules — only:
             #   DAC_READ_SEARCH — traverse/read exported files regardless of
@@ -59,6 +56,9 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /export
+            - name: config
+              mountPath: /etc/ganesha
+              readOnly: true
           resources:
             requests:
               cpu: 25m
@@ -69,3 +69,6 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: nfs-server-data
+        - name: config
+          configMap:
+            name: nfs-ganesha-config

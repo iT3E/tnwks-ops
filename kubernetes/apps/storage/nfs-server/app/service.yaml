@@ -8,17 +8,18 @@ metadata:
     app.kubernetes.io/name: nfs-server
 spec:
   type: ClusterIP
+  # Fixed ClusterIP. The `nfs:` volume type mounts at the kubelet/node level,
+  # and Talos nodes resolve via the host resolver (169.254.x) — NOT cluster
+  # CoreDNS — so a *.svc.cluster.local name can't be resolved for the mount.
+  # Nodes CAN reach ClusterIPs directly (verified), so consumers reference this
+  # stable IP instead of the DNS name. Picked from the top of SERVICE_CIDR
+  # (10.43.0.0/16), clear of the dynamic allocation range in use.
+  clusterIP: 10.43.255.254
   selector:
     app.kubernetes.io/name: nfs-server
-  # NFSv4-only: clients reach the server on 2049 alone. Ganesha starts rpcbind
-  # internally but NFSv4.1 clients never need it, so mountd/rpcbind aren't
-  # exposed.
+  # NFSv4-only over TCP: clients reach the server on 2049 alone.
   ports:
     - name: nfs
       port: 2049
       targetPort: nfs
       protocol: TCP
-    - name: nfs-udp
-      port: 2049
-      targetPort: nfs-udp
-      protocol: UDP
