@@ -42,7 +42,9 @@ resources:
   # be CephFS RWX instead, so it's wired per-cluster rather than in the shared
   # groups. (nginx itself lives in the production overlay below.)
   - ../../../apps/storage/namespace.yaml
-  - ../../../apps/storage/nfs-server/ks.yaml
+  # nfs-server: WSL-specific ks with a nodeSelector pin to worker-2 (the only
+  # node local-path can provision on). See nfs-server-ks.yaml.
+  - ./nfs-server-ks.yaml
   - ../../../apps/tools/actions-runner-controller/controller/ks.yaml
   - ../../../apps/tools/actions-runner-controller/runner/ks.yaml
 
