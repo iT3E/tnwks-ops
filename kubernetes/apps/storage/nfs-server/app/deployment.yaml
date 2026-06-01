@@ -7,8 +7,8 @@ metadata:
   labels:
     app.kubernetes.io/name: nfs-server
 spec:
-  # NFS state (the exported /sites tree) lives on a single RWO PVC, so this
-  # must stay single-replica — Recreate avoids two pods racing for the volume.
+  # NFS state (the exported tree) lives on a single RWO PVC, so this must stay
+  # single-replica — Recreate avoids two pods racing for the volume.
   replicas: 1
   strategy:
     type: Recreate
@@ -22,44 +22,43 @@ spec:
     spec:
       containers:
         - name: nfs-server
-          # erichough/nfs-server — ganesha/kernel NFS server. Exports each
-          # directory listed in NFS_EXPORT_* env vars; rw + no_root_squash so
-          # the actions-runner can write build output as any uid.
-          image: docker.io/erichough/nfs-server:2.2.1
+          # Userspace NFS-Ganesha (vfs FSAL) from the kubernetes-sigs
+          # nfs-ganesha-server-and-external-provisioner project. Runs entirely
+          # in userspace — no host nfsd kernel module (unlike erichough /
+          # volume-nfs), which WSL2's Talos-in-Docker kernel doesn't load.
+          # Exports /export over NFSv4 on 2049. v4.0.8 is the newest tag
+          # actually published to registry.k8s.io (master references an
+          # unpromoted v6.5).
+          image: registry.k8s.io/sig-storage/nfs-provisioner:v4.0.8
+          args:
+            # The binary doubles as a dynamic provisioner; the arg is harmless
+            # for our static single-export use and keeps ganesha's default
+            # NFSv4-only export of /export.
+            - "-provisioner=tnwks.us/nfs"
           env:
-            - name: NFS_EXPORT_0
-              value: "/sites *(rw,fsid=0,sync,no_subtree_check,no_root_squash,insecure)"
-            # nfsd thread count; the default of 8 is plenty for a single
-            # nginx reader plus the runner.
-            - name: NFS_SERVER_THREAD_COUNT
-              value: "8"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
           ports:
             - name: nfs
               containerPort: 2049
               protocol: TCP
-            - name: mountd
-              containerPort: 20048
-              protocol: TCP
-            - name: rpcbind
-              containerPort: 111
-              protocol: TCP
+            - name: nfs-udp
+              containerPort: 2049
+              protocol: UDP
           securityContext:
-            # NFS kernel server needs SYS_ADMIN (mount namespaces, nfsd) and
-            # access to the host's nfs/nfsd kernel modules — privileged is the
-            # documented requirement for this image.
-            privileged: true
+            # Userspace ganesha needs no privileged/kernel modules — only:
+            #   DAC_READ_SEARCH — traverse/read exported files regardless of
+            #                     perms (ganesha does its own NFS access checks)
+            #   SYS_RESOURCE    — raise the fd rlimit for many clients
             capabilities:
               add:
-                - SYS_ADMIN
-                - SYS_MODULE
+                - DAC_READ_SEARCH
+                - SYS_RESOURCE
           volumeMounts:
             - name: data
-              mountPath: /sites
-            # erichough/nfs-server loads nfs/nfsd modules from the host's
-            # kernel module tree at startup.
-            - name: kernel-modules
-              mountPath: /lib/modules
-              readOnly: true
+              mountPath: /export
           resources:
             requests:
               cpu: 25m
@@ -70,6 +69,3 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: nfs-server-data
-        - name: kernel-modules
-          hostPath:
-            path: /lib/modules
