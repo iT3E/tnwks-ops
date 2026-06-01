@@ -55,9 +55,9 @@ spec:
       volumes:
         - name: sites
           nfs:
-            # nfs-server Service in the storage namespace exports / (fsid=0).
+            # nfs-server (ganesha) in the storage namespace exports /export.
             server: nfs-server.storage.svc.cluster.local
-            path: /
+            path: /export
             readOnly: true
         - name: nginx-config
           configMap:

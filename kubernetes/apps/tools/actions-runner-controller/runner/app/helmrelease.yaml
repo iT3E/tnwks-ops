@@ -122,4 +122,4 @@ spec:
           - name: sites
             nfs:
               server: nfs-server.storage.svc.cluster.local
-              path: /
+              path: /export
