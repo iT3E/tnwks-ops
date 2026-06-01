@@ -18,6 +18,10 @@ resources:
   - ../../../../apps/production/ombi-f/ks.yaml
   - ../../../../apps/production/wizarr/ks.yaml
   - ../../../../apps/production/changedetection/ks.yaml
+  # sites: nginx serving AI-built Angular frontends at sites.tnwks.us/<project>/
+  # off the shared NFS export (nfs-server lives in the storage namespace, wired
+  # in the WSL apps overlay one level up).
+  - ../../../../apps/production/sites/ks.yaml
   # frigate: WSL-specific Flux Kustomization with a patch to replace the
   # NFD coral nodeSelector with a hostname pin to homelab-wsl-worker-2.
   - ./frigate-ks.yaml
