@@ -37,6 +37,14 @@ resources:
   - ../../../apps/monitoring
   - ../../../apps/selfhosted
   - ../../../apps/tools
+  # Sites platform — WSL-only. The NFS server gives nginx + the GHA runner a
+  # shared RWX volume on top of WSL's RWO-only local-path. On MS-01 this would
+  # be CephFS RWX instead, so it's wired per-cluster rather than in the shared
+  # groups. (nginx itself lives in the production overlay below.)
+  - ../../../apps/storage/namespace.yaml
+  - ../../../apps/storage/nfs-server/ks.yaml
+  - ../../../apps/tools/actions-runner-controller/controller/ks.yaml
+  - ../../../apps/tools/actions-runner-controller/runner/ks.yaml
 
   # Trimmed namespaces — per-namespace overlays sit alongside this file
   - ./home-automation
