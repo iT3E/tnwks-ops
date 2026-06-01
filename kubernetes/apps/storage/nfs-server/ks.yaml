@@ -1,0 +1,27 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: nfs-server
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/storage/nfs-server/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  # nginx (production) and actions-runner (tools) mount this export, so other
+  # Flux Kustomizations depend on it — wait for the share to come up.
+  wait: true
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: nfs-server
+      namespace: storage
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

@@ -1,0 +1,24 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: sites
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/production/sites/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false # no flux ks dependents
+  # nginx mounts the NFS export served by the nfs-server Kustomization
+  # (storage namespace); gate on it so the share exists before pods start.
+  dependsOn:
+    - name: nfs-server
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

@@ -1,0 +1,26 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sites
+  namespace: production
+  annotations:
+    external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
+spec:
+  ingressClassName: nginx
+  # No secretName — the ingress-nginx default-ssl-certificate is the
+  # wildcard *.${SECRET_DOMAIN} cert, which covers sites.${SECRET_DOMAIN}.
+  tls:
+    - hosts:
+        - "sites.${SECRET_DOMAIN}"
+  rules:
+    - host: "sites.${SECRET_DOMAIN}"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sites
+                port:
+                  name: http

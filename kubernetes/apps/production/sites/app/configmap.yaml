@@ -1,0 +1,27 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sites-nginx
+  namespace: production
+data:
+  # Drop-in server block — mounted at /etc/nginx/conf.d/default.conf, which the
+  # stock nginx image includes from its packaged nginx.conf.
+  default.conf: |
+    server {
+        listen 80;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        # Root SPA fallback (a site published directly at /).
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        # Per-project SPA fallback: requests under /<project>/ that don't map
+        # to a real file fall back to that project's index.html so Angular
+        # client-side routing works at sites.tnwks.us/<project>/.
+        location ~ ^/([^/]+)/ {
+            try_files $uri $uri/ /$1/index.html =404;
+        }
+    }
