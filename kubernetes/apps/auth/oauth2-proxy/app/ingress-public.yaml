@@ -1,0 +1,55 @@
+---
+# Public oauth2-proxy entry point — oauth2.${SECRET_DOMAIN} (e.g. oauth2.tnwks.us).
+#
+# The chart's built-in ingress (helmrelease.yaml `ingress:` block) stays on the
+# nginx-internal class at oauth2.${INTERNAL_DOMAIN} for internal apps like
+# Grafana. This second, public ingress (class `nginx`, reached via the
+# cloudflared tunnel) lets a visitor on the public sites platform
+# (sites.${SECRET_DOMAIN}) complete the sign-in flow — its auth-signin redirect
+# points here.
+#
+# Both hosts front the SAME oauth2-proxy Service. oauth2-proxy has no static
+# redirect_url (see helmrelease.yaml), so it derives /oauth2/callback per entry
+# host from the X-Forwarded-* headers — each host gets its own callback, and
+# both are registered on the Cognito app client
+# (infrastructure/terraform/aws/accounts/prod/cognito.tf).
+#
+# The shared session cookie is scoped to .${SECRET_DOMAIN} (cookie_domains in
+# the helmrelease), so a session minted via oauth2.${SECRET_DOMAIN} is also
+# valid for sites.${SECRET_DOMAIN} and every internal.${SECRET_DOMAIN} host.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oauth2-proxy-public
+  namespace: auth
+  annotations:
+    external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
+    # Cognito JWTs are large; oauth2-proxy splits the session cookie into
+    # chunks whose combined Set-Cookie headers overflow nginx's default 4k
+    # proxy buffer on /oauth2/callback (surfaces as 502). Match the internal
+    # ingress's buffer bump.
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+spec:
+  ingressClassName: nginx
+  # No secretName — the public ingress-nginx default-ssl-certificate is the
+  # wildcard *.${SECRET_DOMAIN} cert, which covers oauth2.${SECRET_DOMAIN}.
+  tls:
+    - hosts:
+        - "oauth2.${SECRET_DOMAIN}"
+  rules:
+    - host: "oauth2.${SECRET_DOMAIN}"
+      http:
+        paths:
+          # Scope the PUBLIC surface to /oauth2/* only — the sites sign-in flow
+          # needs /oauth2/{start,callback,sign_out}. The auth-subrequest itself
+          # (/oauth2/auth) is hit cluster-internally via the Service, not through
+          # this ingress, so it does not need to be public. Backending `/` here
+          # would needlessly expose every oauth2-proxy route to the internet.
+          - path: /oauth2
+            pathType: Prefix
+            backend:
+              service:
+                name: oauth2-proxy
+                port:
+                  name: http

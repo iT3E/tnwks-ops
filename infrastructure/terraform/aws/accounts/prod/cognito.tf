@@ -288,13 +288,23 @@ resource "aws_cognito_user_pool_client" "oauth2_proxy" {
 
   generate_secret = true
 
-  # Second callback_url is the post-enrollment landing for the
+  # oauth2-proxy fronts two entry hosts off one app client:
+  #   - oauth2.internal.tnwks.us → internal apps (Grafana et al.)
+  #   - oauth2.tnwks.us          → the public sites platform (sites.tnwks.us)
+  # oauth2-proxy derives the callback per entry host (no static redirect_url in
+  # its helmrelease), so BOTH callbacks must be registered here or Cognito
+  # rejects the public flow with "redirect_uri mismatch".
+  # The grafana.internal.tnwks.us entry is the post-enrollment landing for the
   # /passkeys/add managed-login flow.
   callback_urls = [
     "https://oauth2.internal.tnwks.us/oauth2/callback",
+    "https://oauth2.tnwks.us/oauth2/callback",
     "https://grafana.internal.tnwks.us/",
   ]
-  logout_urls = ["https://oauth2.internal.tnwks.us/oauth2/sign_out"]
+  logout_urls = [
+    "https://oauth2.internal.tnwks.us/oauth2/sign_out",
+    "https://oauth2.tnwks.us/oauth2/sign_out",
+  ]
 
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_flows_user_pool_client = true
