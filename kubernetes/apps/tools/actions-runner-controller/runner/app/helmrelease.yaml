@@ -1,0 +1,73 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2beta2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: sites-builder
+  namespace: tools
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: gha-runner-scale-set
+      version: 0.14.2
+      sourceRef:
+        kind: HelmRepository
+        name: actions-runner-controller
+        namespace: flux-system
+  maxHistory: 2
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  # The controller HelmRelease must be installed first (it owns the
+  # AutoscalingRunnerSet CRD this release creates).
+  dependsOn:
+    - name: gha-runner-scale-set-controller
+  values:
+    # Repo-scoped runners for the Angular source repo. Workflows target this
+    # scale set with `runs-on: sites-builder` (the runnerScaleSetName below,
+    # which defaults to the release name but is set explicitly for clarity).
+    githubConfigUrl: "https://github.com/iT3E/tnwks-sites"
+    runnerScaleSetName: sites-builder
+    # Pre-defined secret (GitHub App) — see secret.sops.yaml.
+    githubConfigSecret: sites-runner-github-app
+    minRunners: 1
+    maxRunners: 3
+    # The chart auto-discovers the controller's ServiceAccount for RoleBinding;
+    # set it explicitly since the controller HelmRelease is named
+    # gha-runner-scale-set-controller (SA = <release>-gha-rs-controller).
+    controllerServiceAccount:
+      namespace: tools
+      name: gha-runner-scale-set-controller-gha-rs-controller
+    # Default to dind-less "kubernetes-novolume" would require hooks; the
+    # Angular build just needs node + the NFS share, so use the plain runner
+    # pod template and mount the shared export at /sites.
+    template:
+      spec:
+        containers:
+          - name: runner
+            image: ghcr.io/actions/actions-runner:latest
+            command: ["/home/runner/run.sh"]
+            volumeMounts:
+              - name: sites
+                mountPath: /sites
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                memory: 2Gi
+        volumes:
+          # Shared NFS export served by nfs-server (storage namespace); build
+          # jobs publish their dist/ output straight onto the volume nginx
+          # serves.
+          - name: sites
+            nfs:
+              server: nfs-server.storage.svc.cluster.local
+              path: /
