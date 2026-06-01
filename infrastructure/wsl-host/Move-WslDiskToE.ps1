@@ -5,10 +5,9 @@
 # drive onto E:, using `wsl --manage <distro> --move`.
 #
 # Why --move (not export/import): in-place relocation, no double-size tar (the
-# export/import path would need ~376 GiB peak on E: vs ~387 GiB free — too
+# export/import path would need ~376 GiB peak on E: vs ~387 GiB free - too
 # tight), and it preserves the distro config (default user, wsl.conf) so there
-# is no post-move user-restore step. Requires WSL >= 2.something; verified on
-# 2.7.3.
+# is no post-move user-restore step. Requires a recent WSL; verified on 2.7.3.
 #
 # IMPORTANT: this shuts WSL down, so it MUST run from the Windows side, detached
 # from any WSL shell (the shell that launches it will die at --shutdown). It
@@ -19,6 +18,9 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File Move-WslDiskToE.ps1
 #
 # Idempotent-ish: if the distro is already under $DestDir it exits early.
+#
+# NOTE: this file must stay pure ASCII - Windows PowerShell 5.1 mis-decodes
+# non-ASCII bytes (em-dashes, box-drawing) and fails to parse.
 
 [CmdletBinding()]
 param(
@@ -59,18 +61,18 @@ function Get-DistroBasePath {
     return $key.GetValue('BasePath')
 }
 
-# ── Setup ───────────────────────────────────────────────────────────────────
+# --- Setup -------------------------------------------------------------------
 New-Item -ItemType Directory -Force -Path (Split-Path $LogPath), $DestDir | Out-Null
 Log "=== Move-WslDiskToE start: distro=$Distro dest=$DestDir ==="
 
 Require-Admin
 
-# ── Pre-flight ────────────────────────────────────────────────────────────────
+# --- Pre-flight --------------------------------------------------------------
 $basePath = Get-DistroBasePath -Name $Distro
 Log "Current BasePath: $basePath"
 
 if ($basePath -like "$DestDir*") {
-    Log "Distro already located under $DestDir — nothing to do. Exiting."
+    Log "Distro already located under $DestDir - nothing to do. Exiting."
     return
 }
 
@@ -82,19 +84,19 @@ if ($freeGiB -lt $MinFreeGiBOnDest) {
     throw "ABORT: $destDrive has only $freeGiB GiB free, below the $MinFreeGiBOnDest GiB floor. Not starting the move."
 }
 
-# Capture default user so we can assert it survived (–move should preserve it).
+# Capture default user so we can assert it survived (move should preserve it).
 $defaultUid = (Get-ChildItem HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss |
     Where-Object { $_.GetValue('DistributionName') -eq $Distro } |
     Select-Object -First 1).GetValue('DefaultUid')
 Log "Current DefaultUid: $defaultUid"
 
-# ── Quiesce ───────────────────────────────────────────────────────────────────
+# --- Quiesce -----------------------------------------------------------------
 Log "Shutting WSL down (cluster goes offline now)..."
 & wsl.exe --shutdown
 Start-Sleep -Seconds 8
 Log "Shutdown issued."
 
-# ── Move ───────────────────────────────────────────────────────────────────────
+# --- Move --------------------------------------------------------------------
 Log "Running: wsl --manage $Distro --move `"$DestDir`"  (this is the long step)"
 $moveOut = & wsl.exe --manage $Distro --move "$DestDir" 2>&1 | Out-String
 Log "wsl --move output: $($moveOut.Trim())"
@@ -104,7 +106,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "ABORT: 'wsl --manage $Distro --move' exited $LASTEXITCODE. Distro should be intact at its original location; re-run after resolving."
 }
 
-# ── Verify new location ─────────────────────────────────────────────────────────
+# --- Verify new location -----------------------------------------------------
 $newBase = Get-DistroBasePath -Name $Distro
 Log "New BasePath: $newBase"
 if ($newBase -notlike "$DestDir*") {
@@ -112,7 +114,7 @@ if ($newBase -notlike "$DestDir*") {
 }
 Log "Disk relocation confirmed under $DestDir."
 
-# ── Restart the cluster ─────────────────────────────────────────────────────────
+# --- Restart the cluster -----------------------------------------------------
 # Booting the distro restarts systemd; the Talos node containers have
 # restart_policy 'no' (per the bootstrap playbook), so start any that are down.
 Log "Booting distro + restarting Talos node containers..."
@@ -128,7 +130,7 @@ docker ps --filter label=talos.owned=true --format '{{.Names}} {{.Status}}'
 $restartOut = & wsl.exe -d $Distro -- bash -lc $restart 2>&1 | Out-String
 Log "Container restart output:`n$($restartOut.Trim())"
 
-# ── Verify cluster ──────────────────────────────────────────────────────────────
+# --- Verify cluster ----------------------------------------------------------
 Log "Waiting for nodes to be Ready..."
 $nodesOut = & wsl.exe -d $Distro -- bash -lc 'for i in $(seq 1 60); do kubectl get nodes --no-headers 2>/dev/null | grep -q " Ready " && break; sleep 5; done; kubectl get nodes 2>&1' | Out-String
 Log "kubectl get nodes:`n$($nodesOut.Trim())"
@@ -136,7 +138,7 @@ Log "kubectl get nodes:`n$($nodesOut.Trim())"
 $ksOut = & wsl.exe -d $Distro -- bash -lc 'kubectl get pods -n storage -o wide 2>&1; echo ---; kubectl get pods -n production -l app.kubernetes.io/name=sites 2>&1; echo ---; kubectl get pods -n tools 2>&1 | grep -E "runner|listener" || true' | Out-String
 Log "Sites platform pods:`n$($ksOut.Trim())"
 
-# ── Confirm C: reclaimed ─────────────────────────────────────────────────────────
+# --- Confirm C: reclaimed ----------------------------------------------------
 $cFree = [math]::Round((Get-PSDrive -Name C).Free / 1GB, 1)
 Log "C: free now: $cFree GiB"
 
