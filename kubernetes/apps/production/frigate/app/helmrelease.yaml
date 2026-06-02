@@ -127,8 +127,14 @@ spec:
         type: hostPath
         hostPath: /dev/bus/usb
         hostPathType: Directory
+        # HostToContainer (rslave) so Coral re-enumeration on the host —
+        # new /dev/bus/usb/<bus>/<dev> node after a usbipd detach/attach or
+        # firmware reload — propagates into the pod live. Without this the
+        # kubelet mount is None-propagation and libedgetpu keeps scanning a
+        # stale tree, failing to find 18d1:9302 → detector death → CrashLoop.
         globalMounts:
           - path: /dev/bus/usb
+            mountPropagation: HostToContainer
       media:
         accessMode: ReadWriteOnce
         size: 1Gi

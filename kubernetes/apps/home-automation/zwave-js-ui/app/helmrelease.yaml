@@ -82,10 +82,15 @@ spec:
     persistence:
       usb:
         type: hostPath
-        hostPath: /dev/serial/by-id/usb-0658_0200-if00  #had to configure this serial port in settings manually via browser
+        hostPath: /dev/serial/by-id/usb-0658_0200-if00 #had to configure this serial port in settings manually via browser
         hostPathType: CharDevice
+        # HostToContainer (rslave) for parity with the frigate Coral mount.
+        # This is a single CharDevice leaf, so propagation is effectively a
+        # no-op today — but it documents intent and is correct should the
+        # mount ever move to the parent /dev/serial directory.
         globalMounts:
           - path: /dev/serial/by-id/usb-0658_0200-if00
+            mountPropagation: HostToContainer
     ingress:
       app:
         className: nginx-internal
