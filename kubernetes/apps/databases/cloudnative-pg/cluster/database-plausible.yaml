@@ -1,0 +1,20 @@
+---
+# Declarative database creation for Plausible Analytics CE.
+#
+# Sibling of database.yaml (litellm). Same rationale: the Database CRD
+# reconciles continuously, so adding a database to an already-running cluster
+# is pure GitOps. `ensure: present` is idempotent.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: plausible
+  namespace: databases
+spec:
+  cluster:
+    name: postgres
+  name: plausible
+  owner: app
+  ensure: present
+  # Keep the database if this resource is ever removed — never let a manifest
+  # deletion drop application data.
+  databaseReclaimPolicy: retain

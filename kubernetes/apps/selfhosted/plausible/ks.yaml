@@ -1,0 +1,27 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: plausible
+  namespace: flux-system
+spec:
+  # Gate on:
+  #   * cloudnative-pg-cluster — owns the `plausible` Database CRD and the
+  #     `postgres-app` Secret that reflector mirrors into selfhosted/.
+  #   * oauth2-proxy — the dashboard ingress uses it for auth-subrequest.
+  dependsOn:
+    - name: cloudnative-pg-cluster
+    - name: oauth2-proxy
+  path: ./kubernetes/apps/selfhosted/plausible/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false # no flux ks dependents
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

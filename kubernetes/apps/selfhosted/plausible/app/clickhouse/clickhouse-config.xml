@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<!--
+  ClickHouse server overrides for Plausible's sidecar event store.
+
+  Dropped into /etc/clickhouse-server/config.d/ so it MERGES over the image's
+  default config.xml rather than replacing it (data paths, users, the
+  plausible_events_db creation handled by Plausible's `db createdb`, etc. all
+  stay at their defaults). This file only tightens two things:
+
+    * Network — bind to localhost only. ClickHouse is a same-pod sidecar
+      reached over 127.0.0.1:8123; nothing outside the pod should talk to it.
+    * Logging — cut the noise. ClickHouse's default info-level server log and
+      per-query system tables are pure overhead for an embedded analytics
+      store and otherwise fill the PVC.
+-->
+<clickhouse>
+  <!-- Same-pod sidecar: HTTP on 127.0.0.1:8123 only, no external listener. -->
+  <listen_host>127.0.0.1</listen_host>
+  <listen_host>::1</listen_host>
+
+  <!-- Quiet the server log; warning is enough to surface real problems. -->
+  <logger>
+    <level>warning</level>
+    <console>true</console>
+  </logger>
+
+  <!-- Disable the chatty internal telemetry tables that just grow the PVC. -->
+  <query_log remove="remove" />
+  <query_thread_log remove="remove" />
+  <metric_log remove="remove" />
+  <asynchronous_metric_log remove="remove" />
+  <trace_log remove="remove" />
+  <session_log remove="remove" />
+  <part_log remove="remove" />
+  <text_log remove="remove" />
+  <crash_log remove="remove" />
+</clickhouse>
