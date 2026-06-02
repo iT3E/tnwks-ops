@@ -134,25 +134,38 @@
             name: "{{ worker_name }}"
           register: w2_info
 
+        # The Coral is bind-mounted (not --device) with rslave propagation so
+        # host re-enumeration (usbipd detach/attach, firmware reload) makes
+        # the new /dev/bus/usb/<bus>/<dev> node appear inside the container
+        # live. A --device flag snapshots the major/minor at container start
+        # and goes stale on re-enum — libedgetpu in Frigate then finds no
+        # 18d1:9302 and CrashLoops. privileged: true already grants the
+        # device-cgroup access the bind mount needs. The Z-Stick stays a
+        # --device: Talos runs no udev, so /dev/serial/by-id is never
+        # populated and the CDC node arrives as /dev/ttyACM0 (the zwave-js-ui
+        # WSL overlay points at that path). See docs/usb-passthrough.md.
         - name: Build desired device list
           ansible.builtin.set_fact:
             w2_devices: >-
-              {{
-                ([ '/dev/bus/usb:/dev/bus/usb:rwm' ] if usb_bus_stat.stat.exists else [])
-                + ([ zstick_path ~ ':' ~ zstick_path ~ ':rwm' ] if zstick_stat.stat.exists else [])
-              }}
+              {{ [ zstick_path ~ ':' ~ zstick_path ~ ':rwm' ] if zstick_stat.stat.exists else [] }}
 
         - name: Build desired bind-mount list
           ansible.builtin.set_fact:
             w2_bind_mounts: >-
-              {{ [ bulk_host_path ~ ':' ~ bulk_host_path ] if bulk_path_stat.stat.exists else [] }}
+              {{
+                ([ '/dev/bus/usb:/dev/bus/usb:rslave' ] if usb_bus_stat.stat.exists else [])
+                + ([ bulk_host_path ~ ':' ~ bulk_host_path ] if bulk_path_stat.stat.exists else [])
+              }}
 
+        # /dev/bus/usb is now an rslave bind, so look in Binds (not Devices).
+        # A container still carrying the old --device form has no matching
+        # bind here, so this stays false and triggers the migrating recreate.
         - name: Detect whether worker-2 already has the desired augmentations
           ansible.builtin.set_fact:
             w2_has_usb: >-
               {{ usb_bus_stat.stat.exists | bool
-                 and (w2_info.container.HostConfig.Devices | default([]))
-                       | selectattr('PathOnHost', 'equalto', '/dev/bus/usb')
+                 and (w2_info.container.HostConfig.Binds | default([]))
+                       | select('match', '^/dev/bus/usb:')
                        | list | length > 0 }}
             w2_has_bulk: >-
               {{ bulk_path_stat.stat.exists | bool

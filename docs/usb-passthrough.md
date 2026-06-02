@@ -97,8 +97,13 @@ provisions the node containers itself with a fixed config. The bootstrap
 playbook handles this declaratively: after `talosctl cluster create`
 runs, it inspects worker-2, captures its named volumes + env (which hold
 the base64 machine config in `USERDATA`), and recreates the container
-via `community.docker.docker_container` with the USB devices and
+via `community.docker.docker_container` with the USB passthrough and
 `/mnt/e/k8s-storage` bind-mount layered on top.
+
+The Coral comes through as an **`rslave` bind mount** of `/dev/bus/usb`
+(not a `--device`), so host re-enumeration propagates live — see the
+`--device` caveat below. The Z-Stick stays a `--device` because Talos
+runs no udev to recreate its node on re-enum (see `/dev/ttyACM0` note).
 
 ```bash
 cd infrastructure
@@ -139,14 +144,26 @@ talosctl -n 10.5.0.4 ls /dev | grep ttyACM # Z-Stick lands here
 > and cgroup-allows that exact one. If the underlying USB device
 > disconnects/reconnects later (USB reset, suspend, replug, or a
 > usbipd `detach`/`attach` cycle), the host renumbers it but the Talos
-> container still has the stale node. The pod will then either see a
-> dangling /dev entry or open the wrong device. The fix is to recreate
-> the worker container **after** the device is in its final, stable
-> state on the host — for the Coral that means after Windows has
-> loaded firmware and `lsusb` shows `18d1:9302` in WSL. A long-term
-> alternative is bind-mounting `/dev/bus/usb` (`-v /dev/bus/usb:/dev/bus/usb`)
-> instead of `--device`, but that needs validation against Talos's
-> read-only rootfs constraints.
+> container still has the stale node. The pod then sees a dangling
+> /dev entry or opens the wrong device.
+>
+> **The Coral avoids this** — the playbook bind-mounts `/dev/bus/usb`
+> with `rslave` propagation instead of using `--device`. New
+> `/dev/bus/usb/<bus>/<dev>` nodes created on the host when the Coral
+> re-enumerates propagate into the container live, so `libedgetpu`
+> always finds the current `18d1:9302` and Frigate no longer CrashLoops
+> after a usbipd cycle. `privileged: true` (already set on the worker
+> container) grants the device-cgroup access the bind mount needs. The
+> pod-side `hostPath` mount carries the matching
+> `mountPropagation: HostToContainer` so the new node reaches the
+> Frigate container too.
+>
+> **The Z-Stick stays a `--device`.** Talos runs no udev, so it cannot
+> recreate a CDC node on re-enum the way the kernel does for
+> `/dev/bus/usb`; bind-propagating `/dev/ttyACM0` would gain nothing,
+> and bind-mounting all of `/dev` into the Talos worker is too invasive.
+> If the Z-Stick re-enumerates, re-run the playbook (it recreates
+> worker-2 after the device is back in a stable state).
 
 ---
 
@@ -171,6 +188,7 @@ persistence:
     hostPathType: Directory
     globalMounts:
       - path: /dev/bus/usb
+        mountPropagation: HostToContainer # pick up Coral re-enum live
 ```
 
 ### zwave-js-ui (Z-Stick)
