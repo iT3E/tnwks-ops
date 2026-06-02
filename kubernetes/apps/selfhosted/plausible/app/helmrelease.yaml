@@ -68,6 +68,13 @@ spec:
                 value: "http://localhost:8123/plausible_events_db"
               - name: DISABLE_REGISTRATION
                 value: "invite_only"
+              - name: MAXMIND_LICENSE_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: plausible-secret
+                    key: MAXMIND_LICENSE_KEY
+              - name: MAXMIND_EDITION
+                value: "GeoLite2-City"
             probes:
               liveness: &probes
                 enabled: true
