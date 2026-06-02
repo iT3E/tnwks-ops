@@ -46,8 +46,8 @@ spec:
                 custom: true
                 spec:
                   httpGet:
-                    path: /health
-                    port: 8000
+                    path: /
+                    port: 8080
                   initialDelaySeconds: 10
                   periodSeconds: 30
                   timeoutSeconds: 5
@@ -58,8 +58,8 @@ spec:
                 custom: true
                 spec:
                   httpGet:
-                    path: /health
-                    port: 8000
+                    path: /
+                    port: 8080
                   initialDelaySeconds: 5
                   periodSeconds: 5
                   timeoutSeconds: 5
