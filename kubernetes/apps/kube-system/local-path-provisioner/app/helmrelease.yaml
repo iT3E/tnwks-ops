@@ -28,19 +28,16 @@ spec:
     helperImage:
       repository: public.ecr.aws/docker/library/busybox
       tag: latest
-    # Three StorageClasses on this cluster:
-    #   local-path       — DEFAULT. /mnt/e/k8s-storage/default on worker-2.
-    #                      Use for almost everything; PVCs avoid the WSL
-    #                      ext4.vhdx on C:.
-    #   local-path-bulk  — /mnt/e/k8s-storage on worker-2. Bulk video/archive
-    #                      (frigate-media etc.). Same bind-mount as default.
-    #   local-path-ext4  — /var/lib/rancher/k3s/storage on worker-1. The WSL
-    #                      ext4.vhdx (C:). Used only by workloads that can't
-    #                      live on the Windows DrvFs bind-mount because they
-    #                      need real Linux permissions semantics (chmod /
-    #                      setuid). Postgres is the canonical case: initdb
-    #                      fails on /mnt/e with "could not change permissions
-    #                      of postgresql.conf: Operation not permitted".
+    # Three StorageClasses on this cluster (post WSL drive migration —
+    # all paths now on the single ext4 vhdx, no more /mnt/e DrvFs split):
+    #   local-path       — DEFAULT. /var/lib/rancher/k3s/storage on both
+    #                      workers. General-purpose.
+    #   local-path-bulk  — /var/lib/rancher/k3s/storage/bulk on both workers.
+    #                      Bulk video/archive (frigate-media etc.).
+    #   local-path-ext4  — LEGACY. /var/lib/rancher/k3s/storage on worker-1.
+    #                      Kept for existing PVCs (postgres). Functionally
+    #                      equivalent to local-path now; can be consolidated
+    #                      later.
     # The chart treats `storageClassConfigs` as exclusive with the top-level
     # `storageClass` block — only entries in the map are created.
     storageClassConfigs:
@@ -52,8 +49,10 @@ spec:
           reclaimPolicy: Delete
           volumeBindingMode: WaitForFirstConsumer
         nodePathMap:
+          - node: homelab-wsl-worker-1
+            paths: ["/var/lib/rancher/k3s/storage"]
           - node: homelab-wsl-worker-2
-            paths: ["/mnt/e/k8s-storage/default"]
+            paths: ["/var/lib/rancher/k3s/storage"]
       local-path-bulk:
         storageClass:
           create: true
@@ -62,8 +61,10 @@ spec:
           reclaimPolicy: Delete
           volumeBindingMode: WaitForFirstConsumer
         nodePathMap:
+          - node: homelab-wsl-worker-1
+            paths: ["/var/lib/rancher/k3s/storage/bulk"]
           - node: homelab-wsl-worker-2
-            paths: ["/mnt/e/k8s-storage"]
+            paths: ["/var/lib/rancher/k3s/storage/bulk"]
       local-path-ext4:
         storageClass:
           create: true
