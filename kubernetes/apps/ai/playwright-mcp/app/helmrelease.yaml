@@ -100,3 +100,9 @@ spec:
           playwright-mcp:
             app:
               - path: /tmp
+      playwright-data:
+        type: emptyDir
+        advancedMounts:
+          playwright-mcp:
+            app:
+              - path: /app/ms-playwright/mcp-chromium
