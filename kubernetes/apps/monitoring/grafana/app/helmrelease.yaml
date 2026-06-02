@@ -97,6 +97,14 @@ spec:
               path: /var/lib/grafana/dashboards/nginx
             orgId: 1
             type: file
+          - name: plausible
+            disableDeletion: false
+            editable: true
+            folder: "Plausible"
+            options:
+              path: /var/lib/grafana/dashboards/plausible
+            orgId: 1
+            type: file
 
     datasources:
       datasources.yaml:
@@ -199,6 +207,15 @@ spec:
         nginx-ingress:
           gnetId: 14314
           revision: 2
+          datasource:
+            - name: "DS_PROMETHEUS"
+              value: Prometheus
+
+      plausible:
+        # Ref: https://grafana.com/grafana/dashboards/22200-plausible-analytics/
+        plausible-analytics:
+          gnetId: 22200
+          revision: 1
           datasource:
             - name: "DS_PROMETHEUS"
               value: Prometheus

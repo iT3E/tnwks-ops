@@ -1,0 +1,57 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: plausible-exporter
+  namespace: monitoring
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      interval: 30m
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  maxHistory: 2
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  values:
+    controllers:
+      plausible-exporter:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: ghcr.io/riesinger/plausible-exporter
+              tag: latest
+            env:
+              PLAUSIBLE_HOST: "http://plausible.selfhosted.svc.cluster.local:8000"
+              PLAUSIBLE_SITE_IDS: "sites.tnwks.us"
+              PLAUSIBLE_TOKEN:
+                valueFrom:
+                  secretKeyRef:
+                    name: plausible-exporter-secret
+                    key: PLAUSIBLE_TOKEN
+            resources:
+              requests:
+                cpu: 5m
+                memory: 16Mi
+              limits:
+                memory: 64Mi
+    service:
+      app:
+        controller: plausible-exporter
+        ports:
+          http:
+            port: 8080

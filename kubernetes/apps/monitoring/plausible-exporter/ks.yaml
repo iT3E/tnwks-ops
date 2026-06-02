@@ -1,0 +1,19 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: plausible-exporter
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: kube-prometheus-stack
+    - name: plausible
+  path: ./kubernetes/apps/monitoring/plausible-exporter/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 3m
