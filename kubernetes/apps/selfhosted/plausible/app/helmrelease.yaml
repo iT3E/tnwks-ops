@@ -31,9 +31,8 @@ spec:
               size: 5Gi
               storageClass: "${STORAGE_CLASS_DEFAULT}"
               advancedMounts:
-                plausible:
-                  clickhouse:
-                    - path: /var/lib/clickhouse
+                clickhouse:
+                  - path: /var/lib/clickhouse
         containers:
           app:
             image:
