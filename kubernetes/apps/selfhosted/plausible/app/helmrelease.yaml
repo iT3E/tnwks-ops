@@ -1,0 +1,134 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fluxcd-community/flux2-schemas/main/helmrelease-helm-v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app plausible
+  namespace: selfhosted
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      interval: 30m
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  values:
+    controllers:
+      plausible:
+        type: statefulset
+        annotations:
+          reloader.stakater.com/auto: "true"
+        statefulset:
+          # ClickHouse event store needs durable storage. One claim, mounted
+          # only into the clickhouse container via advancedMounts.
+          volumeClaimTemplates:
+            - name: clickhouse-data
+              accessMode: ReadWriteOnce
+              size: 5Gi
+              storageClass: "${STORAGE_CLASS_DEFAULT}"
+              advancedMounts:
+                plausible:
+                  clickhouse:
+                    - path: /var/lib/clickhouse
+        containers:
+          app:
+            image:
+              repository: ghcr.io/plausible/community-edition
+              tag: v3.2.1
+            # Upstream compose entrypoint: create the Postgres + ClickHouse
+            # databases (incl. plausible_events_db), run migrations, then boot.
+            # `createdb`/`migrate` are idempotent, so this is safe on restart.
+            command:
+              - "sh"
+              - "-c"
+              - "/entrypoint.sh db createdb && /entrypoint.sh db migrate && /entrypoint.sh run"
+            env:
+              - name: BASE_URL
+                value: "https://analytics.${SECRET_DOMAIN}"
+              - name: SECRET_KEY_BASE
+                valueFrom:
+                  secretKeyRef:
+                    name: plausible-secret
+                    key: SECRET_KEY_BASE
+              # CNPG app password, sourced from the reflected `postgres-app`
+              # secret (reflector mirrors it into the `selfhosted` namespace).
+              # Composed into DATABASE_URL via k8s env-var expansion so the
+              # password itself never lands in git.
+              - name: DATABASE_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: postgres-app
+                    key: password
+              - name: DATABASE_URL
+                value: "postgres://app:$(DATABASE_PASSWORD)@postgres-rw.databases.svc.cluster.local:5432/plausible"
+              - name: CLICKHOUSE_DATABASE_URL
+                value: "http://localhost:8123/plausible_events_db"
+              - name: DISABLE_REGISTRATION
+                value: "invite_only"
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/health
+                    port: 8000
+                  initialDelaySeconds: 30
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+              readiness: *probes
+              # Migrations run before the web server binds the port; give them
+              # generous headroom (up to ~10m) before the pod is marked failed.
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/health
+                    port: 8000
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 60
+            resources:
+              requests:
+                cpu: 50m
+                memory: 256Mi
+              limits:
+                memory: 1Gi
+          clickhouse:
+            image:
+              repository: clickhouse/clickhouse-server
+              tag: 24.3-alpine
+            # The clickhouse-server entrypoint starts as root and chowns
+            # /var/lib/clickhouse to the clickhouse user itself, so no fsGroup
+            # or init chown is needed (cf. the WSL emptyDir fsGroup caveat).
+            resources:
+              requests:
+                cpu: 50m
+                memory: 256Mi
+              limits:
+                memory: 1Gi
+    service:
+      app:
+        controller: plausible
+        ports:
+          http:
+            port: 8000
+    persistence:
+      # ClickHouse server overrides (logging + localhost listener). Merged
+      # over the image defaults via the config.d drop-in directory; mounted
+      # only into the clickhouse container.
+      clickhouse-config:
+        type: configMap
+        name: plausible-clickhouse-config
+        advancedMounts:
+          plausible:
+            clickhouse:
+              - path: /etc/clickhouse-server/config.d/logging.xml
+                subPath: clickhouse-config.xml
+                readOnly: true

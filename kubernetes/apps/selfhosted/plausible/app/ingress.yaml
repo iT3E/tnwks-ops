@@ -1,0 +1,86 @@
+---
+# PUBLIC, UNAUTHENTICATED tracking ingress. The Plausible tracking script
+# (/js/script.js) and the event collection endpoint (/api/event) are hit by
+# every visitor's browser on sites we measure — they MUST be reachable without
+# a session. nginx routes by longest-matching path, so these specific prefixes
+# win over the catch-all `/` on the authenticated `plausible` ingress below.
+#
+# This ingress owns the analytics.${SECRET_DOMAIN} DNS record (external-dns
+# target); the dashboard ingress below deliberately omits the target so the two
+# don't fight over ownership of the same host.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: plausible-tracking
+  namespace: selfhosted
+  annotations:
+    external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
+spec:
+  ingressClassName: nginx
+  # No secretName — the ingress-nginx default-ssl-certificate is the
+  # wildcard *.${SECRET_DOMAIN} cert, which covers analytics.${SECRET_DOMAIN}.
+  tls:
+    - hosts:
+        - "analytics.${SECRET_DOMAIN}"
+  rules:
+    - host: "analytics.${SECRET_DOMAIN}"
+      http:
+        paths:
+          - path: /js
+            pathType: Prefix
+            backend:
+              service:
+                name: plausible
+                port:
+                  name: http
+          - path: /api/event
+            pathType: Exact
+            backend:
+              service:
+                name: plausible
+                port:
+                  name: http
+---
+# DASHBOARD ingress — everything that is NOT tracking traffic (the login,
+# stats UI, settings, invites). Gated behind oauth2-proxy via the nginx
+# auth-subrequest so only authenticated users reach the dashboard.
+#
+# A separate Ingress (rather than auth annotations on the tracking one above)
+# keeps the auth surface surgically scoped: a misconfigured auth-url can never
+# take down public tracking. Both target the same `plausible` Service.
+#
+# No external-dns target here: the tracking ingress above already owns the
+# analytics.${SECRET_DOMAIN} record. A second claim would make external-dns
+# fight itself over ownership.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: plausible
+  namespace: selfhosted
+  annotations:
+    # Auth subrequest: nginx asks oauth2-proxy (cluster-internal Service)
+    # whether the request carries a valid session. 202 → allow; 401 → signin.
+    nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local/oauth2/auth"
+    # On 401, redirect the browser to the PUBLIC oauth2 host so an external
+    # visitor can reach the sign-in flow. rd= returns them to where they were.
+    nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${SECRET_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
+    # Cognito sessions span multiple cookies; the auth-subrequest header chunk
+    # overflows nginx's default 4k buffer. Match what Grafana/oauth2-proxy use.
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - "analytics.${SECRET_DOMAIN}"
+  rules:
+    - host: "analytics.${SECRET_DOMAIN}"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: plausible
+                port:
+                  name: http

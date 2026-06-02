@@ -6,6 +6,7 @@ namespace: databases
 resources:
   - ./cluster.yaml
   - ./database.yaml
+  - ./database-plausible.yaml
 # PrometheusRule lives in cluster-prometheusrules/ behind its own
 # Kustomization that depends on kube-prometheus-stack so the CRD
 # exists before apply.
