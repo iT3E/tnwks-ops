@@ -1,0 +1,22 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: valkey
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/cache/valkey/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  # oauth2-proxy gates its own reconcile on this HelmRelease being healthy
+  # (see kubernetes/apps/auth/oauth2-proxy/ks.yaml), so surface health here.
+  healthChecks:
+    - apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      name: valkey
+      namespace: cache
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

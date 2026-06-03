@@ -7,6 +7,9 @@ metadata:
 spec:
   dependsOn:
     - name: ingress-nginx-internal
+    # Session store must exist before oauth2-proxy starts, else it crashloops
+    # on a redis dial error. valkey's ks.yaml has a HelmRelease healthCheck.
+    - name: valkey
   path: ./kubernetes/apps/auth/oauth2-proxy/app
   prune: true
   sourceRef:
