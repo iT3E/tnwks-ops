@@ -1,0 +1,99 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: valkey
+  namespace: cache
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  values:
+    defaultPodOptions:
+      securityContext:
+        runAsUser: 568
+        runAsGroup: 568
+        runAsNonRoot: true
+        fsGroup: 568
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+    controllers:
+      valkey:
+        # Single-node session store for oauth2-proxy. Memory-only by design:
+        # sessions are a cache, not a source of truth (Cognito is). A restart
+        # forces every active user to re-authenticate once — the same cost as
+        # today's cookie-store behaviour — so HA/persistence isn't warranted.
+        # See kubernetes/apps/auth/oauth2-proxy for the consumer.
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: docker.io/valkey/valkey
+              tag: 9.1.0-alpine@sha256:a35428eba9043cc0b79dbe54100f0c92784f2de00ad09b01182bfb1c5c83d1bd
+            # Keep the image entrypoint (docker-entrypoint.sh) and drive config
+            # via args. ${VALKEY_PASSWORD} is substituted by Flux from
+            # cluster-secrets (same mechanism oauth2-proxy uses for its
+            # client secret).
+            #   --save "" / --appendonly no : disable RDB+AOF, fully in-memory.
+            #   --maxmemory-policy noeviction: never silently drop a live
+            #     session under memory pressure; oauth2-proxy sets a TTL on
+            #     every key so they expire on their own.
+            args:
+              - valkey-server
+              - --requirepass
+              - ${VALKEY_PASSWORD}
+              - --save
+              - ""
+              - --appendonly
+              - "no"
+              - --maxmemory
+              - 128mb
+              - --maxmemory-policy
+              - noeviction
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            probes:
+              liveness:
+                enabled: true
+              readiness:
+                enabled: true
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 192Mi
+    service:
+      app:
+        controller: valkey
+        ports:
+          valkey:
+            port: 6379
+    persistence:
+      # valkey-server's working dir is /data; with persistence disabled it
+      # writes nothing here, but readOnlyRootFilesystem still needs a writable
+      # path for it to chdir into. emptyDir keeps the pod stateless.
+      data:
+        type: emptyDir
+        globalMounts:
+          - path: /data

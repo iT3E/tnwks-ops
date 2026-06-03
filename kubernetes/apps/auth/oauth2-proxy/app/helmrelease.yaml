@@ -55,7 +55,21 @@ spec:
         set_xauthrequest = true
         set_authorization_header = false
         skip_jwt_bearer_tokens = false
-        session_store_type = "cookie"
+        # Server-side (Valkey) session store, not cookie. Cognito's
+        # access+id+refresh tokens exceed the 4kB cookie limit, so the cookie
+        # store split the session into _oauth2_proxy_{0,1,..} chunks. The 23h
+        # silent refresh runs inside nginx's auth_request subrequest, whose
+        # Set-Cookie headers nginx discards — so the browser kept stale chunks,
+        # they failed HMAC ("cookie signature not valid"), and users were
+        # bounced to re-login at the 24h access-token boundary despite the
+        # 30-day refresh token. With Valkey the browser holds only a small,
+        # stable ticket cookie (unchanged across refresh — the tokens live
+        # server-side under the same key), so the subrequest never needs to
+        # rewrite a cookie and the session rides the refresh token to 30 days.
+        # See kubernetes/apps/cache/valkey.
+        session_store_type = "redis"
+        redis_connection_url = "redis://valkey.cache.svc.cluster.local:6379"
+        redis_password = "${VALKEY_PASSWORD}"
         reverse_proxy = true
         # Broadened from .${INTERNAL_DOMAIN} to .${SECRET_DOMAIN} (the apex,
         # tnwks.us). .${INTERNAL_DOMAIN} is a strict subset, so internal apps

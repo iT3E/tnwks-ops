@@ -26,6 +26,7 @@ resources:
   # Shared namespaces — used as-is
   - ../../../apps/ai
   - ../../../apps/auth
+  - ../../../apps/cache
   - ../../../apps/cert-manager
   - ../../../apps/databases
   - ../../../apps/default
