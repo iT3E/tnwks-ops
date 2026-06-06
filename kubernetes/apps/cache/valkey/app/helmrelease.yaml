@@ -35,10 +35,10 @@ spec:
           type: RuntimeDefault
     controllers:
       valkey:
-        # Single-node session store for oauth2-proxy. Memory-only by design:
-        # sessions are a cache, not a source of truth (Cognito is). A restart
-        # forces every active user to re-authenticate once — the same cost as
-        # today's cookie-store behaviour — so HA/persistence isn't warranted.
+        # Single-node session store for oauth2-proxy. RDB persistence enabled
+        # (snapshot every 60s if ≥ 1 key changed) so sessions survive pod/node
+        # restarts. Cognito is still the source of truth — worst case (corrupt RDB)
+        # forces a one-time re-auth, same as the old cookie-store behaviour.
         # See kubernetes/apps/auth/oauth2-proxy for the consumer.
         annotations:
           reloader.stakater.com/auto: "true"
@@ -51,7 +51,8 @@ spec:
             # via args. ${VALKEY_PASSWORD} is substituted by Flux from
             # cluster-secrets (same mechanism oauth2-proxy uses for its
             # client secret).
-            #   --save "" / --appendonly no : disable RDB+AOF, fully in-memory.
+            #   --save 60 1 : RDB snapshot every 60s if ≥ 1 write.
+            #   --appendonly no : AOF disabled (RDB is sufficient for sessions).
             #   --maxmemory-policy noeviction: never silently drop a live
             #     session under memory pressure; oauth2-proxy sets a TTL on
             #     every key so they expire on their own.
@@ -60,7 +61,8 @@ spec:
               - --requirepass
               - ${VALKEY_PASSWORD}
               - --save
-              - ""
+              - "60"
+              - "1"
               - --appendonly
               - "no"
               - --maxmemory
@@ -90,10 +92,12 @@ spec:
           valkey:
             port: 6379
     persistence:
-      # valkey-server's working dir is /data; with persistence disabled it
-      # writes nothing here, but readOnlyRootFilesystem still needs a writable
-      # path for it to chdir into. emptyDir keeps the pod stateless.
+      # RDB snapshots (--save 60 1) land in /data/dump.rdb. With a PVC,
+      # sessions survive pod/node restarts — no forced re-login on reboot.
       data:
-        type: emptyDir
+        type: persistentVolumeClaim
+        accessMode: ReadWriteOnce
+        size: 128Mi
+        storageClass: ${STORAGE_CLASS_DEFAULT}
         globalMounts:
           - path: /data
