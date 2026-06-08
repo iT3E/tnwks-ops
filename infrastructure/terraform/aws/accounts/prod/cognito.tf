@@ -194,8 +194,8 @@ resource "aws_cognito_user_group" "agents" {
 
 ## ---------------------------------------------------------------------------------------------------------------------
 ## USERS
-## Human admin(s). Email is sourced from secrets.sops.yaml so the value
-## doesn't land in the public repo.
+## Human users (admin, viewer). Emails are sourced from secrets.sops.yaml so
+## the values don't land in the public repo.
 ##
 ## Pool's sign_in_policy enables PASSWORD as a first-auth factor, so
 ## AdminCreateUser requires a TemporaryPassword (AWS won't generate one
@@ -250,6 +250,46 @@ resource "aws_cognito_user_in_group" "admin_in_admins" {
   user_pool_id = aws_cognito_user_pool.tnwks_auth.id
   group_name   = aws_cognito_user_group.admins.name
   username     = aws_cognito_user.admin.username
+}
+
+# Read-only human user. Email sourced from secrets.sops.yaml (viewer_email)
+# so the address never lands in the public repo — same pattern as admin above.
+resource "random_password" "viewer_temp" {
+  length           = 24
+  special          = true
+  override_special = "!@#$%^&*()-_=+"
+
+  keepers = {
+    username        = data.sops_file.secrets.data["viewer_email"]
+    auth_posture    = "passkey-as-mfa-with-totp"
+    invite_template = "v2-onboard-tnwks-us"
+  }
+}
+
+resource "aws_cognito_user" "viewer" {
+  user_pool_id       = aws_cognito_user_pool.tnwks_auth.id
+  username           = data.sops_file.secrets.data["viewer_email"]
+  temporary_password = random_password.viewer_temp.result
+
+  attributes = {
+    email          = data.sops_file.secrets.data["viewer_email"]
+    email_verified = true
+  }
+
+  desired_delivery_mediums = ["EMAIL"]
+
+  lifecycle {
+    ignore_changes = [temporary_password]
+    replace_triggered_by = [
+      random_password.viewer_temp,
+    ]
+  }
+}
+
+resource "aws_cognito_user_in_group" "viewer_in_viewers" {
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+  group_name   = aws_cognito_user_group.viewers.name
+  username     = aws_cognito_user.viewer.username
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
