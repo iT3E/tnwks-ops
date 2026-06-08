@@ -1,0 +1,53 @@
+---
+# packing-api ingress — gates the packing list's write API behind the SAME
+# oauth2-proxy auth-subrequest that protects /<project>/private/* on the sites
+# platform. A public visitor gets bounced to Cognito sign-in (the frontend
+# treats that as "not authenticated" and never shows the packing UI), exactly
+# like the private budget.json.
+#
+# Path: sites.${SECRET_DOMAIN}/van-trip-colorado-2026/api/...  ->  service /...
+# The rewrite strips the project+/api prefix so the Go service sees bare
+# /items, /items/{id}, /healthz.
+#
+# This is a separate Ingress from the `sites` and `sites-private` ones (which
+# live in the sites app). Keeping it here co-locates it with the service it
+# fronts, and longest-prefix routing in ingress-nginx means this more-specific
+# /van-trip-colorado-2026/api path wins over the public `/` sites ingress.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: packing-api
+  namespace: production
+  annotations:
+    # --- oauth2-proxy auth-subrequest (copied from sites-private) ---
+    nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local/oauth2/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${SECRET_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
+    # oauth2-proxy returns the authenticated identity on the auth subrequest;
+    # pass it through to the upstream so the service can stamp updated_by.
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-Email,X-Auth-Request-User"
+    # Cognito sessions span multiple cookies; the subrequest header chunk
+    # overflows nginx's default 4k buffer. Match sites-private / oauth2-proxy.
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+    # --- prefix rewrite ---
+    # Capture everything after /van-trip-colorado-2026/api and hand it to the
+    # service as /$1 (so /van-trip-colorado-2026/api/items -> /items, and the
+    # bare /van-trip-colorado-2026/api -> /).
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - "sites.${SECRET_DOMAIN}"
+  rules:
+    - host: "sites.${SECRET_DOMAIN}"
+      http:
+        paths:
+          - path: /van-trip-colorado-2026/api(?:/(.*))?$
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: packing-api
+                port:
+                  name: http
