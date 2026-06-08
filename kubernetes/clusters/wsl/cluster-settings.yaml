@@ -15,23 +15,28 @@ data:
   INTERNAL_DOMAIN: "internal.tnwks.us"
 
   # Storage classes
-  #   local-path       — default, on the Talos node container's overlay (C:)
+  #   democratic-local — DEFAULT. democratic-csi local-hostpath driver.
+  #                      Provisions directories under
+  #                      /var/lib/democratic-csi/local-hostpath with NO node
+  #                      affinity (volumeBindingMode: Immediate), so a PVC's
+  #                      pod can schedule on any worker even when another is
+  #                      NotReady. This is why it replaced local-path as the
+  #                      default: local-path pins each PV to a node and
+  #                      deadlocks scheduling when that node goes down.
+  #   local-path       — LEGACY default. Still present for PVCs not yet
+  #                      migrated (storageClassName is immutable, so existing
+  #                      volumes stay on it until they're recreated). Apps
+  #                      still on local-path: postgres (via DATABASE), valkey,
+  #                      plausible/clickhouse, mosquitto, nfs-server. These
+  #                      need real data migrations and will show a drifted
+  #                      HelmRelease until then (pods keep running).
   #   local-path-bulk  — pinned to homelab-wsl-worker-2, backed by Windows E:
   #                      via a /mnt/e bind-mount. Used directly by apps that
-  #                      need real disk (e.g. frigate recordings); not yet
-  #                      wired into STORAGE_CLASS_BULK because flipping that
-  #                      variable would invalidate existing qbit/jellyfin
-  #                      PVCs (storageClassName is immutable).
-  STORAGE_CLASS_DEFAULT: "local-path"
+  #                      need real disk (e.g. frigate recordings).
+  STORAGE_CLASS_DEFAULT: "democratic-local"
   STORAGE_CLASS_BULK: "local-path"
-  # democratic-local — democratic-csi local-hostpath driver. Provisions
-  # directories under /var/lib/democratic-csi/local-hostpath with NO node
-  # affinity (volumeBindingMode: Immediate), so a PVC's pod can schedule on
-  # any worker even when another is NotReady — unlike local-path, whose
-  # per-PV node affinity deadlocks scheduling when its node goes down.
-  # Opt-in for now; intended to become STORAGE_CLASS_DEFAULT in a later
-  # migration step (flipping the default is deferred so existing local-path
-  # PVCs are left untouched — storageClassName is immutable).
+  # Retained as an explicit handle for the local-hostpath class (same value
+  # as STORAGE_CLASS_DEFAULT now) so manifests that opted in early still work.
   STORAGE_CLASS_DEMOCRATIC: "democratic-local"
   # Database (postgres) storage. Must support Linux permission semantics
   # (initdb chmods config files). The default local-path SC sits on a
