@@ -32,7 +32,6 @@ resources:
   - ../../../apps/default
   - ../../../apps/flux-system
   - ../../../apps/kube-system
-  - ../../../apps/kube-system/democratic-csi/ks.yaml
   - ../../../apps/kube-system/flannel/ks.yaml
   - ../../../apps/kube-system/local-path-provisioner/ks.yaml
   - ../../../apps/media

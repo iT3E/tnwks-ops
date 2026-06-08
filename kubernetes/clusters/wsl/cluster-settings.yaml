@@ -22,25 +22,13 @@ data:
   #                      via a /mnt/e bind-mount. Used directly by apps that
   #                      need real disk (e.g. frigate recordings).
   #
-  # NOTE: democratic-csi local-hostpath (democratic-local) is installed but is
-  # NOT usable as a general default on this cluster — see the comment on
-  # STORAGE_CLASS_DEMOCRATIC below. Do not point STORAGE_CLASS_DEFAULT at it.
+  # NOTE: democratic-csi local-hostpath was evaluated and removed — it cannot
+  # work on Talos-in-Docker here: the nodes don't share a filesystem (so an
+  # Immediate-bound volume created on one node is missing on the node the pod
+  # lands on) and the Talos mount binary rejects the driver's `mount --bind`
+  # flags. Don't reintroduce it without solving both at the bootstrap layer.
   STORAGE_CLASS_DEFAULT: "local-path"
   STORAGE_CLASS_BULK: "local-path"
-  # democratic-local — democratic-csi local-hostpath. Present on the cluster
-  # but BROKEN for real workloads here, for two independent reasons:
-  #   1. Talos-in-Docker nodes do NOT share a filesystem (each node is its own
-  #      container). local-hostpath creates the volume dir on the *controller*
-  #      node; with volumeBindingMode: Immediate the workload pod can land on a
-  #      different node where the dir doesn't exist -> NodeStageVolume fails
-  #      with "special device .../v/<pvc> does not exist".
-  #   2. The node driver runs `mount --bind`, but the Talos mount binary
-  #      rejects GNU long options ("illegal option -- -").
-  # Kept defined only so the HelmRelease/StorageClass reconcile cleanly; do
-  # NOT route app PVCs here until both issues are solved at the Talos/Docker
-  # bootstrap layer (shared host volume bind-mounted into every node + a
-  # mount-binary fix). See PR history for the investigation.
-  STORAGE_CLASS_DEMOCRATIC: "democratic-local"
   # Database (postgres) storage. Must support Linux permission semantics
   # (initdb chmods config files). The default local-path SC sits on a
   # Windows DrvFs bind-mount which doesn't, so postgres uses local-path-ext4
