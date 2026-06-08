@@ -24,6 +24,15 @@ data:
   #                      PVCs (storageClassName is immutable).
   STORAGE_CLASS_DEFAULT: "local-path"
   STORAGE_CLASS_BULK: "local-path"
+  # democratic-local — democratic-csi local-hostpath driver. Provisions
+  # directories under /var/lib/democratic-csi/local-hostpath with NO node
+  # affinity (volumeBindingMode: Immediate), so a PVC's pod can schedule on
+  # any worker even when another is NotReady — unlike local-path, whose
+  # per-PV node affinity deadlocks scheduling when its node goes down.
+  # Opt-in for now; intended to become STORAGE_CLASS_DEFAULT in a later
+  # migration step (flipping the default is deferred so existing local-path
+  # PVCs are left untouched — storageClassName is immutable).
+  STORAGE_CLASS_DEMOCRATIC: "democratic-local"
   # Database (postgres) storage. Must support Linux permission semantics
   # (initdb chmods config files). The default local-path SC sits on a
   # Windows DrvFs bind-mount which doesn't, so postgres uses local-path-ext4
