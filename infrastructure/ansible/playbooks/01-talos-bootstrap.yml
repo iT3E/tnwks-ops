@@ -118,6 +118,11 @@
             path: "{{ zstick_path }}"
           register: zstick_stat
 
+        - name: Check whether host /dev tree is present
+          ansible.builtin.stat:
+            path: /dev
+          register: host_dev_stat
+
         - name: Skip augmentation when neither USB nor bulk path is available
           ansible.builtin.debug:
             msg: |
@@ -134,38 +139,54 @@
             name: "{{ worker_name }}"
           register: w2_info
 
-        # The Coral is bind-mounted (not --device) with rslave propagation so
-        # host re-enumeration (usbipd detach/attach, firmware reload) makes
-        # the new /dev/bus/usb/<bus>/<dev> node appear inside the container
-        # live. A --device flag snapshots the major/minor at container start
-        # and goes stale on re-enum — libedgetpu in Frigate then finds no
-        # 18d1:9302 and CrashLoops. privileged: true already grants the
-        # device-cgroup access the bind mount needs. The Z-Stick stays a
-        # --device: Talos runs no udev, so /dev/serial/by-id is never
-        # populated and the CDC node arrives as /dev/ttyACM0 (the zwave-js-ui
-        # WSL overlay points at that path). See docs/usb-passthrough.md.
+        # Both USB devices reach worker-2 as rslave bind mounts (not --device)
+        # so host re-enumeration — usbipd detach/attach, Coral firmware reload,
+        # or a Z-Stick attached *after* the container started — propagates the
+        # live device node into the container. A --device flag snapshots the
+        # major/minor at container start and goes stale on re-enum (or is never
+        # created at all if the device wasn't attached yet): libedgetpu then
+        # finds no 18d1:9302 and Frigate CrashLoops, and zwave-js-ui's kubelet
+        # mount fails with "/dev/ttyACM0 is not a character device".
+        # privileged: true already grants the device-cgroup access bind mounts
+        # need.
+        #
+        #   - Coral: bind /dev/bus/usb (libedgetpu speaks raw usbfs nodes, and
+        #     the subtree is self-contained, so it mounts directly).
+        #   - Z-Stick: bind the whole host /dev at a *dedicated* /hostdev
+        #     mountpoint, NOT over the container's own /dev. zwave-js-ui opens
+        #     a CDC tty (/dev/ttyACM0), whose only parent dir is /dev itself;
+        #     overlaying the container's /dev would shadow Talos's /dev/pts,
+        #     /dev/shm and submounts and break the node. The zwave-js-ui WSL
+        #     overlay points the pod hostPath at /hostdev/ttyACM0 to match.
+        # See docs/usb-passthrough.md.
         - name: Build desired device list
           ansible.builtin.set_fact:
-            w2_devices: >-
-              {{ [ zstick_path ~ ':' ~ zstick_path ~ ':rwm' ] if zstick_stat.stat.exists else [] }}
+            w2_devices: []
 
         - name: Build desired bind-mount list
           ansible.builtin.set_fact:
             w2_bind_mounts: >-
               {{
                 ([ '/dev/bus/usb:/dev/bus/usb:rslave' ] if usb_bus_stat.stat.exists else [])
+                + ([ '/dev:/hostdev:rslave' ] if host_dev_stat.stat.exists else [])
                 + ([ bulk_host_path ~ ':' ~ bulk_host_path ] if bulk_path_stat.stat.exists else [])
               }}
 
-        # /dev/bus/usb is now an rslave bind, so look in Binds (not Devices).
-        # A container still carrying the old --device form has no matching
-        # bind here, so this stays false and triggers the migrating recreate.
+        # Both USB passthroughs are now rslave binds, so look in Binds (not
+        # Devices). A container still carrying the old --device form (or
+        # lacking the /hostdev bind) has no matching entry here, so the flag
+        # stays false and triggers the migrating recreate.
         - name: Detect whether worker-2 already has the desired augmentations
           ansible.builtin.set_fact:
             w2_has_usb: >-
               {{ usb_bus_stat.stat.exists | bool
                  and (w2_info.container.HostConfig.Binds | default([]))
                        | select('match', '^/dev/bus/usb:')
+                       | list | length > 0 }}
+            w2_has_hostdev: >-
+              {{ host_dev_stat.stat.exists | bool
+                 and (w2_info.container.HostConfig.Binds | default([]))
+                       | select('match', '^/dev:/hostdev:')
                        | list | length > 0 }}
             w2_has_bulk: >-
               {{ bulk_path_stat.stat.exists | bool
@@ -177,6 +198,7 @@
           when:
             - w2_info.exists
             - (usb_bus_stat.stat.exists and not w2_has_usb)
+              or (host_dev_stat.stat.exists and not w2_has_hostdev)
               or (bulk_path_stat.stat.exists and not w2_has_bulk)
           block:
             - name: Capture original named volumes from worker-2

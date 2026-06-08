@@ -59,6 +59,25 @@ usbipd attach --wsl --busid 2-3
 usbipd attach --wsl --busid 4-1
 ```
 
+> **Don't do the attach by hand on every reboot — register the task.**
+> `usbipd bind` is persistent but `usbipd attach --wsl` is per-session, so a
+> Windows reboot or `wsl --shutdown` drops both dongles out of WSL and the
+> frigate / zwave-js-ui pods break. `infrastructure/wsl-host/` ships a
+> Scheduled Task that re-attaches them automatically at logon and when the
+> WSL VM reconnects (matches `vmid` by VID:PID, not busid). Register it once,
+> elevated:
+>
+> ```powershell
+> cd <repo>\infrastructure\wsl-host
+> .\Register-TnwksUsbAttachTask.ps1
+> Start-ScheduledTask -TaskName tnwks-usb-attach   # run it now
+> ```
+>
+> `Sync-TnwksUsbAttach.ps1` is idempotent — it binds (with `--force`) and
+> attaches any target dongle that's connected but not yet attached, and
+> leaves already-attached ones alone. The Coral firmware flip still needs a
+> manual nudge in the worst case (see the gotcha below).
+
 > **Coral gotcha — bind after firmware loads, not before.** When the
 > Coral first appears on Windows it shows VID/PID `1a6e:089a` (DFU
 > bootloader). Windows itself completes the firmware load, after which
@@ -100,10 +119,11 @@ the base64 machine config in `USERDATA`), and recreates the container
 via `community.docker.docker_container` with the USB passthrough and
 `/mnt/e/k8s-storage` bind-mount layered on top.
 
-The Coral comes through as an **`rslave` bind mount** of `/dev/bus/usb`
-(not a `--device`), so host re-enumeration propagates live — see the
-`--device` caveat below. The Z-Stick stays a `--device` because Talos
-runs no udev to recreate its node on re-enum (see `/dev/ttyACM0` note).
+Both dongles come through as **`rslave` bind mounts** (not `--device`), so
+host re-enumeration — and a dongle attached *after* the container started —
+propagates the live node in. The Coral binds `/dev/bus/usb`; the Z-Stick
+binds the whole host `/dev` tree at a dedicated `/hostdev` mountpoint (its
+CDC tty's only parent dir is `/dev` itself). See the `--device` caveat below.
 
 ```bash
 cd infrastructure
@@ -127,43 +147,47 @@ named volume); drain just relocates pods that can move.
 ### Verify the device made it through
 
 ```bash
-talosctl -n 10.5.0.4 ls /dev/bus/usb       # should list 001, 002 ...
-talosctl -n 10.5.0.4 ls /dev | grep ttyACM # Z-Stick lands here
+talosctl -n 10.5.0.4 ls /dev/bus/usb        # Coral: should list 001, 002 ...
+talosctl -n 10.5.0.4 ls /hostdev | grep ttyACM  # Z-Stick lands here
 ```
 
-> **Why `/dev/ttyACM0` and not `/dev/serial/by-id/...`?** Talos doesn't
-> populate udev's `/dev/serial/by-id/` symlinks. Docker resolves the
-> host symlink at container start, so the device node arrives as
-> `/dev/ttyACM0` inside the Talos container. The WSL overlay
+> **Why `/hostdev/ttyACM0` and not `/dev/serial/by-id/...`?** Talos
+> doesn't populate udev's `/dev/serial/by-id/` symlinks, so the Z-Stick
+> arrives as the bare `ttyACM0` node. worker-2 bind-mounts the host's
+> `/dev` at `/hostdev`, so the device is at `/hostdev/ttyACM0` inside the
+> container. The WSL overlay
 > (`kubernetes/clusters/wsl/apps/home-automation/zwave-js-ui-ks.yaml`)
 > patches the zwave-js-ui hostPath accordingly. The MS-01 cluster keeps
 > the upstream by-id path because udev runs there.
 
 > **`--device` is a snapshot, not a live mount.** Docker's `--device`
 > flag captures the host's device-node major/minor at container start
-> and cgroup-allows that exact one. If the underlying USB device
-> disconnects/reconnects later (USB reset, suspend, replug, or a
-> usbipd `detach`/`attach` cycle), the host renumbers it but the Talos
-> container still has the stale node. The pod then sees a dangling
-> /dev entry or opens the wrong device.
+> and cgroup-allows that exact one. If the device isn't present yet at
+> container start (attached later), or disconnects/reconnects (USB reset,
+> suspend, replug, usbipd `detach`/`attach`), the container is left with
+> no node or a stale one. The pod then can't open the device:
+> `libedgetpu` fails to load, or the kubelet rejects the zwave hostPath
+> with `/dev/ttyACM0 is not a character device`.
 >
-> **The Coral avoids this** — the playbook bind-mounts `/dev/bus/usb`
-> with `rslave` propagation instead of using `--device`. New
-> `/dev/bus/usb/<bus>/<dev>` nodes created on the host when the Coral
-> re-enumerates propagate into the container live, so `libedgetpu`
-> always finds the current `18d1:9302` and Frigate no longer CrashLoops
-> after a usbipd cycle. `privileged: true` (already set on the worker
-> container) grants the device-cgroup access the bind mount needs. The
-> pod-side `hostPath` mount carries the matching
-> `mountPropagation: HostToContainer` so the new node reaches the
-> Frigate container too.
+> **Both dongles avoid this with `rslave` bind mounts** instead of
+> `--device`, so nodes created on the host propagate into the container
+> live. `privileged: true` (already set on the worker container) grants
+> the device-cgroup access the bind mounts need, and the pod-side
+> `hostPath` mounts carry the matching `mountPropagation: HostToContainer`
+> so the live node reaches the app container too.
 >
-> **The Z-Stick stays a `--device`.** Talos runs no udev, so it cannot
-> recreate a CDC node on re-enum the way the kernel does for
-> `/dev/bus/usb`; bind-propagating `/dev/ttyACM0` would gain nothing,
-> and bind-mounting all of `/dev` into the Talos worker is too invasive.
-> If the Z-Stick re-enumerates, re-run the playbook (it recreates
-> worker-2 after the device is back in a stable state).
+> - **Coral** binds `/dev/bus/usb` directly — `libedgetpu` speaks raw
+>   usbfs nodes and the subtree is self-contained, so new
+>   `/dev/bus/usb/<bus>/<dev>` nodes from a firmware-flip re-enumeration
+>   appear in the pod and Frigate finds the current `18d1:9302`.
+> - **Z-Stick** binds the whole host `/dev` at **`/hostdev`** (a dedicated
+>   mountpoint, *not* over the container's own `/dev`). zwave-js-ui opens a
+>   CDC tty whose only parent dir is `/dev` itself; overlaying the
+>   container's `/dev` would shadow Talos's `/dev/pts`, `/dev/shm` and
+>   submounts and break the node, so it gets its own path. The live
+>   `/hostdev/ttyACM0` appears even when the Z-Stick is attached after
+>   worker-2 started — which is exactly the host-reboot ordering that used
+>   to wedge the pod.
 
 ---
 
@@ -206,7 +230,8 @@ persistence:
     hostPathType: CharDevice
 ```
 
-The WSL overlay patches this to `/dev/ttyACM0` and pins the pod to
+The WSL overlay patches this to `/hostdev/ttyACM0` (the host `/dev` tree is
+bind-mounted into worker-2 at `/hostdev`) and pins the pod to
 `homelab-wsl-worker-2`:
 
 ```
@@ -245,14 +270,16 @@ usbipd list                                    # device should be 'Attached'
 lsusb | grep -E "Coral|Aeotec|Sigma|Google"
 ls /dev/bus/usb/*/
 
-# Talos node container (replace <node> with the node name)
+# Talos node container (replace <node> with the node name).
+# On WSL the Z-Stick is under /hostdev; on MS-01 it's /dev/serial/by-id.
 talosctl -n <node> ls /dev/bus/usb
-talosctl -n <node> ls /dev/serial/by-id
+talosctl -n <node> ls /hostdev | grep ttyACM    # WSL
+talosctl -n <node> ls /dev/serial/by-id         # MS-01
 
 # Pod
 kubectl exec -n production deploy/frigate -- ls /dev/bus/usb
 kubectl exec -n home-automation deploy/zwave-js-ui -- \
-  ls -l /dev/serial/by-id
+  ls -l /hostdev/ttyACM0                          # WSL (by-id on MS-01)
 ```
 
 If any layer doesn't see the device, fix that layer before going up.
@@ -263,11 +290,11 @@ If any layer doesn't see the device, fix that layer before going up.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `usbipd list` shows device but `lsusb` in WSL is empty | Forgot `attach` after WSL restart | `usbipd attach --wsl --busid X-Y` |
-| Device disappears after Windows reboot | `bind` is persistent; `attach` is per-session | Re-run `attach` in startup script |
-| Pod crashes with "no such device" | Talos node container doesn't see the device | Re-do Step 2 |
-| Coral throws permission errors | Coral firmware load flips vendor:product, breaks bind | Re-bind with new busid after first run |
-| Z-Wave controller "stuck" | wrong CDC path in hostPath | `talosctl -n <node> ls /dev/serial/by-id`, update the helmrelease |
+| `usbipd list` shows device but `lsusb` in WSL is empty | Forgot `attach` after WSL restart | `Start-ScheduledTask -TaskName tnwks-usb-attach` (or `usbipd attach --wsl --busid X-Y`) |
+| Devices drop out after every Windows reboot | `bind` is persistent; `attach` is per-session, and the auto-attach task isn't registered | Register it: `.\Register-TnwksUsbAttachTask.ps1` (elevated) |
+| Pod crashes with "no such device" / zwave "is not a character device" | worker-2 container doesn't see the live node (stale `--device` snapshot, or attached after container start) | Re-run `task bootstrap:wsl` to recreate worker-2 with the `rslave` binds (Step 2) |
+| Coral throws permission errors / `Failed to load delegate` | Coral firmware flip kicked it back to the Windows host at `18d1:9302` | Re-run `tnwks-usb-attach`, or manually re-bind/attach the runtime VID (see Coral gotcha) |
+| Z-Wave controller "stuck" | wrong CDC path in hostPath | `talosctl -n <node> ls /hostdev \| grep ttyACM` (WSL) and confirm the overlay path |
 
 ## References
 

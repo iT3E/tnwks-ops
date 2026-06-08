@@ -1,9 +1,13 @@
 ---
 # WSL overlay for zwave-js-ui: pin to homelab-wsl-worker-2 (the only node
-# with the Aeotec Z-Stick passed through via --device) and re-point the
-# usb hostPath at /dev/ttyACM0. Talos doesn't populate udev's
-# /dev/serial/by-id/ symlinks, but Docker resolves the host symlink at
-# container start so the device node arrives as /dev/ttyACM0.
+# with the Aeotec Z-Stick) and re-point the usb hostPath at
+# /hostdev/ttyACM0. worker-2 bind-mounts the host's /dev tree at /hostdev
+# with rslave propagation (see 01-talos-bootstrap.yml), mirroring the Coral
+# /dev/bus/usb bind: the live CDC tty node propagates in even when the
+# Z-Stick is attached after the container started, so a host reboot no
+# longer wedges the pod with a stale --device snapshot. It lands at
+# /hostdev/ttyACM0 (not /dev/serial/by-id/...) because Talos runs no udev
+# to populate the by-id symlinks.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -29,7 +33,7 @@ spec:
           value: homelab-wsl-worker-2
         - op: replace
           path: /spec/values/persistence/usb/hostPath
-          value: /dev/ttyACM0
+          value: /hostdev/ttyACM0
         - op: replace
           path: /spec/values/persistence/usb/globalMounts/0/path
-          value: /dev/ttyACM0
+          value: /hostdev/ttyACM0
