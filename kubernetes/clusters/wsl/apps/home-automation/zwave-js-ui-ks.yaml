@@ -8,6 +8,17 @@
 # longer wedges the pod with a stale --device snapshot. It lands at
 # /hostdev/ttyACM0 (not /dev/serial/by-id/...) because Talos runs no udev
 # to populate the by-id symlinks.
+#
+# hostPathType is also cleared to "" (no validation). On WSL the worker
+# kubelet runs as a nested container whose mount namespace only carries the
+# worker's own /dev, NOT the sibling /hostdev bind — so a `CharDevice`
+# precheck stats a path the kubelet can't see and fails with "not a
+# character device". containerd (running in the worker's main namespace,
+# where /hostdev IS present) does the real mount, so skipping the kubelet
+# precheck lets the live node through. The Coral sidesteps this because its
+# mount lives under /dev (hostPathType: Directory just checks the dir
+# exists). MS-01 keeps CharDevice — udev runs there and the device is a
+# normal /dev node.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -34,6 +45,9 @@ spec:
         - op: replace
           path: /spec/values/persistence/usb/hostPath
           value: /hostdev/ttyACM0
+        - op: replace
+          path: /spec/values/persistence/usb/hostPathType
+          value: ""
         - op: replace
           path: /spec/values/persistence/usb/globalMounts/0/path
           value: /hostdev/ttyACM0
