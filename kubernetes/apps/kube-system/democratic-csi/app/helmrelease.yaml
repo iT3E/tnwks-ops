@@ -68,6 +68,12 @@ spec:
     # Mount the host base path into the controller container so it can create
     # and delete volume directories.
     controller:
+      # The local-hostpath driver doesn't implement volume resize, so the
+      # external-resizer sidecar crashes on startup (NodeGetCapabilities
+      # returns Unimplemented). The StorageClass sets allowVolumeExpansion:
+      # false anyway, so the resizer has no job — disable it.
+      externalResizer:
+        enabled: false
       driver:
         extraVolumeMounts:
           - name: local-hostpath
