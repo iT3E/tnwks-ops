@@ -1,0 +1,82 @@
+---
+# packing-api — the write-backend for the editable, multi-user packing list on
+# the Van Trip page of the sites platform. The site itself is static (nginx off
+# NFS); this is the one stateful piece, so it gets its own tiny service +
+# Postgres-backed store.
+#
+# Source + image build: github.com/iT3E/tnwks-packing-api (pushes
+# ghcr.io/it3e/tnwks-packing-api:main on every merge).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: packing-api
+  namespace: production
+  labels:
+    app.kubernetes.io/name: packing-api
+  annotations:
+    # Roll the pod when the reflected postgres-app secret rotates.
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: packing-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: packing-api
+    spec:
+      containers:
+        - name: packing-api
+          # :main is the rolling tag CI pushes from the repo's main branch.
+          # imagePullPolicy Always so a re-pushed :main is actually picked up
+          # on pod restart (the tag is mutable).
+          image: ghcr.io/it3e/tnwks-packing-api:main
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            # DB connection. Username/password come from the CNPG-generated
+            # `postgres-app` secret, reflected into the production namespace
+            # (see the cnpg Cluster's inheritedMetadata). Same keys mealie uses.
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: password
+            - name: POSTGRES_SERVER
+              value: "postgres-rw.databases.svc.cluster.local"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: "vantrip"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi

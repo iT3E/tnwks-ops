@@ -22,6 +22,10 @@ resources:
   # off the shared NFS export (nfs-server lives in the storage namespace, wired
   # in the WSL apps overlay one level up).
   - ../../../../apps/production/sites/ks.yaml
+  # packing-api: write-backend for the editable packing list on the Van Trip
+  # site. Gated by the same oauth2-proxy that protects /<project>/private/*,
+  # persists to the cnpg `vantrip` database. WSL-only, same as sites.
+  - ../../../../apps/production/packing-api/ks.yaml
   # frigate: WSL-specific Flux Kustomization with a patch to replace the
   # NFD coral nodeSelector with a hostname pin to homelab-wsl-worker-2.
   - ./frigate-ks.yaml

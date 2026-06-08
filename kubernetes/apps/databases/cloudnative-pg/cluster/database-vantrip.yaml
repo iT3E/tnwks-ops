@@ -1,0 +1,22 @@
+---
+# Declarative database creation for the Van Trip packing-api (production ns).
+#
+# Sibling of database.yaml (litellm) / database-plausible.yaml. The Database
+# CRD reconciles continuously, so adding a database to an already-running
+# cluster is pure GitOps. `ensure: present` is idempotent. The packing-api
+# (production namespace) connects via the reflected `postgres-app` secret —
+# owner `app` matches that credential.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: vantrip
+  namespace: databases
+spec:
+  cluster:
+    name: postgres
+  name: vantrip
+  owner: app
+  ensure: present
+  # Keep the database if this resource is ever removed — never let a manifest
+  # deletion drop the packing list.
+  databaseReclaimPolicy: retain
