@@ -72,7 +72,6 @@ spec:
         extraVolumeMounts:
           - name: local-hostpath
             mountPath: /var/lib/democratic-csi/local-hostpath
-            mountPropagation: Bidirectional
       extraVolumes:
         - name: local-hostpath
           hostPath:
@@ -86,7 +85,6 @@ spec:
         extraVolumeMounts:
           - name: local-hostpath
             mountPath: /var/lib/democratic-csi/local-hostpath
-            mountPropagation: Bidirectional
       extraVolumes:
         - name: local-hostpath
           hostPath:
