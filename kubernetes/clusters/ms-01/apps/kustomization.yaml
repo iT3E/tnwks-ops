@@ -9,8 +9,9 @@ resources:
   - ../../../apps/kube-system/cilium/ks.yaml
   - ../../../apps/storage/rook-ceph/rook-ceph-operator
   - ../../../apps/storage/rook-ceph/cluster
-  # MS-01-only: loki, thanos, vector. They depend on Rook S3 buckets.
-  - ../../../apps/monitoring/loki/ks.yaml
+  # MS-01-only: thanos + vector. thanos needs a Rook S3 bucket; vector's
+  # aggregator dependsOn loki. (loki itself moved to the shared monitoring
+  # kustomization now that it uses the filesystem backend.)
   - ../../../apps/monitoring/thanos/ks.yaml
   - ../../../apps/monitoring/vector/ks.yaml
   # node-feature-discovery is MS-01-only too — needed for hardware-aware
@@ -22,7 +23,6 @@ resources:
   # also needs a kustomize patch to add the `backup.barmanObjectStore`
   # block back; TODO when MS-01 is racked and backups are needed.
   - ../../../apps/databases/cloudnative-pg/ks-cluster-backup.yaml
-  # ObjectBucketClaims for thanos/loki (cnpg's bucket is created via
-  # the ks-cluster-backup path above).
+  # ObjectBucketClaim for thanos (cnpg's bucket is created via the
+  # ks-cluster-backup path above; loki no longer needs an S3 bucket).
   - ../../../apps/monitoring/thanos/app/s3-thanos-bucket.yaml
-  - ../../../apps/monitoring/loki/app/s3-loki-bucket.yaml

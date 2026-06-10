@@ -16,180 +16,106 @@ spec:
         namespace: flux-system
       interval: 30m
   values:
+    # Single-binary + filesystem. The previous config targeted Rook-Ceph S3
+    # (MS-01-only) with a Loki-2.x schema (boltdb-shipper / v11 / shared_store)
+    # that the chart's Loki-3.x image no longer accepts, so it never ran.
+    # Single-binary on a local PVC drops the object-store dependency entirely,
+    # which is what makes Loki viable on WSL (no shared FS, no Rook S3) while
+    # staying portable to MS-01.
+    deploymentMode: SingleBinary
+
     loki:
-      structuredConfig:
-        auth_enabled: false
+      auth_enabled: false
 
-        server:
-          log_level: info
-          http_listen_port: 3100
-          grpc_listen_port: 9095
+      commonConfig:
+        path_prefix: /var/loki
+        # Single replica — one ingester, no ring quorum to satisfy.
+        replication_factor: 1
 
-          grpc_server_max_recv_msg_size: 8388608
-          grpc_server_max_send_msg_size: 8388608
+      storage:
+        type: filesystem
+        filesystem:
+          chunks_directory: /var/loki/chunks
+          rules_directory: /var/loki/rules
 
-        memberlist:
-          join_members: ["loki-memberlist"]
+      schemaConfig:
+        configs:
+          - from: "2024-04-01"
+            store: tsdb
+            object_store: filesystem
+            schema: v13
+            index:
+              prefix: loki_index_
+              period: 24h
 
-        limits_config:
-          retention_period: 14d
-          enforce_metric_name: false
-          reject_old_samples: true
-          reject_old_samples_max_age: 168h
-          max_cache_freshness_per_query: 10m
-          split_queries_by_interval: 15m
-          per_stream_rate_limit: 64M
-          per_stream_rate_limit_burst: 128M
-          ingestion_rate_mb: 64
-          ingestion_burst_size_mb: 128
-          shard_streams:
-            enabled: true
+      limits_config:
+        retention_period: 14d
+        reject_old_samples: true
+        reject_old_samples_max_age: 168h
+        max_cache_freshness_per_query: 10m
+        split_queries_by_interval: 15m
+        per_stream_rate_limit: 64M
+        per_stream_rate_limit_burst: 128M
+        ingestion_rate_mb: 64
+        ingestion_burst_size_mb: 128
+        shard_streams:
+          enabled: true
 
-        schema_config:
-          configs:
-            - from: "2021-08-01"
-              store: boltdb-shipper
-              object_store: s3
-              schema: v11
-              index:
-                prefix: loki_index_
-                period: 24h
+      compactor:
+        working_directory: /var/loki/compactor
+        compaction_interval: 10m
+        retention_enabled: true
+        retention_delete_delay: 2h
+        retention_delete_worker_count: 150
+        delete_request_store: filesystem
 
-        common:
-          path_prefix: /var/loki
-          replication_factor: 3
-          storage:
-            s3:
-              s3: null
-              insecure: true
-              s3forcepathstyle: true
-          ring:
-            kvstore:
-              store: memberlist
+      ingester:
+        chunk_encoding: snappy
 
-        ruler:
-          enable_api: true
-          enable_alertmanager_v2: true
-          alertmanager_url: http://kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093
-          storage:
-            type: local
-            local:
-              directory: /rules
-          rule_path: /rules
-          ring:
-            kvstore:
-              store: memberlist
+      analytics:
+        reporting_enabled: false
 
-        distributor:
-          ring:
-            kvstore:
-              store: memberlist
+    # Run the single-binary target; zero out the SimpleScalable pools.
+    singleBinary:
+      replicas: 1
+      persistence:
+        enabled: true
+        size: 20Gi
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
+      resources:
+        requests:
+          cpu: 50m
+          memory: 256Mi
+        limits:
+          memory: 1Gi
 
-        compactor:
-          working_directory: /var/loki/boltdb-shipper-compactor
-          shared_store: s3
-          compaction_interval: 10m
-          retention_enabled: true
-          retention_delete_delay: 2h
-          retention_delete_worker_count: 150
+    write:
+      replicas: 0
+    read:
+      replicas: 0
+    backend:
+      replicas: 0
 
-        ingester:
-          max_chunk_age: 1h
-          lifecycler:
-            ring:
-              kvstore:
-                store: memberlist
-
-        analytics:
-          reporting_enabled: false
-
-      podAnnotations:
-        secret.reloader.stakater.com/reload: loki-secrets
-
+    # The gateway (nginx) fronts the single-binary and provides the stable
+    # loki-gateway Service that Grafana and Alloy write/read against.
     gateway:
-      replicas: 3
-      affinity: |
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 1
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    {{- include "loki.gatewaySelectorLabels" . | nindent 12 }}
-                topologyKey: kubernetes.io/hostname
       enabled: true
+      replicas: 1
       image:
         registry: ghcr.io
         repository: nginxinc/nginx-unprivileged
         tag: 1.27-alpine
-      ingress:
-        enabled: true
-        ingressClassName: "nginx-internal"
-        annotations:
-          nginx.ingress.kubernetes.io/whitelist-source-range: |
-            10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-        hosts:
-          - host: &host "loki.${INTERNAL_DOMAIN}"
-            paths:
-              - path: /
-                pathType: Prefix
-        tls:
-          - hosts:
-              - *host
 
-    write:
-      replicas: 3
-      affinity: |
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 1
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    {{- include "loki.writeSelectorLabels" . | nindent 12 }}
-                topologyKey: kubernetes.io/hostname
-      persistence:
-        size: 20Gi
-        storageClass: "${STORAGE_CLASS_DEFAULT}"
+    # memcached chunks/results caches default on and spin up extra pods that a
+    # low-traffic homelab doesn't need.
+    chunksCache:
+      enabled: false
+    resultsCache:
+      enabled: false
 
-    read:
-      replicas: 3
-      affinity: |
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 1
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    {{- include "loki.readSelectorLabels" . | nindent 12 }}
-                topologyKey: kubernetes.io/hostname
-      extraVolumeMounts:
-        - name: rules
-          mountPath: /rules
-      extraVolumes:
-        - name: rules
-          emptyDir: {}
-
-    backend:
-      replicas: 3
-      affinity: |
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 1
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    {{- include "loki.backendSelectorLabels" . | nindent 12 }}
-                topologyKey: kubernetes.io/hostname
-      extraVolumeMounts:
-        - name: rules
-          mountPath: /rules
-      extraVolumes:
-        - name: rules
-          emptyDir: {}
-      persistence:
-        size: 20Gi
-        storageClass: "${STORAGE_CLASS_DEFAULT}"
+    # No bundled MinIO — we use the filesystem backend.
+    minio:
+      enabled: false
 
     monitoring:
       dashboards:
@@ -203,25 +129,11 @@ spec:
         enabled: false
         grafanaAgent:
           installOperator: false
-      lokiCanary:
-        enabled: false
+
+    # lokiCanary + test are top-level keys in this chart (not under
+    # `monitoring`); a low-traffic homelab doesn't need the synthetic
+    # write/read probe DaemonSet.
+    lokiCanary:
+      enabled: false
     test:
       enabled: false
-
-  valuesFrom:
-    - kind: ConfigMap
-      name: s3-loki-bucket
-      valuesKey: BUCKET_NAME
-      targetPath: loki.structuredConfig.common.storage.s3.bucketnames
-    - kind: Secret
-      name: loki-secrets
-      valuesKey: BUCKET_HOST
-      targetPath: loki.structuredConfig.common.storage.s3.endpoint
-    - kind: Secret
-      name: s3-loki-bucket
-      valuesKey: AWS_ACCESS_KEY_ID
-      targetPath: loki.structuredConfig.common.storage.s3.access_key_id
-    - kind: Secret
-      name: s3-loki-bucket
-      valuesKey: AWS_SECRET_ACCESS_KEY
-      targetPath: loki.structuredConfig.common.storage.s3.secret_access_key

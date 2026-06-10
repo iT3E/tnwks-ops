@@ -1,0 +1,56 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: tempo
+  namespace: monitoring
+spec:
+  interval: 30m
+  chart:
+    spec:
+      # grafana/tempo is the single-binary (monolithic) chart — ideal for a
+      # low-traffic homelab. (grafana/tempo-distributed is the microservices
+      # variant; we deliberately don't use it.)
+      chart: tempo
+      version: 1.24.4
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+      interval: 30m
+  values:
+    tempo:
+      # Anonymous usage reporting off, matching loki/grafana here.
+      reportingEnabled: false
+      retention: 168h # 7d — span retention for the homelab
+      storage:
+        trace:
+          # Local filesystem backend on the PVC mounted below. No S3/MinIO
+          # dependency, so this runs identically on WSL and MS-01.
+          backend: local
+          local:
+            path: /var/tempo/traces
+          wal:
+            path: /var/tempo/wal
+      # Receivers are left at the chart default, which already enables OTLP on
+      # :4317 (gRPC) / :4318 (HTTP) — that's the only one Alloy uses to forward
+      # Faro traces. The chart's default set also opens jaeger/zipkin listeners;
+      # they're left in place (the chart's Service template hard-references the
+      # jaeger block, so nulling it breaks rendering) and simply go unused.
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          memory: 512Mi
+
+    persistence:
+      enabled: true
+      storageClassName: "${STORAGE_CLASS_DEFAULT}"
+      accessModes:
+        - ReadWriteOnce
+      size: 10Gi
+
+    # ServiceMonitor for kube-prometheus-stack to scrape Tempo's own metrics.
+    serviceMonitor:
+      enabled: ${SERVICE_MONITOR_ENABLED}

@@ -3,8 +3,9 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: monitoring
 resources:
-  - ./secrets.sops.yaml
   - ./helmrelease.yaml
   - ./prometheus-rule.yaml
-# s3-loki-bucket.yaml uses ObjectBucketClaim which only exists when Rook
-# is installed. Added back per-cluster via kubernetes/clusters/ms-01/apps/.
+# Loki now uses the filesystem backend (single-binary), so it no longer needs
+# the Rook S3 ObjectBucketClaim (s3-loki-bucket.yaml) or the loki-secrets /
+# loki ExternalSecret. Those files are kept in-tree but unreferenced in case a
+# future object-store deployment on MS-01 wants them back.

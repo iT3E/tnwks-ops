@@ -14,6 +14,13 @@ resources:
   - ./unms-exporter/ks.yaml
   - ./snmp-exporter/ks.yaml
   - ./plausible-exporter/ks.yaml
-# loki, thanos, and vector are MS-01 only (loki + thanos need Rook Ceph
-# S3 buckets, vector-aggregator dependsOn loki). Added back via
+  # Faro frontend-observability stack — runs on every cluster. loki now uses
+  # the filesystem backend (single-binary) instead of Rook S3, so it's viable
+  # on WSL too; tempo is filesystem-backed single-binary; alloy receives Faro
+  # SDK telemetry and fans it out to tempo (traces) + loki (logs).
+  - ./loki/ks.yaml
+  - ./tempo/ks.yaml
+  - ./alloy/ks.yaml
+# thanos and vector remain MS-01 only (thanos needs a Rook Ceph S3 bucket;
+# vector-aggregator dependsOn loki). Added back via
 # kubernetes/clusters/ms-01/apps/kustomization.yaml.
