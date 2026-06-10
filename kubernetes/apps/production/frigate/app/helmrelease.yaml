@@ -117,12 +117,27 @@ spec:
           - path: /config/config.yml
             subPath: config.yml
             readOnly: true
+      # Frame shared-memory. Frigate keeps decoded frames in /dev/shm; a
+      # RAM-backed volume keeps that off disk.
       cache:
         type: emptyDir
         medium: Memory
-        sizeLimit: 4Gi
+        sizeLimit: 2Gi
         globalMounts:
           - path: /dev/shm
+      # Recording segment cache. Frigate writes every record-role segment to
+      # /tmp/cache first, then copies the kept ones to /media. With no volume
+      # here it lands on the container overlay (the WSL sdd ext4 vhdx that also
+      # backs /var/lib/docker and every local-path PVC), so ~10 cameras of
+      # continuous segment write+read churn saturate that one shared disk —
+      # NodeDiskIOSaturation on sdd across all three nodes. A RAM-backed mount
+      # is Frigate's documented best practice and removes the churn from disk.
+      tmp-cache:
+        type: emptyDir
+        medium: Memory
+        sizeLimit: 2Gi
+        globalMounts:
+          - path: /tmp/cache
       usb:
         type: hostPath
         hostPath: /dev/bus/usb
