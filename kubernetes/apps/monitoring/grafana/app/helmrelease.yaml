@@ -304,11 +304,19 @@ spec:
       pspEnabled: false
 
     resources:
+      # 219M was far too low: Grafana's working set (binary + multiple
+      # datasources + dashboard/datasource sidecars + image-renderer) exceeds
+      # it, so the kernel evicted its file-backed pages the moment they loaded
+      # and re-read them from disk on the next access. That thrash showed up as
+      # sustained multi-GB/s reads on the shared WSL vhdx (sdd) — 3 TB of
+      # read_bytes against only 276 MB of actual read syscalls, with
+      # workingset_refault_file in the hundreds of millions and memory.max hit
+      # 16M times. Give it real headroom so its working set stays resident.
       limits:
-        memory: 219M
+        memory: 768M
       requests:
         cpu: 23m
-        memory: 127M
+        memory: 256M
 
     serviceMonitor:
       enabled: true
