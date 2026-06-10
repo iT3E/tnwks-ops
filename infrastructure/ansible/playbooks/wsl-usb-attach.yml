@@ -1,0 +1,22 @@
+---
+# Install + enable the USB auto-attach systemd units on the WSL host, one per
+# homelab dongle (Z-Stick, Coral). Keeps each attached into the WSL VM across
+# WSL restarts so frigate/zwave recover without a Windows event.
+#
+#   ansible-playbook -i ./ansible/inventory/wsl.yml ./ansible/playbooks/wsl-usb-attach.yml
+#
+# Run from infrastructure/ so ansible.cfg's relative paths resolve.
+#
+# PREREQUISITE (one-time, Windows-side, elevated): each dongle must be
+# `usbipd bind`-ed so it is shareable and the binding persists across reboots:
+#   usbipd bind --force --hardware-id 0658:0200
+#   usbipd bind --force --hardware-id 18d1:9302
+# `attach` (what these units do, repeatedly) needs no elevation; `bind` does.
+# Confirm with `usbipd list` → STATE shows "Shared"/Persisted. See
+# docs/usb-passthrough.md.
+
+- hosts: localhost
+  become: true
+  gather_facts: false
+  roles:
+    - ../roles/wsl_usb_attach
