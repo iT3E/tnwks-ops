@@ -1,0 +1,71 @@
+---
+# Pod-level resource-pressure alerts. The built-in node alerts (e.g.
+# NodeDiskIOSaturation) tell you a node is unhappy but not which pod is to
+# blame — on WSL every node container + local-path PVC shares one ext4 vhdx
+# (sdd), so a single thrashing pod lights up all three nodes and the node
+# alert can't name it. These rules name the pod directly.
+#
+# Origin: a Grafana pod pinned at a too-small 219M memory limit thrashed its
+# page cache (workingset_refault in the hundreds of millions), re-reading
+# itself from sdd at ~1 GB/s and saturating disk for the whole cluster. It
+# never OOMed (so the OOMKilled rule stayed silent) — it just sat at the limit
+# re-faulting forever. Both signals below were verified to spike for that pod
+# during the incident (working-set ratio 0.99; container_fs_reads ~1800 MB/s,
+# matching the node sdd peak).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: resource-pressure-alert
+spec:
+  groups:
+    - name: resource-pressure
+      rules:
+        # Leading indicator: a container sitting near its memory limit. Fires
+        # BEFORE the disk saturates, and points straight at the pod+container
+        # whose limit is too low. Catches the whole "limit too small ->
+        # page-cache thrash" class, not just the Grafana case.
+        # (cgroup v2: container_memory_failcnt doesn't exist, so use the
+        # working-set/limit ratio instead.)
+        - alert: ContainerMemoryNearLimit
+          annotations:
+            summary: >-
+              Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }}
+              is at {{ $value | humanizePercentage }} of its memory limit
+            description: >-
+              {{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container }})
+              has run above 90% of its memory limit for 15m. At the limit the
+              kernel evicts file-backed pages and re-reads them from disk on
+              every access (page-cache thrash) — which on WSL saturates the
+              shared sdd vhdx. Raise the container's memory limit.
+          expr: |
+            container_memory_working_set_bytes{container!=""}
+              / on(namespace,pod,container)
+            kube_pod_container_resource_limits{resource="memory",container!=""}
+              > 0.9
+          for: 15m
+          labels:
+            severity: warning
+
+        # Attribution: a pod reading from disk hard enough to be the likely
+        # cause of node disk-IO saturation. Turns "which pod is hammering the
+        # disk?" from a manual hunt into a label on the alert. 150 MB/s
+        # sustained for 10m is well above this cluster's steady-state baseline
+        # (~0 MB/s) but below a brief legitimate burst.
+        - alert: ContainerHighDiskReadThrash
+          annotations:
+            summary: >-
+              {{ $labels.namespace }}/{{ $labels.pod }} is reading
+              {{ $value | humanize1024 }}B/s from disk
+            description: >-
+              {{ $labels.namespace }}/{{ $labels.pod }} has sustained heavy disk
+              reads for 10m. On WSL all pods share the sdd vhdx, so this is the
+              likely source of any NodeDiskIOSaturation alert. Check whether the
+              pod is page-cache thrashing (see ContainerMemoryNearLimit) or
+              genuinely needs the IO.
+          expr: |
+            sum by (namespace, pod) (
+              rate(container_fs_reads_bytes_total{pod!=""}[5m])
+            ) > 150 * 1024 * 1024
+          for: 10m
+          labels:
+            severity: warning
