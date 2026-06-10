@@ -1,0 +1,107 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: alloy
+  namespace: monitoring
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: alloy
+      version: 1.9.0
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+      interval: 30m
+  values:
+    # Central collector for browser RUM, not a per-node agent — run a single
+    # Deployment replica rather than the chart's default DaemonSet.
+    controller:
+      type: deployment
+      replicas: 1
+
+    alloy:
+      # WAL/data is ephemeral (Faro telemetry is forwarded straight through to
+      # Tempo/Loki, nothing is buffered long-term), so the default emptyDir at
+      # /tmp/alloy is fine.
+      configMap:
+        create: true
+        content: |-
+          // ---------------------------------------------------------------
+          // Faro receiver — the HTTP endpoint browser JS (the Faro SDK) POSTs
+          // RUM payloads to. Split into traces -> Tempo and logs/exceptions ->
+          // Loki below. uiPathPrefix-style routing isn't needed; the ingress
+          // sends the whole host to this port.
+          // ---------------------------------------------------------------
+          faro.receiver "frontend" {
+            server {
+              listen_address           = "0.0.0.0"
+              listen_port              = 12347
+              cors_allowed_origins     = ["https://sites.${SECRET_DOMAIN}"]
+              max_allowed_payload_size = "10MiB"
+            }
+
+            output {
+              logs   = [loki.write.faro.receiver]
+              traces = [otelcol.exporter.otlp.tempo.input]
+            }
+          }
+
+          // Frontend logs + exceptions -> Loki gateway. The receiver attaches
+          // app/session/page labels from the Faro payload.
+          loki.write "faro" {
+            endpoint {
+              url = "http://loki-gateway.monitoring.svc.cluster.local:80/loki/api/v1/push"
+            }
+          }
+
+          // Frontend traces -> Tempo over OTLP gRPC. tls.insecure because this
+          // is an in-cluster plaintext hop.
+          otelcol.exporter.otlp "tempo" {
+            client {
+              endpoint = "tempo.monitoring.svc.cluster.local:4317"
+              tls {
+                insecure = true
+              }
+            }
+          }
+
+      # Expose the Faro receiver port on the container + Service so the ingress
+      # below (and in-cluster clients) can reach it. 12345 (UI/metrics) is
+      # exposed automatically by enableHttpServerPort.
+      extraPorts:
+        - name: faro
+          port: 12347
+          targetPort: 12347
+          protocol: TCP
+
+      resources:
+        requests:
+          cpu: 25m
+          memory: 128Mi
+        limits:
+          memory: 512Mi
+
+    # PUBLIC ingress for the Faro port. Browser JS on sites.${SECRET_DOMAIN}
+    # POSTs telemetry here, so it must be reachable from the LAN/internet, not
+    # just internally — hence the `nginx` (external, cloudflared-fronted) class
+    # and the public ${SECRET_DOMAIN}, matching the sites it serves. The chart
+    # points this Ingress at faroPort automatically.
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      faroPort: 12347
+      annotations:
+        external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
+      hosts:
+        - faro.${SECRET_DOMAIN}
+      path: /
+      pathType: Prefix
+      tls:
+        - hosts:
+            - faro.${SECRET_DOMAIN}
+
+    serviceMonitor:
+      enabled: ${SERVICE_MONITOR_ENABLED}

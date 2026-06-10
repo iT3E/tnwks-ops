@@ -118,7 +118,19 @@ spec:
           - access: proxy
             name: Loki
             type: loki
+            uid: loki
             url: http://loki-gateway.monitoring.svc.cluster.local:80
+          - access: proxy
+            name: Tempo
+            type: tempo
+            uid: tempo
+            url: http://tempo.monitoring.svc.cluster.local:3200
+            jsonData:
+              # Trace -> Logs correlation: jump from a Tempo span to the Faro
+              # logs Alloy wrote to Loki for the same trace.
+              tracesToLogsV2:
+                datasourceUid: loki
+                filterByTraceID: true
           - name: Alertmanager
             type: alertmanager
             access: proxy
