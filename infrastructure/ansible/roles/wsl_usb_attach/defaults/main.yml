@@ -1,0 +1,17 @@
+---
+# Which dongles to keep attached, by USB VID:PID. Each becomes a
+# tnwks-usb-attach@<vid:pid> systemd instance. Matched by hardware-id (not
+# busid, which changes across replug). The systemd instance name is the
+# VID:PID with ':' percent-encoded to '\x3a' (systemd unescapes it).
+#
+# The Coral lists two IDs: 18d1:9302 (runtime, after libedgetpu loads
+# firmware) and 1a6e:089a (DFU bootloader, before). --auto-attach re-attaches
+# across the firmware flip, so we track the runtime VID; if the Coral is ever
+# cold and stuck at the bootloader VID, add 1a6e:089a here too.
+wsl_usb_attach_devices:
+  - "0658:0200"   # Aeotec Z-Stick Gen5 (Sigma Designs CDC ACM) → /dev/ttyACM0
+  - "18d1:9302"   # Google Coral TPU — runtime VID
+
+# The absolute path to usbipd.exe is set in tnwks-usb-attach.sh (USBIPD_EXE
+# overridable there). interop appendWindowsPath is disabled, so a bare name
+# does not resolve.

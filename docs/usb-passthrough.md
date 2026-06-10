@@ -59,24 +59,40 @@ usbipd attach --wsl --busid 2-3
 usbipd attach --wsl --busid 4-1
 ```
 
-> **Don't do the attach by hand on every reboot — register the task.**
+> **Don't do the attach by hand on every reboot — WSL owns it now.**
 > `usbipd bind` is persistent but `usbipd attach --wsl` is per-session, so a
-> Windows reboot or `wsl --shutdown` drops both dongles out of WSL and the
-> frigate / zwave-js-ui pods break. `infrastructure/wsl-host/` ships a
-> Scheduled Task that re-attaches them automatically at logon and when the
-> WSL VM reconnects (matches `vmid` by VID:PID, not busid). Register it once,
-> elevated:
+> Windows reboot, `wsl --shutdown`, or a WSL-only crash (dockerd bounce, VM
+> OOM) drops both dongles out of WSL and the frigate / zwave-js-ui pods break.
 >
-> ```powershell
-> cd <repo>\infrastructure\wsl-host
-> .\Register-TnwksUsbAttachTask.ps1
-> Start-ScheduledTask -TaskName tnwks-usb-attach   # run it now
+> The recovery is a **systemd service inside WSL**, one instance per dongle
+> (`tnwks-usb-attach@<vid:pid>`), installed by Ansible. Each runs
+> `usbipd.exe attach --wsl --auto-attach --hardware-id <VID:PID>` over interop
+> and is `enabled` (`WantedBy=multi-user.target`) so it fires on **every WSL
+> boot** — including a WSL-only restart, which a Windows-logon-keyed Scheduled
+> Task would miss. `--auto-attach` re-attaches on replug (covers the Coral
+> firmware flip), and `Restart=always` covers the interop child exiting.
+>
+> This inverts the old model: **the Windows side now only needs to start WSL**
+> (logon autostart / a one-line task). Everything else lives in WSL. Install
+> or re-run via the bootstrap task:
+>
+> ```bash
+> task bootstrap:wsl-usb-attach          # idempotent; also part of `task bootstrap:wsl`
 > ```
 >
-> `Sync-TnwksUsbAttach.ps1` is idempotent — it binds (with `--force`) and
-> attaches any target dongle that's connected but not yet attached, and
-> leaves already-attached ones alone. The Coral firmware flip still needs a
-> manual nudge in the worst case (see the gotcha below).
+> **One-time Windows prerequisite (elevated):** each dongle must be
+> `usbipd bind`-ed once so it's shareable and the binding persists
+> (`attach`, which the service does repeatedly, needs no elevation):
+>
+> ```powershell
+> usbipd bind --force --hardware-id 0658:0200   # Z-Stick
+> usbipd bind --force --hardware-id 18d1:9302   # Coral (runtime VID — see gotcha)
+> ```
+>
+> The old `Register-TnwksUsbAttachTask.ps1` / `Sync-TnwksUsbAttach.ps1`
+> Scheduled-Task approach is superseded by this and can be removed. The Coral
+> firmware flip still needs a manual nudge in the worst case (see the gotcha
+> below).
 
 > **Coral gotcha — bind after firmware loads, not before.** When the
 > Coral first appears on Windows it shows VID/PID `1a6e:089a` (DFU
@@ -290,10 +306,10 @@ If any layer doesn't see the device, fix that layer before going up.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `usbipd list` shows device but `lsusb` in WSL is empty | Forgot `attach` after WSL restart | `Start-ScheduledTask -TaskName tnwks-usb-attach` (or `usbipd attach --wsl --busid X-Y`) |
-| Devices drop out after every Windows reboot | `bind` is persistent; `attach` is per-session, and the auto-attach task isn't registered | Register it: `.\Register-TnwksUsbAttachTask.ps1` (elevated) |
+| `usbipd list` shows device but `lsusb` in WSL is empty | Attach service not running (or `vhci_hcd` not loaded) | `systemctl status 'tnwks-usb-attach@*'`; if absent, `task bootstrap:wsl-usb-attach` |
+| Devices drop out after every WSL/Windows restart | `bind` is persistent; `attach` is per-session, and the WSL attach service isn't installed/enabled | `task bootstrap:wsl-usb-attach` (then confirm `systemctl is-enabled 'tnwks-usb-attach@0658:0200'`) |
 | Pod crashes with "no such device" / zwave "is not a character device" | worker-2 container doesn't see the live node (stale `--device` snapshot, or attached after container start) | Re-run `task bootstrap:wsl` to recreate worker-2 with the `rslave` binds (Step 2) |
-| Coral throws permission errors / `Failed to load delegate` | Coral firmware flip kicked it back to the Windows host at `18d1:9302` | Re-run `tnwks-usb-attach`, or manually re-bind/attach the runtime VID (see Coral gotcha) |
+| Coral throws permission errors / `Failed to load delegate` | Coral firmware flip kicked it back to the Windows host at `18d1:9302` | `--auto-attach` should re-grab it; if stuck, `systemctl restart 'tnwks-usb-attach@18d1:9302'` or manually re-bind/attach the runtime VID (see Coral gotcha) |
 | Z-Wave controller "stuck" | wrong CDC path in hostPath | `talosctl -n <node> ls /hostdev \| grep ttyACM` (WSL) and confirm the overlay path |
 
 ## References

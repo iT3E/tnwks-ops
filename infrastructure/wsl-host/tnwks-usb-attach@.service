@@ -1,0 +1,21 @@
+[Unit]
+Description=tnwks USB attach (%i) — usbipd-win auto-attach dongle %i into WSL
+# The Windows host only needs to start WSL; this unit re-attaches the dongle
+# on every WSL boot, so a WSL-only restart recovers without a Windows event.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+# %i is the URL-decoded instance name, a VID:PID (e.g. 0658:0200). systemd
+# escapes the ':' as the instance arg; the script takes it verbatim.
+ExecStart=/usr/local/bin/tnwks-usb-attach %i
+# usbipd attach --auto-attach blocks; if it exits (device absent, interop
+# child died) systemd retries until the dongle is present and stays attached.
+Restart=always
+RestartSec=5
+# modprobe + interop need root.
+User=root
+
+[Install]
+WantedBy=multi-user.target

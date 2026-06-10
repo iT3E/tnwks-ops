@@ -1,0 +1,55 @@
+---
+# wsl_usb_attach — install the attach script + templated systemd unit, then
+# enable+start one instance per dongle so each stays attached into the WSL VM
+# across WSL restarts. Inverts the old Windows-Scheduled-Task model; the
+# Windows side now only starts WSL. See docs/usb-passthrough.md.
+
+- name: Install tnwks-usb-attach script
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../wsl-host/tnwks-usb-attach.sh"
+    dest: /usr/local/bin/tnwks-usb-attach
+    owner: root
+    group: root
+    mode: "0755"
+  register: usb_attach_script
+
+- name: Install tnwks-usb-attach templated systemd unit
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../wsl-host/tnwks-usb-attach@.service"
+    dest: /etc/systemd/system/tnwks-usb-attach@.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: usb_attach_unit
+
+- name: Reload systemd if the unit file changed
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: usb_attach_unit.changed
+
+# A VID:PID contains ':', which must be escaped for the systemd instance name.
+# systemd-escape produces the on-disk name (e.g. 0658\x3a0200); the unit's %i
+# unescapes it back to "0658:0200" for the script argument.
+- name: Compute escaped systemd instance names
+  ansible.builtin.command: "systemd-escape '{{ item }}'"
+  register: usb_attach_escaped
+  changed_when: false
+  loop: "{{ wsl_usb_attach_devices }}"
+
+- name: Enable and start tnwks-usb-attach instances
+  ansible.builtin.systemd:
+    name: "tnwks-usb-attach@{{ item.stdout }}.service"
+    enabled: true
+    state: started
+  loop: "{{ usb_attach_escaped.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Restart tnwks-usb-attach instances if script or unit changed
+  ansible.builtin.systemd:
+    name: "tnwks-usb-attach@{{ item.stdout }}.service"
+    state: restarted
+  loop: "{{ usb_attach_escaped.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: usb_attach_script.changed or usb_attach_unit.changed

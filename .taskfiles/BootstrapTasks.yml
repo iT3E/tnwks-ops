@@ -10,13 +10,20 @@ env:
 
 tasks:
   wsl:
-    desc: Bootstrap the WSL Talos cluster (Talos → CNI → SOPS → Flux)
+    desc: Bootstrap the WSL Talos cluster (Talos → CNI → SOPS → Flux → USB attach)
     dir: "{{.ANSIBLE_DIR}}"
     cmds:
       - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/wsl.yml {{.ANSIBLE_PLAYBOOK_DIR}}/01-talos-bootstrap.yml
       - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/wsl.yml {{.ANSIBLE_PLAYBOOK_DIR}}/02-cni-bootstrap.yml
       - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/wsl.yml {{.ANSIBLE_PLAYBOOK_DIR}}/03-sops-keys.yml
       - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/wsl.yml {{.ANSIBLE_PLAYBOOK_DIR}}/04-flux-install.yml
+      - task: wsl-usb-attach
+
+  wsl-usb-attach:
+    desc: Install/enable the WSL USB auto-attach systemd units (Z-Stick + Coral)
+    dir: "{{.ANSIBLE_DIR}}"
+    cmds:
+      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/wsl.yml {{.ANSIBLE_PLAYBOOK_DIR}}/wsl-usb-attach.yml
 
   ms-01:
     desc: Bootstrap the MS-01 Talos cluster (Talos → CNI → SOPS → Flux)
