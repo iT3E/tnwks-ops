@@ -239,7 +239,13 @@
                 hostname: "{{ worker_name }}"
                 image: "{{ w2_info.container.Config.Image }}"
                 state: started
-                restart_policy: "no"
+                # Match the restart policy talosctl sets on the stock nodes
+                # (controlplane-1, worker-1 both get `unless-stopped`). The
+                # recreate here previously hardcoded `no`, so worker-2 alone
+                # stayed dead after a Docker/WSL restart while the other two
+                # came back — wedging every pod pinned to it (grafana PVC,
+                # alertmanager, frigate/zwave USB) until a manual docker start.
+                restart_policy: unless-stopped
                 privileged: true
                 read_only: true
                 shm_size: 64M
