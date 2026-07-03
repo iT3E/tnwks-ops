@@ -102,6 +102,6 @@ spec:
               cpu: 10m
               memory: 24Mi
             limits:
-              # A little more headroom than packing-api: image decode/resize on
-              # upload allocates transiently.
-              memory: 128Mi
+              # Image decode/resize on upload can spike to ~100 MB for large
+              # JPEGs; 128 Mi caused OOMKills under normal admin usage.
+              memory: 256Mi
