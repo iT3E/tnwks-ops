@@ -1,0 +1,23 @@
+---
+# Declarative database creation for the Raine's Things storefront backend
+# (raines-things-api, production ns).
+#
+# Sibling of database-vantrip.yaml (packing-api). The Database CRD reconciles
+# continuously, so adding a database to an already-running cluster is pure
+# GitOps. `ensure: present` is idempotent. The raines-things-api (production
+# namespace) connects via the reflected `postgres-app` secret — owner `app`
+# matches that credential.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: raines
+  namespace: databases
+spec:
+  cluster:
+    name: postgres
+  name: raines
+  owner: app
+  ensure: present
+  # Keep the database if this resource is ever removed — never let a manifest
+  # deletion drop the shop's products/orders.
+  databaseReclaimPolicy: retain

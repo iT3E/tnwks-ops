@@ -8,6 +8,7 @@ resources:
   - ./database.yaml
   - ./database-plausible.yaml
   - ./database-vantrip.yaml
+  - ./database-raines.yaml
 # PrometheusRule lives in cluster-prometheusrules/ behind its own
 # Kustomization that depends on kube-prometheus-stack so the CRD
 # exists before apply.

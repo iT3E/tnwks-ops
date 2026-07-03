@@ -26,6 +26,11 @@ resources:
   # site. Gated by the same oauth2-proxy that protects /<project>/private/*,
   # persists to the cnpg `vantrip` database. WSL-only, same as sites.
   - ../../../../apps/production/packing-api/ks.yaml
+  # raines-things-api: write-backend for the Raine's Things storefront. One
+  # service, two ingresses — a public one (catalog/checkout/webhook/tracking)
+  # and an oauth2-gated one for /admin/*. Persists to the cnpg `raines`
+  # database; Stripe + SMTP creds via its own SOPS secret. WSL-only, same as sites.
+  - ../../../../apps/production/raines-things-api/ks.yaml
   # frigate: WSL-specific Flux Kustomization with a patch to replace the
   # NFD coral nodeSelector with a hostname pin to homelab-wsl-worker-2.
   - ./frigate-ks.yaml
