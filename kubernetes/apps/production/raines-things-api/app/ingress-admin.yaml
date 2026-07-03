@@ -1,0 +1,49 @@
+---
+# raines-things-api ADMIN ingress — gates the shopkeeper's surface (/admin/*)
+# behind the SAME oauth2-proxy auth-subrequest that protects /<project>/private/*
+# and the packing-api. Only a signed-in Cognito user (the dad/daughter) can
+# manage products, upload images, or update orders. A public visitor is bounced
+# to sign-in; the frontend treats that as "not admin" and never shows the
+# manage UI.
+#
+# Path: sites.${SECRET_DOMAIN}/raines-things/api/admin/...  ->  service /admin/...
+# This path is a strictly longer prefix than the public ingress's
+# /raines-things/api, so ingress-nginx routes /admin traffic here (gated) and
+# everything else through ingress-public.yaml (open). The rewrite preserves the
+# /admin segment so the Go service still routes on /admin/*.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: raines-things-api-admin
+  namespace: production
+  annotations:
+    # --- oauth2-proxy auth-subrequest (copied from packing-api / sites-private) ---
+    nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local/oauth2/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${SECRET_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
+    # Pass the authenticated identity through so the service can stamp updated_by.
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-Email,X-Auth-Request-User"
+    # Cognito sessions span multiple cookies; the subrequest header chunk
+    # overflows nginx's default 4k buffer. Match sites-private / packing-api.
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+    # --- prefix rewrite (keep the /admin segment) ---
+    nginx.ingress.kubernetes.io/rewrite-target: /admin/$1
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Product photo uploads are multipart; allow a few MB (service caps at 12MB).
+    nginx.ingress.kubernetes.io/proxy-body-size: "12m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - "sites.${SECRET_DOMAIN}"
+  rules:
+    - host: "sites.${SECRET_DOMAIN}"
+      http:
+        paths:
+          - path: /raines-things/api/admin(?:/(.*))?$
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: raines-things-api
+                port:
+                  name: http

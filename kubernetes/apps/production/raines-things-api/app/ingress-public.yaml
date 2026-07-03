@@ -1,0 +1,42 @@
+---
+# raines-things-api PUBLIC ingress — the storefront's anonymous surface: browse
+# the catalog, view product images, start checkout, receive the Stripe webhook,
+# and track an order by its opaque token. NO oauth2 auth here (buyers are
+# anonymous); the Stripe webhook is secured by signature verification, and the
+# order-tracking token is an unguessable capability.
+#
+# Path: sites.${SECRET_DOMAIN}/raines-things/api/...  ->  service /...
+# The rewrite strips the project+/api prefix so the Go service sees bare paths
+# (/products, /checkout, /webhooks/stripe, /order/{token}, /healthz).
+#
+# The companion ingress-admin.yaml carries the SAME host+path but with the
+# /admin subtree and the oauth2 annotations. `/raines-things/api/admin` is a
+# strictly longer prefix, so ingress-nginx longest-prefix routing sends admin
+# traffic through the gated ingress and everything else through this one.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: raines-things-api
+  namespace: production
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Stripe posts JSON webhooks; keep a little body headroom (image uploads go
+    # through the admin ingress, which sets its own larger limit).
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - "sites.${SECRET_DOMAIN}"
+  rules:
+    - host: "sites.${SECRET_DOMAIN}"
+      http:
+        paths:
+          - path: /raines-things/api(?:/(.*))?$
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: raines-things-api
+                port:
+                  name: http

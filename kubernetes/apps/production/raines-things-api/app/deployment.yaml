@@ -1,0 +1,107 @@
+---
+# raines-things-api — the write-backend for the "Raine's Things" storefront on
+# the sites platform (sites.tnwks.us/raines-things/). The site itself is static
+# (nginx off NFS); this is the stateful piece: products + images (Postgres),
+# orders, Stripe Checkout, and buyer email.
+#
+# Source + image build: github.com/iT3E/tnwks-raines-things-api (pushes
+# ghcr.io/it3e/tnwks-raines-things-api:main on every merge).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: raines-things-api
+  namespace: production
+  labels:
+    app.kubernetes.io/name: raines-things-api
+  annotations:
+    # Roll the pod when the reflected postgres-app secret (or our own
+    # raines-things-secret) rotates.
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: raines-things-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: raines-things-api
+    spec:
+      containers:
+        - name: raines-things-api
+          # :main is the rolling tag CI pushes from the repo's main branch.
+          # imagePullPolicy Always so a re-pushed :main is picked up on restart.
+          image: ghcr.io/it3e/tnwks-raines-things-api:main
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            # --- Postgres (reflected CNPG postgres-app secret, `raines` db) ---
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: password
+            - name: POSTGRES_SERVER
+              value: "postgres-rw.databases.svc.cluster.local"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: "raines"
+            # --- Public base URL (Stripe success/cancel + email links) ---
+            - name: PUBLIC_BASE_URL
+              value: "https://sites.${SECRET_DOMAIN}/raines-things"
+            # --- Stripe (our own SOPS secret; test-mode keys for now) ---
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: raines-things-secret
+                  key: STRIPE_SECRET_KEY
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: raines-things-secret
+                  key: STRIPE_WEBHOOK_SECRET
+            # --- SMTP (shared cluster SES creds via Flux var substitution) ---
+            - name: SMTP_HOST
+              value: "email-smtp.us-west-2.amazonaws.com"
+            - name: SMTP_PORT
+              value: "587"
+            - name: SMTP_USERNAME
+              value: "${SMTP_USER}"
+            - name: SMTP_PASSWORD
+              value: "${SMTP_PASSWORD}"
+            - name: SMTP_FROM
+              value: "Raine's Things <raines-things@${SECRET_DOMAIN}>"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 24Mi
+            limits:
+              # A little more headroom than packing-api: image decode/resize on
+              # upload allocates transiently.
+              memory: 128Mi

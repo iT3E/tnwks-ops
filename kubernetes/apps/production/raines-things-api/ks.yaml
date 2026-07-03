@@ -1,0 +1,26 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: raines-things-api
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/production/raines-things-api/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false # no flux ks dependents
+  # Gate on the postgres cluster so the raines database + reflected
+  # postgres-app secret exist before the pod starts.
+  dependsOn:
+    - name: cloudnative-pg-cluster
+  # This app ships its own SOPS-encrypted secret (Stripe keys), so Flux needs
+  # the decryption provider — same as plausible et al.
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
