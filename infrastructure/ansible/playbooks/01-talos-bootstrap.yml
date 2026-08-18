@@ -44,13 +44,25 @@
       changed_when: false
       when: cluster_target == 'wsl'
 
-    # Resource sizing notes (host has 64GiB RAM):
+    # Resource sizing notes (host has 64GiB RAM; WSL VM gets 40GiB via .wslconfig):
     #   * 4 CPU / 4 GiB on the CP — etcd + apiserver + flux-system pods that
     #     don't tolerate the worker taint comfortably fit here.
-    #   * 4 CPU / 8 GiB per worker — Prometheus, matrix-synapse, jellyfin
-    #     each want 0.5-1.5 GiB resident; 2 GiB was the original choke point.
-    #   * Total Talos footprint ~20 GiB, plus Docker daemon + WSL services,
-    #     so the host's `.wslconfig` should grant the WSL VM at least 24 GiB.
+    #   * 4 CPU / 13 GiB per worker. 8 GiB was too small: frigate alone sets
+    #     requests == limits == 8Gi, which equals an entire worker's whole cap.
+    #     kubelet advertises node capacity from the *host* (~39 GiB) because it
+    #     cannot see this docker cgroup limit, so the scheduler happily packed
+    #     ~18 GiB of requests onto an 8 GiB box. The container cgroup then sat
+    #     pinned at memory.max (4.8M memory.events breaches on worker-2) and
+    #     kubelet + containerd thrashed reclaim at ~1250 major faults/sec.
+    #     That fires NodeMemoryMajorPagesFaults on all three nodes at once:
+    #     they share one WSL2 kernel, so each node-exporter reports the same
+    #     host /proc/vmstat and the single signal gets triple-counted.
+    #     (2026-08-17 incident. Raising the cap to 13 GiB took the rate to
+    #     ~27/sec, zeroed the breaches, and cleared PSI stalls.)
+    #   * Total Talos footprint is ~30 GiB of *caps* (4 + 13 + 13). Docker
+    #     memory limits are ceilings, not reservations, so this coexists with
+    #     the Docker daemon, WSL services, and qmd's CUDA address reservation
+    #     inside the 40GiB VM. Raising these further needs a `.wslconfig` bump.
     - name: Create WSL Talos Docker cluster
       ansible.builtin.command: >-
         talosctl cluster create docker
@@ -59,7 +71,7 @@
         --cpus-controlplanes 4.0
         --cpus-workers 4.0
         --memory-controlplanes 4GiB
-        --memory-workers 8GiB
+        --memory-workers 13GiB
         --kubernetes-version 1.34.0
         --config-patch @{{ talos_dir }}/cluster-config.yaml
       when:
