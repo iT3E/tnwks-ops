@@ -18,9 +18,6 @@ roles:
   - name: xanmanning.k3s
     src: https://github.com/PyratLabs/ansible-role-k3s.git
     version: v3.6.4
-  - name: lae.proxmox
-    src: https://github.com/lae/ansible-role-proxmox.git
-    version: v1.10.1
   - name: geerlingguy.ntp
     src: https://github.com/geerlingguy/ansible-role-ntp.git
     version: 4.0.0

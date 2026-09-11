@@ -45,9 +45,9 @@ tnwks-ops/
 │   └── ms-01/                   # MS-01 controlplane + worker + patches
 ├── infrastructure/
 │   ├── ansible/                 # Bootstrap playbooks (talos, flux, sops)
-│   ├── terraform/aws/           # Active
-│   ├── terraform/cloudflare/    # Active
-│   └── _archive/                # Legacy PVE/Proxmox terraform + packer
+│   └── terraform/
+│       ├── environments/        # Thin roots, one per TFC workspace
+│       └── modules/             # aws/ and cloudflare/ child modules
 ├── kubernetes/
 │   ├── apps/                    # Shared app manifests (namespaced)
 │   ├── bootstrap/               # Optional manual Flux install (legacy)

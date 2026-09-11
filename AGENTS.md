@@ -232,8 +232,6 @@ names stay in plaintext).
 - `infrastructure/terraform/cloudflare/` — DNS + zone/account-level config,
   driven locally via `task terraform:{plan,apply}`.
 - `infrastructure/terraform/modules/` — shared modules.
-- `infrastructure/_archive/` — old PVE/Proxmox terraform + packer; not
-  active.
 
 ### Talos
 
