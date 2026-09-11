@@ -8,7 +8,7 @@
 #####################################
 
 module "cf_domain_1" {
-  source     = "../modules/cloudflare"
+  source     = "../modules/cloudflare-zone"
   domain     = data.sops_file.secrets.data["cf_domain_1"]
   account_id = data.sops_file.secrets.data["cf_account_id"]
 
@@ -135,7 +135,7 @@ module "cf_domain_1" {
 #####################################
 
 module "cf_domain_2" {
-  source     = "../modules/cloudflare"
+  source     = "../modules/cloudflare-zone"
   domain     = data.sops_file.secrets.data["cf_domain_2"]
   account_id = data.sops_file.secrets.data["cf_account_id"]
 
@@ -172,7 +172,7 @@ module "cf_domain_2" {
 #####################################
 
 module "cf_domain_3" {
-  source     = "../modules/cloudflare"
+  source     = "../modules/cloudflare-zone"
   domain     = data.sops_file.secrets.data["cf_domain_3"]
   account_id = data.sops_file.secrets.data["cf_account_id"]
 
@@ -208,7 +208,7 @@ module "cf_domain_3" {
 #####################################
 
 module "cf_domain_4" {
-  source     = "../modules/cloudflare"
+  source     = "../modules/cloudflare-zone"
   domain     = data.sops_file.secrets.data["cf_domain_4"]
   account_id = data.sops_file.secrets.data["cf_account_id"]
 

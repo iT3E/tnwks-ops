@@ -231,9 +231,10 @@ names stay in plaintext).
   domains require us-east-1 ACM regardless of pool region).
 - `infrastructure/terraform/cloudflare/` — DNS + zone/account-level config,
   driven locally via `task terraform:{plan,apply}`.
-- `infrastructure/terraform/modules/` — shared modules.
-- `infrastructure/_archive/` — old PVE/Proxmox terraform + packer; not
-  active.
+- `infrastructure/terraform/modules/` — shared child modules, one directory
+  per thing provisioned (`cloudflare-zone/`). See its README for conventions.
+- `infrastructure/_archive/` — old PVE/Proxmox terraform + packer, including
+  `_archive/modules/proxmox/`; not active.
 
 ### Talos
 
