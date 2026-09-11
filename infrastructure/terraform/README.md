@@ -20,10 +20,16 @@ Each environment root holds only `backend.tf`, `providers.tf`, `versions.tf`,
 `variables.tf`. All resources live in `modules/`. See `modules/README.md` for the
 module conventions.
 
-> **Terraform Cloud `working_directory` must point at the environment root**, for
-> example `infrastructure/terraform/environments/aws-prod`. CI uploads the whole
-> `infrastructure/terraform` tree so that relative module sources such as
-> `../../modules/aws` resolve inside the tarball.
+> **Terraform Cloud `working_directory` must point at the environment root.**
+> It is a path *relative to the configuration root*, and CI uploads
+> `infrastructure/terraform` as that root, so the value is
+> `environments/aws-prod`, not the full repo path. This lets relative module
+> sources such as `../../modules/aws` resolve inside the uploaded tarball.
+>
+> For CLI-driven workspaces the same value works: because
+> `environments/<env>` is two levels deep, running Terraform from that
+> directory makes the CLI upload its parent and grandparent, which is again
+> `infrastructure/terraform`.
 
 ## Manual bootstrap steps
 
@@ -34,11 +40,15 @@ module conventions.
 2. Create the workspaces below, each with `working_directory` set to its
    environment root:
 
-   | Workspace | Working directory | Run type | Trigger |
+   | Workspace | `working_directory` | Execution mode | Driven by |
    | --- | --- | --- | --- |
-   | `tnwks-ops-aws-init` | `infrastructure/terraform/environments/aws-init` | CLI | — |
-   | `tnwks-ops-aws-identity` | `infrastructure/terraform/environments/aws-identity` | VCS | after `tnwks-ops-aws-init` |
-   | `tnwks-ops-aws-prod` | `infrastructure/terraform/environments/aws-prod` | VCS | after `tnwks-ops-aws-identity` |
+   | `tnwks-ops-aws-init` | `environments/aws-init` | local | CLI, by hand |
+   | `tnwks-ops-aws-identity` | `environments/aws-identity` | remote | API/CLI, by hand |
+   | `tnwks-ops-aws-prod` | `environments/aws-prod` | remote | `.github/workflows/terraform-{plan,apply}.yaml` |
+   | `tnwks-cloudflare-prod_old` | `environments/cloudflare` | local | `task terraform:{plan,apply}` |
+
+   None of these workspaces currently has a VCS connection; runs are created by
+   the GitHub Actions workflows (prod) or from the CLI.
 
 3. Set up the GitHub OAuth connection for VCS runs.
 
