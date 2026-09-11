@@ -1,9 +1,11 @@
 ## ---------------------------------------------------------------------------------------------------------------------
-## PROVIDERS
-## Cloudflare credentials are sourced from secrets.sops.yaml.
+## PROVIDER
+## All Terraform providers.
+##
 ## ---------------------------------------------------------------------------------------------------------------------
 
-provider "cloudflare" {
-  email   = data.sops_file.secrets.data["cloudflare_email"]
-  api_key = data.sops_file.secrets.data["cloudflare_api_key"]
+provider "aws" {
+  region     = data.sops_file.secrets.data["aws_region"]
+  access_key = data.sops_file.secrets.data["aws_access_key"]
+  secret_key = data.sops_file.secrets.data["aws_secret_key"]
 }

@@ -1,9 +1,8 @@
 ## ---------------------------------------------------------------------------------------------------------------------
-## PROVIDERS
-## Cloudflare credentials are sourced from secrets.sops.yaml.
+## DATA
+## Data sources referenced from more than one file in this root module.
 ## ---------------------------------------------------------------------------------------------------------------------
 
-provider "cloudflare" {
-  email   = data.sops_file.secrets.data["cloudflare_email"]
-  api_key = data.sops_file.secrets.data["cloudflare_api_key"]
+data "sops_file" "secrets" {
+  source_file = "secrets.sops.yaml"
 }

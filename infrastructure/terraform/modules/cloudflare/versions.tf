@@ -1,9 +1,13 @@
 ## ---------------------------------------------------------------------------------------------------------------------
-## PROVIDERS
-## Cloudflare credentials are sourced from secrets.sops.yaml.
+## VERSIONS
+## Provider requirements for this module. No version constraint — the calling
+## root module pins cloudflare/cloudflare.
 ## ---------------------------------------------------------------------------------------------------------------------
 
-provider "cloudflare" {
-  email   = data.sops_file.secrets.data["cloudflare_email"]
-  api_key = data.sops_file.secrets.data["cloudflare_api_key"]
+terraform {
+  required_providers {
+    cloudflare = {
+      source = "cloudflare/cloudflare"
+    }
+  }
 }

@@ -1,9 +1,13 @@
 ## ---------------------------------------------------------------------------------------------------------------------
-## PROVIDERS
-## Cloudflare credentials are sourced from secrets.sops.yaml.
+## VERSIONS
+## Provider version constraints.
 ## ---------------------------------------------------------------------------------------------------------------------
 
-provider "cloudflare" {
-  email   = data.sops_file.secrets.data["cloudflare_email"]
-  api_key = data.sops_file.secrets.data["cloudflare_api_key"]
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
 }

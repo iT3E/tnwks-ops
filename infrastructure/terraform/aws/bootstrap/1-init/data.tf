@@ -1,9 +1,13 @@
 ## ---------------------------------------------------------------------------------------------------------------------
-## PROVIDERS
-## Cloudflare credentials are sourced from secrets.sops.yaml.
+## DATA
+## Contains any data blocks that will be used in multiple sections.
+##
 ## ---------------------------------------------------------------------------------------------------------------------
 
-provider "cloudflare" {
-  email   = data.sops_file.secrets.data["cloudflare_email"]
-  api_key = data.sops_file.secrets.data["cloudflare_api_key"]
+data "sops_file" "secrets" {
+  source_file = "secrets.sops.yaml"
+}
+
+data "tls_certificate" "tfc_certificate" {
+  url = "https://app.terraform.io"
 }

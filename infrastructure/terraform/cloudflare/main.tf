@@ -1,28 +1,3 @@
-terraform {
-  cloud {
-    hostname     = "app.terraform.io"
-    organization = "tnwks-ops"
-    workspaces {
-      name = "tnwks-cloudflare-prod_old"
-    }
-  }
-  required_version = ">= 1.2.2"
-  required_providers {
-    cloudflare = {
-      source  = "cloudflare/cloudflare"
-      version = "4.18.0"
-    }
-    sops = {
-      source  = "carlpett/sops"
-      version = "1.4.1"
-    }
-  }
-}
-
-data "sops_file" "secrets" {
-  source_file = "secrets.sops.yaml"
-}
-
 #########################
 #########################
 
