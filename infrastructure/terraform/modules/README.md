@@ -10,8 +10,7 @@ modules/
 ├── aws/                 # prod account infra: cognito, ses, iam, acm
 │   ├── init/            # org bootstrap: TFC OIDC trust, project, workspaces
 │   └── identity/        # organizations, identity center, kms for sops
-├── cloudflare/          # one zone + its settings, WAF ruleset and DNS records
-└── proxmox/             # legacy, no active callers
+└── cloudflare/          # one zone + its settings, WAF ruleset and DNS records
 ```
 
 | Module | Called by | Provisions |

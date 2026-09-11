@@ -11,8 +11,7 @@ environments/          thin roots — one per Terraform Cloud workspace
 
 modules/               child modules, namespaced by provider
 ├── aws/               prod account infra (+ init/ and identity/ nested)
-├── cloudflare/        one zone, its settings, WAF and DNS
-└── proxmox/           legacy, no active callers
+└── cloudflare/        one zone, its settings, WAF and DNS
 ```
 
 Each environment root holds only `backend.tf`, `providers.tf`, `versions.tf`,
