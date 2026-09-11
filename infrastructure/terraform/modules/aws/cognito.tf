@@ -1,0 +1,533 @@
+## ---------------------------------------------------------------------------------------------------------------------
+## COGNITO
+## User pool, groups, seeded users, resource server, app clients and the
+## custom hosted-UI domain. terraform_data resources cover gaps the AWS
+## provider does not model yet (MFA config, managed login branding).
+## ---------------------------------------------------------------------------------------------------------------------
+
+resource "aws_cognito_user_pool" "tnwks_auth" {
+  name           = "tnwks-auth"
+  user_pool_tier = "ESSENTIALS"
+
+  username_attributes      = ["email"]
+  auto_verified_attributes = ["email"]
+
+  password_policy {
+    minimum_length                   = 12
+    require_lowercase                = true
+    require_uppercase                = true
+    require_numbers                  = true
+    require_symbols                  = true
+    temporary_password_validity_days = 7
+  }
+
+  # MFA + WebAuthn are configured by the terraform_data.cognito_mfa resource
+  # via SetUserPoolMfaConfig — the provider's web_authn_configuration block
+  # is missing the FactorConfiguration field
+  # (hashicorp/terraform-provider-aws#47598), so a native MFA apply is rejected
+  # by AWS. sign_in_policy stays here because the provider handles it safely.
+  mfa_configuration = "OFF"
+
+  # Cognito requires PASSWORD to remain in allowed_first_auth_factors —
+  # AWS rejects pool updates that remove it ("Password should be configured
+  # as one of the allowed first auth factors"). This is a Cognito limitation,
+  # not a TF provider gap.
+  sign_in_policy {
+    allowed_first_auth_factors = ["PASSWORD", "WEB_AUTHN"]
+  }
+
+  account_recovery_setting {
+    recovery_mechanism {
+      name     = "verified_email"
+      priority = 1
+    }
+  }
+
+  admin_create_user_config {
+    allow_admin_create_user_only = true
+
+    # AWS requires {username} and {####} placeholders in email_message AND
+    # sms_message; without both the apply is rejected. {####} is replaced
+    # with the temp password, {username} with the Cognito username (== email).
+    # We never deliver via SMS (desired_delivery_mediums = ["EMAIL"]) but the
+    # API requires sms_message anyway.
+    #
+    # The passkey link deliberately doesn't pass client_id/redirect_uri:
+    # embedding aws_cognito_user_pool_client.oauth2_proxy.id here would create
+    # a pool↔client dependency cycle. The bare /passkeys/add URL works fine —
+    # Cognito just doesn't auto-redirect after enrollment.
+    invite_message_template {
+      email_subject = "Welcome to tnwks — finish setting up your account"
+      sms_message   = "Your tnwks username is {username} and temporary password is {####}"
+      email_message = <<-EOT
+        <p>Hi,</p>
+        <p>You've been invited to tnwks. To finish setting up your account, visit <a href="https://onboard.tnwks.us/">https://onboard.tnwks.us/</a> and sign in with:</p>
+        <ul>
+          <li>Username: <code>{username}</code></li>
+          <li>Temporary password: <code>{####}</code></li>
+        </ul>
+        <p>You'll be prompted to set a permanent password and then guided through registering a passkey (Touch ID, Windows Hello, or a hardware key) so future sign-ins are one touch.</p>
+      EOT
+    }
+  }
+
+  schema {
+    name                     = "email"
+    attribute_data_type      = "String"
+    mutable                  = true
+    required                 = true
+    developer_only_attribute = false
+
+    string_attribute_constraints {
+      min_length = 1
+      max_length = 256
+    }
+  }
+
+  deletion_protection = "ACTIVE"
+
+  lifecycle {
+    ignore_changes = [
+      mfa_configuration,
+      software_token_mfa_configuration,
+      web_authn_configuration,
+    ]
+  }
+}
+
+resource "terraform_data" "cognito_mfa" {
+  triggers_replace = [
+    aws_cognito_user_pool.tnwks_auth.id,
+    local.cognito_mfa,
+    data.aws_region.current.name,
+    local.cognito_mfa_role_arn,
+  ]
+
+  provisioner "local-exec" {
+    when    = create
+    command = <<-EOT
+      set -eu
+      creds=$(aws sts assume-role \
+        --role-arn ${local.cognito_mfa_role_arn} \
+        --role-session-name tfc-cognito-mfa \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
+      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
+      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
+      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
+      aws cognito-idp set-user-pool-mfa-config \
+        --region ${data.aws_region.current.name} \
+        --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
+        --mfa-configuration ON \
+        --software-token-mfa-configuration Enabled=true \
+        --web-authn-configuration RelyingPartyId=${local.cognito_mfa.relying_party_id},UserVerification=${local.cognito_mfa.user_verification},FactorConfiguration=${local.cognito_mfa.factor_configuration}
+    EOT
+  }
+
+  # No destroy provisioner: replacement of this resource (e.g. when changing
+  # local.cognito_mfa) was setting MFA=OFF *before* the create-side ran, which
+  # in turn made aws_cognito_user_pool.tnwks_auth's UpdateUserPool fail with
+  # "Cannot turn MFA functionality ON, once the user pool has been created"
+  # because the provider tried to push the (TF-state) mfa_configuration back
+  # in the same plan. The create provisioner is authoritative for the pool's
+  # MFA config either way; on real destroy the pool itself is deletion-
+  # protected, so a parting MFA=OFF call serves no purpose.
+}
+
+resource "aws_cognito_user_group" "admins" {
+  name         = "admins"
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+  description  = "Full access to internal services"
+  precedence   = 1
+}
+
+resource "aws_cognito_user_group" "viewers" {
+  name         = "viewers"
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+  description  = "Read-only access to internal services"
+  precedence   = 10
+}
+
+resource "aws_cognito_user_group" "agents" {
+  name         = "agents"
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+  description  = "Machine-to-machine clients"
+  precedence   = 20
+}
+
+resource "random_password" "admin_temp" {
+  length           = 24
+  special          = true
+  override_special = "!@#$%^&*()-_=+"
+
+  # Rotate the temp password whenever the username changes (e.g. a new
+  # admin) or when the pool's auth posture changes (forces a fresh user +
+  # invitation email so enrollment starts clean).
+  keepers = {
+    username     = var.admin_email
+    auth_posture = "passkey-as-mfa-with-totp"
+    # Bump invite_template when the email body changes to force a fresh
+    # invitation send to the existing admin so they see the new template.
+    invite_template = "v2-onboard-tnwks-us"
+  }
+}
+
+resource "aws_cognito_user" "admin" {
+  user_pool_id       = aws_cognito_user_pool.tnwks_auth.id
+  username           = var.admin_email
+  temporary_password = random_password.admin_temp.result
+
+  attributes = {
+    email          = var.admin_email
+    email_verified = true
+  }
+
+  desired_delivery_mediums = ["EMAIL"]
+
+  # On re-applies the user has already rotated this password; don't
+  # try to reset it back to the temp value.
+  # replace_triggered_by ties user replacement to random_password.admin_temp,
+  # so changing the random_password.keepers (auth_posture, username) forces a
+  # fresh user + invitation email — which is what we want when flipping the
+  # pool's auth posture (e.g. password+TOTP -> WebAuthn-only).
+  lifecycle {
+    ignore_changes = [temporary_password]
+    replace_triggered_by = [
+      random_password.admin_temp,
+    ]
+  }
+}
+
+resource "aws_cognito_user_in_group" "admin_in_admins" {
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+  group_name   = aws_cognito_user_group.admins.name
+  username     = aws_cognito_user.admin.username
+}
+
+resource "random_password" "viewer_temp" {
+  length           = 24
+  special          = true
+  override_special = "!@#$%^&*()-_=+"
+
+  keepers = {
+    username        = var.viewer_email
+    auth_posture    = "passkey-as-mfa-with-totp"
+    invite_template = "v2-onboard-tnwks-us"
+  }
+}
+
+resource "aws_cognito_user" "viewer" {
+  user_pool_id       = aws_cognito_user_pool.tnwks_auth.id
+  username           = var.viewer_email
+  temporary_password = random_password.viewer_temp.result
+
+  attributes = {
+    email          = var.viewer_email
+    email_verified = true
+  }
+
+  desired_delivery_mediums = ["EMAIL"]
+
+  lifecycle {
+    ignore_changes = [temporary_password]
+    replace_triggered_by = [
+      random_password.viewer_temp,
+    ]
+  }
+}
+
+resource "aws_cognito_user_in_group" "viewer_in_viewers" {
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+  group_name   = aws_cognito_user_group.viewers.name
+  username     = aws_cognito_user.viewer.username
+}
+
+resource "aws_cognito_resource_server" "tnwks_api" {
+  identifier   = "tnwks-api"
+  name         = "tnwks-api"
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+
+  scope {
+    scope_name        = "read"
+    scope_description = "Read access to tnwks internal APIs"
+  }
+
+  scope {
+    scope_name        = "write"
+    scope_description = "Write access to tnwks internal APIs"
+  }
+
+  scope {
+    scope_name        = "admin"
+    scope_description = "Admin access to tnwks internal APIs"
+  }
+}
+
+resource "aws_cognito_user_pool_client" "oauth2_proxy" {
+  name         = "oauth2-proxy"
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+
+  generate_secret = true
+
+  # oauth2-proxy fronts two entry hosts off one app client:
+  #   - oauth2.internal.tnwks.us → internal apps (Grafana et al.)
+  #   - oauth2.tnwks.us          → the public sites platform (sites.tnwks.us)
+  # oauth2-proxy derives the callback per entry host (no static redirect_url in
+  # its helmrelease), so BOTH callbacks must be registered here or Cognito
+  # rejects the public flow with "redirect_uri mismatch".
+  # The grafana.internal.tnwks.us entry is the post-enrollment landing for the
+  # /passkeys/add managed-login flow.
+  callback_urls = [
+    "https://oauth2.internal.tnwks.us/oauth2/callback",
+    "https://oauth2.tnwks.us/oauth2/callback",
+    "https://grafana.internal.tnwks.us/",
+  ]
+  logout_urls = [
+    "https://oauth2.internal.tnwks.us/oauth2/sign_out",
+    "https://oauth2.tnwks.us/oauth2/sign_out",
+  ]
+
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_scopes                 = ["openid", "email", "profile"]
+
+  supported_identity_providers = ["COGNITO"]
+
+  # ALLOW_USER_AUTH enables choice-based auth, which is the only flow that
+  # supports passkeys per AWS docs. ALLOW_USER_SRP_AUTH stays as the OIDC
+  # path oauth2-proxy uses today.
+  explicit_auth_flows = [
+    "ALLOW_USER_AUTH",
+    "ALLOW_USER_SRP_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH",
+  ]
+
+  access_token_validity  = 24
+  id_token_validity      = 24
+  refresh_token_validity = 30
+
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
+
+  prevent_user_existence_errors = "ENABLED"
+  enable_token_revocation       = true
+}
+
+resource "terraform_data" "oauth2_proxy_managed_login" {
+  triggers_replace = [
+    aws_cognito_user_pool.tnwks_auth.id,
+    aws_cognito_user_pool_client.oauth2_proxy.id,
+    data.aws_region.current.name,
+    local.cognito_mfa_role_arn,
+  ]
+
+  provisioner "local-exec" {
+    when    = create
+    command = <<-EOT
+      set -eu
+      creds=$(aws sts assume-role \
+        --role-arn ${local.cognito_mfa_role_arn} \
+        --role-session-name tfc-managed-login \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
+      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
+      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
+      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
+      # CreateManagedLoginBranding errors with ManagedLoginBrandingExistsException
+      # if a branding already exists for the client; check first so re-applies
+      # are idempotent.
+      existing=$(aws cognito-idp describe-managed-login-branding-by-client \
+        --region ${data.aws_region.current.name} \
+        --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
+        --client-id ${aws_cognito_user_pool_client.oauth2_proxy.id} \
+        --query 'ManagedLoginBranding.ManagedLoginBrandingId' \
+        --output text 2>/dev/null) || existing=""
+      if [ -z "$existing" ] || [ "$existing" = "None" ]; then
+        aws cognito-idp create-managed-login-branding \
+          --region ${data.aws_region.current.name} \
+          --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
+          --client-id ${aws_cognito_user_pool_client.oauth2_proxy.id} \
+          --use-cognito-provided-values
+      fi
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      set -eu
+      creds=$(aws sts assume-role \
+        --role-arn ${self.triggers_replace[3]} \
+        --role-session-name tfc-managed-login \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
+      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
+      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
+      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
+      branding_id=$(aws cognito-idp describe-managed-login-branding-by-client \
+        --region ${self.triggers_replace[2]} \
+        --user-pool-id ${self.triggers_replace[0]} \
+        --client-id ${self.triggers_replace[1]} \
+        --query 'ManagedLoginBranding.ManagedLoginBrandingId' \
+        --output text 2>/dev/null) || branding_id=""
+      if [ -n "$branding_id" ] && [ "$branding_id" != "None" ]; then
+        aws cognito-idp delete-managed-login-branding \
+          --region ${self.triggers_replace[2]} \
+          --user-pool-id ${self.triggers_replace[0]} \
+          --managed-login-branding-id "$branding_id"
+      fi
+    EOT
+  }
+}
+
+resource "aws_cognito_user_pool_client" "onboard" {
+  name         = "onboard"
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+
+  generate_secret = false
+
+  # Second callback_url is the post-enrollment landing for the
+  # /passkeys/add managed-login flow. Same pattern as the oauth2-proxy
+  # client — /passkeys/add validates the redirect_uri param against
+  # callback_urls and otherwise responds with "Invalid request".
+  callback_urls = [
+    "https://onboard.tnwks.us/callback",
+    "https://onboard.tnwks.us/done",
+  ]
+  logout_urls = ["https://onboard.tnwks.us/"]
+
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_scopes                 = ["openid", "email", "profile"]
+
+  supported_identity_providers = ["COGNITO"]
+
+  explicit_auth_flows = [
+    "ALLOW_USER_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH",
+  ]
+
+  access_token_validity  = 1
+  id_token_validity      = 1
+  refresh_token_validity = 30
+
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
+
+  prevent_user_existence_errors = "ENABLED"
+  enable_token_revocation       = true
+}
+
+resource "terraform_data" "onboard_managed_login" {
+  triggers_replace = [
+    aws_cognito_user_pool.tnwks_auth.id,
+    aws_cognito_user_pool_client.onboard.id,
+    data.aws_region.current.name,
+    local.cognito_mfa_role_arn,
+  ]
+
+  provisioner "local-exec" {
+    when    = create
+    command = <<-EOT
+      set -eu
+      creds=$(aws sts assume-role \
+        --role-arn ${local.cognito_mfa_role_arn} \
+        --role-session-name tfc-onboard-managed-login \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
+      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
+      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
+      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
+      existing=$(aws cognito-idp describe-managed-login-branding-by-client \
+        --region ${data.aws_region.current.name} \
+        --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
+        --client-id ${aws_cognito_user_pool_client.onboard.id} \
+        --query 'ManagedLoginBranding.ManagedLoginBrandingId' \
+        --output text 2>/dev/null) || existing=""
+      if [ -z "$existing" ] || [ "$existing" = "None" ]; then
+        aws cognito-idp create-managed-login-branding \
+          --region ${data.aws_region.current.name} \
+          --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
+          --client-id ${aws_cognito_user_pool_client.onboard.id} \
+          --use-cognito-provided-values
+      fi
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      set -eu
+      creds=$(aws sts assume-role \
+        --role-arn ${self.triggers_replace[3]} \
+        --role-session-name tfc-onboard-managed-login \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
+      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
+      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
+      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
+      branding_id=$(aws cognito-idp describe-managed-login-branding-by-client \
+        --region ${self.triggers_replace[2]} \
+        --user-pool-id ${self.triggers_replace[0]} \
+        --client-id ${self.triggers_replace[1]} \
+        --query 'ManagedLoginBranding.ManagedLoginBrandingId' \
+        --output text 2>/dev/null) || branding_id=""
+      if [ -n "$branding_id" ] && [ "$branding_id" != "None" ]; then
+        aws cognito-idp delete-managed-login-branding \
+          --region ${self.triggers_replace[2]} \
+          --user-pool-id ${self.triggers_replace[0]} \
+          --managed-login-branding-id "$branding_id"
+      fi
+    EOT
+  }
+}
+
+resource "aws_cognito_user_pool_client" "agent_ori" {
+  name         = "agent-ori"
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+
+  generate_secret = true
+
+  allowed_oauth_flows                  = ["client_credentials"]
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_scopes = [
+    "${aws_cognito_resource_server.tnwks_api.identifier}/read",
+    "${aws_cognito_resource_server.tnwks_api.identifier}/write",
+  ]
+
+  supported_identity_providers = ["COGNITO"]
+
+  access_token_validity = 24
+  id_token_validity     = 24
+  # Required field even though client_credentials doesn't issue refresh tokens.
+  refresh_token_validity = 30
+
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
+
+  prevent_user_existence_errors = "ENABLED"
+  enable_token_revocation       = true
+}
+
+resource "aws_cognito_user_pool_domain" "tnwks_auth" {
+  domain          = "auth.tnwks.us"
+  user_pool_id    = aws_cognito_user_pool.tnwks_auth.id
+  certificate_arn = aws_acm_certificate.auth_tnwks_us.arn
+
+  # version 2 = Managed Login (newer hosted UI, supports passkey enrollment
+  # at /passkeys/add). version 1 = classic Hosted UI which doesn't have
+  # the passkey endpoints — /passkeys/add returns "URL doesn't exist on the
+  # authorization server" without this.
+  managed_login_version = 2
+
+  depends_on = [aws_acm_certificate_validation.auth_tnwks_us]
+}
