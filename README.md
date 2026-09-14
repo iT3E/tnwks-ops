@@ -45,8 +45,8 @@ tnwks-ops/
 │   └── ms-01/                   # MS-01 controlplane + worker + patches
 ├── infrastructure/
 │   ├── ansible/                 # Bootstrap playbooks (talos, flux, sops)
-│   ├── terraform/aws/           # Active
-│   ├── terraform/cloudflare/    # Active
+│   ├── terraform/environments/  # Thin roots (aws-prod, cloudflare, bootstrap/)
+│   ├── terraform/modules/       # Shared child modules, namespaced by provider
 │   └── _archive/                # Legacy PVE/Proxmox terraform + packer
 ├── kubernetes/
 │   ├── apps/                    # Shared app manifests (namespaced)

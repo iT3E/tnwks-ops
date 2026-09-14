@@ -12,7 +12,7 @@
 # redirect_url (see helmrelease.yaml), so it derives /oauth2/callback per entry
 # host from the X-Forwarded-* headers — each host gets its own callback, and
 # both are registered on the Cognito app client
-# (infrastructure/terraform/aws/accounts/prod/cognito.tf).
+# (infrastructure/terraform/modules/aws/cognito.tf).
 #
 # The shared session cookie is scoped to .${SECRET_DOMAIN} (cookie_domains in
 # the helmrelease), so a session minted via oauth2.${SECRET_DOMAIN} is also

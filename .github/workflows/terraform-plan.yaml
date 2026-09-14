@@ -5,7 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'infrastructure/terraform/aws/accounts/prod/**'
+      - 'infrastructure/terraform/environments/aws-prod/**'
+      - 'infrastructure/terraform/modules/aws/**'
 
 
 env:
@@ -34,7 +35,7 @@ jobs:
         id: plan-upload
         with:
           workspace: ${{ env.TF_WORKSPACE }}
-          directory: "infrastructure/terraform/aws/accounts/prod"
+          directory: "infrastructure/terraform"
           speculative: true
 
       - name: Create Plan Run
@@ -105,7 +106,7 @@ jobs:
         id: plan-upload
         with:
           workspace: ${{ env.TF_WORKSPACE }}
-          directory: "infrastructure/terraform/aws/accounts/prod"
+          directory: "infrastructure/terraform"
           speculative: true
 
       - name: Create Plan Run
