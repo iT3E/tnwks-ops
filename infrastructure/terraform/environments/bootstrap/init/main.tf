@@ -5,7 +5,7 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 
 module "init" {
-  source = "../../modules/aws/init"
+  source = "../../../modules/aws/init"
 
   aws_account_prod_email = data.sops_file.secrets.data["aws_account_prod_email"]
 }
