@@ -1,9 +1,8 @@
 ## ---------------------------------------------------------------------------------------------------------------------
-## TFE PROJECT
-## Terraform Cloud project grouping the AWS workspaces.
+## OUTPUTS
 ## ---------------------------------------------------------------------------------------------------------------------
 
-resource "tfe_project" "tfe_project_aws" {
-  organization = "tnwks-ops"
-  name         = "AWS_Project"
+output "role_arn" {
+  description = "ARN of the role TFC workspaces assume via OIDC"
+  value       = aws_iam_role.tfc_oidc_role.arn
 }

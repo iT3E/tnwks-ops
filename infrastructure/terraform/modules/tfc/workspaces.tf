@@ -6,7 +6,7 @@
 
 resource "tfe_workspace" "tnwks-ops-aws-identity" {
   name         = "tnwks-ops-aws-identity"
-  organization = "tnwks-ops"
+  organization = var.tfc_organization
   project_id   = tfe_project.tfe_project_aws.id
 }
 
@@ -17,7 +17,7 @@ resource "tfe_workspace_settings" "tnwks-ops-aws-identity_workspace_settings" {
 
 resource "tfe_workspace" "tnwks-ops-aws-prod" {
   name         = "tnwks-ops-aws-prod"
-  organization = "tnwks-ops"
+  organization = var.tfc_organization
   project_id   = tfe_project.tfe_project_aws.id
 }
 

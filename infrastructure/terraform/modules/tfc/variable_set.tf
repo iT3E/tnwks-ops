@@ -7,7 +7,7 @@
 resource "tfe_variable_set" "variable_set" {
   name         = "aws_var_set"
   description  = "Variable set containing AWS connectivity settings"
-  organization = "tnwks-ops"
+  organization = var.tfc_organization
 }
 
 resource "tfe_project_variable_set" "variable_set_project" {
@@ -25,7 +25,7 @@ resource "tfe_variable" "tfe_var_aws_auth_bool" {
 
 resource "tfe_variable" "tfe_var_aws_auth_arn" {
   key             = "TFC_AWS_RUN_ROLE_ARN"
-  value           = aws_iam_role.tfc_oidc_role.arn
+  value           = var.aws_oidc_role_arn
   category        = "env"
   description     = "Role to be used for OIDC auth"
   variable_set_id = tfe_variable_set.variable_set.id

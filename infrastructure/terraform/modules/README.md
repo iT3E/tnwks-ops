@@ -8,16 +8,18 @@ infrastructure** (`cognito.tf`, `ses.tf`, `iam_policies.tf`, `iam_roles.tf`, ...
 ```
 modules/
 ├── aws/                 # prod account infra: cognito, ses, iam, acm
-│   ├── init/            # org bootstrap: TFC OIDC trust, project, workspaces
+│   ├── oidc/            # IAM OIDC provider + role that TFC workspaces assume
 │   └── identity/        # organizations, identity center, kms for sops
+├── tfc/                 # Terraform Cloud project, workspaces, variable set
 └── cloudflare/          # one zone + its settings, WAF ruleset and DNS records
 ```
 
 | Module | Called by | Provisions |
 | --- | --- | --- |
 | `aws/` | `environments/aws-prod` | Cognito user pool, groups, seeded users, app clients, custom hosted-UI domain, SES domain identity + DKIM, SMTP IAM user, ACM cert for the auth domain |
-| `aws/init/` | `environments/bootstrap/init` | IAM OIDC provider trusting Terraform Cloud, the assumable role, the TFC project, workspaces and the project variable set |
-| `aws/identity/` | `environments/bootstrap/identity` | AWS Organizations prod account, Identity Center users/groups/permission sets, KMS key backing SOPS |
+| `aws/oidc/` | `environments/bootstrap/aws-init` | IAM OIDC provider trusting Terraform Cloud and the role its workspaces assume |
+| `tfc/` | `environments/bootstrap/aws-init` | Terraform Cloud project, the workspaces the other environments run in, and the project variable set carrying AWS credentials |
+| `aws/identity/` | `environments/bootstrap/aws-identity` | AWS Organizations prod account, Identity Center users/groups/permission sets, KMS key backing SOPS |
 | `cloudflare/` | `environments/cloudflare` | One Cloudflare zone plus zone settings, custom WAF ruleset and DNS records. Instantiated once per domain |
 
 ## Conventions

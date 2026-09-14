@@ -1,4 +1,17 @@
 ## ---------------------------------------------------------------------------------------------------------------------
+## LOCALS
+## TFC identifiers are rendered into the trust policy as plain strings, so
+## this module needs no reference to the TFC resources themselves.
+## ---------------------------------------------------------------------------------------------------------------------
+
+locals {
+  tfc_subs = [
+    for ws in var.tfc_workspace_names :
+    "organization:${var.tfc_organization}:project:${var.tfc_project_name}:workspace:${ws}:run_phase:*"
+  ]
+}
+
+## ---------------------------------------------------------------------------------------------------------------------
 ## IAM ROLES
 ## Role assumed by TFC workspaces via the OIDC provider above.
 ## ---------------------------------------------------------------------------------------------------------------------
@@ -36,8 +49,7 @@ resource "aws_iam_role" "tfc_oidc_role" {
        },
        "StringLike": {
          "app.terraform.io:sub": [
-          "organization:tnwks-ops:project:${tfe_project.tfe_project_aws.name}:workspace:tnwks-ops-aws-identity:run_phase:*",
-          "organization:tnwks-ops:project:${tfe_project.tfe_project_aws.name}:workspace:tnwks-ops-aws-prod:run_phase:*"
+          ${join(",\n          ", [for s in local.tfc_subs : jsonencode(s)])}
          ]
        }
      }

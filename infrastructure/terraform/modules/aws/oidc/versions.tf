@@ -8,9 +8,6 @@ terraform {
     aws = {
       source = "hashicorp/aws"
     }
-    tfe = {
-      source = "hashicorp/tfe"
-    }
     tls = {
       source = "hashicorp/tls"
     }

@@ -233,10 +233,10 @@ names stay in plaintext).
   domains require us-east-1 ACM regardless of pool region).
 - `infrastructure/terraform/environments/cloudflare/` — DNS + zone/account-level
   config, driven locally via `task terraform:{plan,apply}`.
-- `infrastructure/terraform/environments/bootstrap/{init,identity}/` — org
+- `infrastructure/terraform/environments/bootstrap/{aws-init,aws-identity}/` — org
   bootstrap and Identity Center. CLI/VCS driven, not wired into CI.
 - `infrastructure/terraform/modules/` — shared child modules, namespaced by
-  provider (`aws/`, `aws/init/`, `aws/identity/`, `cloudflare/`). One file per
+  provider (`aws/`, `aws/oidc/`, `aws/identity/`, `tfc/`, `cloudflare/`). One file per
   piece of infrastructure. See its README for conventions.
 - `infrastructure/_archive/` — old PVE/Proxmox terraform + packer; not
   active.
