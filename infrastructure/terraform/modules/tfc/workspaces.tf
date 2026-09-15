@@ -26,7 +26,7 @@ resource "tfe_workspace" "tnwks-ops-aws-prod" {
   name              = "tnwks-ops-aws-prod"
   organization      = var.tfc_organization
   project_id        = tfe_project.tfe_project_aws.id
-  working_directory = "environments/aws-prod"
+  working_directory = "environments/prod/aws"
 }
 
 resource "tfe_workspace_settings" "tnwks-ops-aws-prod_workspace_settings" {

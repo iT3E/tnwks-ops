@@ -47,7 +47,7 @@ task talos:destroy:wsl
 # Terraform — the local task targets Cloudflare *only*. AWS state is in
 # Terraform Cloud (workspace tnwks-ops-aws-prod) and is driven by the
 # .github/workflows/terraform-{plan,apply}.yaml on PRs/pushes touching
-# infrastructure/terraform/environments/aws-prod/** or modules/aws/**.
+# infrastructure/terraform/environments/prod/aws/** or modules/aws/**.
 task terraform:plan
 task terraform:apply
 
@@ -105,7 +105,7 @@ system actually owns the change:
   so check `homelab-wsl` and `homelab-ms-01` if the change touches a
   shared app.
 
-- **Terraform AWS (`infrastructure/terraform/environments/aws-prod/**`,
+- **Terraform AWS (`infrastructure/terraform/environments/prod/aws/**`,
   `infrastructure/terraform/modules/aws/**`)** —
   the PR triggers a speculative plan via
   `.github/workflows/terraform-plan.yaml` (Terraform Cloud workspace
@@ -114,7 +114,7 @@ system actually owns the change:
   creates and auto-confirms a real run in the same workspace. Validate
   via the run link or the TFC UI.
 
-- **Terraform Cloudflare (`infrastructure/terraform/environments/cloudflare/**`)** —
+- **Terraform Cloudflare (`infrastructure/terraform/environments/prod/cloudflare/**`)** —
   not wired into CI. After the PR merges, run `task terraform:apply`
   locally to push the change.
 
@@ -222,7 +222,7 @@ names stay in plaintext).
 
 ### Terraform
 
-- `infrastructure/terraform/environments/aws-prod/` — thin root module that
+- `infrastructure/terraform/environments/prod/aws/` — thin root module that
   calls `modules/aws`. Cognito user pools (auth for ingresses), SES and the
   supporting IAM, driven by **Terraform Cloud** workspace
   `tnwks-ops-aws-prod` via the GitHub Actions in `.github/workflows/terraform-{plan,apply}.yaml`.
@@ -231,7 +231,7 @@ names stay in plaintext).
   `arn:aws:iam::654654262098:role/tnwks-org-init-role`; ACM for Cognito
   custom domains uses an aliased `us_east_1` provider (Cognito custom
   domains require us-east-1 ACM regardless of pool region).
-- `infrastructure/terraform/environments/cloudflare/` — DNS + zone/account-level
+- `infrastructure/terraform/environments/prod/cloudflare/` — DNS + zone/account-level
   config, driven locally via `task terraform:{plan,apply}`.
 - `infrastructure/terraform/environments/bootstrap/{aws-init,aws-identity}/` — org
   bootstrap and Identity Center. CLI/VCS driven, not wired into CI.
