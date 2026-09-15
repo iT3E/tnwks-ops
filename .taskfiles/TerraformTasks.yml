@@ -5,18 +5,18 @@ tasks:
 
   init:
     desc: Initialize terraform dependencies
-    dir: "{{.TERRAFORM_DIR}}/environments/cloudflare"
+    dir: "{{.TERRAFORM_DIR}}/environments/prod/cloudflare"
     cmds:
       - terraform init {{.CLI_ARGS}}
 
   plan:
     desc: Show the changes terraform will make
-    dir: "{{.TERRAFORM_DIR}}/environments/cloudflare"
+    dir: "{{.TERRAFORM_DIR}}/environments/prod/cloudflare"
     cmds:
       - terraform plan {{.CLI_ARGS}}
 
   apply:
     desc: Apply the changes to Cloudflare
-    dir: "{{.TERRAFORM_DIR}}/environments/cloudflare"
+    dir: "{{.TERRAFORM_DIR}}/environments/prod/cloudflare"
     cmds:
       - terraform apply {{.CLI_ARGS}}

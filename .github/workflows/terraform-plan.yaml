@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'infrastructure/terraform/environments/aws-prod/**'
+      - 'infrastructure/terraform/environments/prod/aws/**'
       - 'infrastructure/terraform/modules/aws/**'
 
 

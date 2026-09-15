@@ -24,7 +24,7 @@ module conventions.
 > **Terraform Cloud `working_directory` must point at the environment root.**
 > It is a path *relative to the configuration root*, and CI uploads
 > `infrastructure/terraform` as that root, so the value is
-> `environments/aws-prod`, not the full repo path. This lets relative module
+> `environments/prod/aws`, not the full repo path. This lets relative module
 > sources such as `../../modules/aws` resolve inside the uploaded tarball.
 >
 > For CLI-driven workspaces the same value works: because
@@ -45,8 +45,8 @@ module conventions.
    | --- | --- | --- | --- |
    | `tnwks-ops-aws-init` | `environments/bootstrap/aws-init` | local | CLI, by hand |
    | `tnwks-ops-aws-identity` | `environments/bootstrap/aws-identity` | remote | API/CLI, by hand |
-   | `tnwks-ops-aws-prod` | `environments/aws-prod` | remote | `.github/workflows/terraform-{plan,apply}.yaml` |
-   | `tnwks-cloudflare-prod_old` | `environments/cloudflare` | local | `task terraform:{plan,apply}` |
+   | `tnwks-ops-aws-prod` | `environments/prod/aws` | remote | `.github/workflows/terraform-{plan,apply}.yaml` |
+   | `tnwks-cloudflare-prod_old` | `environments/prod/cloudflare` | local | `task terraform:{plan,apply}` |
 
    None of these workspaces currently has a VCS connection; runs are created by
    the GitHub Actions workflows (prod) or from the CLI.
@@ -71,7 +71,7 @@ module conventions.
 
 ### AWS prod account
 
-9. Apply `environments/aws-prod` (Cognito, SES, supporting IAM). Runs
+9. Apply `environments/prod/aws` (Cognito, SES, supporting IAM). Runs
    automatically on PR merge via `.github/workflows/terraform-{plan,apply}.yaml`.
 
 ## CLI usage

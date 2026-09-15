@@ -16,11 +16,11 @@ modules/
 
 | Module | Called by | Provisions |
 | --- | --- | --- |
-| `aws/` | `environments/aws-prod` | Cognito user pool, groups, seeded users, app clients, custom hosted-UI domain, SES domain identity + DKIM, SMTP IAM user, ACM cert for the auth domain |
+| `aws/` | `environments/prod/aws` | Cognito user pool, groups, seeded users, app clients, custom hosted-UI domain, SES domain identity + DKIM, SMTP IAM user, ACM cert for the auth domain |
 | `aws/oidc/` | `environments/bootstrap/aws-init` | IAM OIDC provider trusting Terraform Cloud and the role its workspaces assume |
 | `tfc/` | `environments/bootstrap/aws-init` | Terraform Cloud project, the workspaces the other environments run in, and the project variable set carrying AWS credentials |
 | `aws/identity/` | `environments/bootstrap/aws-identity` | AWS Organizations prod account, Identity Center users/groups/permission sets, KMS key backing SOPS |
-| `cloudflare/` | `environments/cloudflare` | One Cloudflare zone plus zone settings, custom WAF ruleset and DNS records. Instantiated once per domain |
+| `cloudflare/` | `environments/prod/cloudflare` | One Cloudflare zone plus zone settings, custom WAF ruleset and DNS records. Instantiated once per domain |
 
 ## Conventions
 
