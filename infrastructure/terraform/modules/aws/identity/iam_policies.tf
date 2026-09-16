@@ -62,7 +62,7 @@ data "aws_iam_policy_document" "custom_role_trust_policy" {
 
 module "iam_policy_kms_sops" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-policy"
-  version = "~> 5.0"
+  version = "~> 6.0"
 
   name        = "iam-policy-kms-sops"
   description = "Allows access to use SOPS KMS key"
