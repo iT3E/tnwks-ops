@@ -5,7 +5,7 @@
 
 module "kms_sops" {
   source  = "terraform-aws-modules/kms/aws"
-  version = "~> 2.0"
+  version = "~> 4.0"
 
   deletion_window_in_days = 7
   description             = "Used by sops"
