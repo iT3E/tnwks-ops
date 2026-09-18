@@ -22,7 +22,12 @@ detectors:
 ffmpeg:
   global_args: ["-hide_banner", "-loglevel", "warning"]
   output_args:
-    record: preset-record-generic-audio-copy
+    # The Amcrest/Loryta/SV3C cameras publish pcm_alaw audio. mp4 has no
+    # tag for pcm_alaw, so `-c copy` (the -audio-copy preset) fails the
+    # header write with "Could not find tag for codec pcm_alaw" and every
+    # segment gets discarded by the record maintainer. Transcode to aac
+    # instead: video is still `-c:v copy`, so this costs no video re-encode.
+    record: preset-record-generic-audio-aac
 
 snapshots:
   enabled: true
