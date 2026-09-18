@@ -5,7 +5,7 @@
 
 module "iam_assumable_role_sops" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-assumable-role"
-  version = "~> 5.0"
+  version = "~> 6.0"
 
   create_role                     = true
   role_name                       = "iam-role-sops"
