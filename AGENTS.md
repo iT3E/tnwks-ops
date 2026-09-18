@@ -238,8 +238,6 @@ names stay in plaintext).
 - `infrastructure/terraform/modules/` — shared child modules, namespaced by
   provider (`aws/`, `aws/oidc/`, `aws/identity/`, `tfc/`, `cloudflare/`). One file per
   piece of infrastructure. See its README for conventions.
-- `infrastructure/_archive/` — old PVE/Proxmox terraform + packer; not
-  active.
 
 ### Talos
 
