@@ -1,0 +1,73 @@
+---
+version: "3"
+
+## ---------------------------------------------------------------------------------------------------------------------
+## MikroTik RB5009 tasks.
+##
+## RouterOS is only reachable from inside the LAN, so unlike the AWS stacks these
+## run locally rather than through CI. Same shape as the Cloudflare tasks.
+## ---------------------------------------------------------------------------------------------------------------------
+
+vars:
+  MIKROTIK_TF_DIR: "{{.TERRAFORM_DIR}}/environments/prod/mikrotik"
+  MIKROTIK_DIR: "{{.ROOT_DIR}}/infrastructure/mikrotik"
+  VYOS_CONFIG_DIR: '{{.VYOS_CONFIG_DIR | default "/tmp/vyos-config"}}'
+
+tasks:
+
+  tfvars:
+    desc: Regenerate terraform.tfvars from the canonical VyOS config
+    cmds:
+      - |
+        if [ ! -d "{{.VYOS_CONFIG_DIR}}/config-parts" ]; then
+          echo "Cloning canonical VyOS config to {{.VYOS_CONFIG_DIR}}"
+          git clone --depth 1 git@github.com:iT3E/vyos-config.git "{{.VYOS_CONFIG_DIR}}"
+        else
+          git -C "{{.VYOS_CONFIG_DIR}}" pull --ff-only
+        fi
+      - |
+        python3 "{{.MIKROTIK_DIR}}/tools/vyos-to-tfvars.py" \
+          --vyos-config "{{.VYOS_CONFIG_DIR}}" \
+          --out "{{.MIKROTIK_TF_DIR}}/terraform.tfvars"
+      - terraform fmt "{{.MIKROTIK_TF_DIR}}/terraform.tfvars"
+    preconditions:
+      - sh: command -v python3
+        msg: python3 is required to run the tfvars generator
+
+  init:
+    desc: Initialize the MikroTik Terraform root module
+    dir: "{{.MIKROTIK_TF_DIR}}"
+    cmds:
+      - terraform init {{.CLI_ARGS}}
+
+  validate:
+    desc: Validate the MikroTik module and root module without contacting the router
+    cmds:
+      - terraform -chdir="{{.TERRAFORM_DIR}}/modules/mikrotik" init -backend=false
+      - terraform -chdir="{{.TERRAFORM_DIR}}/modules/mikrotik" validate
+      - terraform -chdir="{{.MIKROTIK_TF_DIR}}" init -backend=false
+      - terraform -chdir="{{.MIKROTIK_TF_DIR}}" validate
+
+  plan:
+    desc: Show the changes Terraform will make to the MikroTik router
+    dir: "{{.MIKROTIK_TF_DIR}}"
+    cmds:
+      - terraform plan {{.CLI_ARGS}}
+
+  apply:
+    desc: Apply the MikroTik configuration
+    dir: "{{.MIKROTIK_TF_DIR}}"
+    cmds:
+      - terraform apply {{.CLI_ARGS}}
+
+  bootstrap:
+    desc: Run the post-console Ansible bootstrap and pre-Terraform verification
+    dir: "{{.ANSIBLE_DIR}}"
+    cmds:
+      - |
+        export ROUTEROS_USERNAME=$(sops -d "{{.MIKROTIK_TF_DIR}}/secrets.sops.yaml" | yq -r '.routeros_username')
+        export ROUTEROS_PASSWORD=$(sops -d "{{.MIKROTIK_TF_DIR}}/secrets.sops.yaml" | yq -r '.routeros_password')
+        ansible-playbook -i inventory/mikrotik.yml playbooks/mikrotik-bootstrap.yml {{.CLI_ARGS}}
+    preconditions:
+      - sh: test -f "{{.MIKROTIK_TF_DIR}}/secrets.sops.yaml"
+        msg: secrets.sops.yaml is missing; see infrastructure/mikrotik/bootstrap/README.md
