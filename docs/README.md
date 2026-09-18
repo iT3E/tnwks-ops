@@ -46,6 +46,7 @@ Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md)
 | | |
 | --- | --- |
 | [`apps/home-assistant.md`](apps/home-assistant.md) | Home Assistant |
+| [`apps/peloton-to-garmin.md`](apps/peloton-to-garmin.md) | peloton-to-garmin: the dead-auth v3.6.1 pin and why Renovate can't see it |
 
 ## Other
 
