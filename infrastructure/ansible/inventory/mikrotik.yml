@@ -1,0 +1,22 @@
+---
+## ---------------------------------------------------------------------------------------------------------------------
+## MikroTik inventory.
+##
+## Credentials are NOT here. They come from SOPS, same as the Terraform root
+## module. Decrypt into the environment before running the playbook:
+##
+##   export ROUTEROS_USERNAME=$(sops -d ../../terraform/environments/prod/mikrotik/secrets.sops.yaml \
+##     | yq -r '.routeros_username')
+##   export ROUTEROS_PASSWORD=$(sops -d ../../terraform/environments/prod/mikrotik/secrets.sops.yaml \
+##     | yq -r '.routeros_password')
+## ---------------------------------------------------------------------------------------------------------------------
+
+mikrotik:
+  hosts:
+    sce-rtr01:
+      # Bootstrap mgmt address from routeros-bootstrap.rsc section 2. After
+      # cutover this becomes the bridge mgmt SVI at the same address.
+      ansible_host: 10.98.0.1
+  vars:
+    routeros_username: "{{ lookup('env', 'ROUTEROS_USERNAME') | default('terraform', true) }}"
+    routeros_password: "{{ lookup('env', 'ROUTEROS_PASSWORD') }}"
