@@ -1,0 +1,113 @@
+---
+## ---------------------------------------------------------------------------------------------------------------------
+## Ansible bootstrap for the MikroTik RB5009.
+##
+## Scope note: routeros-bootstrap.rsc in this directory is the authoritative
+## first-touch bootstrap and is pasted into a console on a factory-reset unit.
+## This playbook is the repeatable/idempotent version for everything that comes
+## AFTER the box has an IP and a working API account, so it can be re-run
+## against a live router (backups, firmware checks, drift audit) without the
+## manual console step.
+##
+## Requires: ansible-galaxy collection install community.routeros
+##
+## Usage:
+##   task mikrotik:bootstrap
+##   ansible-playbook -i inventory/mikrotik.yml playbooks/mikrotik-bootstrap.yml --check
+## ---------------------------------------------------------------------------------------------------------------------
+
+- name: MikroTik RB5009 bootstrap and pre-Terraform verification
+  hosts: mikrotik
+  gather_facts: false
+  connection: local
+
+  vars:
+    backup_dir: "{{ playbook_dir }}/../../mikrotik/backups"
+    required_routeros_major: 7
+
+  tasks:
+    - name: Read system resource
+      community.routeros.api_info:
+        path: system resource
+        hostname: "{{ ansible_host }}"
+        username: "{{ routeros_username }}"
+        password: "{{ routeros_password }}"
+        tls: true
+        validate_certs: false
+      register: sysres
+
+    - name: Assert RouterOS 7.x
+      # The provider targets 7.x REST. On 6.x everything below silently misbehaves.
+      ansible.builtin.assert:
+        that:
+          - sysres.result[0]['version'] is version(required_routeros_major | string, '>=')
+        fail_msg: >-
+          RouterOS {{ sysres.result[0]['version'] }} detected. Upgrade to 7.x
+          before running Terraform; the routeros provider targets 7.x REST.
+        success_msg: "RouterOS {{ sysres.result[0]['version'] }} OK"
+
+    - name: Warn on low free memory
+      # RB5009 has 1GB. This is the constraint that ruled out porting the
+      # 9-container VyOS stack, so it is worth surfacing rather than assuming.
+      ansible.builtin.debug:
+        msg: >-
+          free-memory={{ sysres.result[0]['free-memory'] }}
+          total-memory={{ sysres.result[0]['total-memory'] }}
+          architecture={{ sysres.result[0]['architecture-name'] }}
+
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: "0750"
+      delegate_to: localhost
+
+    - name: Export running configuration
+      # Pre-Terraform snapshot. Terraform's plan is only trustworthy if we can
+      # diff against what was actually on the box beforehand.
+      community.routeros.api_command:
+        commands:
+          - /export terse
+        hostname: "{{ ansible_host }}"
+        username: "{{ routeros_username }}"
+        password: "{{ routeros_password }}"
+        tls: true
+        validate_certs: false
+      register: running_config
+
+    - name: Write configuration snapshot
+      ansible.builtin.copy:
+        content: "{{ running_config.stdout | default('') }}"
+        dest: "{{ backup_dir }}/{{ inventory_hostname }}-{{ lookup('pipe', 'date +%Y%m%dT%H%M%S') }}.rsc"
+        mode: "0640"
+      delegate_to: localhost
+
+    - name: Verify the REST API service is reachable and TLS-enabled
+      community.routeros.api_info:
+        path: ip service
+        hostname: "{{ ansible_host }}"
+        username: "{{ routeros_username }}"
+        password: "{{ routeros_password }}"
+        tls: true
+        validate_certs: false
+      register: services
+
+    - name: Assert www-ssl is enabled
+      ansible.builtin.assert:
+        that:
+          - services.result | selectattr('name', 'equalto', 'www-ssl')
+            | selectattr('disabled', 'equalto', false) | list | length > 0
+        fail_msg: >-
+          www-ssl is disabled. Terraform talks to https://<host>/rest and cannot
+          enable the listener it authenticates through. Run
+          routeros-bootstrap.rsc section 3 on the console first.
+
+    - name: Report insecure services still enabled
+      # Terraform disables these, but knowing the pre-apply state makes the first
+      # plan readable.
+      ansible.builtin.debug:
+        msg: >-
+          Still enabled (Terraform will disable):
+          {{ services.result
+             | rejectattr('disabled', 'equalto', true)
+             | map(attribute='name') | list }}
