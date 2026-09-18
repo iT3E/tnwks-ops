@@ -59,22 +59,22 @@ spec:
               - name: P2G_PELOTON__EMAIL
                 valueFrom:
                   secretKeyRef:
-                    name: peloton-to-garmin-it-secrets
+                    name: peloton-to-garmin-mh-secrets
                     key: P2G_PELOTON__EMAIL
               - name: P2G_PELOTON__PASSWORD
                 valueFrom:
                   secretKeyRef:
-                    name: peloton-to-garmin-it-secrets
+                    name: peloton-to-garmin-mh-secrets
                     key: P2G_PELOTON__PASSWORD
               - name: P2G_GARMIN__EMAIL
                 valueFrom:
                   secretKeyRef:
-                    name: peloton-to-garmin-it-secrets
+                    name: peloton-to-garmin-mh-secrets
                     key: P2G_GARMIN__EMAIL
               - name: P2G_GARMIN__PASSWORD
                 valueFrom:
                   secretKeyRef:
-                    name: peloton-to-garmin-it-secrets
+                    name: peloton-to-garmin-mh-secrets
                     key: P2G_GARMIN__PASSWORD
             probes:
               startup:
