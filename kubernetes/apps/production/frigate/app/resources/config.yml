@@ -125,6 +125,18 @@ cameras:
 
   frigate_sv3c_west:
     ffmpeg:
+      # Record WITHOUT audio on this camera only. With the global
+      # -audio-copy -> -audio-aac change (#1343), `-c:a aac` alongside
+      # `-c:v copy` makes ffmpeg hold video packets in the muxing queue
+      # while it waits on audio frames to encode. Every other camera on
+      # the aac preset sits at ~25 MiB RSS; this one's record process grew
+      # +62 MiB/min (~3.6 GiB/hr) until it hit the 8Gi container limit and
+      # got OOMKilled roughly every 2h (cgroup showed oom_kill 101).
+      # preset-record-generic is the same segmenter with `-an`, so the
+      # unbounded queue cannot form. Exterior camera, audio has no value
+      # here. Revisit if the upstream aac muxing behaviour changes.
+      output_args:
+        record: preset-record-generic
       inputs:
         - path: rtsp://localhost:8554/frigate_sv3c_west_lq
           roles: ["detect"]
