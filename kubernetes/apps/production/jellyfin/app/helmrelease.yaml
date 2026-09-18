@@ -48,7 +48,7 @@ spec:
           app:
             image:
               repository: jellyfin/jellyfin
-              tag: 10.11.10
+              tag: 10.11.11
             env:
               TZ: "America/Los_Angeles"
             resources:
