@@ -23,7 +23,7 @@ curl -k -u terraform:<pw> https://10.98.0.1/rest/system/resource
       ↓
 task mikrotik:bootstrap  (Ansible verify + snapshot)
       ↓
-task mikrotik:tfvars     (regenerate from VyOS source)
+task mikrotik:generate   (regenerate locals.tf from VyOS source)
       ↓
 task mikrotik:plan  →  task mikrotik:apply
 ```
