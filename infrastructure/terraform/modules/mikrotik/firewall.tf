@@ -124,6 +124,31 @@ resource "routeros_ip_firewall_filter" "input_drop_invalid" {
   comment          = "001 input: drop invalid (terraform)"
 }
 
+# --- Aggregate LAN interface list --------------------------------------------
+# Router services (DNS, NTP, DHCP) must be reachable from every internal VLAN and
+# from none of the WAN. The EdgeRouter Lite bound DNS and NTP to 0.0.0.0, which
+# made it a public open resolver and an open NTP reflector. Matching the input
+# chain against this list is what stops that from being recreated here.
+
+resource "routeros_interface_list" "lan" {
+  name    = "zone-lan"
+  comment = "All internal VLANs, for input-chain service scoping (terraform)"
+}
+
+resource "routeros_interface_list_member" "lan" {
+  # Keyed off local.active_vlans rather than var.vlans so this can never name an
+  # SVI that was not created (disabled VLANs have no interface to reference).
+  for_each = toset([
+    for zone in var.lan_interface_lists : zone
+    if contains(keys(local.active_vlans), zone)
+  ])
+
+  list      = routeros_interface_list.lan.name
+  interface = routeros_interface_vlan.svi[each.key].name
+
+  depends_on = [routeros_interface_vlan.svi]
+}
+
 resource "routeros_ip_firewall_filter" "input_accept" {
   for_each = var.input_rules
 
@@ -132,13 +157,17 @@ resource "routeros_ip_firewall_filter" "input_accept" {
   protocol          = each.value.protocol
   dst_port          = each.value.dst_port_list != null ? local.port_list_strings[each.value.dst_port_list] : each.value.dst_port
   in_interface_list = each.value.in_interface_list != null ? "zone-${each.value.in_interface_list}" : null
-  src_address_list  = each.value.src_address_list
-  src_address       = each.value.src_address
-  icmp_options      = each.value.icmp_options
-  comment           = "${each.key} ${each.value.comment} (terraform)"
+  # WireGuard is the one service that must answer on the WAN, so it matches a
+  # physical interface instead of a zone list.
+  in_interface     = each.value.in_interface
+  src_address_list = each.value.src_address_list
+  src_address      = each.value.src_address
+  icmp_options     = each.value.icmp_options
+  comment          = "${each.key} ${each.value.comment} (terraform)"
 
   depends_on = [
     routeros_interface_list.zone,
+    routeros_interface_list_member.lan,
     routeros_ip_firewall_addr_list.this,
   ]
 }
@@ -198,4 +227,20 @@ resource "routeros_move_items" "firewall_filter" {
     routeros_ip_firewall_filter.zone_accept,
     routeros_ip_firewall_filter.zone_drop,
   ]
+}
+
+# --- Connection tracking -----------------------------------------------------
+# The EdgeRouter Lite tuned conntrack for the full internet-edge load
+# (table-size 32768, hash-size 4096, tcp loose enable). RouterOS sizes its table
+# automatically from available RAM, so only the behavioural knobs carry over.
+
+resource "routeros_ip_firewall_connection_tracking" "this" {
+  count = var.connection_tracking != null ? 1 : 0
+
+  enabled                 = var.connection_tracking.enabled
+  loose_tcp_tracking      = var.connection_tracking.loose_tcp_tracking
+  tcp_established_timeout = var.connection_tracking.tcp_established_timeout
+  tcp_close_wait_timeout  = var.connection_tracking.tcp_close_wait_timeout
+  tcp_syn_sent_timeout    = var.connection_tracking.tcp_syn_sent_timeout
+  udp_timeout             = var.connection_tracking.udp_timeout
 }

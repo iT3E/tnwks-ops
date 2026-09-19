@@ -113,6 +113,24 @@ PORT_GROUP_RE = re.compile(r"^set firewall group port-group (\S+) port '([^']*)'
 DHCP_RE = re.compile(r"^set service dhcp-server shared-network-name (\S+) (.+)$")
 NAT_RE = re.compile(r"^set nat destination rule (\d+) (.+)$")
 ROUTE_RE = re.compile(r"^set protocols static route (\S+) next-hop (\S+)")
+
+# --------------------------------------------------------------------------
+# EdgeRouter Lite consolidation (docs/edgerouter-discovery.md).
+#
+# The RB5009 replaces THOMAS-ER01 too, so the transit hop disappears. Verified
+# on the live ERL on 2026-09-19: 172.16.1.252 and .254 are both `ip neigh`
+# FAILED and 100% ping loss, yet both routers still route production subnets at
+# them. Anything pointing at a dead next-hop is a bug, not a config to port.
+# --------------------------------------------------------------------------
+DEAD_NEXT_HOPS = {"172.16.1.252", "172.16.1.254"}
+
+# The old upstream router. With one box there is nothing left to forward to; the
+# default route now comes from the WAN DHCP lease.
+RETIRED_UPSTREAM = "172.16.1.1"
+
+# Source NAT moves off the ERL onto the RB5009's WAN port. VyOS had its
+# masquerade rule commented out precisely because the ERL was doing it.
+WAN_INTERFACE = "ether1"
 SYSTEM_RE = re.compile(r"^set system (\S+(?: \S+)*) '?([^']*)'?$")
 
 
@@ -742,6 +760,9 @@ def build_zone_policies(rulesets: dict, pairs: dict, zone_iface: dict) -> tuple[
                         input_seq += 10
                         entry = {
                             "comment": f"DNS from {from_zone} (was {ruleset})",
+                            # Scoped to the originating zone, so it can never be
+                            # satisfied from the WAN. The EdgeRouter's 0.0.0.0
+                            # DNS bind is exactly what this avoids.
                             "in_interface_list": from_zone,
                         }
                         for key in ("protocol", "dst_port"):
@@ -848,13 +869,22 @@ def build_zone_policies(rulesets: dict, pairs: dict, zone_iface: dict) -> tuple[
     input_seq = max(input_seq, 500)
     for offset, extra in enumerate([
         {"comment": "ICMP for path MTU discovery and diagnostics", "protocol": "icmp"},
-        {"comment": "DHCP requests from LAN clients", "protocol": "udp", "dst_port": "67,68"},
-        {"comment": "NTP server mode for LAN clients", "protocol": "udp", "dst_port": "123"},
+        # LAN-only. The EdgeRouter Lite bound DHCP/NTP/DNS to 0.0.0.0, which left
+        # it a public open resolver and open NTP reflector on the WAN address.
+        # in_interface_list = "lan" is what keeps that from coming back.
+        {"comment": "DHCP requests from LAN clients", "protocol": "udp",
+         "dst_port": "67,68", "in_interface_list": "lan"},
+        {"comment": "NTP server mode for LAN clients only (never WAN)", "protocol": "udp",
+         "dst_port": "123", "in_interface_list": "lan"},
         {"comment": "SSH from the mgmt VLAN only", "protocol": "tcp",
          "dst_port": "22", "in_interface_list": "unifi-mgmt-900"},
         {"comment": "RouterOS REST API and Winbox from the mgmt VLAN only", "protocol": "tcp",
          "dst_port": "443,8291", "in_interface_list": "unifi-mgmt-900"},
-        {"comment": "WireGuard listeners", "protocol": "udp", "dst_port": "51820,51821"},
+        # The one service that must answer on the WAN. Replaces EdgeRouter
+        # port-forward rules 3 and 4, which forwarded 51820/51821 to VyOS at
+        # 172.16.1.250; this router terminates the tunnels itself.
+        {"comment": "WireGuard from the internet (replaces ERL port-forward 3/4)",
+         "protocol": "udp", "dst_port": "51820,51821", "in_interface": WAN_INTERFACE},
     ]):
         input_rules[f"{input_seq + (offset + 1) * 10:03d}-router-service"] = extra
 
@@ -916,6 +946,28 @@ def main() -> int:
     notes.extend(dns_notes)
     notes.extend(admin_notes)
 
+    # --- EdgeRouter consolidation: prune routes that no longer make sense ----
+    kept_routes = {}
+    for label, route in routes.items():
+        gw = route["gateway"]
+        dst = route["dst_address"]
+        if gw in DEAD_NEXT_HOPS:
+            notes.append(
+                "route %s via %s DROPPED: next-hop is dead (ip neigh FAILED, 100%% "
+                "ping loss on 2026-09-19). Both VyOS and the EdgeRouter still "
+                "pointed production subnets at it" % (dst, gw)
+            )
+            continue
+        if dst == "0.0.0.0/0" and gw == RETIRED_UPSTREAM:
+            notes.append(
+                "route 0.0.0.0/0 via %s DROPPED: that was the EdgeRouter Lite, "
+                "which this router replaces. The default route now comes from the "
+                "WAN DHCP lease (add_default_route = yes)" % gw
+            )
+            continue
+        kept_routes[label] = route
+    routes = kept_routes
+
     # NAT: rewrite VyOS interface references to RouterOS VLAN interface names.
     dstnat = {}
     for num, rule in sorted(nat.items()):
@@ -935,6 +987,18 @@ def main() -> int:
         for key in ("dst_address", "src_address"):
             if key in rule:
                 entry[key] = rule[key]
+
+        # A redirect to a dead host is a black hole, not a feature. The VyOS
+        # transit-10 NTP rule pointed at 172.16.1.254, which means NTP for that
+        # zone has been silently failing; do not carry the bug forward.
+        if entry["to_address"] in DEAD_NEXT_HOPS:
+            notes.append(
+                "nat rule %s (%s) DROPPED: redirect target %s is dead, so this "
+                "rule black-holes traffic today. Verified 2026-09-19"
+                % (num, entry["comment"], entry["to_address"])
+            )
+            continue
+
         for proto in expand_protocol(entry["protocol"]):
             dstnat["%s-%s" % (num, proto)] = dict(entry, protocol=proto)
 
@@ -947,6 +1011,16 @@ def main() -> int:
             "comment": iface.get("comment", name),
             "peers": {k: v for k, v in sorted(iface["peers"].items())},
         }
+
+    # Every enabled VLAN is a LAN interface. The WAN port is physical and is
+    # deliberately absent, which is what makes the input-chain scoping safe.
+    lan_zones = [n for n, v in vlans.items() if v.get("enabled") is not False]
+
+    # EdgeRouter `system conntrack` values, ported so the consolidated router is
+    # sized for the edge load rather than RouterOS defaults.
+    # Strings, not bools: RouterOS spells these "yes"/"no"/"auto" and the
+    # provider schema types them as String.
+    conntrack = {"enabled": "yes", "loose_tcp_tracking": "yes"}
 
     rule_count = sum(len(p["rules"]) for p in zone_policies.values())
     enabled_vlans = sum(1 for v in vlans.values() if v.get("enabled") is not False)
@@ -1049,8 +1123,10 @@ def main() -> int:
     body.append("\n")
     body.append(assign("dstnat_rules", dict(sorted(dstnat.items()))))
     body.append("\n")
-    body.append(assign("masquerade_out_interface", None,
-                       "VyOS had source NAT commented out; the EdgeRouter does the NAT."))
+    body.append(assign("masquerade_out_interface", WAN_INTERFACE,
+                       "Source NAT moves here from the EdgeRouter Lite (its\n"
+                       "`service nat rule 5000 type masquerade outbound-interface eth0`).\n"
+                       "VyOS had its own masquerade commented out because the ERL did it."))
     body.append("\n")
     body.append(assign("dns", dns,
                        "Replaces the blocky + dnsdist + bind container stack with native\n"
@@ -1068,6 +1144,16 @@ def main() -> int:
     body.append(assign("admin_ssh_keys", admin_keys,
                        "Username is injected from SOPS in main.tf (VyOS used\n"
                        "${SSH_VYOS_USERNAME}), so only key material lives here."))
+    body.append("\n")
+    body.append("\n")
+    body.append(assign("lan_interface_lists", sorted(lan_zones),
+                       "Members of the aggregate zone-lan interface list. Input-chain\n"
+                       "rules for DNS/NTP/DHCP match this so they cannot be reached from\n"
+                       "the WAN, closing the EdgeRouter's open-resolver/open-NTP exposure."))
+    body.append("\n")
+    body.append(assign("connection_tracking", conntrack,
+                       "Carried over from the EdgeRouter Lite, which sized conntrack for\n"
+                       "the full internet-edge load (table-size 32768, tcp loose enable)."))
     body.append("\n")
     body.append(assign("wireguard_interfaces", wg_out,
                        "Private keys are injected from SOPS in main.tf, never stored here."))
