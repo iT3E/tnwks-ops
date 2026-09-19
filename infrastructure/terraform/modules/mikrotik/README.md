@@ -55,10 +55,10 @@ and the forced-DNS dstnat rules follow it.
 ## Conventions
 
 - `vlans` entries carry `enabled`. VyOS shipped SVIs for VLANs 11/110/120/410/
-  550/720 with no live devices; they stay in tfvars as `enabled = false` so the
+  550/720 with no live devices; they stay in locals.tf as `enabled = false` so the
   intent survives without provisioning dead interfaces.
 - `port_lists` exists because RouterOS has no port-group object. Entries are
   rendered into comma-joined `dst_port` strings at plan time.
-- WireGuard private keys arrive through SOPS-decrypted tfvars. Never a literal.
+- WireGuard private keys arrive from SOPS via main.tf. Never a literal, never in locals.tf.
 - Every resource carries a `(terraform)` comment suffix so hand-made config is
   distinguishable on the device.

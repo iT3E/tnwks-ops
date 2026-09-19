@@ -15,8 +15,8 @@ vars:
 
 tasks:
 
-  tfvars:
-    desc: Regenerate terraform.tfvars from the canonical VyOS config
+  generate:
+    desc: Regenerate locals.tf from the canonical VyOS config
     cmds:
       - |
         if [ ! -d "{{.VYOS_CONFIG_DIR}}/config-parts" ]; then
@@ -26,13 +26,13 @@ tasks:
           git -C "{{.VYOS_CONFIG_DIR}}" pull --ff-only
         fi
       - |
-        python3 "{{.MIKROTIK_DIR}}/tools/vyos-to-tfvars.py" \
+        python3 "{{.MIKROTIK_DIR}}/tools/vyos-to-locals.py" \
           --vyos-config "{{.VYOS_CONFIG_DIR}}" \
-          --out "{{.MIKROTIK_TF_DIR}}/terraform.tfvars"
-      - terraform fmt "{{.MIKROTIK_TF_DIR}}/terraform.tfvars"
+          --out "{{.MIKROTIK_TF_DIR}}/locals.tf"
+      - terraform fmt "{{.MIKROTIK_TF_DIR}}"
     preconditions:
       - sh: command -v python3
-        msg: python3 is required to run the tfvars generator
+        msg: python3 is required to run the locals.tf generator
 
   init:
     desc: Initialize the MikroTik Terraform root module

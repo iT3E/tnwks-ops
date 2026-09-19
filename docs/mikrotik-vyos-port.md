@@ -10,14 +10,14 @@ RB5009UG+S+IN running RouterOS 7.
 - **Terraform:** `infrastructure/terraform/modules/mikrotik` (child) and
   `infrastructure/terraform/environments/prod/mikrotik` (root).
 - **Bootstrap:** `infrastructure/mikrotik/bootstrap/`.
-- **Generator:** `infrastructure/mikrotik/tools/vyos-to-tfvars.py`.
+- **Generator:** `infrastructure/mikrotik/tools/vyos-to-locals.py`.
 
 ## Why a generator instead of hand-written HCL
 
 The VyOS firewall is 140 rulesets / 195 rule lines / 45 accept rules, plus 20
 DHCP static mappings and 37 address-group members. Hand-transcribing that is how
-you ship a subtly wrong firewall. `task mikrotik:tfvars` regenerates
-`terraform.tfvars` from the VyOS repo, so the port is reproducible and can be
+you ship a subtly wrong firewall. `task mikrotik:generate` regenerates
+`locals.tf` from the VyOS repo, so the port is reproducible and can be
 re-run if the VyOS config changes before cutover.
 
 The generated file is committed. Review its diff, do not edit it.
@@ -113,7 +113,7 @@ Two knock-on effects:
 - Client DNS stops being *forwarded* traffic and becomes traffic *to the router*.
   Every VyOS `<zone> -> containers` `accept_dns` rule therefore moves from the
   forward chain to the **input** chain. The generator does this automatically and
-  records it in the tfvars footer.
+  records it in the locals.tf footer.
 
 Deliberately not ported: dnsdist's `zip` `DropAction` and its per-subnet ControlD
 DoH pools. If those still matter they come back as `ip_dns_forwarders` plus a
@@ -214,7 +214,7 @@ Worth fixing in `vyos-config` regardless of the migration:
    `curl -k -u terraform:<pw> https://10.98.0.1/rest/system/resource`
 3. **Snapshot and verify:** `task mikrotik:bootstrap` (Ansible: asserts RouterOS
    7.x, exports a pre-Terraform config snapshot, checks `www-ssl`).
-4. **Regenerate and review tfvars:** `task mikrotik:tfvars`, then read the diff
+4. **Regenerate and review locals.tf:** `task mikrotik:generate`, then read the diff
    and the translation-notes footer.
 5. **Plan:** `task mikrotik:init && task mikrotik:plan`. Confirm it does not
    propose destroying the bootstrap mgmt address out from under itself.

@@ -2,7 +2,7 @@
 """Translate the VyOS `sce-vyos01` configuration into RouterOS Terraform tfvars.
 
 Reads the canonical VyOS source of truth (the `config-parts/*.sh` files from
-https://github.com/iT3E/vyos-config) and emits `terraform.tfvars` for the
+https://github.com/iT3E/vyos-config) and emits `locals.tf` for the
 `modules/mikrotik` Terraform module.
 
 Why this exists rather than hand-written HCL: the VyOS firewall carries 140
@@ -12,8 +12,8 @@ means the port is reproducible and re-runnable when the VyOS config changes
 before cutover.
 
 Usage:
-    ./vyos-to-tfvars.py --vyos-config ~/src/vyos-config \\
-        --out ../../terraform/environments/prod/mikrotik/terraform.tfvars
+    ./vyos-to-locals.py --vyos-config ~/src/vyos-config \\
+        --out ../../terraform/environments/prod/mikrotik/locals.tf
 
 Non-obvious translations this script performs:
 
@@ -37,6 +37,8 @@ import re
 import sys
 from collections import OrderedDict
 from pathlib import Path
+
+import yaml
 
 # --------------------------------------------------------------------------
 # VyOS accepts IANA service names where RouterOS requires port numbers.
@@ -394,6 +396,250 @@ def parse_system(lines: list[str]) -> dict:
 # --------------------------------------------------------------------------
 # HCL emitters
 # --------------------------------------------------------------------------
+def parse_ntp(lines: list[str]) -> dict:
+    """VyOS `service ntp` -> RouterOS NTP client/server settings.
+
+    VyOS both consumed upstream NTP and served the LAN (it had allow-client
+    ranges), so RouterOS needs server mode on to keep those clients working.
+    """
+    servers: list[str] = []
+    serves_clients = False
+    for line in lines:
+        m = re.match(r"^set service ntp server (\S+)", line)
+        if m:
+            servers.append(unquote(m.group(1)))
+            continue
+        if re.match(r"^set service ntp allow-client", line):
+            serves_clients = True
+    if not servers:
+        return {}
+    return {
+        "servers": sorted(set(servers)),
+        "server_mode": serves_clients,
+        "client_mode": "unicast",
+    }
+
+
+def parse_bind_zones(zone_dir: Path) -> tuple[dict, list[str]]:
+    """Parse bind zone files into RouterOS static DNS records.
+
+    Only A and CNAME are translated. SOA/NS are bind-internal: RouterOS is a
+    forwarding resolver with static overrides, not an authoritative server, so
+    it has no equivalent and needs none.
+    """
+    records: dict[str, dict] = {}
+    notes: list[str] = []
+    if not zone_dir.is_dir():
+        return records, notes
+
+    rr_re = re.compile(
+        r"^(?P<name>[@A-Za-z0-9_*.-]+)\s+(?:\d+\s+)?(?:IN\s+)?"
+        r"(?P<type>A|CNAME)\s+(?P<value>\S+)\s*$"
+    )
+    for zone_file in sorted(zone_dir.iterdir()):
+        if not zone_file.is_file():
+            continue
+        origin = None
+        for raw in zone_file.read_text().splitlines():
+            line = raw.split(";", 1)[0].strip()
+            if not line:
+                continue
+            m_origin = re.match(r"^\$ORIGIN\s+(\S+?)\.?$", line)
+            if m_origin:
+                origin = m_origin.group(1).rstrip(".")
+                continue
+            m = rr_re.match(line)
+            if not m or origin is None:
+                continue
+            label = m.group("name")
+            rtype = m.group("type")
+            value = m.group("value")
+            fqdn = origin if label == "@" else "%s.%s" % (label, origin)
+            key = re.sub(r"[^A-Za-z0-9]+", "_", fqdn).strip("_").lower()
+            entry = {
+                "name": fqdn,
+                "type": rtype,
+                "comment": "bind %s" % zone_file.name,
+            }
+            if rtype == "A":
+                entry["address"] = value.rstrip(".")
+            else:
+                entry["cname"] = value.rstrip(".")
+            records[key] = entry
+    return records, notes
+
+
+def parse_dns(vyos_root: Path) -> tuple[dict, list[str]]:
+    """Collapse the blocky/dnsdist/bind container stack into native RouterOS DNS.
+
+    Returns the `dns` object plus translation notes for everything that does not
+    survive the move off containers.
+    """
+    notes: list[str] = []
+    containers = vyos_root / "containers"
+    dns: dict = {
+        "upstream_servers": [],
+        "allow_remote": True,
+        "cache_size": 10240,
+        "cache_max_ttl": "1d",
+        "static_records": {},
+        "adlists": [],
+    }
+
+    # --- blocky: upstreams, blocklists, split-horizon overrides ---------------
+    blocky_cfg = containers / "blocky" / "config" / "config.yaml"
+    if blocky_cfg.is_file():
+        cfg = yaml.safe_load(blocky_cfg.read_text()) or {}
+
+        upstreams = (cfg.get("upstream") or {}).get("default") or []
+        plain: list[str] = []
+        doh = None
+        for up in upstreams:
+            up = str(up)
+            # blocky spells DoT as tcp-tls:HOST:PORT. RouterOS has no DoT, only
+            # DoH, so the hosts stay plain resolvers and DoH is layered on top.
+            m = re.match(r"^tcp-tls:([0-9.]+)(?::\d+)?$", up)
+            if m:
+                plain.append(m.group(1))
+                continue
+            if up.startswith("https://"):
+                doh = up
+                continue
+            plain.append(re.sub(r"^[a-z-]+:", "", up).split(":")[0])
+        dns["upstream_servers"] = plain
+        if any(p in {"1.1.1.1", "1.0.0.1"} for p in plain):
+            doh = doh or "https://cloudflare-dns.com/dns-query"
+            notes.append(
+                "dns: blocky used DoT (tcp-tls) upstreams; RouterOS has no DoT, "
+                "so the same Cloudflare resolvers are configured with DoH "
+                "(use_doh_server) plus plain-IP fallback"
+            )
+        if doh:
+            dns["use_doh_server"] = doh
+            dns["verify_doh_cert"] = True
+
+        custom = cfg.get("customDNS") or {}
+        ttl = custom.get("customTTL", "1h")
+        mapping = custom.get("mapping") or {}
+        # A wildcard plus its apex collapse into one match_subdomain record.
+        wildcards = {k[2:] for k in mapping if k.startswith("*.")}
+        for host, addr in mapping.items():
+            bare = host[2:] if host.startswith("*.") else host
+            if not host.startswith("*.") and host in wildcards:
+                continue
+            key = re.sub(r"[^A-Za-z0-9]+", "_", bare).strip("_").lower()
+            dns["static_records"][key] = {
+                "name": bare,
+                "address": str(addr).split(",")[0].strip(),
+                "type": "A",
+                "ttl": ttl,
+                "match_subdomain": bare in wildcards,
+                "comment": "blocky customDNS",
+            }
+        if wildcards:
+            notes.append(
+                "dns: blocky wildcard mappings (*.host) collapsed into single "
+                "RouterOS records with match_subdomain=true: %s"
+                % sorted(wildcards)
+            )
+        if custom.get("rewrite"):
+            noop = [k for k, v in custom["rewrite"].items() if k == v]
+            if noop:
+                notes.append(
+                    "dns: blocky customDNS.rewrite entries %s are no-ops "
+                    "(key == value) and are not ported" % noop
+                )
+
+        blocking = cfg.get("blocking") or {}
+        adlists: list[str] = []
+        for _group, urls in (blocking.get("blackLists") or {}).items():
+            adlists.extend(str(u).strip() for u in urls or [])
+        dns["adlists"] = adlists
+        if adlists:
+            notes.append(
+                "dns: %d blocky blackList URLs become ip_dns_adlist entries -- "
+                "see the RAM warning in docs/mikrotik-vyos-port.md" % len(adlists)
+            )
+        white = blocking.get("whiteLists") or {}
+        white_urls = [u for urls in white.values() for u in (urls or [])]
+        if white_urls:
+            notes.append(
+                "dns: blocky had %d whiteList URL(s); RouterOS ip_dns_adlist has "
+                "no allow-list concept, so these are NOT ported (false positives "
+                "must be handled with static_records overrides)" % len(white_urls)
+            )
+
+    # --- bind: authoritative tnwks.local + unifi zones ------------------------
+    zone_records, zone_notes = parse_bind_zones(containers / "bind" / "config" / "zones")
+    notes.extend(zone_notes)
+    for key, rec in zone_records.items():
+        dns["static_records"].setdefault(key, rec)
+    if zone_records:
+        notes.append(
+            "dns: %d bind A/CNAME records ported as RouterOS static entries; "
+            "bind SOA/NS have no RouterOS equivalent and are dropped (RouterOS "
+            "forwards and overrides, it is not authoritative)" % len(zone_records)
+        )
+
+    # --- dnsdist: explicitly not ported ---------------------------------------
+    dnsdist_cfg = containers / "dnsdist" / "config" / "dnsdist.conf"
+    if dnsdist_cfg.is_file():
+        dtext = dnsdist_cfg.read_text()
+        pools = sorted(set(re.findall(r'pool\s*=\s*"([^"]+)"', dtext)))
+        controld = [p for p in pools if "controld" in p]
+        if controld:
+            notes.append(
+                "dns: dnsdist per-subnet ControlD DoH pools %s are NOT ported; "
+                "RouterOS resolves uniformly. Per-client policy needs "
+                "ip_dns_forwarders or an off-router resolver" % controld
+            )
+        if "DropAction" in dtext:
+            notes.append(
+                "dns: dnsdist DropAction rules are NOT ported (no RouterOS "
+                "equivalent in the DNS path; use firewall rules instead)"
+            )
+
+    dns["static_records"] = dict(sorted(dns["static_records"].items()))
+    return dns, notes
+
+
+def parse_admin_keys(lines: list[str]) -> tuple[list[str], list[str]]:
+    """Extract active SSH public keys from `system login user`.
+
+    VyOS interpolated the username from ${SSH_VYOS_USERNAME}, so the username is
+    injected from SOPS in main.tf and only the key material is emitted here.
+    Commented-out keys in the source are intentionally ignored.
+    """
+    keys: list[str] = []
+    notes: list[str] = []
+    key_re = re.compile(
+        r"^set system login user \S+ authentication public-keys (\S+) key '([^']+)'"
+    )
+    type_re = re.compile(
+        r"^set system login user \S+ authentication public-keys (\S+) type '([^']+)'"
+    )
+    types: dict[str, str] = {}
+    found: dict[str, str] = {}
+    for line in lines:
+        m = key_re.match(line)
+        if m:
+            found[m.group(1)] = m.group(2)
+            continue
+        m = type_re.match(line)
+        if m:
+            types[m.group(1)] = m.group(2)
+    for name, material in sorted(found.items()):
+        ktype = types.get(name, "ssh-rsa")
+        keys.append("%s %s" % (ktype, material))
+    if keys:
+        notes.append(
+            "system: %d SSH public key(s) ported from VyOS `system login user`; "
+            "the username came from ${SSH_VYOS_USERNAME} and is injected from "
+            "SOPS in main.tf" % len(keys)
+        )
+    return keys, notes
+
+
 def hcl(value, indent: int = 0) -> str:
     pad = "  " * indent
     if isinstance(value, bool):
@@ -620,12 +866,12 @@ def main() -> int:
     ap.add_argument("--vyos-config", required=True, type=Path,
                     help="Path to a clone of iT3E/vyos-config")
     ap.add_argument("--out", required=True, type=Path,
-                    help="terraform.tfvars destination")
+                    help="locals.tf destination in the prod/mikrotik root module")
     args = ap.parse_args()
 
     parts = args.vyos_config / "config-parts"
     if not parts.is_dir():
-        print(f"error: {parts} not found", file=sys.stderr)
+        print("error: %s not found" % parts, file=sys.stderr)
         return 1
 
     read = lambda name: strip_comments(parts / name)
@@ -638,6 +884,9 @@ def main() -> int:
     nat = parse_nat(read("nat.sh"), zone_iface)
     routes = parse_routes(read("protocols.sh"))
     system = parse_system(read("system.sh"))
+    ntp = parse_ntp(read("service.sh"))
+    admin_keys, admin_notes = parse_admin_keys(read("system.sh"))
+    dns, dns_notes = parse_dns(args.vyos_config)
 
     # Attach DHCP config onto the matching VLAN entry.
     for zone, net in dhcp.items():
@@ -664,18 +913,20 @@ def main() -> int:
             vlan["enabled"] = False
 
     zone_policies, input_rules, notes = build_zone_policies(rulesets, pairs, zone_iface)
+    notes.extend(dns_notes)
+    notes.extend(admin_notes)
 
     # NAT: rewrite VyOS interface references to RouterOS VLAN interface names.
     dstnat = {}
     for num, rule in sorted(nat.items()):
         zone = rule.pop("_zone", None)
         if zone not in vlans:
-            notes.append(f"nat rule {num}: zone {zone} not a ported VLAN")
+            notes.append("nat rule %s: zone %s not a ported VLAN" % (num, zone))
             continue
         vlan_id = vlans[zone]["vlan_id"]
         entry = {
-            "comment": rule.get("comment", f"nat {num}"),
-            "in_interface": f"bridge-lan-vlan{vlan_id}",
+            "comment": rule.get("comment", "nat %s" % num),
+            "in_interface": "bridge-lan-vlan%s" % vlan_id,
             "protocol": rule.get("protocol", "udp"),
             "dst_port": rule.get("dst_port", ""),
             "to_address": rule.get("to_address", ""),
@@ -685,8 +936,7 @@ def main() -> int:
             if key in rule:
                 entry[key] = rule[key]
         for proto in expand_protocol(entry["protocol"]):
-            suffixed = dict(entry, protocol=proto)
-            dstnat[f"{num}-{proto}"] = suffixed
+            dstnat["%s-%s" % (num, proto)] = dict(entry, protocol=proto)
 
     # WireGuard: strip private keys, main.tf injects them from SOPS.
     wg_out = {}
@@ -699,72 +949,146 @@ def main() -> int:
         }
 
     rule_count = sum(len(p["rules"]) for p in zone_policies.values())
-    header = f"""## ---------------------------------------------------------------------------------------------------------------------
+    enabled_vlans = sum(1 for v in vlans.values() if v.get("enabled") is not False)
+    dhcp_servers = sum(1 for v in vlans.values() if "dhcp" in v)
+    lease_count = sum(len(v["dhcp"]["leases"]) for v in vlans.values() if "dhcp" in v)
+
+    header = """## ------------------------------------------------------------------------------------------------------\
+---------------
 ## GENERATED FILE - DO NOT EDIT BY HAND
 ##
-## Produced by infrastructure/mikrotik/tools/vyos-to-tfvars.py from the VyOS
-## config at github.com/iT3E/vyos-config (config-parts/*.sh).
+## Produced by infrastructure/mikrotik/tools/vyos-to-locals.py from the VyOS
+## config at github.com/iT3E/vyos-config (config-parts/*.sh + containers/*).
 ##
 ## Regenerate with:
-##   task mikrotik:tfvars
+##   task mikrotik:generate
+##
+## Values live here rather than in a .tfvars file to match the rest of this repo
+## (environments/prod/aws, environments/prod/cloudflare and bootstrap/aws-init
+## all inline their values and pull secrets from SOPS). Secrets are NOT here:
+## see secrets.sops.yaml.
 ##
 ## Translation summary:
-##   VLANs                {len(vlans)} ({sum(1 for v in vlans.values() if v.get('enabled') is not False)} enabled)
-##   DHCP servers         {sum(1 for v in vlans.values() if 'dhcp' in v)}
-##   DHCP static leases   {sum(len(v['dhcp']['leases']) for v in vlans.values() if 'dhcp' in v)}
-##   Address lists        {len(address_lists)} ({sum(len(m) for m in address_lists.values())} members)
-##   Port lists           {len(port_lists)}
-##   Zone-pair chains     {len(zone_policies)}
-##   Firewall accepts     {rule_count} (expanded from VyOS tcp_udp / port-limit splits)
-##   dstnat rules         {len(dstnat)}
-##   Static routes        {len(routes)}
-##   WireGuard listeners  {len(wg_out)}
-## ---------------------------------------------------------------------------------------------------------------------
+##   VLANs                %d (%d enabled)
+##   DHCP servers         %d
+##   DHCP static leases   %d
+##   Address lists        %d (%d members)
+##   Port lists           %d
+##   Zone-pair chains     %d
+##   Firewall accepts     %d (expanded from VyOS tcp_udp / port-limit splits)
+##   Input-chain accepts  %d
+##   dstnat rules         %d
+##   Static routes        %d
+##   WireGuard listeners  %d
+##   DNS static records   %d
+##   DNS adlists          %d
+## ------------------------------------------------------------------------------------------------------\
+---------------
 
-"""
+""" % (
+        len(vlans), enabled_vlans, dhcp_servers, lease_count,
+        len(address_lists), sum(len(m) for m in address_lists.values()),
+        len(port_lists), len(zone_policies), rule_count, len(input_rules),
+        len(dstnat), len(routes), len(wg_out),
+        len(dns.get("static_records", {})), len(dns.get("adlists", [])),
+    )
+    header = header.replace("\\\n", "")
 
-    body = []
-    body.append(f'identity = {hcl(system.get("identity", "sce-rtr01"))}\n')
-    body.append(f'domain   = {hcl(system.get("domain", "tnwks.local"))}\n')
-    body.append(f'timezone = {hcl(system.get("timezone", "America/Los_Angeles"))}\n')
-    body.append("\n# ether1 is WAN; the rest of the ports form the VLAN trunk bridge.\n")
-    body.append('wan_interface       = "ether1"\n')
-    body.append('lan_trunk_interface = "bridge-lan"\n')
-    body.append('bridge_name         = "bridge-lan"\n')
-    body.append('bridge_ports        = %s\n' % hcl(
-        ["ether2", "ether3", "ether4", "ether5", "ether6", "ether7", "ether8", "sfp-sfpplus1"]))
-    body.append("\nvlans = %s\n" % hcl(dict(sorted(vlans.items()))))
-    body.append("\nstatic_routes = %s\n" % hcl(dict(sorted(routes.items()))))
-    body.append("\naddress_lists = %s\n" % hcl(
-        {k: dict(v) for k, v in sorted(address_lists.items())}))
-    body.append("\n# RouterOS has no port-group object; these render into dst_port strings.\n")
-    body.append("port_lists = %s\n" % hcl({k: v for k, v in sorted(port_lists.items())}))
-    body.append("\n# Order is semantic. Keys are NNN-from-to; routeros_move_items re-sequences\n")
-    body.append("# the forward chain to sorted key order after apply.\n")
-    body.append("zone_policies = %s\n" % hcl(dict(zone_policies)))
-    body.append("\n# Input chain. No VyOS counterpart: VyOS had no local zone so traffic TO the\n")
-    body.append("# router was unfiltered. This is an intentional hardening delta, and it is\n")
-    body.append("# where the ported client-DNS rules land now the resolver is the router.\n")
-    body.append("input_rules = %s\n" % hcl(dict(input_rules)))
-    body.append("\ndstnat_rules = %s\n" % hcl(dict(sorted(dstnat.items()))))
-    body.append("\n# VyOS had source NAT commented out; the EdgeRouter does the NAT.\n")
-    body.append("masquerade_out_interface = null\n")
-    body.append("\nwireguard_interfaces = %s\n" % hcl(wg_out))
+    def assign(name: str, value, comment: str | None = None) -> str:
+        out = ""
+        if comment:
+            for line in comment.strip().split("\n"):
+                out += "  # %s\n" % line
+        return out + "  %s = %s\n" % (name, hcl(value, 1))
+
+    # The VyOS box is sce-vyos01. This is a NEW device that will run alongside it
+    # until the trunk swings, so it gets its own name, matching the bootstrap
+    # script. Emitted rather than inherited so the two never collide on the wire.
+    vyos_identity = system.get("identity", "sce-vyos01")
+    identity = "sce-rtr01"
+    if vyos_identity != identity:
+        notes.append(
+            "system: identity is %s, NOT the VyOS name %s -- the two run "
+            "concurrently until the trunk swings. The bind zone has an A record "
+            "for %s (172.16.1.250); add one for %s before cutover"
+            % (identity, vyos_identity, vyos_identity, identity)
+        )
+
+    body = ["locals {\n"]
+    body.append(assign("identity", identity))
+    body.append(assign("domain", system.get("domain", "tnwks.local")))
+    body.append(assign("timezone", system.get("timezone", "America/Los_Angeles")))
+    body.append("\n")
+    body.append(assign("wan_interface", "ether1",
+                       "ether1 is WAN; the rest of the ports form the VLAN trunk bridge."))
+    body.append(assign("lan_trunk_interface", "bridge-lan"))
+    body.append(assign("bridge_name", "bridge-lan"))
+    body.append(assign("bridge_ports", [
+        "ether2", "ether3", "ether4", "ether5",
+        "ether6", "ether7", "ether8", "sfp-sfpplus1",
+    ]))
+    body.append("\n")
+    body.append(assign("vlans", dict(sorted(vlans.items()))))
+    body.append("\n")
+    body.append(assign("static_routes", dict(sorted(routes.items()))))
+    body.append("\n")
+    body.append(assign("address_lists",
+                       {k: dict(v) for k, v in sorted(address_lists.items())}))
+    body.append("\n")
+    body.append(assign("port_lists", {k: v for k, v in sorted(port_lists.items())},
+                       "RouterOS has no port-group object; these render into dst_port strings."))
+    body.append("\n")
+    body.append(assign("zone_policies", dict(zone_policies),
+                       "Order is semantic. Keys are NNN-from-to; routeros_move_items\n"
+                       "re-sequences the forward chain to sorted key order after apply."))
+    body.append("\n")
+    body.append(assign("input_rules", dict(input_rules),
+                       "Input chain. No VyOS counterpart: VyOS had no local zone so traffic\n"
+                       "TO the router was unfiltered. Intentional hardening delta, and where\n"
+                       "the ported client-DNS rules land now the resolver is the router."))
+    body.append("\n")
+    body.append(assign("dstnat_rules", dict(sorted(dstnat.items()))))
+    body.append("\n")
+    body.append(assign("masquerade_out_interface", None,
+                       "VyOS had source NAT commented out; the EdgeRouter does the NAT."))
+    body.append("\n")
+    body.append(assign("dns", dns,
+                       "Replaces the blocky + dnsdist + bind container stack with native\n"
+                       "RouterOS DNS. See docs/mikrotik-vyos-port.md for what did not survive."))
+    body.append("\n")
+    body.append(assign("ntp", ntp,
+                       "VyOS both consumed upstream NTP and served the LAN (allow-client),\n"
+                       "so server_mode stays on."))
+    if system.get("syslog"):
+        body.append("\n")
+        body.append(assign("syslog", system["syslog"],
+                           "VyOS shipped octet-counted TCP syslog to the k8s Vector aggregator.\n"
+                           "RouterOS emits plain syslog, so the Vector source must accept it."))
+    body.append("\n")
+    body.append(assign("admin_ssh_keys", admin_keys,
+                       "Username is injected from SOPS in main.tf (VyOS used\n"
+                       "${SSH_VYOS_USERNAME}), so only key material lives here."))
+    body.append("\n")
+    body.append(assign("wireguard_interfaces", wg_out,
+                       "Private keys are injected from SOPS in main.tf, never stored here."))
 
     if notes:
-        body.append("\n## Translation notes (see docs/mikrotik-vyos-port.md):\n")
+        body.append("\n  # Translation notes (see docs/mikrotik-vyos-port.md):\n")
         for note in sorted(set(notes)):
-            body.append(f"##   - {note}\n")
+            body.append("  #   - %s\n" % note)
+    body.append("}\n")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(header + "".join(body))
 
-    print(f"wrote {args.out}")
-    print(f"  vlans={len(vlans)} zone_chains={len(zone_policies)} accepts={rule_count} "
-          f"dstnat={len(dstnat)} leases={sum(len(v['dhcp']['leases']) for v in vlans.values() if 'dhcp' in v)}")
-    print(f"  input_rules={len(input_rules)}")
+    print("wrote %s" % args.out)
+    print("  vlans=%d zone_chains=%d accepts=%d dstnat=%d leases=%d"
+          % (len(vlans), len(zone_policies), rule_count, len(dstnat), lease_count))
+    print("  input_rules=%d dns_records=%d adlists=%d ssh_keys=%d"
+          % (len(input_rules), len(dns.get("static_records", {})),
+             len(dns.get("adlists", [])), len(admin_keys)))
     if notes:
-        print(f"  {len(set(notes))} translation notes (recorded in the tfvars footer)")
+        print("  %d translation notes (recorded in the locals footer)" % len(set(notes)))
     return 0
 
 
