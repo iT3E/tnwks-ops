@@ -9,7 +9,7 @@ spec:
   chart:
     spec:
       chart: flannel
-      version: v0.28.4
+      version: v0.28.9
       sourceRef:
         kind: HelmRepository
         name: flannel
