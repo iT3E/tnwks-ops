@@ -68,10 +68,10 @@ resource "routeros_ip_dhcp_client" "wan" {
   interface = var.wan_interface
   comment   = "WAN - Cable (terraform)"
 
-  # VyOS took a default route from the EdgeRouter via transit-10, not from the
-  # cable modem. Keep the WAN lease address-only so it cannot install a
-  # competing default route. RouterOS models this as a string, not a bool.
-  add_default_route = "no"
+  # The EdgeRouter Lite used to own the default route and hand it to VyOS over
+  # transit-10. The RB5009 replaces both boxes, so the default route now comes
+  # from the WAN lease itself. RouterOS models this as a string, not a bool.
+  add_default_route = var.wan_add_default_route
   use_peer_dns      = false
   use_peer_ntp      = false
 }

@@ -21,8 +21,8 @@
 ##   Zone-pair chains     22
 ##   Firewall accepts     44 (expanded from VyOS tcp_udp / port-limit splits)
 ##   Input-chain accepts  28
-##   dstnat rules         12
-##   Static routes        4
+##   dstnat rules         11
+##   Static routes        1
 ##   WireGuard listeners  2
 ##   DNS static records   39
 ##   DNS adlists          45
@@ -271,21 +271,9 @@ locals {
   }
 
   static_routes = {
-    "10_10_93_0_24" = {
-      dst_address = "10.10.93.0/24"
-      gateway     = "172.16.1.254"
-    }
     "10_60_10_0_24" = {
       dst_address = "10.60.10.0/24"
       gateway     = "10.10.140.140"
-    }
-    "10_98_0_0_24" = {
-      dst_address = "10.98.0.0/24"
-      gateway     = "172.16.1.254"
-    }
-    default = {
-      dst_address = "0.0.0.0/0"
-      gateway     = "172.16.1.1"
     }
   }
 
@@ -951,14 +939,16 @@ locals {
       protocol = "icmp"
     }
     "520-router-service" = {
-      comment  = "DHCP requests from LAN clients"
-      protocol = "udp"
-      dst_port = "67,68"
+      comment           = "DHCP requests from LAN clients"
+      protocol          = "udp"
+      dst_port          = "67,68"
+      in_interface_list = "lan"
     }
     "530-router-service" = {
-      comment  = "NTP server mode for LAN clients"
-      protocol = "udp"
-      dst_port = "123"
+      comment           = "NTP server mode for LAN clients only (never WAN)"
+      protocol          = "udp"
+      dst_port          = "123"
+      in_interface_list = "lan"
     }
     "540-router-service" = {
       comment           = "SSH from the mgmt VLAN only"
@@ -973,9 +963,10 @@ locals {
       in_interface_list = "unifi-mgmt-900"
     }
     "560-router-service" = {
-      comment  = "WireGuard listeners"
-      protocol = "udp"
-      dst_port = "51820,51821"
+      comment      = "WireGuard from the internet (replaces ERL port-forward 3/4)"
+      protocol     = "udp"
+      dst_port     = "51820,51821"
+      in_interface = "ether1"
     }
   }
 
@@ -1072,15 +1063,6 @@ locals {
       to_port      = "123"
       dst_address  = "!10.10.140.1"
     }
-    "117-udp" = {
-      comment      = "Force NTP for transit-10"
-      in_interface = "bridge-lan-vlan10"
-      protocol     = "udp"
-      dst_port     = "123"
-      to_address   = "172.16.1.254"
-      to_port      = "123"
-      dst_address  = "!172.16.1.254"
-    }
     "120-udp" = {
       comment      = "Force NTP for app-720"
       in_interface = "bridge-lan-vlan720"
@@ -1092,8 +1074,10 @@ locals {
     }
   }
 
-  # VyOS had source NAT commented out; the EdgeRouter does the NAT.
-  masquerade_out_interface = null
+  # Source NAT moves here from the EdgeRouter Lite (its
+  # `service nat rule 5000 type masquerade outbound-interface eth0`).
+  # VyOS had its own masquerade commented out because the ERL did it.
+  masquerade_out_interface = "ether1"
 
   # Replaces the blocky + dnsdist + bind container stack with native
   # RouterOS DNS. See docs/mikrotik-vyos-port.md for what did not survive.
@@ -1417,6 +1401,31 @@ locals {
     "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDQ3xsijUu7JGOG+GVc4FffLRqLF4gWDRT0EWofYinTFGkzxJFhGoS76bbjCU7nUGun5YQbRS7QcWkVKfKBne/ydtc9Mm1OZ/7N3a03TNPnXeFsiNgXfrC8LQN/OKrqreXqMhnj2Hc7o/KTHR/Ui8OE1uDI3mMcETWb1hQJRaLKKMjP5n/N9rEA8tvTK48NptXl0Jf3dJecbYu4/Az+llms9csBBRK2lqGFhYrwn+a7dLYkM80NGjQkk5tIG+0HLCNwYP1vJYLKgEc/XSEvCoyP2gdE3387mMLjBwBF55aDSf/vmnIawkL6hMYCz5CMuiFl7NbxLZk4RKJwdcJiEfX5xzXEu4f3AVIA/uxyM0pTTX1lJrPL+lzKH8VMfVOFxLTuyBU2VBgcbN6J/kHKanjpjcQ4INvmCKsO7YjsGWcE8MzhWfJrFUbX0ri4hhoESk+eqfP+AgSY0x9ibT/pGD0NKJbU6M6QpV3KfbV/JZ1xgakiIJZbleRonFSL1sSX6x0=",
   ]
 
+
+  # Members of the aggregate zone-lan interface list. Input-chain
+  # rules for DNS/NTP/DHCP match this so they cannot be reached from
+  # the WAN, closing the EdgeRouter's open-resolver/open-NTP exposure.
+  lan_interface_lists = [
+    "UISP-140",
+    "ad-110",
+    "app-720",
+    "bastion-410",
+    "iLO-550",
+    "k8s-120",
+    "pve-11",
+    "seccam-610",
+    "transit-10",
+    "unifi-frontend-910",
+    "unifi-mgmt-900",
+  ]
+
+  # Carried over from the EdgeRouter Lite, which sized conntrack for
+  # the full internet-edge load (table-size 32768, tcp loose enable).
+  connection_tracking = {
+    enabled            = "yes"
+    loose_tcp_tracking = "yes"
+  }
+
   # Private keys are injected from SOPS in main.tf, never stored here.
   wireguard_interfaces = {
     wg01 = {
@@ -1480,7 +1489,11 @@ locals {
   #   - k8s-120-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
   #   - k8s-120-containers rule 2: DROPPED as a router rule; after the container->k8s move both ends are inside k8s-120, so it is intra-VLAN traffic the router never sees. Enforce with a Kubernetes NetworkPolicy if it still matters.
   #   - k8s-120-containers rule 3: DROPPED as a router rule; after the container->k8s move both ends are inside k8s-120, so it is intra-VLAN traffic the router never sees. Enforce with a Kubernetes NetworkPolicy if it still matters.
+  #   - nat rule 117 (Force NTP for transit-10) DROPPED: redirect target 172.16.1.254 is dead, so this rule black-holes traffic today. Verified 2026-09-19
   #   - pve-11-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
+  #   - route 0.0.0.0/0 via 172.16.1.1 DROPPED: that was the EdgeRouter Lite, which this router replaces. The default route now comes from the WAN DHCP lease (add_default_route = yes)
+  #   - route 10.10.93.0/24 via 172.16.1.254 DROPPED: next-hop is dead (ip neigh FAILED, 100% ping loss on 2026-09-19). Both VyOS and the EdgeRouter still pointed production subnets at it
+  #   - route 10.98.0.0/24 via 172.16.1.254 DROPPED: next-hop is dead (ip neigh FAILED, 100% ping loss on 2026-09-19). Both VyOS and the EdgeRouter still pointed production subnets at it
   #   - seccam-610-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
   #   - system: 1 SSH public key(s) ported from VyOS `system login user`; the username came from ${SSH_VYOS_USERNAME} and is injected from SOPS in main.tf
   #   - system: identity is sce-rtr01, NOT the VyOS name sce-vyos01 -- the two run concurrently until the trunk swings. The bind zone has an A record for sce-vyos01 (172.16.1.250); add one for sce-rtr01 before cutover

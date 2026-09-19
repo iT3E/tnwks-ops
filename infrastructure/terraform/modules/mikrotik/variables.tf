@@ -148,6 +148,7 @@ variable "input_rules" {
     dst_port          = optional(string)
     dst_port_list     = optional(string)
     in_interface_list = optional(string)
+    in_interface      = optional(string)
     src_address_list  = optional(string)
     src_address       = optional(string)
     icmp_options      = optional(string)
@@ -264,6 +265,55 @@ variable "ssh_port" {
   description = "SSH service port."
   type        = number
   default     = 22
+}
+
+variable "wan_add_default_route" {
+  description = <<-EOT
+    Whether the WAN DHCP lease installs a default route. RouterOS models this as
+    a string ("yes" / "no" / "special-classless"), not a bool.
+
+    "yes" because this router replaces the EdgeRouter Lite, which previously held
+    the default route and handed it to VyOS over the transit VLAN. There is no
+    upstream router left to learn it from.
+  EOT
+  type        = string
+  default     = "yes"
+
+  validation {
+    condition     = contains(["yes", "no", "special-classless"], var.wan_add_default_route)
+    error_message = "Must be yes, no, or special-classless."
+  }
+}
+
+variable "lan_interface_lists" {
+  description = <<-EOT
+    Zone names whose interfaces make up the aggregate `zone-lan` interface list.
+
+    Input-chain rules for router-provided services (DNS, NTP, DHCP) match on this
+    list so they can never be satisfied from the WAN. The EdgeRouter Lite bound
+    DNS and NTP to 0.0.0.0, which made it a public open resolver and an open NTP
+    reflector. Scoping these to the LAN list is what closes that.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
+variable "connection_tracking" {
+  description = <<-EOT
+    Conntrack tuning carried over from the EdgeRouter Lite, which sized its table
+    for the full internet-edge load.
+  EOT
+  type = object({
+    # RouterOS models both of these as strings ("yes" / "no" / "auto"), not
+    # booleans. Passing a bool fails at apply, not at validate.
+    enabled                 = optional(string, "auto")
+    loose_tcp_tracking      = optional(string)
+    tcp_established_timeout = optional(string)
+    tcp_close_wait_timeout  = optional(string)
+    tcp_syn_sent_timeout    = optional(string)
+    udp_timeout             = optional(string)
+  })
+  default = null
 }
 
 variable "disabled_ip_services" {

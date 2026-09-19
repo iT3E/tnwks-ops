@@ -1,7 +1,16 @@
 # VyOS to MikroTik RouterOS port
 
-Porting `sce-vyos01` (VyOS 1.4-rolling on an Intel N5105 box) to a MikroTik
-RB5009UG+S+IN running RouterOS 7.
+Collapsing **two** routers into one MikroTik RB5009UG+S+IN on RouterOS 7:
+
+- `sce-vyos01` — VyOS 1.4-rolling on an Intel N5105 box. Internal L3, VLANs,
+  zone firewall, DHCP, DNS containers, WireGuard.
+- `THOMAS-ER01` — EdgeRouter Lite. Internet edge: WAN DHCP, the default route,
+  and source NAT.
+
+The ERL half is documented separately in
+[`edgerouter-discovery.md`](edgerouter-discovery.md), including the security
+findings that set the migration timeline. Read that before cutover; several of
+its findings change what this document ports.
 
 - **Source of truth:** [`iT3E/vyos-config`](https://github.com/iT3E/vyos-config)
   `config-parts/*.sh`, HEAD `34b952a` (2026-07-13). Chosen over a live
@@ -38,6 +47,66 @@ The generated file is committed. Review its diff, do not edit it.
 | WireGuard | `wg01`, `wg02` | `interface_wireguard` + peers | 2 listeners, 5 peers |
 | DNS | 3 Podman containers | native RouterOS DNS | see below |
 | Containers | 9 Podman containers | Kubernetes / native / dropped | see below |
+
+## What consolidation changes
+
+Folding the ERL in is not additive, it deletes work:
+
+| | Before (two boxes) | After (RB5009) |
+| --- | --- | --- |
+| Default route | ERL learns from cable modem, VyOS statics `0.0.0.0/0` at it | WAN DHCP lease, `add_default_route = "yes"` |
+| Source NAT | ERL `service nat rule 5000` masquerade on `eth0` | `masquerade_out_interface = "ether1"` |
+| Static routes | 25 on the ERL + 4 on VyOS = 29 | **1** (`10.60.10.0/24 → 10.10.140.140`) |
+| WireGuard | ERL port-forwards 51820/51821 to VyOS | terminated on the router, input-chain accept on `ether1` |
+| Transit VLAN | real hop, ERL ↔ VyOS | vestigial; kept only for its zone rules and DNS records |
+| Input filtering | **none on either box** | explicit input chain with terminal drop |
+
+25 of the ERL's routes were "send it to VyOS." When one box owns those SVIs they
+become connected routes and simply disappear from config.
+
+### Dead config found on the ERL, not ported
+
+Verified live on 2026-09-19. Full evidence in `edgerouter-discovery.md`.
+
+- **`172.16.1.252` and `172.16.1.254` are both dead** (`ip neigh` FAILED, 100%
+  ping loss) yet 13 and 3 routes respectively still point at them, across both
+  routers. The generator drops any route whose next-hop is in `DEAD_NEXT_HOPS`
+  and records each one.
+- **The AWS site-to-site VPN is dead.** BGP to `169.254.28.13` /
+  `169.254.225.73` has `MsgRcv 0`, `Up/Down never`, zero established sessions;
+  both `vti` interfaces are `disable` and `ip link` reports they do not exist.
+  Not ported. Rebuild deliberately if AWS connectivity is wanted.
+- **`traffic-policy shaper client-up-s`** shapes `172.16.1.254/32`, which is
+  dead. Nothing to shape.
+- **ERL `eth1` (`10.98.0.1/24`) is disabled with 0 bytes ever.** That address is
+  what the RB5009 bootstrap already claims for management, which is consistent:
+  the new box takes over the role this interface was meant to play.
+
+### This resolves an open question from the VyOS side
+
+I previously flagged "transit-10 NTP dstnat targets `172.16.1.254`, verify it is
+intentional." It is not: `.254` is dead, so that redirect **black-holes NTP for
+`unifi-mgmt-900` today**. A live pre-existing bug, fixed by not porting it. The
+generator drops any dstnat whose target is a dead host.
+
+### The input chain stops being optional
+
+This document originally called the explicit input chain "intentional
+hardening." With the ERL folded in it is now the only thing between the internet
+and the router, and it is what closes the ERL's two worst findings: DNS and NTP
+were bound to `0.0.0.0`, making the box a **public open resolver and an open NTP
+reflector** usable for amplification attacks against third parties.
+
+So the module gained an aggregate `zone-lan` interface list. Router services
+match on it and therefore cannot be answered from the WAN:
+
+| Service | Scope |
+| --- | --- |
+| DNS 53 | originating zone list only |
+| NTP 123, DHCP 67/68 | `zone-lan` |
+| SSH 22, REST/Winbox 443/8291 | `unifi-mgmt-900` only |
+| WireGuard 51820/51821 | `ether1` (the one deliberate WAN service) |
+| everything else | terminal drop |
 
 ## The four translations that are not one-to-one
 
@@ -177,11 +246,15 @@ Worth fixing in `vyos-config` regardless of the migration:
 - **`wg01` exists in git but not on the live router**, while the `vpn` zone still
   references it. The port provisions both `wg01` and `wg02` from git. Decide
   whether `wg01` should exist before cutover.
-- **NTP dstnat for `transit-10` targets `172.16.1.254`**, which is not a VyOS
-  address (it is a transit VIP). Ported verbatim; verify it is intentional.
-- **`eth0` WAN DHCP is vestigial.** The default route goes via transit to the
-  EdgeRouter, not via the cable modem. Ported with `add_default_route = "no"` so
-  it cannot install a competing route.
+- **NTP dstnat for `transit-10` targeted `172.16.1.254`.** ~~Verify it is
+  intentional.~~ **Resolved:** `.254` is dead, so the rule black-holes NTP for
+  that zone today. Not ported; the generator records it.
+- **`eth0` WAN DHCP is no longer vestigial.** With the ERL gone this is the only
+  internet uplink, so `add_default_route = "yes"` and the VyOS
+  `0.0.0.0/0 → 172.16.1.1` static is dropped.
+- **Both routers routed `10.98.0.0/24` at dead `172.16.1.254`**, so switch
+  management has been reachable only by accident. Dropped; `10.98.0.0/24` becomes
+  a connected route on the consolidated box.
 - 🔴 **Exposed credential:** the `cloudflare-ddns` container env holds a
   plaintext `CF_API_TOKEN` in the VyOS repo. **Rotate it.** This adds to the
   network credential rotation debt outstanding since April.
@@ -225,9 +298,25 @@ Worth fixing in `vyos-config` regardless of the migration:
    accept, and one known-good firewall *denial*.
 8. **Swing the Aruba trunk** from the VyOS box to the RB5009. Keep VyOS powered
    off but unmodified as the rollback path.
-9. **Post-cutover:** remove the bootstrap mgmt address, migrate the remaining
-   container workloads to Kubernetes, swap the node-exporter Grafana dashboard
-   for SNMP, and rotate the Cloudflare token.
+9. **Move the WAN.** Cable modem into `ether1`. Confirm the router gets a lease
+   and installs a default route, then confirm NAT works from a client.
+10. **Verify the router is not an open resolver or open NTP server.** From
+    outside the network, against the WAN address:
+
+    ```bash
+    dig @<wan-ip> example.com          # must time out
+    ntpdate -q <wan-ip>                 # must fail
+    nmap -sU -p 123,53,10001 <wan-ip>   # must not be open
+    ```
+
+    This is the single most important post-cutover check. The ERL failed all
+    three.
+11. **Retire the ERL.** Power it off, keep it unmodified as a second rollback
+    path, and remove `sce-er01` / `sce-vyos01` DNS records once stable.
+12. **Post-cutover:** remove the bootstrap mgmt address, migrate the remaining
+    container workloads to Kubernetes, swap the node-exporter Grafana dashboard
+    for SNMP, and rotate **both** the Cloudflare token and the Namecheap DDNS
+    password.
 
 ## Deliberately not ported
 
