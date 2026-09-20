@@ -131,6 +131,18 @@ RETIRED_UPSTREAM = "172.16.1.1"
 # Source NAT moves off the ERL onto the RB5009's WAN port. VyOS had its
 # masquerade rule commented out precisely because the ERL was doing it.
 WAN_INTERFACE = "ether1"
+
+# DDNS, from the EdgeRouter's `service dns dynamic interface eth0 service
+# namecheap`, NOT from VyOS (VyOS ran a Cloudflare container for a different
+# domain). Kept on Namecheap because the WireGuard client configs use this exact
+# hostname as their endpoint: changing providers means reissuing every client
+# config, so the record stays put and the migration keeps one less moving part.
+DDNS = {
+    "provider": "namecheap",
+    "host": "ddns",
+    "domain": "thomasnetworks.us",
+    "interval": "5m",
+}
 SYSTEM_RE = re.compile(r"^set system (\S+(?: \S+)*) '?([^']*)'?$")
 
 
@@ -1154,6 +1166,14 @@ def main() -> int:
     body.append(assign("connection_tracking", conntrack,
                        "Carried over from the EdgeRouter Lite, which sized conntrack for\n"
                        "the full internet-edge load (table-size 32768, tcp loose enable)."))
+    body.append("\n")
+    body.append(assign("ddns", DDNS,
+                       "From the EdgeRouter's `service dns dynamic` (namecheap), not VyOS.\n"
+                       "RouterOS has no Namecheap client, so the module renders a script +\n"
+                       "scheduler onto the router; see modules/mikrotik/ddns.tf.\n"
+                       "LOAD-BEARING: the WireGuard client configs use this hostname as\n"
+                       "their endpoint, so a stale record breaks remote VPN access at the\n"
+                       "next WAN address change. The password comes from SOPS."))
     body.append("\n")
     body.append(assign("wireguard_interfaces", wg_out,
                        "Private keys are injected from SOPS in main.tf, never stored here."))

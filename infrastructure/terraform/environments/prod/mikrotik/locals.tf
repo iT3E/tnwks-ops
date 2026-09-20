@@ -1426,6 +1426,19 @@ locals {
     loose_tcp_tracking = "yes"
   }
 
+  # From the EdgeRouter's `service dns dynamic` (namecheap), not VyOS.
+  # RouterOS has no Namecheap client, so the module renders a script +
+  # scheduler onto the router; see modules/mikrotik/ddns.tf.
+  # LOAD-BEARING: the WireGuard client configs use this hostname as
+  # their endpoint, so a stale record breaks remote VPN access at the
+  # next WAN address change. The password comes from SOPS.
+  ddns = {
+    provider = "namecheap"
+    host     = "ddns"
+    domain   = "thomasnetworks.us"
+    interval = "5m"
+  }
+
   # Private keys are injected from SOPS in main.tf, never stored here.
   wireguard_interfaces = {
     wg01 = {
