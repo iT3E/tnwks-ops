@@ -37,6 +37,11 @@ module "mikrotik" {
   lan_interface_lists = local.lan_interface_lists
   connection_tracking = local.connection_tracking
 
+  # Dynamic DNS. The WireGuard client configs use this hostname as their
+  # endpoint, so it is in the VPN critical path; see the module's ddns.tf.
+  ddns            = local.ddns
+  ddns_credential = data.sops_file.secrets.data["ddns_credential"]
+
   dstnat_rules             = local.dstnat_rules
   masquerade_out_interface = local.masquerade_out_interface
 

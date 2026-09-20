@@ -316,6 +316,77 @@ variable "connection_tracking" {
   default = null
 }
 
+variable "ddns" {
+  description = <<-EOT
+    Dynamic DNS via a RouterOS script plus scheduler. Null disables it entirely.
+
+    RouterOS has no Namecheap or Cloudflare DDNS client; the only native option is
+    /ip cloud, which gives you <serial>.sn.mynetname.net instead of your own
+    hostname. So a real hostname means a scripted provider.
+
+    This is load-bearing, not cosmetic: WireGuard client configs use the DDNS
+    hostname as their endpoint, so a stale record breaks remote VPN access at the
+    next WAN address change.
+
+    namecheap needs host + domain. Uses the update endpoint at
+    dynamicdns.park-your-domain.com, so no record lookup is required.
+
+    cloudflare needs zone_id + record_id + record_name, and the A record must
+    already exist. Create it in environments/prod/cloudflare, not here.
+  EOT
+  type = object({
+    provider = string
+    interval = optional(string, "5m")
+
+    # namecheap
+    host   = optional(string)
+    domain = optional(string)
+
+    # cloudflare
+    zone_id     = optional(string)
+    record_id   = optional(string)
+    record_name = optional(string)
+    ttl         = optional(number, 120)
+  })
+  default = null
+
+  validation {
+    condition     = var.ddns == null ? true : contains(["namecheap", "cloudflare"], var.ddns.provider)
+    error_message = "ddns.provider must be namecheap or cloudflare."
+  }
+
+  validation {
+    condition = var.ddns == null ? true : (
+      var.ddns.provider != "namecheap" ||
+      (var.ddns.host != null && var.ddns.domain != null)
+    )
+    error_message = "ddns.provider = namecheap requires host and domain."
+  }
+
+  validation {
+    condition = var.ddns == null ? true : (
+      var.ddns.provider != "cloudflare" ||
+      (var.ddns.zone_id != null && var.ddns.record_id != null && var.ddns.record_name != null)
+    )
+    error_message = "ddns.provider = cloudflare requires zone_id, record_id and record_name."
+  }
+}
+
+variable "ddns_credential" {
+  description = <<-EOT
+    The DDNS secret: a Namecheap dynamic-DNS password, or a Cloudflare API token
+    scoped to Zone:DNS:Edit. Comes from SOPS, never a literal.
+
+    NOTE: this ends up stored in the RouterOS script body on the router, where any
+    account with read+policy rights can display it. That is inherent to scripted
+    DDNS on RouterOS, not a flaw in this module. Use a token scoped to exactly the
+    one zone it needs, and rotate it if the router is ever RMA'd or resold.
+  EOT
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
 variable "disabled_ip_services" {
   description = <<-EOT
     RouterOS services to disable, mapped to their default port. VyOS exposed
