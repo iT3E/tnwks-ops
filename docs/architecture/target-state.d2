@@ -1,0 +1,210 @@
+# ---------------------------------------------------------------------------
+# TARGET STATE in D2 - the same topology as target-state.mmd, different language.
+#
+# Rendered with:  d2 --theme 1 --layout elk target-state.d2 target-state-d2.svg
+#
+# Why this file exists: it is a deliberate side-by-side against Mermaid on
+# identical content. D2's advantages show up here as real containers (nesting is
+# structural, not a visual "subgraph" hint), typed connections, and SQL-ish
+# shapes for tabular data. See README.md for the verdict.
+#
+# Sources: infrastructure/terraform/modules/mikrotik, the generated
+# environments/prod/mikrotik/locals.tf, docs/mikrotik-vyos-port.md,
+# docs/edgerouter-discovery.md.
+# ---------------------------------------------------------------------------
+
+vars: {
+  d2-config: {
+    layout-engine: elk
+    sketch: false
+  }
+}
+
+title: |md
+  # Target state: one RB5009, Terraform-managed
+  `sce-rtr01` replaces **both** `sce-vyos01` and `THOMAS-ER01`
+| {near: top-center}
+
+isp: {
+  label: "ISP\ncable"
+  shape: cloud
+  style.fill: "#f4f4f4"
+}
+
+clients: {
+  label: "WireGuard clients\nit-pc01 · macbook-it · xps-it\nit-mobile · mh-mobile"
+  shape: person
+  style.fill: "#eef3fb"
+}
+
+rb: MikroTik RB5009UG+S+IN — sce-rtr01 — RouterOS 7 {
+  style: {
+    fill: "#f7fbff"
+    stroke: "#3b6ea5"
+    stroke-width: 2
+  }
+
+  wan: {
+    label: "ether1 · WAN\nip_dhcp_client\nadd_default_route = yes\nmasquerade out ether1"
+    style.fill: "#e8f0fe"
+  }
+
+  input: input chain — terminal drop {
+    style: {
+      fill: "#eaf7ef"
+      stroke: "#2e8b57"
+    }
+
+    lan: {
+      label: "zone-lan list only\nDNS 53 · NTP 123 · DHCP 67/68"
+      style.fill: "#d9f2e3"
+    }
+    mgmt: {
+      label: "unifi-mgmt-900 only\nSSH 22 · REST 443 · Winbox 8291"
+      style.fill: "#d9f2e3"
+    }
+    wg_in: {
+      label: "ether1 only\nWireGuard 51820/51821"
+      style.fill: "#d9f2e3"
+    }
+    drop: {
+      label: "everything else → drop"
+      style: {
+        fill: "#fde8e8"
+        stroke: "#c0392b"
+      }
+    }
+  }
+
+  forward: {
+    label: "forward chain\n22 zone-pair chains · 44 accepts\nper-pair terminating drop\nordered via routeros_move_items"
+    style.fill: "#e8f0fe"
+  }
+
+  services: native services — no containers {
+    style: {
+      fill: "#eaf7ef"
+      stroke: "#2e8b57"
+    }
+
+    tbl: {
+      shape: sql_table
+      label: replaces 5 crash-looping Podman containers
+      "ip_dns + forwarders": "1.1.1.1 / 1.0.0.1 · cache 10240"
+      "ip_dns_adlist": "45 lists (was blocky)"
+      "ip_dns_record": "39 static (was bind)"
+      "ip_dhcp_server": "9 servers · 21 static leases"
+      "NTP server": "LAN-scoped (was open on WAN)"
+      "SNMP": "replaces node-exporter"
+    }
+  }
+
+  wg: {
+    label: "WireGuard — terminated here\nwg01 10.10.30.1/24 · 3 peers\nwg02 10.10.31.1/24 · 2 peers\n(was ERL port-forward → VyOS)"
+    style.fill: "#e8f0fe"
+  }
+
+  ddns: {
+    label: "ddns-update\n/system/script + /system/scheduler\nNamecheap · every 5m\nddns.thomasnetworks.us"
+    style: {
+      fill: "#fef6e7"
+      stroke: "#b9770e"
+    }
+  }
+
+  bridge: {
+    label: "bridge-lan · VLAN filtering\npvid 4094 · 11 tagged VLANs\nno more router-on-a-stick hairpin"
+    style.fill: "#e8f0fe"
+  }
+}
+
+sw: {
+  label: "Aruba SW03 · 10.98.0.251\nArubaS2500-24P PoE\nGE0/0/23 full trunk · unchanged"
+  style.fill: "#eaf7ef"
+}
+
+vlans: 11 VLANs — one SVI each {
+  style: {
+    fill: "#f6fdf9"
+    stroke: "#2e8b57"
+  }
+
+  live: {
+    shape: sql_table
+    label: carrying traffic
+    "910 unifi-frontend": 10.10.91.1/24
+    "900 unifi-mgmt": "10.10.90.1/24 · 3 APs"
+    "610 seccam": "10.10.60.1/24 · 5 cams"
+    "120 k8s": 10.10.120.1/24
+    "550 iLO": "10.10.55.1/24 · 2 iLO"
+    "140 UISP": 10.10.140.1/24
+  }
+
+  dormant: {
+    shape: sql_table
+    label: enabled = false — intent preserved
+    "110 ad": 10.10.10.1/24
+    "11 pve": 10.10.11.1/24
+    "410 bastion": 10.10.40.1/24
+    "720 app": 10.10.72.1/24
+    "10 transit": "172.16.1.x · vestigial"
+  }
+}
+
+eprt: {
+  label: "EP-R6 · 10.10.140.140\nthe ONLY surviving static route\n10.60.10.0/24 (in-laws)\nwas 29 routes across 2 boxes"
+  style.fill: "#eaf7ef"
+}
+
+k8s: {
+  label: "homelab-wsl k8s\nex-VyOS workloads: unifi,\nhaproxy → ingress"
+  style.fill: "#eaf7ef"
+}
+
+tf: {
+  label: "Terraform\nmodules/mikrotik\nsecrets via SOPS\napplied locally (LAN-only)"
+  shape: hexagon
+  style: {
+    fill: "#fef6e7"
+    stroke: "#b9770e"
+  }
+}
+
+# --- connections ------------------------------------------------------------
+isp -> rb.wan: "DHCP lease\n35.135.x.x"
+rb.wan -> rb.input: all inbound
+rb.input -> rb.forward
+rb.forward -> rb.services
+rb.wan -> rb.ddns: reads lease
+rb.wan -> rb.wg: "UDP 51820/51821"
+rb.forward -> rb.bridge
+rb.bridge -> sw: 802.1q tagged trunk
+sw -> vlans.live
+sw -> vlans.dormant: no SVI created {style.stroke-dash: 4}
+vlans.live -> eprt: VLAN 140
+vlans.live -> k8s: VLAN 120
+clients -> rb.input.wg_in: "dial DDNS hostname"
+rb.ddns -> clients: "keeps endpoint resolvable\n(load-bearing)" {
+  style: {
+    stroke: "#b9770e"
+    stroke-dash: 3
+  }
+}
+tf -> rb: "REST API 443\nterraform apply" {style.stroke-dash: 3}
+
+retired: retired at cutover {
+  style: {
+    fill: "#f4f4f4"
+    stroke: "#95a5a6"
+    stroke-dash: 4
+  }
+
+  notes: |md
+    - **THOMAS-ER01** EdgeRouter Lite — NAT + default route move to `ether1`
+    - **sce-vyos01** VyOS — 11 SVIs + zone firewall move to the RB5009
+    - **AWS site-to-site VPN** — BGP `MsgRcv 0`, vti absent; rebuild deliberately
+    - **172.16.1.252 / .254** — dead next-hops, 16 routes pointed at them
+    - **transit-10 NTP dstnat** — black-holed at dead `.254`
+    - **12 Podman containers** — native services or already on k8s
+  |
+}
