@@ -1,0 +1,30 @@
+{{/*
+  Telegram (parse_mode HTML) message for the War Room.
+
+  Every alert line carries the labels that tell alerts apart (rule_group,
+  pod, instance, ...), plus runbook and graph links, so a grouped
+  "FIRING:2" no longer shows two identical lines.
+
+  Rendered with: amtool template render --template.glob=telegram.tmpl \
+    --template.text='{{ template "telegram.message" . }}'
+*/}}
+
+{{ define "telegram.message" -}}
+{{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} <b>{{ .Status | toUpper }}{{ if eq .Status "firing" }} ({{ .Alerts.Firing | len }}){{ end }}: {{ .CommonLabels.alertname }}</b>{{ with .CommonLabels.severity }} [{{ . }}]{{ end }}
+{{- with .CommonAnnotations.summary }}
+<i>{{ . }}</i>
+{{- end }}
+{{ range $i, $a := .Alerts }}{{ if lt $i 8 }}
+• {{ with $a.Annotations.description }}{{ . }}{{ else }}{{ with $a.Annotations.summary }}{{ . }}{{ end }}{{ end }}
+{{ template "telegram.labels" $a }}
+{{- if $a.Annotations.runbook_url }} <a href="{{ $a.Annotations.runbook_url }}">runbook</a>{{ end }}{{ if $a.GeneratorURL }} <a href="{{ $a.GeneratorURL }}">graph</a>{{ end }}
+{{ end }}{{ end -}}
+{{ if gt (len .Alerts) 8 }}
+…and {{ len .Alerts | printf "%d" }} total, see Alertmanager.
+{{- end }}
+{{- end }}
+
+{{/* Distinguishing labels only. rule_group paths are trimmed to the group name. */}}
+{{ define "telegram.labels" -}}
+<code>{{ range (.Labels.Remove (stringSlice "alertname" "severity" "prometheus" "container" "endpoint" "service" "job" "uid")).SortedPairs }}{{ .Name }}={{ reReplaceAll "^.*;" "" .Value }} {{ end }}</code>
+{{- end }}
