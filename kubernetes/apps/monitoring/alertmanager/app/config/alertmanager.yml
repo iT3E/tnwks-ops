@@ -1,3 +1,6 @@
+templates:
+  - /etc/alertmanager/*.tmpl
+
 receivers:
   - name: "null"
   - name: "telegram"
@@ -9,16 +12,9 @@ receivers:
         chat_id: -5257099089
         send_resolved: true
         parse_mode: HTML
-        message: |-
-          {{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} <b>[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}]</b> {{ .CommonLabels.alertname }}
-          {{- range .Alerts }}
-          {{- if ne .Annotations.description "" }}
-          {{ .Annotations.description }}
-          {{- else if ne .Annotations.summary "" }}
-          {{ .Annotations.summary }}
-          {{- end }}
-          <b>Severity:</b> {{ .Labels.severity }}
-          {{- end }}
+        # Template: telegram.tmpl (same ConfigMap). Shows per-alert labels
+        # and runbook/graph links so grouped alerts are distinguishable.
+        message: '{{ template "telegram.message" . }}'
 
 route:
   group_by: ["alertname", "job"]

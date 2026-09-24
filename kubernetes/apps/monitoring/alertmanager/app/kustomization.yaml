@@ -9,6 +9,7 @@ configMapGenerator:
   - name: alertmanager-configmap
     files:
       - config/alertmanager.yml
+      - config/telegram.tmpl
 generatorOptions:
   disableNameSuffixHash: true
   annotations:
