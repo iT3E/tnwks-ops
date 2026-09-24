@@ -42,6 +42,9 @@ spec:
               tag: v0.12.0@sha256:2524b895bdae244984e937ecb8fdd755baedbf2bb108204bd1a1dc6732706303
             args:
               - --config.file=/etc/smokeping/smokeping.yaml
+              # Fine buckets through 10-100ms (the default doubles 25.6 -> 51.2
+              # -> 102.4ms), so quantiles can resolve "2x a 20ms baseline".
+              - --buckets=0.0005,0.001,0.002,0.005,0.01,0.015,0.02,0.025,0.03,0.035,0.04,0.045,0.05,0.06,0.07,0.08,0.09,0.1,0.125,0.15,0.2,0.3,0.5,1,2
             env:
               GOMAXPROCS: "1"
             securityContext:
@@ -91,5 +94,5 @@ spec:
           - port: http
             scheme: http
             path: /metrics
-            interval: 15s
+            interval: 10s # 3 samples per 30s window for the fast latency rule
             scrapeTimeout: 5s

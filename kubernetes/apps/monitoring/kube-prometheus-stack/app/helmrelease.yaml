@@ -168,8 +168,10 @@ spec:
                   instance: sce-vyos01
 
           - job_name: edgerouter
-            scrape_interval: 60s
-            scrape_timeout: 15s
+            # 15s so WAN throughput in the wan-latency alerts reflects the
+            # spike itself, not a 2m average. if_mib walk takes ~1s.
+            scrape_interval: 15s
+            scrape_timeout: 10s
             metrics_path: /snmp
             params:
               module: [if_mib]
