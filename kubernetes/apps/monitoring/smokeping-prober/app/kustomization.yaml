@@ -2,17 +2,13 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: monitoring
+resources:
+  - ./helmrelease.yaml
 configMapGenerator:
-  - name: grafana-dashboard
+  - name: smokeping-prober-config
     files:
-      - home.json
-      - unms_overview.json
-      - vyos.json
-      - edgerouter.json
-      - wan-latency.json
+      - config/smokeping.yaml
 generatorOptions:
   disableNameSuffixHash: true
   annotations:
     kustomize.toolkit.fluxcd.io/substitute: disabled
-  labels:
-    grafana_dashboard: "true"

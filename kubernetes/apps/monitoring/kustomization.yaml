@@ -13,6 +13,7 @@ resources:
   - ./unpoller/ks.yaml
   - ./unms-exporter/ks.yaml
   - ./snmp-exporter/ks.yaml
+  - ./smokeping-prober/ks.yaml
   - ./plausible-exporter/ks.yaml
   # Faro frontend-observability stack — runs on every cluster. loki now uses
   # the filesystem backend (single-binary) instead of Rook S3, so it's viable
