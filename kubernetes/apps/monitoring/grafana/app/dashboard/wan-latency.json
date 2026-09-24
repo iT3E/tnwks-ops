@@ -73,7 +73,7 @@
     },
     {
       "id": 2,
-      "title": "Slow pings (>100ms), share of answered",
+      "title": "Internet p90 (30s) vs alert line (2x hourly median)",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -87,38 +87,42 @@
       },
       "targets": [
         {
-          "expr": "smokeping:slow_ratio:rate1m",
-          "legendFormat": "{{name}}",
+          "expr": "smokeping:rtt_p90:rate30s{role=\"internet\"}",
+          "legendFormat": "{{name}} p90 30s",
           "refId": "A"
+        },
+        {
+          "expr": "smokeping:latency_threshold:1h{role=\"internet\"}",
+          "legendFormat": "{{name}} alert line",
+          "refId": "B"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit",
+          "unit": "s",
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 0,
-            "showPoints": "never",
-            "thresholdsStyle": {
-              "mode": "dashed"
-            }
-          },
-          "max": 1,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
+            "showPoints": "never"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*alert line"
+            },
+            "properties": [
               {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 0.1
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [6, 4]
+                }
               }
             ]
           }
-        },
-        "overrides": []
+        ]
       },
       "options": {
         "legend": {
@@ -207,7 +211,7 @@
       },
       "targets": [
         {
-          "expr": "wan:receive_bits:rate2m",
+          "expr": "wan:receive_bits:rate1m",
           "legendFormat": "down",
           "refId": "A"
         }
@@ -236,7 +240,7 @@
     },
     {
       "id": 5,
-      "title": "WAN upload (EdgeRouter eth0), plan ~10 Mbps",
+      "title": "WAN upload (EdgeRouter eth0), plan ~20 Mbps",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -250,7 +254,7 @@
       },
       "targets": [
         {
-          "expr": "wan:transmit_bits:rate2m",
+          "expr": "wan:transmit_bits:rate1m",
           "legendFormat": "up",
           "refId": "A"
         }
@@ -275,7 +279,7 @@
               },
               {
                 "color": "red",
-                "value": 8500000
+                "value": 18000000
               }
             ]
           }
