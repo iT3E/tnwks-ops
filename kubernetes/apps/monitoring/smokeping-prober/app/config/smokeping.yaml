@@ -1,0 +1,46 @@
+---
+# Continuous 1/s ICMP probes, recorded as Prometheus histograms.
+# `role` drives the WAN latency alerts in
+# kube-prometheus-stack/addons/alerts/wan-latency.yaml:
+#   lan      first router hop (VyOS). Isolates WSL/docker/VyOS trouble.
+#   edge     EdgeRouter LAN side, the last hop we own before the ISP.
+#   internet public anycast resolvers. >=2 of 3 must degrade to alert,
+#            so one provider having a bad day stays quiet.
+# protocol udp = unprivileged ICMP echo via SOCK_DGRAM; needs
+# net.ipv4.ping_group_range (set on the pod) and no capabilities.
+targets:
+  - hosts: ["10.10.91.1"]
+    interval: 1s
+    network: ip4
+    protocol: udp
+    labels:
+      role: lan
+      name: vyos
+  - hosts: ["172.16.1.1"]
+    interval: 1s
+    network: ip4
+    protocol: udp
+    labels:
+      role: edge
+      name: edgerouter
+  - hosts: ["1.1.1.1"]
+    interval: 1s
+    network: ip4
+    protocol: udp
+    labels:
+      role: internet
+      name: cloudflare
+  - hosts: ["8.8.8.8"]
+    interval: 1s
+    network: ip4
+    protocol: udp
+    labels:
+      role: internet
+      name: google
+  - hosts: ["9.9.9.9"]
+    interval: 1s
+    network: ip4
+    protocol: udp
+    labels:
+      role: internet
+      name: quad9

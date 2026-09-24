@@ -1,0 +1,118 @@
+---
+# WAN latency / packet loss, fed by smokeping-prober (1 ping/s per target).
+#
+# Target roles (see monitoring/smokeping-prober/app/config/smokeping.yaml):
+#   lan      VyOS, first hop from the cluster
+#   edge     EdgeRouter LAN side, last hop before the ISP
+#   internet 1.1.1.1, 8.8.8.8, 9.9.9.9
+#
+# The alerts localise the fault instead of just saying "slow":
+#   internet slow + edge healthy  -> WanLatencyHigh (uplink saturated or ISP)
+#   edge slow                     -> InternalPathLatencyHigh (VyOS / WSL / LAN)
+#
+# Baseline to 1.1.1.1 on this link (2026-09-22..24): p50 18ms, p99 27ms.
+# 100ms (bucket le=0.1024) is ~5x p99, which is well into "calls stutter".
+# A ping counts as "slow" if it exceeds 100ms. A target is "degraded" when
+# >10% of its pings in the last minute are slow (6+ of ~60). Alerts need
+# 2 of 3 internet targets degraded for 1m, which catches episodes of ~20s+
+# while ignoring a single stray spike or one resolver having a bad day.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: wan-latency-alerts
+spec:
+  groups:
+    - name: wan-latency.rules
+      interval: 15s
+      rules:
+        # Share of *answered* pings slower than 100ms.
+        - record: smokeping:slow_ratio:rate1m
+          expr: |
+            1 - (
+              sum by (host, name, role) (rate(smokeping_response_duration_seconds_bucket{le="0.1024"}[1m]))
+              /
+              sum by (host, name, role) (rate(smokeping_response_duration_seconds_count[1m]))
+            )
+        # Share of pings that never came back.
+        - record: smokeping:loss_ratio:rate1m
+          expr: |
+            clamp_min(
+              1 - (
+                sum by (host, name, role) (rate(smokeping_response_duration_seconds_count[1m]))
+                /
+                sum by (host, name, role) (rate(smokeping_requests_total[1m]))
+              ),
+              0
+            )
+        - record: smokeping:rtt_p50:rate1m
+          expr: histogram_quantile(0.5, sum by (le, host, name, role) (rate(smokeping_response_duration_seconds_bucket[1m])))
+        - record: smokeping:rtt_p90:rate1m
+          expr: histogram_quantile(0.9, sum by (le, host, name, role) (rate(smokeping_response_duration_seconds_bucket[1m])))
+        # WAN throughput on the EdgeRouter (eth0), bits/s. 1m SNMP scrape, so 2m window.
+        - record: wan:receive_bits:rate2m
+          expr: sum(rate(ifHCInOctets{instance="edgerouter-lite",ifName="eth0"}[2m])) * 8
+        - record: wan:transmit_bits:rate2m
+          expr: sum(rate(ifHCOutOctets{instance="edgerouter-lite",ifName="eth0"}[2m])) * 8
+
+    - name: wan-latency
+      interval: 15s
+      rules:
+        - alert: WanLatencyHigh
+          expr: |
+            count(smokeping:slow_ratio:rate1m{role="internet"} > 0.10) >= 2
+            unless on ()
+            (max(smokeping:slow_ratio:rate1m{role="edge"}) > 0.10)
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Internet latency spiking (bufferbloat / saturation?)"
+            description: >-
+              {{ $value }} of 3 internet targets have >10% of pings over 100ms.
+              EdgeRouter hop is clean, so this is the uplink or the ISP.
+              p90:{{ range query "smokeping:rtt_p90:rate1m{role=\"internet\"}" }} {{ .Labels.name }} {{ .Value | humanizeDuration }};{{ end }}
+              WAN now: down {{ with query "wan:receive_bits:rate2m" }}{{ . | first | value | humanize }}{{ end }}bps (~500M plan),
+              up {{ with query "wan:transmit_bits:rate2m" }}{{ . | first | value | humanize }}{{ end }}bps (~10M plan).
+              Up near 10M = upload saturation, the usual bufferbloat cause.
+
+        - alert: WanPacketLoss
+          expr: |
+            count(smokeping:loss_ratio:rate1m{role="internet"} > 0.05) >= 2
+            unless on ()
+            (max(smokeping:loss_ratio:rate1m{role="edge"}) > 0.05)
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Internet packet loss"
+            description: >-
+              {{ $value }} of 3 internet targets losing >5% of pings.
+              loss:{{ range query "smokeping:loss_ratio:rate1m{role=\"internet\"}" }} {{ .Labels.name }} {{ .Value | humanizePercentage }};{{ end }}
+              WAN now: down {{ with query "wan:receive_bits:rate2m" }}{{ . | first | value | humanize }}{{ end }}bps,
+              up {{ with query "wan:transmit_bits:rate2m" }}{{ . | first | value | humanize }}{{ end }}bps.
+
+        - alert: InternalPathLatencyHigh
+          expr: |
+            max(smokeping:slow_ratio:rate1m{role="edge"}) > 0.10
+            or
+            max(smokeping:loss_ratio:rate1m{role="edge"}) > 0.05
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Latency/loss inside the network (before the ISP)"
+            description: >-
+              Pings from the cluster to the EdgeRouter (172.16.1.1) are slow or dropping,
+              so internet latency right now is a local problem, not the WAN.
+              EdgeRouter p90 {{ with query "smokeping:rtt_p90:rate1m{role=\"edge\"}" }}{{ . | first | value | humanizeDuration }}{{ end }},
+              VyOS p90 {{ with query "smokeping:rtt_p90:rate1m{role=\"lan\"}" }}{{ . | first | value | humanizeDuration }}{{ end }}.
+              If VyOS is slow too, suspect VyOS CPU or the WSL host.
+
+        - alert: SmokepingProberDown
+          expr: absent(up{job="smokeping-prober"} == 1)
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "smokeping-prober is not being scraped"
+            description: "WAN latency monitoring is blind: no successful smokeping-prober scrape for 5 minutes."

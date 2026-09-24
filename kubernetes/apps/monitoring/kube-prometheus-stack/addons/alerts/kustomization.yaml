@@ -8,3 +8,4 @@ resources:
   - ./windows.yaml
   - ./vyos.yaml
   - ./edgerouter.yaml
+  - ./wan-latency.yaml
