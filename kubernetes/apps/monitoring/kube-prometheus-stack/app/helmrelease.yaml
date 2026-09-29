@@ -158,6 +158,18 @@ spec:
                 labels:
                   instance: DESKTOP-HKE05KI
 
+          # SMART disk health on the Windows host. smartctl_exporter runs there as the
+          # SYSTEM scheduled task \Prometheus\smartctl_exporter and re-reads the drives
+          # every 120s, so scraping faster than 60s only returns cached values.
+          - job_name: smartctl-exporter
+            scrape_interval: 60s
+            scrape_timeout: 20s
+            static_configs:
+              - targets:
+                  - ${WINDOWS_HOST_IP}:9633
+                labels:
+                  instance: DESKTOP-HKE05KI
+
           - job_name: vyos
             scrape_interval: 30s
             scrape_timeout: 10s
