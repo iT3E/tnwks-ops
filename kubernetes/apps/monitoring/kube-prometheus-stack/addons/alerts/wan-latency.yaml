@@ -79,6 +79,37 @@ spec:
         - record: wan:transmit_bits:rate1m
           expr: sum(rate(ifHCOutOctets{instance="edgerouter-lite",ifName="eth0"}[1m])) * 8
 
+        # Who is using the WAN, from flow export (monitoring/flow-collector).
+        # Per client and remote network (ASN), bits/s. 2m window because the
+        # routers export long-lived flows every ~30s.
+        - record: wan:client_as_transmit_bits_by_ip:rate2m
+          expr: sum by (client_ip, asn, as_name) (rate(wan_client_transmit_bytes_total[2m])) * 8
+        - record: wan:client_as_receive_bits_by_ip:rate2m
+          expr: sum by (client_ip, asn, as_name) (rate(wan_client_receive_bytes_total[2m])) * 8
+        # client_ip -> client (DHCP hostname). One name per IP. Any router can
+        # feed this: VyOS writes dhcp_lease_info via node-exporter's textfile
+        # collector; on RouterOS, map mktxp's lease metric to the same labels.
+        - record: wan:client_name
+          expr: |
+            topk by (client_ip) (1,
+              max by (client_ip, client) (
+                label_replace(
+                  label_replace(dhcp_lease_info{hostname!=""}, "client_ip", "$1", "ip", "(.+)"),
+                  "client", "$1", "hostname", "(.+)")
+              )
+            )
+        # Same rates with a readable `client` label (hostname, else the IP).
+        - record: wan:client_as_transmit_bits:rate2m
+          expr: |
+            (wan:client_as_transmit_bits_by_ip:rate2m * on (client_ip) group_left (client) wan:client_name)
+            or on (client_ip, asn)
+            label_replace(wan:client_as_transmit_bits_by_ip:rate2m, "client", "$1", "client_ip", "(.+)")
+        - record: wan:client_as_receive_bits:rate2m
+          expr: |
+            (wan:client_as_receive_bits_by_ip:rate2m * on (client_ip) group_left (client) wan:client_name)
+            or on (client_ip, asn)
+            label_replace(wan:client_as_receive_bits_by_ip:rate2m, "client", "$1", "client_ip", "(.+)")
+
     - name: wan-latency
       interval: 15s
       rules:
@@ -110,6 +141,8 @@ spec:
               up {{ with query "wan:transmit_bits:rate1m" }}{{ . | first | value | humanize }}{{ end }}bps
               (plan ~900M/20M, speedtests top out ~600M/24M).
               Near either ceiling = saturation (bufferbloat); low = ISP.
+              Top users (2m avg), up:{{ range query "sort_desc(topk(3, wan:client_as_transmit_bits:rate2m > 250e3))" }} {{ .Labels.client }} → {{ .Labels.as_name }} {{ .Value | humanize }}bps;{{ else }} none over 250kbps;{{ end }}
+              down:{{ range query "sort_desc(topk(3, wan:client_as_receive_bits:rate2m > 2e6))" }} {{ .Labels.client }} ← {{ .Labels.as_name }} {{ .Value | humanize }}bps;{{ else }} none over 2Mbps;{{ end }}
 
         - alert: WanPacketLoss
           expr: |
@@ -126,6 +159,8 @@ spec:
               loss:{{ range query "smokeping:loss_ratio:rate1m{role=\"internet\"}" | sortByLabel "name" }} {{ .Labels.name }} {{ .Value | humanizePercentage }};{{ end }}
               WAN now: down {{ with query "wan:receive_bits:rate1m" }}{{ . | first | value | humanize }}{{ end }}bps,
               up {{ with query "wan:transmit_bits:rate1m" }}{{ . | first | value | humanize }}{{ end }}bps.
+              Top users (2m avg), up:{{ range query "sort_desc(topk(3, wan:client_as_transmit_bits:rate2m > 250e3))" }} {{ .Labels.client }} → {{ .Labels.as_name }} {{ .Value | humanize }}bps;{{ else }} none over 250kbps;{{ end }}
+              down:{{ range query "sort_desc(topk(3, wan:client_as_receive_bits:rate2m > 2e6))" }} {{ .Labels.client }} ← {{ .Labels.as_name }} {{ .Value | humanize }}bps;{{ else }} none over 2Mbps;{{ end }}
 
         - alert: InternalPathLatencyHigh
           expr: |

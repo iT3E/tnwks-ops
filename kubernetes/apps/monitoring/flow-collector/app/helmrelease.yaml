@@ -1,0 +1,116 @@
+---
+# WAN top-talker attribution. Routers export NetFlow/IPFIX for WAN-bound
+# traffic; this turns it into per-client upload/download counters labelled
+# with the remote network (ASN), so WAN alerts can say who is filling the pipe.
+#
+#   router (VyOS flow-accounting, later RB5009 traffic-flow)
+#     -> Windows host udp/2055 (Tnwks-UdpRelay, infrastructure/wsl-host)
+#     -> WSL socat (tnwks-lan-bridge@netflow)
+#     -> MetalLB ${FLOW_COLLECTOR_LB_ADDR}:2055 -> this pod
+#
+# The collector is a stdlib-only Python script (config/flow_collector.py) on a
+# stock python image. ASN data: iptoasn.com (public domain), refreshed weekly
+# into an emptyDir. Metrics: wan_client_{transmit,receive}_bytes_total.
+# Alerts: kube-prometheus-stack/addons/alerts/wan-latency.yaml
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: flow-collector
+  namespace: monitoring
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      interval: 30m
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  values:
+    controllers:
+      flow-collector:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        pod:
+          securityContext:
+            runAsUser: 65534
+            runAsGroup: 65534
+            runAsNonRoot: true
+            fsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+        containers:
+          app:
+            image:
+              repository: docker.io/library/python
+              tag: 3.13-alpine@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+            command: ["python3", "-u", "/app/flow_collector.py"]
+            env:
+              FLOW_PORT: "2055"
+              METRICS_PORT: "9300"
+              LAN_NETS: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+              ASN_DB_CACHE: /cache/ip2asn-v4.tsv.gz
+              PYTHONDONTWRITEBYTECODE: "1"
+            securityContext:
+              readOnlyRootFilesystem: true
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
+            probes:
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /healthz
+                    port: 9300
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /healthz
+                    port: 9300
+            resources:
+              requests:
+                cpu: 10m
+                memory: 96Mi
+              limits:
+                memory: 256Mi
+    service:
+      app:
+        controller: flow-collector
+        ports:
+          http:
+            port: 9300
+      netflow:
+        controller: flow-collector
+        type: LoadBalancer
+        loadBalancerIP: "${FLOW_COLLECTOR_LB_ADDR:=}"
+        ports:
+          netflow:
+            port: 2055
+            protocol: UDP
+    persistence:
+      script:
+        type: configMap
+        name: flow-collector-script
+        globalMounts:
+          - path: /app
+            readOnly: true
+      cache:
+        type: emptyDir
+        globalMounts:
+          - path: /cache
+    serviceMonitor:
+      app:
+        enabled: ${SERVICE_MONITOR_ENABLED}
+        serviceName: flow-collector-app # app-template suffixes the identifier when there are two services
+        endpoints:
+          - port: http
+            scheme: http
+            path: /metrics
+            interval: 15s
+            scrapeTimeout: 5s
