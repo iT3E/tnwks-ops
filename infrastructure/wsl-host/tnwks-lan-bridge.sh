@@ -22,7 +22,9 @@ command -v socat >/dev/null || { echo "socat missing — sudo apt-get install -y
 run() {
   local listen="$1" target="$2" proto="${3:-TCP}"
   if [[ "$proto" == "UDP" ]]; then
-    exec socat -d "UDP-LISTEN:${listen},reuseaddr,fork,bind=0.0.0.0" "UDP:${target}"
+    # UDP4-*, not UDP-*: socat 1.8 fails "UDP-LISTEN:...,bind=0.0.0.0" with
+    # "unknown address family 0". This branch was unused until netflow.
+    exec socat -d "UDP4-LISTEN:${listen},reuseaddr,fork" "UDP4:${target}"
   else
     exec socat -d "TCP-LISTEN:${listen},reuseaddr,fork,bind=0.0.0.0" "TCP:${target}"
   fi
