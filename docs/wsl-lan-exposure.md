@@ -61,13 +61,13 @@ The public ingress controller (`.202`) is intentionally **not** bridged here —
 that one is fronted by the cloudflared tunnel and should never be reachable
 from the LAN side.
 
-## UDP services (NetFlow/IPFIX for flow-collector)
+## UDP services (sFlow/NetFlow for flow-collector)
 
 netsh portproxy is TCP-only, so UDP needs its own Windows-side forwarder.
 Routers export flows to the Windows host on udp/2055:
 
 ```
-router flow export -> <windows-ip>:2055
+router flow export (sFlow or IPFIX) -> <windows-ip>:2055
   -> Start-TnwksUdpRelay.ps1 (Scheduled Task tnwks-udp-relay) -> <wsl-ip>:2055
   -> socat tnwks-lan-bridge@netflow -> MetalLB 10.5.0.204:2055
   -> monitoring/flow-collector

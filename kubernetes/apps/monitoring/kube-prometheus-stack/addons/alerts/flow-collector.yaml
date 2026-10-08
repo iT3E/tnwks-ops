@@ -26,11 +26,11 @@ spec:
           labels:
             severity: warning
           annotations:
-            summary: "No NetFlow/IPFIX reaching flow-collector"
+            summary: "No sFlow/NetFlow reaching flow-collector"
             description: >-
               flow-collector is up but has had no flow packets for
               {{ $value | humanizeDuration }}. Check in order: router flow export
-              (VyOS `show flow-accounting`), the Windows relay (Scheduled Task
+              (VyOS: `systemctl status hsflowd`, `system sflow` on eth1.10), the Windows relay (Scheduled Task
               tnwks-udp-relay, C:\ProgramData\tnwks-udp-relay\udp-relay.log), the WSL
               socat unit (systemctl status tnwks-lan-bridge@netflow), MetalLB 10.5.0.204.
         - alert: FlowCollectorNoAsnData
