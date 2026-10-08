@@ -7,7 +7,9 @@
 
 [CmdletBinding()]
 param(
-    [string]$SourceScript = (Join-Path $PSScriptRoot 'Start-TnwksUdpRelay.ps1'),
+    # No $PSScriptRoot default: it is empty during param binding under
+    # `powershell.exe -File`, so the path is resolved below instead.
+    [string]$SourceScript,
     [string]$InstallDir   = 'C:\ProgramData\tnwks-udp-relay',
     [string]$TaskName     = 'tnwks-udp-relay',
     [int]$Port            = 2055,
@@ -18,6 +20,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($SourceScript)) {
+    $here = $PSScriptRoot
+    if ([string]::IsNullOrWhiteSpace($here) -and $MyInvocation.MyCommand.Path) {
+        $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
+    $SourceScript = Join-Path $here 'Start-TnwksUdpRelay.ps1'
+}
 
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 $p  = New-Object Security.Principal.WindowsPrincipal($id)
