@@ -44,7 +44,12 @@ resource "routeros_ip_firewall_addr_list" "this" {
 # --- Global state policy -----------------------------------------------------
 # VyOS: state-policy established accept / related accept / invalid drop.
 
+# FastTrack (and its hw_offload) bypasses ip traffic-flow, so with it on the
+# flow export only sees the first packets of each connection and the WAN
+# top-talker attribution (tnwks-ops monitoring/flow-collector) goes blind.
+# Off by default; see var.fasttrack.
 resource "routeros_ip_firewall_filter" "fasttrack_established" {
+  count            = var.fasttrack ? 1 : 0
   chain            = "forward"
   action           = "fasttrack-connection"
   connection_state = "established,related"
@@ -196,7 +201,9 @@ locals {
     ],
     [
       routeros_ip_firewall_filter.input_drop.id,
-      routeros_ip_firewall_filter.fasttrack_established.id,
+    ],
+    [for r in routeros_ip_firewall_filter.fasttrack_established : r.id],
+    [
       routeros_ip_firewall_filter.accept_established.id,
       routeros_ip_firewall_filter.drop_invalid.id,
     ],

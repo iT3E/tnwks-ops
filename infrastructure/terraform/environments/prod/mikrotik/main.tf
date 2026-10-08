@@ -45,6 +45,15 @@ module "mikrotik" {
   dstnat_rules             = local.dstnat_rules
   masquerade_out_interface = local.masquerade_out_interface
 
+  # WAN top talkers for War Room alerts (tnwks-ops monitoring/flow-collector).
+  # FastTrack off so traffic-flow sees bulk transfers; measure CPU under a
+  # speed test after cutover before ever turning it back on.
+  fasttrack = false
+  flow_export = {
+    collector_address = "10.10.91.142" # Windows host, relays udp/2055 into WSL
+    src_address       = "10.10.91.1"
+  }
+
   dns    = local.dns
   ntp    = local.ntp
   syslog = local.syslog

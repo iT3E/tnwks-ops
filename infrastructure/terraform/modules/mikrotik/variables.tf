@@ -415,3 +415,34 @@ variable "admin_users" {
   }))
   default = {}
 }
+
+variable "fasttrack" {
+  description = <<-EOT
+    Add the FastTrack (hw_offload) rule for established/related forward traffic.
+    FastTracked packets bypass ip traffic-flow, so turning this on blinds the
+    flow export (var.flow_export) to bulk transfers. Keep it off unless the
+    RB5009 can't route the WAN rate without it; check CPU under a speed test.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "flow_export" {
+  description = <<-EOT
+    NetFlow/IPFIX export of WAN-bound flows to tnwks-ops monitoring/flow-collector
+    (WAN top talkers in War Room alerts). Exported on the WAN interface, so
+    only internet traffic is seen; forward-chain records carry the LAN client
+    address (srcnat happens after traffic-flow). null disables it.
+  EOT
+  type = object({
+    collector_address = string # Windows host that relays udp into WSL
+    collector_port    = optional(number, 2055)
+    src_address       = optional(string) # e.g. the 910 gateway address
+    version           = optional(string, "IPFIX")
+    interfaces        = optional(string) # defaults to var.wan_interface
+    # Export long flows every minute so per-client rates stay near real time.
+    active_flow_timeout   = optional(string, "1m")
+    inactive_flow_timeout = optional(string, "15s")
+  })
+  default = null
+}

@@ -311,9 +311,24 @@ Worth fixing in `vyos-config` regardless of the migration:
 
     This is the single most important post-cutover check. The ERL failed all
     three.
-11. **Retire the ERL.** Power it off, keep it unmodified as a second rollback
+11. **Turn on WAN flow export** (War Room "Top users" line, tnwks-ops
+    `monitoring/flow-collector`). Terraform creates the traffic-flow config and
+    the IPFIX target (`var.flow_export`), but provider v1.99.1 can't set
+    `enabled`, so run once: `/ip traffic-flow set enabled=yes`. Then check
+    `wan_client_receive_bytes_total` is growing in Prometheus and
+    FlowCollectorNoFlows clears. VyOS's sFlow export stops with VyOS, which is
+    expected.
+    - **FastTrack is off** (`var.fasttrack = false`) because FastTracked packets
+      bypass traffic-flow. Run a speed test and watch `/system resource monitor`.
+      Only if CPU can't sustain the WAN rate, set `fasttrack = true` and accept
+      that top-talker data goes blind for bulk transfers.
+    - **Client names** came from VyOS DHCP leases (`dhcp_lease_info` via VyOS
+      node-exporter). Recreate that metric from RouterOS leases (e.g. mktxp's
+      DHCP lease metric relabelled to `ip`/`hostname`, feeding the
+      `wan:client_name` recording rule), or alerts fall back to bare IPs.
+12. **Retire the ERL.** Power it off, keep it unmodified as a second rollback
     path, and remove `sce-er01` / `sce-vyos01` DNS records once stable.
-12. **Post-cutover:** remove the bootstrap mgmt address, migrate the remaining
+13. **Post-cutover:** remove the bootstrap mgmt address, migrate the remaining
     container workloads to Kubernetes, swap the node-exporter Grafana dashboard
     for SNMP, and rotate **both** the Cloudflare token and the Namecheap DDNS
     password.
