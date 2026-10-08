@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""WAN flow collector: NetFlow v5/v9/IPFIX in, per-client Prometheus counters out.
+"""WAN flow collector: sFlow v5 / NetFlow v5/v9/IPFIX in, per-client Prometheus counters out.
 
 Router-agnostic on purpose: VyOS (flow-accounting) and RouterOS (traffic-flow)
 both speak IPFIX, so swapping routers only changes where the flows come from.
@@ -242,8 +242,83 @@ def _parse_data_set(version, domain, tid, body, now):
         STATS["records"] += n
 
 
+def _account_ip_header(h, nbytes, now):
+    """h starts at an IPv4 header; account its src/dst."""
+    if len(h) < 20 or h[0] >> 4 != 4:
+        return False
+    src = struct.unpack_from("!I", h, 12)[0]
+    dst = struct.unpack_from("!I", h, 16)[0]
+    account(src, dst, nbytes, now)
+    return True
+
+
+def _account_ether_header(h, nbytes, now):
+    """h starts at an Ethernet header (802.1Q/802.1ad tags allowed)."""
+    if len(h) < 14:
+        return False
+    off = 12
+    etype = struct.unpack_from("!H", h, off)[0]
+    while etype in (0x8100, 0x88A8) and off + 6 <= len(h):
+        off += 4
+        etype = struct.unpack_from("!H", h, off)[0]
+    if etype != 0x0800:
+        return False  # IPv6/ARP/...: VyOS doesn't forward IPv6 today
+    return _account_ip_header(h[off + 2:], nbytes, now)
+
+
+def handle_sflow(data, now):
+    """sFlow v5: sampled packet headers, scaled by the sampling rate.
+
+    VyOS 1.4's netflow exporter (pmacct uacctd) misreads addresses on VLAN
+    interfaces, so VyOS uses sFlow (hsflowd) instead. Same port as NetFlow;
+    told apart by the 32-bit version field (5).
+    """
+    u32 = lambda o: struct.unpack_from("!I", data, o)[0]
+    addr_type = u32(4)
+    off = 8 + (4 if addr_type == 1 else 16) + 12  # agent, sub-agent, seq, uptime
+    nsamples = u32(off)
+    off += 4
+    n = 0
+    for _ in range(nsamples):
+        fmt, length = u32(off), u32(off + 4)
+        body_off, off = off + 8, off + 8 + length
+        enterprise, kind = fmt >> 12, fmt & 0xFFF
+        if enterprise != 0 or kind not in (1, 3):
+            continue  # counter samples etc.
+        if kind == 1:   # flow_sample
+            rate = u32(body_off + 8)
+            rec_off = body_off + 32
+            nrec = u32(body_off + 28)
+        else:           # expanded flow_sample
+            rate = u32(body_off + 12)
+            rec_off = body_off + 44
+            nrec = u32(body_off + 40)
+        for _ in range(nrec):
+            rfmt, rlen = u32(rec_off), u32(rec_off + 4)
+            r = rec_off + 8
+            rec_off = r + rlen
+            if rfmt != 1:  # only raw packet header records
+                continue
+            proto, frame_len, _stripped, hlen = struct.unpack_from("!IIII", data, r)
+            hdr = data[r + 16: r + 16 + hlen]
+            nbytes = frame_len * max(rate, 1)
+            n += 1
+            if proto == 1:
+                _account_ether_header(hdr, nbytes, now)
+            elif proto == 11:
+                _account_ip_header(hdr, nbytes, now)
+    with LOCK:
+        STATS["records"] += n
+
+
 def handle_packet(data, now):
     if len(data) < 4:
+        return
+    if struct.unpack_from("!I", data, 0)[0] == 5:
+        with LOCK:
+            STATS["packets"]["sflow5"] = STATS["packets"].get("sflow5", 0) + 1
+            STATS["last_packet"] = now
+        handle_sflow(data, now)
         return
     version = struct.unpack_from("!H", data, 0)[0]
     with LOCK:
@@ -327,7 +402,7 @@ def render():
             lines.append(f'{metric}{{client_ip="{ipaddress.IPv4Address(client)}",asn="{asn}",'
                          f'as_name="{_esc(as_name)}"}} {nbytes}')
     lines.append("# TYPE flow_collector_packets_total counter")
-    for v, c in sorted(stats["packets"].items()):
+    for v, c in sorted(stats["packets"].items(), key=lambda kv: str(kv[0])):
         lines.append(f'flow_collector_packets_total{{version="{v}"}} {c}')
     for name, help_ in (("records", "Flow records decoded"),
                         ("records_lan_wan", "Flow records between the LAN and the internet"),

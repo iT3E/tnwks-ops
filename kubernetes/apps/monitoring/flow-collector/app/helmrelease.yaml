@@ -1,9 +1,10 @@
 ---
-# WAN top-talker attribution. Routers export NetFlow/IPFIX for WAN-bound
-# traffic; this turns it into per-client upload/download counters labelled
-# with the remote network (ASN), so WAN alerts can say who is filling the pipe.
+# WAN top-talker attribution. Routers export sFlow or NetFlow/IPFIX for
+# WAN-bound traffic; this turns it into per-client upload/download counters
+# labelled with the remote network (ASN), so WAN alerts can say who is filling
+# the pipe. Formats are auto-detected on the same port.
 #
-#   router (VyOS flow-accounting, later RB5009 traffic-flow)
+#   router (VyOS sFlow/hsflowd, later RB5009 traffic-flow IPFIX)
 #     -> Windows host udp/2055 (Tnwks-UdpRelay, infrastructure/wsl-host)
 #     -> WSL socat (tnwks-lan-bridge@netflow)
 #     -> MetalLB ${FLOW_COLLECTOR_LB_ADDR}:2055 -> this pod
