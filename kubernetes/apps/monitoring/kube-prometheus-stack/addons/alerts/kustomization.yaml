@@ -9,3 +9,4 @@ resources:
   - ./vyos.yaml
   - ./edgerouter.yaml
   - ./wan-latency.yaml
+  - ./flow-collector.yaml

@@ -55,10 +55,40 @@ chain self-heals without manual intervention.
 | `k8s-gateway`                        | 10.5.0.201 | 53/UDP           |
 | `ingress-nginx-controller` (public)  | 10.5.0.202 | 80, 443          |
 | `mosquitto`                          | 10.5.0.203 | 1883             |
+| `flow-collector-netflow`             | 10.5.0.204 | 2055/UDP         |
 
 The public ingress controller (`.202`) is intentionally **not** bridged here —
 that one is fronted by the cloudflared tunnel and should never be reachable
 from the LAN side.
+
+## UDP services (NetFlow/IPFIX for flow-collector)
+
+netsh portproxy is TCP-only, so UDP needs its own Windows-side forwarder.
+Routers export flows to the Windows host on udp/2055:
+
+```
+router flow export -> <windows-ip>:2055
+  -> Start-TnwksUdpRelay.ps1 (Scheduled Task tnwks-udp-relay) -> <wsl-ip>:2055
+  -> socat tnwks-lan-bridge@netflow -> MetalLB 10.5.0.204:2055
+  -> monitoring/flow-collector
+```
+
+The relay re-resolves the WSL IP every 60s (`wsl.exe hostname -I`, falling back
+to the portproxy rules' connectaddress), so it survives WSL restarts. It runs
+as the desktop user, because WSL distros are per-user and SYSTEM's `wsl.exe`
+can't see `Ubuntu`.
+
+One-time setup on Windows (elevated):
+
+```powershell
+cd \\wsl$\Ubuntu\home\it3e\git-public\tnwks-ops\infrastructure\wsl-host
+.\Register-TnwksUdpRelayTask.ps1
+```
+
+It copies the relay to `C:\ProgramData\tnwks-udp-relay`, opens inbound
+udp/2055 from RFC1918 sources only, and starts the task. Log:
+`C:\ProgramData\tnwks-udp-relay\udp-relay.log`. The WSL half is the `netflow`
+instance of the `wsl_lan_bridge` role (re-run `wsl-lan-bridge.yml`).
 
 ## One-time setup on the WSL distro
 

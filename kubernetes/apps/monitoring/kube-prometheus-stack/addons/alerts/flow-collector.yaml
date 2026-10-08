@@ -1,0 +1,45 @@
+---
+# Health of the WAN top-talker pipeline (router flow export -> Windows relay ->
+# WSL socat -> monitoring/flow-collector). If this is broken, the "Top users"
+# line in WanLatencyHigh/WanPacketLoss goes quiet, so say so loudly.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: flow-collector-alerts
+spec:
+  groups:
+    - name: flow-collector
+      rules:
+        - alert: FlowCollectorDown
+          expr: absent(up{job="flow-collector-app"} == 1)
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "flow-collector is not being scraped"
+            description: >-
+              No successful scrape of monitoring/flow-collector for 10 minutes, so WAN
+              alerts can't name the clients using the link.
+        - alert: FlowCollectorNoFlows
+          expr: time() - max(flow_collector_last_packet_timestamp_seconds) > 600
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "No NetFlow/IPFIX reaching flow-collector"
+            description: >-
+              flow-collector is up but has had no flow packets for
+              {{ $value | humanizeDuration }}. Check in order: router flow export
+              (VyOS `show flow-accounting`), the Windows relay (Scheduled Task
+              tnwks-udp-relay, C:\ProgramData\tnwks-udp-relay\udp-relay.log), the WSL
+              socat unit (systemctl status tnwks-lan-bridge@netflow), MetalLB 10.5.0.204.
+        - alert: FlowCollectorNoAsnData
+          expr: max(flow_collector_asn_db_ranges) == 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "flow-collector has no ASN table"
+            description: >-
+              The iptoasn download failed and there is no cached copy, so remote networks
+              show as "unknown". Check the pod log for "asn db download failed".
