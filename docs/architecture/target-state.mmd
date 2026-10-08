@@ -1,0 +1,69 @@
+%% ---------------------------------------------------------------------------
+%% TARGET STATE - one RB5009, fully Terraform-managed
+%% .
+%% Source: infrastructure/terraform/modules/mikrotik + environments/prod/mikrotik
+%% (generated locals.tf), docs/mikrotik-vyos-port.md, docs/edgerouter-discovery.md.
+%% .
+%% Green = new//native capability. Amber = still needs a decision.
+%% ---------------------------------------------------------------------------
+flowchart TB
+    isp["🌐 ISP<br/>cable"]
+
+    subgraph rb["MikroTik RB5009UG+S+IN · sce-rtr01 · RouterOS 7"]
+        wan["ether1 · WAN<br/>ip_dhcp_client<br/>add_default_route = yes<br/>masquerade out ether1"]
+
+        subgraph inchain["input chain · terminal drop"]
+            i_lan["zone-lan list<br/>DNS 53 · NTP 123 · DHCP 67/68"]
+            i_mgmt["unifi-mgmt-900 only<br/>SSH 22 · REST 443 · Winbox 8291"]
+            i_wg["ether1 only<br/>WireGuard 51820/51821"]
+        end
+
+        svc["native services, no containers<br/>ip_dns + 45 adlists + 39 records<br/>9 DHCP servers · 21 static leases<br/>NTP server · SNMP"]
+        fw["forward chain<br/>22 zone-pair chains · 44 accepts<br/>per-pair terminating drop<br/>ordered via routeros_move_items"]
+        wg["WireGuard<br/>wg01 10.10.30.1/24 · 3 peers<br/>wg02 10.10.31.1/24 · 2 peers"]
+        ddns["ddns-update script + scheduler<br/>Namecheap · every 5m<br/>ddns.thomasnetworks.us"]
+        bridge["bridge-lan · VLAN filtering<br/>pvid 4094 · 11 tagged VLANs"]
+    end
+
+    sw["Aruba SW03 · 10.98.0.251<br/>802.1q trunk unchanged"]
+
+    subgraph vlans["11 VLANs · one SVI each"]
+        v910["910 unifi-frontend · 10.10.91.1"]
+        v900["900 unifi-mgmt · 10.10.90.1"]
+        v610["610 seccam · 10.10.60.1"]
+        v120["120 k8s · 10.10.120.1"]
+        v550["550 iLO · 10.10.55.1"]
+        v140["140 UISP · 10.10.140.1"]
+        vrest["110 ad · 11 pve · 410 bastion<br/>720 app · 10 transit (vestigial)"]
+    end
+
+    eprt["EP-R6 · 10.10.140.140<br/>ONLY static route:<br/>10.60.10.0/24"]
+    k8s["homelab-wsl k8s<br/>ex-VyOS container workloads<br/>unifi · haproxy → ingress"]
+    clients["WireGuard clients<br/>dial ddns.thomasnetworks.us"]
+
+    tf["Terraform<br/>modules/mikrotik<br/>secrets via SOPS<br/>applied locally, LAN-only"]
+
+    isp --> wan
+    wan --> inchain
+    inchain --> fw
+    wan --- ddns
+    wan --- wg
+    fw --- svc
+    fw --> bridge
+    bridge -->|"tagged trunk"| sw
+    sw --> v910 & v900 & v610 & v120 & v550 & v140 & vrest
+    v140 --> eprt
+    v120 --> k8s
+    clients -->|"UDP 51820/51821"| i_wg
+    ddns -.->|"keeps endpoint<br/>resolvable"| clients
+    tf -.->|"REST API 443"| rb
+
+    classDef new fill:#eaf7ef,stroke:#2e8b57,stroke-width:2px,color:#1d5c39
+    classDef router fill:#e8f0fe,stroke:#3b6ea5,color:#1b3a5c
+    classDef ext fill:#f4f4f4,stroke:#95a5a6,color:#5d6d7e
+    classDef ctl fill:#fef6e7,stroke:#b9770e,color:#7e5109
+
+    class i_lan,i_mgmt,i_wg,svc,ddns new
+    class wan,fw,wg,bridge router
+    class sw,v910,v900,v610,v120,v550,v140,vrest,eprt,k8s,clients ext
+    class tf ctl

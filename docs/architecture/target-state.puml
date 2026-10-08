@@ -1,0 +1,114 @@
+' ---------------------------------------------------------------------------
+' TARGET STATE in PlantUML - the same topology as target-state.mmd and
+' target-state.d2, in a third language, so the three can be compared on
+' identical content rather than on three different diagrams.
+'
+' Rendered with:
+'   java -jar ~/.local/lib/plantuml.jar -tsvg target-state.puml
+'
+' Uses !pragma layout smetana - PlantUML's bundled pure-Java port of Graphviz
+' dot. Without it, every non-sequence diagram needs a system Graphviz install
+' and fails with "Cannot find Graphviz". Smetana keeps this renderable with
+' nothing but the jar and a JRE.
+'
+' PlantUML's angle here is the deployment diagram: node/artifact/component are
+' real semantic elements rather than generic boxes, which suits "what physically
+' runs where" better than a flowchart does. See README.md for the verdict.
+'
+' Sources: infrastructure/terraform/modules/mikrotik, the generated
+' environments/prod/mikrotik/locals.tf, docs/mikrotik-vyos-port.md,
+' docs/edgerouter-discovery.md.
+' ---------------------------------------------------------------------------
+@startuml target-state-plantuml
+!pragma layout smetana
+!theme plain
+title Target state: one RB5009 replaces both sce-vyos01 and THOMAS-ER01
+
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam ArrowColor #3b6ea5
+skinparam nodeBorderColor #3b6ea5
+skinparam rectangleBorderColor #2e8b57
+
+cloud "ISP\ncable" as isp #f4f4f4
+
+actor "WireGuard clients\nit-pc01 · macbook-it · xps-it\nit-mobile · mh-mobile" as clients
+
+node "MikroTik RB5009UG+S+IN\n**sce-rtr01** · RouterOS 7" as rb #f7fbff {
+
+  component "ether1 · WAN\nip_dhcp_client\nadd_default_route = yes\nmasquerade out ether1" as wan #e8f0fe
+
+  rectangle "input chain — terminal drop" as input #eaf7ef {
+    component "zone-lan list only\nDNS 53 · NTP 123 · DHCP 67/68" as i_lan #d9f2e3
+    component "unifi-mgmt-900 only\nSSH 22 · REST 443 · Winbox 8291" as i_mgmt #d9f2e3
+    component "ether1 only\nWireGuard 51820/51821" as i_wg #d9f2e3
+    component "everything else → drop" as i_drop #fde8e8
+  }
+
+  component "forward chain\n22 zone-pair chains · 44 accepts\nper-pair terminating drop\nordered via routeros_move_items" as fwd #e8f0fe
+
+  rectangle "native services — no containers" as svc #eaf7ef {
+    artifact "ip_dns + forwarders\n1.1.1.1 / 1.0.0.1 · cache 10240" as s_dns #d9f2e3
+    artifact "ip_dns_adlist\n45 lists (was blocky)" as s_adl #d9f2e3
+    artifact "ip_dns_record\n39 static (was bind)" as s_rec #d9f2e3
+    artifact "ip_dhcp_server\n9 servers · 21 static leases" as s_dhcp #d9f2e3
+    artifact "NTP server\nLAN-scoped (was open on WAN)" as s_ntp #d9f2e3
+    artifact "SNMP\nreplaces node-exporter" as s_snmp #d9f2e3
+  }
+
+  component "WireGuard — terminated here\nwg01 10.10.30.1/24 · 3 peers\nwg02 10.10.31.1/24 · 2 peers" as wg #e8f0fe
+
+  artifact "ddns-update\n/system/script + /system/scheduler\nNamecheap · every 5m\nddns.thomasnetworks.us" as ddns #fef6e7
+
+  component "bridge-lan · VLAN filtering\npvid 4094 · 11 tagged VLANs" as bridge #e8f0fe
+}
+
+node "Aruba SW03 · 10.98.0.251\nArubaS2500-24P PoE\nGE0/0/23 full trunk · unchanged" as sw #eaf7ef
+
+rectangle "11 VLANs — one SVI each" as vlans #f6fdf9 {
+  rectangle "carrying traffic" as v_live #eaf7ef {
+    artifact "910 unifi-frontend · 10.10.91.1/24" as v910
+    artifact "900 unifi-mgmt · 10.10.90.1/24 · 3 APs" as v900
+    artifact "610 seccam · 10.10.60.1/24 · 5 cams" as v610
+    artifact "120 k8s · 10.10.120.1/24" as v120
+    artifact "550 iLO · 10.10.55.1/24 · 2 iLO" as v550
+    artifact "140 UISP · 10.10.140.1/24" as v140
+  }
+  rectangle "enabled = false — intent preserved" as v_off #f4f4f4 {
+    artifact "110 ad · 11 pve · 410 bastion\n720 app · 10 transit (vestigial)" as voff
+  }
+}
+
+node "EP-R6 · 10.10.140.140\nthe ONLY surviving static route\n10.60.10.0/24 (in-laws)" as eprt #eaf7ef
+node "homelab-wsl k8s\nex-VyOS workloads:\nunifi · haproxy → ingress" as k8s #eaf7ef
+
+artifact "Terraform\nmodules/mikrotik\nsecrets via SOPS\napplied locally (LAN-only)" as tf #fef6e7
+
+isp --> wan : "DHCP lease"
+wan --> input : all inbound
+input --> fwd
+fwd --> svc
+wan --> ddns : reads lease
+wan --> wg : "UDP 51820/51821"
+fwd --> bridge
+bridge --> sw : "802.1q tagged trunk"
+sw --> v_live
+sw ..> v_off : no SVI created
+v140 --> eprt
+v120 --> k8s
+clients --> i_wg : "dial DDNS hostname"
+ddns ..> clients : "keeps endpoint resolvable\n(load-bearing)"
+tf ..> rb : "REST API 443\nterraform apply"
+
+legend right
+  |= |= retired at cutover |
+  | <&circle-x> | **THOMAS-ER01** EdgeRouter Lite — NAT + default route → ether1 |
+  | <&circle-x> | **sce-vyos01** VyOS — 11 SVIs + zone firewall → RB5009 |
+  | <&circle-x> | **AWS site-to-site VPN** — BGP MsgRcv 0, vti absent |
+  | <&circle-x> | **172.16.1.252 / .254** — dead next-hops, 16 routes |
+  | <&circle-x> | **transit-10 NTP dstnat** — black-holed at dead .254 |
+  | <&circle-x> | **12 Podman containers** — native services or k8s |
+endlegend
+
+@enduml

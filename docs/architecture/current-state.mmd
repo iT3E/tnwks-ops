@@ -1,0 +1,70 @@
+%% ---------------------------------------------------------------------------
+%% CURRENT STATE - two routers, as of 2026-09-19
+%% .
+%% Source: docs/edgerouter-discovery.md (live discovery against 172.16.1.1),
+%% Obsidian "Network Current State" (live SSH 2026-04-03/04, ports 2026-05-02),
+%% and iT3E/vyos-config config-parts/*.sh.
+%% .
+%% Red = verified broken or dangerous. Dashed = dead / never passes traffic.
+%% ---------------------------------------------------------------------------
+flowchart TB
+    isp["🌐 ISP<br/>cable"]
+
+    subgraph edge["EdgeRouter Lite · THOMAS-ER01 · EdgeOS 2.0.9 (2021)"]
+        erl_wan["eth0 · WAN<br/>35.135.56.103/20 DHCP<br/>default via 35.135.48.1<br/>masquerade NAT"]
+        erl_lan["eth2 · LAN2<br/>172.16.1.1/24"]
+        erl_dead["eth1 · LAN1<br/>10.98.0.1/24<br/>DISABLED · 0 bytes ever"]
+        erl_risk["⛔ NO input firewall<br/>INPUT policy ACCEPT, 0 rules<br/>open DNS 53 · open NTP 123<br/>BGP 179 · UBNT 10001/2"]
+    end
+
+    subgraph vyos["VyOS · sce-vyos01 · Celeron N5105 · ~187% CPU"]
+        vy_transit["eth0/transit<br/>172.16.1.250"]
+        vy_stick["eth1 · router-on-a-stick<br/>ALL 11 VLANs tagged"]
+        vy_ctr["12 Podman containers<br/>bind · dnsdist · blocky · haproxy×3<br/>unifi · node-exporter · relays<br/>❌ 5 crash-looping"]
+        vy_fw["zone firewall<br/>140 rulesets · 45 accepts<br/>no local zone = input unfiltered"]
+    end
+
+    sw["Aruba SW03 · 10.98.0.251<br/>ArubaS2500-24P PoE · ArubaOS 7.4.1.12<br/>GE0/0/23 = full trunk"]
+
+    subgraph vlans["11 VLANs"]
+        v910["910 unifi-frontend<br/>10.10.91.1"]
+        v900["900 unifi-mgmt<br/>10.10.90.1 · 3 APs"]
+        v610["610 seccam<br/>10.10.60.1 · 5 live cams"]
+        v120["120 k8s<br/>10.10.120.1"]
+        v550["550 iLO<br/>10.10.55.1 · 2 iLO"]
+        v140["140 UISP<br/>10.10.140.1"]
+        voff["110 ad · 11 pve · 410 bastion<br/>720 app · 10 transit<br/>(no DHCP / dormant)"]
+    end
+
+    eprt["EP-R6 bridge<br/>10.10.140.140<br/>→ in-laws 10.60.10.0/24"]
+
+    dead252["172.16.1.252<br/>DEAD · ip neigh FAILED<br/>13 routes point here"]
+    dead254["172.16.1.254<br/>DEAD · 100% loss<br/>3 routes + NTP dstnat<br/>+ shaper target"]
+    awsvpn["AWS site-to-site VPN<br/>BGP MsgRcv 0 · Up/Down never<br/>vti0/vti1 absent from ip link<br/>DEAD"]
+
+    isp --> erl_wan
+    erl_wan --- erl_risk
+    erl_wan --> erl_lan
+    erl_lan -->|"VLAN 10 transit"| vy_transit
+    vy_transit --- vy_fw
+    vy_transit --> vy_stick
+    vy_stick --- vy_ctr
+    vy_stick -->|"802.1q trunk"| sw
+    sw --> v910 & v900 & v610 & v120 & v550 & v140 & voff
+    v140 --> eprt
+
+    erl_lan -.->|"both routers<br/>route at dead hops"| dead252
+    erl_lan -.-> dead254
+    vy_transit -.-> dead254
+    erl_wan -.-> awsvpn
+    erl_dead -.-> sw
+
+    classDef risk fill:#fde8e8,stroke:#c0392b,stroke-width:2px,color:#7b241c
+    classDef dead fill:#f4f4f4,stroke:#95a5a6,stroke-dasharray:4 3,color:#7f8c8d
+    classDef router fill:#e8f0fe,stroke:#3b6ea5,color:#1b3a5c
+    classDef net fill:#eaf7ef,stroke:#2e8b57,color:#1d5c39
+
+    class erl_risk,vy_ctr,vy_fw risk
+    class erl_dead,dead252,dead254,awsvpn dead
+    class erl_wan,erl_lan,vy_transit,vy_stick router
+    class sw,v910,v900,v610,v120,v550,v140,voff,eprt net
