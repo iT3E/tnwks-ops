@@ -65,6 +65,7 @@ tnwks-ops/
     ├── bootstrap-wsl.md
     ├── bootstrap-ms-01.md
     ├── usb-passthrough.md
+    ├── peloton-to-garmin-pinned-auth.md
     └── disaster-recovery.md
 ```
 
@@ -94,6 +95,14 @@ gets it natively; the WSL cluster needs `usbipd-win` on the host.
 ### Disaster recovery
 
 See [docs/disaster-recovery.md](./docs/disaster-recovery.md).
+
+### Known-broken apps
+
+`peloton-to-garmin` is pinned to a 2023 image whose Peloton auth endpoint has
+been retired, so both instances fail every sync cycle. Renovate cannot see
+newer versions because upstream moved to flavor-prefixed tags. Do not bump it
+blindly — see
+[docs/peloton-to-garmin-pinned-auth.md](./docs/peloton-to-garmin-pinned-auth.md).
 
 ---
 
