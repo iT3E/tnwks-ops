@@ -1,0 +1,175 @@
+---
+# Disk hardware health for DESKTOP-HKE05KI (the Windows host under the WSL cluster).
+# Sources:
+#   - smartctl_exporter (job smartctl-exporter, :9633) runs as the SYSTEM scheduled
+#     task \Prometheus\smartctl_exporter on the Windows host and reads SMART data
+#     through smartmontools. `device` (sda, sdc, ...) is smartctl's own name and can
+#     change between boots, so every alert joins model_name + serial_number from
+#     smartctl_device to say which physical drive it is.
+#   - windows_exporter diskdrive collector (Win32_DiskDrive status, job windows-exporter).
+# Counter alerts fire on *change* (new reallocations, new media errors), so a drive
+# that already carries old damage stays quiet until it gets worse.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: disk-health-alerts
+spec:
+  groups:
+    - name: disk-health
+      rules:
+        # Wear used, 0-100 (can exceed 100 on NVMe). NVMe reports it directly; SATA SSDs
+        # report a normalized "life left" attribute (100 = new), so wear = 100 - value.
+        - record: smart:ssd_wear_used:percent
+          expr: |
+            smartctl_device_percentage_used
+            or
+            100 - min by (instance, job, device) (
+              smartctl_device_attribute{attribute_value_type="value",
+                attribute_name=~"Wear_Leveling_Count|Media_Wearout_Indicator|SSD_Life_Left|Percent_Lifetime_Remain"}
+            )
+
+        - alert: DiskSmartFailed
+          expr: |
+            (smartctl_device_smart_status == 0)
+            * on (instance, device) group_left (model_name, serial_number) smartctl_device
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "SMART health FAILED on {{ $labels.model_name }} ({{ $labels.instance }})"
+            description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }} reports SMART overall-health FAILED. The drive itself predicts failure: back it up now and replace it."
+
+        - alert: DiskSmartAttributeFailing
+          expr: |
+            (
+              max by (instance, job, device, attribute_id, attribute_name) (smartctl_device_attribute{attribute_value_type="value"})
+              <= on (instance, device, attribute_id) group_left ()
+              max by (instance, device, attribute_id) (smartctl_device_attribute{attribute_value_type="thresh"} > 0)
+            )
+            * on (instance, device) group_left (model_name, serial_number) smartctl_device
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "SMART attribute {{ $labels.attribute_name }} at/below threshold on {{ $labels.model_name }}"
+            description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }}: attribute {{ $labels.attribute_id }} {{ $labels.attribute_name }} normalized value {{ $value }} is at or below the vendor failure threshold. Back the drive up and plan a replacement."
+
+        - alert: DiskBadSectorsIncreasing
+          expr: |
+            (
+              max by (instance, job, device, attribute_name) (
+                increase(smartctl_device_attribute{attribute_value_type="raw",
+                  attribute_name=~"Reallocated_Sector_Ct|Reallocated_Event_Count|Current_Pending_Sector|Offline_Uncorrectable|Reported_Uncorrect|Uncorrectable_Error_Cnt|Runtime_Bad_Block|Program_Fail_Cnt_Total|Program_Fail_Count|Erase_Fail_Count_Total|Erase_Fail_Count"}[1h])
+              ) > 0
+            )
+            * on (instance, device) group_left (model_name, serial_number) smartctl_device
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.attribute_name }} increased on {{ $labels.model_name }}"
+            description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }}: {{ $labels.attribute_name }} went up by {{ $value | humanize }} in the last hour. The drive is remapping or failing to read/write blocks. Make sure it is backed up; repeated increases mean replace it."
+
+        - alert: DiskSataCrcErrorsIncreasing
+          expr: |
+            (
+              max by (instance, job, device, attribute_name) (
+                increase(smartctl_device_attribute{attribute_value_type="raw",
+                  attribute_name=~"CRC_Error_Count|UDMA_CRC_Error_Count"}[1h])
+              ) > 5
+            )
+            * on (instance, device) group_left (model_name, serial_number) smartctl_device
+          labels:
+            severity: warning
+          annotations:
+            summary: "SATA link CRC errors on {{ $labels.model_name }}"
+            description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }}: {{ $value | humanize }} new interface CRC errors in the last hour. This is usually the SATA cable or port, not the flash. Reseat or swap the cable."
+
+        - alert: DiskNvmeCriticalWarning
+          expr: |
+            (smartctl_device_critical_warning > 0)
+            * on (instance, device) group_left (model_name, serial_number) smartctl_device
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "NVMe critical warning on {{ $labels.model_name }}"
+            description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }} set NVMe critical warning bits {{ $value }} (1=spare low, 2=over temperature, 4=reliability degraded, 8=read-only, 16=backup failed). Back it up and check `smartctl -a` on the host."
+
+        - alert: DiskNvmeMediaErrorsIncreasing
+          expr: |
+            (increase(smartctl_device_media_errors[1h]) > 0)
+            * on (instance, device) group_left (model_name, serial_number) smartctl_device
+          labels:
+            severity: warning
+          annotations:
+            summary: "NVMe media errors increased on {{ $labels.model_name }}"
+            description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }} logged {{ $value | humanize }} new media/data integrity errors in the last hour (unrecovered read/write). Make sure it is backed up."
+
+        - alert: DiskNvmeSpareLow
+          expr: |
+            (
+              smartctl_device_available_spare
+              <= on (instance, device) group_left () smartctl_device_available_spare_threshold
+            )
+            * on (instance, device) group_left (model_name, serial_number) smartctl_device
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "NVMe spare blocks exhausted on {{ $labels.model_name }}"
+            description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }}: available spare is {{ $value }}%, at or below the drive's own threshold. It is close to going read-only. Replace it."
+
+        - alert: DiskSsdWearHigh
+          expr: |
+            (smart:ssd_wear_used:percent >= 90)
+            * on (instance, device) group_left (model_name, serial_number) smartctl_device
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "SSD {{ $labels.model_name }} has used {{ $value }}% of its rated endurance"
+            description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }} is at {{ $value }}% of its rated write endurance. Many drives outlive the rating, but plan a replacement and keep it backed up."
+
+        - alert: DiskTemperatureHigh
+          expr: |
+            (smartctl_device_temperature{temperature_type="current"} > 70)
+            * on (instance, device) group_left (model_name, serial_number) smartctl_device
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.model_name }} at {{ $value }}°C"
+            description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }} has been above 70°C for 15m ({{ $value }}°C now). Sustained heat throttles and ages the drive; check airflow or the M.2 heatsink."
+
+        - alert: DiskDisappeared
+          expr: |
+            count by (instance) (smartctl_device)
+            < max_over_time((count by (instance) (smartctl_device))[1d:5m])
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "A drive disappeared from {{ $labels.instance }}"
+            description: "smartctl on {{ $labels.instance }} sees {{ $value }} drive(s), fewer than it saw in the last day. A drive dropped off the bus or stopped answering SMART. Check Disk Management and `smartctl --scan` on the host."
+
+        - alert: WindowsDiskDriveStatusBad
+          expr: |
+            (windows_diskdrive_status{status!="OK"} == 1)
+            * on (instance, name) group_left (model) windows_diskdrive_info
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Windows reports {{ $labels.model }} as {{ $labels.status }}"
+            description: "Win32_DiskDrive on {{ $labels.instance }} reports {{ $labels.model }} ({{ $labels.name }}) status {{ $labels.status }} instead of OK. Back it up and check the drive."
+
+        - alert: SmartctlExporterDown
+          expr: |
+            up{job="smartctl-exporter"} == 0
+            unless on (instance) (up{job="windows-exporter"} == 0)
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "smartctl_exporter on {{ $labels.instance }} is down, disk health is blind"
+            description: "Prometheus can't scrape smartctl_exporter on {{ $labels.instance }}:9633 while windows_exporter is fine. Check the Windows scheduled task \\Prometheus\\smartctl_exporter and the 'smartctl_exporter (Prometheus)' firewall rule."

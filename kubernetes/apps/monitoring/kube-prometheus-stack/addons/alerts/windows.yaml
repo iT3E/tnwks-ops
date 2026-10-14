@@ -17,7 +17,7 @@ spec:
             description: "DESKTOP-HKE05KI CPU at {{ $value | humanizePercentage }}"
 
         - alert: WindowsHostHighMemory
-          expr: 1 - (windows_os_physical_memory_free_bytes{instance="DESKTOP-HKE05KI"} / windows_cs_physical_memory_bytes{instance="DESKTOP-HKE05KI"}) > 0.9
+          expr: 1 - (windows_memory_physical_free_bytes{instance="DESKTOP-HKE05KI"} / windows_memory_physical_total_bytes{instance="DESKTOP-HKE05KI"}) > 0.9
           for: 10m
           labels:
             severity: warning
@@ -26,7 +26,7 @@ spec:
             description: "DESKTOP-HKE05KI memory at {{ $value | humanizePercentage }}"
 
         - alert: WindowsHostCriticalMemory
-          expr: 1 - (windows_os_physical_memory_free_bytes{instance="DESKTOP-HKE05KI"} / windows_cs_physical_memory_bytes{instance="DESKTOP-HKE05KI"}) > 0.95
+          expr: 1 - (windows_memory_physical_free_bytes{instance="DESKTOP-HKE05KI"} / windows_memory_physical_total_bytes{instance="DESKTOP-HKE05KI"}) > 0.95
           for: 5m
           labels:
             severity: critical

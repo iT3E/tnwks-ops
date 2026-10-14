@@ -6,6 +6,7 @@ resources:
   - ./oomkilled.yaml
   - ./resource-pressure.yaml
   - ./windows.yaml
+  - ./disk-health.yaml
   - ./vyos.yaml
   - ./edgerouter.yaml
   - ./wan-latency.yaml
