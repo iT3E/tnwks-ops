@@ -46,7 +46,7 @@ spec:
           app:
             image:
               repository: docker.io/valkey/valkey
-              tag: 9.1.0-alpine@sha256:c9b77919daeba2c02ad954d0c844cc4e7142069d177b89c5fd771f405daf9e02
+              tag: 9.1.2-alpine@sha256:48332870af354a799964c0012ae1194a0bf2bf894eb508f945810596dc2d8d11
             # Keep the image entrypoint (docker-entrypoint.sh) and drive config
             # via args. ${VALKEY_PASSWORD} is substituted by Flux from
             # cluster-secrets (same mechanism oauth2-proxy uses for its
