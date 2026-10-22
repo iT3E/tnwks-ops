@@ -84,6 +84,12 @@ go2rtc:
 
 cameras:
   frigate_wyze_groom:
+    # Disabled 2026-10-22: online, but its RTSP server is off (tcp/554 refused, likely a Wyze firmware update dropped RTSP); dark since at least 2026-09-20.
+    # While enabled, Frigate restarts its ffmpeg every 10s, and each restart
+    # leaks ~16 kB in the main process (upstream discussion #24001, still in
+    # 0.18.2). With 4 dead cameras that was ~600 MB/day until the 8Gi limit.
+    # Re-enable once the stream answers again.
+    enabled: false
     ffmpeg:
       inputs:
         - path: rtsp://localhost:8554/frigate_wyze_groom
@@ -92,6 +98,12 @@ cameras:
       enabled: False
 
   frigate_wyze_rroom:
+    # Disabled 2026-10-22: not answering on the network; dark since at least 2026-09-20.
+    # While enabled, Frigate restarts its ffmpeg every 10s, and each restart
+    # leaks ~16 kB in the main process (upstream discussion #24001, still in
+    # 0.18.2). With 4 dead cameras that was ~600 MB/day until the 8Gi limit.
+    # Re-enable once the stream answers again.
+    enabled: false
     ffmpeg:
       inputs:
         - path: rtsp://localhost:8554/frigate_wyze_rroom
@@ -100,6 +112,12 @@ cameras:
       enabled: False
 
   frigate_wyze_baby:
+    # Disabled 2026-10-22: online, but its RTSP server is off (tcp/554 refused, likely a Wyze firmware update dropped RTSP); dark since at least 2026-09-20.
+    # While enabled, Frigate restarts its ffmpeg every 10s, and each restart
+    # leaks ~16 kB in the main process (upstream discussion #24001, still in
+    # 0.18.2). With 4 dead cameras that was ~600 MB/day until the 8Gi limit.
+    # Re-enable once the stream answers again.
+    enabled: false
     ffmpeg:
       inputs:
         - path: rtsp://localhost:8554/frigate_wyze_baby
@@ -108,6 +126,12 @@ cameras:
       enabled: False
 
   frigate_sv3c_east:
+    # Disabled 2026-10-22: not answering on the network (10.10.60.35, no ARP); dark since at least 2026-09-20.
+    # While enabled, Frigate restarts its ffmpeg every 10s, and each restart
+    # leaks ~16 kB in the main process (upstream discussion #24001, still in
+    # 0.18.2). With 4 dead cameras that was ~600 MB/day until the 8Gi limit.
+    # Re-enable once the stream answers again.
+    enabled: false
     ffmpeg:
       inputs:
         - path: rtsp://localhost:8554/frigate_sv3c_east_lq
