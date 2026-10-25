@@ -36,6 +36,7 @@ tasks:
         ansible
         awscli
         betterleaks
+        changie
         cilium-cli
         cloudflare/cloudflare/cloudflared
         direnv
