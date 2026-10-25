@@ -22,7 +22,7 @@ vars: {
 
 title: |md
   # Target state: one RB5009, Terraform-managed
-  `sce-rtr01` replaces **both** `sce-vyos01` and `THOMAS-ER01`
+  `sce-rtr01` replaces **both** `sce-vyos01` and `sce-er01`
 | {near: top-center}
 
 isp: {
@@ -189,7 +189,7 @@ retired: retired at cutover {
   }
 
   notes: |md
-    - **THOMAS-ER01** EdgeRouter Lite — NAT + default route move to `ether1`
+    - **sce-er01** EdgeRouter Lite — NAT + default route move to `ether1`
     - **sce-vyos01** VyOS — live SVIs + zone firewall move to the RB5009
     - **AWS site-to-site VPN** — BGP `MsgRcv 0`, vti absent; rebuild deliberately
     - **172.16.1.252 / .254** — dead next-hops, 16 routes pointed at them

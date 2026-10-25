@@ -171,10 +171,9 @@ resource "routeros_ip_firewall_filter" "input_mgmt" {
 }
 
 # --- Aggregate LAN interface list --------------------------------------------
-# Router services (DNS, NTP, DHCP) must be reachable from every internal VLAN and
-# from none of the WAN. The EdgeRouter Lite bound DNS and NTP to 0.0.0.0, which
-# made it a public open resolver and an open NTP reflector. Matching the input
-# chain against this list is what stops that from being recreated here.
+# Router services (DNS, NTP, DHCP) must be reachable from internal VLANs and
+# never from the WAN, where an answering resolver or NTP server is a reflection
+# source. Matching the input chain against this list enforces that.
 
 resource "routeros_interface_list" "lan" {
   name    = "zone-lan"

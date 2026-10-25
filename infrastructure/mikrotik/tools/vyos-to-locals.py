@@ -201,7 +201,7 @@ ROUTE_RE = re.compile(r"^set protocols static route (\S+) next-hop (\S+)")
 # --------------------------------------------------------------------------
 # EdgeRouter Lite consolidation (docs/edgerouter-discovery.md).
 #
-# The RB5009 replaces THOMAS-ER01 too, so the transit hop disappears.
+# The RB5009 replaces sce-er01 too, so the transit hop disappears.
 # 172.16.1.252 and .254 are both dead (`ip neigh` FAILED, 100% ping loss; see
 # docs/edgerouter-discovery.md), yet both routers still route production
 # subnets at them. Anything pointing at a dead next-hop is a bug, not a config to port.
@@ -241,8 +241,7 @@ NATIVE_VLAN = {
 # Break-glass: docs/network-access.md.
 ADMIN_ZONE = "vpn"  # wg01
 
-# Who may reach switch management. VyOS left eth1 out of every zone, so today
-# it is reachable from everywhere.
+# Who may reach switch management.
 NATIVE_VLAN_ACCESS = [ADMIN_ZONE]
 BRIDGE_PORTS = ["ether2", "ether3", "ether4", "ether5", "ether6", "ether7", "sfp-sfpplus1"]
 
@@ -1081,9 +1080,7 @@ def build_zone_policies(
     input_seq = max(input_seq, 500)
     for offset, extra in enumerate([
         {"comment": "ICMP for path MTU discovery and diagnostics", "protocol": "icmp"},
-        # LAN-only. The EdgeRouter Lite bound DHCP/NTP/DNS to 0.0.0.0, which left
-        # it a public open resolver and open NTP reflector on the WAN address.
-        # in_interface_list = "lan" is what keeps that from coming back.
+        # LAN-only: never answer DHCP/NTP/DNS on the WAN.
         {"comment": "DHCP requests from LAN clients", "protocol": "udp",
          "dst_port": "67,68", "in_interface_list": "lan"},
         {"comment": "NTP server mode for LAN clients only (never WAN)", "protocol": "udp",

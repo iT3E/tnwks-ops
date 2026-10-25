@@ -4,7 +4,7 @@ Collapsing **two** routers into one MikroTik RB5009UG+S+IN on RouterOS 7:
 
 - `sce-vyos01` — VyOS 1.4-rolling on an Intel N5105 box. Internal L3, VLANs,
   zone firewall, DHCP, DNS containers, WireGuard.
-- `THOMAS-ER01` — EdgeRouter Lite. Internet edge: WAN DHCP, the default route,
+- `sce-er01` — EdgeRouter Lite. Internet edge: WAN DHCP, the default route,
   and source NAT.
 
 The ERL half is documented separately in
@@ -97,9 +97,8 @@ Evidence in `edgerouter-discovery.md`.
 ### The input chain stops being optional
 
 With the ERL folded in, the input chain is the only thing between the internet
-and the router, and it is what closes the ERL's two worst findings: DNS and NTP
-were bound to `0.0.0.0`, making the box a **public open resolver and an open NTP
-reflector** usable for amplification attacks against third parties.
+and the router. Router services must never answer on the WAN; a resolver or NTP
+server reachable from the internet is usable for reflection attacks.
 
 So the module gained an aggregate `zone-lan` interface list. Router services
 match on it and therefore cannot be answered from the WAN:
@@ -337,14 +336,13 @@ Worth fixing in `vyos-config` regardless of the migration:
   `172.16.1.254`.** Dropped. `10.98.0.0/24` is reachable anyway because live
   VyOS has `10.98.0.1/24` on bare `eth1` (the trunk's untagged native VLAN),
   which `vyos-config` lacks. That is where the Aruba's management address
-  (`10.98.0.251`) lives, and it is in no VyOS zone, so every VLAN can reach it.
-  The port routes it as zone `switch-mgmt` (`native_vlan`), untagged on the
-  uplink only, reachable from 910, 900 and `wg01`.
+  (`10.98.0.251`) lives. The port routes it as zone `switch-mgmt`
+  (`native_vlan`), untagged on the uplink only, reachable from `wg01`.
 
-- **The live router has drifted from git.** Live VyOS has
-  `unifi-frontend-910-seccam-610 rule 1` ("Allow all from 910 to cameras"),
-  which `vyos-config` does not. That rule is what lets Frigate reach the cameras
-  today; the port replaces it with the Frigate-only rule above. Before cutover,
+- **The live router has drifted from git.** Live VyOS has a
+  `unifi-frontend-910-seccam-610` rule that `vyos-config` does not, and it is
+  what lets Frigate reach the cameras today; the port replaces it with the
+  Frigate-only rule above. Before cutover,
   diff `show configuration commands` against `config-parts/*.sh` for any other
   drift, since the generator only sees git.
 
@@ -433,8 +431,8 @@ transit-10, where VyOS's own `X -> transit-10` rules apply.
     starts doing work, and the DDNS script starts updating Namecheap from the
     lease within 5 minutes (`/log print where message~"ddns"`).
 13. **Verify** internet and NAT from a client, WireGuard from outside (now direct,
-    not port-forwarded), and that the router is not an open resolver or NTP
-    server. From outside the network, against the WAN address:
+    not port-forwarded), and that DNS and NTP do not answer on the WAN. From
+    outside the network, against the WAN address:
 
     ```bash
     dig @<wan-ip> example.com          # must time out
@@ -442,8 +440,7 @@ transit-10, where VyOS's own `X -> transit-10` rules apply.
     nmap -sU -p 123,53,10001 <wan-ip>   # must not be open
     ```
 
-    This is the single most important post-cutover check. The ERL failed all
-    three.
+    This is the single most important post-cutover check.
 14. **Flow export:** `wan_client_receive_bytes_total` grows in Prometheus and
     FlowCollectorNoFlows clears. FastTrack stays off (`var.fasttrack = false`)
     because FastTracked packets bypass traffic-flow; run a speed test and watch

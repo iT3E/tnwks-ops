@@ -1,8 +1,8 @@
-# EdgeRouter Lite discovery (THOMAS-ER01)
+# EdgeRouter Lite discovery (sce-er01)
 
 Live discovery of the internet edge router, run 2026-09-19 against `172.16.1.1`.
 This is the second half of the consolidation: the RB5009 replaces **both**
-`sce-vyos01` (internal L3/firewall) and `THOMAS-ER01` (internet edge).
+`sce-vyos01` (internal L3/firewall) and `sce-er01` (internet edge).
 
 Read alongside `mikrotik-vyos-port.md`, which covers the VyOS side and the
 cutover. This document is the evidence for what the port takes over from the ERL
@@ -12,10 +12,9 @@ and what it deliberately leaves behind.
 
 | | |
 | --- | --- |
-| Hostname | `THOMAS-ER01` |
+| Hostname | `sce-er01` (DNS name) |
 | Model | `UBNT_E100` (EdgeRouter Lite, 3-port, MIPS64) |
-| Firmware | `v2.0.9-hotfix.2` built **2021-05-11** (over 5 years old) |
-| Kernel | `4.9.79-UBNT` |
+| Firmware | EdgeOS 2.x |
 | RAM | 480MB total, 107MB used |
 | Uptime | 15 days |
 | Load | 0.09 |
@@ -52,62 +51,17 @@ This is the whole reason the port has to change:
 Everything else on the ERL is either dead, duplicated on VyOS, or a security
 problem.
 
-## 🔴 Security findings
+## What the replacement must not inherit
 
-These are live, on the box carrying all internet traffic, right now.
+The ERL is being retired, not hardened, so these are requirements on the RB5009
+rather than fixes to the ERL:
 
-### 1. There is no input firewall at all
-
-```
-Chain INPUT (policy ACCEPT)     <- zero rules
-Chain FORWARD (policy ACCEPT)
-Chain anyany                    <- 0 references
-```
-
-`firewall name anyany default-action accept` is defined and attached to nothing.
-No `firewall in`/`local` applied to `eth0`. The router accepts everything
-addressed to itself from the internet, filtered only by what happens to be
-listening.
-
-### 2. Open DNS resolver and open NTP server on the public internet
-
-Listening on `0.0.0.0` / `:::`, which includes the WAN address:
-
-| Port | Service | Exposure |
-| --- | --- | --- |
-| 53/tcp+udp | dnsmasq | **open resolver** despite `listen-on eth2` |
-| 123/udp | ntpd | **open NTP**, explicitly bound to `<wan-ip>:123` |
-| 179/tcp | BGP | open listener for dead sessions |
-| 10001/udp+tcp | UBNT discovery | open |
-| 10002/udp | UBNT discovery | open |
-
-IPv6 is bound too (`:::53`, `:::123`, `:::179`, `:::10001`, `:::10002`).
-
-Open resolvers and open NTP are the two classic **reflection/amplification DDoS
-sources**. This box is currently usable by strangers to attack third parties, and
-the ISP link is the amplifier. `config` says DNS listens on `eth2` only; the
-process disagrees, which is exactly the kind of gap a real input drop would have
-caught.
-
-This alone justifies the migration timeline.
-
-### 3. Secrets in plaintext in the config
-
-- **Namecheap DDNS password** for the DDNS domain:
-  (redacted). **Rotate.**
-- **UISP/UNMS connection token** in the `service unms connection` string.
-- `system login user ivan.thomas` SHA-512 hash (expected, but it is in the dump).
-
-Adds to the credential-rotation debt already open since April.
-
-### 4. Weaker settings worth fixing on the way over
-
-- `service gui older-ciphers enable` — deliberately weakened TLS on the web UI.
-- `service snmp community public authorization ro` — the default community name,
-  plus a second community `thomas`. LAN-bound, but `public` should not exist.
-- `firewall source-validation disable` — no anti-spoof / reverse-path check.
-- `firewall send-redirects enable` — should be off on a border router.
-- Firmware is 5 years stale.
+- An explicit input chain ending in a drop. From the WAN, only WireGuard.
+- DNS, NTP and DHCP answered on internal VLANs only.
+- No routing-protocol or vendor-discovery listeners.
+- Reverse-path filtering on, ICMP redirects off.
+- No credentials carried over from the ERL config; the DDNS password is rotated.
+- No default SNMP community names.
 
 ## Dead configuration
 
@@ -175,7 +129,7 @@ VyOS's bare `eth1` as switch management.
 | `service dns forwarding` (cache 150) | already covered by native `ip_dns` from the VyOS port |
 | `system ntp server *.ubnt.pool.ntp.org` | merge with VyOS `us.pool.ntp.org`, **LAN-only, never WAN** |
 | `service ssh listen-address 172.16.1.1` | `ip_service` ssh + input-chain accept from mgmt only |
-| `service snmp` | RouterOS SNMP, drop the `public` community |
+| `service snmp` | mktxp over the read-only API instead |
 | `system conntrack` tuning | `ip_firewall_connection_tracking` |
 | `system offload` | RouterOS fasttrack, already in the port |
 | `service dns dynamic` (namecheap) | ⚠️ no RouterOS namecheap provider — see below |
@@ -230,10 +184,8 @@ Net: the consolidated router needs roughly **one** static route
 
 ### The WAN input chain becomes load-bearing
 
-The VyOS port already adds an explicit input chain with a terminal drop, which I
-described as "intentional hardening." With the ERL folded in, that input chain is
-now **the only thing standing between the internet and the router**, and it is
-what closes the open-resolver and open-NTP holes. It stops being a nice-to-have.
+With the ERL folded in, the RB5009's input chain is the only filter between the
+internet and the router, so it is load-bearing rather than optional.
 
 Requirements it must meet:
 
@@ -243,7 +195,7 @@ Requirements it must meet:
 - WireGuard `51820`/`51821` accepted on `ether1` (this is the one WAN-facing
   service, and it replaces ERL port-forward rules 3 and 4).
 - Established/related and ICMP as already configured.
-- `source-validation` on, unlike the ERL.
+- Reverse-path filtering on.
 
 ## Reproducing this discovery
 
@@ -260,6 +212,5 @@ sshpass -p "$ERL_PASS" ssh \
   "/opt/vyatta/bin/vyatta-op-cmd-wrapper show configuration commands"
 ```
 
-Operational commands need the
-`/opt/vyatta/bin/vyatta-op-cmd-wrapper` prefix over SSH, `arp` does not exist
-(use `ip neigh`), and `sudo` works without a password prompt.
+Operational commands need the `/opt/vyatta/bin/vyatta-op-cmd-wrapper` prefix
+over SSH, and `arp` does not exist (use `ip neigh`).

@@ -400,9 +400,7 @@ variable "lan_interface_lists" {
     Zone names whose interfaces make up the aggregate `zone-lan` interface list.
 
     Input-chain rules for router-provided services (DNS, NTP, DHCP) match on this
-    list so they can never be satisfied from the WAN. The EdgeRouter Lite bound
-    DNS and NTP to 0.0.0.0, which made it a public open resolver and an open NTP
-    reflector. Scoping these to the LAN list is what closes that.
+    list so they can never be satisfied from the WAN.
   EOT
   type        = list(string)
   default     = []

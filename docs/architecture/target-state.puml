@@ -22,7 +22,7 @@
 @startuml target-state-plantuml
 !pragma layout smetana
 !theme plain
-title Target state: one RB5009 replaces both sce-vyos01 and THOMAS-ER01
+title Target state: one RB5009 replaces both sce-vyos01 and sce-er01
 
 skinparam backgroundColor transparent
 skinparam shadowing false
@@ -101,7 +101,7 @@ tf ..> rb : "REST API 443\nterraform apply"
 
 legend right
   |= |= retired at cutover |
-  | <&circle-x> | **THOMAS-ER01** EdgeRouter Lite — NAT + default route → ether1 |
+  | <&circle-x> | **sce-er01** EdgeRouter Lite — NAT + default route → ether1 |
   | <&circle-x> | **sce-vyos01** VyOS — live SVIs + zone firewall → RB5009 |
   | <&circle-x> | **AWS site-to-site VPN** — BGP MsgRcv 0, vti absent |
   | <&circle-x> | **172.16.1.252 / .254** — dead next-hops, 16 routes |
