@@ -35,6 +35,7 @@ tasks:
         age
         ansible
         awscli
+        betterleaks
         cilium-cli
         cloudflare/cloudflare/cloudflared
         direnv

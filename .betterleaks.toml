@@ -1,0 +1,30 @@
+# betterleaks config for tnwks-ops. Extends the upstream default rules.
+# Run locally: task precommit:run   (or: betterleaks git --staged)
+title = "tnwks-ops"
+
+[extend]
+useDefault = true
+
+# The default rules catch KEY=value secrets but not a credential written as
+# prose in a doc, e.g. "the DDNS password for `example.us`: `3f9a...`". The
+# secret must be a backticked hex/base64-looking token (no `_`, `-` or `.`,
+# which rules out paths and identifiers) within two lines of the keyword.
+[[rules]]
+id = "prose-credential"
+description = "Credential pasted into documentation next to a secret-ish word"
+regex = '''(?i)\b(?:password|passwd|secret|token|api[ _-]?key|credential)s?\b[^\n]{0,100}(?:\n[^\n]{0,100})?`([A-Za-z0-9+/=]{24,})`'''
+secretGroup = 1
+entropy = 3.5
+path = '''\.(?:md|mmd|d2|puml|txt|rst|adoc)$'''
+keywords = ["password", "passwd", "secret", "token", "api key", "api_key", "apikey", "credential"]
+
+[allowlist]
+description = "Vendored third-party code, upstream test fixtures, and template placeholders"
+paths = [
+  # Vendored Home Assistant custom components (translations, minified JS).
+  '''kubernetes/apps/production/home-assistant/app/config/custom_components/''',
+  # Upstream rook script; the hits are its mocked Ceph command output.
+  '''create-external-cluster-resources\.py$''',
+]
+# Placeholder values in *.example / bootstrap templates.
+stopwords = ["CHANGEME", "CHANGEME-SEE-SOPS", "generated"]
