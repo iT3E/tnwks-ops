@@ -135,8 +135,8 @@ defaults to accept, so without it every unbound pair, and WAN to LAN, is open.
 
 **Internet egress keeps VyOS's semantics.** VyOS reached the internet through
 `transit-10` (the ERL hop), so its `X -> transit-10` rulesets are the
-internet-egress policy: cameras (`seccam-610`) only reach the internet from
-`blue_iris`, and `iLO-550` not at all. `ether1` joins `zone-transit-10`
+internet-egress policy: cameras (`seccam-610`) and `iLO-550` get no internet
+access at all. `ether1` joins `zone-transit-10`
 (`outside_zone`), so those same rules apply before and after the modem moves.
 
 ### 2. VLANs move onto a VLAN-filtering bridge
@@ -215,8 +215,8 @@ router.
 
 `seccam-610` is untrusted:
 
-- Cameras can reach only the router's DHCP, DNS, NTP and ICMP. No internet
-  (except the Blue Iris NVR), no management access to the router.
+- Cameras can reach only the router's DHCP, DNS, NTP and ICMP. No internet, no
+  management access to the router, nothing on any other VLAN.
 - Nothing on 910 reaches a camera except Frigate's RTSP pulls (tcp/udp 554 from
   the `frigate` address list to `security_cameras`). Everything else on 910
   talks to Frigate, not to cameras.
@@ -255,7 +255,9 @@ generator resolves each one rather than dropping it:
 
 The generator records every one of these in the locals.tf footer. The
 `*.tnwks.local` names that pointed at haproxy (`hass`, `jellyfin`,
-`obsidian-couchdb`, `blueiris`) are dropped.
+`obsidian-couchdb`, `blueiris`) are dropped. Blue Iris itself is retired: its
+address group and every rule naming it are dropped, so the camera VLAN
+initiates nothing beyond the router's DHCP/DNS/NTP.
 
 ## Gaps with no native RouterOS equivalent
 

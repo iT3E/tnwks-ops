@@ -140,6 +140,12 @@ NEW_ADDRESS_LISTS = {
     "frigate": {WSL_HOST.replace(".", "_"): WSL_HOST},
 }
 
+# Address groups for hosts that are retired. Every rule that names one is
+# dropped, the group is not emitted, and dstnat exemptions for its members go.
+RETIRED_ADDRESS_GROUPS = {
+    "blue_iris": "Blue Iris NVR, replaced by Frigate",
+}
+
 # --------------------------------------------------------------------------
 # Camera policy. The camera VLAN is untrusted: cameras may only reach the
 # router's DHCP/DNS/NTP, nothing on 910 may reach them except Frigate's RTSP
@@ -1111,9 +1117,22 @@ def main() -> int:
         if "dhcp" not in vlan and name not in active_zones:
             vlan["enabled"] = False
 
+    # Retired hosts: drop their groups and every rule that names one, before
+    # any translation, so no pair is emitted on their behalf.
+    retired_notes: list[str] = []
+    retired_members = set()
+    for group, why in RETIRED_ADDRESS_GROUPS.items():
+        retired_members.update(address_lists.pop(group, {}).values())
+        for name, data in rulesets.items():
+            for num in [n for n, r in data["rules"].items()
+                        if group in (r.get("src_address_list"), r.get("dst_address_list"))]:
+                del data["rules"][num]
+                retired_notes.append("%s rule %s: DROPPED; it names %s (%s)" % (name, num, group, why))
+
     zone_policies, input_rules, notes = build_zone_policies(
         rulesets, pairs, zone_iface, port_lists, vlans
     )
+    notes.extend(retired_notes)
     notes.extend(dns_notes)
     notes.extend(admin_notes)
 
@@ -1208,6 +1227,10 @@ def main() -> int:
         for key in ("dst_address", "src_address"):
             if key in rule:
                 entry[key] = rule[key]
+        # An exemption for a retired host ("!10.10.60.210") has nothing to exempt.
+        if entry.get("src_address", "").lstrip("!") in retired_members:
+            notes.append("nat rule %s (%s): exemption for retired host %s removed"
+                         % (num, entry["comment"], entry.pop("src_address").lstrip("!")))
 
         # A redirect to a dead host is a black hole, not a feature. The VyOS
         # transit-10 NTP rule pointed at 172.16.1.254, which means NTP for that

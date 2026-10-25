@@ -16,10 +16,10 @@
 ##   VLANs                11 (11 enabled)
 ##   DHCP servers         9
 ##   DHCP static leases   21
-##   Address lists        22 (38 members)
+##   Address lists        21 (37 members)
 ##   Port lists           3
-##   Zone-pair chains     39
-##   Firewall accepts     49 (expanded from VyOS tcp_udp / port-limit splits)
+##   Zone-pair chains     35
+##   Firewall accepts     41 (expanded from VyOS tcp_udp / port-limit splits)
 ##   Input-chain accepts  31
 ##   dstnat rules         11
 ##   Static routes        1
@@ -292,9 +292,6 @@ locals {
   address_lists = {
     "3d_printer_controllers" = {
       "10_1_3_56" = "10.1.3.56"
-    }
-    blue_iris = {
-      "10_10_60_210" = "10.10.60.210"
     }
     domain_controllers = {
       "10_10_10_10" = "10.10.10.10"
@@ -704,84 +701,7 @@ locals {
       rules          = []
       default_action = "accept"
     }
-    "160-seccam-610-ad-110" = {
-      from    = "seccam-610"
-      to      = "ad-110"
-      comment = "From seccam-610 to ad-110"
-      rules = [
-        {
-          comment          = "rule 1 [ports 1/2]"
-          src_address_list = "blue_iris"
-          dst_address_list = "domain_controllers"
-          protocol         = "tcp"
-          dst_port         = "389,53,3268,3269,88,464,636,123,135,137,138,139,445,9389,5985"
-        },
-        {
-          comment          = "rule 1 [ports 2/2]"
-          src_address_list = "blue_iris"
-          dst_address_list = "domain_controllers"
-          protocol         = "tcp"
-          dst_port         = "5986,6000-6199,49152-65535"
-        },
-        {
-          comment          = "rule 1 [ports 1/2]"
-          src_address_list = "blue_iris"
-          dst_address_list = "domain_controllers"
-          protocol         = "udp"
-          dst_port         = "389,53,3268,3269,88,464,636,123,135,137,138,139,445,9389,5985"
-        },
-        {
-          comment          = "rule 1 [ports 2/2]"
-          src_address_list = "blue_iris"
-          dst_address_list = "domain_controllers"
-          protocol         = "udp"
-          dst_port         = "5986,6000-6199,49152-65535"
-        },
-      ]
-    }
-    "170-seccam-610-app-720" = {
-      from    = "seccam-610"
-      to      = "app-720"
-      comment = "From seccam-610 to app-720"
-      rules = [
-        {
-          comment          = "Rule: mosquitto_mqtt"
-          src_address_list = "blue_iris"
-          dst_address_list = "hass"
-          protocol         = "tcp"
-          dst_port         = "1883"
-        },
-        {
-          comment          = "Rule: mosquitto_mqtt"
-          src_address_list = "blue_iris"
-          dst_address_list = "hass"
-          protocol         = "udp"
-          dst_port         = "1883"
-        },
-      ]
-    }
-    "180-seccam-610-transit-10" = {
-      from    = "seccam-610"
-      to      = "transit-10"
-      comment = "From seccam-610 to transit-10"
-      rules = [{
-        comment          = "rule 1"
-        src_address_list = "blue_iris"
-      }]
-    }
-    "190-seccam-610-unifi-frontend-910" = {
-      from    = "seccam-610"
-      to      = "unifi-frontend-910"
-      comment = "From seccam-610 to unifi-frontend-910"
-      rules = [
-        {
-          comment          = "rule 1"
-          src_address_list = "blue_iris"
-          dst_address_list = "wyze_cameras"
-        },
-      ]
-    }
-    "200-transit-10-k8s-120" = {
+    "160-transit-10-k8s-120" = {
       from    = "transit-10"
       to      = "k8s-120"
       comment = "From transit-10 to k8s-120"
@@ -794,7 +714,7 @@ locals {
         },
       ]
     }
-    "210-transit-10-unifi-mgmt-900" = {
+    "170-transit-10-unifi-mgmt-900" = {
       from    = "transit-10"
       to      = "unifi-mgmt-900"
       comment = "From transit-10 to unifi-mgmt-900"
@@ -811,21 +731,21 @@ locals {
         },
       ]
     }
-    "220-UISP-140-transit-10" = {
+    "180-UISP-140-transit-10" = {
       from           = "UISP-140"
       to             = "transit-10"
       comment        = "From uisp-140 to transit-10"
       rules          = []
       default_action = "accept"
     }
-    "230-unifi-frontend-910-transit-10" = {
+    "190-unifi-frontend-910-transit-10" = {
       from           = "unifi-frontend-910"
       to             = "transit-10"
       comment        = "From unifi-frontend-910 to transit-10"
       rules          = []
       default_action = "accept"
     }
-    "240-unifi-mgmt-900-unifi-frontend-910" = {
+    "200-unifi-mgmt-900-unifi-frontend-910" = {
       from    = "unifi-mgmt-900"
       to      = "unifi-frontend-910"
       comment = "unifi-mgmt-900 -> unifi-frontend-910"
@@ -844,56 +764,56 @@ locals {
         },
       ]
     }
-    "250-unifi-mgmt-900-transit-10" = {
+    "210-unifi-mgmt-900-transit-10" = {
       from           = "unifi-mgmt-900"
       to             = "transit-10"
       comment        = "From unifi-mgmt-900 to transit-10"
       rules          = []
       default_action = "accept"
     }
-    "260-vpn-UISP-140" = {
+    "220-vpn-UISP-140" = {
       from           = "vpn"
       to             = "UISP-140"
       comment        = "From vpn to UISP-140"
       rules          = []
       default_action = "accept"
     }
-    "270-vpn-ad-110" = {
+    "230-vpn-ad-110" = {
       from           = "vpn"
       to             = "ad-110"
       comment        = "From vpn to ad-110"
       rules          = []
       default_action = "accept"
     }
-    "280-vpn-app-720" = {
+    "240-vpn-app-720" = {
       from           = "vpn"
       to             = "app-720"
       comment        = "From vpn to app-720"
       rules          = []
       default_action = "accept"
     }
-    "290-vpn-bastion-410" = {
+    "250-vpn-bastion-410" = {
       from           = "vpn"
       to             = "bastion-410"
       comment        = "From vpn to bastion-410"
       rules          = []
       default_action = "accept"
     }
-    "300-vpn-iLO-550" = {
+    "260-vpn-iLO-550" = {
       from           = "vpn"
       to             = "iLO-550"
       comment        = "From vpn to iLO-550"
       rules          = []
       default_action = "accept"
     }
-    "310-vpn-k8s-120" = {
+    "270-vpn-k8s-120" = {
       from           = "vpn"
       to             = "k8s-120"
       comment        = "From vpn to k8s-120"
       rules          = []
       default_action = "accept"
     }
-    "320-vpn-mobile-unifi-frontend-910" = {
+    "280-vpn-mobile-unifi-frontend-910" = {
       from    = "vpn-mobile"
       to      = "unifi-frontend-910"
       comment = "From vpn-mobile to unifi-frontend-910"
@@ -907,49 +827,49 @@ locals {
       ]
       default_action = "accept"
     }
-    "330-vpn-mobile-transit-10" = {
+    "290-vpn-mobile-transit-10" = {
       from           = "vpn-mobile"
       to             = "transit-10"
       comment        = "From vpn-mobile to transit-10"
       rules          = []
       default_action = "accept"
     }
-    "340-vpn-pve-11" = {
+    "300-vpn-pve-11" = {
       from           = "vpn"
       to             = "pve-11"
       comment        = "From vpn to pve-11"
       rules          = []
       default_action = "accept"
     }
-    "350-vpn-seccam-610" = {
+    "310-vpn-seccam-610" = {
       from           = "vpn"
       to             = "seccam-610"
       comment        = "From vpn to seccam-610"
       rules          = []
       default_action = "accept"
     }
-    "360-vpn-transit-10" = {
+    "320-vpn-transit-10" = {
       from           = "vpn"
       to             = "transit-10"
       comment        = "From vpn to transit-10"
       rules          = []
       default_action = "accept"
     }
-    "370-vpn-unifi-frontend-910" = {
+    "330-vpn-unifi-frontend-910" = {
       from           = "vpn"
       to             = "unifi-frontend-910"
       comment        = "From vpn to unifi-frontend-910"
       rules          = []
       default_action = "accept"
     }
-    "380-vpn-unifi-mgmt-900" = {
+    "340-vpn-unifi-mgmt-900" = {
       from           = "vpn"
       to             = "unifi-mgmt-900"
       comment        = "From vpn to unifi-mgmt-900"
       rules          = []
       default_action = "accept"
     }
-    "390-unifi-frontend-910-seccam-610" = {
+    "350-unifi-frontend-910-seccam-610" = {
       from    = "unifi-frontend-910"
       to      = "seccam-610"
       comment = "From unifi-frontend-910 to seccam-610"
@@ -1186,7 +1106,6 @@ locals {
       protocol     = "tcp"
       dst_port     = "53"
       to_port      = "53"
-      src_address  = "!10.10.60.210"
       action       = "redirect"
     }
     "103-udp" = {
@@ -1195,7 +1114,6 @@ locals {
       protocol     = "udp"
       dst_port     = "53"
       to_port      = "53"
-      src_address  = "!10.10.60.210"
       action       = "redirect"
     }
     "110-udp" = {
@@ -1680,13 +1598,17 @@ locals {
   #   - k8s-120-containers rule 3: DROPPED; it targeted haproxy_all, which only existed for haproxy (not ported, its backends are gone)
   #   - nat rule 102 (Force DNS for unifi-frontend-910): dst-nat to 10.10.53.4 (DNS container) became a redirect to the router
   #   - nat rule 103 (Force DNS for seccam-610): dst-nat to 10.10.53.4 (DNS container) became a redirect to the router
+  #   - nat rule 103 (Force DNS for seccam-610): exemption for retired host 10.10.60.210 removed
   #   - nat rule 117 (Force NTP for transit-10) DROPPED: redirect target 172.16.1.254 is dead, so this rule black-holes traffic today
   #   - pve-11-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
   #   - route 0.0.0.0/0 via 172.16.1.1: not a static route; becomes upstream_gateway (distance 10) for the staged cutover, and the WAN DHCP lease (distance 1) takes over when the modem moves
   #   - route 10.10.93.0/24 via 172.16.1.254 DROPPED: next-hop is dead (ip neigh FAILED, 100% ping loss). Both VyOS and the EdgeRouter still pointed production subnets at it
   #   - route 10.98.0.0/24 via 172.16.1.254 DROPPED: next-hop is dead (ip neigh FAILED, 100% ping loss). Both VyOS and the EdgeRouter still pointed production subnets at it
-  #   - seccam-610-ad-110 rule 1: port-group ad_auth_ports has 18 entries (RouterOS max 15); inlined and split across 2 rules
+  #   - seccam-610-ad-110 rule 1: DROPPED; it names blue_iris (Blue Iris NVR, replaced by Frigate)
+  #   - seccam-610-app-720 rule 1: DROPPED; it names blue_iris (Blue Iris NVR, replaced by Frigate)
   #   - seccam-610-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
+  #   - seccam-610-transit-10 rule 1: DROPPED; it names blue_iris (Blue Iris NVR, replaced by Frigate)
+  #   - seccam-610-unifi-frontend-910 rule 1: DROPPED; it names blue_iris (Blue Iris NVR, replaced by Frigate)
   #   - syslog: target 10.10.120.56 (Vector on the old cluster, gone) -> 10.10.91.142:6001, the WSL host's LAN bridge. Needs vector-aggregator running on WSL and a tcp/6001 lan-bridge relay
   #   - system: 1 SSH public key(s) ported from VyOS `system login user`; the username came from ${SSH_VYOS_USERNAME} and is injected from SOPS in main.tf
   #   - system: VyOS flow export (sFlow, for monitoring/flow-collector) is not generated; the root module's flow_export (IPFIX) replaces it
