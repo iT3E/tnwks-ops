@@ -323,7 +323,8 @@ Worth fixing in `vyos-config` regardless of the migration:
   references it. The port provisions it from git as the admin VPN, so its peers
   need working client configs before cutover.
 - **`910 -> 10.10.140.140:443` (the EP-R6 UI) is open live** but has no rule in
-  git. The port does not carry it over: UISP radios are reachable over `wg01`.
+  git. In the port it is reachable over `wg01` (`vpn -> UISP-140` defaults to
+  accept) and not from 910.
 - **NTP dstnat for `transit-10` targets `172.16.1.254`.** `.254` is dead, so the
   rule black-holes NTP for
   that zone today. Not ported; the generator records it.
