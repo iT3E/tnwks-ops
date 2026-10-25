@@ -60,11 +60,11 @@ rb: MikroTik RB5009UG+S+IN — sce-rtr01 — RouterOS 7 {
       style.fill: "#d9f2e3"
     }
     mgmt: {
-      label: "unifi-mgmt-900 only\nSSH 22 · REST 443 · Winbox 8291"
+      label: "internal VLANs (not 610) · wg01 · ether8 OOB\nSSH 22 · REST 443 · Winbox 8291\ncredential-gated"
       style.fill: "#d9f2e3"
     }
     wg_in: {
-      label: "ether1 only\nWireGuard 51820/51821"
+      label: "zone-transit-10 (ether1, ERL port-forward)\nWireGuard 51820/51821"
       style.fill: "#d9f2e3"
     }
     drop: {
@@ -77,7 +77,7 @@ rb: MikroTik RB5009UG+S+IN — sce-rtr01 — RouterOS 7 {
   }
 
   forward: {
-    label: "forward chain\n22 zone-pair chains · 44 accepts\nper-pair terminating drop\nordered via routeros_move_items"
+    label: "forward chain\nper-pair default (drop or accept)\nterminal forward drop\nordered via routeros_move_items"
     style.fill: "#e8f0fe"
   }
 
@@ -89,13 +89,13 @@ rb: MikroTik RB5009UG+S+IN — sce-rtr01 — RouterOS 7 {
 
     tbl: {
       shape: sql_table
-      label: replaces 5 crash-looping Podman containers
+      label: replaces the Podman DNS containers
       "ip_dns + forwarders": "1.1.1.1 / 1.0.0.1 · cache 10240"
       "ip_dns_adlist": "45 lists (was blocky)"
-      "ip_dns_record": "39 static (was bind)"
-      "ip_dhcp_server": "9 servers · 21 static leases"
+      "ip_dns_record": "static (was bind + blocky)"
+      "ip_dhcp_server": "one per VLAN"
       "NTP server": "LAN-scoped (was open on WAN)"
-      "SNMP": "replaces node-exporter"
+      "mktxp API": "read-only, replaces node-exporter"
     }
   }
 
@@ -113,7 +113,7 @@ rb: MikroTik RB5009UG+S+IN — sce-rtr01 — RouterOS 7 {
   }
 
   bridge: {
-    label: "bridge-lan · VLAN filtering\npvid 4094 · 11 tagged VLANs\nno more router-on-a-stick hairpin"
+    label: "bridge-lan · VLAN filtering\nnative VLAN 1 = switch mgmt (uplink only)\nno more router-on-a-stick hairpin"
     style.fill: "#e8f0fe"
   }
 }
@@ -123,7 +123,7 @@ sw: {
   style.fill: "#eaf7ef"
 }
 
-vlans: 11 VLANs — one SVI each {
+vlans: VLANs — one SVI each {
   style: {
     fill: "#f6fdf9"
     stroke: "#2e8b57"
@@ -136,18 +136,9 @@ vlans: 11 VLANs — one SVI each {
     "900 unifi-mgmt": "10.10.90.1/24 · 3 APs"
     "610 seccam": "10.10.60.1/24 · 5 cams"
     "120 k8s": 10.10.120.1/24
-    "550 iLO": "10.10.55.1/24 · 2 iLO"
     "140 UISP": 10.10.140.1/24
-  }
-
-  dormant: {
-    shape: sql_table
-    label: enabled = false — intent preserved
-    "110 ad": 10.10.10.1/24
-    "11 pve": 10.10.11.1/24
-    "410 bastion": 10.10.40.1/24
-    "720 app": 10.10.72.1/24
-    "10 transit": "172.16.1.x · vestigial"
+    "native switch-mgmt": "10.98.0.1/24 · untagged · Aruba"
+    "10 transit": "172.16.1.250 · until the ERL retires"
   }
 }
 
@@ -157,7 +148,7 @@ eprt: {
 }
 
 k8s: {
-  label: "homelab-wsl k8s\nex-VyOS workloads: unifi,\nhaproxy → ingress"
+  label: "homelab-wsl k8s\nex-VyOS workloads: unifi\nFrigate pulls camera RTSP"
   style.fill: "#eaf7ef"
 }
 
@@ -178,11 +169,10 @@ rb.forward -> rb.services
 rb.wan -> rb.ddns: reads lease
 rb.wan -> rb.wg: "UDP 51820/51821"
 rb.forward -> rb.bridge
-rb.bridge -> sw: 802.1q tagged trunk
+rb.bridge -> sw: "802.1q trunk + untagged switch mgmt"
 sw -> vlans.live
-sw -> vlans.dormant: no SVI created {style.stroke-dash: 4}
 vlans.live -> eprt: VLAN 140
-vlans.live -> k8s: VLAN 120
+vlans.live -> k8s: "VLAN 910 (Windows host)"
 clients -> rb.input.wg_in: "dial DDNS hostname"
 rb.ddns -> clients: "keeps endpoint resolvable\n(load-bearing)" {
   style: {
@@ -201,10 +191,11 @@ retired: retired at cutover {
 
   notes: |md
     - **THOMAS-ER01** EdgeRouter Lite — NAT + default route move to `ether1`
-    - **sce-vyos01** VyOS — 11 SVIs + zone firewall move to the RB5009
+    - **sce-vyos01** VyOS — live SVIs + zone firewall move to the RB5009
     - **AWS site-to-site VPN** — BGP `MsgRcv 0`, vti absent; rebuild deliberately
     - **172.16.1.252 / .254** — dead next-hops, 16 routes pointed at them
     - **transit-10 NTP dstnat** — black-holed at dead `.254`
-    - **12 Podman containers** — native services or already on k8s
+    - **12 Podman containers** — native services, k8s, or dropped (haproxy)
+    - **VLANs 11 · 110 · 410 · 550 · 720** and Blue Iris — retired, not ported
   |
 }

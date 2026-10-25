@@ -155,14 +155,14 @@ Note `10.60.10.0/24` is the airMAX subnet, which VyOS correctly routes via
 VyOS's `transit-10` NTP dstnat also targets `.254`, so NTP for that zone is
 black-holed today. Not ported.
 
-Also note VyOS routes `10.98.0.0/24` and `10.10.93.0/24` via `172.16.1.254`, so
-**both routers currently send switch-management traffic to a dead host.**
+VyOS also routes `10.98.0.0/24` and `10.10.93.0/24` via `172.16.1.254`. For
+`10.98.0.0/24` that static is shadowed by VyOS's connected `eth1` address, so
+switch management still works; `10.10.93.0/24` goes nowhere.
 
 ### eth1: disabled, never used
 
-`10.98.0.1/24`, `disable`, 0 bytes RX and TX. That address is what the RB5009
-bootstrap script already claims for management, which is consistent: the new box
-takes over the role this interface was supposed to play.
+`10.98.0.1/24`, `disable`, 0 bytes RX and TX. The same address is live on
+VyOS's bare `eth1` as switch management.
 
 ## What must be ported
 

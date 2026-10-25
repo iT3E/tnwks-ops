@@ -1,7 +1,6 @@
 locals {
-  # Only VLANs flagged enabled get provisioned. VyOS carried definitions for
-  # 11/110/120/410/550/720 that had no live devices; keeping them here as
-  # enabled=false preserves the intent without creating dead SVIs.
+  # Only VLANs flagged enabled get provisioned; enabled=false keeps a
+  # definition in git without creating an SVI.
   active_vlans = { for k, v in var.vlans : k => v if coalesce(v.enabled, true) }
 
   # VLANs that additionally want a DHCP server.
@@ -43,6 +42,8 @@ locals {
   # in_interface_list / out_interface_list rather than raw interface names.
   zone_interfaces = merge(
     { for k, v in local.active_vlans : k => "${var.bridge_name}-vlan${v.vlan_id}" },
+    # The native (untagged) network is routed on the bridge interface itself.
+    var.native_vlan == null ? {} : { (var.native_vlan.zone) = var.bridge_name },
     # Keyed by VyOS zone (vpn, vpn-mobile), not interface name (wg01, wg02):
     # the zone-pair and input rules are written against zone names.
     { for k, v in var.wireguard_interfaces : coalesce(v.zone, k) => k },

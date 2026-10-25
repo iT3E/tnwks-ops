@@ -12,10 +12,16 @@
 resource "routeros_interface_bridge" "lan" {
   name           = var.bridge_name
   vlan_filtering = true
-  # RouterOS drops untagged frames into pvid; nothing on this trunk is
-  # untagged, so pin pvid to an unused tag rather than the default 1.
-  pvid    = 4094
+  # The bridge's own L3 interface sits in its pvid. With a native network that
+  # is VLAN 1 (routed here, see var.native_vlan); without one, pin it to an
+  # unused tag so nothing lands in VLAN 1 by accident.
+  pvid    = local.native_enabled ? 1 : 4094
   comment = "LAN trunk to Aruba SW03 (terraform)"
+}
+
+locals {
+  native_enabled = var.native_vlan != null
+  native_ports   = local.native_enabled ? toset(var.native_vlan.ports) : toset([])
 }
 
 resource "routeros_interface_bridge_port" "lan" {
@@ -30,7 +36,8 @@ resource "routeros_interface_bridge_port" "lan" {
 
   bridge    = routeros_interface_bridge.lan.name
   interface = each.value
-  pvid      = 4094
+  # Untagged frames: native network on the uplink, black-holed everywhere else.
+  pvid = contains(local.native_ports, each.value) ? 1 : 4094
   # hw=true keeps the port on the switch chip for offloaded forwarding.
   hw      = true
   comment = "trunk member (terraform)"
@@ -49,6 +56,34 @@ resource "routeros_interface_bridge_vlan" "tagged" {
   comment  = coalesce(each.value.comment, each.key)
 
   depends_on = [routeros_interface_bridge_port.lan]
+}
+
+# Native network: VLAN 1, untagged on the uplink and on the bridge's own
+# interface, which carries the address.
+resource "routeros_interface_bridge_vlan" "native" {
+  count = local.native_enabled ? 1 : 0
+
+  bridge   = routeros_interface_bridge.lan.name
+  vlan_ids = ["1"]
+  untagged = concat([routeros_interface_bridge.lan.name], var.native_vlan.ports)
+  comment  = coalesce(var.native_vlan.comment, var.native_vlan.zone)
+
+  lifecycle {
+    precondition {
+      condition     = alltrue([for p in var.native_vlan.ports : contains(var.bridge_ports, p)])
+      error_message = "native_vlan.ports must all be bridge_ports."
+    }
+  }
+
+  depends_on = [routeros_interface_bridge_port.lan]
+}
+
+resource "routeros_ip_address" "native" {
+  count = local.native_enabled ? 1 : 0
+
+  address   = var.native_vlan.address
+  interface = routeros_interface_bridge.lan.name
+  comment   = coalesce(var.native_vlan.comment, var.native_vlan.zone)
 }
 
 resource "routeros_interface_vlan" "svi" {

@@ -26,6 +26,7 @@ module "mikrotik" {
   # WAN port joins transit-10 so VyOS's internet-egress rules still apply, and
   # the EdgeRouter stays the default route until the modem moves to ether1.
   mgmt             = local.mgmt
+  native_vlan      = local.native_vlan
   outside_zone     = local.outside_zone
   upstream_gateway = local.upstream_gateway
 

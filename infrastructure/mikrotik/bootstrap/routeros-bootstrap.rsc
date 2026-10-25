@@ -19,7 +19,7 @@
 #   2. After the reboot there is no IP config at all. Connect a laptop to ether8
 #      and open the serial console, or Winbox by MAC address, and paste this
 #      script.
-#   3. Give the laptop 10.98.0.2/24 on that cable. ether8 is the out-of-band
+#   3. Give the laptop 192.168.88.2/24 on that cable. ether8 is the out-of-band
 #      management port permanently: it is never added to the LAN bridge, and
 #      the Terraform input chain always accepts SSH/REST/Winbox on it.
 #
@@ -42,10 +42,9 @@
 #     (`/system device-mode update container=yes` forces a hardware
 #     confirmation: press the reset button or power-cycle within the timeout).
 #     The port does NOT use containers, so skip unless that changes.
-#   * Out-of-band mgmt is 10.98.0.1/24 on ether8, a dedicated cable to the
-#     laptop (or later a mgmt port on the switch). Nothing else lives in
-#     10.98.0.0/24: the ERL's eth1 there was never used, and both routers'
-#     10.98.0.0/24 routes pointed at a dead host.
+#   * Out-of-band mgmt is 192.168.88.1/24 on ether8, a dedicated cable to the
+#     laptop. Its own subnet: 10.98.0.0/24 is switch management, carried
+#     untagged on the trunk and routed by Terraform (var.native_vlan).
 #
 # ---------------------------------------------------------------------------------------------------------------------
 # 1. IDENTITY + ADMIN ACCOUNT
@@ -85,7 +84,7 @@
 # No default route here. Terraform owns it (upstream_gateway, then the WAN
 # lease), and a bench router needs no internet to be configured.
 
-/ip address add address=10.98.0.1/24 interface=ether8 comment="out-of-band mgmt (bootstrap-owned, do not remove)"
+/ip address add address=192.168.88.1/24 interface=ether8 comment="out-of-band mgmt (bootstrap-owned, do not remove)"
 
 # ---------------------------------------------------------------------------------------------------------------------
 # 3. REST API + TLS
@@ -129,7 +128,7 @@
 # ---------------------------------------------------------------------------------------------------------------------
 # From the workstation:
 #
-#   curl -k -u terraform:<password> https://10.98.0.1/rest/system/resource
+#   curl -k -u terraform:<password> https://192.168.88.1/rest/system/resource
 #
 # A JSON body means Terraform can take over:
 #
@@ -138,5 +137,5 @@
 #
 # Read the plan. It should create the bridge, VLANs, addresses, DHCP, DNS,
 # firewall and WireGuard. It must NOT list ether8 as a bridge port or touch the
-# 10.98.0.1/24 address. If it does, stop and fix the module.
+# 192.168.88.1/24 address. If it does, stop and fix the module.
 # ---------------------------------------------------------------------------------------------------------------------

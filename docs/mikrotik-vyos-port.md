@@ -23,8 +23,7 @@ its findings change what this document ports.
 
 ## Why a generator instead of hand-written HCL
 
-The VyOS firewall is 140 rulesets / 195 rule lines / 45 accept rules, plus 20
-DHCP static mappings and 37 address-group members. Hand-transcribing that is how
+The VyOS firewall is 140 rulesets across 14 zones. Hand-transcribing that is how
 you ship a subtly wrong firewall. `task mikrotik:generate` regenerates
 `locals.tf` from the VyOS repo, so the port is reproducible and can be
 re-run if the VyOS config changes before cutover.
@@ -33,20 +32,32 @@ The generated file is committed. Review its diff, do not edit it.
 
 ## Translation summary
 
-| Concern | VyOS | RouterOS | Result |
-| --- | --- | --- | --- |
-| VLANs | `eth1` + `vif` subinterfaces | VLAN-filtering bridge + `interface_vlan` | 11 VLANs |
-| Addressing | `vif <n> address` | `ip_address` per SVI | 11 addresses |
-| DHCP | 9 `shared-network-name` | `ip_pool` + `ip_dhcp_server` + `_network` | 9 servers, 21 leases |
-| Zones | 14 zones, per-pair rulesets | `interface_list` + forward-chain segments | 22 chains |
-| Firewall | 45 accepts across 30 rulesets | 44 forward accepts + 28 input accepts | see below |
-| Address groups | `firewall group address-group` | `ip_firewall_addr_list` | 21 lists, 37 members |
-| Port groups | `firewall group port-group` | rendered into `dst_port` strings | 3 |
-| NAT | 8 `nat destination` rules | `ip_firewall_nat` dstnat | 12 (tcp_udp split) |
-| Routing | 4 `protocols static route` | `ip_route` | 4 |
-| WireGuard | `wg01`, `wg02` | `interface_wireguard` + peers | 2 listeners, 5 peers |
-| DNS | 3 Podman containers | native RouterOS DNS | see below |
-| Containers | 9 Podman containers | Kubernetes / native / dropped | see below |
+Counts are in the header of the generated `locals.tf`; they change whenever the
+VyOS source or the retirement lists in the generator do.
+
+| Concern | VyOS | RouterOS |
+| --- | --- | --- |
+| VLANs | `eth1` + `vif` subinterfaces | VLAN-filtering bridge + `interface_vlan` |
+| Switch management | bare `eth1` (untagged) | `native_vlan` on the bridge, uplink only |
+| Addressing | `vif <n> address` | `ip_address` per SVI |
+| DHCP | `shared-network-name` | `ip_pool` + `ip_dhcp_server` + `_network` |
+| Zones | per-pair rulesets | `interface_list` + forward-chain segments |
+| Address / port groups | `firewall group` | `ip_firewall_addr_list` / `dst_port` strings |
+| NAT | `nat destination` | `ip_firewall_nat` dstnat (tcp_udp split) |
+| Routing | `protocols static route` | `ip_route` |
+| WireGuard | `wg01`, `wg02` | `interface_wireguard` + peers |
+| DNS | 3 Podman containers | native RouterOS DNS |
+| Containers | 9 Podman containers | Kubernetes / native / dropped |
+
+### Retired, not ported
+
+| What | Effect |
+| --- | --- |
+| VLANs `ad-110`, `app-720`, `bastion-410`, `iLO-550`, `pve-11` | No SVI, DHCP, NAT, DNS records into the subnet, or zone pairs to/from them |
+| Blue Iris (`blue_iris`) | Every rule naming it dropped; the camera VLAN initiates nothing beyond the router |
+| haproxy (3 containers) | Its rules and `*.tnwks.local` names dropped |
+
+Address and port lists that no remaining rule references are not emitted.
 
 ## What consolidation changes
 
@@ -78,9 +89,9 @@ Evidence in `edgerouter-discovery.md`.
   Not ported. Rebuild deliberately if AWS connectivity is wanted.
 - **`traffic-policy shaper client-up-s`** shapes `172.16.1.254/32`, which is
   dead. Nothing to shape.
-- **ERL `eth1` (`10.98.0.1/24`) is disabled with 0 bytes ever.** That address is
-  what the RB5009 bootstrap already claims for management, which is consistent:
-  the new box takes over the role this interface was meant to play.
+- **ERL `eth1` (`10.98.0.1/24`) is disabled with 0 bytes ever.** The same
+  address is live on VyOS's bare `eth1` as switch management, which the RB5009
+  takes over (`native_vlan`).
 
 ### The input chain stops being optional
 
@@ -135,8 +146,7 @@ defaults to accept, so without it every unbound pair, and WAN to LAN, is open.
 
 **Internet egress keeps VyOS's semantics.** VyOS reached the internet through
 `transit-10` (the ERL hop), so its `X -> transit-10` rulesets are the
-internet-egress policy: cameras (`seccam-610`) and `iLO-550` get no internet
-access at all. `ether1` joins `zone-transit-10`
+internet-egress policy: cameras (`seccam-610`) get no internet access at all. `ether1` joins `zone-transit-10`
 (`outside_zone`), so those same rules apply before and after the modem moves.
 
 ### 2. VLANs move onto a VLAN-filtering bridge
@@ -189,7 +199,7 @@ Two knock-on effects:
 - Blocking and split-horizon now apply to **every** VLAN. dnsdist only sent
   `10.10.91.0/24` and `10.10.31.0/24` through blocky; RouterOS adlists are
   global. The lists are malware/phishing/ad lists, so the wider scope is mostly
-  a gain, but a false positive now hits iLO, UniFi and k8s too.
+  a gain, but a false positive now hits UniFi and k8s too.
 - Client DNS stops being *forwarded* traffic and becomes traffic *to the router*.
   Every VyOS `<zone> -> containers` `accept_dns` rule therefore moves from the
   forward chain to the **input** chain. The generator does this automatically and
@@ -286,9 +296,6 @@ These need a decision, they are not solved by this port:
 
 Worth fixing in `vyos-config` regardless of the migration:
 
-- **`app-720-containers` is an orphan.** The ruleset has an accept rule but no
-  `firewall zone containers from app-720` binding, so it never applied. The
-  generator records it and emits nothing.
 - **`wg01` exists in git but not on the live router**, while the `vpn` zone still
   references it. The port provisions both `wg01` and `wg02` from git. Decide
   whether `wg01` should exist before cutover.
@@ -300,9 +307,13 @@ Worth fixing in `vyos-config` regardless of the migration:
   `0.0.0.0/0 → 172.16.1.1` static becomes `upstream_gateway` at distance 10, so
   the router can sit behind the ERL first (stage A) and the WAN lease's
   distance-1 default wins as soon as the modem is on `ether1` (stage B).
-- **Both routers routed `10.98.0.0/24` and `10.10.93.0/24` at dead
-  `172.16.1.254`**, so nothing in those subnets has been reachable. Dropped.
-  `10.98.0.0/24` is reused as the RB5009's out-of-band mgmt network on `ether8`.
+- **Both routers route `10.98.0.0/24` and `10.10.93.0/24` at dead
+  `172.16.1.254`.** Dropped. `10.98.0.0/24` is reachable anyway because live
+  VyOS has `10.98.0.1/24` on bare `eth1` (the trunk's untagged native VLAN),
+  which `vyos-config` lacks. That is where the Aruba's management address
+  (`10.98.0.251`) lives, and it is in no VyOS zone, so every VLAN can reach it.
+  The port routes it as zone `switch-mgmt` (`native_vlan`), untagged on the
+  uplink only, reachable from 910, 900 and `wg01`.
 
 - **The live router has drifted from git.** Live VyOS has
   `unifi-frontend-910-seccam-610 rule 1` ("Allow all from 910 to cameras"),
@@ -319,8 +330,8 @@ Worth fixing in `vyos-config` regardless of the migration:
   containers, so this is only relevant if a decision above reverses.
 - IPv6 forwarding was disabled in the source config
   (`set system ipv6 disable-forwarding`); the port does not enable it.
-- RouterOS caps `dst-port` at **15 entries per rule**. `ad_auth_ports` has 18, so
-  the generator splits it across multiple rules and annotates the comments.
+- RouterOS caps `dst-port` at **15 entries per rule**. The generator splits any
+  longer port list across multiple rules and annotates the comments.
 - VyOS ran `ethtool --set-eee <iface> eee off` on every interface from its
   post-config bootup script. RouterOS has no EEE toggle. If link flaps appear
   after cutover, this is the first suspect and it must be handled on the Aruba
@@ -351,13 +362,13 @@ share the trunk with VyOS: stage A is a swap, not a parallel run.
 1. **Reset and bootstrap.** `/system reset-configuration no-defaults=yes
    skip-backup=yes`, then paste
    `infrastructure/mikrotik/bootstrap/routeros-bootstrap.rsc` over serial or
-   Winbox-by-MAC on `ether8`. Laptop on `ether8` at `10.98.0.2/24`.
+   Winbox-by-MAC on `ether8`. Laptop on `ether8` at `192.168.88.2/24`.
 2. **Verify API reachability:**
-   `curl -k -u terraform:<pw> https://10.98.0.1/rest/system/resource`
+   `curl -k -u terraform:<pw> https://192.168.88.1/rest/system/resource`
 3. **Snapshot and verify:** `task mikrotik:bootstrap` (Ansible: asserts RouterOS
    7.x, exports a pre-Terraform config snapshot, checks `www-ssl`).
 4. **Plan:** `task mikrotik:init && task mikrotik:plan`. `ether8` must not appear
-   as a bridge port, and nothing may touch `10.98.0.1/24`.
+   as a bridge port, and nothing may touch `192.168.88.1/24`.
 5. **Apply**, then **plan again**: the second plan must be empty. Anything it
    wants to change is drift between the module and what RouterOS stored, and is
    cheaper to find now.

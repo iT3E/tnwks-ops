@@ -195,6 +195,14 @@ resource "routeros_interface_list_member" "lan" {
   depends_on = [routeros_interface_vlan.svi]
 }
 
+# The native network is internal too (the switch uses router DNS/NTP).
+resource "routeros_interface_list_member" "lan_native" {
+  count = local.native_enabled ? 1 : 0
+
+  list      = routeros_interface_list.lan.name
+  interface = routeros_interface_bridge.lan.name
+}
+
 resource "routeros_ip_firewall_filter" "input_accept" {
   for_each = var.input_rules
 

@@ -23,7 +23,7 @@ Non-obvious translations this script performs:
   * VyOS accepts IANA service names in port fields (`domain`, `http`, `ntp`).
     RouterOS wants numbers. SERVICE_PORTS below does that mapping.
   * RouterOS caps `dst-port` at 15 entries per rule. Any port list longer than
-    that is split across multiple rules (`ad_auth_ports` has 18 entries).
+    that is split across multiple rules.
   * VyOS zone `containers` pointed at the Podman pod interface `pod-containers`.
     The container stack is not being ported to the router, so every rule that
     references that zone is either moved (DNS -> input chain), retargeted to
@@ -37,6 +37,7 @@ Non-obvious translations this script performs:
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import re
 import sys
 from collections import OrderedDict
@@ -140,6 +141,10 @@ NEW_ADDRESS_LISTS = {
     "frigate": {WSL_HOST.replace(".", "_"): WSL_HOST},
 }
 
+# VLANs (VyOS zones) that are retired. Not emitted at all: no SVI, DHCP, DNS
+# records into the subnet, NAT, or any zone pair to or from them.
+RETIRED_ZONES = {"ad-110", "app-720", "bastion-410", "iLO-550", "pve-11"}
+
 # Address groups for hosts that are retired. Every rule that names one is
 # dropped, the group is not emitted, and dstnat exemptions for its members go.
 RETIRED_ADDRESS_GROUPS = {
@@ -208,8 +213,24 @@ OUTSIDE_ZONE = "transit-10"
 
 # Out-of-band management. Standalone port, NOT in the LAN bridge: the bootstrap
 # script puts the REST API address here, and bridging it would invalidate that
-# address on the first apply.
-MGMT = {"interface": "ether8", "address": "10.98.0.1/24"}
+# address on the first apply. Its own subnet, used nowhere else.
+MGMT = {"interface": "ether8", "address": "192.168.88.1/24"}
+
+# Switch management. The Aruba's management address (10.98.0.251) is on the
+# trunk's untagged native VLAN, where VyOS has 10.98.0.1/24 on bare eth1. That
+# address is missing from vyos-config, so it is declared here. Untagged only on
+# the uplink (ether2, cabled to Aruba GE0/0/23).
+NATIVE_VLAN = {
+    "zone": "switch-mgmt",
+    "address": "10.98.0.1/24",
+    "ports": ["ether2"],
+    "comment": "Aruba switch management (untagged on the uplink)",
+}
+
+# Who may reach switch management. VyOS left eth1 out of every zone, so today
+# it is reachable from everywhere; here it is the same set that may manage the
+# router: 910, the UniFi mgmt VLAN and the personal VPN. Credential-gated.
+NATIVE_VLAN_ACCESS = ["unifi-frontend-910", "unifi-mgmt-900", "vpn"]
 BRIDGE_PORTS = ["ether2", "ether3", "ether4", "ether5", "ether6", "ether7", "sfp-sfpplus1"]
 
 # Remote syslog. VyOS shipped to a Vector aggregator on the old cluster
@@ -889,7 +910,7 @@ def build_zone_policies(
         nonlocal input_seq
         for variant in emit_variants(rule, num, ruleset):
             input_seq += 10
-            entry = {"comment": f"DNS from {from_zone} (was {ruleset})"}
+            entry = {"comment": f"DNS from {from_zone}" + (f" (was {ruleset})" if ruleset else "")}
             if from_zone == OUTSIDE_ZONE:
                 # The outside zone's list also holds the WAN port, so matching
                 # the list would answer DNS on the internet. Pin to the SVI.
@@ -1025,6 +1046,12 @@ def build_zone_policies(
                        native_default=default_action)
         pol["rules"].extend(rules_out)
 
+    for from_zone in NATIVE_VLAN_ACCESS:
+        get_pair(from_zone, NATIVE_VLAN["zone"], f"From {from_zone} to {NATIVE_VLAN['zone']}",
+                 native_default="accept")
+    # The switch resolves through the router like every other internal network.
+    add_dns_input(NATIVE_VLAN["zone"], dns_rule, 0, "")
+
     for (from_zone, to_zone), extra_rules in EXTRA_ZONE_RULES.items():
         pol = get_pair(from_zone, to_zone, f"From {from_zone} to {to_zone}")
         for num, rule in enumerate(extra_rules, start=1):
@@ -1117,9 +1144,31 @@ def main() -> int:
         if "dhcp" not in vlan and name not in active_zones:
             vlan["enabled"] = False
 
-    # Retired hosts: drop their groups and every rule that names one, before
-    # any translation, so no pair is emitted on their behalf.
+    # Retired zones: drop the VLAN and unbind every ruleset to or from it, before
+    # any translation, so nothing is emitted on their behalf.
     retired_notes: list[str] = []
+    retired_nets = []
+    for zone in sorted(RETIRED_ZONES):
+        vlan = vlans.pop(zone, None)
+        if vlan and vlan.get("address"):
+            retired_nets.append(ipaddress.ip_interface(vlan["address"]).network)
+        retired_notes.append("zone %s: retired; VLAN, DHCP and every pair to or from it are not emitted" % zone)
+    for ruleset in [r for r, (f, t) in pairs.items() if f in RETIRED_ZONES or t in RETIRED_ZONES]:
+        del pairs[ruleset]
+    dhcp = {z: n for z, n in dhcp.items() if z not in RETIRED_ZONES}
+
+    def in_retired_net(address: str) -> bool:
+        try:
+            ip = ipaddress.ip_address(address)
+        except ValueError:
+            return False
+        return any(ip in net for net in retired_nets)
+
+    for key in [k for k, r in dns["static_records"].items() if in_retired_net(r.get("address", ""))]:
+        rec = dns["static_records"].pop(key)
+        retired_notes.append("dns: %s -> %s DROPPED; address is in a retired VLAN" % (rec["name"], rec["address"]))
+
+    # Retired hosts: drop their groups and every rule that names one.
     retired_members = set()
     for group, why in RETIRED_ADDRESS_GROUPS.items():
         retired_members.update(address_lists.pop(group, {}).values())
@@ -1133,6 +1182,20 @@ def main() -> int:
         rulesets, pairs, zone_iface, port_lists, vlans
     )
     notes.extend(retired_notes)
+
+    # Address and port lists nothing references any more (their rules went
+    # with a retired zone or host) are not emitted.
+    referenced_addr, referenced_port = set(), set()
+    for rule in [r for p in zone_policies.values() for r in p["rules"]] + list(input_rules.values()):
+        referenced_addr.update(filter(None, (rule.get("src_address_list"), rule.get("dst_address_list"))))
+        if rule.get("dst_port_list"):
+            referenced_port.add(rule["dst_port_list"])
+    for name in sorted(set(address_lists) - referenced_addr):
+        del address_lists[name]
+        notes.append("address list %s: not emitted, no remaining rule references it" % name)
+    for name in sorted(set(port_lists) - referenced_port):
+        del port_lists[name]
+        notes.append("port list %s: not emitted, no remaining rule references it" % name)
     notes.extend(dns_notes)
     notes.extend(admin_notes)
 
@@ -1213,7 +1276,8 @@ def main() -> int:
     for num, rule in sorted(nat.items()):
         zone = rule.pop("_zone", None)
         if zone not in vlans:
-            notes.append("nat rule %s: zone %s not a ported VLAN" % (num, zone))
+            why = "zone is retired" if zone in RETIRED_ZONES else "zone %s is not a ported VLAN" % zone
+            notes.append("nat rule %s (%s): DROPPED; %s" % (num, rule.get("comment", ""), why))
             continue
         vlan_id = vlans[zone]["vlan_id"]
         entry = {
@@ -1360,6 +1424,8 @@ def main() -> int:
     body.append(assign("bridge_ports", BRIDGE_PORTS))
     body.append(assign("mgmt", MGMT,
                        "Never bridged: this is the address Terraform reaches the router on."))
+    body.append(assign("native_vlan", NATIVE_VLAN,
+                       "Untagged on the uplink only; the Aruba's management lives here."))
     body.append("\n")
     body.append(assign("outside_zone", OUTSIDE_ZONE,
                        "VyOS's internet egress went via transit-10; the WAN port joins it."))

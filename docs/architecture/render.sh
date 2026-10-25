@@ -9,7 +9,7 @@
 # failing the run, so you can work on one language without installing all three.
 #
 # Install notes, none of which need root:
-#   mermaid   npx -y @mermaid-js/mermaid-cli   (downloads a private Chrome)
+#   mermaid   npx -y @mermaid-js/mermaid-cli@12   (downloads a private Chrome)
 #   d2        curl -fsSL https://d2lang.com/install.sh | sh -s -- --prefix ~/.local
 #   plantuml  curl -fsSL -o ~/.local/lib/plantuml.jar \
 #               https://github.com/plantuml/plantuml/releases/download/v1.2026.0/plantuml-1.2026.0.jar
@@ -36,8 +36,9 @@ render_mermaid() {
   for src in *.mmd; do
     [ -e "$src" ] || continue
     local out="${src%.mmd}-mermaid.svg"
-    if npx -y @mermaid-js/mermaid-cli@latest -i "$src" -o "$out" \
-         -c "$cfg" -b transparent -w 1800 >/dev/null 2>&1; then
+    # Pinned major: v12 replaced -w with --size, and @latest broke this.
+    if npx -y @mermaid-js/mermaid-cli@12 -i "$src" -o "$out" \
+         -c "$cfg" -b transparent --size 1800 >/dev/null 2>&1; then
       echo "   OK   $src -> $out"
     else
       echo "   FAIL $src"
@@ -80,7 +81,8 @@ render_plantuml() {
   # -plantuml: it keeps them from overwriting the mermaid SVG of the same diagram.
   for src in *.puml; do
     [ -e "$src" ] || continue
-    if java -jar "$PLANTUML_JAR" -tsvg "$src" >/dev/null 2>&1; then
+    # Headless: under WSLg, DISPLAY is set and PlantUML otherwise tries X11.
+    if java -Djava.awt.headless=true -jar "$PLANTUML_JAR" -tsvg "$src" >/dev/null 2>&1; then
       echo "   OK   $src"
     else
       echo "   FAIL $src"

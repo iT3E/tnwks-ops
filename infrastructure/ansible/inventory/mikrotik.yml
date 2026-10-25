@@ -16,7 +16,7 @@ mikrotik:
     sce-rtr01:
       # Out-of-band mgmt address on ether8, from routeros-bootstrap.rsc
       # section 2. Permanent: ether8 is never bridged.
-      ansible_host: 10.98.0.1
+      ansible_host: 192.168.88.1
   vars:
     routeros_username: "{{ lookup('env', 'ROUTEROS_USERNAME') | default('terraform', true) }}"
     routeros_password: "{{ lookup('env', 'ROUTEROS_PASSWORD') }}"

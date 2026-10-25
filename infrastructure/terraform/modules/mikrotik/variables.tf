@@ -62,6 +62,24 @@ variable "mgmt" {
   default = null
 }
 
+variable "native_vlan" {
+  description = <<-EOT
+    Untagged (native) network on the trunk uplink, routed on the bridge itself.
+
+    The Aruba's own management address lives on the trunk's native VLAN, so
+    untagged frames on the uplink must reach an SVI or switch management is cut
+    off. Only the listed ports carry it; every other bridge port drops untagged
+    frames into an unused pvid. null keeps the trunk all-tagged.
+  EOT
+  type = object({
+    zone    = string       # zone name used by zone_policies / input_rules
+    address = string       # router address on the native network, CIDR
+    ports   = list(string) # bridge ports that carry it untagged (the uplink)
+    comment = optional(string)
+  })
+  default = null
+}
+
 variable "outside_zone" {
   description = <<-EOT
     Zone that the WAN port joins, so internet traffic is governed by the same

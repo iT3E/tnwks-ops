@@ -58,9 +58,11 @@ and the forced-DNS dstnat rules become `redirect` to the router.
 
 ## Conventions
 
-- `vlans` entries carry `enabled`. VyOS shipped SVIs for VLANs 11/110/120/410/
-  550/720 with no live devices; they stay in locals.tf as `enabled = false` so the
-  intent survives without provisioning dead interfaces.
+- `vlans` entries carry `enabled`; `enabled = false` keeps a definition in git
+  without provisioning an SVI. Retired VLANs are not emitted at all (the
+  generator's `RETIRED_ZONES`).
+- `native_vlan` routes the trunk's untagged network on the bridge itself, for
+  the switch's own management address. Only its listed ports carry it.
 - `port_lists` exists because RouterOS has no port-group object. Entries are
   rendered into comma-joined `dst_port` strings at plan time.
 - WireGuard private keys arrive from SOPS via main.tf. Never a literal, never in locals.tf.

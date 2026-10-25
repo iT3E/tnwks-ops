@@ -41,47 +41,46 @@ node "MikroTik RB5009UG+S+IN\n**sce-rtr01** · RouterOS 7" as rb #f7fbff {
 
   rectangle "input chain — terminal drop" as input #eaf7ef {
     component "zone-lan list only\nDNS 53 · NTP 123 · DHCP 67/68" as i_lan #d9f2e3
-    component "unifi-mgmt-900 only\nSSH 22 · REST 443 · Winbox 8291" as i_mgmt #d9f2e3
-    component "ether1 only\nWireGuard 51820/51821" as i_wg #d9f2e3
+    component "internal VLANs (not 610) · wg01 · ether8 OOB\nSSH 22 · REST 443 · Winbox 8291\ncredential-gated" as i_mgmt #d9f2e3
+    component "zone-transit-10\nWireGuard 51820/51821" as i_wg #d9f2e3
     component "everything else → drop" as i_drop #fde8e8
   }
 
-  component "forward chain\n22 zone-pair chains · 44 accepts\nper-pair terminating drop\nordered via routeros_move_items" as fwd #e8f0fe
+  component "forward chain\nper-pair default (drop or accept)\nterminal forward drop\nordered via routeros_move_items" as fwd #e8f0fe
 
   rectangle "native services — no containers" as svc #eaf7ef {
     artifact "ip_dns + forwarders\n1.1.1.1 / 1.0.0.1 · cache 10240" as s_dns #d9f2e3
     artifact "ip_dns_adlist\n45 lists (was blocky)" as s_adl #d9f2e3
-    artifact "ip_dns_record\n39 static (was bind)" as s_rec #d9f2e3
-    artifact "ip_dhcp_server\n9 servers · 21 static leases" as s_dhcp #d9f2e3
+    artifact "ip_dns_record\nstatic (was bind + blocky)" as s_rec #d9f2e3
+    artifact "ip_dhcp_server\none per VLAN" as s_dhcp #d9f2e3
     artifact "NTP server\nLAN-scoped (was open on WAN)" as s_ntp #d9f2e3
-    artifact "SNMP\nreplaces node-exporter" as s_snmp #d9f2e3
+    artifact "mktxp API\nread-only, replaces node-exporter" as s_snmp #d9f2e3
   }
 
   component "WireGuard — terminated here\nwg01 10.10.30.1/24 · 3 peers\nwg02 10.10.31.1/24 · 2 peers" as wg #e8f0fe
 
   artifact "ddns-update\n/system/script + /system/scheduler\nNamecheap · every 5m\nddns.ddns-domain.example" as ddns #fef6e7
 
-  component "bridge-lan · VLAN filtering\npvid 4094 · 11 tagged VLANs" as bridge #e8f0fe
+  component "bridge-lan · VLAN filtering\nnative VLAN 1 = switch mgmt (uplink only)" as bridge #e8f0fe
 }
 
 node "Aruba SW03 · 10.98.0.251\nArubaS2500-24P PoE\nGE0/0/23 full trunk · unchanged" as sw #eaf7ef
 
-rectangle "11 VLANs — one SVI each" as vlans #f6fdf9 {
+rectangle "VLANs — one SVI each" as vlans #f6fdf9 {
   rectangle "carrying traffic" as v_live #eaf7ef {
     artifact "910 unifi-frontend · 10.10.91.1/24" as v910
     artifact "900 unifi-mgmt · 10.10.90.1/24 · 3 APs" as v900
     artifact "610 seccam · 10.10.60.1/24 · 5 cams" as v610
     artifact "120 k8s · 10.10.120.1/24" as v120
-    artifact "550 iLO · 10.10.55.1/24 · 2 iLO" as v550
     artifact "140 UISP · 10.10.140.1/24" as v140
   }
-  rectangle "enabled = false — intent preserved" as v_off #f4f4f4 {
-    artifact "110 ad · 11 pve · 410 bastion\n720 app · 10 transit (vestigial)" as voff
+  rectangle "untagged / transitional" as v_off #f4f4f4 {
+    artifact "native switch-mgmt · 10.98.0.1/24\n10 transit · until the ERL retires" as voff
   }
 }
 
 node "EP-R6 · 10.10.140.140\nthe ONLY surviving static route\n10.60.10.0/24 (in-laws)" as eprt #eaf7ef
-node "homelab-wsl k8s\nex-VyOS workloads:\nunifi · haproxy → ingress" as k8s #eaf7ef
+node "homelab-wsl k8s\nex-VyOS workloads: unifi\nFrigate pulls camera RTSP" as k8s #eaf7ef
 
 artifact "Terraform\nmodules/mikrotik\nsecrets via SOPS\napplied locally (LAN-only)" as tf #fef6e7
 
@@ -92,11 +91,11 @@ fwd --> svc
 wan --> ddns : reads lease
 wan --> wg : "UDP 51820/51821"
 fwd --> bridge
-bridge --> sw : "802.1q tagged trunk"
+bridge --> sw : "802.1q trunk + untagged switch mgmt"
 sw --> v_live
-sw ..> v_off : no SVI created
+sw ..> v_off : native + transit
 v140 --> eprt
-v120 --> k8s
+v910 --> k8s : "Windows host"
 clients --> i_wg : "dial DDNS hostname"
 ddns ..> clients : "keeps endpoint resolvable\n(load-bearing)"
 tf ..> rb : "REST API 443\nterraform apply"
@@ -104,11 +103,12 @@ tf ..> rb : "REST API 443\nterraform apply"
 legend right
   |= |= retired at cutover |
   | <&circle-x> | **THOMAS-ER01** EdgeRouter Lite — NAT + default route → ether1 |
-  | <&circle-x> | **sce-vyos01** VyOS — 11 SVIs + zone firewall → RB5009 |
+  | <&circle-x> | **sce-vyos01** VyOS — live SVIs + zone firewall → RB5009 |
   | <&circle-x> | **AWS site-to-site VPN** — BGP MsgRcv 0, vti absent |
   | <&circle-x> | **172.16.1.252 / .254** — dead next-hops, 16 routes |
   | <&circle-x> | **transit-10 NTP dstnat** — black-holed at dead .254 |
-  | <&circle-x> | **12 Podman containers** — native services or k8s |
+  | <&circle-x> | **12 Podman containers** — native services, k8s, or dropped |
+  | <&circle-x> | **VLANs 11 · 110 · 410 · 550 · 720**, Blue Iris — retired |
 endlegend
 
 @enduml

@@ -19,7 +19,7 @@ with, or the IP address it connects over. Those four things live here.
 ```
 routeros-bootstrap.rsc   (console, once, physical access)
       ↓
-curl -k -u terraform:<pw> https://10.98.0.1/rest/system/resource
+curl -k -u terraform:<pw> https://192.168.88.1/rest/system/resource
       ↓
 task mikrotik:bootstrap  (Ansible verify + snapshot)
       ↓
@@ -57,7 +57,7 @@ in either locks you out. You want console access when that happens, not after.
 second session before running that line. The interactive admin is created by
 Terraform (from SOPS), not here.
 
-**ether8 is the out-of-band port, forever.** The bootstrap puts `10.98.0.1/24` on
+**ether8 is the out-of-band port, forever.** The bootstrap puts `192.168.88.1/24` on
 it, Terraform keeps it out of the bridge and always accepts SSH/REST/Winbox on
 it. Leave a cable to it. If an input-chain change goes wrong, that cable is how
 you get back in without a console.
