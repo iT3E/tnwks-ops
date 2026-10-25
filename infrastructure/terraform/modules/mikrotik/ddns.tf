@@ -27,8 +27,8 @@ locals {
   ddns_script = var.ddns == null ? null : (
     var.ddns.provider == "namecheap"
     ? templatefile("${path.module}/templates/ddns-namecheap.rsc", {
-      host          = var.ddns.host
-      domain        = var.ddns.domain
+      host          = var.ddns_host
+      domain        = var.ddns_domain
       credential    = var.ddns_credential
       wan_interface = var.wan_interface
     })
@@ -49,6 +49,13 @@ resource "routeros_system_script" "ddns" {
   name   = "ddns-update"
   source = local.ddns_script
 
+  lifecycle {
+    precondition {
+      condition     = var.ddns.provider != "namecheap" || (var.ddns_host != null && var.ddns_domain != null)
+      error_message = "ddns.provider = namecheap requires ddns_host and ddns_domain."
+    }
+  }
+
   # read  - read the DHCP client lease
   # write - set the :global that caches the last successful address
   # test  - /tool fetch lives under the test policy
@@ -58,7 +65,7 @@ resource "routeros_system_script" "ddns" {
   # a different user. The scheduler owns this global, so it is unnecessary.
   policy = ["read", "write", "test"]
 
-  comment = "Dynamic DNS for ${var.ddns.provider} (terraform)"
+  comment = "Dynamic DNS via ${var.ddns.provider} (terraform)"
 }
 
 resource "routeros_system_scheduler" "ddns" {

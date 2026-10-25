@@ -93,7 +93,7 @@ This alone justifies the migration timeline.
 
 ### 3. Secrets in plaintext in the config
 
-- **Namecheap DDNS password** for `ddns-domain.example`:
+- **Namecheap DDNS password** for the DDNS domain:
   (redacted). **Rotate.**
 - **UISP/UNMS connection token** in the `service unms connection` string.
 - `system login user ivan.thomas` SHA-512 hash (expected, but it is in the dump).
@@ -147,7 +147,7 @@ Note `10.60.10.0/24` is the airMAX subnet, which VyOS correctly routes via
 
 `ip neigh` = `FAILED`, ping = 100% loss. Referenced by:
 
-- `port-forward rule 1` — `isitup.ddns-domain.example`, tcp 8888
+- `port-forward rule 1` — an `isitup` host, tcp 8888
 - `port-forward rule 2` — **Helium Miner**, tcp 44158
 - `traffic-policy shaper client-up-s` classes 2 and 3, both matching
   `source address 172.16.1.254/32`, plus `eth2 redirect ifb1`
@@ -184,7 +184,7 @@ VyOS's bare `eth1` as switch management.
 
 ### DDNS is duplicated across two providers and two domains
 
-- ERL: Namecheap DDNS for `ddns.ddns-domain.example`.
+- ERL: Namecheap DDNS for the WireGuard endpoint hostname.
 - VyOS: a `cloudflare-ddns` container for `tnwks.us`.
 
 RouterOS has `ip_cloud` (MikroTik's own DDNS) and Cloudflare via a scheduler

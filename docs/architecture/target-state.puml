@@ -41,7 +41,7 @@ node "MikroTik RB5009UG+S+IN\n**sce-rtr01** · RouterOS 7" as rb #f7fbff {
 
   rectangle "input chain — terminal drop" as input #eaf7ef {
     component "zone-lan list only\nDNS 53 · NTP 123 · DHCP 67/68" as i_lan #d9f2e3
-    component "internal VLANs (not 610) · wg01 · ether8 OOB\nSSH 22 · REST 443 · Winbox 8291\ncredential-gated" as i_mgmt #d9f2e3
+    component "admin VPN (wg01) · ether8 OOB\nSSH 22 · REST 443 · Winbox 8291" as i_mgmt #d9f2e3
     component "zone-transit-10\nWireGuard 51820/51821" as i_wg #d9f2e3
     component "everything else → drop" as i_drop #fde8e8
   }
@@ -59,7 +59,7 @@ node "MikroTik RB5009UG+S+IN\n**sce-rtr01** · RouterOS 7" as rb #f7fbff {
 
   component "WireGuard — terminated here\nwg01 10.10.30.1/24 · 3 peers\nwg02 10.10.31.1/24 · 2 peers" as wg #e8f0fe
 
-  artifact "ddns-update\n/system/script + /system/scheduler\nNamecheap · every 5m\nddns.ddns-domain.example" as ddns #fef6e7
+  artifact "ddns-update\n/system/script + /system/scheduler\nNamecheap · every 5m\nWireGuard endpoint hostname" as ddns #fef6e7
 
   component "bridge-lan · VLAN filtering\nnative VLAN 1 = switch mgmt (uplink only)" as bridge #e8f0fe
 }
@@ -71,7 +71,6 @@ rectangle "VLANs — one SVI each" as vlans #f6fdf9 {
     artifact "910 unifi-frontend · 10.10.91.1/24" as v910
     artifact "900 unifi-mgmt · 10.10.90.1/24 · 3 APs" as v900
     artifact "610 seccam · 10.10.60.1/24 · 5 cams" as v610
-    artifact "120 k8s · 10.10.120.1/24" as v120
     artifact "140 UISP · 10.10.140.1/24" as v140
   }
   rectangle "untagged / transitional" as v_off #f4f4f4 {
@@ -108,7 +107,7 @@ legend right
   | <&circle-x> | **172.16.1.252 / .254** — dead next-hops, 16 routes |
   | <&circle-x> | **transit-10 NTP dstnat** — black-holed at dead .254 |
   | <&circle-x> | **12 Podman containers** — native services, k8s, or dropped |
-  | <&circle-x> | **VLANs 11 · 110 · 410 · 550 · 720**, Blue Iris — retired |
+  | <&circle-x> | **VLANs 11 · 110 · 120 · 410 · 550 · 720**, Blue Iris — retired |
 endlegend
 
 @enduml

@@ -14,14 +14,14 @@ flowchart TB
 
         subgraph inchain["input chain · terminal drop"]
             i_lan["zone-lan list<br/>DNS 53 · NTP 123 · DHCP 67/68"]
-            i_mgmt["internal VLANs (not 610) · wg01 · ether8 OOB<br/>SSH 22 · REST 443 · Winbox 8291<br/>credential-gated"]
+            i_mgmt["admin VPN (wg01) · ether8 OOB<br/>SSH 22 · REST 443 · Winbox 8291"]
             i_wg["zone-transit-10<br/>WireGuard 51820/51821"]
         end
 
         svc["native services, no containers<br/>ip_dns + 45 adlists + static records<br/>DHCP per VLAN<br/>NTP server · mktxp API"]
         fw["forward chain<br/>per-pair default (drop or accept)<br/>terminal forward drop<br/>ordered via routeros_move_items"]
         wg["WireGuard<br/>wg01 10.10.30.1/24 · 3 peers<br/>wg02 10.10.31.1/24 · 2 peers"]
-        ddns["ddns-update script + scheduler<br/>Namecheap · every 5m<br/>ddns.ddns-domain.example"]
+        ddns["ddns-update script + scheduler<br/>Namecheap · every 5m<br/>WireGuard endpoint hostname"]
         bridge["bridge-lan · VLAN filtering<br/>native VLAN 1 = switch mgmt (uplink only)"]
     end
 
@@ -31,14 +31,13 @@ flowchart TB
         v910["910 unifi-frontend · 10.10.91.1"]
         v900["900 unifi-mgmt · 10.10.90.1"]
         v610["610 seccam · 10.10.60.1"]
-        v120["120 k8s · 10.10.120.1"]
         v140["140 UISP · 10.10.140.1"]
         vrest["native switch-mgmt · 10.98.0.1 (untagged)<br/>10 transit · until the ERL retires"]
     end
 
     eprt["EP-R6 · 10.10.140.140<br/>ONLY static route:<br/>10.60.10.0/24"]
     k8s["homelab-wsl k8s<br/>ex-VyOS container workloads: unifi<br/>Frigate pulls camera RTSP"]
-    clients["WireGuard clients<br/>dial ddns.ddns-domain.example"]
+    clients["WireGuard clients<br/>dial WireGuard endpoint hostname"]
 
     tf["Terraform<br/>modules/mikrotik<br/>secrets via SOPS<br/>applied locally, LAN-only"]
 
@@ -50,7 +49,7 @@ flowchart TB
     fw --- svc
     fw --> bridge
     bridge -->|"tagged trunk"| sw
-    sw --> v910 & v900 & v610 & v120 & v140 & vrest
+    sw --> v910 & v900 & v610 & v140 & vrest
     v140 --> eprt
     v910 -->|"Windows host"| k8s
     clients -->|"UDP 51820/51821"| i_wg
@@ -64,5 +63,5 @@ flowchart TB
 
     class i_lan,i_mgmt,i_wg,svc,ddns new
     class wan,fw,wg,bridge router
-    class sw,v910,v900,v610,v120,v140,vrest,eprt,k8s,clients ext
+    class sw,v910,v900,v610,v140,vrest,eprt,k8s,clients ext
     class tf ctl

@@ -438,8 +438,9 @@ variable "ddns" {
     hostname as their endpoint, so a stale record breaks remote VPN access at the
     next WAN address change.
 
-    namecheap needs host + domain. Uses the update endpoint at
-    dynamicdns.park-your-domain.com, so no record lookup is required.
+    namecheap needs ddns_host + ddns_domain (sensitive, from SOPS). Uses the
+    update endpoint at dynamicdns.park-your-domain.com, so no record lookup is
+    required.
 
     cloudflare needs zone_id + record_id + record_name, and the A record must
     already exist. Create it in environments/prod/cloudflare, not here.
@@ -447,10 +448,6 @@ variable "ddns" {
   type = object({
     provider = string
     interval = optional(string, "5m")
-
-    # namecheap
-    host   = optional(string)
-    domain = optional(string)
 
     # cloudflare
     zone_id     = optional(string)
@@ -467,19 +464,25 @@ variable "ddns" {
 
   validation {
     condition = var.ddns == null ? true : (
-      var.ddns.provider != "namecheap" ||
-      (var.ddns.host != null && var.ddns.domain != null)
-    )
-    error_message = "ddns.provider = namecheap requires host and domain."
-  }
-
-  validation {
-    condition = var.ddns == null ? true : (
       var.ddns.provider != "cloudflare" ||
       (var.ddns.zone_id != null && var.ddns.record_id != null && var.ddns.record_name != null)
     )
     error_message = "ddns.provider = cloudflare requires zone_id, record_id and record_name."
   }
+}
+
+variable "ddns_host" {
+  description = "Namecheap DDNS host label (e.g. `ddns`). From SOPS."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "ddns_domain" {
+  description = "Namecheap DDNS domain. From SOPS: it ties the repo to an identity."
+  type        = string
+  default     = null
+  sensitive   = true
 }
 
 variable "ddns_credential" {
@@ -548,6 +551,12 @@ variable "admin_ssh_keys" {
 # (flow-collector client names).
 variable "monitoring_username" {
   description = "Read-only API account for mktxp. null disables it and keeps api-ssl off."
+  type        = string
+  default     = null
+}
+
+variable "monitoring_source_list" {
+  description = "Address list allowed to reach the read-only API (api-ssl 8729)."
   type        = string
   default     = null
 }

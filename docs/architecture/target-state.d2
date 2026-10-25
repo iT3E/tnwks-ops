@@ -60,7 +60,7 @@ rb: MikroTik RB5009UG+S+IN — sce-rtr01 — RouterOS 7 {
       style.fill: "#d9f2e3"
     }
     mgmt: {
-      label: "internal VLANs (not 610) · wg01 · ether8 OOB\nSSH 22 · REST 443 · Winbox 8291\ncredential-gated"
+      label: "admin VPN (wg01) · ether8 OOB\nSSH 22 · REST 443 · Winbox 8291"
       style.fill: "#d9f2e3"
     }
     wg_in: {
@@ -105,7 +105,7 @@ rb: MikroTik RB5009UG+S+IN — sce-rtr01 — RouterOS 7 {
   }
 
   ddns: {
-    label: "ddns-update\n/system/script + /system/scheduler\nNamecheap · every 5m\nddns.ddns-domain.example"
+    label: "ddns-update\n/system/script + /system/scheduler\nNamecheap · every 5m\nWireGuard endpoint hostname"
     style: {
       fill: "#fef6e7"
       stroke: "#b9770e"
@@ -135,7 +135,6 @@ vlans: VLANs — one SVI each {
     "910 unifi-frontend": 10.10.91.1/24
     "900 unifi-mgmt": "10.10.90.1/24 · 3 APs"
     "610 seccam": "10.10.60.1/24 · 5 cams"
-    "120 k8s": 10.10.120.1/24
     "140 UISP": 10.10.140.1/24
     "native switch-mgmt": "10.98.0.1/24 · untagged · Aruba"
     "10 transit": "172.16.1.250 · until the ERL retires"
@@ -196,6 +195,6 @@ retired: retired at cutover {
     - **172.16.1.252 / .254** — dead next-hops, 16 routes pointed at them
     - **transit-10 NTP dstnat** — black-holed at dead `.254`
     - **12 Podman containers** — native services, k8s, or dropped (haproxy)
-    - **VLANs 11 · 110 · 410 · 550 · 720** and Blue Iris — retired, not ported
+    - **VLANs 11 · 110 · 120 · 410 · 550 · 720** and Blue Iris — retired, not ported
   |
 }

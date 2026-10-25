@@ -53,7 +53,8 @@ VyOS source or the retirement lists in the generator do.
 
 | What | Effect |
 | --- | --- |
-| VLANs `ad-110`, `app-720`, `bastion-410`, `iLO-550`, `pve-11` | No SVI, DHCP, NAT, DNS records into the subnet, or zone pairs to/from them |
+| VLANs `ad-110`, `app-720`, `bastion-410`, `iLO-550`, `pve-11`, `k8s-120` | No SVI, DHCP, NAT, DNS records into the subnet, or zone pairs to/from them |
+| `udmpro` address group | Named for a UDM Pro but pointing at the EdgeRouter; its rule into VLAN 900 is dropped |
 | Blue Iris (`blue_iris`) | Every rule naming it dropped; the camera VLAN initiates nothing beyond the router |
 | haproxy (3 containers) | Its rules and `*.tnwks.local` names dropped |
 
@@ -107,9 +108,13 @@ match on it and therefore cannot be answered from the WAN:
 | --- | --- |
 | DNS 53 | originating zone list only |
 | NTP 123, DHCP 67/68 | `zone-lan` |
-| SSH 22, REST/Winbox 443/8291 | any internal VLAN, the personal VPN (`wg01`), and out-of-band `ether8`. Gated by credentials (SSH keys, admin password), not source address |
-| RouterOS API-SSL 8729 | `zone-lan`, for mktxp only (read-only `monitoring` group) |
-| WireGuard 51820/51821 | `zone-transit-10`, which holds both the transit SVI (ERL port-forward, stage A) and `ether1` (stage B) |
+| SSH 22, REST/Winbox 443/8291 | the admin VPN (`wg01`) and out-of-band `ether8` only |
+| RouterOS API-SSL 8729 | the `monitoring` list (WSL host), for mktxp; read-only `monitoring` group |
+| WireGuard 51820/51821 | `zone-transit-10` (ERL port-forward in stage A, `ether1` in stage B) and `zone-lan` (joining the admin VPN from home) |
+
+People reach sensitive systems (router, switch, UniFi APs, UISP radios) only
+over `wg01`. The full access model and the break-glass procedures are in
+[`network-access.md`](network-access.md).
 | everything else | terminal drop |
 
 ## The four translations that are not one-to-one
@@ -199,7 +204,25 @@ Two knock-on effects:
 - Blocking and split-horizon now apply to **every** VLAN. dnsdist only sent
   `10.10.91.0/24` and `10.10.31.0/24` through blocky; RouterOS adlists are
   global. The lists are malware/phishing/ad lists, so the wider scope is mostly
-  a gain, but a false positive now hits UniFi and k8s too.
+  a gain, but a false positive now hits every VLAN.
+
+What the move to RouterOS DNS keeps and loses, relative to what the
+containers actually did:
+
+| Feature | Today | RouterOS |
+| --- | --- | --- |
+| Ad/malware blocking (45 lists) | blocky, 910 + `wg02` only | `ip_dns_adlist`, every VLAN |
+| Allowlists (2 anudeep lists) | blocky `whiteLists` | **lost**: no allowlist URLs; unblock single names with static `FWD` records |
+| `*.internal.tnwks.us` and other overrides | blocky `customDNS` | static records, `match_subdomain` for wildcards |
+| `tnwks.local`, `unifi` zones | bind (authoritative) | static records (no SOA/NS, not authoritative) |
+| `.zip` dropped | dnsdist `DropAction` | static `NXDOMAIN` record for `zip` and everything under it |
+| Encrypted upstream | DoT to Cloudflare | DoH to Cloudflare |
+| Query and block metrics | blocky Prometheus endpoint, dnsdist query log | **lost**: RouterOS exposes cache stats, not per-query or per-block metrics |
+| ControlD pools | defined in dnsdist, no rule routes to them | nothing to port |
+
+RAM is the constraint to watch: adlists live in memory on a 1 GB router. Check
+`/ip dns adlist print` and `/system resource print` after the bench apply, and
+trim to fewer, larger curated lists if usage is high.
 - Client DNS stops being *forwarded* traffic and becomes traffic *to the router*.
   Every VyOS `<zone> -> containers` `accept_dns` rule therefore moves from the
   forward chain to the **input** chain. The generator does this automatically and
@@ -297,8 +320,10 @@ These need a decision, they are not solved by this port:
 Worth fixing in `vyos-config` regardless of the migration:
 
 - **`wg01` exists in git but not on the live router**, while the `vpn` zone still
-  references it. The port provisions both `wg01` and `wg02` from git. Decide
-  whether `wg01` should exist before cutover.
+  references it. The port provisions it from git as the admin VPN, so its peers
+  need working client configs before cutover.
+- **`910 -> 10.10.140.140:443` (the EP-R6 UI) is open live** but has no rule in
+  git. The port does not carry it over: UISP radios are reachable over `wg01`.
 - **NTP dstnat for `transit-10` targets `172.16.1.254`.** `.254` is dead, so the
   rule black-holes NTP for
   that zone today. Not ported; the generator records it.
@@ -349,6 +374,9 @@ share the trunk with VyOS: stage A is a swap, not a parallel run.
 
 ### Before the window
 
+- `wg01` client configs working (the admin VPN is the only management path
+  after cutover; see `network-access.md`), and a copy of the SOPS age key and
+  admin password stored off the desktop for break-glass.
 - Live VyOS config diffed against `vyos-config` (see "Known VyOS drift"), and
   anything real committed to `vyos-config` and regenerated.
 - `secrets.sops.yaml` created and encrypted (see `secrets.sops.yaml.example`;
@@ -391,9 +419,10 @@ transit-10, where VyOS's own `X -> transit-10` rules apply.
    addresses (same IPs, new MAC). `clear arp` on the ERL speeds it up.
 10. **Verify:** DHCP lease on a test client in 910 and 900, DNS through the
     router (`dig @10.10.91.1 example.com`, and a `*.internal.tnwks.us` name),
-    internet from a client, one known-good accept (e.g. 910 -> 900 UniFi), one
-    known-good denial (e.g. a camera in 610 cannot reach the internet), and a
-    WireGuard client connecting through the ERL port-forward.
+    internet from a client, one known-good accept (e.g. `wg01` -> router
+    REST), one known-good denial (e.g. 910 -> router REST, or a camera in 610
+    reaching the internet), and a WireGuard client connecting through the ERL
+    port-forward.
 11. **Rollback:** trunk back to VyOS, power it on.
 
 ### Stage B: move the WAN

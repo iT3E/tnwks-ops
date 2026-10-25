@@ -226,7 +226,8 @@ resource "routeros_ip_firewall_filter" "input_accept" {
   ]
 }
 
-# mktxp's API-SSL port, LAN only. Exists only while the monitoring account does.
+# mktxp's API-SSL port, from the monitoring source only. Exists only while the
+# monitoring account does.
 resource "routeros_ip_firewall_filter" "input_monitoring" {
   count = local.monitoring_enabled ? 1 : 0
 
@@ -235,7 +236,8 @@ resource "routeros_ip_firewall_filter" "input_monitoring" {
   protocol          = "tcp"
   dst_port          = "8729"
   in_interface_list = routeros_interface_list.lan.name
-  comment           = "600 input: RouterOS API-SSL for mktxp, LAN only (terraform)"
+  src_address_list  = var.monitoring_source_list
+  comment           = "600 input: RouterOS API-SSL for mktxp (terraform)"
 }
 
 resource "routeros_ip_firewall_filter" "input_drop" {

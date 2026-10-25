@@ -139,15 +139,23 @@ NEW_ADDRESS_LISTS = {
     "unifi_controller": {UNIFI_CONTROLLER_HOME.replace(".", "_"): UNIFI_CONTROLLER_HOME},
     # Frigate runs on the WSL cluster, so its camera pulls come from the Windows host.
     "frigate": {WSL_HOST.replace(".", "_"): WSL_HOST},
+    # mktxp (WSL cluster) is the only client of the router's read-only API.
+    "monitoring": {WSL_HOST.replace(".", "_"): WSL_HOST},
 }
+
+# Lists the module references directly rather than through a generated rule,
+# so the unused-list pruning must keep them.
+MODULE_ADDRESS_LISTS = {"monitoring"}
 
 # VLANs (VyOS zones) that are retired. Not emitted at all: no SVI, DHCP, DNS
 # records into the subnet, NAT, or any zone pair to or from them.
-RETIRED_ZONES = {"ad-110", "app-720", "bastion-410", "iLO-550", "pve-11"}
+RETIRED_ZONES = {"ad-110", "app-720", "bastion-410", "iLO-550", "pve-11", "k8s-120"}
 
 # Address groups for hosts that are retired. Every rule that names one is
 # dropped, the group is not emitted, and dstnat exemptions for its members go.
 RETIRED_ADDRESS_GROUPS = {
+    # Named for a UDM Pro, but 172.16.1.1 is the EdgeRouter, which retires.
+    "udmpro": "stale UDM Pro entry pointing at the EdgeRouter",
     "blue_iris": "Blue Iris NVR, replaced by Frigate",
 }
 
@@ -227,10 +235,15 @@ NATIVE_VLAN = {
     "comment": "Aruba switch management (untagged on the uplink)",
 }
 
+# Management access model: people reach sensitive systems (switch, UniFi and
+# UISP management, the router itself) only over the admin VPN. Services keep
+# their own narrow paths (UniFi controller <-> APs, mktxp -> router API).
+# Break-glass: docs/network-access.md.
+ADMIN_ZONE = "vpn"  # wg01
+
 # Who may reach switch management. VyOS left eth1 out of every zone, so today
-# it is reachable from everywhere; here it is the same set that may manage the
-# router: 910, the UniFi mgmt VLAN and the personal VPN. Credential-gated.
-NATIVE_VLAN_ACCESS = ["unifi-frontend-910", "unifi-mgmt-900", "vpn"]
+# it is reachable from everywhere.
+NATIVE_VLAN_ACCESS = [ADMIN_ZONE]
 BRIDGE_PORTS = ["ether2", "ether3", "ether4", "ether5", "ether6", "ether7", "sfp-sfpplus1"]
 
 # Remote syslog. VyOS shipped to a Vector aggregator on the old cluster
@@ -247,10 +260,9 @@ WAN_INTERFACE = "ether1"
 # domain). Kept on Namecheap because the WireGuard client configs use this exact
 # hostname as their endpoint: changing providers means reissuing every client
 # config, so the record stays put and the migration keeps one less moving part.
+# Host and domain come from SOPS, not from here.
 DDNS = {
     "provider": "namecheap",
-    "host": "ddns",
-    "domain": "ddns-domain.example",
     "interval": "5m",
 }
 SYSTEM_RE = re.compile(r"^set system (\S+(?: \S+)*) '?([^']*)'?$")
@@ -739,11 +751,16 @@ def parse_dns(vyos_root: Path) -> tuple[dict, list[str]]:
                 "RouterOS resolves uniformly. Per-client policy needs "
                 "ip_dns_forwarders or an off-router resolver" % controld
             )
-        if "DropAction" in dtext:
-            notes.append(
-                "dns: dnsdist DropAction rules are NOT ported (no RouterOS "
-                "equivalent in the DNS path; use firewall rules instead)"
-            )
+        # Name-based drops (addAction("zip", DropAction())) become NXDOMAIN
+        # records covering the name and everything under it.
+        for name in re.findall(r'^\s*addAction\(\s*["\']([A-Za-z0-9.-]+)["\']\s*,\s*DropAction\(\)', dtext, re.M):
+            if re.match(r"^[0-9./]+$", name):
+                continue  # subnet catch-alls, not names
+            key = "drop_" + re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_").lower()
+            dns["static_records"][key] = {
+                "name": name, "type": "NXDOMAIN", "match_subdomain": True,
+                "comment": "dnsdist DropAction",
+            }
 
     dns["static_records"] = dict(sorted(dns["static_records"].items()))
     return dns, notes
@@ -1071,16 +1088,13 @@ def build_zone_policies(
          "dst_port": "67,68", "in_interface_list": "lan"},
         {"comment": "NTP server mode for LAN clients only (never WAN)", "protocol": "udp",
          "dst_port": "123", "in_interface_list": "lan"},
-        # Management from any internal VLAN except the cameras, and from the
-        # personal VPN (wg01), never the WAN. Gated by credentials (password
-        # for REST/Winbox, keys for SSH), not by source address. The camera
-        # deny must sort before the LAN accept below.
-        {"comment": "No management (SSH/REST/Winbox/API) from the camera VLAN", "action": "drop",
-         "protocol": "tcp", "dst_port": "22,443,8291,8729", "in_interface_list": CAMERA_ZONE},
-        {"comment": "SSH/REST/Winbox from LAN (credential-protected)", "protocol": "tcp",
-         "dst_port": "22,443,8291", "in_interface_list": "lan"},
-        {"comment": "SSH/REST/Winbox from the personal VPN (wg01)", "protocol": "tcp",
-         "dst_port": "22,443,8291", "in_interface_list": "vpn"},
+        # Router management only over the admin VPN (and the out-of-band port,
+        # which the module handles). Never from a LAN VLAN or the WAN.
+        {"comment": "SSH/REST/Winbox from the admin VPN (wg01)", "protocol": "tcp",
+         "dst_port": "22,443,8291", "in_interface_list": ADMIN_ZONE},
+        # LAN hosts (the desktop) join the admin VPN over the LAN.
+        {"comment": "WireGuard from the LAN, to join the admin VPN from inside",
+         "protocol": "udp", "dst_port": "51820,51821", "in_interface_list": "lan"},
         # The one service that must answer from outside. While the ERL is still
         # upstream it port-forwards 51820/51821 to 172.16.1.250 (this router's
         # transit-10 SVI); afterwards they arrive on ether1. Both are members of
@@ -1190,7 +1204,7 @@ def main() -> int:
         referenced_addr.update(filter(None, (rule.get("src_address_list"), rule.get("dst_address_list"))))
         if rule.get("dst_port_list"):
             referenced_port.add(rule["dst_port_list"])
-    for name in sorted(set(address_lists) - referenced_addr):
+    for name in sorted(set(address_lists) - referenced_addr - MODULE_ADDRESS_LISTS):
         del address_lists[name]
         notes.append("address list %s: not emitted, no remaining rule references it" % name)
     for name in sorted(set(port_lists) - referenced_port):
@@ -1481,6 +1495,9 @@ def main() -> int:
                            "VyOS shipped octet-counted TCP syslog to the k8s Vector aggregator.\n"
                            "RouterOS emits plain syslog, so the Vector source must accept it."))
     body.append("\n")
+    body.append(assign("monitoring_source_list", "monitoring",
+                       "Address list allowed to reach the router's read-only API (mktxp)."))
+    body.append("\n")
     body.append(assign("admin_ssh_keys", admin_keys,
                        "Username is injected from SOPS in main.tf (VyOS used\n"
                        "${SSH_VYOS_USERNAME}), so only key material lives here."))
@@ -1501,7 +1518,7 @@ def main() -> int:
                        "scheduler onto the router; see modules/mikrotik/ddns.tf.\n"
                        "LOAD-BEARING: the WireGuard client configs use this hostname as\n"
                        "their endpoint, so a stale record breaks remote VPN access at the\n"
-                       "next WAN address change. The password comes from SOPS."))
+                       "next WAN address change. Host, domain and password come from SOPS."))
     body.append("\n")
     body.append(assign("wireguard_interfaces", wg_out,
                        "Private keys are injected from SOPS in main.tf, never stored here."))

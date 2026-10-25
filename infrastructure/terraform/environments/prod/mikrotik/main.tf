@@ -48,6 +48,8 @@ module "mikrotik" {
   # Dynamic DNS. The WireGuard client configs use this hostname as their
   # endpoint, so it is in the VPN critical path; see the module's ddns.tf.
   ddns            = local.ddns
+  ddns_host       = data.sops_file.secrets.data["ddns_host"]
+  ddns_domain     = data.sops_file.secrets.data["ddns_domain"]
   ddns_credential = data.sops_file.secrets.data["ddns_credential"]
 
   dstnat_rules             = local.dstnat_rules
@@ -85,6 +87,7 @@ module "mikrotik" {
 
   # Read-only API account for mktxp (RouterOS metrics + DHCP lease names for
   # flow-collector), replacing the VyOS node-exporter.
-  monitoring_username = "mktxp"
-  monitoring_password = data.sops_file.secrets.data["mktxp_password"]
+  monitoring_username    = "mktxp"
+  monitoring_source_list = local.monitoring_source_list
+  monitoring_password    = data.sops_file.secrets.data["mktxp_password"]
 }

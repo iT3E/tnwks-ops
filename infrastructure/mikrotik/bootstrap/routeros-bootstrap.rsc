@@ -64,7 +64,7 @@
 # secrets.sops.yaml. Generate it with `openssl rand -base64 24`, do not reuse
 # an existing device password (the homelab has credential-reuse debt already).
 # No address= restriction: access is gated by this credential plus the
-# Terraform input chain (LAN, personal VPN and the OOB port; never the WAN).
+# Terraform input chain (admin VPN and the OOB port; never a LAN VLAN or the WAN).
 /user add name=terraform group=full password="CHANGEME-SEE-SOPS" \
   comment="Terraform service account (tnwks-ops)"
 
