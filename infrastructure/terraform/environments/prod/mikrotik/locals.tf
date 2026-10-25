@@ -811,7 +811,7 @@ locals {
         it-pc01 = {
           allowed_address      = ["10.10.30.10/32"]
           persistent_keepalive = "15s"
-          public_key           = "RLV0A32MXIFkqLuwLdgpJVDaerxLcCexUCaGOkNte3w="
+          public_key           = "G50MJOM94BeGaX9wVFvChFDOy8YAbu32MpTIVSctsSE="
         }
         macbook-it = {
           allowed_address      = ["10.10.30.11/32"]
@@ -954,6 +954,7 @@ locals {
   #   - vpn-mobile-containers rule 2 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
   #   - vpn-mobile-containers rule 3: retargeted to vpn-mobile -> unifi-frontend-910 dst unifi_controller
   #   - vpn-mobile-containers rule 4: DROPPED; it targeted haproxy_frontend, which only existed for haproxy (not ported, its backends are gone)
+  #   - wireguard: wg01/it-pc01 re-keyed for the RB5009 (WG_PEER_PUBLIC_KEYS)
   #   - zone ad-110: retired; VLAN, DHCP and every pair to or from it are not emitted
   #   - zone app-720: retired; VLAN, DHCP and every pair to or from it are not emitted
   #   - zone bastion-410: retired; VLAN, DHCP and every pair to or from it are not emitted

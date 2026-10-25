@@ -246,6 +246,13 @@ ADMIN_ZONE = "vpn"  # wg01
 # listener (wg02 also carries a non-admin phone) does not grant it wholesale.
 ADMIN_PEERS = {"vpn-mobile": ["it-mobile"]}
 
+# WireGuard peer public keys that replace the ones in vyos-config, keyed
+# "<interface>/<peer>". wg01 never ran on VyOS, so its client keys were never
+# in use; peers listed here were re-keyed for the RB5009. Public keys only.
+WG_PEER_PUBLIC_KEYS = {
+    "wg01/it-pc01": "G50MJOM94BeGaX9wVFvChFDOy8YAbu32MpTIVSctsSE=",  # WSL on the desktop
+}
+
 # Zones that hold management interfaces: reachable by people only over the
 # admin VPN or from an admin peer.
 SENSITIVE_ZONES = ["switch-mgmt", "unifi-mgmt-900", "UISP-140"]
@@ -1366,6 +1373,13 @@ def main() -> int:
             dstnat["%s-%s" % (num, proto)] = dict(entry, protocol=proto)
 
     # WireGuard: strip private keys, main.tf injects them from SOPS.
+    for key, pub in WG_PEER_PUBLIC_KEYS.items():
+        iface, peer = key.split("/", 1)
+        if peer not in wireguard.get(iface, {}).get("peers", {}):
+            raise SystemExit("error: WG_PEER_PUBLIC_KEYS names unknown peer %s" % key)
+        wireguard[iface]["peers"][peer]["public_key"] = pub
+        notes.append("wireguard: %s re-keyed for the RB5009 (WG_PEER_PUBLIC_KEYS)" % key)
+
     wg_out = {}
     iface_zone = {v: k for k, v in zone_iface.items()}
     for name, iface in sorted(wireguard.items()):

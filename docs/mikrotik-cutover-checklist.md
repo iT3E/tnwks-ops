@@ -27,7 +27,7 @@ undone by moving one cable back.
 | --- | --- | --- |
 | 0.1 | Agent (approve) | Squash the PR's commits into one with a clean message, then squash-merge it. Applying from `main` keeps `main` the source of truth |
 | 0.2 | Agent (approve) | Create the `tnwks-mikrotik-prod` workspace (execution mode **local**) by applying `environments/bootstrap/aws-init`, which owns `modules/tfc`. The plan must show only the workspace and its settings |
-| 0.3 | Agent | Build and encrypt `secrets.sops.yaml`: generated passwords (Terraform, admin, mktxp), `admin_username: it3e`, the WireGuard keys from `vyos-config/secrets.sops.yaml`, and the DDNS host/domain/password from the ERL's current config |
+| 0.3 | Agent | Build and encrypt `secrets.sops.yaml`: generated passwords (Terraform, admin, mktxp), `admin_username: it3e`, the WireGuard keys from `vyos-config/secrets.sops.yaml`, and the DDNS host/domain/password from the ERL's current config. If the AWS KMS recipient is unavailable, encrypt to the age recipients and add KMS later with `sops updatekeys` |
 | 0.4 | Agent | Copy the SOPS age key and the admin password to `G:\My Drive\Backup` |
 | 0.5 | Agent | Diff live VyOS (`show configuration commands`) against `vyos-config`; anything real goes into `vyos-config` and `task mikrotik:generate` |
 | 0.6 | Agent | Generate the `wg01` client config for WSL on the PC (`wg-quick`, already installed; new keypair if the old one is gone, its public key goes into `vyos-config`). The phone keeps its `wg02` config: it is an admin peer by address |
