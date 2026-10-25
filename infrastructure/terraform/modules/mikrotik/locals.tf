@@ -43,7 +43,9 @@ locals {
   # in_interface_list / out_interface_list rather than raw interface names.
   zone_interfaces = merge(
     { for k, v in local.active_vlans : k => "${var.bridge_name}-vlan${v.vlan_id}" },
-    { for k, v in var.wireguard_interfaces : k => k },
+    # Keyed by VyOS zone (vpn, vpn-mobile), not interface name (wg01, wg02):
+    # the zone-pair and input rules are written against zone names.
+    { for k, v in var.wireguard_interfaces : coalesce(v.zone, k) => k },
   )
 
   # Zone pairs whose both sides actually exist. A VyOS pair referencing a
@@ -74,14 +76,16 @@ locals {
     }
   ]...)
 
-  # The terminating drop for each pair, evaluated after that pair's accepts.
-  zone_drops = {
+  # The terminating default for each pair, evaluated after that pair's
+  # accepts. Usually a drop; an accept for the pairs VyOS defaulted open.
+  zone_defaults = {
     for pair_key, pair in local.active_zone_policies :
     pair_key => {
       from    = pair.from
       to      = pair.to
-      comment = "${pair.from} -> ${pair.to}: default drop"
-      log     = coalesce(pair.log_default, true)
+      action  = pair.default_action
+      comment = "${pair.from} -> ${pair.to}: default ${pair.default_action}"
+      log     = pair.default_action == "drop" && coalesce(pair.log_default, true)
     }
   }
 }

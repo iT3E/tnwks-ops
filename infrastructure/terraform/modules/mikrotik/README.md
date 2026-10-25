@@ -28,9 +28,13 @@ One file per piece of infrastructure, matching the repo convention:
 VyOS gave every directed zone pair its own ruleset with its own
 `default-action drop`. RouterOS has one flat ordered `forward` chain. The port
 creates an interface-list per zone, emits each pair's accept rules, then emits
-that pair's terminating drop. The trailing drop is not optional; without it an
-unmatched packet falls through into a later pair's accepts and the policy
-silently loosens.
+that pair's terminating default (drop, or accept where VyOS defaulted the pair
+open). The trailing default is not optional; without it an unmatched packet
+falls through into a later pair's accepts and the policy silently loosens.
+
+After every pair comes a terminal forward drop. RouterOS `forward` defaults to
+accept, while VyOS dropped anything between zones with no ruleset. Without it,
+every unbound zone pair and WAN-to-LAN would be open.
 
 Rule order is therefore semantic, and Terraform does not order resource
 creation. `routeros_move_items` re-sequences the chain after apply using the
@@ -50,7 +54,7 @@ of why VyOS sat at ~187% CPU. The RB5009 has 1GB RAM and no sensible storage for
 container layers. Native RouterOS DNS takes over: `ip_dns` for upstreams,
 `ip_dns_adlist` for blocking, `ip_dns_record` for the split-horizon entries. The
 resolver address advertised by DHCP changes from `10.10.53.4` to the VLAN SVI,
-and the forced-DNS dstnat rules follow it.
+and the forced-DNS dstnat rules become `redirect` to the router.
 
 ## Conventions
 
@@ -60,5 +64,10 @@ and the forced-DNS dstnat rules follow it.
 - `port_lists` exists because RouterOS has no port-group object. Entries are
   rendered into comma-joined `dst_port` strings at plan time.
 - WireGuard private keys arrive from SOPS via main.tf. Never a literal, never in locals.tf.
+- `mgmt` is the out-of-band port. It is never bridged, always gets SSH/REST/
+  Winbox on the input chain, and its address is owned by the bootstrap script,
+  not Terraform, so an apply can never remove the connection it runs over.
+- Anything from SOPS is sensitive, and Terraform rejects sensitive values in
+  `for_each`/`count`. Keep secrets out of map keys (see `admin_username`).
 - Every resource carries a `(terraform)` comment suffix so hand-made config is
   distinguishable on the device.

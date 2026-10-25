@@ -16,15 +16,15 @@
 ##   VLANs                11 (11 enabled)
 ##   DHCP servers         9
 ##   DHCP static leases   21
-##   Address lists        21 (37 members)
+##   Address lists        22 (38 members)
 ##   Port lists           3
-##   Zone-pair chains     22
-##   Firewall accepts     44 (expanded from VyOS tcp_udp / port-limit splits)
-##   Input-chain accepts  28
+##   Zone-pair chains     39
+##   Firewall accepts     49 (expanded from VyOS tcp_udp / port-limit splits)
+##   Input-chain accepts  31
 ##   dstnat rules         11
 ##   Static routes        1
 ##   WireGuard listeners  2
-##   DNS static records   39
+##   DNS static records   35
 ##   DNS adlists          45
 ## ---------------------------------------------------------------------------------------------------------------------
 
@@ -33,11 +33,23 @@ locals {
   domain   = "tnwks.local"
   timezone = "America/Los_Angeles"
 
-  # ether1 is WAN; the rest of the ports form the VLAN trunk bridge.
+  # ether1 is WAN, ether8 is out-of-band mgmt, the rest form the
+  # VLAN trunk bridge.
   wan_interface       = "ether1"
   lan_trunk_interface = "bridge-lan"
   bridge_name         = "bridge-lan"
-  bridge_ports        = ["ether2", "ether3", "ether4", "ether5", "ether6", "ether7", "ether8", "sfp-sfpplus1"]
+  bridge_ports        = ["ether2", "ether3", "ether4", "ether5", "ether6", "ether7", "sfp-sfpplus1"]
+  # Never bridged: this is the address Terraform reaches the router on.
+  mgmt = {
+    interface = "ether8"
+    address   = "10.98.0.1/24"
+  }
+
+  # VyOS's internet egress went via transit-10; the WAN port joins it.
+  outside_zone = "transit-10"
+  # EdgeRouter Lite, still upstream during the staged cutover. Set to
+  # null once the modem is on ether1 and the ERL is retired.
+  upstream_gateway = "172.16.1.1"
 
   vlans = {
     UISP-140 = {
@@ -292,6 +304,9 @@ locals {
     freenas = {
       "10_10_40_10" = "10.10.40.10"
     }
+    frigate = {
+      "10_10_91_142" = "10.10.91.142"
+    }
     haproxy_all = {
       "10_10_53_2" = "10.10.53.2"
       "10_10_53_8" = "10.10.53.8"
@@ -347,7 +362,7 @@ locals {
       "172_16_1_1" = "172.16.1.1"
     }
     unifi_controller = {
-      "10_10_53_10" = "10.10.53.10"
+      "10_10_91_142" = "10.10.91.142"
     }
     windows_bastion = {
       "10_10_40_240" = "10.10.40.240"
@@ -388,7 +403,21 @@ locals {
   # Order is semantic. Keys are NNN-from-to; routeros_move_items
   # re-sequences the forward chain to sorted key order after apply.
   zone_policies = {
-    "010-app-720-unifi-frontend-910" = {
+    "010-ad-110-transit-10" = {
+      from           = "ad-110"
+      to             = "transit-10"
+      comment        = "From ad-110 to transit-10"
+      rules          = []
+      default_action = "accept"
+    }
+    "020-app-720-transit-10" = {
+      from           = "app-720"
+      to             = "transit-10"
+      comment        = "From app-720 to transit-10"
+      rules          = []
+      default_action = "accept"
+    }
+    "030-app-720-unifi-frontend-910" = {
       from    = "app-720"
       to      = "unifi-frontend-910"
       comment = "From app-720 to unifi-frontend-910"
@@ -399,7 +428,7 @@ locals {
         },
       ]
     }
-    "020-app-720-unifi-mgmt-900" = {
+    "040-app-720-unifi-mgmt-900" = {
       from    = "app-720"
       to      = "unifi-mgmt-900"
       comment = "From app-720 to unifi-mgmt-900"
@@ -420,22 +449,34 @@ locals {
         },
       ]
     }
-    "030-bastion-410-ad-110" = {
+    "050-bastion-410-ad-110" = {
       from    = "bastion-410"
       to      = "ad-110"
       comment = "From bastion-410 to ad-110"
       rules = [
         {
-          comment          = "rule 1"
+          comment          = "rule 1 [ports 1/2]"
           src_address_list = "windows_bastion"
-          dst_port_list    = "ad_auth_ports"
           protocol         = "tcp"
+          dst_port         = "389,53,3268,3269,88,464,636,123,135,137,138,139,445,9389,5985"
         },
         {
-          comment          = "rule 1"
+          comment          = "rule 1 [ports 2/2]"
           src_address_list = "windows_bastion"
-          dst_port_list    = "ad_auth_ports"
+          protocol         = "tcp"
+          dst_port         = "5986,6000-6199,49152-65535"
+        },
+        {
+          comment          = "rule 1 [ports 1/2]"
+          src_address_list = "windows_bastion"
           protocol         = "udp"
+          dst_port         = "389,53,3268,3269,88,464,636,123,135,137,138,139,445,9389,5985"
+        },
+        {
+          comment          = "rule 1 [ports 2/2]"
+          src_address_list = "windows_bastion"
+          protocol         = "udp"
+          dst_port         = "5986,6000-6199,49152-65535"
         },
         {
           comment          = "rule 2"
@@ -456,20 +497,32 @@ locals {
           protocol         = "udp"
         },
         {
-          comment          = "rule 4"
+          comment          = "rule 4 [ports 1/2]"
           src_address_list = "freenas"
-          dst_port_list    = "ad_auth_ports"
           protocol         = "tcp"
+          dst_port         = "389,53,3268,3269,88,464,636,123,135,137,138,139,445,9389,5985"
         },
         {
-          comment          = "rule 4"
+          comment          = "rule 4 [ports 2/2]"
           src_address_list = "freenas"
-          dst_port_list    = "ad_auth_ports"
+          protocol         = "tcp"
+          dst_port         = "5986,6000-6199,49152-65535"
+        },
+        {
+          comment          = "rule 4 [ports 1/2]"
+          src_address_list = "freenas"
           protocol         = "udp"
+          dst_port         = "389,53,3268,3269,88,464,636,123,135,137,138,139,445,9389,5985"
+        },
+        {
+          comment          = "rule 4 [ports 2/2]"
+          src_address_list = "freenas"
+          protocol         = "udp"
+          dst_port         = "5986,6000-6199,49152-65535"
         },
       ]
     }
-    "040-bastion-410-seccam-610" = {
+    "060-bastion-410-seccam-610" = {
       from    = "bastion-410"
       to      = "seccam-610"
       comment = "From bastion-410 to seccam-610"
@@ -494,7 +547,14 @@ locals {
         },
       ]
     }
-    "050-bastion-410-unifi-frontend-910" = {
+    "070-bastion-410-transit-10" = {
+      from           = "bastion-410"
+      to             = "transit-10"
+      comment        = "From bastion-410 to transit-10"
+      rules          = []
+      default_action = "accept"
+    }
+    "080-bastion-410-unifi-frontend-910" = {
       from    = "bastion-410"
       to      = "unifi-frontend-910"
       comment = "From bastion-410 to unifi-frontend-910"
@@ -519,36 +579,61 @@ locals {
         },
       ]
     }
-    "060-k8s-120-seccam-610" = {
-      from    = "k8s-120"
-      to      = "seccam-610"
-      comment = "k8s-120 -> seccam-610 (ported from containers-seccam-610)"
-      rules = [
-        {
-          comment  = "Rule: accept_biris (container -> k8s)"
-          protocol = "tcp"
-          dst_port = "81"
-        },
-      ]
-    }
-    "070-k8s-120-unifi-mgmt-900" = {
-      from    = "k8s-120"
+    "090-unifi-frontend-910-unifi-mgmt-900" = {
+      from    = "unifi-frontend-910"
       to      = "unifi-mgmt-900"
-      comment = "k8s-120 -> unifi-mgmt-900 (ported from containers-unifi-mgmt-900)"
+      comment = "unifi-frontend-910 -> unifi-mgmt-900"
       rules = [
         {
-          comment  = "Rule: accept_unifi_controller (container -> k8s)"
-          protocol = "tcp"
-          dst_port = "22,3478"
+          comment          = "Rule: accept_unifi_controller (was containers-unifi-mgmt-900)"
+          src_address_list = "unifi_controller"
+          protocol         = "tcp"
+          dst_port         = "22,3478"
         },
         {
-          comment  = "Rule: accept_unifi_controller (container -> k8s)"
-          protocol = "udp"
-          dst_port = "22,3478"
+          comment          = "Rule: accept_unifi_controller (was containers-unifi-mgmt-900)"
+          src_address_list = "unifi_controller"
+          protocol         = "udp"
+          dst_port         = "22,3478"
         },
       ]
     }
-    "080-k8s-120-pve-11" = {
+    "100-k8s-120-unifi-frontend-910" = {
+      from    = "k8s-120"
+      to      = "unifi-frontend-910"
+      comment = "From k8s-120 to unifi-frontend-910"
+      rules = [
+        {
+          comment          = "Rule: accept_8443_unifi_controller (was k8s-120-containers)"
+          dst_address_list = "unifi_controller"
+          protocol         = "tcp"
+          dst_port         = "8443"
+        },
+        {
+          comment          = "Rule: allow_tcp_udp_robovac2"
+          dst_address_list = "robovac1"
+          protocol         = "tcp"
+        },
+        {
+          comment          = "Rule: allow_tcp_udp_robovac2"
+          dst_address_list = "robovac1"
+          protocol         = "udp"
+        },
+        {
+          comment          = "Rule: allow_tcp_udp_wyze"
+          dst_address_list = "wyze_cameras"
+          protocol         = "tcp"
+          dst_port         = "554"
+        },
+        {
+          comment          = "Rule: allow_tcp_udp_wyze"
+          dst_address_list = "wyze_cameras"
+          protocol         = "udp"
+          dst_port         = "554"
+        },
+      ]
+    }
+    "110-k8s-120-pve-11" = {
       from    = "k8s-120"
       to      = "pve-11"
       comment = "From k8s-120 to pve-11"
@@ -573,7 +658,7 @@ locals {
         },
       ]
     }
-    "090-k8s-120-seccam-610" = {
+    "120-k8s-120-seccam-610" = {
       from    = "k8s-120"
       to      = "seccam-610"
       comment = "From k8s-120 to seccam-610"
@@ -592,36 +677,14 @@ locals {
         },
       ]
     }
-    "100-k8s-120-unifi-frontend-910" = {
-      from    = "k8s-120"
-      to      = "unifi-frontend-910"
-      comment = "From k8s-120 to unifi-frontend-910"
-      rules = [
-        {
-          comment          = "Rule: allow_tcp_udp_robovac2"
-          dst_address_list = "robovac1"
-          protocol         = "tcp"
-        },
-        {
-          comment          = "Rule: allow_tcp_udp_robovac2"
-          dst_address_list = "robovac1"
-          protocol         = "udp"
-        },
-        {
-          comment          = "Rule: allow_tcp_udp_wyze"
-          dst_address_list = "wyze_cameras"
-          protocol         = "tcp"
-          dst_port         = "554"
-        },
-        {
-          comment          = "Rule: allow_tcp_udp_wyze"
-          dst_address_list = "wyze_cameras"
-          protocol         = "udp"
-          dst_port         = "554"
-        },
-      ]
+    "130-k8s-120-transit-10" = {
+      from           = "k8s-120"
+      to             = "transit-10"
+      comment        = "From k8s-120 to transit-10"
+      rules          = []
+      default_action = "accept"
     }
-    "110-pve-11-k8s-120" = {
+    "140-pve-11-k8s-120" = {
       from    = "pve-11"
       to      = "k8s-120"
       comment = "From pve-11 to k8s-120"
@@ -634,28 +697,49 @@ locals {
         },
       ]
     }
-    "120-seccam-610-ad-110" = {
+    "150-pve-11-transit-10" = {
+      from           = "pve-11"
+      to             = "transit-10"
+      comment        = "From pve-11 to transit-10"
+      rules          = []
+      default_action = "accept"
+    }
+    "160-seccam-610-ad-110" = {
       from    = "seccam-610"
       to      = "ad-110"
       comment = "From seccam-610 to ad-110"
       rules = [
         {
-          comment          = "rule 1"
+          comment          = "rule 1 [ports 1/2]"
           src_address_list = "blue_iris"
           dst_address_list = "domain_controllers"
-          dst_port_list    = "ad_auth_ports"
           protocol         = "tcp"
+          dst_port         = "389,53,3268,3269,88,464,636,123,135,137,138,139,445,9389,5985"
         },
         {
-          comment          = "rule 1"
+          comment          = "rule 1 [ports 2/2]"
           src_address_list = "blue_iris"
           dst_address_list = "domain_controllers"
-          dst_port_list    = "ad_auth_ports"
+          protocol         = "tcp"
+          dst_port         = "5986,6000-6199,49152-65535"
+        },
+        {
+          comment          = "rule 1 [ports 1/2]"
+          src_address_list = "blue_iris"
+          dst_address_list = "domain_controllers"
           protocol         = "udp"
+          dst_port         = "389,53,3268,3269,88,464,636,123,135,137,138,139,445,9389,5985"
+        },
+        {
+          comment          = "rule 1 [ports 2/2]"
+          src_address_list = "blue_iris"
+          dst_address_list = "domain_controllers"
+          protocol         = "udp"
+          dst_port         = "5986,6000-6199,49152-65535"
         },
       ]
     }
-    "130-seccam-610-app-720" = {
+    "170-seccam-610-app-720" = {
       from    = "seccam-610"
       to      = "app-720"
       comment = "From seccam-610 to app-720"
@@ -676,7 +760,7 @@ locals {
         },
       ]
     }
-    "140-seccam-610-transit-10" = {
+    "180-seccam-610-transit-10" = {
       from    = "seccam-610"
       to      = "transit-10"
       comment = "From seccam-610 to transit-10"
@@ -685,7 +769,7 @@ locals {
         src_address_list = "blue_iris"
       }]
     }
-    "150-seccam-610-unifi-frontend-910" = {
+    "190-seccam-610-unifi-frontend-910" = {
       from    = "seccam-610"
       to      = "unifi-frontend-910"
       comment = "From seccam-610 to unifi-frontend-910"
@@ -697,7 +781,7 @@ locals {
         },
       ]
     }
-    "160-transit-10-k8s-120" = {
+    "200-transit-10-k8s-120" = {
       from    = "transit-10"
       to      = "k8s-120"
       comment = "From transit-10 to k8s-120"
@@ -710,7 +794,7 @@ locals {
         },
       ]
     }
-    "170-transit-10-unifi-mgmt-900" = {
+    "210-transit-10-unifi-mgmt-900" = {
       from    = "transit-10"
       to      = "unifi-mgmt-900"
       comment = "From transit-10 to unifi-mgmt-900"
@@ -727,72 +811,162 @@ locals {
         },
       ]
     }
-    "180-unifi-frontend-910-k8s-120" = {
-      from    = "unifi-frontend-910"
-      to      = "k8s-120"
-      comment = "unifi-frontend-910 -> k8s-120 (ported from unifi-frontend-910-containers)"
-      rules = [
-        {
-          comment          = "Rule: allow_80_443_to_haproxy_frontend (container -> k8s)"
-          dst_address_list = "k8s_ingress"
-          protocol         = "tcp"
-          dst_port         = "80,443"
-        },
-      ]
+    "220-UISP-140-transit-10" = {
+      from           = "UISP-140"
+      to             = "transit-10"
+      comment        = "From uisp-140 to transit-10"
+      rules          = []
+      default_action = "accept"
     }
-    "190-unifi-mgmt-900-k8s-120" = {
+    "230-unifi-frontend-910-transit-10" = {
+      from           = "unifi-frontend-910"
+      to             = "transit-10"
+      comment        = "From unifi-frontend-910 to transit-10"
+      rules          = []
+      default_action = "accept"
+    }
+    "240-unifi-mgmt-900-unifi-frontend-910" = {
       from    = "unifi-mgmt-900"
-      to      = "k8s-120"
-      comment = "unifi-mgmt-900 -> k8s-120 (ported from unifi-mgmt-900-containers)"
+      to      = "unifi-frontend-910"
+      comment = "unifi-mgmt-900 -> unifi-frontend-910"
       rules = [
         {
-          comment       = "Rule: accept_unifi_ap (container -> k8s)"
-          dst_port_list = "unifi_controller_ports"
-          protocol      = "tcp"
-        },
-        {
-          comment       = "Rule: accept_unifi_ap (container -> k8s)"
-          dst_port_list = "unifi_controller_ports"
-          protocol      = "udp"
-        },
-      ]
-    }
-    "200-vpn-mobile-k8s-120" = {
-      from    = "vpn-mobile"
-      to      = "k8s-120"
-      comment = "vpn-mobile -> k8s-120 (ported from vpn-mobile-containers)"
-      rules = [
-        {
-          comment          = "Rule: accept_http_https_to_haproxy_authenticated (container -> k8s)"
-          dst_address_list = "k8s_ingress"
+          comment          = "Rule: accept_unifi_ap (was unifi-mgmt-900-containers)"
+          dst_address_list = "unifi_controller"
+          dst_port_list    = "unifi_controller_ports"
           protocol         = "tcp"
-          dst_port         = "80,443"
+        },
+        {
+          comment          = "Rule: accept_unifi_ap (was unifi-mgmt-900-containers)"
+          dst_address_list = "unifi_controller"
+          dst_port_list    = "unifi_controller_ports"
+          protocol         = "udp"
         },
       ]
     }
-    "210-vpn-mobile-k8s-120" = {
+    "250-unifi-mgmt-900-transit-10" = {
+      from           = "unifi-mgmt-900"
+      to             = "transit-10"
+      comment        = "From unifi-mgmt-900 to transit-10"
+      rules          = []
+      default_action = "accept"
+    }
+    "260-vpn-UISP-140" = {
+      from           = "vpn"
+      to             = "UISP-140"
+      comment        = "From vpn to UISP-140"
+      rules          = []
+      default_action = "accept"
+    }
+    "270-vpn-ad-110" = {
+      from           = "vpn"
+      to             = "ad-110"
+      comment        = "From vpn to ad-110"
+      rules          = []
+      default_action = "accept"
+    }
+    "280-vpn-app-720" = {
+      from           = "vpn"
+      to             = "app-720"
+      comment        = "From vpn to app-720"
+      rules          = []
+      default_action = "accept"
+    }
+    "290-vpn-bastion-410" = {
+      from           = "vpn"
+      to             = "bastion-410"
+      comment        = "From vpn to bastion-410"
+      rules          = []
+      default_action = "accept"
+    }
+    "300-vpn-iLO-550" = {
+      from           = "vpn"
+      to             = "iLO-550"
+      comment        = "From vpn to iLO-550"
+      rules          = []
+      default_action = "accept"
+    }
+    "310-vpn-k8s-120" = {
+      from           = "vpn"
+      to             = "k8s-120"
+      comment        = "From vpn to k8s-120"
+      rules          = []
+      default_action = "accept"
+    }
+    "320-vpn-mobile-unifi-frontend-910" = {
       from    = "vpn-mobile"
-      to      = "k8s-120"
-      comment = "vpn-mobile -> k8s-120 (ported from vpn-mobile-containers)"
+      to      = "unifi-frontend-910"
+      comment = "From vpn-mobile to unifi-frontend-910"
       rules = [
         {
-          comment          = "Rule: accept_8443_unifi_controller (container -> k8s)"
-          dst_address_list = "k8s_ingress_internal"
+          comment          = "Rule: accept_8443_unifi_controller (was vpn-mobile-containers)"
+          dst_address_list = "unifi_controller"
           protocol         = "tcp"
           dst_port         = "8443"
         },
       ]
+      default_action = "accept"
     }
-    "220-vpn-mobile-k8s-120" = {
-      from    = "vpn-mobile"
-      to      = "k8s-120"
-      comment = "vpn-mobile -> k8s-120 (ported from vpn-mobile-containers)"
+    "330-vpn-mobile-transit-10" = {
+      from           = "vpn-mobile"
+      to             = "transit-10"
+      comment        = "From vpn-mobile to transit-10"
+      rules          = []
+      default_action = "accept"
+    }
+    "340-vpn-pve-11" = {
+      from           = "vpn"
+      to             = "pve-11"
+      comment        = "From vpn to pve-11"
+      rules          = []
+      default_action = "accept"
+    }
+    "350-vpn-seccam-610" = {
+      from           = "vpn"
+      to             = "seccam-610"
+      comment        = "From vpn to seccam-610"
+      rules          = []
+      default_action = "accept"
+    }
+    "360-vpn-transit-10" = {
+      from           = "vpn"
+      to             = "transit-10"
+      comment        = "From vpn to transit-10"
+      rules          = []
+      default_action = "accept"
+    }
+    "370-vpn-unifi-frontend-910" = {
+      from           = "vpn"
+      to             = "unifi-frontend-910"
+      comment        = "From vpn to unifi-frontend-910"
+      rules          = []
+      default_action = "accept"
+    }
+    "380-vpn-unifi-mgmt-900" = {
+      from           = "vpn"
+      to             = "unifi-mgmt-900"
+      comment        = "From vpn to unifi-mgmt-900"
+      rules          = []
+      default_action = "accept"
+    }
+    "390-unifi-frontend-910-seccam-610" = {
+      from    = "unifi-frontend-910"
+      to      = "seccam-610"
+      comment = "From unifi-frontend-910 to seccam-610"
       rules = [
         {
-          comment          = "Rule: accept_http_https_to_haproxy_frontend (container -> k8s)"
-          dst_address_list = "k8s_ingress"
+          comment          = "Frigate (WSL cluster) RTSP pulls from the cameras"
+          src_address_list = "frigate"
+          dst_address_list = "security_cameras"
           protocol         = "tcp"
-          dst_port         = "80,443"
+          dst_port         = "554"
+        },
+        {
+          comment          = "Frigate (WSL cluster) RTSP pulls from the cameras"
+          src_address_list = "frigate"
+          dst_address_list = "security_cameras"
+          protocol         = "udp"
+          dst_port         = "554"
         },
       ]
     }
@@ -887,16 +1061,16 @@ locals {
       dst_port          = "53,853"
     }
     "150-dns-transit-10-tcp" = {
-      comment           = "DNS from transit-10 (was transit-10-containers)"
-      in_interface_list = "transit-10"
-      protocol          = "tcp"
-      dst_port          = "53,853"
+      comment      = "DNS from transit-10 (was transit-10-containers)"
+      in_interface = "bridge-lan-vlan10"
+      protocol     = "tcp"
+      dst_port     = "53,853"
     }
     "160-dns-transit-10-udp" = {
-      comment           = "DNS from transit-10 (was transit-10-containers)"
-      in_interface_list = "transit-10"
-      protocol          = "udp"
-      dst_port          = "53,853"
+      comment      = "DNS from transit-10 (was transit-10-containers)"
+      in_interface = "bridge-lan-vlan10"
+      protocol     = "udp"
+      dst_port     = "53,853"
     }
     "170-dns-unifi-frontend-910-tcp" = {
       comment           = "DNS from unifi-frontend-910 (was unifi-frontend-910-containers)"
@@ -922,13 +1096,25 @@ locals {
       protocol          = "udp"
       dst_port          = "53,853"
     }
-    "210-dns-vpn-mobile-tcp" = {
+    "210-dns-vpn-tcp" = {
+      comment           = "DNS from vpn (was vpn-containers)"
+      in_interface_list = "vpn"
+      protocol          = "tcp"
+      dst_port          = "53,853"
+    }
+    "220-dns-vpn-udp" = {
+      comment           = "DNS from vpn (was vpn-containers)"
+      in_interface_list = "vpn"
+      protocol          = "udp"
+      dst_port          = "53,853"
+    }
+    "230-dns-vpn-mobile-tcp" = {
       comment           = "DNS from vpn-mobile (was vpn-mobile-containers)"
       in_interface_list = "vpn-mobile"
       protocol          = "tcp"
       dst_port          = "53,853"
     }
-    "220-dns-vpn-mobile-udp" = {
+    "240-dns-vpn-mobile-udp" = {
       comment           = "DNS from vpn-mobile (was vpn-mobile-containers)"
       in_interface_list = "vpn-mobile"
       protocol          = "udp"
@@ -951,22 +1137,29 @@ locals {
       in_interface_list = "lan"
     }
     "540-router-service" = {
-      comment           = "SSH from the mgmt VLAN only"
+      comment           = "No management (SSH/REST/Winbox/API) from the camera VLAN"
+      action            = "drop"
       protocol          = "tcp"
-      dst_port          = "22"
-      in_interface_list = "unifi-mgmt-900"
+      dst_port          = "22,443,8291,8729"
+      in_interface_list = "seccam-610"
     }
     "550-router-service" = {
-      comment           = "RouterOS REST API and Winbox from the mgmt VLAN only"
+      comment           = "SSH/REST/Winbox from LAN (credential-protected)"
       protocol          = "tcp"
-      dst_port          = "443,8291"
-      in_interface_list = "unifi-mgmt-900"
+      dst_port          = "22,443,8291"
+      in_interface_list = "lan"
     }
     "560-router-service" = {
-      comment      = "WireGuard from the internet (replaces ERL port-forward 3/4)"
-      protocol     = "udp"
-      dst_port     = "51820,51821"
-      in_interface = "ether1"
+      comment           = "SSH/REST/Winbox from the personal VPN (wg01)"
+      protocol          = "tcp"
+      dst_port          = "22,443,8291"
+      in_interface_list = "vpn"
+    }
+    "570-router-service" = {
+      comment           = "WireGuard listeners (ERL port-forward, then WAN)"
+      protocol          = "udp"
+      dst_port          = "51820,51821"
+      in_interface_list = "transit-10"
     }
   }
 
@@ -976,38 +1169,34 @@ locals {
       in_interface = "bridge-lan-vlan910"
       protocol     = "tcp"
       dst_port     = "53"
-      to_address   = "10.10.53.4"
       to_port      = "53"
-      dst_address  = "!10.10.53.4"
+      action       = "redirect"
     }
     "102-udp" = {
       comment      = "Force DNS for unifi-frontend-910"
       in_interface = "bridge-lan-vlan910"
       protocol     = "udp"
       dst_port     = "53"
-      to_address   = "10.10.53.4"
       to_port      = "53"
-      dst_address  = "!10.10.53.4"
+      action       = "redirect"
     }
     "103-tcp" = {
       comment      = "Force DNS for seccam-610"
       in_interface = "bridge-lan-vlan610"
       protocol     = "tcp"
       dst_port     = "53"
-      to_address   = "10.10.53.4"
       to_port      = "53"
-      dst_address  = "!10.10.53.4"
       src_address  = "!10.10.60.210"
+      action       = "redirect"
     }
     "103-udp" = {
       comment      = "Force DNS for seccam-610"
       in_interface = "bridge-lan-vlan610"
       protocol     = "udp"
       dst_port     = "53"
-      to_address   = "10.10.53.4"
       to_port      = "53"
-      dst_address  = "!10.10.53.4"
       src_address  = "!10.10.60.210"
+      action       = "redirect"
     }
     "110-udp" = {
       comment      = "Force NTP for unifi-mgmt-900"
@@ -1099,12 +1288,6 @@ locals {
         comment = "bind db.tnwks.local"
         address = "10.10.120.51"
       }
-      blueiris_tnwks_local = {
-        name    = "blueiris.tnwks.local"
-        type    = "A"
-        comment = "bind db.tnwks.local"
-        address = "10.10.53.9"
-      }
       changedetection_tnwks_local = {
         name    = "changedetection.tnwks.local"
         type    = "A"
@@ -1129,12 +1312,6 @@ locals {
         comment = "bind db.tnwks.local"
         address = "10.10.120.51"
       }
-      hass_tnwks_local = {
-        name    = "hass.tnwks.local"
-        type    = "A"
-        comment = "bind db.tnwks.local"
-        address = "10.10.53.9"
-      }
       hubble_tnwks_local = {
         name    = "hubble.tnwks.local"
         type    = "A"
@@ -1149,23 +1326,11 @@ locals {
         match_subdomain = true
         comment         = "blocky customDNS"
       }
-      jellyfin_tnwks_local = {
-        name    = "jellyfin.tnwks.local"
-        type    = "A"
-        comment = "bind db.tnwks.local"
-        address = "10.10.53.8"
-      }
       loki_tnwks_local = {
         name    = "loki.tnwks.local"
         type    = "A"
         comment = "bind db.tnwks.local"
         address = "10.10.120.51"
-      }
-      obsidian_couchdb_tnwks_local = {
-        name    = "obsidian-couchdb.tnwks.local"
-        type    = "A"
-        comment = "bind db.tnwks.local"
-        address = "10.10.53.9"
       }
       prometheus_tnwks_local = {
         name    = "prometheus.tnwks.local"
@@ -1311,7 +1476,7 @@ locals {
         name    = "unifi"
         type    = "A"
         comment = "bind db.unifi"
-        address = "10.10.53.10"
+        address = "10.10.91.142"
       }
       unms_tnwks_us = {
         name            = "unms.tnwks.us"
@@ -1390,7 +1555,7 @@ locals {
   # VyOS shipped octet-counted TCP syslog to the k8s Vector aggregator.
   # RouterOS emits plain syslog, so the Vector source must accept it.
   syslog = {
-    remote          = "10.10.120.56"
+    remote          = "10.10.91.142"
     remote_protocol = "tcp"
     remote_port     = 6001
   }
@@ -1442,6 +1607,7 @@ locals {
   # Private keys are injected from SOPS in main.tf, never stored here.
   wireguard_interfaces = {
     wg01 = {
+      zone        = "vpn"
       address     = "10.10.30.1/24"
       listen_port = 51820
       comment     = "WIREGUARD"
@@ -1464,6 +1630,7 @@ locals {
       }
     }
     wg02 = {
+      zone        = "vpn-mobile"
       address     = "10.10.31.1/24"
       listen_port = 51821
       comment     = "WIREGUARD-AO"
@@ -1485,38 +1652,54 @@ locals {
   # Translation notes (see docs/mikrotik-vyos-port.md):
   #   - UISP-140-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
   #   - ad-110-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
+  #   - address list unifi_controller: VyOS members ['10.10.53.10'] replaced with ['10.10.91.142'] (workload moved)
   #   - app-720-containers: orphaned ruleset, no `firewall zone ... from` binding in the VyOS config, so it never applied (pre-existing VyOS drift)
+  #   - bastion-410-ad-110 rule 1: port-group ad_auth_ports has 18 entries (RouterOS max 15); inlined and split across 2 rules
+  #   - bastion-410-ad-110 rule 4: port-group ad_auth_ports has 18 entries (RouterOS max 15); inlined and split across 2 rules
   #   - bastion-410-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
-  #   - containers-k8s-120 rule 1: DROPPED as a router rule; after the container->k8s move both ends are inside k8s-120, so it is intra-VLAN traffic the router never sees. Enforce with a Kubernetes NetworkPolicy if it still matters.
-  #   - containers-seccam-610 rule 1: source retargeted to k8s-120; workload moves to Kubernetes
-  #   - containers-unifi-mgmt-900 rule 1: source retargeted to k8s-120; workload moves to Kubernetes
+  #   - containers-k8s-120 rule 1: DROPPED; haproxy -> backend traffic, and haproxy is not ported (its backends are gone)
+  #   - containers-seccam-610 rule 1: DROPPED; haproxy -> backend traffic, and haproxy is not ported (its backends are gone)
+  #   - containers-unifi-mgmt-900 rule 1: source retargeted to unifi_controller in unifi-frontend-910
   #   - dns: 36 bind A/CNAME records ported as RouterOS static entries; bind SOA/NS have no RouterOS equivalent and are dropped (RouterOS forwards and overrides, it is not authoritative)
   #   - dns: 45 blocky blackList URLs become ip_dns_adlist entries -- see the RAM warning in docs/mikrotik-vyos-port.md
+  #   - dns: blocking and split-horizon now apply to EVERY VLAN; dnsdist only sent 10.10.91.0/24 and 10.10.31.0/24 through blocky. RouterOS adlists are global
   #   - dns: blocky customDNS.rewrite entries ['tnwks.us'] are no-ops (key == value) and are not ported
   #   - dns: blocky had 2 whiteList URL(s); RouterOS ip_dns_adlist has no allow-list concept, so these are NOT ported (false positives must be handled with static_records overrides)
   #   - dns: blocky used DoT (tcp-tls) upstreams; RouterOS has no DoT, so the same Cloudflare resolvers are configured with DoH (use_doh_server) plus plain-IP fallback
   #   - dns: blocky wildcard mappings (*.host) collapsed into single RouterOS records with match_subdomain=true: ['internal.tnwks.us']
+  #   - dns: blueiris.tnwks.local -> 10.10.53.9 DROPPED; that was a haproxy container, and the app is served on *.internal.tnwks.us by the WSL ingress now
   #   - dns: dnsdist DropAction rules are NOT ported (no RouterOS equivalent in the DNS path; use firewall rules instead)
   #   - dns: dnsdist per-subnet ControlD DoH pools ['controld_iot', 'controld_servers', 'controld_trusted'] are NOT ported; RouterOS resolves uniformly. Per-client policy needs ip_dns_forwarders or an off-router resolver
+  #   - dns: hass.tnwks.local -> 10.10.53.9 DROPPED; that was a haproxy container, and the app is served on *.internal.tnwks.us by the WSL ingress now
+  #   - dns: jellyfin.tnwks.local -> 10.10.53.8 DROPPED; that was a haproxy container, and the app is served on *.internal.tnwks.us by the WSL ingress now
+  #   - dns: obsidian-couchdb.tnwks.local -> 10.10.53.9 DROPPED; that was a haproxy container, and the app is served on *.internal.tnwks.us by the WSL ingress now
+  #   - dns: unifi retargeted 10.10.53.10 -> 10.10.91.142 (container moved)
   #   - iLO-550-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
   #   - k8s-120-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
-  #   - k8s-120-containers rule 2: DROPPED as a router rule; after the container->k8s move both ends are inside k8s-120, so it is intra-VLAN traffic the router never sees. Enforce with a Kubernetes NetworkPolicy if it still matters.
-  #   - k8s-120-containers rule 3: DROPPED as a router rule; after the container->k8s move both ends are inside k8s-120, so it is intra-VLAN traffic the router never sees. Enforce with a Kubernetes NetworkPolicy if it still matters.
-  #   - nat rule 117 (Force NTP for transit-10) DROPPED: redirect target 172.16.1.254 is dead, so this rule black-holes traffic today. Verified 2026-09-19
+  #   - k8s-120-containers rule 2: retargeted to k8s-120 -> unifi-frontend-910 dst unifi_controller
+  #   - k8s-120-containers rule 3: DROPPED; it targeted haproxy_all, which only existed for haproxy (not ported, its backends are gone)
+  #   - nat rule 102 (Force DNS for unifi-frontend-910): dst-nat to 10.10.53.4 (DNS container) became a redirect to the router
+  #   - nat rule 103 (Force DNS for seccam-610): dst-nat to 10.10.53.4 (DNS container) became a redirect to the router
+  #   - nat rule 117 (Force NTP for transit-10) DROPPED: redirect target 172.16.1.254 is dead, so this rule black-holes traffic today
   #   - pve-11-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
-  #   - route 0.0.0.0/0 via 172.16.1.1 DROPPED: that was the EdgeRouter Lite, which this router replaces. The default route now comes from the WAN DHCP lease (add_default_route = yes)
-  #   - route 10.10.93.0/24 via 172.16.1.254 DROPPED: next-hop is dead (ip neigh FAILED, 100% ping loss on 2026-09-19). Both VyOS and the EdgeRouter still pointed production subnets at it
-  #   - route 10.98.0.0/24 via 172.16.1.254 DROPPED: next-hop is dead (ip neigh FAILED, 100% ping loss on 2026-09-19). Both VyOS and the EdgeRouter still pointed production subnets at it
+  #   - route 0.0.0.0/0 via 172.16.1.1: not a static route; becomes upstream_gateway (distance 10) for the staged cutover, and the WAN DHCP lease (distance 1) takes over when the modem moves
+  #   - route 10.10.93.0/24 via 172.16.1.254 DROPPED: next-hop is dead (ip neigh FAILED, 100% ping loss). Both VyOS and the EdgeRouter still pointed production subnets at it
+  #   - route 10.98.0.0/24 via 172.16.1.254 DROPPED: next-hop is dead (ip neigh FAILED, 100% ping loss). Both VyOS and the EdgeRouter still pointed production subnets at it
+  #   - seccam-610-ad-110 rule 1: port-group ad_auth_ports has 18 entries (RouterOS max 15); inlined and split across 2 rules
   #   - seccam-610-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
+  #   - syslog: target 10.10.120.56 (Vector on the old cluster, gone) -> 10.10.91.142:6001, the WSL host's LAN bridge. Needs vector-aggregator running on WSL and a tcp/6001 lan-bridge relay
   #   - system: 1 SSH public key(s) ported from VyOS `system login user`; the username came from ${SSH_VYOS_USERNAME} and is injected from SOPS in main.tf
+  #   - system: VyOS flow export (sFlow, for monitoring/flow-collector) is not generated; the root module's flow_export (IPFIX) replaces it
+  #   - system: VyOS task-scheduler (dhcp-leases-textfile.py -> node-exporter dhcp_lease_info, used for flow-collector client names) has no RouterOS port; client names need a RouterOS lease exporter (e.g. mktxp)
   #   - system: identity is sce-rtr01, NOT the VyOS name sce-vyos01 -- the two run concurrently until the trunk swings. The bind zone has an A record for sce-vyos01 (172.16.1.250); add one for sce-rtr01 before cutover
   #   - transit-10-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
   #   - unifi-frontend-910-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
-  #   - unifi-frontend-910-containers rule 2: retargeted unifi-frontend-910 -> k8s-120; workload moves to Kubernetes
+  #   - unifi-frontend-910-containers rule 2: DROPPED; it targeted haproxy_frontend, which only existed for haproxy (not ported, its backends are gone)
   #   - unifi-mgmt-900-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
-  #   - unifi-mgmt-900-containers rule 2: retargeted unifi-mgmt-900 -> k8s-120; workload moves to Kubernetes
-  #   - vpn-mobile-containers rule 1: retargeted vpn-mobile -> k8s-120; workload moves to Kubernetes
+  #   - unifi-mgmt-900-containers rule 2: retargeted to unifi-mgmt-900 -> unifi-frontend-910 dst unifi_controller
+  #   - vpn-containers (default-action accept): DNS moved to the input chain; other container access follows vpn -> unifi-frontend-910
+  #   - vpn-mobile-containers rule 1: DROPPED; it targeted haproxy_authenticated, which only existed for haproxy (not ported, its backends are gone)
   #   - vpn-mobile-containers rule 2 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
-  #   - vpn-mobile-containers rule 3: retargeted vpn-mobile -> k8s-120; workload moves to Kubernetes
-  #   - vpn-mobile-containers rule 4: retargeted vpn-mobile -> k8s-120; workload moves to Kubernetes
+  #   - vpn-mobile-containers rule 3: retargeted to vpn-mobile -> unifi-frontend-910 dst unifi_controller
+  #   - vpn-mobile-containers rule 4: DROPPED; it targeted haproxy_frontend, which only existed for haproxy (not ported, its backends are gone)
 }

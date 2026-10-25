@@ -23,9 +23,15 @@
 #      a rule can say in_interface_list=zone-x, out_interface_list=zone-y and
 #      mean exactly what the VyOS pair meant.
 #   3. Each zone pair contributes its accept rules followed by its own
-#      terminating drop. That per-pair drop is what reproduces VyOS's per-pair
+#      terminating default (drop, or accept where VyOS defaulted the pair
+#      open). That per-pair default is what reproduces VyOS's per-pair
 #      default-action. Without it, an unmatched packet would fall through to
 #      later pairs' accepts and the policy would be wrong.
+#   4. A terminal forward drop after every pair. VyOS dropped traffic between
+#      zones with no `from` binding at all (110 of its 140 rulesets are empty
+#      default-drop pairs, and most zone pairs have no ruleset). RouterOS
+#      forward defaults to ACCEPT, so without this rule every one of those
+#      pairs, and WAN -> LAN, would be wide open.
 #
 # ORDER IS SEMANTIC. Terraform does not guarantee resource creation order, so
 # routeros_move_items reorders the chain to the sorted key sequence after
@@ -97,16 +103,37 @@ resource "routeros_ip_firewall_filter" "zone_accept" {
 # This is the VyOS per-ruleset default-action. Do not remove it: the accepts
 # above are only correct because the pair cannot fall through.
 
-resource "routeros_ip_firewall_filter" "zone_drop" {
-  for_each = local.zone_drops
+resource "routeros_ip_firewall_filter" "zone_default" {
+  for_each = local.zone_defaults
 
   chain              = "forward"
-  action             = "drop"
+  action             = each.value.action
   in_interface_list  = routeros_interface_list.zone[each.value.from].name
   out_interface_list = routeros_interface_list.zone[each.value.to].name
   log                = each.value.log
   log_prefix         = "${each.value.from}-${each.value.to}-default"
   comment            = "${each.key}/zzz ${each.value.comment} (terraform)"
+
+  # Appended after the pair's accepts on first apply, so the chain is in a
+  # sane order even before routeros_move_items runs.
+  depends_on = [routeros_ip_firewall_filter.zone_accept]
+}
+
+# --- Terminal forward drop ---------------------------------------------------
+# Everything no zone pair claimed. See point 4 at the top of this file.
+
+resource "routeros_ip_firewall_filter" "forward_drop" {
+  chain      = "forward"
+  action     = "drop"
+  log        = var.forward_drop_log
+  log_prefix = "forward-default"
+  comment    = "zzz forward: default drop (terraform)"
+
+  depends_on = [
+    routeros_ip_firewall_filter.accept_established,
+    routeros_ip_firewall_filter.zone_accept,
+    routeros_ip_firewall_filter.zone_default,
+  ]
 }
 
 # --- Input chain -------------------------------------------------------------
@@ -127,6 +154,20 @@ resource "routeros_ip_firewall_filter" "input_drop_invalid" {
   action           = "drop"
   connection_state = "invalid"
   comment          = "001 input: drop invalid (terraform)"
+}
+
+# The out-of-band port always gets SSH, REST and Winbox. This is the rule that
+# keeps Terraform's own session alive through the first apply, and the cable to
+# plug into if a later change to the input chain goes wrong.
+resource "routeros_ip_firewall_filter" "input_mgmt" {
+  count = var.mgmt == null ? 0 : 1
+
+  chain        = "input"
+  action       = "accept"
+  protocol     = "tcp"
+  dst_port     = "22,443,8291"
+  in_interface = var.mgmt.interface
+  comment      = "002 input: SSH/REST/Winbox on the out-of-band mgmt port (terraform)"
 }
 
 # --- Aggregate LAN interface list --------------------------------------------
@@ -158,7 +199,7 @@ resource "routeros_ip_firewall_filter" "input_accept" {
   for_each = var.input_rules
 
   chain             = "input"
-  action            = "accept"
+  action            = each.value.action
   protocol          = each.value.protocol
   dst_port          = each.value.dst_port_list != null ? local.port_list_strings[each.value.dst_port_list] : each.value.dst_port
   in_interface_list = each.value.in_interface_list != null ? "zone-${each.value.in_interface_list}" : null
@@ -177,17 +218,41 @@ resource "routeros_ip_firewall_filter" "input_accept" {
   ]
 }
 
+# mktxp's API-SSL port, LAN only. Exists only while the monitoring account does.
+resource "routeros_ip_firewall_filter" "input_monitoring" {
+  count = local.monitoring_enabled ? 1 : 0
+
+  chain             = "input"
+  action            = "accept"
+  protocol          = "tcp"
+  dst_port          = "8729"
+  in_interface_list = routeros_interface_list.lan.name
+  comment           = "600 input: RouterOS API-SSL for mktxp, LAN only (terraform)"
+}
+
 resource "routeros_ip_firewall_filter" "input_drop" {
   chain      = "input"
   action     = "drop"
   log        = var.input_drop_log
   log_prefix = "input-default"
   comment    = "zzz input: default drop (terraform)"
+
+  # New filter rules append to the end of the chain. If this drop were created
+  # before the established/mgmt accepts, Terraform's next REST call would be
+  # dropped mid-apply, before routeros_move_items ever got to reorder anything.
+  depends_on = [
+    routeros_ip_firewall_filter.input_established,
+    routeros_ip_firewall_filter.input_drop_invalid,
+    routeros_ip_firewall_filter.input_mgmt,
+    routeros_ip_firewall_filter.input_accept,
+    routeros_ip_firewall_filter.input_monitoring,
+  ]
 }
 
 # --- Ordering ---------------------------------------------------------------
-# Sequence: input chain (state, accepts, drop), then forward chain (state, then
-# for each zone pair its accepts followed by its own drop).
+# Sequence: input chain (state, mgmt, accepts, drop), then forward chain (state,
+# then for each zone pair its accepts followed by its own default, then the
+# terminal drop).
 
 locals {
   firewall_sequence = concat(
@@ -195,10 +260,12 @@ locals {
       routeros_ip_firewall_filter.input_established.id,
       routeros_ip_firewall_filter.input_drop_invalid.id,
     ],
+    [for r in routeros_ip_firewall_filter.input_mgmt : r.id],
     [
       for k in sort(keys(var.input_rules)) :
       routeros_ip_firewall_filter.input_accept[k].id
     ],
+    [for r in routeros_ip_firewall_filter.input_monitoring : r.id],
     [
       routeros_ip_firewall_filter.input_drop.id,
     ],
@@ -213,9 +280,10 @@ locals {
           for rule_key in sort([for k, v in local.zone_rules : k if v.pair_key == pair_key]) :
           routeros_ip_firewall_filter.zone_accept[rule_key].id
         ],
-        [routeros_ip_firewall_filter.zone_drop[pair_key].id],
+        [routeros_ip_firewall_filter.zone_default[pair_key].id],
       )
     ]),
+    [routeros_ip_firewall_filter.forward_drop.id],
   )
 }
 
@@ -226,13 +294,16 @@ resource "routeros_move_items" "firewall_filter" {
   depends_on = [
     routeros_ip_firewall_filter.input_established,
     routeros_ip_firewall_filter.input_drop_invalid,
+    routeros_ip_firewall_filter.input_mgmt,
     routeros_ip_firewall_filter.input_accept,
+    routeros_ip_firewall_filter.input_monitoring,
     routeros_ip_firewall_filter.input_drop,
     routeros_ip_firewall_filter.fasttrack_established,
     routeros_ip_firewall_filter.accept_established,
     routeros_ip_firewall_filter.drop_invalid,
     routeros_ip_firewall_filter.zone_accept,
-    routeros_ip_firewall_filter.zone_drop,
+    routeros_ip_firewall_filter.zone_default,
+    routeros_ip_firewall_filter.forward_drop,
   ]
 }
 

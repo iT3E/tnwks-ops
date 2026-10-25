@@ -25,9 +25,13 @@ Non-obvious translations this script performs:
   * RouterOS caps `dst-port` at 15 entries per rule. Any port list longer than
     that is split across multiple rules (`ad_auth_ports` has 18 entries).
   * VyOS zone `containers` pointed at the Podman pod interface `pod-containers`.
-    The container stack is not being ported to the router, so rules referencing
-    that zone are emitted as commented-out HCL with a disposition note rather
-    than silently dropped.
+    The container stack is not being ported to the router, so every rule that
+    references that zone is either moved (DNS -> input chain), retargeted to
+    the workload's new home, or dropped with a note in the locals.tf footer.
+  * VyOS `default-action` is honoured per ruleset. Default-drop pairs with no
+    rules emit nothing (the module's terminal forward drop covers them);
+    default-accept pairs are emitted with `default_action = "accept"`, because
+    they are what let every VLAN reach the internet.
 """
 
 from __future__ import annotations
@@ -86,18 +90,79 @@ UNPORTED_ZONES = {"containers"}
 # Anything matching DNS_PORT_SPECS becomes an input rule; every other
 # containers-zone rule is retargeted via CONTAINER_ZONE_SUCCESSOR.
 # --------------------------------------------------------------------------
-CONTAINER_ZONE_SUCCESSOR = "k8s-120"
+#
+# Where the surviving container workloads live now. Kubernetes runs on the WSL
+# desktop (homelab-wsl), which the LAN reaches through the Windows host on VLAN
+# 910; its ingress and any relayed services answer on that one address.
+# --------------------------------------------------------------------------
+WSL_HOST = "10.10.91.142"
+CONTAINER_ZONE_SUCCESSOR = "unifi-frontend-910"
 
 DNS_PORT_SPECS = {"domain,domain-s", "domain", "53", "53,853"}
 
-# Address groups that pointed at container workloads. After the move they are
-# reached through the k8s ingress, so the rule keeps its port intent but the
-# address list is replaced by the ingress list.
+# The DNS containers. Forced-DNS dstnat that targeted them becomes a redirect
+# to the router, which is the resolver now.
+CONTAINER_DNS_ADDRESSES = {"10.10.53.4", "10.10.53.7"}
+
+# Where the UniFi Network controller (container 10.10.53.10) moves: Kubernetes
+# on the WSL desktop, reached from the LAN through the Windows host. The APs
+# need TCP 8080 (inform), UDP 3478 (STUN) and the UI on TCP 8443 relayed there
+# (docs/wsl-lan-exposure.md).
+UNIFI_CONTROLLER_HOME = WSL_HOST
+
+# Container address groups that still mean something after the move, mapped to
+# the address list that replaces them. Lists here are (re)defined in
+# NEW_ADDRESS_LISTS.
 CONTAINER_ADDRESS_GROUPS = {
-    "haproxy_frontend": "k8s_ingress",
-    "haproxy_authenticated": "k8s_ingress",
-    "haproxy_all": "k8s_ingress_internal",
-    "unifi_controller": "k8s_ingress_internal",
+    "unifi_controller": "unifi_controller",
+}
+
+# haproxy is retired, not migrated: every backend it proxied to (the old
+# 10.10.120.x cluster and its ingress) is gone, and the WSL cluster serves those
+# apps on *.internal.tnwks.us through its own ingress. Rules that reached
+# haproxy are dropped rather than retargeted.
+HAPROXY_ONLY_GROUPS = {"haproxy_all", "haproxy_frontend", "haproxy_authenticated"}
+
+# containers -> X rulesets: which container was the SOURCE. Anything not listed
+# was haproxy talking to its backends and is dropped with haproxy.
+CONTAINER_SOURCE_RULESETS = {
+    "containers-unifi-mgmt-900": "unifi_controller",  # controller -> APs (SSH adopt, STUN)
+}
+
+# Port groups that implied a container destination without naming one.
+CONTAINER_PORT_GROUP_DESTINATIONS = {
+    "unifi_controller_ports": "unifi_controller",
+}
+
+NEW_ADDRESS_LISTS = {
+    "unifi_controller": {UNIFI_CONTROLLER_HOME.replace(".", "_"): UNIFI_CONTROLLER_HOME},
+    # Frigate runs on the WSL cluster, so its camera pulls come from the Windows host.
+    "frigate": {WSL_HOST.replace(".", "_"): WSL_HOST},
+}
+
+# --------------------------------------------------------------------------
+# Camera policy. The camera VLAN is untrusted: cameras may only reach the
+# router's DHCP/DNS/NTP, nothing on 910 may reach them except Frigate's RTSP
+# pulls, and everything else on 910 talks to Frigate rather than to a camera.
+# --------------------------------------------------------------------------
+CAMERA_ZONE = "seccam-610"
+EXTRA_ZONE_RULES = {
+    ("unifi-frontend-910", CAMERA_ZONE): [{
+        "description": "Frigate (WSL cluster) RTSP pulls from the cameras",
+        "protocol": "tcp_udp",
+        "dst_port": "554",
+        "src_address_list": "frigate",
+        "dst_address_list": "security_cameras",
+    }],
+}
+
+# Static DNS records that pointed at container IPs. None drops the record;
+# a string retargets it. Per-name overrides win over per-address ones.
+DNS_RECORD_RETARGET_BY_NAME: dict[str, str | None] = {}
+DNS_RECORD_RETARGET_BY_ADDRESS = {
+    "10.10.53.8": None,   # haproxy-frontend -> old k8s ingress (gone)
+    "10.10.53.9": None,   # haproxy-authenticated -> old k8s ingress (gone)
+    "10.10.53.10": UNIFI_CONTROLLER_HOME,  # `unifi` inform host; unpoller uses https://unifi:8443
 }
 
 IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
@@ -117,16 +182,34 @@ ROUTE_RE = re.compile(r"^set protocols static route (\S+) next-hop (\S+)")
 # --------------------------------------------------------------------------
 # EdgeRouter Lite consolidation (docs/edgerouter-discovery.md).
 #
-# The RB5009 replaces THOMAS-ER01 too, so the transit hop disappears. Verified
-# on the live ERL on 2026-09-19: 172.16.1.252 and .254 are both `ip neigh`
-# FAILED and 100% ping loss, yet both routers still route production subnets at
-# them. Anything pointing at a dead next-hop is a bug, not a config to port.
+# The RB5009 replaces THOMAS-ER01 too, so the transit hop disappears.
+# 172.16.1.252 and .254 are both dead (`ip neigh` FAILED, 100% ping loss; see
+# docs/edgerouter-discovery.md), yet both routers still route production
+# subnets at them. Anything pointing at a dead next-hop is a bug, not a config to port.
 # --------------------------------------------------------------------------
 DEAD_NEXT_HOPS = {"172.16.1.252", "172.16.1.254"}
 
-# The old upstream router. With one box there is nothing left to forward to; the
-# default route now comes from the WAN DHCP lease.
+# The old upstream router. Its static default is not ported as a VyOS route;
+# instead it becomes the module's upstream_gateway (distance 10), so the RB5009
+# can replace VyOS first while the ERL still holds the WAN, and the WAN DHCP
+# lease takes over the default automatically when the modem moves to ether1.
 RETIRED_UPSTREAM = "172.16.1.1"
+UPSTREAM_GATEWAY = RETIRED_UPSTREAM
+
+# VyOS reached the internet through transit-10, so `X -> transit-10` rulesets
+# are its internet-egress policy. The WAN port joins this zone's list.
+OUTSIDE_ZONE = "transit-10"
+
+# Out-of-band management. Standalone port, NOT in the LAN bridge: the bootstrap
+# script puts the REST API address here, and bridging it would invalidate that
+# address on the first apply.
+MGMT = {"interface": "ether8", "address": "10.98.0.1/24"}
+BRIDGE_PORTS = ["ether2", "ether3", "ether4", "ether5", "ether6", "ether7", "sfp-sfpplus1"]
+
+# Remote syslog. VyOS shipped to a Vector aggregator on the old cluster
+# (10.10.120.56:6001, gone). Vector now belongs on the WSL cluster, which the
+# LAN reaches through the Windows host's LAN bridge, same as flow-collector.
+SYSLOG_REMOTE = WSL_HOST
 
 # Source NAT moves off the ERL onto the RB5009's WAN port. VyOS had its
 # masquerade rule commented out precisely because the ERL was doing it.
@@ -316,6 +399,12 @@ def parse_firewall_rules(lines: list[str]) -> dict:
             rule["src_address"] = unquote(rest.split("source address ", 1)[1])
         elif rest.startswith("destination address "):
             rule["dst_address"] = unquote(rest.split("destination address ", 1)[1])
+        else:
+            # Anything else (network-group, source port, state, icmp,
+            # inbound-interface, ...) changes what the rule matches. Silently
+            # dropping it would emit a broader rule than VyOS had, so record it
+            # and refuse to emit the rule (see build_zone_policies).
+            rule.setdefault("_unknown", []).append(rest)
     return rulesets
 
 
@@ -704,27 +793,74 @@ def hcl(value, indent: int = 0) -> str:
     raise TypeError(type(value))
 
 
-def build_zone_policies(rulesets: dict, pairs: dict, zone_iface: dict) -> tuple[dict, dict, list[str]]:
+def build_zone_policies(
+    rulesets: dict, pairs: dict, zone_iface: dict, port_lists: dict, vlans: dict
+) -> tuple[dict, dict, list[str]]:
     """Turn VyOS rulesets into RouterOS zone-pair policies plus input rules.
 
     Returns (zone_policies, input_rules, notes).
     """
     policies: "OrderedDict[str, dict]" = OrderedDict()
+    # (from, to) -> policy key. One RouterOS pair per directed zone pair: two
+    # keys for the same pair would each carry their own terminating default,
+    # and the first one's drop would shadow every accept in the second.
+    pair_keys: dict[tuple[str, str], str] = {}
     input_rules: "OrderedDict[str, dict]" = OrderedDict()
     notes: list[str] = []
     seq = 0
     input_seq = 0
 
-    def emit_variants(rule: dict, num: int) -> list[dict]:
+    def default_of(ruleset: str) -> str:
+        return rulesets.get(ruleset, {}).get("meta", {}).get("default-action", "drop")
+
+    def get_pair(from_zone: str, to_zone: str, comment: str, native_default: str | None = None) -> dict:
+        """Find or create the policy for a directed pair.
+
+        native_default is the VyOS default-action of the ruleset that actually
+        binds this pair. Retargeted container rules join a pair without one, and
+        must not override it.
+        """
+        nonlocal seq
+        key = pair_keys.get((from_zone, to_zone))
+        if key is None:
+            seq += 10
+            key = f"{seq:03d}-{from_zone}-{to_zone}"
+            pair_keys[(from_zone, to_zone)] = key
+            policies[key] = {"from": from_zone, "to": to_zone, "comment": comment, "rules": []}
+        pol = policies[key]
+        if native_default is not None:
+            pol["comment"] = comment
+            if native_default == "accept":
+                pol["default_action"] = "accept"
+        return pol
+
+    def emit_variants(rule: dict, num: int, ruleset: str) -> list[dict]:
         """Expand one VyOS rule into RouterOS-legal variants."""
+        if rule.get("_unknown"):
+            raise SystemExit(
+                f"error: {ruleset} rule {num} uses match keys this generator does not "
+                f"translate: {rule['_unknown']}. Emitting it without them would be "
+                f"broader than VyOS; teach parse_firewall_rules about them first."
+            )
         base = {"comment": rule.get("description") or f"rule {num}"}
         for key in ("src_address_list", "dst_address_list", "src_address", "dst_address"):
             if key in rule:
                 base[key] = rule[key]
 
         if "dst_port_list" in rule:
-            base["dst_port_list"] = rule["dst_port_list"]
-            port_chunks = [None]
+            members = port_lists.get(rule["dst_port_list"], [])
+            if len(members) > ROUTEROS_MAX_DST_PORTS:
+                # RouterOS rejects >15 dst-port entries, and a port-group renders
+                # into one dst-port string, so inline and split it.
+                port_chunks = chunk_ports(members)
+                notes.append(
+                    f"{ruleset} rule {num}: port-group {rule['dst_port_list']} has "
+                    f"{len(members)} entries (RouterOS max {ROUTEROS_MAX_DST_PORTS}); "
+                    f"inlined and split across {len(port_chunks)} rules"
+                )
+            else:
+                base["dst_port_list"] = rule["dst_port_list"]
+                port_chunks = [None]
         elif "dst_port" in rule:
             port_chunks = chunk_ports(resolve_ports(rule["dst_port"]))
         else:
@@ -743,24 +879,51 @@ def build_zone_policies(rulesets: dict, pairs: dict, zone_iface: dict) -> tuple[
                 out.append(emitted)
         return out
 
+    def add_dns_input(from_zone: str, rule: dict, num: int, ruleset: str) -> None:
+        nonlocal input_seq
+        for variant in emit_variants(rule, num, ruleset):
+            input_seq += 10
+            entry = {"comment": f"DNS from {from_zone} (was {ruleset})"}
+            if from_zone == OUTSIDE_ZONE:
+                # The outside zone's list also holds the WAN port, so matching
+                # the list would answer DNS on the internet. Pin to the SVI.
+                entry["in_interface"] = "bridge-lan-vlan%s" % vlans[from_zone]["vlan_id"]
+            else:
+                # Scoped to the originating zone, so it can never be satisfied
+                # from the WAN. The EdgeRouter's 0.0.0.0 DNS bind is exactly
+                # what this avoids.
+                entry["in_interface_list"] = from_zone
+            for key in ("protocol", "dst_port"):
+                if key in variant:
+                    entry[key] = variant[key]
+            input_rules[f"{input_seq:03d}-dns-{from_zone}-{entry.get('protocol', 'any')}"] = entry
+
+    dns_rule = {"protocol": "tcp_udp", "dst_port": "domain,domain-s", "description": "accept_dns"}
+
     for ruleset in sorted(rulesets):
         data = rulesets[ruleset]
-        if not data["rules"]:
-            # 110 of the 140 VyOS rulesets are empty: the pair exists but has no
-            # accepts, so it is pure default-drop. The absence of any accept plus
-            # the terminal forward drop already expresses that; no chain needed.
-            continue
-
+        default_action = default_of(ruleset)
         from_zone, to_zone = pairs.get(ruleset, (None, None))
+
         if from_zone is None:
-            notes.append(
-                f"{ruleset}: orphaned ruleset, no `firewall zone ... from` binding "
-                f"in the VyOS config, so it never applied (pre-existing VyOS drift)"
-            )
+            if data["rules"]:
+                notes.append(
+                    f"{ruleset}: orphaned ruleset, no `firewall zone ... from` binding "
+                    f"in the VyOS config, so it never applied (pre-existing VyOS drift)"
+                )
             continue
 
         # --- containers zone disposition -----------------------------------
         if to_zone in UNPORTED_ZONES:
+            if default_action == "accept":
+                # e.g. vpn-containers: everything to the containers was allowed,
+                # which at minimum means DNS. The rest of the container access
+                # is covered by this zone's own pair to the successor VLAN.
+                add_dns_input(from_zone, dns_rule, 0, ruleset)
+                notes.append(
+                    f"{ruleset} (default-action accept): DNS moved to the input chain; "
+                    f"other container access follows {from_zone} -> {CONTAINER_ZONE_SUCCESSOR}"
+                )
             for num in sorted(data["rules"]):
                 rule = data["rules"][num]
                 if rule.get("action") != "accept":
@@ -768,90 +931,71 @@ def build_zone_policies(rulesets: dict, pairs: dict, zone_iface: dict) -> tuple[
                 if rule.get("dst_port", "") in DNS_PORT_SPECS:
                     # The resolver now runs ON the router, so this stops being
                     # forwarded traffic and becomes an input-chain accept.
-                    for variant in emit_variants(rule, num):
-                        input_seq += 10
-                        entry = {
-                            "comment": f"DNS from {from_zone} (was {ruleset})",
-                            # Scoped to the originating zone, so it can never be
-                            # satisfied from the WAN. The EdgeRouter's 0.0.0.0
-                            # DNS bind is exactly what this avoids.
-                            "in_interface_list": from_zone,
-                        }
-                        for key in ("protocol", "dst_port"):
-                            if key in variant:
-                                entry[key] = variant[key]
-                        input_rules[f"{input_seq:03d}-dns-{from_zone}-{entry.get('protocol', 'any')}"] = entry
+                    add_dns_input(from_zone, rule, num, ruleset)
                     notes.append(
                         f"{ruleset} rule {num} (accept_dns): moved to the input chain; "
                         f"native RouterOS DNS replaces the dnsdist container"
                     )
-                elif from_zone == CONTAINER_ZONE_SUCCESSOR:
-                    # Both ends land in the same VLAN after the move. Intra-VLAN
-                    # traffic is switched locally and never reaches the router's
-                    # forward chain, so a rule here would be dead config. This
-                    # becomes a Kubernetes NetworkPolicy concern instead.
+                    continue
+                retarget = dict(rule)
+                grp = retarget.get("dst_address_list")
+                if grp is None and retarget.get("dst_port_list") in CONTAINER_PORT_GROUP_DESTINATIONS:
+                    grp = CONTAINER_PORT_GROUP_DESTINATIONS[retarget["dst_port_list"]]
+                if grp in HAPROXY_ONLY_GROUPS or grp not in set(CONTAINER_ADDRESS_GROUPS) | set(CONTAINER_ADDRESS_GROUPS.values()):
                     notes.append(
-                        f"{ruleset} rule {num}: DROPPED as a router rule; after the "
-                        f"container->k8s move both ends are inside {CONTAINER_ZONE_SUCCESSOR}, "
-                        f"so it is intra-VLAN traffic the router never sees. Enforce with a "
-                        f"Kubernetes NetworkPolicy if it still matters."
+                        f"{ruleset} rule {num}: DROPPED; it targeted {grp or 'an unnamed container'}, "
+                        f"which only existed for haproxy (not ported, its backends are gone)"
                     )
-                else:
-                    # haproxy / unifi-controller workloads move to Kubernetes.
-                    retarget = dict(rule)
-                    grp = retarget.get("dst_address_list")
-                    if grp in CONTAINER_ADDRESS_GROUPS:
-                        retarget["dst_address_list"] = CONTAINER_ADDRESS_GROUPS[grp]
-                    key = f"{(seq + 10):03d}-{from_zone}-{CONTAINER_ZONE_SUCCESSOR}"
-                    if key not in policies:
-                        seq += 10
-                        key = f"{seq:03d}-{from_zone}-{CONTAINER_ZONE_SUCCESSOR}"
-                        policies[key] = {
-                            "from": from_zone,
-                            "to": CONTAINER_ZONE_SUCCESSOR,
-                            "comment": f"{from_zone} -> {CONTAINER_ZONE_SUCCESSOR} (ported from {ruleset})",
-                            "rules": [],
-                        }
-                    for variant in emit_variants(retarget, num):
-                        variant["comment"] += " (container -> k8s)"
-                        policies[key]["rules"].append(variant)
+                    continue
+                retarget["dst_address_list"] = CONTAINER_ADDRESS_GROUPS.get(grp, grp)
+                if from_zone == CONTAINER_ZONE_SUCCESSOR:
+                    # Same VLAN as the workload's new home: switched locally, the
+                    # router never sees it, so a forward rule would be dead config.
                     notes.append(
-                        f"{ruleset} rule {num}: retargeted {from_zone} -> "
-                        f"{CONTAINER_ZONE_SUCCESSOR}; workload moves to Kubernetes"
+                        f"{ruleset} rule {num}: DROPPED as a router rule; {from_zone} and the "
+                        f"new home of {grp} ({CONTAINER_ZONE_SUCCESSOR}) are the same VLAN"
                     )
+                    continue
+                pol = get_pair(from_zone, CONTAINER_ZONE_SUCCESSOR,
+                               f"{from_zone} -> {CONTAINER_ZONE_SUCCESSOR}")
+                for variant in emit_variants(retarget, num, ruleset):
+                    variant["comment"] += f" (was {ruleset})"
+                    pol["rules"].append(variant)
+                notes.append(
+                    f"{ruleset} rule {num}: retargeted to {from_zone} -> "
+                    f"{CONTAINER_ZONE_SUCCESSOR} dst {retarget['dst_address_list']}"
+                )
             continue
 
         if from_zone in UNPORTED_ZONES:
-            # containers -> X. The source is now a k8s pod, so the traffic
-            # arrives from the k8s VLAN instead of the router's pod bridge.
+            src_group = CONTAINER_SOURCE_RULESETS.get(ruleset)
             for num in sorted(data["rules"]):
                 rule = data["rules"][num]
                 if rule.get("action") != "accept":
                     continue
-                if to_zone == CONTAINER_ZONE_SUCCESSOR:
+                if src_group is None:
                     notes.append(
-                        f"{ruleset} rule {num}: DROPPED as a router rule; after the "
-                        f"container->k8s move both ends are inside {CONTAINER_ZONE_SUCCESSOR}, "
-                        f"so it is intra-VLAN traffic the router never sees. Enforce with a "
-                        f"Kubernetes NetworkPolicy if it still matters."
+                        f"{ruleset} rule {num}: DROPPED; haproxy -> backend traffic, and "
+                        f"haproxy is not ported (its backends are gone)"
                     )
                     continue
-                key = f"{(seq + 10):03d}-{CONTAINER_ZONE_SUCCESSOR}-{to_zone}"
-                if key not in policies:
-                    seq += 10
-                    key = f"{seq:03d}-{CONTAINER_ZONE_SUCCESSOR}-{to_zone}"
-                    policies[key] = {
-                        "from": CONTAINER_ZONE_SUCCESSOR,
-                        "to": to_zone,
-                        "comment": f"{CONTAINER_ZONE_SUCCESSOR} -> {to_zone} (ported from {ruleset})",
-                        "rules": [],
-                    }
-                for variant in emit_variants(rule, num):
-                    variant["comment"] += " (container -> k8s)"
-                    policies[key]["rules"].append(variant)
+                if to_zone == CONTAINER_ZONE_SUCCESSOR:
+                    notes.append(
+                        f"{ruleset} rule {num}: DROPPED as a router rule; source and "
+                        f"destination are both in {CONTAINER_ZONE_SUCCESSOR}"
+                    )
+                    continue
+                # Scope the source to the container's new address, not the whole
+                # successor VLAN. VyOS only ever allowed the container itself.
+                retarget = dict(rule, src_address_list=src_group)
+                pol = get_pair(CONTAINER_ZONE_SUCCESSOR, to_zone,
+                               f"{CONTAINER_ZONE_SUCCESSOR} -> {to_zone}")
+                for variant in emit_variants(retarget, num, ruleset):
+                    variant["comment"] += f" (was {ruleset})"
+                    pol["rules"].append(variant)
                 notes.append(
-                    f"{ruleset} rule {num}: source retargeted to "
-                    f"{CONTAINER_ZONE_SUCCESSOR}; workload moves to Kubernetes"
+                    f"{ruleset} rule {num}: source retargeted to {src_group} in "
+                    f"{CONTAINER_ZONE_SUCCESSOR}"
                 )
             continue
 
@@ -860,24 +1004,30 @@ def build_zone_policies(rulesets: dict, pairs: dict, zone_iface: dict) -> tuple[
         for num in sorted(data["rules"]):
             rule = data["rules"][num]
             if rule.get("action") != "accept":
-                notes.append(f"{ruleset} rule {num}: action={rule.get('action')}, not an accept")
-                continue
-            rules_out.extend(emit_variants(rule, num))
+                raise SystemExit(
+                    f"error: {ruleset} rule {num} has action={rule.get('action')}; only "
+                    f"accept rules are translated. Add support before regenerating."
+                )
+            rules_out.extend(emit_variants(rule, num, ruleset))
 
-        if not rules_out:
+        if not rules_out and default_action != "accept":
+            # 110 of the 140 VyOS rulesets are empty default-drop pairs. The
+            # module's terminal forward drop expresses that; no chain needed.
             continue
 
-        seq += 10
-        policies[f"{seq:03d}-{from_zone}-{to_zone}"] = {
-            "from": from_zone,
-            "to": to_zone,
-            "comment": data["meta"].get("description", ruleset),
-            "rules": rules_out,
-        }
+        pol = get_pair(from_zone, to_zone, data["meta"].get("description", ruleset),
+                       native_default=default_action)
+        pol["rules"].extend(rules_out)
+
+    for (from_zone, to_zone), extra_rules in EXTRA_ZONE_RULES.items():
+        pol = get_pair(from_zone, to_zone, f"From {from_zone} to {to_zone}")
+        for num, rule in enumerate(extra_rules, start=1):
+            pol["rules"].extend(emit_variants(rule, num, f"{from_zone}-{to_zone} (camera policy)"))
 
     # Router-destined services. VyOS left input unfiltered (no local zone), so
     # these are additions rather than ports. They are required for the router to
-    # stay reachable and functional once the input chain ends in a drop.
+    # stay reachable and functional once the input chain ends in a drop. The
+    # out-of-band mgmt port is handled by the module itself (var.mgmt).
     input_seq = max(input_seq, 500)
     for offset, extra in enumerate([
         {"comment": "ICMP for path MTU discovery and diagnostics", "protocol": "icmp"},
@@ -888,15 +1038,22 @@ def build_zone_policies(rulesets: dict, pairs: dict, zone_iface: dict) -> tuple[
          "dst_port": "67,68", "in_interface_list": "lan"},
         {"comment": "NTP server mode for LAN clients only (never WAN)", "protocol": "udp",
          "dst_port": "123", "in_interface_list": "lan"},
-        {"comment": "SSH from the mgmt VLAN only", "protocol": "tcp",
-         "dst_port": "22", "in_interface_list": "unifi-mgmt-900"},
-        {"comment": "RouterOS REST API and Winbox from the mgmt VLAN only", "protocol": "tcp",
-         "dst_port": "443,8291", "in_interface_list": "unifi-mgmt-900"},
-        # The one service that must answer on the WAN. Replaces EdgeRouter
-        # port-forward rules 3 and 4, which forwarded 51820/51821 to VyOS at
-        # 172.16.1.250; this router terminates the tunnels itself.
-        {"comment": "WireGuard from the internet (replaces ERL port-forward 3/4)",
-         "protocol": "udp", "dst_port": "51820,51821", "in_interface": WAN_INTERFACE},
+        # Management from any internal VLAN except the cameras, and from the
+        # personal VPN (wg01), never the WAN. Gated by credentials (password
+        # for REST/Winbox, keys for SSH), not by source address. The camera
+        # deny must sort before the LAN accept below.
+        {"comment": "No management (SSH/REST/Winbox/API) from the camera VLAN", "action": "drop",
+         "protocol": "tcp", "dst_port": "22,443,8291,8729", "in_interface_list": CAMERA_ZONE},
+        {"comment": "SSH/REST/Winbox from LAN (credential-protected)", "protocol": "tcp",
+         "dst_port": "22,443,8291", "in_interface_list": "lan"},
+        {"comment": "SSH/REST/Winbox from the personal VPN (wg01)", "protocol": "tcp",
+         "dst_port": "22,443,8291", "in_interface_list": "vpn"},
+        # The one service that must answer from outside. While the ERL is still
+        # upstream it port-forwards 51820/51821 to 172.16.1.250 (this router's
+        # transit-10 SVI); afterwards they arrive on ether1. Both are members of
+        # the outside zone's list, so one rule covers both stages.
+        {"comment": "WireGuard listeners (ERL port-forward, then WAN)",
+         "protocol": "udp", "dst_port": "51820,51821", "in_interface_list": OUTSIDE_ZONE},
     ]):
         input_rules[f"{input_seq + (offset + 1) * 10:03d}-router-service"] = extra
 
@@ -954,9 +1111,61 @@ def main() -> int:
         if "dhcp" not in vlan and name not in active_zones:
             vlan["enabled"] = False
 
-    zone_policies, input_rules, notes = build_zone_policies(rulesets, pairs, zone_iface)
+    zone_policies, input_rules, notes = build_zone_policies(
+        rulesets, pairs, zone_iface, port_lists, vlans
+    )
     notes.extend(dns_notes)
     notes.extend(admin_notes)
+
+    # Address lists that describe where container workloads went, plus the
+    # router-admin list. These replace any same-named VyOS group.
+    for name, members in NEW_ADDRESS_LISTS.items():
+        if name in address_lists:
+            notes.append(
+                "address list %s: VyOS members %s replaced with %s (workload moved)"
+                % (name, list(address_lists[name].values()), list(members.values()))
+            )
+        address_lists[name] = OrderedDict(members)
+
+    # Static DNS records that pointed at container IPs.
+    for key in list(dns["static_records"]):
+        rec = dns["static_records"][key]
+        addr = rec.get("address")
+        if rec["name"] in DNS_RECORD_RETARGET_BY_NAME:
+            target = DNS_RECORD_RETARGET_BY_NAME[rec["name"]]
+        elif addr in DNS_RECORD_RETARGET_BY_ADDRESS:
+            target = DNS_RECORD_RETARGET_BY_ADDRESS[addr]
+        else:
+            continue
+        if target is None:
+            del dns["static_records"][key]
+            notes.append(
+                "dns: %s -> %s DROPPED; that was a haproxy container, and the app "
+                "is served on *.internal.tnwks.us by the WSL ingress now" % (rec["name"], addr)
+            )
+        else:
+            rec["address"] = target
+            notes.append("dns: %s retargeted %s -> %s (container moved)" % (rec["name"], addr, target))
+
+    # Things added to vyos-config after this generator was written. Not ported
+    # by the generator; called out so they are not lost silently.
+    system_text = (parts / "system.sh").read_text()
+    if "flow-accounting" in system_text or "sflow" in system_text:
+        notes.append(
+            "system: VyOS flow export (sFlow, for monitoring/flow-collector) is not "
+            "generated; the root module's flow_export (IPFIX) replaces it"
+        )
+    if "task-scheduler" in system_text:
+        notes.append(
+            "system: VyOS task-scheduler (dhcp-leases-textfile.py -> node-exporter "
+            "dhcp_lease_info, used for flow-collector client names) has no RouterOS "
+            "port; client names need a RouterOS lease exporter (e.g. mktxp)"
+        )
+    notes.append(
+        "dns: blocking and split-horizon now apply to EVERY VLAN; dnsdist only "
+        "sent 10.10.91.0/24 and 10.10.31.0/24 through blocky. RouterOS adlists "
+        "are global"
+    )
 
     # --- EdgeRouter consolidation: prune routes that no longer make sense ----
     kept_routes = {}
@@ -966,15 +1175,15 @@ def main() -> int:
         if gw in DEAD_NEXT_HOPS:
             notes.append(
                 "route %s via %s DROPPED: next-hop is dead (ip neigh FAILED, 100%% "
-                "ping loss on 2026-09-19). Both VyOS and the EdgeRouter still "
-                "pointed production subnets at it" % (dst, gw)
+                "ping loss). Both VyOS and the EdgeRouter still pointed "
+                "production subnets at it" % (dst, gw)
             )
             continue
         if dst == "0.0.0.0/0" and gw == RETIRED_UPSTREAM:
             notes.append(
-                "route 0.0.0.0/0 via %s DROPPED: that was the EdgeRouter Lite, "
-                "which this router replaces. The default route now comes from the "
-                "WAN DHCP lease (add_default_route = yes)" % gw
+                "route 0.0.0.0/0 via %s: not a static route; becomes "
+                "upstream_gateway (distance 10) for the staged cutover, and the "
+                "WAN DHCP lease (distance 1) takes over when the modem moves" % gw
             )
             continue
         kept_routes[label] = route
@@ -1006,18 +1215,33 @@ def main() -> int:
         if entry["to_address"] in DEAD_NEXT_HOPS:
             notes.append(
                 "nat rule %s (%s) DROPPED: redirect target %s is dead, so this "
-                "rule black-holes traffic today. Verified 2026-09-19"
+                "rule black-holes traffic today"
                 % (num, entry["comment"], entry["to_address"])
             )
             continue
+
+        # Forced DNS pointed at the dnsdist/blocky containers. The resolver is
+        # the router now, so redirect (to the router on the ingress interface).
+        # The `!container` destination exclusion has nothing left to exclude.
+        if entry["to_address"] in CONTAINER_DNS_ADDRESSES:
+            notes.append(
+                "nat rule %s (%s): dst-nat to %s (DNS container) became a redirect "
+                "to the router" % (num, entry["comment"], entry["to_address"])
+            )
+            entry["action"] = "redirect"
+            del entry["to_address"]
+            if entry.get("dst_address", "").lstrip("!") in CONTAINER_DNS_ADDRESSES:
+                del entry["dst_address"]
 
         for proto in expand_protocol(entry["protocol"]):
             dstnat["%s-%s" % (num, proto)] = dict(entry, protocol=proto)
 
     # WireGuard: strip private keys, main.tf injects them from SOPS.
     wg_out = {}
+    iface_zone = {v: k for k, v in zone_iface.items()}
     for name, iface in sorted(wireguard.items()):
         wg_out[name] = {
+            "zone": iface_zone.get(name, name),
             "address": iface.get("address", ""),
             "listen_port": iface.get("listen_port", 51820),
             "comment": iface.get("comment", name),
@@ -1105,14 +1329,20 @@ def main() -> int:
     body.append(assign("domain", system.get("domain", "tnwks.local")))
     body.append(assign("timezone", system.get("timezone", "America/Los_Angeles")))
     body.append("\n")
-    body.append(assign("wan_interface", "ether1",
-                       "ether1 is WAN; the rest of the ports form the VLAN trunk bridge."))
+    body.append(assign("wan_interface", WAN_INTERFACE,
+                       "ether1 is WAN, ether8 is out-of-band mgmt, the rest form the\n"
+                       "VLAN trunk bridge."))
     body.append(assign("lan_trunk_interface", "bridge-lan"))
     body.append(assign("bridge_name", "bridge-lan"))
-    body.append(assign("bridge_ports", [
-        "ether2", "ether3", "ether4", "ether5",
-        "ether6", "ether7", "ether8", "sfp-sfpplus1",
-    ]))
+    body.append(assign("bridge_ports", BRIDGE_PORTS))
+    body.append(assign("mgmt", MGMT,
+                       "Never bridged: this is the address Terraform reaches the router on."))
+    body.append("\n")
+    body.append(assign("outside_zone", OUTSIDE_ZONE,
+                       "VyOS's internet egress went via transit-10; the WAN port joins it."))
+    body.append(assign("upstream_gateway", UPSTREAM_GATEWAY,
+                       "EdgeRouter Lite, still upstream during the staged cutover. Set to\n"
+                       "null once the modem is on ether1 and the ERL is retired."))
     body.append("\n")
     body.append(assign("vlans", dict(sorted(vlans.items()))))
     body.append("\n")
@@ -1148,6 +1378,15 @@ def main() -> int:
                        "VyOS both consumed upstream NTP and served the LAN (allow-client),\n"
                        "so server_mode stays on."))
     if system.get("syslog"):
+        old_remote = system["syslog"].get("remote")
+        if old_remote != SYSLOG_REMOTE:
+            notes.append(
+                "syslog: target %s (Vector on the old cluster, gone) -> %s:%s, the "
+                "WSL host's LAN bridge. Needs vector-aggregator running on WSL and "
+                "a tcp/%s lan-bridge relay" % (old_remote, SYSLOG_REMOTE,
+                    system["syslog"].get("remote_port", 6001), system["syslog"].get("remote_port", 6001))
+            )
+            system["syslog"]["remote"] = SYSLOG_REMOTE
         body.append("\n")
         body.append(assign("syslog", system["syslog"],
                            "VyOS shipped octet-counted TCP syslog to the k8s Vector aggregator.\n"

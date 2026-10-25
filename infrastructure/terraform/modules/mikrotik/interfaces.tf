@@ -4,7 +4,8 @@
 # Structural difference worth understanding before reading further:
 #
 #   VyOS terminated VLANs directly on a physical port (eth1.910) and had no
-#   L2 bridge at all. RouterOS on an RB5009 wants a VLAN-filtering bridge so\n#   the switch chip can hardware-offload the trunk. So each VyOS `eth1.<vif>`
+#   L2 bridge at all. RouterOS on an RB5009 wants a VLAN-filtering bridge so
+#   the switch chip can hardware-offload the trunk. So each VyOS `eth1.<vif>`
 #   becomes a routeros_interface_vlan on the bridge, and each VyOS
 #   `address` becomes a separate routeros_ip_address.
 
@@ -19,6 +20,13 @@ resource "routeros_interface_bridge" "lan" {
 
 resource "routeros_interface_bridge_port" "lan" {
   for_each = toset(var.bridge_ports)
+
+  lifecycle {
+    precondition {
+      condition     = var.mgmt == null || !contains(var.bridge_ports, try(var.mgmt.interface, ""))
+      error_message = "The mgmt port must not be a bridge member: its address goes invalid when bridged, locking Terraform out."
+    }
+  }
 
   bridge    = routeros_interface_bridge.lan.name
   interface = each.value
@@ -76,6 +84,19 @@ resource "routeros_ip_dhcp_client" "wan" {
   use_peer_ntp      = false
 }
 
+# Fallback default via the EdgeRouter while it is still upstream. Distance 10
+# loses to the DHCP lease's distance-1 route as soon as the modem is on ether1.
+resource "routeros_ip_route" "upstream_default" {
+  count = var.upstream_gateway == null ? 0 : 1
+
+  dst_address = "0.0.0.0/0"
+  gateway     = var.upstream_gateway
+  distance    = 10
+  comment     = "default via upstream router during staged cutover (terraform)"
+
+  depends_on = [routeros_ip_address.svi]
+}
+
 # --- Zone interface lists ----------------------------------------------------
 # RouterOS has no zone object. An interface-list per VyOS zone gives the
 # firewall rules the same from/to vocabulary.
@@ -97,4 +118,13 @@ resource "routeros_interface_list_member" "zone" {
     routeros_interface_vlan.svi,
     routeros_interface_wireguard.this,
   ]
+}
+
+# The WAN port joins the outside zone, so VyOS's `X -> transit-10` rules keep
+# governing internet egress after the modem moves here (var.outside_zone).
+resource "routeros_interface_list_member" "outside_wan" {
+  count = var.outside_zone == null ? 0 : 1
+
+  list      = routeros_interface_list.zone[var.outside_zone].name
+  interface = var.wan_interface
 }

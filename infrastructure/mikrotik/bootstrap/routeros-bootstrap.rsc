@@ -7,9 +7,21 @@
 # logs in with, or the IP address it connects over. That is this script's job.
 #
 # HOW TO RUN
-#   This is NOT executed from the repo. RouterOS runs it. Paste it into a Winbox
-#   or serial terminal on a factory-reset RB5009 while connected to ether2 with
-#   a DHCP client (RouterOS defconf hands out 192.168.88.0/24 there).
+#   This is NOT executed from the repo. RouterOS runs it.
+#
+#   1. Reset WITHOUT the default configuration. Defconf creates its own bridge
+#      (ether2-8 + sfp), its own firewall and a DHCP server; all of it would
+#      collide with Terraform's bridge ports and leave stray rules outside the
+#      ordering Terraform enforces:
+#
+#        /system reset-configuration no-defaults=yes skip-backup=yes
+#
+#   2. After the reboot there is no IP config at all. Connect a laptop to ether8
+#      and open the serial console, or Winbox by MAC address, and paste this
+#      script.
+#   3. Give the laptop 10.98.0.2/24 on that cable. ether8 is the out-of-band
+#      management port permanently: it is never added to the LAN bridge, and
+#      the Terraform input chain always accepts SSH/REST/Winbox on it.
 #
 #   Order matters: run this, verify the API is reachable, THEN run
 #   `task terraform:mikrotik:apply`.
@@ -30,29 +42,34 @@
 #     (`/system device-mode update container=yes` forces a hardware
 #     confirmation: press the reset button or power-cycle within the timeout).
 #     The port does NOT use containers, so skip unless that changes.
-#   * Note the mgmt subnet: 10.98.0.0/24, matching the VyOS eth1 native address.
-#     The Aruba trunk delivers it untagged.
+#   * Out-of-band mgmt is 10.98.0.1/24 on ether8, a dedicated cable to the
+#     laptop (or later a mgmt port on the switch). Nothing else lives in
+#     10.98.0.0/24: the ERL's eth1 there was never used, and both routers'
+#     10.98.0.0/24 routes pointed at a dead host.
 #
 # ---------------------------------------------------------------------------------------------------------------------
 # 1. IDENTITY + ADMIN ACCOUNT
 # ---------------------------------------------------------------------------------------------------------------------
-# RouterOS ships a passwordless `admin`. Create the real accounts first, verify
-# login works, and only then remove admin. Do not reverse this order.
+# A no-defaults reset leaves a passwordless `admin`. Create the Terraform account
+# first, verify login works, and only then remove admin. Do not reverse this
+# order.
+#
+# The interactive admin account is NOT created here: Terraform creates it, with
+# its password and SSH key from SOPS. Creating it here too would make the first
+# apply fail on a duplicate user. Until then, the terraform account is the
+# console fallback.
 
 /system identity set name=sce-rtr01
 
 # Terraform's service account. The password must match `routeros_password` in
 # secrets.sops.yaml. Generate it with `openssl rand -base64 24`, do not reuse
 # an existing device password (the homelab has credential-reuse debt already).
+# No address= restriction: access is gated by this credential plus the
+# Terraform input chain (LAN, personal VPN and the OOB port; never the WAN).
 /user add name=terraform group=full password="CHANGEME-SEE-SOPS" \
-  comment="Terraform service account (tnwks-ops)" \
-  address=10.98.0.0/24,10.10.91.0/24
+  comment="Terraform service account (tnwks-ops)"
 
-# Interactive admin account, SSH key only.
-/user add name=it3e group=full password="CHANGEME" comment="Ivan"
-/user ssh-keys import public-key-file=id_rsa.pub user=it3e
-
-# Verify BOTH accounts work in a second session before running this line.
+# Verify the terraform account works in a second session before running this.
 /user remove [find name=admin]
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -62,15 +79,13 @@
 # manage, because removing it mid-apply would sever the connection doing the
 # apply. Everything else is Terraform's.
 #
-# Put the mgmt address on the physical trunk port directly for bootstrap. Once
-# Terraform builds the bridge, mgmt lives on the bridge instead; this address is
-# then redundant and can be removed in the cutover's final step.
+# ether8 is excluded from Terraform's bridge (var.mgmt). It must stay that way:
+# an address on a bridge member port goes invalid, which is an instant lockout.
+#
+# No default route here. Terraform owns it (upstream_gateway, then the WAN
+# lease), and a bench router needs no internet to be configured.
 
-/ip address add address=10.98.0.1/24 interface=ether2 comment="bootstrap mgmt - remove after cutover"
-
-# Default route to the EdgeRouter, matching the VyOS static route. Terraform
-# also manages this; setting it here just keeps the box reachable meanwhile.
-/ip route add dst-address=0.0.0.0/0 gateway=172.16.1.1 comment="bootstrap default - Terraform owns this"
+/ip address add address=10.98.0.1/24 interface=ether8 comment="out-of-band mgmt (bootstrap-owned, do not remove)"
 
 # ---------------------------------------------------------------------------------------------------------------------
 # 3. REST API + TLS
@@ -122,6 +137,6 @@
 #   task terraform:mikrotik:plan
 #
 # Read the plan. It should create the bridge, VLANs, addresses, DHCP, DNS,
-# firewall and WireGuard, and it should NOT propose destroying the bootstrap
-# mgmt address out from under itself. If it does, stop and fix the module.
+# firewall and WireGuard. It must NOT list ether8 as a bridge port or touch the
+# 10.98.0.1/24 address. If it does, stop and fix the module.
 # ---------------------------------------------------------------------------------------------------------------------

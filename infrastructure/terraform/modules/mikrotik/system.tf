@@ -52,38 +52,95 @@ resource "routeros_ip_service" "ssh" {
 }
 
 resource "routeros_ip_service" "disabled" {
-  for_each = var.disabled_ip_services
+  # api-ssl stays on when mktxp is configured; see below.
+  for_each = {
+    for name, port in var.disabled_ip_services : name => port
+    if !(name == "api-ssl" && local.monitoring_enabled)
+  }
 
   numbers  = each.key
   port     = each.value
   disabled = true
 }
 
-# --- Local accounts ---------------------------------------------------------
-
-resource "routeros_system_user" "admins" {
-  for_each = var.admin_users
-
-  name    = each.key
-  group   = each.value.group
-  comment = each.value.comment
-  address = each.value.address
+# VyOS: `service ssh disable-password-authentication`. RouterOS 7 already
+# refuses password SSH for a user that has keys unless this is overridden; pin
+# it so it cannot be flipped on by hand.
+resource "routeros_ip_ssh_server" "this" {
+  always_allow_password_login = false
+  strong_crypto               = true
 }
 
-resource "routeros_system_user_sshkeys" "admins" {
-  for_each = {
-    for pair in flatten([
-      for user, cfg in var.admin_users : [
-        for idx, key in coalesce(cfg.ssh_keys, []) : {
-          key_id = "${user}/${idx}"
-          user   = user
-          pubkey = key
-        }
-      ]
-    ]) : pair.key_id => pair
-  }
+# --- Local accounts ---------------------------------------------------------
 
-  user       = routeros_system_user.admins[each.value.user].name
-  key        = each.value.pubkey
-  depends_on = [routeros_system_user.admins]
+locals {
+  # Whether an admin is configured is not itself secret; unwrapping just the
+  # boolean keeps count/for_each legal without exposing the username.
+  admin_enabled = nonsensitive(var.admin_username != null)
+}
+
+resource "routeros_system_user" "admin" {
+  count = local.admin_enabled ? 1 : 0
+
+  name     = var.admin_username
+  password = var.admin_password
+  group    = "full"
+  comment  = "Interactive admin, SSH key only (terraform)"
+
+  lifecycle {
+    precondition {
+      condition     = var.admin_password != null
+      error_message = "admin_password is required: a RouterOS user without one has an empty password."
+    }
+  }
+}
+
+resource "routeros_system_user_sshkeys" "admin" {
+  for_each = local.admin_enabled ? { for idx, key in var.admin_ssh_keys : tostring(idx) => key } : {}
+
+  user = routeros_system_user.admin[0].name
+  key  = each.value
+}
+
+# --- Monitoring account (mktxp) ----------------------------------------------
+# Read-only and API-only: the group grants `api` + `read` and nothing else, so
+# the account cannot log in over SSH/Winbox/REST or change configuration. Plain
+# `api` (8728) stays disabled; mktxp connects over api-ssl with the bootstrap
+# certificate.
+
+locals {
+  monitoring_enabled = var.monitoring_username != null
+}
+
+resource "routeros_system_user_group" "monitoring" {
+  count = local.monitoring_enabled ? 1 : 0
+
+  name    = "monitoring"
+  policy  = ["api", "read"]
+  comment = "mktxp: read-only API (terraform)"
+}
+
+resource "routeros_system_user" "monitoring" {
+  count = local.monitoring_enabled ? 1 : 0
+
+  name     = var.monitoring_username
+  password = var.monitoring_password
+  group    = routeros_system_user_group.monitoring[0].name
+  comment  = "mktxp exporter (terraform)"
+
+  lifecycle {
+    precondition {
+      condition     = var.monitoring_password != null
+      error_message = "monitoring_password is required when monitoring_username is set."
+    }
+  }
+}
+
+resource "routeros_ip_service" "api_ssl" {
+  count = local.monitoring_enabled ? 1 : 0
+
+  numbers     = "api-ssl"
+  port        = 8729
+  certificate = var.api_certificate
+  disabled    = false
 }

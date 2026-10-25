@@ -14,7 +14,7 @@ variable "timezone" {
 }
 
 variable "wan_interface" {
-  description = "Physical interface facing the upstream router (EdgeRouter / transit)."
+  description = "Physical WAN port (cable modem). Kept out of the LAN bridge."
   type        = string
 }
 
@@ -37,6 +37,58 @@ variable "bridge_ports" {
   description = "Physical ports enslaved to the LAN bridge (tagged trunk members)."
   type        = list(string)
   default     = []
+}
+
+variable "mgmt" {
+  description = <<-EOT
+    Out-of-band management port, kept OUT of the LAN bridge.
+
+    The bootstrap script puts the REST API address on this port, and Terraform
+    reaches the router through it. If the port were a bridge member its address
+    would go invalid the moment the bridge is created, which is a guaranteed
+    lockout on the first apply. Input-chain access (SSH, REST, Winbox) is always
+    accepted on this interface, so a firewall mistake elsewhere still leaves a
+    cable you can plug into.
+
+    The address itself stays owned by the bootstrap script, not Terraform: it is
+    the connection Terraform applies over, so Terraform must never be able to
+    destroy or replace it. `address` is recorded here for documentation and the
+    bridge-membership check only.
+  EOT
+  type = object({
+    interface = string
+    address   = string
+  })
+  default = null
+}
+
+variable "outside_zone" {
+  description = <<-EOT
+    Zone that the WAN port joins, so internet traffic is governed by the same
+    zone-pair rules VyOS used for its upstream.
+
+    VyOS reached the internet through `transit-10` (the EdgeRouter hop), so every
+    `X -> transit-10` ruleset was really an internet-egress policy. Adding the
+    WAN port to that zone's interface list keeps those rules meaningful both
+    while the EdgeRouter is still upstream and after the modem moves to the WAN
+    port. null leaves the WAN port in no zone, which the terminal forward drop
+    then blocks entirely.
+  EOT
+  type        = string
+  default     = null
+}
+
+variable "upstream_gateway" {
+  description = <<-EOT
+    Static default route used while an upstream router is still in front of this
+    one (the EdgeRouter Lite at 172.16.1.1 during the staged cutover).
+
+    Installed at distance 10, so the WAN DHCP lease's default route (distance 1)
+    wins automatically the moment the modem is plugged into the WAN port; moving
+    the cable needs no Terraform change. Set to null once the EdgeRouter is gone.
+  EOT
+  type        = string
+  default     = null
 }
 
 variable "vlans" {
@@ -111,10 +163,14 @@ variable "zone_policies" {
     keys in `NNN-from-to` form.
   EOT
   type = map(object({
-    from        = string
-    to          = string
-    comment     = optional(string)
-    log_default = optional(bool, true)
+    from    = string
+    to      = string
+    comment = optional(string)
+    # VyOS per-ruleset default-action. Most pairs are drop; the internet-egress
+    # and VPN pairs were accept, and rendering those as drop would cut off the
+    # internet for every VLAN once the terminal forward drop is in place.
+    default_action = optional(string, "drop")
+    log_default    = optional(bool, true)
     rules = optional(list(object({
       comment          = string
       protocol         = optional(string)
@@ -127,6 +183,11 @@ variable "zone_policies" {
     })), [])
   }))
   default = {}
+
+  validation {
+    condition     = alltrue([for p in values(var.zone_policies) : contains(["accept", "drop"], p.default_action)])
+    error_message = "zone_policies[*].default_action must be accept or drop."
+  }
 }
 
 variable "input_rules" {
@@ -143,7 +204,10 @@ variable "input_rules" {
     the router itself, so those become router-destined input accepts.
   EOT
   type = map(object({
-    comment           = string
+    comment = string
+    # accept, or drop to carve an exception out of a later, broader accept
+    # (e.g. no management from the camera VLAN ahead of "management from LAN").
+    action            = optional(string, "accept")
     protocol          = optional(string)
     dst_port          = optional(string)
     dst_port_list     = optional(string)
@@ -154,6 +218,11 @@ variable "input_rules" {
     icmp_options      = optional(string)
   }))
   default = {}
+
+  validation {
+    condition     = alltrue([for r in values(var.input_rules) : contains(["accept", "drop"], r.action)])
+    error_message = "input_rules[*].action must be accept or drop."
+  }
 }
 
 variable "input_drop_log" {
@@ -162,19 +231,39 @@ variable "input_drop_log" {
   default     = true
 }
 
+variable "forward_drop_log" {
+  description = "Log packets hitting the terminal forward drop (traffic between zones with no VyOS ruleset)."
+  type        = bool
+  default     = true
+}
+
 variable "dstnat_rules" {
-  description = "Port of VyOS `nat destination` (forced DNS / forced NTP interception)."
+  description = <<-EOT
+    Port of VyOS `nat destination` (forced DNS / forced NTP interception).
+
+    action is dst-nat (to_address required) or redirect (to the router itself,
+    used once the resolver moved from the dnsdist container onto the router).
+  EOT
   type = map(object({
     comment      = string
     in_interface = string
     protocol     = string
     dst_port     = string
+    action       = optional(string, "dst-nat")
     dst_address  = optional(string)
     src_address  = optional(string)
-    to_address   = string
+    to_address   = optional(string)
     to_port      = string
   }))
   default = {}
+
+  validation {
+    condition = alltrue([
+      for r in values(var.dstnat_rules) :
+      r.action == "redirect" || (r.action == "dst-nat" && r.to_address != null)
+    ])
+    error_message = "dstnat_rules: action must be redirect, or dst-nat with to_address set."
+  }
 }
 
 variable "masquerade_out_interface" {
@@ -199,8 +288,11 @@ variable "wireguard_interfaces" {
     address     = string
     listen_port = number
     private_key = string
-    comment     = optional(string)
-    mtu         = optional(string)
+    # VyOS zone this listener belongs to (wg01 -> vpn, wg02 -> vpn-mobile).
+    # Zone-pair and input rules name the zone, not the interface.
+    zone    = optional(string)
+    comment = optional(string)
+    mtu     = optional(string)
     peers = map(object({
       public_key           = string
       allowed_address      = list(string)
@@ -405,15 +497,54 @@ variable "disabled_ip_services" {
   }
 }
 
-variable "admin_users" {
-  description = "Local RouterOS accounts and their SSH public keys."
-  type = map(object({
-    group    = optional(string, "full")
-    comment  = optional(string)
-    ssh_keys = optional(list(string), [])
-    address  = optional(string)
-  }))
-  default = {}
+# The admin account is three variables rather than a map keyed by username:
+# the username comes from SOPS, sops_file marks everything it returns as
+# sensitive, and Terraform refuses sensitive values as for_each keys.
+variable "admin_username" {
+  description = "Interactive admin account name (from SOPS)."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "admin_password" {
+  description = <<-EOT
+    Password for the admin account (from SOPS). Required: a RouterOS user created
+    without one has an EMPTY password, which Winbox/WebFig will accept. SSH still
+    uses keys only (routeros_ip_ssh_server below).
+  EOT
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "admin_ssh_keys" {
+  description = "SSH public keys for the admin account."
+  type        = list(string)
+  default     = []
+}
+
+# --- Monitoring (mktxp) -------------------------------------------------------
+# mktxp scrapes RouterOS over its native API, not REST. It replaces the VyOS
+# node-exporter, and its DHCP lease metric replaces VyOS's dhcp_lease_info
+# (flow-collector client names).
+variable "monitoring_username" {
+  description = "Read-only API account for mktxp. null disables it and keeps api-ssl off."
+  type        = string
+  default     = null
+}
+
+variable "monitoring_password" {
+  description = "Password for the mktxp account (from SOPS)."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "api_certificate" {
+  description = "Certificate for the api-ssl service; the bootstrap script creates `rest-api`."
+  type        = string
+  default     = "rest-api"
 }
 
 variable "fasttrack" {

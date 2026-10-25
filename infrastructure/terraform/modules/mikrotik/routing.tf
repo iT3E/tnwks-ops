@@ -12,7 +12,20 @@ resource "routeros_ip_route" "static" {
   dst_address = each.value.dst_address
   gateway     = each.value.gateway
   distance    = each.value.distance
-  comment     = "${each.key} ${coalesce(each.value.comment, "")} (terraform)"
+  comment     = join(" ", compact([each.key, each.value.comment, "(terraform)"]))
 
   depends_on = [routeros_ip_address.svi]
+}
+
+# --- Anti-spoofing -----------------------------------------------------------
+# The EdgeRouter ran `firewall source-validation disable` and `send-redirects
+# enable`, both wrong for a border router. Strict reverse-path filtering drops a
+# packet whose source would not be routed back out the interface it arrived on,
+# e.g. something on the WAN claiming to be 172.16.1.1 (the `udmpro` address list
+# that transit-10 -> unifi-mgmt-900 trusts). Single router, no asymmetric paths,
+# so strict is safe.
+resource "routeros_ip_settings" "this" {
+  rp_filter        = "strict"
+  send_redirects   = false
+  accept_redirects = false
 }

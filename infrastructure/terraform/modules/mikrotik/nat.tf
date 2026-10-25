@@ -6,12 +6,16 @@
 #
 # The `destination address '!x.x.x.x'` negation becomes RouterOS
 # `dst_address = "!x.x.x.x"`, which the provider passes through verbatim.
+#
+# Forced DNS used to dst-nat to the dnsdist container (10.10.53.4). That
+# container does not survive, and the resolver is now the router itself, so
+# those rules are `redirect` (to the router on the ingress interface) instead.
 
 resource "routeros_ip_firewall_nat" "dstnat" {
   for_each = var.dstnat_rules
 
   chain        = "dstnat"
-  action       = "dst-nat"
+  action       = each.value.action
   in_interface = each.value.in_interface
   protocol     = each.value.protocol
   dst_port     = each.value.dst_port
@@ -31,8 +35,10 @@ resource "routeros_move_items" "nat" {
 
 # --- Source NAT --------------------------------------------------------------
 # VyOS had `nat source rule 100` commented out because the upstream EdgeRouter
-# performs the outbound NAT. Leaving masquerade_out_interface null preserves
-# that. Set it only if the MikroTik becomes the edge device.
+# performed the outbound NAT. This router replaces the EdgeRouter, so
+# masquerade_out_interface is the WAN port. While the EdgeRouter is still
+# upstream (var.upstream_gateway) nothing leaves via the WAN port, so the rule
+# is inert until the modem is moved.
 
 resource "routeros_ip_firewall_nat" "masquerade" {
   count = var.masquerade_out_interface == null ? 0 : 1

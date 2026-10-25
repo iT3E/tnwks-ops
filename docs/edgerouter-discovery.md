@@ -4,9 +4,9 @@ Live discovery of the internet edge router, run 2026-09-19 against `172.16.1.1`.
 This is the second half of the consolidation: the RB5009 replaces **both**
 `sce-vyos01` (internal L3/firewall) and `THOMAS-ER01` (internet edge).
 
-Read alongside `mikrotik-vyos-port.md`. That document ports the VyOS side and
-assumes the ERL keeps doing NAT and holding the default route. **That assumption
-is now wrong**, and the deltas are listed at the bottom.
+Read alongside `mikrotik-vyos-port.md`, which covers the VyOS side and the
+cutover. This document is the evidence for what the port takes over from the ERL
+and what it deliberately leaves behind.
 
 ## Device
 
@@ -94,7 +94,7 @@ This alone justifies the migration timeline.
 ### 3. Secrets in plaintext in the config
 
 - **Namecheap DDNS password** for `ddns-domain.example`:
-  `<redacted: rotated>`. **Rotate.**
+  (redacted). **Rotate.**
 - **UISP/UNMS connection token** in the `service unms connection` string.
 - `system login user ivan.thomas` SHA-512 hash (expected, but it is in the dump).
 
@@ -152,10 +152,8 @@ Note `10.60.10.0/24` is the airMAX subnet, which VyOS correctly routes via
 - `traffic-policy shaper client-up-s` classes 2 and 3, both matching
   `source address 172.16.1.254/32`, plus `eth2 redirect ifb1`
 
-**This also resolves an open question from the VyOS port.** I had flagged
-"transit-10 NTP dstnat targets `172.16.1.254`, verify it is intentional." It is
-not intentional: `.254` is dead, so that NTP redirect is black-holing NTP for
-`unifi-mgmt-900` today. A live bug, pre-existing, fixed by not porting it.
+VyOS's `transit-10` NTP dstnat also targets `.254`, so NTP for that zone is
+black-holed today. Not ported.
 
 Also note VyOS routes `10.98.0.0/24` and `10.10.93.0/24` via `172.16.1.254`, so
 **both routers currently send switch-management traffic to a dead host.**
@@ -247,29 +245,10 @@ Requirements it must meet:
 - Established/related and ICMP as already configured.
 - `source-validation` on, unlike the ERL.
 
-## Deltas to the existing port
-
-Concrete changes needed in `modules/mikrotik` and the generated `locals.tf`:
-
-1. `add_default_route` on the WAN DHCP client: `"no"` → **`"yes"`**.
-2. `masquerade_out_interface`: `null` → **`"ether1"`**.
-3. Drop the VyOS `0.0.0.0/0 → 172.16.1.1` static route; the default now comes
-   from the WAN lease.
-4. Drop `10.98.0.0/24` and `10.10.93.0/24` static routes (dead `.254` next-hop).
-5. Keep `10.60.10.0/24 → 10.10.140.140`.
-6. Drop the `transit-10` NTP dstnat entirely (dead target, confirmed above).
-7. Add WAN-facing input rules: WireGuard accept on `ether1`; make sure DNS/NTP
-   accepts are scoped to LAN lists.
-8. Add conntrack tuning to match the ERL's table sizes.
-9. Add a DDNS decision (see above).
-10. `sce-rtr01` should get bind A records for **both** `172.16.1.1` and its
-    management address, since it inherits `sce-er01`'s identity as well.
-
 ## Reproducing this discovery
 
-Credentials live in `~/.openclaw/credentials/net-devices.env` (`ERL_USER`,
-`ERL_PASS`). EdgeOS 2.0.9 predates modern OpenSSH defaults, so legacy overrides
-are mandatory:
+EdgeOS 2.0.9 predates modern OpenSSH defaults, so legacy overrides are
+mandatory:
 
 ```bash
 sshpass -p "$ERL_PASS" ssh \
@@ -281,6 +260,6 @@ sshpass -p "$ERL_PASS" ssh \
   "/opt/vyatta/bin/vyatta-op-cmd-wrapper show configuration commands"
 ```
 
-Notes for next time: operational commands need the
+Operational commands need the
 `/opt/vyatta/bin/vyatta-op-cmd-wrapper` prefix over SSH, `arp` does not exist
 (use `ip neigh`), and `sudo` works without a password prompt.

@@ -22,6 +22,13 @@ module "mikrotik" {
   bridge_name         = local.bridge_name
   bridge_ports        = local.bridge_ports
 
+  # Out-of-band mgmt port (never bridged) and the staged-cutover wiring: the
+  # WAN port joins transit-10 so VyOS's internet-egress rules still apply, and
+  # the EdgeRouter stays the default route until the modem moves to ether1.
+  mgmt             = local.mgmt
+  outside_zone     = local.outside_zone
+  upstream_gateway = local.upstream_gateway
+
   vlans         = local.vlans
   static_routes = local.static_routes
 
@@ -52,6 +59,9 @@ module "mikrotik" {
   flow_export = {
     collector_address = "10.10.91.142" # Windows host, relays udp/2055 into WSL
     src_address       = "10.10.91.1"
+    # Internet traffic leaves via transit-10 (to the ERL) during the staged
+    # cutover and via ether1 afterwards; watching both covers either stage.
+    interfaces = "ether1,bridge-lan-vlan10"
   }
 
   dns    = local.dns
@@ -68,11 +78,12 @@ module "mikrotik" {
 
   # VyOS interpolated the admin username from ${SSH_VYOS_USERNAME}, so it stays a
   # secret here too; only the public key material is generated into locals.tf.
-  admin_users = {
-    (data.sops_file.secrets.data["admin_username"]) = {
-      group    = "full"
-      comment  = "Interactive admin, SSH key only"
-      ssh_keys = local.admin_ssh_keys
-    }
-  }
+  admin_username = data.sops_file.secrets.data["admin_username"]
+  admin_password = data.sops_file.secrets.data["admin_password"]
+  admin_ssh_keys = local.admin_ssh_keys
+
+  # Read-only API account for mktxp (RouterOS metrics + DHCP lease names for
+  # flow-collector), replacing the VyOS node-exporter.
+  monitoring_username = "mktxp"
+  monitoring_password = data.sops_file.secrets.data["mktxp_password"]
 }

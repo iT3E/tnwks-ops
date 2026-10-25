@@ -43,10 +43,19 @@
       "&domain=" . $domain . "&password=" . $password . "&ip=" . $address)
 
     :do {
-      /tool fetch url=$url keep-result=no
-      # Only remember it on success, so a failed update retries next interval.
-      :set ddnsLastAddress $address
-      :log info ("ddns: " . $host . "." . $domain . " updated to " . $address)
+      # Namecheap answers HTTP 200 even when the update is rejected (bad
+      # password, unknown host); the failure is only visible in the XML body as
+      # a non-zero <ErrCount>. A bare fetch would cache a failed update as done
+      # and never retry, so read the body and check it.
+      :local result [/tool fetch url=$url output=user as-value]
+      :if (($result->"data") ~ "<ErrCount>0</ErrCount>") do={
+        # Only remember it on success, so a failed update retries next interval.
+        :set ddnsLastAddress $address
+        :log info ("ddns: " . $host . "." . $domain . " updated to " . $address)
+      } else={
+        :log error ("ddns: Namecheap REJECTED update for " . $host . "." . $domain . \
+          " (" . $address . ") - check the DDNS password; remote VPN access may break")
+      }
     } on-error={
       :log error ("ddns: update FAILED for " . $host . "." . $domain . \
         " (" . $address . ") - remote VPN access may break")

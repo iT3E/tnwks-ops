@@ -66,7 +66,7 @@ become connected routes and simply disappear from config.
 
 ### Dead config found on the ERL, not ported
 
-Verified live on 2026-09-19. Full evidence in `edgerouter-discovery.md`.
+Evidence in `edgerouter-discovery.md`.
 
 - **`172.16.1.252` and `172.16.1.254` are both dead** (`ip neigh` FAILED, 100%
   ping loss) yet 13 and 3 routes respectively still point at them, across both
@@ -82,17 +82,9 @@ Verified live on 2026-09-19. Full evidence in `edgerouter-discovery.md`.
   what the RB5009 bootstrap already claims for management, which is consistent:
   the new box takes over the role this interface was meant to play.
 
-### This resolves an open question from the VyOS side
-
-I previously flagged "transit-10 NTP dstnat targets `172.16.1.254`, verify it is
-intentional." It is not: `.254` is dead, so that redirect **black-holes NTP for
-`unifi-mgmt-900` today**. A live pre-existing bug, fixed by not porting it. The
-generator drops any dstnat whose target is a dead host.
-
 ### The input chain stops being optional
 
-This document originally called the explicit input chain "intentional
-hardening." With the ERL folded in it is now the only thing between the internet
+With the ERL folded in, the input chain is the only thing between the internet
 and the router, and it is what closes the ERL's two worst findings: DNS and NTP
 were bound to `0.0.0.0`, making the box a **public open resolver and an open NTP
 reflector** usable for amplification attacks against third parties.
@@ -104,8 +96,9 @@ match on it and therefore cannot be answered from the WAN:
 | --- | --- |
 | DNS 53 | originating zone list only |
 | NTP 123, DHCP 67/68 | `zone-lan` |
-| SSH 22, REST/Winbox 443/8291 | `unifi-mgmt-900` only |
-| WireGuard 51820/51821 | `ether1` (the one deliberate WAN service) |
+| SSH 22, REST/Winbox 443/8291 | any internal VLAN, the personal VPN (`wg01`), and out-of-band `ether8`. Gated by credentials (SSH keys, admin password), not source address |
+| RouterOS API-SSL 8729 | `zone-lan`, for mktxp only (read-only `monitoring` group) |
+| WireGuard 51820/51821 | `zone-transit-10`, which holds both the transit SVI (ERL port-forward, stage A) and `ether1` (stage B) |
 | everything else | terminal drop |
 
 ## The four translations that are not one-to-one
@@ -117,9 +110,11 @@ VyOS gave every directed zone pair its own ruleset with its own
 
 The port creates a `routeros_interface_list` per zone, emits each pair's accept
 rules matching `in_interface_list` / `out_interface_list`, then emits **that
-pair's own terminating drop**.
+pair's own terminating default**: a drop, or an accept for the 21 pairs VyOS
+defaulted open (every `X -> transit-10` internet-egress pair and every `vpn -> X`
+pair). After all pairs comes a **terminal forward drop**.
 
-That trailing per-pair drop is load-bearing. Without it, a packet that matches no
+That trailing per-pair default is load-bearing. Without it, a packet that matches no
 accept in its own pair falls through into a *later* pair's accept rules and the
 policy silently loosens. This is the single most dangerous place to "simplify"
 this config.
@@ -129,9 +124,20 @@ creation order. `ip_firewall_filter` has no `place_before`, so
 `routeros_move_items` re-sequences the chain after apply using the sorted
 `zone_policies` keys. That is why keys are `NNN-from-to`.
 
-110 of the 140 VyOS rulesets contain no rules at all: the pair was declared but
-never given an accept, so it was pure default-drop. Those produce no chain. The
-absence of an accept plus the terminal drop already expresses the same policy.
+Most VyOS rulesets contain no rules at all. The empty default-drop ones produce
+no chain: the terminal forward drop expresses the same policy, and also covers
+every zone pair VyOS never bound (VyOS zones default to drop). The empty
+default-*accept* ones still produce a pair with no rules and an accept default,
+because they are what let each VLAN reach the internet.
+
+The terminal forward drop is the second load-bearing rule. RouterOS `forward`
+defaults to accept, so without it every unbound pair, and WAN to LAN, is open.
+
+**Internet egress keeps VyOS's semantics.** VyOS reached the internet through
+`transit-10` (the ERL hop), so its `X -> transit-10` rulesets are the
+internet-egress policy: cameras (`seccam-610`) only reach the internet from
+`blue_iris`, and `iLO-550` not at all. `ether1` joins `zone-transit-10`
+(`outside_zone`), so those same rules apply before and after the modem moves.
 
 ### 2. VLANs move onto a VLAN-filtering bridge
 
@@ -178,7 +184,12 @@ Native RouterOS takes over:
 Two knock-on effects:
 
 - The resolver address advertised by DHCP changes from `10.10.53.4` to each
-  VLAN's SVI, so the forced-DNS dstnat rules retarget to the SVI too.
+  VLAN's SVI, and the forced-DNS dstnat rules (910, 610) become `redirect` to
+  the router instead of a dst-nat to the dnsdist container.
+- Blocking and split-horizon now apply to **every** VLAN. dnsdist only sent
+  `10.10.91.0/24` and `10.10.31.0/24` through blocky; RouterOS adlists are
+  global. The lists are malware/phishing/ad lists, so the wider scope is mostly
+  a gain, but a false positive now hits iLO, UniFi and k8s too.
 - Client DNS stops being *forwarded* traffic and becomes traffic *to the router*.
   Every VyOS `<zone> -> containers` `accept_dns` rule therefore moves from the
   forward chain to the **input** chain. The generator does this automatically and
@@ -200,13 +211,28 @@ because it is the one place the RouterOS config is deliberately *stricter* than
 the VyOS config it replaces, and because a mistake here locks you out of the
 router.
 
+## Camera VLAN policy
+
+`seccam-610` is untrusted:
+
+- Cameras can reach only the router's DHCP, DNS, NTP and ICMP. No internet
+  (except the Blue Iris NVR), no management access to the router.
+- Nothing on 910 reaches a camera except Frigate's RTSP pulls (tcp/udp 554 from
+  the `frigate` address list to `security_cameras`). Everything else on 910
+  talks to Frigate, not to cameras.
+- Frigate runs on the WSL cluster, so to the router its traffic comes from the
+  Windows host (`10.10.91.142`). Anything else on that host can therefore also
+  pull RTSP; tightening that needs Frigate on its own address.
+- The three Wyze cameras live on 910 itself (`wyze_cameras`), so they are not
+  segregated by this policy.
+
 ## Container disposition
 
 | Container | Disposition |
 | --- | --- |
 | `blocky`, `dnsdist`, `bind` | replaced by native RouterOS DNS (above) |
-| `haproxy` ×3 (`haproxy.cfg`, `-frontend`, `-authenticated`) | move to Kubernetes ingress; firewall rules retarget from the `containers` zone to `k8s-120` |
-| `unifi` | move to Kubernetes |
+| `haproxy` ×3 (`haproxy.cfg`, `-frontend`, `-authenticated`) | **retired, not replaced.** Every backend (the old `10.10.120.x` cluster, its ingress `.52`) is gone; the WSL cluster serves those apps on `*.internal.tnwks.us` via its own ingress. `haproxy-k8s-api` fronted that old cluster's API; WSL Talos has no LB in front of its API. All haproxy rules and `*.tnwks.local` haproxy names are dropped |
+| `unifi` | **moves to Kubernetes on WSL**, reached through the Windows host (`10.10.91.142`). The `unifi` DNS record (used by unpoller) and the AP-inform / controller-to-AP rules point there. Needs LAN-bridge relays for tcp/8080 (inform), udp/3478 (STUN) and tcp/8443 (UI). Budget ~1–2 GB RAM (Java + MongoDB) |
 | `uisp` | already migrated to Kubernetes 2026-05-12 (`kubernetes/apps/production/uisp`) |
 | `speedtest-exporter` | move to Kubernetes |
 | `node-exporter` | replaced by RouterOS SNMP + snmp-exporter; Grafana dashboard needs swapping |
@@ -217,24 +243,42 @@ pod bridge on the router. 22 of the 45 VyOS accepts referenced it, so the
 generator resolves each one rather than dropping it:
 
 - DNS rules move to the input chain.
-- haproxy / unifi-controller rules retarget to `k8s-120`, with container address
-  groups remapped (`haproxy_frontend` → `k8s_ingress`, `haproxy_all` →
-  `k8s_ingress_internal`, and so on).
-- Rules where **both** ends end up inside `k8s-120` after the move are dropped
-  from the router config, because intra-VLAN traffic is switched locally and
-  never reaches the router's forward chain. Those belong in a Kubernetes
-  NetworkPolicy. The generator flags each one instead of emitting dead config.
+- Client -> UniFi controller rules retarget to `unifi-frontend-910` with the
+  destination scoped to the `unifi_controller` list (`10.10.91.142`).
+- Client -> haproxy rules are dropped with haproxy.
+- Controller -> AP rules (`containers -> unifi-mgmt-900`) keep the source scoped
+  to `unifi_controller`, not the whole VLAN.
+- haproxy -> backend rules (`containers -> k8s-120`, `containers -> seccam-610`)
+  and the haproxy stats rule are dropped with haproxy.
+- Rules whose source is already in `unifi-frontend-910` are dropped as router
+  rules: that traffic is switched locally and never reaches the forward chain.
+
+The generator records every one of these in the locals.tf footer. The
+`*.tnwks.local` names that pointed at haproxy (`hass`, `jellyfin`,
+`obsidian-couchdb`, `blueiris`) are dropped.
 
 ## Gaps with no native RouterOS equivalent
 
 These need a decision, they are not solved by this port:
 
-1. **`udp-broadcast-relay`** for Sonos/SSDP (1900) and mDNS (5353) on VLAN 910.
-   RouterOS `mdns_repeat_ifaces` may partially cover mDNS. **There is no SSDP
-   relay.** Either accept the loss, keep a relay elsewhere on the LAN, or run a
-   container (which the hardware argues against).
-2. **`haproxy-k8s-api`** L4 load balancer for the Kubernetes API. Needs a
-   replacement target: k8s-side (kube-vip / MetalLB) is the natural answer.
+1. **`udp-broadcast-relay`** for Sonos/SSDP (1900) and mDNS (5353). Both
+   containers were configured with a **single** interface (`CFG_DEV=eth1.910`),
+   and a relay with one interface has nowhere to relay to, so they did nothing.
+   Not ported, nothing lost. If cross-VLAN discovery is ever wanted, RouterOS
+   `mdns_repeat_ifaces` covers mDNS natively; SSDP would need a relay host.
+2. **Router metrics and DHCP client names: mktxp.** vyos-config `a7fb814` added
+   a task-scheduler job exporting `dhcp_lease_info` via node-exporter, which
+   feeds flow-collector's `wan:client_name`. RouterOS has no equivalent, so the
+   module creates a read-only `mktxp` API account (api-ssl 8729, LAN only).
+   Still to do on the cluster: deploy mktxp, and relabel its DHCP lease metric
+   to `dhcp_lease_info{ip,hostname}` (or point `wan:client_name` at it). Until
+   then WAN alerts fall back to bare IPs.
+3. **Syslog target.** VyOS shipped to `10.10.120.56:6001`, a Vector instance on
+   the old cluster that no longer answers. The router now sends to the WSL
+   host's LAN bridge, `10.10.91.142:6001` (tcp). Still to do on the cluster:
+   vector-aggregator is MS-01-only today, so it needs enabling on WSL plus a
+   tcp/6001 `wsl_lan_bridge` instance. Its `vyos_syslog` parsing expects VyOS
+   kernel-log firewall lines and will need a RouterOS variant.
 
 ## Known VyOS drift found while porting
 
@@ -246,18 +290,24 @@ Worth fixing in `vyos-config` regardless of the migration:
 - **`wg01` exists in git but not on the live router**, while the `vpn` zone still
   references it. The port provisions both `wg01` and `wg02` from git. Decide
   whether `wg01` should exist before cutover.
-- **NTP dstnat for `transit-10` targeted `172.16.1.254`.** ~~Verify it is
-  intentional.~~ **Resolved:** `.254` is dead, so the rule black-holes NTP for
+- **NTP dstnat for `transit-10` targets `172.16.1.254`.** `.254` is dead, so the
+  rule black-holes NTP for
   that zone today. Not ported; the generator records it.
 - **`eth0` WAN DHCP is no longer vestigial.** With the ERL gone this is the only
-  internet uplink, so `add_default_route = "yes"` and the VyOS
-  `0.0.0.0/0 → 172.16.1.1` static is dropped.
-- **Both routers routed `10.98.0.0/24` at dead `172.16.1.254`**, so switch
-  management has been reachable only by accident. Dropped; `10.98.0.0/24` becomes
-  a connected route on the consolidated box.
-- 🔴 **Exposed credential:** the `cloudflare-ddns` container env holds a
-  plaintext `CF_API_TOKEN` in the VyOS repo. **Rotate it.** This adds to the
-  network credential rotation debt outstanding since April.
+  internet uplink, so `add_default_route = "yes"`. The VyOS
+  `0.0.0.0/0 → 172.16.1.1` static becomes `upstream_gateway` at distance 10, so
+  the router can sit behind the ERL first (stage A) and the WAN lease's
+  distance-1 default wins as soon as the modem is on `ether1` (stage B).
+- **Both routers routed `10.98.0.0/24` and `10.10.93.0/24` at dead
+  `172.16.1.254`**, so nothing in those subnets has been reachable. Dropped.
+  `10.98.0.0/24` is reused as the RB5009's out-of-band mgmt network on `ether8`.
+
+- **The live router has drifted from git.** Live VyOS has
+  `unifi-frontend-910-seccam-610 rule 1` ("Allow all from 910 to cameras"),
+  which `vyos-config` does not. That rule is what lets Frigate reach the cameras
+  today; the port replaces it with the Frigate-only rule above. Before cutover,
+  diff `show configuration commands` against `config-parts/*.sh` for any other
+  drift, since the generator only sees git.
 
 ## Hardware constraints
 
@@ -279,29 +329,69 @@ Worth fixing in `vyos-config` regardless of the migration:
 
 ## Cutover runbook
 
-1. **Bootstrap the router.** Paste
-   `infrastructure/mikrotik/bootstrap/routeros-bootstrap.rsc` into a console on a
-   factory-reset RB5009. Creates identity, the `terraform` service account, mgmt
-   IP, REST API + certificate, disables insecure services, removes `admin`.
+Staged so that each step changes one thing and has a one-cable rollback. The
+stages can run back to back in one session; nothing here needs a soak period.
+The RB5009 reuses VyOS's exact gateway addresses and DHCP scopes, so it can never
+share the trunk with VyOS: stage A is a swap, not a parallel run.
+
+### Before the window
+
+- Live VyOS config diffed against `vyos-config` (see "Known VyOS drift"), and
+  anything real committed to `vyos-config` and regenerated.
+- `secrets.sops.yaml` created and encrypted (see `secrets.sops.yaml.example`;
+  `admin_password` and `ddns_credential` are required).
+- UniFi controller running on the WSL cluster with its relays, or accept that
+  APs run unmanaged for a while (they keep passing traffic).
+- Namecheap DDNS password rotated.
+
+### Stage 0: bench (router not connected to anything but the laptop)
+
+1. **Reset and bootstrap.** `/system reset-configuration no-defaults=yes
+   skip-backup=yes`, then paste
+   `infrastructure/mikrotik/bootstrap/routeros-bootstrap.rsc` over serial or
+   Winbox-by-MAC on `ether8`. Laptop on `ether8` at `10.98.0.2/24`.
 2. **Verify API reachability:**
    `curl -k -u terraform:<pw> https://10.98.0.1/rest/system/resource`
 3. **Snapshot and verify:** `task mikrotik:bootstrap` (Ansible: asserts RouterOS
    7.x, exports a pre-Terraform config snapshot, checks `www-ssl`).
-4. **Regenerate and review locals.tf:** `task mikrotik:generate`, then read the diff
-   and the translation-notes footer.
-5. **Plan:** `task mikrotik:init && task mikrotik:plan`. Confirm it does not
-   propose destroying the bootstrap mgmt address out from under itself.
-6. **Apply with physical access to the router.** An input-chain or bridge-VLAN
-   mistake locks you out; you want console access when it happens, not after.
-7. **Verify before swinging the trunk:** per-VLAN ping from the router, DHCP lease
-   on a test client, DNS resolution through the router, one known-good firewall
-   accept, and one known-good firewall *denial*.
-8. **Swing the Aruba trunk** from the VyOS box to the RB5009. Keep VyOS powered
-   off but unmodified as the rollback path.
-9. **Move the WAN.** Cable modem into `ether1`. Confirm the router gets a lease
-   and installs a default route, then confirm NAT works from a client.
-10. **Verify the router is not an open resolver or open NTP server.** From
-    outside the network, against the WAN address:
+4. **Plan:** `task mikrotik:init && task mikrotik:plan`. `ether8` must not appear
+   as a bridge port, and nothing may touch `10.98.0.1/24`.
+5. **Apply**, then **plan again**: the second plan must be empty. Anything it
+   wants to change is drift between the module and what RouterOS stored, and is
+   cheaper to find now.
+6. **Enable flow export once:** `/ip traffic-flow set enabled=yes` (provider
+   v1.99.1 cannot set `enabled`).
+7. **Check the chain order on the box:** `/ip firewall filter print` shows input
+   rules ending in `zzz input: default drop` and forward rules ending in
+   `zzz forward: default drop`.
+
+### Stage A: replace VyOS, ERL stays the edge
+
+The RB5009 takes VyOS's addresses, including `172.16.1.250` on transit-10, so
+the ERL's routes, NAT, and WireGuard port-forwards keep working untouched. The
+default route is `upstream_gateway` (ERL, distance 10). Internet egress goes out
+transit-10, where VyOS's own `X -> transit-10` rules apply.
+
+8. **Swing the Aruba trunk** from VyOS to the RB5009 trunk port. Power VyOS off,
+   unmodified.
+9. **Expect a few minutes of stale ARP** on clients and the ERL for the gateway
+   addresses (same IPs, new MAC). `clear arp` on the ERL speeds it up.
+10. **Verify:** DHCP lease on a test client in 910 and 900, DNS through the
+    router (`dig @10.10.91.1 example.com`, and a `*.internal.tnwks.us` name),
+    internet from a client, one known-good accept (e.g. 910 -> 900 UniFi), one
+    known-good denial (e.g. a camera in 610 cannot reach the internet), and a
+    WireGuard client connecting through the ERL port-forward.
+11. **Rollback:** trunk back to VyOS, power it on.
+
+### Stage B: move the WAN
+
+12. **Modem into `ether1`.** The WAN lease installs a distance-1 default, which
+    beats `upstream_gateway` without a Terraform change. Masquerade on `ether1`
+    starts doing work, and the DDNS script starts updating Namecheap from the
+    lease within 5 minutes (`/log print where message~"ddns"`).
+13. **Verify** internet and NAT from a client, WireGuard from outside (now direct,
+    not port-forwarded), and that the router is not an open resolver or NTP
+    server. From outside the network, against the WAN address:
 
     ```bash
     dig @<wan-ip> example.com          # must time out
@@ -311,27 +401,20 @@ Worth fixing in `vyos-config` regardless of the migration:
 
     This is the single most important post-cutover check. The ERL failed all
     three.
-11. **Turn on WAN flow export** (War Room "Top users" line, tnwks-ops
-    `monitoring/flow-collector`). Terraform creates the traffic-flow config and
-    the IPFIX target (`var.flow_export`), but provider v1.99.1 can't set
-    `enabled`, so run once: `/ip traffic-flow set enabled=yes`. Then check
-    `wan_client_receive_bytes_total` is growing in Prometheus and
-    FlowCollectorNoFlows clears. VyOS's sFlow export stops with VyOS, which is
-    expected.
-    - **FastTrack is off** (`var.fasttrack = false`) because FastTracked packets
-      bypass traffic-flow. Run a speed test and watch `/system resource monitor`.
-      Only if CPU can't sustain the WAN rate, set `fasttrack = true` and accept
-      that top-talker data goes blind for bulk transfers.
-    - **Client names** came from VyOS DHCP leases (`dhcp_lease_info` via VyOS
-      node-exporter). Recreate that metric from RouterOS leases (e.g. mktxp's
-      DHCP lease metric relabelled to `ip`/`hostname`, feeding the
-      `wan:client_name` recording rule), or alerts fall back to bare IPs.
-12. **Retire the ERL.** Power it off, keep it unmodified as a second rollback
-    path, and remove `sce-er01` / `sce-vyos01` DNS records once stable.
-13. **Post-cutover:** remove the bootstrap mgmt address, migrate the remaining
-    container workloads to Kubernetes, swap the node-exporter Grafana dashboard
-    for SNMP, and rotate **both** the Cloudflare token and the Namecheap DDNS
-    password.
+14. **Flow export:** `wan_client_receive_bytes_total` grows in Prometheus and
+    FlowCollectorNoFlows clears. FastTrack stays off (`var.fasttrack = false`)
+    because FastTracked packets bypass traffic-flow; run a speed test and watch
+    `/system resource monitor`, and only enable it if the CPU cannot keep up.
+15. **Rollback:** modem back into the ERL. Stage A state is restored.
+
+### Stage C: retire
+
+16. Power the ERL off, unmodified, as a second rollback path.
+17. Once stable: set `upstream_gateway = null` in the generator, regenerate,
+    apply; replace the `sce-er01` / `sce-vyos01` DNS records with a `sce-rtr01`
+    record (`10.10.91.1`); swap the node-exporter Grafana dashboard for mktxp;
+    bring up Vector on WSL with its tcp/6001 relay so router syslog lands;
+    point flow-collector's client names at mktxp's DHCP lease metric.
 
 ## Deliberately not ported
 

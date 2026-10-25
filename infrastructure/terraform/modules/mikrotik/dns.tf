@@ -29,7 +29,8 @@
 #
 # The router IP becomes the resolver each DHCP scope advertises, which is why
 # dhcp.tf defaults dns_server to the SVI address and why the forced-DNS dstnat
-# rules in nat.tf now redirect to the SVI instead of 10.10.53.4.
+# rules in nat.tf are now `redirect` (to the router) instead of a dst-nat to
+# 10.10.53.4.
 #
 # What is deliberately NOT ported: the `zip` DropAction and the pool-per-subnet
 # ControlD paths from dnsdist.conf. If those matter, they come back as

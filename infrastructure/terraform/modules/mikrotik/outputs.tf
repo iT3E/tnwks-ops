@@ -24,8 +24,13 @@ output "zone_interface_lists" {
 }
 
 output "firewall_rule_count" {
-  description = "Forward-chain rules created by this module (state policy + per-pair accepts + per-pair drops)."
-  value       = 3 + length(routeros_ip_firewall_filter.zone_accept) + length(routeros_ip_firewall_filter.zone_drop)
+  description = "Forward-chain rules created by this module (state policy + per-pair accepts + per-pair defaults + terminal drop)."
+  value = (
+    length(routeros_ip_firewall_filter.fasttrack_established) + 2
+    + length(routeros_ip_firewall_filter.zone_accept)
+    + length(routeros_ip_firewall_filter.zone_default)
+    + 1
+  )
 }
 
 output "dhcp_servers" {
@@ -46,7 +51,7 @@ output "unported_vyos_subsystems" {
   EOT
   value = [
     "podman containers (blocky/dnsdist/bind/haproxy x3/unifi/uisp/node-exporter/speedtest-exporter/cloudflare-ddns)",
-    "udp-broadcast-relay for Sonos (1900) and mDNS (5353)",
+    "udp-broadcast-relay for Sonos (1900) and mDNS (5353): both were configured with a single interface (eth1.910), so they relayed nothing",
     "system conntrack helper modules (ftp/h323/nfs/pptp/sip/sqlnet/tftp)",
     "config-management commit-revisions (RouterOS uses its own backup/rollback)",
     "kernel.pty.max sysctl and reboot-on-panic",
