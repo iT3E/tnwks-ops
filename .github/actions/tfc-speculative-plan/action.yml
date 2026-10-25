@@ -1,0 +1,80 @@
+---
+name: "TFC speculative plan"
+description: >-
+  Upload infrastructure/terraform as a speculative configuration, run a
+  plan-only run in Terraform Cloud, and post (or replace) the plan summary on
+  the PR. Expects TF_API_TOKEN and TF_CLOUD_ORGANIZATION in the environment.
+
+inputs:
+  workspace:
+    description: "Terraform Cloud workspace name"
+    required: true
+  github-token:
+    description: "Token used to comment on the PR"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Upload Configuration
+      uses: hashicorp/tfc-workflows-github/actions/upload-configuration@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
+      id: plan-upload
+      with:
+        workspace: ${{ inputs.workspace }}
+        directory: "infrastructure/terraform"
+        speculative: true
+
+    - name: Create Plan Run
+      uses: hashicorp/tfc-workflows-github/actions/create-run@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
+      id: plan-run
+      with:
+        workspace: ${{ inputs.workspace }}
+        configuration_version: ${{ steps.plan-upload.outputs.configuration_version_id }}
+        plan_only: true
+
+    - name: Get Plan Output
+      uses: hashicorp/tfc-workflows-github/actions/plan-output@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
+      id: plan-output
+      with:
+        plan: ${{ fromJSON(steps.plan-run.outputs.payload).data.relationships.plan.data.id }}
+
+    - name: Update PR
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      # Values reach the script through env, never interpolated into its source.
+      env:
+        PLAN_ADD: ${{ steps.plan-output.outputs.add }}
+        PLAN_CHANGE: ${{ steps.plan-output.outputs.change }}
+        PLAN_DESTROY: ${{ steps.plan-output.outputs.destroy }}
+        RUN_LINK: ${{ steps.plan-run.outputs.run_link }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const marker = 'Terraform Cloud Plan Output';
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          const previous = comments.find(c => c.user.type === 'Bot' && c.body.includes(marker));
+          const { PLAN_ADD, PLAN_CHANGE, PLAN_DESTROY, RUN_LINK } = process.env;
+          const body = [
+            `#### ${marker}`,
+            '```',
+            `Plan: ${PLAN_ADD} to add, ${PLAN_CHANGE} to change, ${PLAN_DESTROY} to destroy.`,
+            '```',
+            `[Terraform Cloud Plan](${RUN_LINK})`,
+          ].join('\n');
+          // Replace the previous summary so the PR timeline shows only the latest.
+          if (previous) {
+            await github.rest.issues.deleteComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: previous.id,
+            });
+          }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body,
+          });
