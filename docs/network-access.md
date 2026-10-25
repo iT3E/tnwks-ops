@@ -32,16 +32,16 @@ so the router cannot restrict them; they are protected by their own logins.
   `10.10.91.1:51820` from home. WireGuard is accepted from the LAN for exactly
   this.
 - Router public key: `terraform output wireguard_public_keys`.
-- On Windows, use the WireGuard for Windows app: WSL egresses through Windows,
-  so one tunnel covers both.
+- On the desktop the tunnel runs in WSL (`wg-quick`), so it serves WSL tools
+  (SSH, Terraform, curl). Windows apps (a browser on the switch UI) do not use
+  it; add the WireGuard for Windows app if that is ever wanted.
 - WireGuard also answers on the out-of-band port, so a direct cable to `ether8`
   plus a tunnel with endpoint `192.168.88.1:51820` tests `wg01` without the
   network (used on the bench).
 - Client `AllowedIPs` (split tunnel), at minimum: `10.10.30.0/24`,
   `10.98.0.0/24`, `10.10.90.0/24`, `10.10.140.0/24`, `10.60.10.0/24`.
 - Terraform runs over `wg01`: set `routeros_url` in SOPS to
-  `https://10.10.30.1`. From the WSL desktop this works as long as Windows has
-  the tunnel up, since WSL egresses through Windows.
+  `https://10.10.30.1`, with the WSL tunnel up.
 
 ## Break-glass
 

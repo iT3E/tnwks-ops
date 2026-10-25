@@ -30,8 +30,7 @@ undone by moving one cable back.
 | 0.3 | Agent | Build and encrypt `secrets.sops.yaml`: generated passwords (Terraform, admin, mktxp), `admin_username: it3e`, the WireGuard keys from `vyos-config/secrets.sops.yaml`, and the DDNS host/domain/password from the ERL's current config |
 | 0.4 | Agent | Copy the SOPS age key and the admin password to `G:\My Drive\Backup` |
 | 0.5 | Agent | Diff live VyOS (`show configuration commands`) against `vyos-config`; anything real goes into `vyos-config` and `task mikrotik:generate` |
-| 0.6 | Agent | Generate the PC's `wg01` client config (new keypair if the old one is gone; the peer public key goes into `vyos-config`). The phone keeps its `wg02` config: it is an admin peer by address |
-| 0.7 | You | Install WireGuard for Windows (the agent can start `winget install WireGuard.WireGuard`; you accept the UAC prompt) and import the config. One install covers Windows apps and WSL, since WSL egresses through Windows |
+| 0.6 | Agent | Generate the `wg01` client config for WSL on the PC (`wg-quick`, already installed; new keypair if the old one is gone, its public key goes into `vyos-config`). The phone keeps its `wg02` config: it is an admin peer by address |
 | 0.8 | Agent | Download the latest RouterOS 7 `arm64` package |
 
 ## Phase 1: Bench (router on your desk, PC on Wi-Fi)
@@ -44,7 +43,7 @@ undone by moving one cable back.
 | 1.4 | Agent | Upload a filled-in `routeros-bootstrap.rsc` and run `/system reset-configuration no-defaults=yes skip-backup=yes run-after-reset=routeros-bootstrap.rsc`. Confirm the REST API answers on `https://192.168.88.1` as `terraform` |
 | 1.5 | Agent | `task mikrotik:bootstrap`, `task mikrotik:init`, `task mikrotik:plan`; summarise the plan |
 | 1.6 | Agent (approve) | `task mikrotik:apply`, then `task mikrotik:plan` again (must be empty). `/ip traffic-flow set enabled=yes`. Check free memory with the adlists loaded and the firewall rule order |
-| 1.7 | You + Agent | **Test `wg01`:** activate a bench copy of the PC tunnel with endpoint `192.168.88.1:51820`. The agent confirms SSH/REST to `10.10.30.1` through it. Deactivate it afterwards |
+| 1.7 | Agent | **Test `wg01`:** bring up a bench copy of the WSL tunnel with endpoint `192.168.88.1:51820` and confirm SSH/REST to `10.10.30.1` through it; take it down afterwards |
 | 1.8 | Agent, then You | The agent reverts the PC's Ethernet adapter to DHCP (UAC prompt); you plug the cable back into the wall/switch |
 
 While the PC's cable is on the router, services published through the PC
@@ -66,7 +65,7 @@ port-forwards are unchanged.
 | --- | --- | --- |
 | 3.1 | You | Unplug VyOS's trunk from Aruba **GE0/0/23** and plug the RB5009's **ether2** into GE0/0/23. Power VyOS off and leave it as is |
 | 3.2 | Agent (approve) | Flush the ERL's ARP table (`sudo ip neigh flush all`); the gateway IPs are the same but the MAC changed |
-| 3.3 | You | Make sure the PC's `wg01` tunnel is active |
+| 3.3 | Agent | Bring up the WSL `wg01` tunnel (endpoint: the DDNS hostname) |
 | 3.4 | Agent | Verify: DHCP leases, DNS (`10.10.91.1`, a `*.internal.tnwks.us` name), internet, Frigate streams, APs, logs; and that 910 cannot reach router management or the cameras |
 | 3.5 | You | Phone on cellular, `wg02`: browse, and open the switch UI (`10.98.0.251`) |
 | — | You | **Rollback:** trunk cable back to VyOS, power it on; the agent flushes ERL ARP again |
