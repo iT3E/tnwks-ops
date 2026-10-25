@@ -51,7 +51,8 @@ task talos:destroy:wsl
 task terraform:plan
 task terraform:apply
 
-# Pre-commit (yamllint + prettier per repo config)
+# Pre-commit (betterleaks secret scan on staged changes; see .pre-commit-config.yaml)
+task precommit:init   # once per clone
 task precommit:run
 ```
 
@@ -248,7 +249,10 @@ plus `talos/ms-01/patches/` are applied with `talosctl apply-config`.
 ## Conventions
 
 - YAML files start with `---`, two-space indent, prettier-formatted (see
-  `.editorconfig`). Pre-commit runs yamllint + prettier.
+  `.editorconfig`). Pre-commit runs betterleaks (secret scanning); the same
+  scan runs in CI on every PR (`.github/workflows/secret-scan.yaml`). Never put
+  a credential in a doc, even "for reference" — write `(redacted)` and point
+  at the SOPS file.
 - Manifests should reference cluster-settings vars (`${STORAGE_CLASS_DEFAULT}`,
   `${BULK_PVC_SIZE}`, etc.) instead of hardcoding cluster-specific values,
   so they remain portable between WSL and MS-01.

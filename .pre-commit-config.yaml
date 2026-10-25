@@ -1,0 +1,13 @@
+---
+# Install once per clone: task precommit:init
+# Run everything:         task precommit:run
+fail_fast: false
+repos:
+  # Secret scanning on staged changes. Config: .betterleaks.toml (extends the
+  # upstream rules with a prose-credential rule for docs). The same scan runs
+  # in CI (.github/workflows/secret-scan.yaml), so a clone without hooks
+  # installed is still covered.
+  - repo: https://github.com/betterleaks/betterleaks
+    rev: v1.9.0
+    hooks:
+      - id: betterleaks
