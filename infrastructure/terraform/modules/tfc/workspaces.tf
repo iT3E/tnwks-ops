@@ -33,3 +33,18 @@ resource "tfe_workspace_settings" "tnwks-ops-aws-prod_workspace_settings" {
   workspace_id   = tfe_workspace.tnwks-ops-aws-prod.id
   execution_mode = "remote"
 }
+
+# RouterOS is reachable only from inside the LAN, so Terraform Cloud holds the
+# state and the run executes wherever `terraform` is invoked (a workstation, or
+# later a self-hosted runner). Remote execution could never reach the router.
+resource "tfe_workspace" "tnwks-mikrotik-prod" {
+  name              = "tnwks-mikrotik-prod"
+  organization      = var.tfc_organization
+  project_id        = tfe_project.tfe_project_aws.id
+  working_directory = "environments/prod/mikrotik"
+}
+
+resource "tfe_workspace_settings" "tnwks-mikrotik-prod_workspace_settings" {
+  workspace_id   = tfe_workspace.tnwks-mikrotik-prod.id
+  execution_mode = "local"
+}

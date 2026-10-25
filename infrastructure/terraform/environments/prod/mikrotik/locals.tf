@@ -16,11 +16,11 @@
 ##   VLANs                5 (5 enabled)
 ##   DHCP servers         4
 ##   DHCP static leases   12
-##   Address lists        4 (10 members)
+##   Address lists        5 (11 members)
 ##   Port lists           1
-##   Zone-pair chains     14
-##   Firewall accepts     7 (expanded from VyOS tcp_udp / port-limit splits)
-##   Input-chain accepts  22
+##   Zone-pair chains     17
+##   Firewall accepts     10 (expanded from VyOS tcp_udp / port-limit splits)
+##   Input-chain accepts  23
 ##   dstnat rules         8
 ##   Static routes        1
 ##   WireGuard listeners  2
@@ -185,6 +185,9 @@ locals {
   }
 
   address_lists = {
+    admin_peers = {
+      it-mobile_10_10_31_10 = "10.10.31.10/32"
+    }
     frigate = {
       "10_10_91_142" = "10.10.91.142"
     }
@@ -356,6 +359,39 @@ locals {
         },
       ]
     }
+    "150-vpn-mobile-switch-mgmt" = {
+      from    = "vpn-mobile"
+      to      = "switch-mgmt"
+      comment = "From vpn-mobile to switch-mgmt"
+      rules = [
+        {
+          comment          = "admin peers (it-mobile)"
+          src_address_list = "admin_peers"
+        },
+      ]
+    }
+    "160-vpn-mobile-unifi-mgmt-900" = {
+      from    = "vpn-mobile"
+      to      = "unifi-mgmt-900"
+      comment = "From vpn-mobile to unifi-mgmt-900"
+      rules = [
+        {
+          comment          = "admin peers (it-mobile)"
+          src_address_list = "admin_peers"
+        },
+      ]
+    }
+    "170-vpn-mobile-UISP-140" = {
+      from    = "vpn-mobile"
+      to      = "UISP-140"
+      comment = "From vpn-mobile to UISP-140"
+      rules = [
+        {
+          comment          = "admin peers (it-mobile)"
+          src_address_list = "admin_peers"
+        },
+      ]
+    }
   }
 
   # Input chain. No VyOS counterpart: VyOS had no local zone so traffic
@@ -481,12 +517,19 @@ locals {
       in_interface_list = "vpn"
     }
     "550-router-service" = {
+      comment           = "SSH/REST/Winbox from admin peers on vpn-mobile"
+      protocol          = "tcp"
+      dst_port          = "22,443,8291"
+      in_interface_list = "vpn-mobile"
+      src_address_list  = "admin_peers"
+    }
+    "560-router-service" = {
       comment           = "WireGuard from the LAN, to join the admin VPN from inside"
       protocol          = "udp"
       dst_port          = "51820,51821"
       in_interface_list = "lan"
     }
-    "560-router-service" = {
+    "570-router-service" = {
       comment           = "WireGuard listeners (ERL port-forward, then WAN)"
       protocol          = "udp"
       dst_port          = "51820,51821"

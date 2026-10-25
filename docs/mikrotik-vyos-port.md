@@ -366,95 +366,15 @@ Worth fixing in `vyos-config` regardless of the migration:
 
 ## Cutover runbook
 
-Staged so that each step changes one thing and has a one-cable rollback. The
-stages can run back to back in one session; nothing here needs a soak period.
-The RB5009 reuses VyOS's exact gateway addresses and DHCP scopes, so it can never
-share the trunk with VyOS: stage A is a swap, not a parallel run.
+The step-by-step, with who does each step, is
+[`mikrotik-cutover-checklist.md`](mikrotik-cutover-checklist.md). In short:
 
-### Before the window
-
-- `wg01` client configs working (the admin VPN is the only management path
-  after cutover; see `network-access.md`), and a copy of the SOPS age key and
-  admin password stored off the desktop for break-glass.
-- Live VyOS config diffed against `vyos-config` (see "Known VyOS drift"), and
-  anything real committed to `vyos-config` and regenerated.
-- `secrets.sops.yaml` created and encrypted (see `secrets.sops.yaml.example`;
-  `admin_password` and `ddns_credential` are required).
-- UniFi controller running on the WSL cluster with its relays, or accept that
-  APs run unmanaged for a while (they keep passing traffic).
-- Namecheap DDNS password rotated.
-
-### Stage 0: bench (router not connected to anything but the laptop)
-
-1. **Reset and bootstrap.** `/system reset-configuration no-defaults=yes
-   skip-backup=yes`, then paste
-   `infrastructure/mikrotik/bootstrap/routeros-bootstrap.rsc` over serial or
-   Winbox-by-MAC on `ether8`. Laptop on `ether8` at `192.168.88.2/24`.
-2. **Verify API reachability:**
-   `curl -k -u terraform:<pw> https://192.168.88.1/rest/system/resource`
-3. **Snapshot and verify:** `task mikrotik:bootstrap` (Ansible: asserts RouterOS
-   7.x, exports a pre-Terraform config snapshot, checks `www-ssl`).
-4. **Plan:** `task mikrotik:init && task mikrotik:plan`. `ether8` must not appear
-   as a bridge port, and nothing may touch `192.168.88.1/24`.
-5. **Apply**, then **plan again**: the second plan must be empty. Anything it
-   wants to change is drift between the module and what RouterOS stored, and is
-   cheaper to find now.
-6. **Enable flow export once:** `/ip traffic-flow set enabled=yes` (provider
-   v1.99.1 cannot set `enabled`).
-7. **Check the chain order on the box:** `/ip firewall filter print` shows input
-   rules ending in `zzz input: default drop` and forward rules ending in
-   `zzz forward: default drop`.
-
-### Stage A: replace VyOS, ERL stays the edge
-
-The RB5009 takes VyOS's addresses, including `172.16.1.250` on transit-10, so
-the ERL's routes, NAT, and WireGuard port-forwards keep working untouched. The
-default route is `upstream_gateway` (ERL, distance 10). Internet egress goes out
-transit-10, where VyOS's own `X -> transit-10` rules apply.
-
-8. **Swing the Aruba trunk** from VyOS to the RB5009 trunk port. Power VyOS off,
-   unmodified.
-9. **Expect a few minutes of stale ARP** on clients and the ERL for the gateway
-   addresses (same IPs, new MAC). `clear arp` on the ERL speeds it up.
-10. **Verify:** DHCP lease on a test client in 910 and 900, DNS through the
-    router (`dig @10.10.91.1 example.com`, and a `*.internal.tnwks.us` name),
-    internet from a client, one known-good accept (e.g. `wg01` -> router
-    REST), one known-good denial (e.g. 910 -> router REST, or a camera in 610
-    reaching the internet), and a WireGuard client connecting through the ERL
-    port-forward.
-11. **Rollback:** trunk back to VyOS, power it on.
-
-### Stage B: move the WAN
-
-12. **Modem into `ether1`.** The WAN lease installs a distance-1 default, which
-    beats `upstream_gateway` without a Terraform change. Masquerade on `ether1`
-    starts doing work, and the DDNS script starts updating Namecheap from the
-    lease within 5 minutes (`/log print where message~"ddns"`).
-13. **Verify** internet and NAT from a client, WireGuard from outside (now direct,
-    not port-forwarded), and that DNS and NTP do not answer on the WAN. From
-    outside the network, against the WAN address:
-
-    ```bash
-    dig @<wan-ip> example.com          # must time out
-    ntpdate -q <wan-ip>                 # must fail
-    nmap -sU -p 123,53,10001 <wan-ip>   # must not be open
-    ```
-
-    This is the single most important post-cutover check.
-14. **Flow export:** `wan_client_receive_bytes_total` grows in Prometheus and
-    FlowCollectorNoFlows clears. FastTrack stays off (`var.fasttrack = false`)
-    because FastTracked packets bypass traffic-flow; run a speed test and watch
-    `/system resource monitor`, and only enable it if the CPU cannot keep up.
-15. **Rollback:** modem back into the ERL. Stage A state is restored.
-
-### Stage C: retire
-
-16. Power the ERL off, unmodified, as a second rollback path.
-17. Once stable: set `upstream_gateway = null` in the generator, regenerate,
-    apply; replace the `sce-er01` / `sce-vyos01` DNS records with a `sce-rtr01`
-    record (`10.10.91.1`); swap the node-exporter Grafana dashboard for mktxp;
-    bring up Vector on WSL with its tcp/6001 relay so router syslog lands;
-    point flow-collector's client names at mktxp's DHCP lease metric.
+| Stage | What changes | Rollback |
+| --- | --- | --- |
+| Bench | Router configured over a direct cable to `ether8`; `wg01` tested | n/a |
+| A | Trunk moves from VyOS to the RB5009 `ether2`; the ERL stays the edge (`upstream_gateway`) | trunk back to VyOS |
+| B | Modem moves from the ERL to `ether1`; the WAN lease's default route wins | modem back to the ERL |
+| C | ERL fallback route removed; old hardware retired | n/a |
 
 ## Deliberately not ported
 

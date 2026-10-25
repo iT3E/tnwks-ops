@@ -170,6 +170,20 @@ resource "routeros_ip_firewall_filter" "input_mgmt" {
   comment      = "002 input: SSH/REST/Winbox on the out-of-band mgmt port (terraform)"
 }
 
+# WireGuard on the out-of-band port as well, so the admin VPN can be tested end
+# to end on the bench (and used over a direct cable) before the router is ever
+# on the network.
+resource "routeros_ip_firewall_filter" "input_mgmt_wireguard" {
+  count = var.mgmt == null || length(var.wireguard_interfaces) == 0 ? 0 : 1
+
+  chain        = "input"
+  action       = "accept"
+  protocol     = "udp"
+  dst_port     = join(",", sort([for w in values(var.wireguard_interfaces) : tostring(w.listen_port)]))
+  in_interface = var.mgmt.interface
+  comment      = "003 input: WireGuard on the out-of-band mgmt port (terraform)"
+}
+
 # --- Aggregate LAN interface list --------------------------------------------
 # Router services (DNS, NTP, DHCP) must be reachable from internal VLANs and
 # never from the WAN, where an answering resolver or NTP server is a reflection
@@ -253,6 +267,7 @@ resource "routeros_ip_firewall_filter" "input_drop" {
     routeros_ip_firewall_filter.input_established,
     routeros_ip_firewall_filter.input_drop_invalid,
     routeros_ip_firewall_filter.input_mgmt,
+    routeros_ip_firewall_filter.input_mgmt_wireguard,
     routeros_ip_firewall_filter.input_accept,
     routeros_ip_firewall_filter.input_monitoring,
   ]
@@ -270,6 +285,7 @@ locals {
       routeros_ip_firewall_filter.input_drop_invalid.id,
     ],
     [for r in routeros_ip_firewall_filter.input_mgmt : r.id],
+    [for r in routeros_ip_firewall_filter.input_mgmt_wireguard : r.id],
     [
       for k in sort(keys(var.input_rules)) :
       routeros_ip_firewall_filter.input_accept[k].id
@@ -304,6 +320,7 @@ resource "routeros_move_items" "firewall_filter" {
     routeros_ip_firewall_filter.input_established,
     routeros_ip_firewall_filter.input_drop_invalid,
     routeros_ip_firewall_filter.input_mgmt,
+    routeros_ip_firewall_filter.input_mgmt_wireguard,
     routeros_ip_firewall_filter.input_accept,
     routeros_ip_firewall_filter.input_monitoring,
     routeros_ip_firewall_filter.input_drop,

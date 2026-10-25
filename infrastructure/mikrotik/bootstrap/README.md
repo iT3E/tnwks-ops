@@ -10,7 +10,7 @@ with, or the IP address it connects over. Those four things live here.
 
 | File | What it is |
 | --- | --- |
-| `routeros-bootstrap.rsc` | First-touch console script. Pasted into serial/Winbox-by-MAC on ether8 after `/system reset-configuration no-defaults=yes`. |
+| `routeros-bootstrap.rsc` | First-touch script. Preferred: copied to the factory-config router and run with `reset-configuration no-defaults=yes run-after-reset=`. Fallback: pasted over serial/Winbox-by-MAC on ether8. See `docs/mikrotik-cutover-checklist.md` 1.4. |
 | `../../ansible/playbooks/mikrotik-bootstrap.yml` | Repeatable post-bootstrap verification: asserts RouterOS 7.x, snapshots the running config, checks `www-ssl`. |
 | `../../ansible/inventory/mikrotik.yml` | Inventory. Credentials come from SOPS via env, not from the file. |
 

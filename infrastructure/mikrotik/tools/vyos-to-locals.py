@@ -241,6 +241,15 @@ NATIVE_VLAN = {
 # Break-glass: docs/network-access.md.
 ADMIN_ZONE = "vpn"  # wg01
 
+# Admin peers on other WireGuard listeners, by peer name. They get the same
+# management access as wg01, scoped to their own tunnel address, so a shared
+# listener (wg02 also carries a non-admin phone) does not grant it wholesale.
+ADMIN_PEERS = {"vpn-mobile": ["it-mobile"]}
+
+# Zones that hold management interfaces: reachable by people only over the
+# admin VPN or from an admin peer.
+SENSITIVE_ZONES = ["switch-mgmt", "unifi-mgmt-900", "UISP-140"]
+
 # Who may reach switch management.
 NATIVE_VLAN_ACCESS = [ADMIN_ZONE]
 BRIDGE_PORTS = ["ether2", "ether3", "ether4", "ether5", "ether6", "ether7", "sfp-sfpplus1"]
@@ -1089,6 +1098,11 @@ def build_zone_policies(
         # which the module handles). Never from a LAN VLAN or the WAN.
         {"comment": "SSH/REST/Winbox from the admin VPN (wg01)", "protocol": "tcp",
          "dst_port": "22,443,8291", "in_interface_list": ADMIN_ZONE},
+    ] + [
+        {"comment": f"SSH/REST/Winbox from admin peers on {zone}", "protocol": "tcp",
+         "dst_port": "22,443,8291", "in_interface_list": zone, "src_address_list": "admin_peers"}
+        for zone in sorted(ADMIN_PEERS)
+    ] + [
         # LAN hosts (the desktop) join the admin VPN over the LAN.
         {"comment": "WireGuard from the LAN, to join the admin VPN from inside",
          "protocol": "udp", "dst_port": "51820,51821", "in_interface_list": "lan"},
@@ -1188,6 +1202,23 @@ def main() -> int:
                         if group in (r.get("src_address_list"), r.get("dst_address_list"))]:
                 del data["rules"][num]
                 retired_notes.append("%s rule %s: DROPPED; it names %s (%s)" % (name, num, group, why))
+
+    # Admin peers: resolve each named peer's tunnel address and give it the
+    # same reach into the sensitive zones as the admin VPN.
+    iface_of_zone = dict(zone_iface)
+    admin_peer_members = OrderedDict()
+    for zone, peer_names in ADMIN_PEERS.items():
+        peers = wireguard.get(iface_of_zone.get(zone, ""), {}).get("peers", {})
+        for name in peer_names:
+            for addr in peers.get(name, {}).get("allowed_address", []):
+                admin_peer_members[name + "_" + addr.split("/")[0].replace(".", "_")] = addr
+        for target in SENSITIVE_ZONES:
+            EXTRA_ZONE_RULES.setdefault((zone, target), []).append({
+                "description": "admin peers (%s)" % ", ".join(peer_names),
+                "src_address_list": "admin_peers",
+            })
+    if admin_peer_members:
+        address_lists["admin_peers"] = admin_peer_members
 
     zone_policies, input_rules, notes = build_zone_policies(
         rulesets, pairs, zone_iface, port_lists, vlans

@@ -7,7 +7,19 @@
 # logs in with, or the IP address it connects over. That is this script's job.
 #
 # HOW TO RUN
-#   This is NOT executed from the repo. RouterOS runs it.
+#   This is NOT executed from the repo. RouterOS runs it, one of two ways.
+#
+#   Unattended (preferred): copy a filled-in copy of this file to the router while
+#   it still has its factory config (scp to 192.168.88.1, admin + the sticker
+#   password), then reset straight into it:
+#
+#     /system reset-configuration no-defaults=yes skip-backup=yes \
+#       run-after-reset=routeros-bootstrap.rsc
+#
+#   The script removes `admin` last and deletes itself, so a failure part-way
+#   leaves the factory admin account in place rather than locking you out.
+#
+#   By hand:
 #
 #   1. Reset WITHOUT the default configuration. Defconf creates its own bridge
 #      (ether2-8 + sfp), its own firewall and a DHCP server; all of it would
@@ -18,7 +30,7 @@
 #
 #   2. After the reboot there is no IP config at all. Connect a laptop to ether8
 #      and open the serial console, or Winbox by MAC address, and paste this
-#      script.
+#      script one section at a time.
 #   3. Give the laptop 192.168.88.2/24 on that cable. ether8 is the out-of-band
 #      management port permanently: it is never added to the LAN bridge, and
 #      the Terraform input chain always accepts SSH/REST/Winbox on it.
@@ -49,14 +61,17 @@
 # ---------------------------------------------------------------------------------------------------------------------
 # 1. IDENTITY + ADMIN ACCOUNT
 # ---------------------------------------------------------------------------------------------------------------------
-# A no-defaults reset leaves a passwordless `admin`. Create the Terraform account
-# first, verify login works, and only then remove admin. Do not reverse this
-# order.
+# A no-defaults reset leaves the factory `admin`. Create the Terraform account
+# first; `admin` is removed at the very end (section 6), only after everything
+# else succeeded.
 #
 # The interactive admin account is NOT created here: Terraform creates it, with
 # its password and SSH key from SOPS. Creating it here too would make the first
 # apply fail on a duplicate user. Until then, the terraform account is the
 # console fallback.
+
+# Unattended runs start at boot; give the interfaces a moment to come up.
+:delay 10s
 
 /system identity set name=sce-rtr01
 
@@ -68,8 +83,6 @@
 /user add name=terraform group=full password="CHANGEME-SEE-SOPS" \
   comment="Terraform service account (tnwks-ops)"
 
-# Verify the terraform account works in a second session before running this.
-/user remove [find name=admin]
 
 # ---------------------------------------------------------------------------------------------------------------------
 # 2. MANAGEMENT REACHABILITY
@@ -99,6 +112,8 @@
 /certificate add name=rest-api common-name=sce-rtr01.tnwks.local \
   key-usage=digital-signature,key-encipherment,tls-server days-valid=3650
 /certificate sign rest-api
+# Signing can return before the key is ready; www-ssl refuses an unsigned cert.
+:delay 5s
 
 /ip service set www-ssl certificate=rest-api disabled=no port=443
 /ip service set ssh port=22 disabled=no
@@ -139,3 +154,13 @@
 # firewall and WireGuard. It must NOT list ether8 as a bridge port or touch the
 # 192.168.88.1/24 address. If it does, stop and fix the module.
 # ---------------------------------------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------------------------------------
+# 6. REMOVE THE FACTORY ADMIN, LAST
+# ---------------------------------------------------------------------------------------------------------------------
+# By hand: verify the terraform account in a second session first. Unattended:
+# reaching this line means every section above succeeded. Then delete this file,
+# which contains the terraform password.
+
+/user remove [find name=admin]
+/file remove [find name~"routeros-bootstrap"]

@@ -5,19 +5,22 @@ router, and how to get back in when the normal path is broken.
 
 ## Access model
 
-People reach sensitive systems **only over the admin VPN (`wg01`)**. Services
-keep their own narrow paths. Nothing is reachable from the WAN except WireGuard.
+People reach sensitive systems **only over the admin VPN (`wg01`)**, or from an
+admin peer on another listener (your phone, `it-mobile` on `wg02`, matched by its
+tunnel address). Services keep their own narrow paths. Nothing is reachable from
+the WAN except WireGuard.
 
 | System | Address | People | Services |
 | --- | --- | --- | --- |
-| RouterOS (SSH 22, REST 443, Winbox 8291) | `10.10.30.1` on `wg01` | `wg01` | — |
+| RouterOS (SSH 22, REST 443, Winbox 8291) | `10.10.30.1` on `wg01` | `wg01`, admin peers | — |
 | RouterOS read-only API (api-ssl 8729) | any router address | — | mktxp, from the WSL host only |
-| Aruba SW03 management | `10.98.0.251` (untagged native VLAN) | `wg01` | — |
-| UniFi APs | VLAN 900 | `wg01` | UniFi controller (SSH adopt, STUN); APs inform to it |
-| UISP radios | VLAN 140, `10.60.10.0/24` via EP-R6 | `wg01` | radios connect out to UISP |
+| Aruba SW03 management | `10.98.0.251` (untagged native VLAN) | `wg01`, admin peers | — |
+| UniFi APs | VLAN 900 | `wg01`, admin peers | UniFi controller (SSH adopt, STUN); APs inform to it |
+| UISP radios | VLAN 140, `10.60.10.0/24` via EP-R6 | `wg01`, admin peers | radios connect out to UISP |
 | Cameras | VLAN 610 | `wg01` | Frigate RTSP (tcp/udp 554) |
 
-`wg02` (`vpn-mobile`) is not an admin VPN: it gets the internet and 910 only.
+`wg02` (`vpn-mobile`) is otherwise not an admin VPN: other peers on it get the
+internet and 910 only. Admin peers are listed in the generator's `ADMIN_PEERS`.
 
 The UniFi controller and UISP UIs run on the WSL cluster behind 910's ingress,
 so the router cannot restrict them; they are protected by their own logins.
@@ -29,6 +32,11 @@ so the router cannot restrict them; they are protected by their own logins.
   `10.10.91.1:51820` from home. WireGuard is accepted from the LAN for exactly
   this.
 - Router public key: `terraform output wireguard_public_keys`.
+- On Windows, use the WireGuard for Windows app: WSL egresses through Windows,
+  so one tunnel covers both.
+- WireGuard also answers on the out-of-band port, so a direct cable to `ether8`
+  plus a tunnel with endpoint `192.168.88.1:51820` tests `wg01` without the
+  network (used on the bench).
 - Client `AllowedIPs` (split tunnel), at minimum: `10.10.30.0/24`,
   `10.98.0.0/24`, `10.10.90.0/24`, `10.10.140.0/24`, `10.60.10.0/24`.
 - Terraform runs over `wg01`: set `routeros_url` in SOPS to
