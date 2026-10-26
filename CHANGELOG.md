@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.13.2 - 2026-10-26
+
+### Fixed
+
+* Grafana restarts once per config change (Reloader no longer races the chart's own restart), which had left it with no pod
+
 ## v1.13.1 - 2026-10-26
 
 ### Fixed
