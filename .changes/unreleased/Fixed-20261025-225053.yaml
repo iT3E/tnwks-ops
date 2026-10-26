@@ -1,3 +1,0 @@
-kind: Fixed
-body: EP-R6 DHCP clients, DNS forwarder and resolver use the router (10.10.140.1) instead of the retired VyOS DNS container
-time: 2026-10-25T22:50:53.751676984-07:00
