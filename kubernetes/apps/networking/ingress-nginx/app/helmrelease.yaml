@@ -50,6 +50,17 @@ spec:
         keep-alive-requests: 10000
         proxy-body-size: "100M"
         ssl-protocols: "TLSv1.3 TLSv1.2"
+        # Real client IPs. Public traffic arrives from cloudflared, a pod, so
+        # without this every visitor was the cloudflared pod's IP (in
+        # X-Forwarded-For and X-Real-IP), and IP-aware apps (Plausible visitor
+        # counts, logins/bans, Jellyfin's local/remote split) saw one client.
+        # cloudflared already sends the visitor's IP in X-Forwarded-For; trust
+        # it only from the pod network. The default proxy-real-ip-cidr is
+        # 0.0.0.0/0, which would let anyone reaching the LB IP pick their own
+        # client IP. Direct hits on the LB from the WSL host arrive as
+        # 10.5.0.1, outside this range, so they keep their real source.
+        use-forwarded-headers: "true"
+        proxy-real-ip-cidr: "${CLUSTER_CIDR}"
         # ingress-nginx 1.9+ disables snippet annotations by default after
         # CVE-2024-7646. We use server-snippet on ombi/sonarr/radarr for
         # legacy hostname redirects; flip this back on rather than rip
