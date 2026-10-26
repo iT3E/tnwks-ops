@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.10.0 - 2026-10-26
+
+### Added
+
+* The CI runner's wg03 tunnel can reach the EP-R6's SSH (and nothing else on VLAN 140)
+
 ## v1.9.0 - 2026-10-26
 
 ### Changed
