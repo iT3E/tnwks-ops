@@ -7,6 +7,8 @@
 #     change between boots, so every alert joins model_name + serial_number from
 #     smartctl_device to say which physical drive it is.
 #   - windows_exporter diskdrive collector (Win32_DiskDrive status, job windows-exporter).
+# Both exporters (versions, collectors, task, firewall scope) are installed by
+# infrastructure/wsl-host/Install-TnwksWindowsMonitoring.ps1 (task wsl-host:monitoring).
 # Counter alerts fire on *change* (new reallocations, new media errors), so a drive
 # that already carries old damage stays quiet until it gets worse. They compare
 # the raw value with itself an hour earlier, keyed by serial number (recording

@@ -20,3 +20,14 @@ tasks:
     desc: Register the Windows UDP relays for NetFlow (2055) and router syslog (6001) (UAC prompt)
     cmds:
       - "{{.WSL_HOST_DIR}}/invoke-elevated.sh {{.WSL_HOST_DIR}}/Register-TnwksUdpRelays.ps1"
+
+  monitoring:
+    desc: Install/update the Windows host's monitoring agents (windows_exporter, smartctl_exporter) and scope their firewall rules (UAC prompt)
+    cmds:
+      - "{{.WSL_HOST_DIR}}/invoke-elevated.sh {{.WSL_HOST_DIR}}/Install-TnwksWindowsMonitoring.ps1"
+
+  monitoring-check:
+    desc: Report drift between the Windows host's monitoring agents and the repo; changes nothing (UAC prompt)
+    cmds:
+      # The script exits 2 when something differs.
+      - "{{.WSL_HOST_DIR}}/invoke-elevated.sh {{.WSL_HOST_DIR}}/Install-TnwksWindowsMonitoring.ps1 -Check || [ $? -eq 2 ]"
