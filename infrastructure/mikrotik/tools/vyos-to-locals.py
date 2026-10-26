@@ -253,6 +253,12 @@ WG_PEER_PUBLIC_KEYS = {
     "wg01/it-pc01": "G50MJOM94BeGaX9wVFvChFDOy8YAbu32MpTIVSctsSE=",  # WSL on the desktop
 }
 
+# Admin SSH public keys added on top of the ones ported from VyOS (comment
+# stripped). The VyOS-era RSA key stays for any machine that still has it.
+EXTRA_ADMIN_SSH_KEYS = [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF6lX74KwH2/4FQHwIwKUHhsP9CxnvliHLKxcVPTLD2B",  # WSL on the desktop
+]
+
 # Zones that hold management interfaces: reachable by people only over the
 # admin VPN or from an admin peer.
 SENSITIVE_ZONES = ["switch-mgmt", "unifi-mgmt-900", "UISP-140"]
@@ -1159,6 +1165,7 @@ def main() -> int:
     system = parse_system(read("system.sh"))
     ntp = parse_ntp(read("service.sh"))
     admin_keys, admin_notes = parse_admin_keys(read("system.sh"))
+    admin_keys += [k for k in EXTRA_ADMIN_SSH_KEYS if k not in admin_keys]
     dns, dns_notes = parse_dns(args.vyos_config)
 
     # Attach DHCP config onto the matching VLAN entry.
