@@ -1,0 +1,3 @@
+kind: Fixed
+body: Public apps see real visitor IPs; the public ingress-nginx trusts cloudflared's X-Forwarded-For from the pod network instead of reporting every visitor as the cloudflared pod
+time: 2026-10-26T01:05:00.000000000-07:00
