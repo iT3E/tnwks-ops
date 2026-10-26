@@ -1,3 +1,0 @@
-kind: Fixed
-body: Home Assistant's login works over a port-forward (it no longer forces https, which sent http://localhost:8123 to https), and its welcome screen offers both SSO and the local login
-time: 2026-10-26T01:25:00.000000000-07:00
