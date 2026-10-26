@@ -41,6 +41,7 @@ undone by moving one cable back.
 | 1.2 | You | Run the elevated PowerShell command the agent provides (UAC prompt) that sets the PC's Ethernet adapter to `192.168.88.2/24` with no gateway, so Windows keeps using Wi-Fi for the internet. Read out the password on the router's sticker |
 | 1.3 | Agent | Upload RouterOS and upgrade it, upgrade the RouterBOARD firmware, reboot |
 | 1.4 | Agent | Upload a filled-in `routeros-bootstrap.rsc` and run `/system reset-configuration no-defaults=yes skip-backup=yes run-after-reset=routeros-bootstrap.rsc`. Confirm the REST API answers on `https://192.168.88.1` as `terraform` |
+| 1.4b | Agent + You | Device-mode: the agent runs `/system device-mode update scheduler=yes fetch=yes` (the DDNS script needs both; 7.17+ ships in mode `home`), then you power-cycle the router within 5 minutes to confirm |
 | 1.5 | Agent | `task mikrotik:bootstrap`, `task mikrotik:init`, `task mikrotik:plan`; summarise the plan |
 | 1.6 | Agent (approve) | `task mikrotik:apply`, then `task mikrotik:plan` again (must be empty). `/ip traffic-flow set enabled=yes`. Check free memory with the adlists loaded and the firewall rule order |
 | 1.7 | Agent | **Test `wg01`:** bring up a bench copy of the WSL tunnel with endpoint `192.168.88.1:51820` and confirm SSH/REST to `10.10.30.1` through it; take it down afterwards |

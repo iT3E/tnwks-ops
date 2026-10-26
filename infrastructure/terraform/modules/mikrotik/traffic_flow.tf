@@ -15,6 +15,9 @@ resource "routeros_ip_traffic_flow" "this" {
   interfaces            = coalesce(var.flow_export.interfaces, var.wan_interface)
   active_flow_timeout   = var.flow_export.active_flow_timeout
   inactive_flow_timeout = var.flow_export.inactive_flow_timeout
+
+  # interfaces names VLAN interfaces by string; see nat.tf.
+  depends_on = [routeros_interface_vlan.svi]
 }
 
 resource "routeros_ip_traffic_flow_target" "collector" {

@@ -50,6 +50,12 @@
 # ---------------------------------------------------------------------------------------------------------------------
 #   * RouterOS 7.x. Check with `/system package print`. If the unit shipped on
 #     6.x, upgrade before anything else; the provider targets 7.x REST.
+#   * Device-mode. RouterOS 7.17+ ships in device-mode `home`, which blocks
+#     the scheduler and fetch that the DDNS script needs. Enable just those:
+#       /system device-mode update scheduler=yes fetch=yes
+#     then confirm within 5 minutes by power-cycling the router (unplug and
+#     replug; a short reset-button press also works, but a long one resets
+#     the configuration). Cannot be done unattended.
 #   * The `container` package requires physical access to enable
 #     (`/system device-mode update container=yes` forces a hardware
 #     confirmation: press the reset button or power-cycle within the timeout).
