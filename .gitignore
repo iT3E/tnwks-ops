@@ -25,3 +25,6 @@ __pycache__/
 
 # RouterOS config snapshots from playbooks/mikrotik-bootstrap.yml (serial numbers, topology)
 infrastructure/mikrotik/backups/
+
+# Agent worktrees
+.claude/worktrees/
