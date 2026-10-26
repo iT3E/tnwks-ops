@@ -342,9 +342,21 @@ Worth fixing in `vyos-config` regardless of the migration:
 - **The live router has drifted from git.** Live VyOS has a
   `unifi-frontend-910-seccam-610` rule that `vyos-config` does not, and it is
   what lets Frigate reach the cameras today; the port replaces it with the
-  Frigate-only rule above. Before cutover,
-  diff `show configuration commands` against `config-parts/*.sh` for any other
-  drift, since the generator only sees git.
+  Frigate-only rule above.
+- **Full live-vs-git diff (2026-10-25, vyos-config `06a7e61`).** Beyond the
+  items above, the only differences that change behaviour:
+  - Live has no forced-DNS NAT (git rules 102/103 on 910 and 610). The port
+    adds it, as a redirect to the router, so clients with hard-coded DNS on
+    those VLANs now resolve through the router.
+  - Live hands `UISP-140` clients `8.8.8.8` for DNS (git: the dnsdist
+    container). The port hands out the router.
+  - Live has a `910 -> UISP-140` HTTP/HTTPS rule. The port makes UISP
+    management VPN-only (`wg01` and admin peers).
+
+  Everything else is syntax drift between VyOS releases (`state-policy`
+  location, `inbound-interface name`, syslog quoting), per-ruleset
+  `enable-default-log` flags (the port logs default drops anyway), container
+  definitions, and `wg01`, which git defines but live never ran.
 
 ## Hardware constraints
 
