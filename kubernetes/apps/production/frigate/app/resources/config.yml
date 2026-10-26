@@ -86,7 +86,9 @@ go2rtc:
 
   webrtc:
     candidates:
-      - frigate.production.svc.cluster.local:8555
+      # The live Service is frigate-app (app-template 3 names it after the
+      # controller); the old frigate Service was a leftover with no endpoints.
+      - frigate-app.production.svc.cluster.local:8555
       - frigate.${INTERNAL_DOMAIN}:8555
       - stun:8555
 

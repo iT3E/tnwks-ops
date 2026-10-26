@@ -92,9 +92,22 @@ spec:
           webrtc-udp:
             port: 8555
             protocol: UDP
+    # The ingress fronts port 5000, Frigate's unauthenticated API (its own
+    # auth is on 8971), so gate it with oauth2-proxy like grafana: the shared
+    # .tnwks.us SSO session gets a browser straight through. Without the gate
+    # anyone on the LAN could read /api/config, which includes every camera's
+    # RTSP credentials. Home Assistant talks to frigate-app:5000 in-cluster
+    # and doesn't pass through here.
     ingress:
       app:
         className: nginx-internal
+        annotations:
+          nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local:80/oauth2/auth"
+          nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${INTERNAL_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
+          # Cognito-backed sessions are split across multiple cookies; the
+          # subrequest header chunk overflows nginx's default 4k buffer.
+          nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+          nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
         hosts:
           - host: &host "{{ .Release.Name }}.${CLUSTER_DOMAIN}"
             paths:
@@ -103,6 +116,11 @@ spec:
                 service:
                   identifier: app
                   port: http
+        # The controller's default cert (*.internal.tnwks.us) covers the
+        # host; listing it makes nginx redirect plain http to https.
+        tls:
+          - hosts:
+              - *host
     persistence:
       config:
         accessMode: ReadWriteOnce
