@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.2.6 - 2026-10-26
+
+### Fixed
+
+* Router DDNS updates the Cloudflare record the WireGuard clients use as their endpoint; Terraform reaches the router over wg01
+
 ## v1.2.5 - 2026-10-26
 
 ### Fixed
