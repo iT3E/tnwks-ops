@@ -87,7 +87,7 @@ spec:
               # Public app-client ID (cognito_home_assistant_client_id output
               # of the AWS workspace), like the onboard client's.
               - name: HASS_OIDC_CLIENT_ID
-                value: "CLIENT_ID_PENDING_TERRAFORM_APPLY"
+                value: "6b83l0fm26ccgo8mmblvftsek"
               - name: HASS_OIDC_DISCOVERY_URL
                 value: "${COGNITO_OIDC_ISSUER_URL}/.well-known/openid-configuration"
               - name: FRIGATE_UI_URL
