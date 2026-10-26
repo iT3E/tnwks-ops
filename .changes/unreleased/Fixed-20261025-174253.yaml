@@ -1,3 +1,0 @@
-kind: Fixed
-body: RouterOS bootstrap waits for the API certificate key instead of a fixed 5 s pause
-time: 2026-10-25T17:42:53.353978186-07:00

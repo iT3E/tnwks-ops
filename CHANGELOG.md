@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.2.1 - 2026-10-26
+
+### Fixed
+
+* RouterOS bootstrap waits for the API certificate key instead of a fixed 5 s pause
+
 ## v1.2.0 - 2026-10-26
 
 ### Changed
