@@ -12,9 +12,18 @@ oauth2-proxy gate:
 | URL | Path | Reachable from |
 |---|---|---|
 | `https://hass.tnwks.us` | Cloudflare → tunnel → public ingress-nginx | anywhere |
-| `https://hass.internal.tnwks.us` | k8s-gateway DNS → nginx-internal | the LAN |
+| `https://hass.internal.tnwks.us` | MikroTik's `*.internal.tnwks.us` record → Windows portproxy → nginx-internal | the LAN |
 
 The two hostnames are distinct, so there's no split-horizon DNS.
+`hass.tnwks.us` is public DNS (external-dns → Cloudflare), resolved for the LAN
+by the MikroTik.
+
+**New public hostnames and the MikroTik's cache:** the MikroTik caches "no such
+name" answers for 30 minutes (the zone's SOA minimum), and Force-DNS redirects
+mean everything on the LAN goes through that cache. If a hostname is looked up
+in the moments before external-dns creates it, it stays unresolvable on the
+LAN for up to half an hour. Run `/ip dns cache flush` on the router to clear
+it.
 
 HA authenticates users itself, with OIDC against the `tnwks-auth` Cognito pool
 (hass-oidc-auth). oauth2-proxy can't front it: the Companion app's native API,
@@ -23,14 +32,16 @@ exempting those paths would leave HA's API public anyway.
 
 What follows from being internet-facing:
 
-- **The break-glass local login is public.** The owner account
-  (`?skip_oidc_redirect=true`) can be reached from anywhere, so it gets a long
-  password and TOTP MFA (setup step 4).
-- **IP banning stays off.** HA never sees real client IPs. Through the tunnel,
-  everyone arrives as the cloudflared pod (`X-Forwarded-For` is rewritten by
-  the public ingress-nginx). From the LAN, everyone arrives as the Windows
-  `netsh portproxy`. A ban would lock out every client on that path. Cognito
-  handles the main login's brute-force protection.
+- **The break-glass local login is public.** The owner account (the HA login
+  linked from the welcome screen) can be reached from anywhere, so it gets a
+  long password and TOTP MFA (setup step 4).
+- **No automatic IP bans.** HA's default enables banning but sets *Login
+  attempts before ban* to unlimited, so nothing is ever banned. Keep it that
+  way. Public clients now arrive with their real IP: the
+  public ingress-nginx trusts cloudflared's `X-Forwarded-For` from the pod
+  network. But every LAN client arrives as the Windows `netsh portproxy`, so a
+  ban triggered from the LAN would lock out the whole LAN. Cognito handles the
+  main login's brute-force protection.
 
 ## What's in git and what isn't
 
@@ -91,28 +102,33 @@ PRs, which catches HA's frequent renames of trigger and condition keys.
 
 ## First-time setup
 
-These steps are needed once per fresh `/config` volume, in this order.
-Everything goes through a port-forward until step 3 has made HA trust
-ingress-nginx. Before that, HA answers every proxied request with `400`.
+**Neither URL works until step 3 is done.** On a fresh `/config` volume HA
+answers every request that comes through ingress-nginx with `400 Bad Request`.
+Proxy trust is UI-only, so the first steps go through a port-forward. These
+steps are needed once per fresh volume, in this order.
 
 ```bash
 export KUBECONFIG=~/.kube/config-homelab-wsl
 kubectl -n home-automation port-forward svc/home-assistant 8123:8123
 ```
 
+WSL forwards localhost, so a Windows browser can use `http://localhost:8123`.
+
 1. **Onboarding.** Open `http://localhost:8123` and create the owner account.
    This is the local break-glass admin, so keep its password in 1Password.
    Location and units are YAML-owned and show as read-only.
-2. **Ignore the SSO redirect for now.** If a login page sends you to Cognito,
-   use `http://localhost:8123/?skip_oidc_redirect=true` instead. SSO only works
-   on the real hostname.
+2. **Over the port-forward, use the local login.** If HA asks you to sign in
+   again, the welcome screen offers *Login with tnwks* and a link to the HA
+   login. Use the HA login: SSO only works on the real hostnames, because
+   Cognito has no `localhost` callback.
 3. **Proxy trust.** Settings > System > Network > HTTP server: turn on
    *Trust X-Forwarded-For* and set *Trusted proxies* to the pod CIDR
    (`10.42.0.0/16`, the cluster's `CLUSTER_CIDR`). Both ingress-nginx
-   controllers run in the pod network. Leave IP banning off (see
-   [Access](#access)) and save. HA restarts and the port-forward drops. Restart
-   the port-forward and **confirm the new settings within 5 minutes**, or HA
-   reverts them. After that, both URLs work.
+   controllers run in the pod network. Leave *Login attempts before ban* at
+   unlimited (see [Access](#access)) and save. HA restarts with the new settings as a
+   trial, and the trial already trusts the proxy. Open
+   `https://hass.internal.tnwks.us` and **confirm the settings within 5
+   minutes**, or HA reverts them. After that, both URLs work.
 4. **MFA on the owner account.** Profile > Security > Multi-factor
    authentication modules: enable *Authenticator app* (TOTP). The owner login is
    internet-facing, so do this before going further.
@@ -189,8 +205,8 @@ window.
 
 ## Break-glass
 
-- **SSO broken:** `https://hass.tnwks.us/?skip_oidc_redirect=true` (or the
-  internal URL) shows the local login, so use the owner account with its TOTP
-  code.
+- **SSO broken:** on the login page's welcome screen, follow the link to the
+  HA login (or go straight to `/?skip_oidc_redirect=true`) and use the owner
+  account with its TOTP code.
 - **Proxy settings broken** (UI unreachable through ingress): use the
   port-forward above and fix them under Settings > System > Network.
