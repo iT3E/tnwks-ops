@@ -31,7 +31,7 @@ spec:
               flow-collector is up but has had no flow packets for
               {{ $value | humanizeDuration }}. Check in order: router flow export
               (RouterOS: `/ip traffic-flow print`, target 10.10.91.142:2055), the Windows relay (Scheduled Task
-              tnwks-udp-relay, C:\ProgramData\tnwks-udp-relay\udp-relay.log), the WSL
+              tnwks-udp-relay, C:\ProgramData\tnwks-udp-relay\udp-relay-2055.log), the WSL
               socat unit (systemctl status tnwks-lan-bridge@netflow), MetalLB 10.5.0.204.
         - alert: FlowCollectorNoAsnData
           expr: max(flow_collector_asn_db_ranges) == 0

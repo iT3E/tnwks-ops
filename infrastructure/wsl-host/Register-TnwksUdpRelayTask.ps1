@@ -1,9 +1,12 @@
 # Register-TnwksUdpRelayTask.ps1
 #
 # One-shot setup: installs Start-TnwksUdpRelay.ps1 to C:\ProgramData\tnwks-udp-relay,
-# opens inbound udp/2055 from the LAN, and registers a Scheduled Task that keeps
-# the relay running (at startup and logon, restarted if it ever exits).
-# Run elevated, once. Re-running is safe: it replaces the task and script.
+# opens inbound udp/$Port from $RemoteAddress, and registers a Scheduled Task
+# that keeps the relay running (at startup and logon, restarted if it ever
+# exits). One task per port; `task wsl-host:udp-relays` registers both:
+#   NetFlow: -Port 2055 (TaskName tnwks-udp-relay, from the LAN)
+#   syslog:  -Port 6001 -TaskName tnwks-udp-relay-syslog -RemoteAddress 10.10.91.1
+# Run elevated. Re-running is safe: it replaces the task and script.
 
 [CmdletBinding()]
 param(
@@ -69,4 +72,4 @@ Start-ScheduledTask -TaskName $TaskName
 
 Write-Host "Scheduled Task '$TaskName' registered and started (runs as $RunAsUser)."
 Write-Host "firewall: inbound udp/$Port allowed from $RemoteAddress"
-Write-Host "Log: $(Join-Path $InstallDir 'udp-relay.log')"
+Write-Host "Log: $(Join-Path $InstallDir "udp-relay-$Port.log")"

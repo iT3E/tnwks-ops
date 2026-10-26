@@ -286,8 +286,11 @@ NATIVE_VLAN_ACCESS = [ADMIN_ZONE]
 BRIDGE_PORTS = ["ether2", "ether3", "ether4", "ether5", "ether6", "ether7", "sfp-sfpplus1"]
 
 # Remote syslog: vector-aggregator on the WSL cluster, reached through the
-# Windows host's LAN bridge, same as flow-collector.
+# Windows host's UDP relay, same as flow-collector. UDP, not VyOS's TCP:
+# RouterOS writes TCP syslog with no framing at all (no newline, no octet
+# count), so a receiver cannot split the stream into messages.
 SYSLOG_REMOTE = WSL_HOST
+SYSLOG_PROTOCOL = "udp"
 
 # Source NAT moves off the ERL onto the RB5009's WAN port. VyOS had its
 # masquerade rule commented out precisely because the ERL was doing it.
@@ -1565,14 +1568,15 @@ def main() -> int:
         if old_remote != SYSLOG_REMOTE:
             notes.append(
                 "syslog: target %s (Vector on the old cluster, gone) -> %s:%s, the "
-                "WSL host's LAN bridge to vector-aggregator (tnwks-lan-bridge@syslog)"
+                "Windows host's UDP relay to vector-aggregator (tnwks-lan-bridge@syslog)"
                 % (old_remote, SYSLOG_REMOTE, system["syslog"].get("remote_port", 6001))
             )
             system["syslog"]["remote"] = SYSLOG_REMOTE
+        system["syslog"]["remote_protocol"] = SYSLOG_PROTOCOL
         body.append("\n")
         body.append(assign("syslog", system["syslog"],
-                           "VyOS shipped octet-counted TCP syslog to the k8s Vector aggregator.\n"
-                           "RouterOS emits plain syslog, so the Vector source must accept it."))
+                           "Syslog to vector-aggregator on the WSL cluster, over UDP: RouterOS\n"
+                           "TCP syslog has no message framing."))
     body.append("\n")
     body.append(assign("monitoring_source_list", "monitoring",
                        "Address list allowed to reach the router's read-only API (mktxp)."))

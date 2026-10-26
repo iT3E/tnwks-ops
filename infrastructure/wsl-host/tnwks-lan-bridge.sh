@@ -5,7 +5,8 @@
 #
 # Chain:
 #   LAN device → VyOS DNS resolves *.internal.tnwks.us → <windows-ip>
-#   <windows-ip>:80/443/1883/6001/53-UDP, 2055-UDP (netflow, via Start-TnwksUdpRelay.ps1)
+#   <windows-ip>:80/443/1883/53-UDP, 2055-UDP (netflow) and 6001-UDP (syslog),
+#   both via Start-TnwksUdpRelay.ps1
 #     → netsh portproxy → 127.0.0.1:port (WSL2 localhost forwarding)
 #     → socat (this script) → MetalLB IP
 
@@ -39,8 +40,9 @@ case "${1:-}" in
   # NetFlow/IPFIX from the router. Windows side is Start-TnwksUdpRelay.ps1
   # (portproxy is TCP-only), target is monitoring/flow-collector.
   netflow) run 2055 "${FLOW_COLLECTOR_IP}:2055"  UDP ;;
-  # Router remote logging (TCP syslog), target is monitoring/vector-aggregator.
-  syslog) run 6001 "${VECTOR_IP}:6001"           TCP ;;
+  # Router remote logging (UDP syslog; Windows side is a second
+  # Start-TnwksUdpRelay.ps1 instance), target is monitoring/vector-aggregator.
+  syslog) run 6001 "${VECTOR_IP}:6001"           UDP ;;
   *)
     echo "usage: $0 {http|https|mqtt|dns|netflow|syslog}" >&2
     exit 2

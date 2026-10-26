@@ -57,6 +57,7 @@ spec:
             port: 6000
           routeros-syslog:
             port: 6001
+            protocol: UDP
     persistence:
       config:
         type: configMap

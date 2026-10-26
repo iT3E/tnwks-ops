@@ -364,7 +364,7 @@ variable "syslog" {
   type = object({
     remote          = string
     remote_port     = optional(number, 6001)
-    remote_protocol = optional(string, "tcp")
+    remote_protocol = optional(string, "udp")
     src_address     = optional(string)
     topics          = optional(list(string), ["info", "error", "warning", "critical"])
     # "syslog" is BSD syslog (RFC 3164) framing; "default" sends bare messages

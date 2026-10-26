@@ -3,12 +3,15 @@
 # Long-running UDP relay: LAN -> this Windows host -> the WSL VM.
 #
 # netsh portproxy (used by Sync-TnwksLanBridge.ps1 for 80/443/1883) is
-# TCP-only, so UDP services like NetFlow/IPFIX need their own forwarder.
-# Chain for flow export (see docs/wsl-lan-exposure.md):
+# TCP-only, so UDP services need their own forwarder. One instance (Scheduled
+# Task) per port; see docs/wsl-lan-exposure.md:
 #
-#   router udp/2055 -> <windows-ip>:2055 (this relay)
+#   router udp/2055 (NetFlow) -> <windows-ip>:2055 (this relay)
 #     -> <wsl-ip>:2055 (socat: tnwks-lan-bridge@netflow)
 #     -> MetalLB 10.5.0.204:2055 (monitoring/flow-collector)
+#   router udp/6001 (syslog)  -> <windows-ip>:6001 (this relay)
+#     -> <wsl-ip>:6001 (socat: tnwks-lan-bridge@syslog)
+#     -> MetalLB 10.5.0.205:6001 (monitoring/vector-aggregator)
 #
 # The WSL VM IP changes on every WSL restart, so it is re-resolved every
 # $RefreshSeconds. Run by the 'tnwks-udp-relay' Scheduled Task as the desktop
@@ -27,7 +30,7 @@ $ErrorActionPreference = 'Continue'
 if ([string]::IsNullOrWhiteSpace($LogPath)) {
     $dir = $PSScriptRoot
     if ([string]::IsNullOrWhiteSpace($dir)) { $dir = 'C:\ProgramData\tnwks-udp-relay' }
-    $LogPath = Join-Path $dir 'udp-relay.log'
+    $LogPath = Join-Path $dir "udp-relay-$Port.log"
 }
 
 function Write-Log([string]$msg) {

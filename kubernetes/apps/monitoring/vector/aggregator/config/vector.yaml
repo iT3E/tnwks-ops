@@ -12,12 +12,13 @@ sources:
     type: vector
     version: "2"
 
-  # RB5009 remote logging (BSD syslog over TCP, ISO 8601 timestamps). On WSL:
-  # router -> Windows host :6001 (portproxy) -> WSL socat
+  # RB5009 remote logging (BSD syslog, ISO 8601 timestamps), UDP: one message
+  # per datagram. RouterOS's TCP syslog has no framing. On WSL: router ->
+  # Windows host udp/6001 (tnwks-udp-relay-syslog) -> WSL socat
   # (tnwks-lan-bridge@syslog) -> this service's LoadBalancer VIP.
   routeros_syslog:
     type: syslog
-    mode: tcp
+    mode: udp
     address: 0.0.0.0:6001
 
 # Transformations
