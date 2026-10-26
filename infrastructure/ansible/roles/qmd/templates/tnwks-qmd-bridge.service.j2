@@ -1,0 +1,31 @@
+{{ ansible_managed | comment }}
+# tnwks-qmd-bridge — LAN-facing TCP bridge for QMD's HTTP MCP server.
+#
+# QMD binds 127.0.0.1 only and has no auth, so this socat forwarder exposes it
+# on {{ qmd_bridge_listen_addr }}:{{ qmd_bridge_listen_port }} for the OpenClaw
+# gateway pods on the MS-01 cluster. Access control is the HOST FIREWALL — only
+# {{ qmd_bridge_allowed_cidrs | join(', ') }} should be permitted to this port.
+#
+# Managed by Ansible (roles/qmd). Do not hand-edit on the host.
+
+[Unit]
+Description=QMD HTTP MCP LAN bridge (socat → 127.0.0.1:{{ qmd_http_port }})
+After=tnwks-qmd.service
+Wants=tnwks-qmd.service
+Requires=tnwks-qmd.service
+
+[Service]
+Type=simple
+# QMD HTTP MCP has NO auth — the host firewall is the primary access control
+# (allow only {{ qmd_bridge_allowed_cidrs | join(', ') }} to this port). socat's
+# single range= below is defense-in-depth for the first CIDR; socat cannot OR
+# multiple ranges, so additional CIDRs must be enforced at the firewall.
+ExecStart=/usr/bin/socat -d \
+  TCP-LISTEN:{{ qmd_bridge_listen_port }},bind={{ qmd_bridge_listen_addr }},reuseaddr,fork,range={{ qmd_bridge_allowed_cidrs[0] }} \
+  TCP:127.0.0.1:{{ qmd_http_port }}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

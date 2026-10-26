@@ -109,9 +109,14 @@
 # the PKI project issues a real cert, import it, point www-ssl at it, and flip
 # `insecure` to false in providers.tf.
 
+# RouterOS 7.25 no longer self-signs a certificate given no CA ("CA not
+# found"), so sign it with a small local CA instead.
+/certificate add name=local-ca common-name=sce-rtr01-ca \
+  key-usage=key-cert-sign,crl-sign days-valid=3650
+/certificate sign local-ca
 /certificate add name=rest-api common-name=sce-rtr01.tnwks.local \
   key-usage=digital-signature,key-encipherment,tls-server days-valid=3650
-/certificate sign rest-api
+/certificate sign rest-api ca=local-ca
 # Signing can return before the key is ready, and www-ssl refuses a cert
 # without one. Wait for it (up to 2 minutes; key generation is slow on ARM).
 # One block: in an .rsc import each top-level line has its own scope.
@@ -123,6 +128,9 @@
   }
 }
 
+# 7.25 also ships a `reverse-proxy` service on 443; it must be off for
+# www-ssl (the REST API) to bind the port.
+/ip service set reverse-proxy disabled=yes
 /ip service set www-ssl certificate=rest-api disabled=no port=443
 /ip service set ssh port=22 disabled=no
 

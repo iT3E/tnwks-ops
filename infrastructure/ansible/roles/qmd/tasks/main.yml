@@ -1,0 +1,180 @@
+---
+# qmd — install QMD, register collections, pre-warm the index, and run it as a
+# long-lived HTTP MCP daemon (+ LAN socat bridge) on the WSL host.
+#
+# Mirrors the wsl_usb_attach pattern: localhost/become, script/unit install,
+# daemon-reload on change, enable+start, restart-on-change. Non-mutating to the
+# k8s cluster — this only provisions the WSL host.
+
+# --- build prerequisites ---------------------------------------------------
+- name: Install build deps for better-sqlite3 / node-llama-cpp
+  ansible.builtin.apt:
+    name:
+      - build-essential
+      - python3
+      - socat
+    state: present
+    update_cache: true
+  # apt runs as root; the rest runs as the interactive user for GPU/XDG access.
+
+- name: Resolve npm global bin dir (nvm-aware)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    command -v npm >/dev/null || { echo "npm not found on PATH for {{ qmd_run_user }}" >&2; exit 1; }
+    dirname "$(command -v npm)"
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ qmd_run_user }}"
+  register: qmd_npm_bindir
+  changed_when: false
+
+# --- install / upgrade QMD -------------------------------------------------
+- name: Install/upgrade QMD to the pinned version
+  community.general.npm:
+    name: "{{ qmd_npm_package }}"
+    version: "{{ qmd_version }}"
+    global: true
+    state: present
+  become: true
+  become_user: "{{ qmd_run_user }}"
+  environment:
+    PATH: "{{ qmd_npm_bindir.stdout }}:{{ ansible_env.PATH }}"
+  register: qmd_install
+
+- name: Locate the qmd binary
+  ansible.builtin.shell: "command -v qmd"
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ qmd_run_user }}"
+  environment:
+    PATH: "{{ qmd_npm_bindir.stdout }}:{{ ansible_env.PATH }}"
+  register: qmd_bin
+  changed_when: false
+
+- name: Report installed QMD version
+  ansible.builtin.command: "{{ qmd_bin.stdout }} --version"
+  become: true
+  become_user: "{{ qmd_run_user }}"
+  register: qmd_ver
+  changed_when: false
+
+- name: Show QMD version
+  ansible.builtin.debug:
+    msg: "QMD installed: {{ qmd_ver.stdout }}"
+
+# --- collections (idempotent) ---------------------------------------------
+- name: List existing QMD collections
+  ansible.builtin.command: "{{ qmd_bin.stdout }} collection list"
+  become: true
+  become_user: "{{ qmd_run_user }}"
+  register: qmd_coll_list
+  changed_when: false
+  failed_when: false
+
+- name: Register QMD collections
+  ansible.builtin.command: >-
+    {{ qmd_bin.stdout }} collection add {{ item.name }} {{ item.path }} --pattern '{{ item.pattern }}'
+  become: true
+  become_user: "{{ qmd_run_user }}"
+  loop: "{{ qmd_collections }}"
+  loop_control:
+    label: "{{ item.name }} → {{ item.path }}"
+  when: item.name not in (qmd_coll_list.stdout | default(''))
+  register: qmd_coll_add
+  changed_when: qmd_coll_add is not skipped
+  failed_when:
+    - qmd_coll_add.rc is defined
+    - qmd_coll_add.rc != 0
+    - "'already exists' not in (qmd_coll_add.stderr | default(''))"
+
+# --- pre-warm index + models ----------------------------------------------
+- name: Pre-warm QMD (update + embed → downloads GGUF models on first run)
+  ansible.builtin.command: "{{ qmd_bin.stdout }} {{ item }}"
+  become: true
+  become_user: "{{ qmd_run_user }}"
+  environment:
+    QMD_FORCE_CPU: "{{ '1' if qmd_force_cpu else '' }}"
+  loop:
+    - update
+    - embed
+  when: qmd_prewarm | bool
+  changed_when: false
+  # embed can take minutes on first run (model download + full pass)
+  async: 1800
+  poll: 30
+
+- name: Assert QMD sees the GPU
+  ansible.builtin.command: "{{ qmd_bin.stdout }} status"
+  become: true
+  become_user: "{{ qmd_run_user }}"
+  register: qmd_status
+  changed_when: false
+  failed_when:
+    - qmd_assert_gpu | bool
+    - not qmd_force_cpu | bool
+    - "'cuda' not in (qmd_status.stdout | lower)"
+
+# --- systemd: QMD HTTP MCP daemon ------------------------------------------
+- name: Install tnwks-qmd systemd unit (HTTP MCP daemon)
+  ansible.builtin.template:
+    src: tnwks-qmd.service.j2
+    dest: /etc/systemd/system/tnwks-qmd.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: qmd_unit
+
+- name: Install tnwks-qmd-bridge systemd unit (LAN socat bridge)
+  ansible.builtin.template:
+    src: tnwks-qmd-bridge.service.j2
+    dest: /etc/systemd/system/tnwks-qmd-bridge.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: qmd_bridge_enabled | bool
+  register: qmd_bridge_unit
+
+- name: Reload systemd if any unit changed
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: qmd_unit.changed or (qmd_bridge_unit.changed | default(false))
+
+- name: Enable and start tnwks-qmd
+  ansible.builtin.systemd:
+    name: tnwks-qmd.service
+    enabled: true
+    state: started
+
+- name: Restart tnwks-qmd if unit or package changed
+  ansible.builtin.systemd:
+    name: tnwks-qmd.service
+    state: restarted
+  when: qmd_unit.changed or qmd_install.changed
+
+- name: Enable and start tnwks-qmd-bridge
+  ansible.builtin.systemd:
+    name: tnwks-qmd-bridge.service
+    enabled: true
+    state: started
+  when: qmd_bridge_enabled | bool
+
+- name: Restart tnwks-qmd-bridge if unit changed
+  ansible.builtin.systemd:
+    name: tnwks-qmd-bridge.service
+    state: restarted
+  when:
+    - qmd_bridge_enabled | bool
+    - qmd_bridge_unit.changed | default(false)
+
+# --- firewall: QMD HTTP MCP has no auth; the bridge must be locked down -----
+- name: Restrict the QMD bridge port to allowed CIDRs (nftables/iptables via ufw)
+  ansible.builtin.debug:
+    msg: >-
+      QMD HTTP MCP ships no auth and the bridge exposes port
+      {{ qmd_bridge_listen_port }} on {{ qmd_bridge_listen_addr }}.
+      Ensure host firewall allows ONLY {{ qmd_bridge_allowed_cidrs | join(', ') }}
+      to reach it. Add the concrete ufw/nft rules for this host's firewall model
+      before treating the bridge as production-safe.
+  when: qmd_bridge_enabled | bool

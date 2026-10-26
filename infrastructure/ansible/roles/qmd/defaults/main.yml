@@ -1,0 +1,60 @@
+---
+# qmd — QMD memory-search sidecar for OpenClaw, run as a long-lived HTTP MCP
+# server on the WSL host so the (CPU-only, MS-01) OpenClaw gateway pods can
+# reach a GPU-accelerated QMD over the LAN.
+#
+# WHY THIS SHAPE:
+#   - QMD does inference in-process via node-llama-cpp (local GGUF). It has NO
+#     OpenAI-compatible client, so it cannot offload to LiteLLM. It must run
+#     where the GPU is — the WSL desktop, not the cluster.
+#   - `qmd mcp --http` binds to 127.0.0.1 ONLY (hardcoded) and ships NO auth.
+#     So a systemd unit alone is not reachable from pods. We add a socat bridge
+#     that exposes the LAN interface → 127.0.0.1:<qmd_http_port>, and rely on
+#     host firewalling to restrict it to the cluster (see qmd_bridge_* below).
+
+# --- package ---------------------------------------------------------------
+qmd_npm_package: "@tobilu/qmd"
+qmd_version: "2.5.3"            # pin; bump deliberately
+qmd_npm_prefix: ""             # empty → use whatever `npm root -g` resolves (nvm-aware)
+
+# --- HTTP MCP daemon -------------------------------------------------------
+# QMD's own HTTP transport. Always 127.0.0.1 (QMD hardcodes the bind host).
+qmd_http_port: 8181
+
+# --- LAN bridge (socat) ----------------------------------------------------
+# Exposes QMD to the cluster because QMD itself won't bind non-loopback.
+qmd_bridge_enabled: true
+qmd_bridge_listen_addr: "0.0.0.0"   # WSL LAN-facing addr the MS-01 nodes reach
+qmd_bridge_listen_port: 8182        # external port pods connect to
+# CIDR(s) allowed to reach the bridge. Everything else is dropped.
+# QMD HTTP MCP has no auth, so this firewall IS the access control.
+qmd_bridge_allowed_cidrs:
+  - "10.10.91.0/24"                 # VLAN 910 main LAN (MS-01 nodes live here)
+  - "10.5.0.0/24"                   # WSL docker bridge / MetalLB range
+
+# --- collections -----------------------------------------------------------
+# Directories QMD indexes. Mirrors today's live config. Source markdown is the
+# canonical input; the SQLite index is derived (regenerable), so we index from
+# whatever is synced onto this host.
+qmd_collections:
+  - name: memory-root-main
+    path: /home/it3e/.openclaw/workspace
+    pattern: "MEMORY.md"
+  - name: memory-dir-main
+    path: /home/it3e/.openclaw/workspace/memory
+    pattern: "**/*.md"
+  - name: tnwks
+    path: /mnt/c/Users/mh/Obsidian/tnwks
+    pattern: "**/*.md"
+
+# --- inference / GPU -------------------------------------------------------
+qmd_force_cpu: false            # set true to skip CUDA (fallback / non-GPU host)
+qmd_assert_gpu: true            # fail the play if `qmd status` doesn't report cuda
+qmd_prewarm: true               # run update+embed at provision time (downloads ~2.2GB GGUF)
+
+# --- runtime user ----------------------------------------------------------
+# QMD reads models from this user's XDG cache and needs the WSL GPU libs on
+# PATH/LD_LIBRARY_PATH, so it runs as the interactive user, not root.
+qmd_run_user: it3e
+qmd_run_group: it3e
+qmd_home: "/home/{{ qmd_run_user }}"
