@@ -367,6 +367,11 @@ variable "syslog" {
     remote_protocol = optional(string, "tcp")
     src_address     = optional(string)
     topics          = optional(list(string), ["info", "error", "warning", "critical"])
+    # "syslog" is BSD syslog (RFC 3164) framing; "default" sends bare messages
+    # that syslog receivers parse poorly. ISO 8601 timestamps carry the year
+    # and offset, which BSD timestamps lack.
+    log_format  = optional(string, "syslog")
+    time_format = optional(string, "iso8601")
   })
   default = null
 }

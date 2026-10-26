@@ -18,10 +18,8 @@ resource "routeros_system_note" "this" {
 }
 
 # --- Remote syslog -----------------------------------------------------------
-# VyOS shipped kern/warning to the k8s Vector aggregator over TCP:6001 with
-# octet-counted framing. RouterOS remote logging is syslog over UDP/TCP; the
-# framing choice lives on the Vector source, so the aggregator's socket for
-# this router must accept the RouterOS format.
+# TCP syslog to monitoring/vector-aggregator (routeros_syslog source, :6001)
+# via the WSL host's LAN bridge; see docs/wsl-lan-exposure.md.
 
 resource "routeros_system_logging_action" "remote" {
   count = var.syslog == null ? 0 : 1
@@ -33,6 +31,9 @@ resource "routeros_system_logging_action" "remote" {
   remote_port     = var.syslog.remote_port
   remote_protocol = var.syslog.remote_protocol
   src_address     = var.syslog.src_address
+
+  remote_log_format  = var.syslog.log_format
+  syslog_time_format = var.syslog.time_format
 }
 
 resource "routeros_system_logging" "remote" {

@@ -5,7 +5,7 @@
 #
 # Chain:
 #   LAN device → VyOS DNS resolves *.internal.tnwks.us → <windows-ip>
-#   <windows-ip>:80/443/1883/53-UDP, 2055-UDP (netflow, via Start-TnwksUdpRelay.ps1)
+#   <windows-ip>:80/443/1883/6001/53-UDP, 2055-UDP (netflow, via Start-TnwksUdpRelay.ps1)
 #     → netsh portproxy → 127.0.0.1:port (WSL2 localhost forwarding)
 #     → socat (this script) → MetalLB IP
 
@@ -15,6 +15,7 @@ INTERNAL_INGRESS_IP="${INTERNAL_INGRESS_IP:-10.5.0.200}"
 K8S_GATEWAY_IP="${K8S_GATEWAY_IP:-10.5.0.201}"
 MQTT_IP="${MQTT_IP:-10.5.0.203}"
 FLOW_COLLECTOR_IP="${FLOW_COLLECTOR_IP:-10.5.0.204}"
+VECTOR_IP="${VECTOR_IP:-10.5.0.205}"
 
 # socat must exist on the WSL host. Apt-get on Ubuntu is fine.
 command -v socat >/dev/null || { echo "socat missing — sudo apt-get install -y socat"; exit 1; }
@@ -38,8 +39,10 @@ case "${1:-}" in
   # NetFlow/IPFIX from the router. Windows side is Start-TnwksUdpRelay.ps1
   # (portproxy is TCP-only), target is monitoring/flow-collector.
   netflow) run 2055 "${FLOW_COLLECTOR_IP}:2055"  UDP ;;
+  # Router remote logging (TCP syslog), target is monitoring/vector-aggregator.
+  syslog) run 6001 "${VECTOR_IP}:6001"           TCP ;;
   *)
-    echo "usage: $0 {http|https|mqtt|dns|netflow}" >&2
+    echo "usage: $0 {http|https|mqtt|dns|netflow|syslog}" >&2
     exit 2
     ;;
 esac

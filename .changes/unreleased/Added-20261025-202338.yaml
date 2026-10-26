@@ -1,0 +1,3 @@
+kind: Added
+body: 'Router syslog to Loki: vector-aggregator on the WSL cluster, a tcp/6001 LAN bridge, and RouterOS BSD-syslog output'
+time: 2026-10-25T20:23:38.6765738-07:00

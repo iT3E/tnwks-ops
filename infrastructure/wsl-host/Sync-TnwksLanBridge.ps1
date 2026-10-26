@@ -2,8 +2,8 @@
 #
 # Keeps Windows netsh portproxy rules in sync with the current WSL VM IP so
 # that LAN devices can reach the homelab-wsl cluster's internal services
-# (Ingress 80/443, k8s-gateway DNS 53/UDP, mosquitto 1883) through this
-# Windows host.
+# (Ingress 80/443, k8s-gateway DNS 53/UDP, mosquitto 1883, router syslog to
+# vector-aggregator 6001) through this Windows host.
 #
 # Run elevated. Idempotent — safe to invoke from a Scheduled Task on logon
 # or whenever the WSL VM IP changes.
@@ -16,7 +16,10 @@ param(
     # is handled separately (see docs/wsl-lan-exposure.md — port 53 needs a
     # different forwarder, e.g. PortProxy with WinDivert or running k8s-gateway
     # DNS on a different LAN entry path).
-    [int[]]$TcpPorts  = @(80, 443, 1883),
+    [int[]]$TcpPorts  = @(80, 443, 1883, 6001),
+    # Ports whose inbound firewall rule is limited to specific senders.
+    # 6001 is syslog ingestion: only the router (its 910 address) sends it.
+    [hashtable]$RemoteAddressByPort = @{ 6001 = '10.10.91.1' },
     [string]$ListenAddress = '0.0.0.0'
 )
 
@@ -62,14 +65,17 @@ function Sync-PortProxy {
 }
 
 function Sync-FirewallRule {
-    param([int]$Port)
+    param([int]$Port, [string]$RemoteAddress = 'Any')
     $name = "tnwks-lan-bridge-$Port"
     $rule = Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue
     if (-not $rule) {
         New-NetFirewallRule -DisplayName $name -Direction Inbound `
             -Action Allow -Protocol TCP -LocalPort $Port `
-            -Profile Any | Out-Null
-        Write-Host "firewall: created inbound allow tcp/$Port"
+            -RemoteAddress ($RemoteAddress -split ',') -Profile Any | Out-Null
+        Write-Host "firewall: created inbound allow tcp/$Port from $RemoteAddress"
+    } else {
+        # Re-assert the sender scope so a widened rule is narrowed again.
+        $rule | Set-NetFirewallRule -RemoteAddress ($RemoteAddress -split ',')
     }
 }
 
@@ -80,7 +86,8 @@ Write-Host "WSL ($WslDistro) IPv4: $wslIp"
 
 foreach ($port in $TcpPorts) {
     Sync-PortProxy -ListenAddress $ListenAddress -Port $port -WslIp $wslIp
-    Sync-FirewallRule -Port $port
+    $remote = if ($RemoteAddressByPort.ContainsKey($port)) { $RemoteAddressByPort[$port] } else { 'Any' }
+    Sync-FirewallRule -Port $port -RemoteAddress $remote
 }
 
 Write-Host ''

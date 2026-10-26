@@ -285,9 +285,8 @@ SENSITIVE_ZONES = ["switch-mgmt", "unifi-mgmt-900", "UISP-140"]
 NATIVE_VLAN_ACCESS = [ADMIN_ZONE]
 BRIDGE_PORTS = ["ether2", "ether3", "ether4", "ether5", "ether6", "ether7", "sfp-sfpplus1"]
 
-# Remote syslog. VyOS shipped to a Vector aggregator on the old cluster
-# (10.10.120.56:6001, gone). Vector now belongs on the WSL cluster, which the
-# LAN reaches through the Windows host's LAN bridge, same as flow-collector.
+# Remote syslog: vector-aggregator on the WSL cluster, reached through the
+# Windows host's LAN bridge, same as flow-collector.
 SYSLOG_REMOTE = WSL_HOST
 
 # Source NAT moves off the ERL onto the RB5009's WAN port. VyOS had its
@@ -1566,9 +1565,8 @@ def main() -> int:
         if old_remote != SYSLOG_REMOTE:
             notes.append(
                 "syslog: target %s (Vector on the old cluster, gone) -> %s:%s, the "
-                "WSL host's LAN bridge. Needs vector-aggregator running on WSL and "
-                "a tcp/%s lan-bridge relay" % (old_remote, SYSLOG_REMOTE,
-                    system["syslog"].get("remote_port", 6001), system["syslog"].get("remote_port", 6001))
+                "WSL host's LAN bridge to vector-aggregator (tnwks-lan-bridge@syslog)"
+                % (old_remote, SYSLOG_REMOTE, system["syslog"].get("remote_port", 6001))
             )
             system["syslog"]["remote"] = SYSLOG_REMOTE
         body.append("\n")

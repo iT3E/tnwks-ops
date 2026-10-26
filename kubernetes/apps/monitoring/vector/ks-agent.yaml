@@ -1,0 +1,19 @@
+---
+# Pod-log agent (DaemonSet -> vector-aggregator:6000). MS-01 only: on WSL every
+# node and PVC shares one virtual disk, so shipping all pod logs into Loki
+# there costs more IO than it is worth.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: vector-agent
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: "./kubernetes/apps/monitoring/vector/agent"
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false # no flux ks dependents
+  dependsOn:
+    - name: vector-aggregator
