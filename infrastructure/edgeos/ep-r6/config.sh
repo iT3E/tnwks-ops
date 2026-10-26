@@ -68,14 +68,14 @@ set service dhcp-server disabled false
 set service dhcp-server hostfile-update disable
 set service dhcp-server shared-network-name LAN authoritative enable
 set service dhcp-server shared-network-name LAN subnet 10.60.10.0/24 default-router 10.60.10.1
-set service dhcp-server shared-network-name LAN subnet 10.60.10.0/24 dns-server 10.10.53.4
+set service dhcp-server shared-network-name LAN subnet 10.60.10.0/24 dns-server 10.10.140.1
 set service dhcp-server shared-network-name LAN subnet 10.60.10.0/24 lease 86400
 set service dhcp-server shared-network-name LAN subnet 10.60.10.0/24 start 10.60.10.38 stop 10.60.10.243
 set service dhcp-server static-arp disable
 set service dhcp-server use-dnsmasq disable
 set service dns forwarding cache-size 150
 set service dns forwarding listen-on eth0
-set service dns forwarding name-server 10.10.53.4
+set service dns forwarding name-server 10.10.140.1
 set service gui http-port 80
 set service gui https-port 443
 set service gui older-ciphers enable
@@ -93,7 +93,7 @@ set system host-name ubnt
 set system login user ${admin_user} authentication encrypted-password '${admin_password_hash}'
 set system login user ${admin_user} authentication plaintext-password ''
 set system login user ${admin_user} level admin
-set system name-server 10.10.53.4
+set system name-server 10.10.140.1
 set system ntp server 0.ubnt.pool.ntp.org
 set system ntp server 1.ubnt.pool.ntp.org
 set system ntp server 2.ubnt.pool.ntp.org
