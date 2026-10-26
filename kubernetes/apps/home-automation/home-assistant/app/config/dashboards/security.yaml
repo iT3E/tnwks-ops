@@ -7,10 +7,22 @@
 # The card streams through go2rtc inside Frigate, proxied by the integration,
 # so no WebRTC port has to be reachable from the browser. The go2rtc stream
 # names are set explicitly because Frigate's camera names have no matching
-# go2rtc stream here (only the _hq / _lq restreams exist). The card uses the
-# _hq main streams, the same ones Frigate's own live view uses
-# (live.streams.main), so quality matches. They're H.264 on every camera, so
-# any browser plays them; the _lq substreams looked visibly worse.
+# go2rtc stream here (only the _hq / _lq restreams exist); both are H.264 on
+# every camera, so any browser plays them.
+#
+# Grid light, single view sharp: each camera's main entry plays its _lq
+# substream, and carries an "HD" entry (same camera, _hq, the stream Frigate's
+# own live view uses) as a substream dependency. The HD entries exist only to
+# be switched to: `capabilities: disable_except: [substream]` keeps them out of
+# the camera menu and stops their media being fetched twice.
+#   - Tapping a camera in the grid selects it; the first automation below then
+#     shows it alone with the HD substream on. It only fires after a real
+#     touch (`interaction`), so loading the dashboard or arriving from an alert
+#     link leaves the grid alone.
+#   - Tapping the camera that is already selected doesn't change the selection,
+#     so it doesn't fire; the "View in HD" menu button does the same thing.
+#   - The display-mode menu button (built in) goes back to the grid, and the
+#     second automation turns HD off again.
 title: Security
 views:
   - title: Cameras
@@ -29,26 +41,91 @@ views:
             reviewed: all
         cameras:
           - camera_entity: camera.frigate_loryta_fdoor
-            go2rtc:
-              stream: frigate_loryta_fdoor_hq
+            go2rtc: { stream: frigate_loryta_fdoor_lq }
+            dependencies: { cameras: [frigate_loryta_fdoor_hd] }
+          - camera_entity: camera.frigate_loryta_fdoor
+            id: frigate_loryta_fdoor_hd
+            title: Loryta Fdoor HD
+            go2rtc: { stream: frigate_loryta_fdoor_hq }
+            capabilities: &hd_only
+              disable_except: [substream]
+
           - camera_entity: camera.frigate_reolink_south
-            go2rtc:
-              stream: frigate_reolink_south_hq
+            go2rtc: { stream: frigate_reolink_south_lq }
+            dependencies: { cameras: [frigate_reolink_south_hd] }
+          - camera_entity: camera.frigate_reolink_south
+            id: frigate_reolink_south_hd
+            title: Reolink South HD
+            go2rtc: { stream: frigate_reolink_south_hq }
+            capabilities: *hd_only
+
           - camera_entity: camera.frigate_sv3c_west
-            go2rtc:
-              stream: frigate_sv3c_west_hq
+            go2rtc: { stream: frigate_sv3c_west_lq }
+            dependencies: { cameras: [frigate_sv3c_west_hd] }
+          - camera_entity: camera.frigate_sv3c_west
+            id: frigate_sv3c_west_hd
+            title: Sv3C West HD
+            go2rtc: { stream: frigate_sv3c_west_hq }
+            capabilities: *hd_only
+
           - camera_entity: camera.frigate_amcrest_balc
-            go2rtc:
-              stream: frigate_amcrest_balc_hq
+            go2rtc: { stream: frigate_amcrest_balc_lq }
+            dependencies: { cameras: [frigate_amcrest_balc_hd] }
+          - camera_entity: camera.frigate_amcrest_balc
+            id: frigate_amcrest_balc_hd
+            title: Amcrest Balc HD
+            go2rtc: { stream: frigate_amcrest_balc_hq }
+            capabilities: *hd_only
+
           - camera_entity: camera.frigate_loryta_pool
-            go2rtc:
-              stream: frigate_loryta_pool_hq
+            go2rtc: { stream: frigate_loryta_pool_lq }
+            dependencies: { cameras: [frigate_loryta_pool_hd] }
+          - camera_entity: camera.frigate_loryta_pool
+            id: frigate_loryta_pool_hd
+            title: Loryta Pool HD
+            go2rtc: { stream: frigate_loryta_pool_hq }
+            capabilities: *hd_only
+
           - camera_entity: camera.frigate_amcrest_kitchen
-            go2rtc:
-              stream: frigate_amcrest_kitchen_hq
+            go2rtc: { stream: frigate_amcrest_kitchen_lq }
+            dependencies: { cameras: [frigate_amcrest_kitchen_hd] }
+          - camera_entity: camera.frigate_amcrest_kitchen
+            id: frigate_amcrest_kitchen_hd
+            title: Amcrest Kitchen HD
+            go2rtc: { stream: frigate_amcrest_kitchen_hq }
+            capabilities: *hd_only
         live:
           display:
             mode: grid
+        elements:
+          - type: custom:advanced-camera-card-menu-icon
+            icon: mdi:high-definition
+            title: View in HD
+            tap_action: &to_hd
+              - action: custom:advanced-camera-card-action
+                advanced_camera_card_action: display_mode_select
+                display_mode: single
+              - action: custom:advanced-camera-card-action
+                advanced_camera_card_action: substream_on
+        automations:
+          # A tap on a grid tile: show that camera alone, in HD.
+          - triggers:
+              - trigger: camera
+            conditions:
+              - condition: view
+                views: [live]
+              - condition: display_mode
+                display_mode: grid
+              - condition: interaction
+                interaction: true
+            actions: *to_hd
+          # Back to the grid: drop to the light substreams.
+          - triggers:
+              - trigger: display_mode
+                display_mode: grid
+            actions:
+              - action: custom:advanced-camera-card-action
+                advanced_camera_card_action: substream_off
 
   - title: Alerts
     path: alerts
