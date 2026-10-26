@@ -4,7 +4,7 @@
 # labelled with the remote network (ASN), so WAN alerts can say who is filling
 # the pipe. Formats are auto-detected on the same port.
 #
-#   router (VyOS sFlow/hsflowd, later RB5009 traffic-flow IPFIX)
+#   router (RB5009 traffic-flow, NetFlow v9)
 #     -> Windows host udp/2055 (Tnwks-UdpRelay, infrastructure/wsl-host)
 #     -> WSL socat (tnwks-lan-bridge@netflow)
 #     -> MetalLB ${FLOW_COLLECTOR_LB_ADDR}:2055 -> this pod

@@ -197,7 +197,7 @@
     },
     {
       "id": 4,
-      "title": "WAN download (EdgeRouter eth0)",
+      "title": "WAN download (router ether1)",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -240,7 +240,7 @@
     },
     {
       "id": 5,
-      "title": "WAN upload (EdgeRouter eth0), plan ~20 Mbps",
+      "title": "WAN upload (router ether1), plan ~20 Mbps",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -299,7 +299,7 @@
     },
     {
       "id": 6,
-      "title": "Local path RTT p90 (VyOS, EdgeRouter)",
+      "title": "Local path RTT p90 (router)",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -313,7 +313,7 @@
       },
       "targets": [
         {
-          "expr": "smokeping:rtt_p90:rate1m{role=~\"lan|edge\"}",
+          "expr": "smokeping:rtt_p90:rate1m{role=\"lan\"}",
           "legendFormat": "{{name}} p90",
           "refId": "A"
         }

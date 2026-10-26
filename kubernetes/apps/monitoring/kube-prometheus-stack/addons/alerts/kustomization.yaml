@@ -6,7 +6,6 @@ resources:
   - ./oomkilled.yaml
   - ./resource-pressure.yaml
   - ./windows.yaml
-  - ./vyos.yaml
-  - ./edgerouter.yaml
+  - ./router.yaml
   - ./wan-latency.yaml
   - ./flow-collector.yaml

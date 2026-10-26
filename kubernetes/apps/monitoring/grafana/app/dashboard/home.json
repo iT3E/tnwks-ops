@@ -746,7 +746,7 @@
         "y": 33
       },
       "id": 51,
-      "title": "VyOS CPU",
+      "title": "Router CPU",
       "type": "gauge",
       "datasource": {
         "type": "prometheus",
@@ -754,7 +754,7 @@
       },
       "targets": [
         {
-          "expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\",instance=\"sce-vyos01\"}[5m]))",
+          "expr": "max(mktxp_system_cpu_load{routerboard_name=\"sce-rtr01\"}) / 100",
           "refId": "A"
         }
       ],
@@ -791,7 +791,7 @@
         "y": 33
       },
       "id": 52,
-      "title": "VyOS Mem",
+      "title": "Router Mem",
       "type": "gauge",
       "datasource": {
         "type": "prometheus",
@@ -799,7 +799,7 @@
       },
       "targets": [
         {
-          "expr": "1 - (node_memory_MemAvailable_bytes{instance=\"sce-vyos01\"} / node_memory_MemTotal_bytes{instance=\"sce-vyos01\"})",
+          "expr": "1 - (max(mktxp_system_free_memory{routerboard_name=\"sce-rtr01\"}) / max(mktxp_system_total_memory{routerboard_name=\"sce-rtr01\"}))",
           "refId": "A"
         }
       ],
@@ -836,7 +836,7 @@
         "y": 33
       },
       "id": 53,
-      "title": "WAN Traffic (EdgeRouter eth0)",
+      "title": "WAN Traffic (router ether1)",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -844,12 +844,12 @@
       },
       "targets": [
         {
-          "expr": "rate(ifHCInOctets{instance=\"edgerouter-lite\",ifName=\"eth0\"}[5m]) * 8",
+          "expr": "wan:receive_bits:rate1m",
           "legendFormat": "Download",
           "refId": "A"
         },
         {
-          "expr": "-rate(ifHCOutOctets{instance=\"edgerouter-lite\",ifName=\"eth0\"}[5m]) * 8",
+          "expr": "-wan:transmit_bits:rate1m",
           "legendFormat": "Upload",
           "refId": "B"
         }
@@ -879,7 +879,7 @@
         "y": 37
       },
       "id": 54,
-      "title": "VyOS \u2014 Inter-VLAN Traffic (top 5)",
+      "title": "Router \u2014 Inter-VLAN Traffic (top 5)",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -887,8 +887,8 @@
       },
       "targets": [
         {
-          "expr": "topk(5, rate(node_network_receive_bytes_total{instance=\"sce-vyos01\",device=~\"eth1\\\\..*\"}[5m]) * 8)",
-          "legendFormat": "{{device}} rx",
+          "expr": "topk(5, rate(mktxp_interface_rx_byte_total{routerboard_name=\"sce-rtr01\",name=~\"bridge-lan-vlan.*\"}[5m]) * 8)",
+          "legendFormat": "{{name}} rx",
           "refId": "A"
         }
       ],
@@ -917,7 +917,7 @@
         "y": 37
       },
       "id": 55,
-      "title": "VyOS \u2014 Conntrack Utilization",
+      "title": "Router \u2014 Connections",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -925,14 +925,9 @@
       },
       "targets": [
         {
-          "expr": "node_nf_conntrack_entries{instance=\"sce-vyos01\"}",
+          "expr": "max(mktxp_ip_connections_total{routerboard_name=\"sce-rtr01\"})",
           "legendFormat": "entries",
           "refId": "A"
-        },
-        {
-          "expr": "node_nf_conntrack_entries_limit{instance=\"sce-vyos01\"}",
-          "legendFormat": "limit",
-          "refId": "B"
         }
       ],
       "fieldConfig": {
