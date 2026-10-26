@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.5.2 - 2026-10-26
+
+### Fixed
+
+* Roles Anywhere SOPS sessions can pass their session tags to iam-role-sops (sts:TagSession)
+
 ## v1.5.1 - 2026-10-26
 
 ### Fixed
