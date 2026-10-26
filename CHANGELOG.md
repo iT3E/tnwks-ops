@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.2.4 - 2026-10-26
+
+### Fixed
+
+* Flow export target uses RouterOS's lowercase ipfix version value
+
 ## v1.2.3 - 2026-10-26
 
 ### Fixed
