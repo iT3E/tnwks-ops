@@ -1,0 +1,3 @@
+kind: Fixed
+body: MikroTik config matches how RouterOS stores values (durations, single-host addresses, booleans, DHCP lease identifiers), so plans after an apply are empty
+time: 2026-10-25T18:15:55.997914067-07:00

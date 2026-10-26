@@ -309,6 +309,15 @@ def resolve_ports(spec: str) -> list[str]:
     return out
 
 
+def routeros_duration(seconds: int) -> str:
+    """Format a duration the way RouterOS stores it (1d, 12h, 30m, 45s), so a
+    value read back from the router matches the config and does not diff."""
+    for unit, size in (("w", 604800), ("d", 86400), ("h", 3600), ("m", 60)):
+        if seconds % size == 0:
+            return "%d%s" % (seconds // size, unit)
+    return "%ds" % seconds
+
+
 def chunk_ports(ports: list[str]) -> list[list[str]]:
     """Split a port list into RouterOS-legal chunks (max 15 entries per rule)."""
     return [
@@ -482,7 +491,7 @@ def parse_dhcp(lines: list[str]) -> dict:
                 net["pool_end"] = unquote(detail.rsplit(" ", 1)[1])
             elif detail.startswith("lease "):
                 seconds = int(unquote(detail.split(" ", 1)[1]))
-                net["lease_time"] = f"{seconds // 3600}h" if seconds % 3600 == 0 else f"{seconds}s"
+                net["lease_time"] = routeros_duration(seconds)
             elif detail.startswith("name-server "):
                 net.setdefault("dns_servers", []).append(unquote(detail.rsplit(" ", 1)[1]))
             elif detail.startswith("default-router "):
@@ -1218,7 +1227,9 @@ def main() -> int:
         peers = wireguard.get(iface_of_zone.get(zone, ""), {}).get("peers", {})
         for name in peer_names:
             for addr in peers.get(name, {}).get("allowed_address", []):
-                admin_peer_members[name + "_" + addr.split("/")[0].replace(".", "_")] = addr
+                # RouterOS stores a single host without /32.
+                host = addr[:-3] if addr.endswith("/32") else addr
+                admin_peer_members[name + "_" + host.replace(".", "_")] = host
         for target in SENSITIVE_ZONES:
             EXTRA_ZONE_RULES.setdefault((zone, target), []).append({
                 "description": "admin peers (%s)" % ", ".join(peer_names),
@@ -1399,7 +1410,9 @@ def main() -> int:
     # sized for the edge load rather than RouterOS defaults.
     # Strings, not bools: RouterOS spells these "yes"/"no"/"auto" and the
     # provider schema types them as String.
-    conntrack = {"enabled": "yes", "loose_tcp_tracking": "yes"}
+    # RouterOS stores loose-tcp-tracking as true/false; writing "yes" would
+    # read back as "true" and diff on every plan.
+    conntrack = {"enabled": "yes", "loose_tcp_tracking": "true"}
 
     rule_count = sum(len(p["rules"]) for p in zone_policies.values())
     enabled_vlans = sum(1 for v in vlans.values() if v.get("enabled") is not False)
