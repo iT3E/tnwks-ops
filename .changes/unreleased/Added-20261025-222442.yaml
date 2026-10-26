@@ -1,3 +1,0 @@
-kind: Added
-body: 'Router wg03 listener for the CI runner: its own zone, REST API only, joined from the LAN; the MikroTik secrets gain a CI-only age recipient'
-time: 2026-10-25T22:24:42.105705742-07:00
