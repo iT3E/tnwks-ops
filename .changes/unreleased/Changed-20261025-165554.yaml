@@ -1,3 +1,0 @@
-kind: Changed
-body: 'Terraform CI: least-privilege tokens, applies gated on the prod environment, PR gating on author and source repo'
-time: 2026-10-25T16:55:54.816533535-07:00

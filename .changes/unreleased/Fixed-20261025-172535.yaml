@@ -1,3 +1,0 @@
-kind: Fixed
-body: Release workflow no longer fails when another merge lands on main while it runs
-time: 2026-10-25T17:25:35.769512584-07:00
