@@ -1,3 +1,0 @@
-kind: Security
-body: Frigate's LAN UI requires an SSO login (oauth2-proxy) and redirects plain http to https; it used to serve its unauthenticated API to the whole LAN, camera credentials included
-time: 2026-10-26T02:00:00.000000000-07:00
