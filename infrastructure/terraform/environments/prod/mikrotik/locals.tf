@@ -13,14 +13,14 @@
 ## see secrets.sops.yaml.
 ##
 ## Translation summary:
-##   VLANs                5 (5 enabled)
+##   VLANs                5 (4 enabled)
 ##   DHCP servers         4
 ##   DHCP static leases   12
 ##   Address lists        5 (11 members)
 ##   Port lists           1
 ##   Zone-pair chains     18
 ##   Firewall accepts     11 (expanded from VyOS tcp_udp / port-limit splits)
-##   Input-chain accepts  25
+##   Input-chain accepts  23
 ##   dstnat rules         8
 ##   Static routes        1
 ##   WireGuard listeners  3
@@ -56,7 +56,7 @@ locals {
   outside_zone = "transit-10"
   # EdgeRouter Lite, still upstream during the staged cutover. Set to
   # null once the modem is on ether1 and the ERL is retired.
-  upstream_gateway = "172.16.1.1"
+  upstream_gateway = null
 
   vlans = {
     UISP-140 = {
@@ -129,6 +129,7 @@ locals {
       vlan_id = 10
       address = "172.16.1.250/24"
       comment = "transit-10"
+      enabled = false
     }
     unifi-frontend-910 = {
       vlan_id = 910
@@ -434,18 +435,6 @@ locals {
       in_interface_list = "seccam-610"
       protocol          = "udp"
       dst_port          = "53,853"
-    }
-    "050-dns-transit-10-tcp" = {
-      comment      = "DNS from transit-10 (was transit-10-containers)"
-      in_interface = "bridge-lan-vlan10"
-      protocol     = "tcp"
-      dst_port     = "53,853"
-    }
-    "060-dns-transit-10-udp" = {
-      comment      = "DNS from transit-10 (was transit-10-containers)"
-      in_interface = "bridge-lan-vlan10"
-      protocol     = "udp"
-      dst_port     = "53,853"
     }
     "070-dns-unifi-frontend-910-tcp" = {
       comment           = "DNS from unifi-frontend-910 (was unifi-frontend-910-containers)"
@@ -760,7 +749,7 @@ locals {
   # Members of the aggregate zone-lan interface list. Input-chain
   # rules for DNS/NTP/DHCP match this so they cannot be reached from
   # the WAN, closing the EdgeRouter's open-resolver/open-NTP exposure.
-  lan_interface_lists = ["UISP-140", "seccam-610", "transit-10", "unifi-frontend-910", "unifi-mgmt-900"]
+  lan_interface_lists = ["UISP-140", "seccam-610", "unifi-frontend-910", "unifi-mgmt-900"]
 
   # Carried over from the EdgeRouter Lite, which sized conntrack for
   # the full internet-edge load (table-size 32768, tcp loose enable).
@@ -947,6 +936,7 @@ locals {
   #   - transit-10-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
   #   - transit-10-k8s-120: orphaned ruleset, no `firewall zone ... from` binding in the VyOS config, so it never applied (pre-existing VyOS drift)
   #   - transit-10-unifi-mgmt-900 rule 1: DROPPED; it names udmpro (stale UDM Pro entry pointing at the EdgeRouter)
+  #   - transit-10: VLAN disabled (EdgeRouter transit hop, retired); the zone keeps only the WAN port (OUTSIDE_ZONE_VLAN_ENABLED)
   #   - unifi-frontend-910-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
   #   - unifi-frontend-910-containers rule 2: DROPPED; it targeted haproxy_frontend, which only existed for haproxy (not ported, its backends are gone)
   #   - unifi-mgmt-900-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container

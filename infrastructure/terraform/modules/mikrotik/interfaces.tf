@@ -137,7 +137,7 @@ resource "routeros_ip_route" "upstream_default" {
 # firewall rules the same from/to vocabulary.
 
 resource "routeros_interface_list" "zone" {
-  for_each = local.zone_interfaces
+  for_each = local.zone_names
 
   name    = "zone-${each.key}"
   comment = "VyOS zone ${each.key} (terraform)"

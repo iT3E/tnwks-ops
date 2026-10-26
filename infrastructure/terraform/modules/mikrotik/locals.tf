@@ -49,11 +49,15 @@ locals {
     { for k, v in var.wireguard_interfaces : coalesce(v.zone, k) => k },
   )
 
+  # Every zone's interface list. The outside zone always has one, even with
+  # its VLAN disabled: it holds the WAN port (outside_wan).
+  zone_names = toset(concat(keys(local.zone_interfaces), var.outside_zone == null ? [] : [var.outside_zone]))
+
   # Zone pairs whose both sides actually exist. A VyOS pair referencing a
   # disabled VLAN is dropped rather than silently creating an orphan chain.
   active_zone_policies = {
     for k, v in var.zone_policies : k => v
-    if contains(keys(local.zone_interfaces), v.from) && contains(keys(local.zone_interfaces), v.to)
+    if contains(local.zone_names, v.from) && contains(local.zone_names, v.to)
   }
 
   # Flatten the accept rules. Sort key is "<pair-key>/<NNN>" so the sorted map
