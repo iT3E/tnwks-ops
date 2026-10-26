@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'MikroTik module applies cleanly on RouterOS 7.25: NAT and flow export wait for VLAN interfaces, log prefixes fit 31 characters, the logging action name is alphanumeric, and the removed SSH password option is no longer set'
+time: 2026-10-25T18:03:27.737346241-07:00

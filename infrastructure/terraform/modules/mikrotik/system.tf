@@ -26,7 +26,8 @@ resource "routeros_system_note" "this" {
 resource "routeros_system_logging_action" "remote" {
   count = var.syslog == null ? 0 : 1
 
-  name            = "remote-vector"
+  # RouterOS 7.25: action names are letters and digits only.
+  name            = "remotevector"
   target          = "remote"
   remote          = var.syslog.remote
   remote_port     = var.syslog.remote_port
@@ -63,12 +64,13 @@ resource "routeros_ip_service" "disabled" {
   disabled = true
 }
 
-# VyOS: `service ssh disable-password-authentication`. RouterOS 7 already
-# refuses password SSH for a user that has keys unless this is overridden; pin
-# it so it cannot be flipped on by hand.
+# VyOS: `service ssh disable-password-authentication`. RouterOS 7.25 replaced
+# always-allow-password-login with password-authentication, whose default
+# (yes-if-no-key) already refuses passwords for any user with a key, which
+# is what the admin account has. Provider v1.99.1 cannot set the new
+# attribute, so only strong crypto is pinned here.
 resource "routeros_ip_ssh_server" "this" {
-  always_allow_password_login = false
-  strong_crypto               = true
+  strong_crypto = true
 }
 
 # --- Local accounts ---------------------------------------------------------

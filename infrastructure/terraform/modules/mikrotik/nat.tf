@@ -24,6 +24,10 @@ resource "routeros_ip_firewall_nat" "dstnat" {
   to_addresses = each.value.to_address
   to_ports     = each.value.to_port
   comment      = "${each.key} ${each.value.comment} (terraform)"
+
+  # in_interface names a VLAN interface by string; without this the rule can
+  # be created before the interface exists and RouterOS rejects it.
+  depends_on = [routeros_interface_vlan.svi]
 }
 
 resource "routeros_move_items" "nat" {

@@ -111,8 +111,10 @@ resource "routeros_ip_firewall_filter" "zone_default" {
   in_interface_list  = routeros_interface_list.zone[each.value.from].name
   out_interface_list = routeros_interface_list.zone[each.value.to].name
   log                = each.value.log
-  log_prefix         = "${each.value.from}-${each.value.to}-default"
-  comment            = "${each.key}/zzz ${each.value.comment} (terraform)"
+  # RouterOS caps log-prefix at 31 characters; the pair key is unique in its
+  # first characters and the full pair is in the comment.
+  log_prefix = substr("fwd ${each.key}", 0, 31)
+  comment    = "${each.key}/zzz ${each.value.comment} (terraform)"
 
   # Appended after the pair's accepts on first apply, so the chain is in a
   # sane order even before routeros_move_items runs.
