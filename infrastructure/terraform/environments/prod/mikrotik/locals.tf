@@ -66,7 +66,7 @@ locals {
       dhcp = {
         pool_start    = "10.10.140.100"
         pool_end      = "10.10.140.200"
-        lease_time    = "24h"
+        lease_time    = "1d"
         authoritative = "yes"
         leases = {
           sce-ep01 = {
@@ -84,7 +84,7 @@ locals {
       dhcp = {
         pool_start    = "10.10.60.30"
         pool_end      = "10.10.60.100"
-        lease_time    = "24h"
+        lease_time    = "1d"
         authoritative = "yes"
         leases = {
           RLC-410 = {
@@ -137,7 +137,7 @@ locals {
       dhcp = {
         pool_start    = "10.10.91.100"
         pool_end      = "10.10.91.200"
-        lease_time    = "24h"
+        lease_time    = "1d"
         authoritative = "yes"
         leases = {
           robovac1 = {
@@ -170,7 +170,7 @@ locals {
       dhcp = {
         pool_start    = "10.10.90.100"
         pool_end      = "10.10.90.200"
-        lease_time    = "24h"
+        lease_time    = "1d"
         authoritative = "yes"
         leases        = {}
       }
@@ -186,7 +186,7 @@ locals {
 
   address_lists = {
     admin_peers = {
-      it-mobile_10_10_31_10 = "10.10.31.10/32"
+      it-mobile_10_10_31_10 = "10.10.31.10"
     }
     frigate = {
       "10_10_91_142" = "10.10.91.142"
@@ -786,7 +786,7 @@ locals {
   # the full internet-edge load (table-size 32768, tcp loose enable).
   connection_tracking = {
     enabled            = "yes"
-    loose_tcp_tracking = "yes"
+    loose_tcp_tracking = "true"
   }
 
   # From the EdgeRouter's `service dns dynamic` (namecheap), not VyOS.

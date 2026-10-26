@@ -26,7 +26,9 @@ resource "routeros_ip_dhcp_server" "this" {
   authoritative = each.value.dhcp.authoritative
   # VyOS had ping-check enabled on every shared-network.
   conflict_detection = true
-  comment            = coalesce(each.value.comment, each.key)
+  # RouterOS's default, stated so the provider does not try to clear it.
+  dynamic_lease_identifiers = "client-mac,client-id"
+  comment                   = coalesce(each.value.comment, each.key)
 }
 
 resource "routeros_ip_dhcp_server_network" "this" {
