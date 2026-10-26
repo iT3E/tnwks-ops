@@ -1,3 +1,0 @@
-kind: Added
-body: SMART disk-health alerts for the Windows host (smartctl_exporter + Win32_DiskDrive), and the Windows memory alerts work again
-time: 2026-10-26T00:54:18.075584432-07:00
