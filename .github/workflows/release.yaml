@@ -108,8 +108,21 @@ jobs:
           git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
           git add -A .changes CHANGELOG.md
           git commit -m "chore(release): ${VERSION}"
+          # main can move between checkout and push (another merge landing).
+          # The release commit only touches .changes/ and CHANGELOG.md, so
+          # rebase onto the new tip and retry; tag only what was pushed.
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "::error::main kept moving; giving up after $attempt attempts"
+              exit 1
+            fi
+            git fetch origin main
+            git rebase origin/main
+          done
           git tag -a "${VERSION}" -m "${VERSION}"
-          git push origin HEAD:main
           git push origin "${VERSION}"
 
       - name: GitHub Release
