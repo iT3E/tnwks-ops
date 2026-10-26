@@ -1,0 +1,3 @@
+kind: Fixed
+body: Mosquitto persists its database again; the PVC was mounted at /data while the broker saved to the read-only /mosquitto/data, so retained messages were lost on restart
+time: 2026-10-25T23:43:32.291395514-07:00
