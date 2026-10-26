@@ -1,3 +1,0 @@
-kind: Added
-body: MikroTik changes plan on PRs and apply on merge from a self-hosted runner (tnwks-ops-runner) that reaches only the router's REST API over wg03
-time: 2026-10-25T22:32:41.947656439-07:00
