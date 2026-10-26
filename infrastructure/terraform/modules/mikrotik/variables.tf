@@ -596,9 +596,9 @@ variable "flow_export" {
   type = object({
     collector_address = string # Windows host that relays udp into WSL
     collector_port    = optional(number, 2055)
-    src_address       = optional(string) # e.g. the 910 gateway address
-    version           = optional(string, "IPFIX")
-    interfaces        = optional(string) # defaults to var.wan_interface
+    src_address       = optional(string)          # e.g. the 910 gateway address
+    version           = optional(string, "ipfix") # RouterOS rejects "IPFIX"
+    interfaces        = optional(string)          # defaults to var.wan_interface
     # Export long flows every minute so per-client rates stay near real time.
     active_flow_timeout   = optional(string, "1m")
     inactive_flow_timeout = optional(string, "15s")
