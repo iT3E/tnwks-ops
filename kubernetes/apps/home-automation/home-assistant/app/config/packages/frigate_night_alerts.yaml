@@ -23,8 +23,18 @@
 #     through silent/vibrate and through DND wherever DND allows alarms (the
 #     Android default). See docs/apps/home-assistant.md.
 #
-# The phone loads the snapshot from HA, through whichever URL the app is on
-# (the Frigate integration's notification proxy serves it).
+# Each review gets one notification, updated in place (same tag):
+#   1. When it first becomes a person alert: the snapshot, rung per tier.
+#   2. When Frigate ends the review: silently swapped for the review's
+#      animated preview (Android animates GIFs in the shade from Android 14;
+#      iOS shows it when expanded). It goes on a low-importance channel and as
+#      a passive interruption, so it never rings, even if the first one was
+#      already dismissed.
+# Tapping either one (or "Play clip") opens the Security dashboard on that
+# camera's latest review, playing the clip through HA, which works away from
+# home. "Open in Frigate" opens the exact review in Frigate's UI, but only on
+# the LAN. The phone loads the images from HA, through whichever URL the app is
+# on (the Frigate integration's notification proxy serves them).
 #
 # The switches and the window are helpers so they can be flipped from the
 # Security dashboard, but `initial` makes this file the source of truth: a
@@ -69,7 +79,7 @@ automation:
     triggers:
       - trigger: mqtt
         topic: frigate/reviews
-    variables:
+    variables: &alert_variables
       # Every camera is exterior, so all of them alert, including the ones
       # currently disabled in Frigate (they'll alert once re-enabled). A camera
       # added to Frigate later needs adding here.
@@ -92,21 +102,40 @@ automation:
       review: "{{ trigger.payload_json }}"
       camera: "{{ review.after.camera }}"
       camera_name: "{{ camera | replace('frigate_', '') | replace('_', ' ') | title }}"
+      # When the activity started, so the update shows the same time.
+      started: >-
+        {{ (review.after.start_time or as_timestamp(now())) | timestamp_custom('%-I:%M %p') }}
       # A review lists the tracked-object events in it; the first one's
       # snapshot is the alert image.
       event_id: "{{ review.after.data.detections | first | default('') }}"
       critical: >-
         {{ camera in critical_cameras
            and is_state('input_boolean.night_person_alerts_critical', 'on') }}
+      # The camera card on the Security dashboard takes actions from the URL:
+      # select this camera, then show its latest review (this one, unless a
+      # newer review on the same camera has arrived since).
+      clip_path: >-
+        /home-security/cameras?advanced-camera-card-action.camera_select=camera.{{ camera }}&advanced-camera-card-action.review
+      tag: "frigate-review-{{ review.after.id }}"
+      buttons:
+        - action: URI
+          title: Play clip
+          uri: "{{ clip_path }}"
+        - action: URI
+          title: Open in Frigate
+          uri: "{{ frigate_ui }}/review?id={{ review.after.id }}"
     conditions:
-      - condition: state
+      - &alerts_on
+        condition: state
         entity_id: input_boolean.night_person_alerts
         state: "on"
       # Spans midnight: after 23:00 OR before 06:00.
-      - condition: time
+      - &in_window
+        condition: time
         after: input_datetime.night_person_alerts_start
         before: input_datetime.night_person_alerts_end
-      - condition: template
+      - &watched
+        condition: template
         value_template: "{{ camera in watched_cameras and event_id != '' }}"
       # Fire once per review: on the message where it first becomes a person
       # alert — a new review, or an update that adds the person or upgrades
@@ -129,26 +158,23 @@ automation:
           notification_id: "frigate_person_{{ camera }}"
           title: "Person at {{ camera_name }}"
           message: >-
-            {{ now().strftime('%-I:%M %p') }} —
+            {{ started }} —
+            [play clip]({{ clip_path }}) ·
             [open in Frigate]({{ frigate_ui }}/review?id={{ review.after.id }})
       # A phone with a stale registration shouldn't fail the run.
       - continue_on_error: true
         action: notify.notify
         data:
           title: "Person at {{ camera_name }}"
-          message: "{{ now().strftime('%-I:%M %p') }}"
+          message: "{{ started }}"
           data:
             image: "/api/frigate/notifications/{{ event_id }}/snapshot.jpg"
-            # Tap opens the camera grid in the app (iOS: url, Android: clickAction).
-            url: /home-security/cameras
-            clickAction: /home-security/cameras
-            # One notification per review; a repeat for the same review replaces it.
-            tag: "frigate-review-{{ review.after.id }}"
+            # Tap (iOS: url, Android: clickAction).
+            url: "{{ clip_path }}"
+            clickAction: "{{ clip_path }}"
+            tag: "{{ tag }}"
             group: frigate-person
-            actions:
-              - action: URI
-                title: Open in Frigate
-                uri: "{{ frigate_ui }}/review?id={{ review.after.id }}"
+            actions: "{{ buttons }}"
             # iOS
             push: >-
               {{ {'sound': {'name': 'default', 'critical': 1, 'volume': 1.0}}
@@ -158,3 +184,48 @@ automation:
             ttl: 0
             priority: high
             channel: "{{ 'alarm_stream' if critical else 'Security alerts' }}"
+
+  - id: frigate_night_person_alert_preview
+    alias: "Security: person at night (preview)"
+    description: >-
+      When a person-alert review ends, silently swaps its notification's
+      snapshot for the review's animated preview.
+    mode: parallel
+    max: 10
+    trace:
+      stored_traces: 50
+    triggers:
+      - trigger: mqtt
+        topic: frigate/reviews
+    variables: *alert_variables
+    conditions:
+      - *alerts_on
+      - *in_window
+      - *watched
+      - condition: template
+        value_template: >-
+          {{ review.type == 'end'
+             and review.after.severity == 'alert'
+             and 'person' in review.after.data.objects }}
+    actions:
+      - continue_on_error: true
+        action: notify.notify
+        data:
+          title: "Person at {{ camera_name }}"
+          message: "{{ started }}"
+          data:
+            image: "/api/frigate/notifications/{{ review.after.id }}/review_preview.gif"
+            url: "{{ clip_path }}"
+            clickAction: "{{ clip_path }}"
+            # Same tag: replaces the alert instead of adding a second one.
+            tag: "{{ tag }}"
+            group: frigate-person
+            actions: "{{ buttons }}"
+            # Never ring for the update. iOS: passive. Android: alert_once for
+            # the in-place replace, plus a low-importance channel so a repost
+            # (if the alert was already dismissed) stays silent too.
+            push:
+              interruption-level: passive
+            alert_once: true
+            channel: Security previews
+            importance: low
