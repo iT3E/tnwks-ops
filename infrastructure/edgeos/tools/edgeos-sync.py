@@ -139,13 +139,30 @@ def main() -> int:
         print("Validated on the device (staged and discarded).")
         return 2
 
+    # commit-confirm, without its interactive prompt (which needs a TTY): the
+    # same steps vyatta-config-mgmt.pl takes. The rollback target is the saved
+    # boot config, i.e. the pre-change state, since nothing is saved until the
+    # confirm. The job id goes where EdgeOS's own `confirm` looks for it.
+    rollback = "/config/edgeos-sync-rollback.boot"
     commit = stage_script(deletes, sets) + "\n".join([
-        f"echo y | {CONFIG_MGMT} --action commit-confirm --minutes {args.confirm_minutes}",
+        f"cp /config/config.boot {rollback}",
+        f"job=$(echo 'sudo sg vyattacfg \"{CONFIG_MGMT} --action rollback --file {rollback}\"'"
+        f" | at now + {args.confirm_minutes} minutes 2>&1 | sed -n 's/^job \\([0-9]*\\) .*/\\1/p')",
+        '[ -n "$job" ] || { echo "could not schedule the rollback; not committing" >&2; exit 1; }',
+        # /var/run needs root; `confirm` reads this file to cancel the job.
+        'echo "$job" | sudo tee /var/run/confirm.job >/dev/null',
         f"{WRAPPER} commit",
     ]) + "\n"
     run_session(device, secrets, commit)
     print("Committed with commit-confirm (%d min). Confirming from a new session..." % args.confirm_minutes)
-    run_session(device, secrets, f"{CONFIG_MGMT} --action confirm\n{WRAPPER} save\n")
+    # Cancel the rollback, prove it is gone, then save.
+    run_session(device, secrets, "\n".join([
+        "set -e",
+        "job=$(cat /var/run/confirm.job)",
+        f"{CONFIG_MGMT} --action confirm",
+        'if sudo atq | grep -q "^$job[[:space:]]"; then echo "rollback job $job still queued" >&2; exit 1; fi',
+        f"{WRAPPER} save",
+    ]) + "\n")
     after_deletes, after_sets = diff(live_lines(device, secrets), desired)
     if after_deletes or after_sets:
         die("confirmed and saved, but the device still differs from the repo (%d/%d)"
