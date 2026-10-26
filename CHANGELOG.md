@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.3.0 - 2026-10-26
+
+### Added
+
+* Router monitoring via mktxp: RouterOS metrics, router alerts, a MikroTik dashboard, and WAN throughput and client names from the router
+
+### Removed
+
+* VyOS and EdgeRouter scrape jobs, alerts and dashboards, and the EdgeRouter smokeping target
+
 ## v1.2.7 - 2026-10-26
 
 ### Fixed
