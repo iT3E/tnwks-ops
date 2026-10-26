@@ -5,9 +5,9 @@
 #
 # The router's REST API is VPN-only, so each runner pod carries a wireproxy
 # sidecar: userspace WireGuard (no NET_ADMIN, no TUN, no kernel module) to the
-# router's wg03 listener, exposing REST as https://127.0.0.1:8443 inside the
-# pod only. wg03 is its own zone with no forwarding, so the tunnel reaches the
-# REST API and nothing else. secret.sops.yaml holds the tunnel config and the
+# router's wg03 listener, exposing REST as https://127.0.0.1:8443 and the
+# EP-R6's SSH as 127.0.0.1:8022, inside the pod only. wg03 is its own zone
+# whose only forward is that SSH, so the tunnel reaches nothing else. secret.sops.yaml holds the tunnel config and the
 # CI-only age key, which decrypts the MikroTik secrets and nothing else.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
@@ -100,6 +100,13 @@ spec:
               # skip the EC2 metadata lookup the AWS SDK would otherwise try.
               - name: AWS_EC2_METADATA_DISABLED
                 value: "true"
+              # CI's SSH key for EdgeOS devices (infrastructure/edgeos); the
+              # workflow writes it to a 0600 file for ssh.
+              - name: EDGEOS_SSH_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: tnwks-ops-runner
+                    key: edgeos-ssh-key
             securityContext:
               allowPrivilegeEscalation: false
               capabilities:
