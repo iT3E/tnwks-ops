@@ -1,3 +1,0 @@
-kind: Added
-body: 'IAM Roles Anywhere for workstation SOPS KMS access: a self-managed CA, a prod-account role that can only assume iam-role-sops, and aws:ra-* tasks'
-time: 2026-10-25T21:34:33.569673778-07:00
