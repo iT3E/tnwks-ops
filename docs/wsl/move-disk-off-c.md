@@ -184,7 +184,7 @@ Then re-check `kubectl get nodes` until all three are `Ready`.
 > (`infrastructure/wsl-host/`) and any Windows `netsh portproxy` are tied to the
 > WSL VM, not the vhdx — they should survive, but if LAN access to the cluster
 > is broken after the move, re-run the bridge setup (see
-> `docs/wsl-lan-exposure.md`).
+> `docs/wsl/lan-exposure.md`).
 
 ---
 
@@ -223,7 +223,7 @@ distro. Everything cluster-side is GitOps, so it rebuilds from this repo:
 1. Move/re-import the distro to E: with an empty `/var/lib/docker` (or a fresh
    distro), OR just relocate as above but `docker system prune -a` first to
    shrink the tar.
-2. Re-bootstrap per `docs/bootstrap-wsl.md`:
+2. Re-bootstrap per `docs/wsl/bootstrap.md`:
    ```bash
    cd infrastructure
    ansible-playbook -i ansible/inventory/wsl.yml ansible/playbooks/01-talos-bootstrap.yml

@@ -11,7 +11,7 @@ attached to the desktop.
 - `talosctl` CLI installed (`brew install siderolabs/tap/talosctl`)
 - At least 8GB RAM available for the cluster
 - For USB-attached apps: usbipd-win on the Windows host
-  (see [docs/usb-passthrough.md](../../docs/usb-passthrough.md))
+  (see [docs/wsl/usb-passthrough.md](../../docs/wsl/usb-passthrough.md))
 
 ## Bootstrap
 
@@ -51,7 +51,7 @@ talosctl cluster destroy --name homelab-wsl
   the LAN via the socat bridge (`wsl-lan-bridge.yml`)
 - USB-attached pods (Frigate, zwave-js-ui) require USB devices to be
   attached via usbipd-win → WSL before `01-talos-bootstrap.yml` runs;
-  see [docs/usb-passthrough.md](../../docs/usb-passthrough.md)
+  see [docs/wsl/usb-passthrough.md](../../docs/wsl/usb-passthrough.md)
 
 ## Talos access (talosconfig) and break-glass
 

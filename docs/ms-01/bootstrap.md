@@ -75,8 +75,8 @@ kubectl get pvc test
 
 Coral TPU (Frigate) and Aeotec Z-Stick (zwave-js-ui) are deployed on this
 cluster too. USB passthrough is native — plug each dongle into one of the
-MS-01s and Talos exposes it. See [usb-passthrough.md](./usb-passthrough.md).
+MS-01s and Talos exposes it. See [usb-passthrough.md](../wsl/usb-passthrough.md).
 
 ## Disaster recovery
 
-See [disaster-recovery.md](./disaster-recovery.md).
+See [disaster-recovery.md](../operations/disaster-recovery.md).

@@ -628,7 +628,7 @@ locals {
   masquerade_out_interface = "ether1"
 
   # Replaces the blocky + dnsdist + bind container stack with native
-  # RouterOS DNS. See docs/mikrotik-vyos-port.md for what did not survive.
+  # RouterOS DNS. See docs/network/migration/vyos-port.md for what did not survive.
   dns = {
     upstream_servers = ["1.1.1.1", "1.0.0.1"]
     allow_remote     = true
@@ -828,7 +828,7 @@ locals {
     }
   }
 
-  # Translation notes (see docs/mikrotik-vyos-port.md):
+  # Translation notes (see docs/network/migration/vyos-port.md):
   #   - UISP-140-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
   #   - ad-110-containers: orphaned ruleset, no `firewall zone ... from` binding in the VyOS config, so it never applied (pre-existing VyOS drift)
   #   - address list 3d_printer_controllers: not emitted, no remaining rule references it
@@ -860,7 +860,7 @@ locals {
   #   - containers-seccam-610 rule 1: DROPPED; haproxy -> backend traffic, and haproxy is not ported (its backends are gone)
   #   - containers-unifi-mgmt-900 rule 1: source retargeted to unifi_controller in unifi-frontend-910
   #   - dns: 36 bind A/CNAME records ported as RouterOS static entries; bind SOA/NS have no RouterOS equivalent and are dropped (RouterOS forwards and overrides, it is not authoritative)
-  #   - dns: 45 blocky blackList URLs become ip_dns_adlist entries -- see the RAM warning in docs/mikrotik-vyos-port.md
+  #   - dns: 45 blocky blackList URLs become ip_dns_adlist entries -- see the RAM warning in docs/network/migration/vyos-port.md
   #   - dns: alertmanager.tnwks.local -> 10.10.120.51 DROPPED; address is in a retired VLAN
   #   - dns: backbox-exporter.tnwks.local -> 10.10.120.51 DROPPED; address is in a retired VLAN
   #   - dns: blocking and split-horizon now apply to EVERY VLAN; dnsdist only sent 10.10.91.0/24 and 10.10.31.0/24 through blocky. RouterOS adlists are global

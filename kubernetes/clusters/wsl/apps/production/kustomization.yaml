@@ -3,7 +3,7 @@
 #
 # frigate is included — the Coral TPU is plugged into the desktop and
 # passed through Windows -> WSL -> Docker -> Talos. See
-# docs/usb-passthrough.md for the chain.
+# docs/wsl/usb-passthrough.md for the chain.
 #
 # uisp is omitted from the WSL cluster — it's a heavy single-instance
 # device-management workload that lives on the MS-01 cluster.

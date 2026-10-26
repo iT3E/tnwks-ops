@@ -17,7 +17,8 @@ xanmanning.k3s*
 .terraform.tfstate*
 terraform.tfstate*
 # Draw.io
-/docs/diagrams/*.bkp
+# draw.io autosave backups
+/docs/**/*.bkp
 # Packer
 # Python
 __pycache__/

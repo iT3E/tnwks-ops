@@ -20,7 +20,7 @@
 #          flip where the device re-enumerates at its runtime VID)
 #
 # Devices are matched by VID:PID, not busid — the busid changes across
-# replug/reboot. See docs/usb-passthrough.md.
+# replug/reboot. See docs/wsl/usb-passthrough.md.
 
 set -euo pipefail
 

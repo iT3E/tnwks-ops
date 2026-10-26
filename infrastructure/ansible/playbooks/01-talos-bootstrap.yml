@@ -170,7 +170,7 @@
         #     overlaying the container's /dev would shadow Talos's /dev/pts,
         #     /dev/shm and submounts and break the node. The zwave-js-ui WSL
         #     overlay points the pod hostPath at /hostdev/ttyACM0 to match.
-        # See docs/usb-passthrough.md.
+        # See docs/wsl/usb-passthrough.md.
         - name: Build desired device list
           ansible.builtin.set_fact:
             w2_devices: []

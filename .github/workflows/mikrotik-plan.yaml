@@ -2,7 +2,7 @@
 name: "MikroTik Plan"
 
 # Plans the MikroTik root module on the self-hosted tnwks-ops-runner (it is
-# the only thing that can reach the router; see docs/mikrotik-ci.md) and posts
+# the only thing that can reach the router; see docs/network/ci.md) and posts
 # the change summary on the PR.
 
 on:

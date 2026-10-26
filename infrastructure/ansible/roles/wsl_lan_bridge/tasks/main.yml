@@ -1,7 +1,7 @@
 ---
 # wsl_lan_bridge — install socat, the bridge script, and the templated
 # systemd unit, then enable+start one instance per LAN-exposed port.
-# See docs/wsl-lan-exposure.md for why this chain exists.
+# See docs/wsl/lan-exposure.md for why this chain exists.
 
 - name: Install socat
   ansible.builtin.apt:

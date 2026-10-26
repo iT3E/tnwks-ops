@@ -2,7 +2,7 @@
 version: "3"
 
 # Host-side plumbing that lets the LAN reach the WSL cluster
-# (docs/wsl-lan-exposure.md). Each task is idempotent. The Windows steps run
+# (docs/wsl/lan-exposure.md). Each task is idempotent. The Windows steps run
 # elevated through invoke-elevated.sh, so expect a UAC prompt.
 
 vars:

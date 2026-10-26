@@ -25,7 +25,7 @@ You also need:
 - 1Password CLI configured (or supply tokens manually)
 - For USB-attached apps (Frigate, zwave-js-ui): `usbipd-win` on the Windows
   host with the dongles bound and attached. See
-  [usb-passthrough.md](./usb-passthrough.md).
+  [usb-passthrough.md](usb-passthrough.md).
 - Working VPN credentials for `pod-gateway`. The VPN secret
   (`kubernetes/apps/vpn/pod-gateway/downloads/secrets.sops.yaml`) is
   encrypted to the existing repo age recipient — to use it on this cluster,
@@ -151,7 +151,7 @@ Apps that are deployed but require USB passthrough to function:
 - `production/frigate` (Coral TPU)
 - `home-automation/zwave-js-ui` (Aeotec Z-Stick)
 
-See [usb-passthrough.md](./usb-passthrough.md).
+See [usb-passthrough.md](usb-passthrough.md).
 
 ## Troubleshooting
 
@@ -178,4 +178,4 @@ See [usb-passthrough.md](./usb-passthrough.md).
 
 ### Frigate / zwave-js-ui pods crash on startup
 - USB device probably isn't reaching the Talos container. Walk down the
-  chain in [usb-passthrough.md](./usb-passthrough.md#verification-commands).
+  chain in [usb-passthrough.md](usb-passthrough.md#verification-commands).

@@ -10,7 +10,7 @@ with, or the IP address it connects over. Those four things live here.
 
 | File | What it is |
 | --- | --- |
-| `routeros-bootstrap.rsc` | First-touch script. Preferred: copied to the factory-config router and run with `reset-configuration no-defaults=yes run-after-reset=`. Fallback: pasted over serial/Winbox-by-MAC on ether8. See `docs/mikrotik-cutover-checklist.md` 1.4. |
+| `routeros-bootstrap.rsc` | First-touch script. Preferred: copied to the factory-config router and run with `reset-configuration no-defaults=yes run-after-reset=`. Fallback: pasted over serial/Winbox-by-MAC on ether8. See `docs/network/migration/cutover-checklist.md` 1.4. |
 | `../../ansible/playbooks/mikrotik-bootstrap.yml` | Repeatable post-bootstrap verification: asserts RouterOS 7.x, snapshots the running config, checks `www-ssl`. |
 | `../../ansible/inventory/mikrotik.yml` | Inventory. Credentials come from SOPS via env, not from the file. |
 
@@ -67,5 +67,5 @@ you get back in without a console.
 `/system device-mode update container=yes` requires **physical access**: it forces
 a hardware confirmation via reset button or power cycle. This port does not use
 containers, so skip it. Relevant only if the container-disposition decisions in
-`docs/mikrotik-vyos-port.md` get reversed, which the hardware argues against
+`docs/network/migration/vyos-port.md` get reversed, which the hardware argues against
 (1GB RAM, 1GB NAND, no M.2).

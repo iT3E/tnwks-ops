@@ -39,7 +39,7 @@ from `show configuration commands` into `config.sh`.
 
 ## CI
 
-Same flow as the MikroTik root (`docs/mikrotik-ci.md`): `edgeos-plan.yaml`
+Same flow as the MikroTik root (`docs/network/ci.md`): `edgeos-plan.yaml`
 plans every device on the owner's PRs and comments the result;
 `edgeos-apply.yaml` applies on merge to `main`. Both run on the
 `tnwks-ops-runner` scale set, whose wireproxy sidecar forwards

@@ -207,7 +207,7 @@ Home Assistant's own YAML (automations, helpers, dashboards) lives in
 `kubernetes/apps/home-automation/home-assistant/app/config/`, delivered as
 ConfigMaps with Flux substitution off (per-cluster values come in as env vars
 and are read with `!env_var`). Integrations, registries and the HTTP server
-settings are UI-only and live on the PVC — `docs/home-assistant.md` has the
+settings are UI-only and live on the PVC — `docs/apps/home-assistant.md` has the
 ownership split and the one-time setup. `.github/workflows/home-assistant.yaml`
 runs `check_config` against the pinned image on every PR that touches the app.
 A PR that only edits existing files under that `config/` dir needs no Changie
