@@ -56,6 +56,7 @@ chain self-heals without manual intervention.
 | `ingress-nginx-controller` (public)  | 10.5.0.202 | 80, 443          |
 | `mosquitto`                          | 10.5.0.203 | 1883             |
 | `flow-collector-netflow`             | 10.5.0.204 | 2055/UDP         |
+| `vector-aggregator`                  | 10.5.0.205 | 6001/TCP         |
 
 The public ingress controller (`.202`) is intentionally **not** bridged here —
 that one is fronted by the cloudflared tunnel and should never be reachable
@@ -90,6 +91,21 @@ udp/2055 from RFC1918 sources only, and starts the task. Log:
 `C:\ProgramData\tnwks-udp-relay\udp-relay.log`. The WSL half is the `netflow`
 instance of the `wsl_lan_bridge` role (re-run `wsl-lan-bridge.yml`).
 
+## Router syslog (vector-aggregator)
+
+The router's remote logging is TCP syslog to the Windows host on tcp/6001,
+which rides the same portproxy chain as HTTP(S):
+
+```
+router remote logging (BSD syslog, TCP) -> <windows-ip>:6001
+  -> netsh portproxy (Sync-TnwksLanBridge.ps1) -> <wsl-ip>:6001
+  -> socat tnwks-lan-bridge@syslog -> MetalLB 10.5.0.205:6001
+  -> monitoring/vector-aggregator -> loki ({job="routeros"})
+```
+
+The Windows firewall rule for 6001 accepts only the router's 910 address
+(`RemoteAddressByPort` in `Sync-TnwksLanBridge.ps1`), not the whole LAN.
+
 ## One-time setup on the WSL distro
 
 ```bash
@@ -100,7 +116,7 @@ ansible-playbook -i ./ansible/inventory/wsl.yml ./ansible/playbooks/wsl-lan-brid
 The `wsl_lan_bridge` role installs `socat`, drops
 `tnwks-lan-bridge` into `/usr/local/bin/`, the templated systemd unit
 into `/etc/systemd/system/`, and enables+starts one instance per
-LAN-exposed port (`http`, `https`, `mqtt`). Idempotent — only restarts
+LAN-exposed port (`http`, `https`, `mqtt`, `netflow`, `syslog`). Idempotent — only restarts
 units when the script or unit file actually changes.
 
 Verify each unit is active:

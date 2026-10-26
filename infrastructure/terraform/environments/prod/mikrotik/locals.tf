@@ -939,7 +939,7 @@ locals {
   #   - seccam-610-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
   #   - seccam-610-transit-10 rule 1: DROPPED; it names blue_iris (Blue Iris NVR, replaced by Frigate)
   #   - seccam-610-unifi-frontend-910 rule 1: DROPPED; it names blue_iris (Blue Iris NVR, replaced by Frigate)
-  #   - syslog: target 10.10.120.56 (Vector on the old cluster, gone) -> 10.10.91.142:6001, the WSL host's LAN bridge. Needs vector-aggregator running on WSL and a tcp/6001 lan-bridge relay
+  #   - syslog: target 10.10.120.56 (Vector on the old cluster, gone) -> 10.10.91.142:6001, the WSL host's LAN bridge to vector-aggregator (tnwks-lan-bridge@syslog)
   #   - system: 1 SSH public key(s) ported from VyOS `system login user`; the username came from ${SSH_VYOS_USERNAME} and is injected from SOPS in main.tf
   #   - system: VyOS flow export (sFlow, for monitoring/flow-collector) is not generated; the root module's flow_export (IPFIX) replaces it
   #   - system: VyOS task-scheduler (dhcp-leases-textfile.py -> node-exporter dhcp_lease_info, used for flow-collector client names) has no RouterOS port; client names need a RouterOS lease exporter (e.g. mktxp)

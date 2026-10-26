@@ -23,6 +23,9 @@ resources:
   - ./loki/ks.yaml
   - ./tempo/ks.yaml
   - ./alloy/ks.yaml
-# thanos and vector remain MS-01 only (thanos needs a Rook Ceph S3 bucket;
-# vector-aggregator dependsOn loki). Added back via
+  # vector-aggregator: receives the router's syslog (and, on MS-01, the pod-log
+  # agent) and writes to loki.
+  - ./vector/ks.yaml
+# thanos and the vector pod-log agent remain MS-01 only (thanos needs a Rook
+# Ceph S3 bucket; see vector/ks-agent.yaml for the agent). Added back via
 # kubernetes/clusters/ms-01/apps/kustomization.yaml.
