@@ -1,55 +1,56 @@
-# MikroTik changes via CI (planned, after cutover)
+# MikroTik changes via CI
 
-Today the RouterOS root module is planned and applied from a workstation
-(`task mikrotik:{plan,apply}`). The goal is the same PR flow as the AWS root:
-plan on the PR, apply on merge. The router is only reachable from the LAN, so
-the runs need a runner inside the network, and router management is VPN-only,
-so that runner needs its own way in.
-
-## Shape
+The RouterOS root module (`infrastructure/terraform/environments/prod/mikrotik`)
+follows the same flow as the AWS root: plan on the PR, apply on merge, no manual
+approval. The router's REST API is only reachable over a VPN, so the runs
+happen on a self-hosted runner in the WSL cluster, which reaches the router
+through its own WireGuard listener.
 
 ```
 PR / merge to main
-  -> GitHub Actions job, runs-on: tnwks-ops-runner (ARC scale set, WSL cluster)
-       wireguard sidecar  --wg03-->  RB5009 10.10.32.1:443 (REST)
-       terraform plan|apply  (state in TFC workspace tnwks-mikrotik-prod,
-                              execution mode local: the run happens on the runner)
+  -> mikrotik-plan.yaml / mikrotik-apply.yaml, runs-on: tnwks-ops-runner
+     (ARC scale set, WSL cluster, tools namespace)
+       runner pod
+         wireproxy sidecar  --wg03 udp/51822-->  RB5009 10.10.32.1
+           127.0.0.1:8443  ----------------->  REST 443 (nothing else)
+         runner: terraform plan|apply
+           state:   TFC workspace tnwks-mikrotik-prod (local execution)
+           secrets: secrets.sops.yaml, via the CI-only age key
 ```
 
 ## Pieces
 
 | Piece | Where | Notes |
 | --- | --- | --- |
-| Runner scale set `tnwks-ops-runner` | `kubernetes/apps/tools/actions-runner-controller/runner/` | Second scale set next to `sites-builder`, scoped to this repo. The existing GitHub App is installed on `tnwks-ops` too |
-| WireGuard sidecar | same pod | Shares the runner's network namespace; needs `NET_ADMIN`. Config (private key, peer) from a SOPS secret. `AllowedIPs` is the router's `wg03` address only |
-| Listener `wg03`, zone `vpn-ci` | `modules/mikrotik` + generator | Its own listener and zone, not a `wg01` peer: `vpn -> *` defaults to accept, which a CI identity must not inherit. `vpn-ci` gets an input accept for REST 443 and no forward pairs, so the terminal drop covers everything else |
-| CI-only SOPS recipient | `.sops.yaml` | A dedicated age key that decrypts only `environments/prod/mikrotik/secrets.sops.yaml`, mounted into the runner. A leaked CI key exposes the router's secrets, not the repo's |
-| TFC token | repo secret | A team token scoped to `tnwks-mikrotik-prod` rather than the org token |
-| Workflows `mikrotik-plan.yaml` / `mikrotik-apply.yaml` | `.github/workflows/` | Same gating as the AWS workflows (below) |
+| Listener `wg03`, zone `vpn-ci` | generator `EXTRA_WIREGUARD` | `10.10.32.1/24`, one peer (`10.10.32.10`). Its own zone, not a `wg01` peer: `vpn -> *` defaults to accept, which a CI identity must not inherit. `vpn-ci` has no zone pairs (the terminal forward drop covers it) and one input accept, REST 443. WireGuard 51822 is accepted from the LAN only, never the WAN |
+| Runner scale set `tnwks-ops-runner` | `kubernetes/apps/tools/actions-runner-controller/ops-runner/` | `minRunners: 0`, `maxRunners: 1`. Same GitHub App as `sites-builder`, installed on both repos |
+| wireproxy sidecar | same pod | Userspace WireGuard (no `NET_ADMIN`, TUN or kernel module). Exposes the router's REST API as `https://127.0.0.1:8443` inside the pod; the runner waits for its `/readyz`, which pings the router through the tunnel |
+| CI-only age key | `.sops.yaml` (first rule), `secret.sops.yaml` | Decrypts `environments/prod/mikrotik/*.sops.yaml` and nothing else in the repo. The runner gets it as `SOPS_AGE_KEY` |
+| Endpoint override | `variables.tf` (`routeros_url`) | CI sets `TF_VAR_routeros_url=https://127.0.0.1:8443`; unset locally, where the SOPS value (`wg01`) applies |
+| TFC token | repo secret `TF_API_TOKEN` | The one the AWS workflows already use. HCP Terraform's free plan has no custom teams, so no workspace-scoped token exists |
+| Workflows | `mikrotik-{plan,apply}.yaml`, `.github/actions/mikrotik-terraform` | Shared plan/apply logic. One concurrency group, so runs never overlap |
 
 ## Security model
 
 This repo is public, and a self-hosted runner executes whatever a workflow
-tells it to inside the LAN. The controls, in order:
+tells it to inside the LAN. The controls:
 
-1. **No fork code on the runner.** Plan runs only when the PR's source repo is
-   this repo and its author is the owner (`head.repo.full_name ==
-   github.repository`), the same gate the AWS plan uses. Fork PRs never get a
-   job on the self-hosted runner.
-2. **Fork PR workflows need approval** for all external contributors (repo
-   setting), so even a workflow change in a fork PR cannot run unreviewed.
-3. **Apply waits for the `prod` environment's reviewers**, and runs only on
-   `push` to `main`, which branch protection limits to merged PRs with a
-   passing secret scan and no force-pushes.
-4. **The runner can only reach the router's REST API.** `wg03` / `vpn-ci` has no
-   forward access, and the runner's tunnel carries only the router address.
-5. **Least privilege everywhere else:** `permissions: {}` by default, a
-   CI-only age key, a workspace-scoped TFC token.
+1. **No fork or third-party code on the runner.** The plan job runs only when
+   the PR comes from this repo and from the owner. Fork PRs need approval for
+   any workflow at all (repo setting: all external contributors).
+2. **Apply runs only from `main`.** The `prod` environment accepts deployments
+   from protected branches only, and `main` takes changes through PRs.
+3. **The runner can reach the router's REST API and nothing else.** No
+   forwarding from `vpn-ci`, and the tunnel's `AllowedIPs` is the router's
+   `wg03` address.
+4. **Narrow secrets.** The CI age key decrypts only the MikroTik secrets.
+   `permissions: {}` by default, `persist-credentials: false`.
+5. **Public logs show no plan body.** The composite action prints only the
+   counts and addresses of changing resources, and Terraform's error blocks
+   on failure. The full plan never reaches the job log or the PR.
 
-## Order of work
+## Local runs
 
-1. After cutover, with the router stable: add `wg03`/`vpn-ci` to the module and
-   generator; apply from the workstation.
-2. CI age recipient in `.sops.yaml`; re-encrypt the MikroTik secrets file.
-3. Runner scale set + WireGuard sidecar (Flux).
-4. Workflows, first as plan-only; switch on apply once plans are trusted.
+Unchanged: `task mikrotik:plan` / `task mikrotik:apply` over `wg01`, for
+break-glass or when CI is down. Both use the same TFC state, and the
+workspace lock keeps them from overlapping with CI.
