@@ -21,6 +21,12 @@ views:
       - type: custom:advanced-camera-card
         cameras_global:
           live_provider: go2rtc
+          # Show reviews whether or not they've been marked reviewed. The
+          # card's default is unreviewed only, and Frigate marks a review
+          # reviewed once it's opened in Frigate's UI, so tapping an alert
+          # you'd already looked at found "No media to display".
+          media:
+            reviewed: all
         cameras:
           - camera_entity: camera.frigate_loryta_fdoor
             go2rtc:
