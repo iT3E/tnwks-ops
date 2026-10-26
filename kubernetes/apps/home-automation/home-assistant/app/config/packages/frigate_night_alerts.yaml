@@ -5,7 +5,7 @@
 # on frigate/reviews (type new / update / end). A review is an "alert" when it
 # contains a label from review.alerts.labels — person, with the default
 # Frigate config. This pushes one notification per review, the first time it
-# becomes a person alert, on an exterior camera, inside the night window.
+# becomes a person alert, on a watched camera, inside the night window.
 #
 # Delivery is the Companion app's native push. mobile_app's legacy notify
 # platform registers one service per phone (notify.mobile_app_<device>) plus a
@@ -58,9 +58,9 @@ automation:
   - id: frigate_night_person_alert
     alias: "Security: person at night"
     description: >-
-      Companion app push when Frigate raises a person alert on an exterior
-      camera between the night alerts start and end times; entry-point
-      cameras break through Do Not Disturb.
+      Companion app push when Frigate raises a person alert on a watched
+      camera between the night alerts start and end times; critical cameras
+      (currently all of them) break through Do Not Disturb.
     mode: parallel
     max: 10
     # Every frigate/reviews message is a run; keep enough to debug a night.
@@ -70,18 +70,23 @@ automation:
       - trigger: mqtt
         topic: frigate/reviews
     variables:
-      # Exterior cameras only; the interior ones see the household at night.
+      # Every camera is exterior, so all of them alert, including the ones
+      # currently disabled in Frigate (they'll alert once re-enabled). A camera
+      # added to Frigate later needs adding here.
       watched_cameras:
         - frigate_loryta_fdoor
         - frigate_reolink_south
         - frigate_sv3c_east
         - frigate_sv3c_west
         - frigate_amcrest_balc
+        - frigate_amcrest_kitchen
         - frigate_loryta_pool
-      # The entry points: a person here at night should wake someone up.
-      critical_cameras:
-        - frigate_loryta_fdoor
-        - frigate_amcrest_balc
+        - frigate_wyze_groom
+        - frigate_wyze_rroom
+        - frigate_wyze_baby
+      # For now every watched camera is critical. To tier them, replace this
+      # with an explicit list; the rest then send normal pushes.
+      critical_cameras: "{{ watched_cameras }}"
       # Browser-facing Frigate UI, for the notification's button.
       frigate_ui: !env_var FRIGATE_UI_URL
       review: "{{ trigger.payload_json }}"

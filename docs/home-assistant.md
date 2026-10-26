@@ -159,16 +159,20 @@ to areas so the Overview dashboard fills in.
 `config/packages/frigate_night_alerts.yaml` sends one Companion app push per
 Frigate review, the first time the review becomes a person alert. The push has
 a snapshot and an *Open in Frigate* button, and tapping it opens the camera
-grid. It only fires for exterior cameras (`watched_cameras`), between 23:00 and
-06:00, and only while *Night person alerts* is on. Each alert also leaves an
-HA notification, one per camera.
+grid. It fires for the cameras in `watched_cameras`, which is all of them,
+since every camera is exterior. It only fires between 23:00 and 06:00, and
+only while *Night person alerts* is on. Each alert also leaves an HA
+notification, one per camera.
 
-There are two tiers:
+There are two tiers. Right now every watched camera is critical
+(`critical_cameras: "{{ watched_cameras }}"`). To tier them, give
+`critical_cameras` an explicit list, and the cameras left out send normal
+pushes. Turning *Critical night alerts* off drops everything to normal.
 
-| Tier | Which cameras | iOS | Android |
-|---|---|---|---|
-| Normal | `watched_cameras` | time-sensitive: gets through Focus, not DND or mute | high priority, channel *Security alerts* |
-| Critical | `critical_cameras` (front door, balcony), while *Critical night alerts* is on | critical alert: overrides DND and mute | alarm stream: rings through silent and vibrate, and through DND when alarms are allowed |
+| Tier | iOS | Android |
+|---|---|---|
+| Normal | time-sensitive: gets through Focus, not DND or mute | high priority, channel *Security alerts* |
+| Critical | critical alert: overrides DND and mute | alarm stream: rings through silent and vibrate, and through DND when alarms are allowed |
 
 The push goes through HA's mobile push relay (Apple/Google). The phone loads
 the snapshot from HA itself, through whichever URL the app is using, and the
@@ -180,7 +184,7 @@ lasting changes in the package. Both switches default to on deliberately: a
 restart should never quietly leave alerting off.
 
 To test it, move the start and end times on the Alerts view so the window
-covers now, then walk past an exterior camera. Restarting HA restores the real
+covers now, then walk past a camera. Restarting HA restores the real
 window.
 
 ## Break-glass
