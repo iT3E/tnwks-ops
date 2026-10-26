@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'WSL Talos: finished pods are garbage-collected (terminated-pod-gc-threshold 1), so leftovers from node restarts can no longer stall Recreate rollouts'
-time: 2026-10-26T00:26:23.945975142-07:00
