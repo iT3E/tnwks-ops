@@ -37,9 +37,9 @@ data "aws_iam_policy_document" "inline_iam_policy_adminaccess" {
 data "aws_iam_policy_document" "custom_role_trust_policy" {
   statement {
     effect = "Allow"
-    # SetSourceIdentity: Roles Anywhere sessions carry a source identity into
-    # the role chain (modules/aws/rolesanywhere.tf).
-    actions = ["sts:AssumeRole", "sts:SetSourceIdentity"]
+    # SetSourceIdentity, TagSession: Roles Anywhere sessions carry a source
+    # identity and session tags into the role chain (modules/aws/rolesanywhere.tf).
+    actions = ["sts:AssumeRole", "sts:SetSourceIdentity", "sts:TagSession"]
     condition {
       test     = "ArnLike"
       variable = "aws:PrincipalArn"
