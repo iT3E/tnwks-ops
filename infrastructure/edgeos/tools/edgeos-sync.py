@@ -151,7 +151,9 @@ def main() -> int:
         '[ -n "$job" ] || { echo "could not schedule the rollback; not committing" >&2; exit 1; }',
         # /var/run needs root; `confirm` reads this file to cancel the job.
         'echo "$job" | sudo tee /var/run/confirm.job >/dev/null',
-        f"{WRAPPER} commit",
+        # A commit that fails leaves the running config untouched; cancel the
+        # rollback so the device does not reboot for nothing.
+        f'{WRAPPER} commit || {{ {CONFIG_MGMT} --action confirm; echo "commit failed; rollback cancelled" >&2; exit 1; }}',
     ]) + "\n"
     run_session(device, secrets, commit)
     print("Committed with commit-confirm (%d min). Confirming from a new session..." % args.confirm_minutes)
