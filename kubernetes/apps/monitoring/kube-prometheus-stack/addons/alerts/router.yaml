@@ -1,0 +1,94 @@
+---
+# RB5009 (sce-rtr01), via mktxp (monitoring/mktxp). mktxp answers /metrics even
+# when it cannot reach the router, so "router unreachable" is the absence of
+# router metrics, not up == 0.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: router-alerts
+spec:
+  groups:
+    - name: router
+      rules:
+        - alert: RouterUnreachable
+          expr: absent(mktxp_system_uptime{routerboard_name="sce-rtr01"})
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Router metrics missing"
+            description: >-
+              No metrics from sce-rtr01 for 3 minutes: the router, its api-ssl
+              service, or mktxp is down. If the internet still works, check the
+              mktxp pod and the router's `monitoring` address list.
+
+        - alert: RouterWANDown
+          expr: mktxp_interface_running{routerboard_name="sce-rtr01",name="ether1"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Router WAN port (ether1) is down"
+            description: "ether1 on sce-rtr01 has no link: internet is down."
+
+        - alert: RouterTrunkDown
+          expr: mktxp_interface_running{routerboard_name="sce-rtr01",name="ether2"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Router trunk (ether2) is down"
+            description: "ether2 on sce-rtr01 is the trunk to the switch; every VLAN is cut off."
+
+        - alert: RouterHighCPU
+          expr: max(mktxp_system_cpu_load{routerboard_name="sce-rtr01"}) > 85
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Router CPU above 85% for 15m"
+            description: "sce-rtr01 CPU at {{ $value }}%."
+
+        - alert: RouterCriticalCPU
+          expr: max(mktxp_system_cpu_load{routerboard_name="sce-rtr01"}) > 95
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Router CPU above 95%"
+            description: "sce-rtr01 CPU at {{ $value }}%: forwarding is likely degraded."
+
+        - alert: RouterHighMemory
+          expr: |
+            1 - (
+              max(mktxp_system_free_memory{routerboard_name="sce-rtr01"})
+              / max(mktxp_system_total_memory{routerboard_name="sce-rtr01"})
+            ) > 0.85
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Router memory above 85%"
+            description: "sce-rtr01 memory at {{ $value | humanizePercentage }}. The DNS adlists live in RAM."
+
+        - alert: RouterStorageLow
+          expr: |
+            max(mktxp_system_free_hdd_space{routerboard_name="sce-rtr01"})
+            / max(mktxp_system_total_hdd_space{routerboard_name="sce-rtr01"}) < 0.15
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Router storage below 15% free"
+            description: "sce-rtr01 flash at {{ $value | humanizePercentage }} free."
+
+        - alert: RouterInterfaceErrors
+          expr: |
+            rate(mktxp_interface_rx_error_total{routerboard_name="sce-rtr01"}[5m])
+            + rate(mktxp_interface_tx_error_total{routerboard_name="sce-rtr01"}[5m]) > 10
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Router interface {{ $labels.name }} seeing errors"
+            description: "{{ $labels.name }} averaging {{ $value | humanize }} errors/sec."

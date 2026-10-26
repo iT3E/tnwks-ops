@@ -1,0 +1,94 @@
+---
+# RouterOS metrics for the RB5009 (sce-rtr01): interfaces, CPU/memory/health,
+# DHCP leases (client names for the flow-collector WAN rules), WireGuard peers,
+# firewall rule counters.
+#
+#   mktxp -> api-ssl 10.10.91.1:8729
+#
+# The router accepts api-ssl only from its `monitoring` address list (the WSL
+# host, which is what cluster egress is NATed to) and only for the read-only
+# `mktxp` account. Credentials: secret.sops.yaml, the same password as
+# mktxp_password in the MikroTik Terraform secrets.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: mktxp
+  namespace: monitoring
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      interval: 30m
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  values:
+    controllers:
+      mktxp:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: ghcr.io/akpw/mktxp
+              tag: 2.1.0@sha256:512ebe6c83c374147ac326c57ff9225b09df777883e772d417e5275bc6820e98
+            args: ["mktxp", "export"]
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            resources:
+              requests:
+                cpu: 10m
+                memory: 64Mi
+              limits:
+                memory: 256Mi
+    defaultPodOptions:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+    service:
+      app:
+        controller: mktxp
+        ports:
+          http:
+            port: 49090
+    serviceMonitor:
+      app:
+        enabled: ${SERVICE_MONITOR_ENABLED}
+        serviceName: mktxp
+        endpoints:
+          - port: http
+            scheme: http
+            path: /metrics
+            interval: 30s
+            scrapeTimeout: 20s
+    persistence:
+      config:
+        type: configMap
+        name: mktxp-config
+        globalMounts:
+          - path: /etc/mktxp/mktxp.conf
+            subPath: mktxp.conf
+            readOnly: true
+          - path: /etc/mktxp/_mktxp.conf
+            subPath: _mktxp.conf
+            readOnly: true
+      credentials:
+        type: secret
+        name: mktxp-credentials
+        globalMounts:
+          - path: /etc/mktxp/credentials.yml
+            subPath: credentials.yml
+            readOnly: true
+      tmp:
+        type: emptyDir
+        globalMounts:
+          - path: /tmp

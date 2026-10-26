@@ -2,18 +2,18 @@
 # WAN latency / packet loss, fed by smokeping-prober (1 ping/s per target).
 #
 # Target roles (see monitoring/smokeping-prober/app/config/smokeping.yaml):
-#   lan      VyOS, first hop from the cluster
-#   edge     EdgeRouter LAN side, last hop before the ISP
+#   lan      the router (sce-rtr01): first hop from the cluster and the last
+#            hop we own before the ISP
 #   internet 1.1.1.1, 8.8.8.8, 9.9.9.9
 #
 # The alerts localise the fault instead of just saying "slow":
-#   internet slow + edge healthy  -> WanLatencyHigh (link saturated or ISP)
-#   edge slow                     -> InternalPathLatencyHigh (VyOS / WSL / LAN)
+#   internet slow + lan healthy   -> WanLatencyHigh (link saturated or ISP)
+#   lan slow                      -> InternalPathLatencyHigh (router / WSL / LAN)
 #
 # Thresholds are relative to each target's own recent baseline:
 #   baseline  = median RTT over the last hour
 #   threshold = max(2 x baseline, baseline + 15ms), never above 100ms
-# e.g. baseline 19ms -> 38ms, 28ms -> 56ms, EdgeRouter 1ms -> 16ms.
+# e.g. baseline 19ms -> 38ms, 28ms -> 56ms, router 1ms -> 16ms.
 # The 100ms cap keeps a long bloated hour from dragging the baseline up
 # far enough to hide the problem.
 #
@@ -73,11 +73,11 @@ spec:
               ),
               0
             )
-        # WAN throughput on the EdgeRouter (eth0), bits/s. 15s SNMP scrape.
+        # WAN throughput on the router's WAN port (ether1), bits/s, via mktxp.
         - record: wan:receive_bits:rate1m
-          expr: sum(rate(ifHCInOctets{instance="edgerouter-lite",ifName="eth0"}[1m])) * 8
+          expr: sum(rate(mktxp_interface_rx_byte_total{routerboard_name="sce-rtr01",name="ether1"}[1m])) * 8
         - record: wan:transmit_bits:rate1m
-          expr: sum(rate(ifHCOutOctets{instance="edgerouter-lite",ifName="eth0"}[1m])) * 8
+          expr: sum(rate(mktxp_interface_tx_byte_total{routerboard_name="sce-rtr01",name="ether1"}[1m])) * 8
 
         # Who is using the WAN, from flow export (monitoring/flow-collector).
         # Per client and remote network (ASN), bits/s. 2m window because the
@@ -86,16 +86,19 @@ spec:
           expr: sum by (client_ip, asn, as_name) (rate(wan_client_transmit_bytes_total[2m])) * 8
         - record: wan:client_as_receive_bits_by_ip:rate2m
           expr: sum by (client_ip, asn, as_name) (rate(wan_client_receive_bytes_total[2m])) * 8
-        # client_ip -> client (DHCP hostname). One name per IP. Any router can
-        # feed this: VyOS writes dhcp_lease_info via node-exporter's textfile
-        # collector; on RouterOS, map mktxp's lease metric to the same labels.
+        # client_ip -> client, from the router's DHCP leases (mktxp). One name
+        # per IP: the client's hostname, else the static lease's comment.
         - record: wan:client_name
           expr: |
             topk by (client_ip) (1,
               max by (client_ip, client) (
                 label_replace(
-                  label_replace(dhcp_lease_info{hostname!=""}, "client_ip", "$1", "ip", "(.+)"),
-                  "client", "$1", "hostname", "(.+)")
+                  label_replace(mktxp_dhcp_lease_info{host_name!=""}, "client_ip", "$1", "address", "(.+)"),
+                  "client", "$1", "host_name", "(.+)")
+                or
+                label_replace(
+                  label_replace(mktxp_dhcp_lease_info{host_name="",comment!=""}, "client_ip", "$1", "address", "(.+)"),
+                  "client", "$1", "comment", "(.+)")
               )
             )
         # Same rates with a readable `client` label (hostname, else the IP).
@@ -122,9 +125,9 @@ spec:
             ) >= 2
             unless on ()
             max(
-              smokeping:rtt_p90:rate30s{role="edge"}
+              smokeping:rtt_p90:rate30s{role="lan"}
               > on (host, name, role)
-              smokeping:latency_threshold:1h{role="edge"}
+              smokeping:latency_threshold:1h{role="lan"}
             )
           for: 15s
           labels:
@@ -136,7 +139,7 @@ spec:
               Normal ~{{ with query "round(avg(smokeping:rtt_p50:rate1h{role=\"internet\"}) * 1000)" }}{{ . | first | value }}ms{{ end }},
               alert line ~{{ with query "round(avg(smokeping:latency_threshold:1h{role=\"internet\"}) * 1000)" }}{{ . | first | value }}ms{{ end }}.
               Now (p90, 30s):{{ range query "round(smokeping:rtt_p90:rate30s{role=\"internet\"} * 1000, 0.1)" | sortByLabel "name" }} {{ .Labels.name }} {{ .Value }}ms;{{ end }}
-              EdgeRouter hop is clean, so this is the WAN link or the ISP.
+              The router hop is clean, so this is the WAN link or the ISP.
               WAN now: down {{ with query "wan:receive_bits:rate1m" }}{{ . | first | value | humanize }}{{ end }}bps,
               up {{ with query "wan:transmit_bits:rate1m" }}{{ . | first | value | humanize }}{{ end }}bps
               (plan ~900M/20M, speedtests top out ~600M/24M).
@@ -148,7 +151,7 @@ spec:
           expr: |
             count(smokeping:loss_ratio:rate1m{role="internet"} > 0.05) >= 2
             unless on ()
-            (max(smokeping:loss_ratio:rate1m{role="edge"}) > 0.05)
+            (max(smokeping:loss_ratio:rate1m{role="lan"}) > 0.05)
           for: 1m
           labels:
             severity: warning
@@ -165,24 +168,23 @@ spec:
         - alert: InternalPathLatencyHigh
           expr: |
             max(
-              smokeping:rtt_p90:rate30s{role="edge"}
+              smokeping:rtt_p90:rate30s{role="lan"}
               > on (host, name, role)
-              smokeping:latency_threshold:1h{role="edge"}
+              smokeping:latency_threshold:1h{role="lan"}
             )
             or
-            max(smokeping:loss_ratio:rate1m{role="edge"}) > 0.05
+            max(smokeping:loss_ratio:rate1m{role="lan"}) > 0.05
           for: 1m
           labels:
             severity: warning
           annotations:
             summary: "Latency/loss inside the network (before the ISP)"
             description: >-
-              Pings from the cluster to the EdgeRouter (172.16.1.1) are slow or dropping,
+              Pings from the cluster to the router (10.10.91.1) are slow or dropping,
               so internet latency right now is a local problem, not the WAN.
-              EdgeRouter p90 {{ with query "round(smokeping:rtt_p90:rate30s{role=\"edge\"} * 1000, 0.1)" }}{{ . | first | value }}ms{{ end }}
-              (normal {{ with query "round(smokeping:rtt_p50:rate1h{role=\"edge\"} * 1000, 0.1)" }}{{ . | first | value }}ms{{ end }}),
-              VyOS p90 {{ with query "round(smokeping:rtt_p90:rate30s{role=\"lan\"} * 1000, 0.1)" }}{{ . | first | value }}ms{{ end }}.
-              If VyOS is slow too, suspect VyOS CPU or the WSL host.
+              Router p90 {{ with query "round(smokeping:rtt_p90:rate30s{role=\"lan\"} * 1000, 0.1)" }}{{ . | first | value }}ms{{ end }}
+              (normal {{ with query "round(smokeping:rtt_p50:rate1h{role=\"lan\"} * 1000, 0.1)" }}{{ . | first | value }}ms{{ end }}).
+              Suspect router CPU (RouterHighCPU) or the WSL host.
 
         - alert: SmokepingProberDown
           expr: absent(up{job="smokeping-prober"} == 1)
