@@ -1,7 +1,7 @@
 # WAN flow export for tnwks-ops monitoring/flow-collector.
-# Chain: RB5009 IPFIX -> Windows host udp/2055 (Start-TnwksUdpRelay.ps1)
+# Chain: RB5009 NetFlow v9 -> Windows host udp/2055 (Start-TnwksUdpRelay.ps1)
 #        -> WSL socat (tnwks-lan-bridge@netflow) -> MetalLB 10.5.0.204.
-# The collector is router-agnostic: VyOS sends sFlow today, this sends IPFIX,
+# The collector is router-agnostic: VyOS sends sFlow today, this sends v9,
 # and both feed the same wan_client_* metrics and alert line.
 # Requires var.fasttrack = false, or bulk traffic never reaches traffic-flow.
 
