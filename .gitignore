@@ -22,3 +22,6 @@ terraform.tfstate*
 # Python
 __pycache__/
 *.pyc
+
+# RouterOS config snapshots from playbooks/mikrotik-bootstrap.yml (serial numbers, topology)
+infrastructure/mikrotik/backups/
