@@ -488,6 +488,117 @@ resource "terraform_data" "onboard_managed_login" {
   }
 }
 
+# Home Assistant logs users in itself via the hass-oidc-auth custom
+# integration (auth_oidc), rather than sitting behind oauth2-proxy: HA's
+# frontend and the companion apps need HA-issued tokens, which a proxy-level
+# session can't provide. Public client (no secret) with PKCE, as the
+# integration recommends. Group membership (cognito:groups) maps to HA roles:
+# admins -> administrator, viewers -> user; anyone in neither is rejected.
+resource "aws_cognito_user_pool_client" "home_assistant" {
+  name         = "home-assistant"
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+
+  generate_secret = false
+
+  # HA is reachable on both hosts (public through the Cloudflare tunnel, LAN
+  # through nginx-internal) and hass-oidc-auth builds the callback from the
+  # host the login started on, so both must be registered.
+  callback_urls = [
+    "https://hass.tnwks.us/auth/oidc/callback",
+    "https://hass.internal.tnwks.us/auth/oidc/callback",
+  ]
+
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_scopes                 = ["openid", "email", "profile"]
+
+  supported_identity_providers = ["COGNITO"]
+
+  explicit_auth_flows = [
+    "ALLOW_USER_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH",
+  ]
+
+  # HA only reads the id_token once, at login, then issues its own refresh
+  # token — so short Cognito lifetimes cost nothing.
+  access_token_validity  = 1
+  id_token_validity      = 1
+  refresh_token_validity = 30
+
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
+
+  prevent_user_existence_errors = "ENABLED"
+  enable_token_revocation       = true
+}
+
+resource "terraform_data" "home_assistant_managed_login" {
+  triggers_replace = [
+    aws_cognito_user_pool.tnwks_auth.id,
+    aws_cognito_user_pool_client.home_assistant.id,
+    data.aws_region.current.name,
+    local.cognito_mfa_role_arn,
+  ]
+
+  provisioner "local-exec" {
+    when    = create
+    command = <<-EOT
+      set -eu
+      creds=$(aws sts assume-role \
+        --role-arn ${local.cognito_mfa_role_arn} \
+        --role-session-name tfc-home-assistant-managed-login \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
+      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
+      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
+      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
+      existing=$(aws cognito-idp describe-managed-login-branding-by-client \
+        --region ${data.aws_region.current.name} \
+        --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
+        --client-id ${aws_cognito_user_pool_client.home_assistant.id} \
+        --query 'ManagedLoginBranding.ManagedLoginBrandingId' \
+        --output text 2>/dev/null) || existing=""
+      if [ -z "$existing" ] || [ "$existing" = "None" ]; then
+        aws cognito-idp create-managed-login-branding \
+          --region ${data.aws_region.current.name} \
+          --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
+          --client-id ${aws_cognito_user_pool_client.home_assistant.id} \
+          --use-cognito-provided-values
+      fi
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      set -eu
+      creds=$(aws sts assume-role \
+        --role-arn ${self.triggers_replace[3]} \
+        --role-session-name tfc-home-assistant-managed-login \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
+      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
+      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
+      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
+      branding_id=$(aws cognito-idp describe-managed-login-branding-by-client \
+        --region ${self.triggers_replace[2]} \
+        --user-pool-id ${self.triggers_replace[0]} \
+        --client-id ${self.triggers_replace[1]} \
+        --query 'ManagedLoginBranding.ManagedLoginBrandingId' \
+        --output text 2>/dev/null) || branding_id=""
+      if [ -n "$branding_id" ] && [ "$branding_id" != "None" ]; then
+        aws cognito-idp delete-managed-login-branding \
+          --region ${self.triggers_replace[2]} \
+          --user-pool-id ${self.triggers_replace[0]} \
+          --managed-login-branding-id "$branding_id"
+      fi
+    EOT
+  }
+}
+
 resource "aws_cognito_user_pool_client" "agent_ori" {
   name         = "agent-ori"
   user_pool_id = aws_cognito_user_pool.tnwks_auth.id
