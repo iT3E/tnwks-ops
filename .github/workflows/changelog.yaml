@@ -2,7 +2,8 @@
 name: "Changelog"
 
 # Every PR adds a Changie fragment (`changie new`), unless it is labeled
-# skip-changelog or comes from a dependency bot.
+# skip-changelog, comes from a dependency bot, or only touches Home
+# Assistant's own config (see "Fragment required?").
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
@@ -27,7 +28,25 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Day-to-day Home Assistant tuning (automations, dashboards, helpers
+      # under its config/ dir) changes how the house behaves, not the
+      # platform, so it shouldn't cut a release. Anything else in the PR —
+      # including HA's helmrelease.yaml or scripts/ — still needs a fragment.
+      - name: Fragment required?
+        id: need
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed="$(git diff --name-only "$BASE_SHA"...HEAD)"
+          if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qv '^kubernetes/apps/home-automation/home-assistant/app/config/'; then
+            echo "Only Home Assistant config/ changed; no fragment needed."
+            echo "required=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "required=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Fragment present
+        if: steps.need.outputs.required == 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -39,6 +58,7 @@ jobs:
           echo "Fragments:"; echo "$added"
 
       - name: Fragments are valid
+        if: steps.need.outputs.required == 'true'
         uses: miniscruff/changie-action@3223cb29b92a0972dedc864ace3da01e04780ae4 # v3.0.1
         with:
           version: "v1.26.0"

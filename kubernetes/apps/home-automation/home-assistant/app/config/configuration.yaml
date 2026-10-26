@@ -1,0 +1,91 @@
+---
+# Home Assistant configuration — the git-owned half.
+#
+# Mounted read-only from the home-assistant-config ConfigMap; packages/ and
+# dashboards/ sit next to it from their own ConfigMaps. Any change here rolls
+# the pod (reloader), and .github/workflows/home-assistant.yaml runs
+# check_config against the pinned image on every PR.
+#
+# Everything ADR-0010 makes UI-only — integrations that talk to a device or
+# service (MQTT broker, Frigate, Telegram, Z-Wave JS), the entity/device/area
+# registries, users — lives in /config/.storage on the PVC and is backed up
+# with HA's own backups, not git. See docs/home-assistant.md for which
+# settings are owned where and the one-time UI steps.
+#
+# Flux variable substitution is OFF for these files (the ConfigMaps carry
+# kustomize.toolkit.fluxcd.io/substitute: disabled) so Jinja templates can
+# never be mangled. Per-cluster values arrive as container env vars instead
+# and are read with !env_var.
+
+homeassistant:
+  name: Home
+  latitude: !env_var HASS_LATITUDE
+  longitude: !env_var HASS_LONGITUDE
+  elevation: !env_var HASS_ELEVATION
+  time_zone: !env_var TZ
+  unit_system: us_customary
+  country: US
+  currency: USD
+  internal_url: !env_var HASS_INTERNAL_URL
+  external_url: !env_var HASS_EXTERNAL_URL
+  packages: !include_dir_named packages
+
+default_config:
+
+# No http: block. Since 2026.8 the HTTP settings are UI-owned: a YAML block
+# is imported once, as an unconfirmed trial that reverts to defaults (no
+# proxy trust) unless an admin confirms it within 5 minutes, and is ignored
+# from then on. Proxy trust (Trust X-Forwarded-For + the pod CIDR) is set
+# once under Settings > System > Network, over a port-forward — see
+# docs/home-assistant.md. Leave IP banning off: through the Cloudflare
+# tunnel every client arrives as the cloudflared pod, and from the LAN as
+# the Windows portproxy, so a ban would lock out everyone on that path.
+
+recorder:
+  db_url: !env_var HASS_RECORDER_DB_URL
+  purge_keep_days: 14
+
+# SSO against the tnwks-auth Cognito pool (hass-oidc-auth; app client in
+# infrastructure/terraform/modules/aws/cognito.tf). Public client + PKCE.
+# Cognito has no `groups` scope and puts membership in `cognito:groups`.
+# The local owner account from onboarding stays as the break-glass login
+# (https://hass.<domain>/?skip_oidc_redirect=true). It's internet-facing,
+# so it carries TOTP MFA (docs/home-assistant.md).
+auth_oidc:
+  client_id: !env_var HASS_OIDC_CLIENT_ID
+  discovery_url: !env_var HASS_OIDC_DISCOVERY_URL
+  display_name: tnwks
+  additional_scopes:
+    - email
+  claims:
+    username: email
+    display_name: email
+    groups: cognito:groups
+  roles:
+    admin: admins
+    user: viewers
+  features:
+    include_groups_scope: false
+    force_https: true
+    default_redirect: true
+
+lovelace:
+  # Frontend resources are git-owned too; the card files themselves are
+  # installed by scripts/prepare-config.sh.
+  resource_mode: yaml
+  resources:
+    - url: /local/advanced-camera-card/advanced-camera-card.js
+      type: module
+  dashboards:
+    home-security:
+      mode: yaml
+      filename: dashboards/security.yaml
+      title: Security
+      icon: mdi:cctv
+
+# Automations, scripts and scenes are split by owner: the ones under
+# packages/ are git-owned (read-only in the UI), and these three files on
+# the PVC are what the UI editors write to.
+automation ui: !include automations.yaml
+script ui: !include scripts.yaml
+scene ui: !include scenes.yaml

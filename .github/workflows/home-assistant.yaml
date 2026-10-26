@@ -1,0 +1,82 @@
+---
+name: "Home Assistant"
+
+# Validates the git-owned Home Assistant config against the exact image and
+# custom-integration versions the cluster will run. Runs on any PR touching the
+# app, so a Renovate bump of the image or an integration is checked against
+# this config before merge (HA routinely renames trigger/condition keys and
+# drops YAML options between releases).
+
+on:
+  pull_request:
+    paths:
+      - "kubernetes/apps/home-automation/home-assistant/**"
+      - ".github/workflows/home-assistant.yaml"
+
+permissions:
+  contents: read
+
+env:
+  APP: kubernetes/apps/home-automation/home-assistant/app
+
+jobs:
+  check-config:
+    name: check-config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      # configMapGenerator needs every file listed explicitly; a file that's
+      # committed but not listed is silently never deployed.
+      - name: Every config file is in a ConfigMap
+        run: |
+          listed="$(yq '.configMapGenerator[].files[]' "$APP/kustomization.yaml" | sort)"
+          present="$(cd "$APP" && find config scripts -type f | sort)"
+          if ! diff <(echo "$listed") <(echo "$present"); then
+            echo "::error::$APP/kustomization.yaml configMapGenerator and the files under config/ + scripts/ differ (< listed only, > on disk only)."
+            exit 1
+          fi
+
+      - name: Read pinned versions
+        run: |
+          init='.spec.values.controllers.home-assistant.initContainers.prepare-config'
+          {
+            echo "IMAGE=$(yq "$init.image | .repository + \":\" + .tag" "$APP/helmrelease.yaml")"
+            yq "$init.env | to_entries | .[] | .key + \"=\" + .value" "$APP/helmrelease.yaml"
+          } | tee -a "$GITHUB_ENV"
+
+      - name: Prepare config directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/config"
+          cp -r "$APP/config/." "$RUNNER_TEMP/config/"
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+            -e HASS_OIDC_AUTH_VERSION -e FRIGATE_INTEGRATION_VERSION -e ADVANCED_CAMERA_CARD_VERSION \
+            -v "$RUNNER_TEMP/config:/config" \
+            -v "$PWD/$APP/scripts/prepare-config.sh:/scripts/prepare-config.sh:ro" \
+            --entrypoint /bin/bash "$IMAGE" /scripts/prepare-config.sh /config
+
+      # check_config exits 0 even when the config is invalid, so fail on its
+      # output: schema errors print an "Incorrect config" section, and
+      # automations whose triggers can't be set up are logged as ERROR.
+      # The env vars stand in for the ones helmrelease.yaml sets.
+      - name: check_config
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+            -e TZ=America/Los_Angeles \
+            -e HASS_EXTERNAL_URL=https://hass.example.test \
+            -e HASS_INTERNAL_URL=https://hass.internal.example.test \
+            -e HASS_OIDC_CLIENT_ID=ci \
+            -e HASS_OIDC_DISCOVERY_URL=https://idp.example.test/.well-known/openid-configuration \
+            -e FRIGATE_UI_URL=https://frigate.example.test \
+            -e HASS_RECORDER_DB_URL=sqlite:////tmp/ci.db \
+            -e HASS_LATITUDE=0 -e HASS_LONGITUDE=0 -e HASS_ELEVATION=0 \
+            -v "$RUNNER_TEMP/config:/config" \
+            --entrypoint python3 "$IMAGE" -m homeassistant --script check_config --config /config \
+            2>&1 | sed 's/\x1b\[[0-9;]*m//g' | tee "$RUNNER_TEMP/check_config.log"
+          if grep -qE '^(Incorrect config|Failed config)|^(ERROR|CRITICAL)' "$RUNNER_TEMP/check_config.log"; then
+            echo "::error::Home Assistant check_config found problems (see log above)."
+            exit 1
+          fi

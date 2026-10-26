@@ -1,0 +1,160 @@
+---
+# Night-time person alerts from Frigate.
+#
+# Frigate groups activity into review items and publishes every change to one
+# on frigate/reviews (type new / update / end). A review is an "alert" when it
+# contains a label from review.alerts.labels — person, with the default
+# Frigate config. This pushes one notification per review, the first time it
+# becomes a person alert, on a watched camera, inside the night window.
+#
+# Delivery is the Companion app's native push. mobile_app's legacy notify
+# platform registers one service per phone (notify.mobile_app_<device>) plus a
+# base service, named notify.notify because the platform has no name; called
+# with no target, the base service sends to every phone that has the app
+# installed and logged in, so no device names live here. (If another unnamed
+# legacy notify platform is ever added, it would compete for notify.notify —
+# give it a name.) Until the first phone registers, the notify step fails and
+# the run stops after the in-app notification. Two tiers:
+#   - normal: time-sensitive (iOS; gets through Focus, not Do Not Disturb or
+#     mute), high-priority on Android.
+#   - critical, for critical_cameras while "Critical night alerts" is on:
+#     breaks through Do Not Disturb and silent mode. iOS critical alerts need
+#     a one-time permission; Android plays on the alarm stream, which rings
+#     through silent/vibrate and through DND wherever DND allows alarms (the
+#     Android default). See docs/home-assistant.md.
+#
+# The phone loads the snapshot from HA, through whichever URL the app is on
+# (the Frigate integration's notification proxy serves it).
+#
+# The switches and the window are helpers so they can be flipped from the
+# Security dashboard, but `initial` makes this file the source of truth: a
+# restart puts them back to the values below. Change them here to make a
+# change stick. Both switches defaulting to on is deliberate — a restart
+# should never silently leave alerting off.
+
+input_boolean:
+  night_person_alerts:
+    name: Night person alerts
+    icon: mdi:shield-moon
+    initial: true
+  night_person_alerts_critical:
+    name: Critical night alerts
+    icon: mdi:alarm-light
+    initial: true
+
+input_datetime:
+  night_person_alerts_start:
+    name: Night alerts start
+    has_date: false
+    has_time: true
+    initial: "23:00:00"
+  night_person_alerts_end:
+    name: Night alerts end
+    has_date: false
+    has_time: true
+    initial: "06:00:00"
+
+automation:
+  - id: frigate_night_person_alert
+    alias: "Security: person at night"
+    description: >-
+      Companion app push when Frigate raises a person alert on a watched
+      camera between the night alerts start and end times; critical cameras
+      (currently all of them) break through Do Not Disturb.
+    mode: parallel
+    max: 10
+    # Every frigate/reviews message is a run; keep enough to debug a night.
+    trace:
+      stored_traces: 50
+    triggers:
+      - trigger: mqtt
+        topic: frigate/reviews
+    variables:
+      # Every camera is exterior, so all of them alert, including the ones
+      # currently disabled in Frigate (they'll alert once re-enabled). A camera
+      # added to Frigate later needs adding here.
+      watched_cameras:
+        - frigate_loryta_fdoor
+        - frigate_reolink_south
+        - frigate_sv3c_east
+        - frigate_sv3c_west
+        - frigate_amcrest_balc
+        - frigate_amcrest_kitchen
+        - frigate_loryta_pool
+        - frigate_wyze_groom
+        - frigate_wyze_rroom
+        - frigate_wyze_baby
+      # For now every watched camera is critical. To tier them, replace this
+      # with an explicit list; the rest then send normal pushes.
+      critical_cameras: "{{ watched_cameras }}"
+      # Browser-facing Frigate UI, for the notification's button.
+      frigate_ui: !env_var FRIGATE_UI_URL
+      review: "{{ trigger.payload_json }}"
+      camera: "{{ review.after.camera }}"
+      camera_name: "{{ camera | replace('frigate_', '') | replace('_', ' ') | title }}"
+      # A review lists the tracked-object events in it; the first one's
+      # snapshot is the alert image.
+      event_id: "{{ review.after.data.detections | first | default('') }}"
+      critical: >-
+        {{ camera in critical_cameras
+           and is_state('input_boolean.night_person_alerts_critical', 'on') }}
+    conditions:
+      - condition: state
+        entity_id: input_boolean.night_person_alerts
+        state: "on"
+      # Spans midnight: after 23:00 OR before 06:00.
+      - condition: time
+        after: input_datetime.night_person_alerts_start
+        before: input_datetime.night_person_alerts_end
+      - condition: template
+        value_template: "{{ camera in watched_cameras and event_id != '' }}"
+      # Fire once per review: on the message where it first becomes a person
+      # alert — a new review, or an update that adds the person or upgrades
+      # the review from detection to alert. Later updates and the end message
+      # for the same review stay quiet.
+      - condition: template
+        value_template: >-
+          {% set after = review.after %}
+          {% set before = review.before %}
+          {{ review.type in ['new', 'update']
+             and after.severity == 'alert'
+             and 'person' in after.data.objects
+             and not (review.type == 'update'
+                      and before.severity == 'alert'
+                      and 'person' in before.data.objects) }}
+    actions:
+      # In-app record too, one per camera (a newer alert replaces it).
+      - action: persistent_notification.create
+        data:
+          notification_id: "frigate_person_{{ camera }}"
+          title: "Person at {{ camera_name }}"
+          message: >-
+            {{ now().strftime('%-I:%M %p') }} —
+            [open in Frigate]({{ frigate_ui }}/review?id={{ review.after.id }})
+      # A phone with a stale registration shouldn't fail the run.
+      - continue_on_error: true
+        action: notify.notify
+        data:
+          title: "Person at {{ camera_name }}"
+          message: "{{ now().strftime('%-I:%M %p') }}"
+          data:
+            image: "/api/frigate/notifications/{{ event_id }}/snapshot.jpg"
+            # Tap opens the camera grid in the app (iOS: url, Android: clickAction).
+            url: /home-security/cameras
+            clickAction: /home-security/cameras
+            # One notification per review; a repeat for the same review replaces it.
+            tag: "frigate-review-{{ review.after.id }}"
+            group: frigate-person
+            actions:
+              - action: URI
+                title: Open in Frigate
+                uri: "{{ frigate_ui }}/review?id={{ review.after.id }}"
+            # iOS
+            push: >-
+              {{ {'sound': {'name': 'default', 'critical': 1, 'volume': 1.0}}
+                 if critical else {'interruption-level': 'time-sensitive'} }}
+            # Android: deliver immediately even to an idle phone; critical ones
+            # ring on the alarm stream.
+            ttl: 0
+            priority: high
+            channel: "{{ 'alarm_stream' if critical else 'Security alerts' }}"

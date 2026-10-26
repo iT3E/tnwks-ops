@@ -5,5 +5,29 @@ namespace: home-automation
 resources:
   - ./secrets.sops.yaml
   - ./helmrelease.yaml
-patchesStrategicMerge:
-  - ./patches/addons.yaml
+# Home Assistant's own configuration, one ConfigMap per directory it mounts
+# into (ConfigMaps are flat). New files under config/packages/ or
+# config/dashboards/ must be listed here too.
+configMapGenerator:
+  - name: home-assistant-config
+    files:
+      - config/configuration.yaml
+  - name: home-assistant-packages
+    files:
+      - config/packages/frigate_night_alerts.yaml
+  - name: home-assistant-dashboards
+    files:
+      - config/dashboards/security.yaml
+  - name: home-assistant-scripts
+    files:
+      - scripts/prepare-config.sh
+generatorOptions:
+  disableNameSuffixHash: true
+  # Jinja and shell, not Flux variables: never envsubst these. Per-cluster
+  # values reach HA as container env vars (helmrelease.yaml).
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled
+labels:
+  - pairs:
+      app.kubernetes.io/name: home-assistant
+      app.kubernetes.io/instance: home-assistant
