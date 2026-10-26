@@ -1,0 +1,20 @@
+---
+version: "3"
+
+# EdgeOS devices as code (infrastructure/edgeos). DEVICE is a directory under
+# infrastructure/edgeos (default ep-r6). Needs the admin VPN (wg01) up.
+
+vars:
+  EDGEOS_DIR: "{{.ROOT_DIR}}/infrastructure/edgeos"
+  DEVICE: '{{.DEVICE | default "ep-r6"}}'
+
+tasks:
+  plan:
+    desc: Diff an EdgeOS device against the repo and validate the change on the device (nothing committed)
+    cmds:
+      - "{{.EDGEOS_DIR}}/tools/edgeos-sync.py plan {{.DEVICE}} || [ $? -eq 2 ]"
+
+  apply:
+    desc: Apply the repo's config to an EdgeOS device (commit-confirm, confirmed from a second session)
+    cmds:
+      - "{{.EDGEOS_DIR}}/tools/edgeos-sync.py apply {{.DEVICE}}"

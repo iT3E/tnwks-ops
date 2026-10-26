@@ -1,0 +1,3 @@
+kind: Added
+body: 'EP-R6 configuration as code: EdgeOS set commands in infrastructure/edgeos with a plan/apply tool (device-validated plans, commit-confirm applies)'
+time: 2026-10-25T22:42:31.775929511-07:00
