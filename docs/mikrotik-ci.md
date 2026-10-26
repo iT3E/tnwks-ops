@@ -1,4 +1,4 @@
-# MikroTik changes via CI
+# MikroTik (and EdgeOS) changes via CI
 
 The RouterOS root module (`infrastructure/terraform/environments/prod/mikrotik`)
 follows the same flow as the AWS root: plan on the PR, apply on merge, no manual
@@ -29,6 +29,7 @@ PR / merge to main
 | Endpoint override | `variables.tf` (`routeros_url`) | CI sets `TF_VAR_routeros_url=https://127.0.0.1:8443`; unset locally, where the SOPS value (`wg01`) applies |
 | TFC token | repo secret `TF_API_TOKEN` | The one the AWS workflows already use. HCP Terraform's free plan has no custom teams, so no workspace-scoped token exists |
 | Workflows | `mikrotik-{plan,apply}.yaml`, `.github/actions/mikrotik-terraform` | Shared plan/apply logic. One concurrency group, so runs never overlap |
+| EdgeOS devices | `edgeos-{plan,apply}.yaml`, `.github/actions/edgeos-sync`, `infrastructure/edgeos` | Same runner. wireproxy also forwards `127.0.0.1:8022` to the EP-R6's SSH, the one forward `vpn-ci` has (`CI_ZONE_RULES`); CI logs in with its own SSH key against a pinned host key |
 
 ## Security model
 

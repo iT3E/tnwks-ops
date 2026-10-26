@@ -1,4 +1,6 @@
 {
   "host": "10.10.140.140",
-  "port": 22
+  "port": 22,
+  "host_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJIQHEBMNIocao7zZBvsDyNig8WoMYy2mOst7eKMd/Tc",
+  "ci_port": 8022
 }

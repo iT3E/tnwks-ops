@@ -1,0 +1,44 @@
+---
+name: "EdgeOS Apply"
+
+# Applies infrastructure/edgeos devices on merge to main, from the self-hosted
+# tnwks-ops-runner. edgeos-sync commits with commit-confirm and confirms from a
+# second login, so a change that cuts a device off rolls back on its own.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "infrastructure/edgeos/**"
+      - ".github/actions/edgeos-sync/**"
+      - ".github/workflows/edgeos-*.yaml"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: edgeos-sync
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: "EdgeOS Apply"
+    runs-on: tnwks-ops-runner
+    timeout-minutes: 20
+    # No reviewer gate: merging to main is the approval. The prod environment
+    # only accepts deployments from protected branches.
+    environment:
+      name: prod
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Apply
+        uses: ./.github/actions/edgeos-sync
+        with:
+          mode: apply
