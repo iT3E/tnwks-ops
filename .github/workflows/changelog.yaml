@@ -1,0 +1,45 @@
+---
+name: "Changelog"
+
+# Every PR adds a Changie fragment (`changie new`), unless it is labeled
+# skip-changelog or comes from a dependency bot.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions: {}
+
+jobs:
+  changelog:
+    name: "changelog"
+    if: >-
+      !contains(github.event.pull_request.labels.*.name, 'skip-changelog') &&
+      github.event.pull_request.user.login != 'renovate[bot]' &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fragment present
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          added="$(git diff --name-only --diff-filter=A "$BASE_SHA"...HEAD -- '.changes/unreleased/*.yaml')"
+          if [ -z "$added" ]; then
+            echo "::error::No Changie fragment. Run 'changie new' and commit the file under .changes/unreleased/, or label the PR skip-changelog."
+            exit 1
+          fi
+          echo "Fragments:"; echo "$added"
+
+      - name: Fragments are valid
+        uses: miniscruff/changie-action@3223cb29b92a0972dedc864ace3da01e04780ae4 # v3.0.1
+        with:
+          version: "v1.26.0"
+          args: batch auto --dry-run

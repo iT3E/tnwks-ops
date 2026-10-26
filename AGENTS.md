@@ -67,7 +67,13 @@ ansible-playbook -i inventory/wsl.yml playbooks/03-sops-keys.yml
 ## Change workflow
 
 All changes go through a PR and are squash-merged to `main` — no direct
-pushes. There is no central "deploy" step; validation happens in whatever
+pushes. Every PR adds a Changie fragment (`changie new`, committed under
+`.changes/unreleased/`) unless it is labeled `skip-changelog`; the
+`changelog` check enforces it. Merging a PR with fragments cuts a release:
+`.github/workflows/release.yaml` batches them into `CHANGELOG.md`, bumps
+the version from the fragment kinds (Fixed/Security → patch, Added/Changed/
+Deprecated/Removed → minor, Breaking → major), tags, and publishes a GitHub
+Release. There is no central "deploy" step; validation happens in whatever
 system actually owns the change:
 
 > **`main` is the single source of truth for cluster state, and Flux is the
