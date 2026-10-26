@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Router syslog reaches Loki: sent over UDP, since RouterOS TCP syslog has no message framing; the Windows and WSL relay setup is now task wsl-host:lan-bridge and task wsl-host:udp-relays'
-time: 2026-10-25T21:03:45.173475595-07:00
