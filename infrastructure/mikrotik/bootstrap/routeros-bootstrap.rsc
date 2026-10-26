@@ -112,8 +112,16 @@
 /certificate add name=rest-api common-name=sce-rtr01.tnwks.local \
   key-usage=digital-signature,key-encipherment,tls-server days-valid=3650
 /certificate sign rest-api
-# Signing can return before the key is ready; www-ssl refuses an unsigned cert.
-:delay 5s
+# Signing can return before the key is ready, and www-ssl refuses a cert
+# without one. Wait for it (up to 2 minutes; key generation is slow on ARM).
+# One block: in an .rsc import each top-level line has its own scope.
+{
+  :local certTries 0
+  :while (([:len [/certificate find where name="rest-api" private-key=yes]] = 0) && ($certTries < 120)) do={
+    :delay 1s
+    :set certTries ($certTries + 1)
+  }
+}
 
 /ip service set www-ssl certificate=rest-api disabled=no port=443
 /ip service set ssh port=22 disabled=no
