@@ -35,6 +35,11 @@ output "cognito_custom_domain_cloudfront_distribution" {
   value       = aws_cognito_user_pool_domain.tnwks_auth.cloudfront_distribution
 }
 
+output "cognito_home_assistant_client_id" {
+  description = "App client ID for Home Assistant (hass-oidc-auth). Public value — copied into kubernetes/apps/home-automation/home-assistant/app/helmrelease.yaml."
+  value       = aws_cognito_user_pool_client.home_assistant.id
+}
+
 output "cognito_hosted_ui_domain" {
   description = "Fully-qualified hosted UI domain."
   value       = aws_cognito_user_pool_domain.tnwks_auth.domain
