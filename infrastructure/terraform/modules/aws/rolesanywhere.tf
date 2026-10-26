@@ -63,9 +63,11 @@ resource "aws_iam_role" "rolesanywhere_sops" {
 data "aws_iam_policy_document" "rolesanywhere_sops" {
   count = local.rolesanywhere_enabled ? 1 : 0
 
+  # Roles Anywhere sessions carry a source identity, which role chaining
+  # passes on, so the hop also needs sts:SetSourceIdentity.
   statement {
     effect    = "Allow"
-    actions   = ["sts:AssumeRole"]
+    actions   = ["sts:AssumeRole", "sts:SetSourceIdentity"]
     resources = [var.sops_role_arn]
   }
 }
