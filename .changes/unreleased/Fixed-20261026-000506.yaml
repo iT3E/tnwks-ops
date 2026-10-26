@@ -1,0 +1,3 @@
+kind: Fixed
+body: Grafana restarts once per config change (Reloader no longer races the chart's own restart), which had left it with no pod
+time: 2026-10-26T00:05:06.887584603-07:00

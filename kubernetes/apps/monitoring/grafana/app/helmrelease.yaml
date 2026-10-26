@@ -253,7 +253,9 @@ spec:
       - grafana-clock-panel
 
     podAnnotations:
-      configmap.reloader.stakater.com/reload: grafana
+      # Not the grafana ConfigMap: the chart's checksum/* annotations already
+      # restart the pod when it changes, and Reloader doing the same at once
+      # raced two Recreate rollouts and stalled the Deployment with no pod.
       secret.reloader.stakater.com/reload: grafana-secrets
 
     rbac:
