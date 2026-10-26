@@ -1,0 +1,3 @@
+kind: Fixed
+body: Frigate runs object detection on the Coral again; detect.enabled defaults to false, so no camera was sending it frames and no person alerts or alert recordings were being produced
+time: 2026-10-26T00:55:00.000000000-07:00

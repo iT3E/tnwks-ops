@@ -47,6 +47,15 @@ record:
       days: 2
       mode: active_objects
 
+# Object detection on the Coral. Frigate defaults detect.enabled to false, so
+# without this the detector loads but no camera ever sends it a frame: no
+# tracked objects, no alert/detection review items (so nothing reaches
+# frigate/reviews for Home Assistant), and with the active_objects retention
+# above, almost no recordings kept. Cameras that set detect.enabled: False
+# themselves (the Wyze ones) stay off.
+detect:
+  enabled: true
+
 objects:
   track: ["person"]
   filters:
