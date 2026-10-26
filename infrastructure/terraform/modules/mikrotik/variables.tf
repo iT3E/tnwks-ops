@@ -426,58 +426,38 @@ variable "connection_tracking" {
 
 variable "ddns" {
   description = <<-EOT
-    Dynamic DNS via a RouterOS script plus scheduler. Null disables it entirely.
+    Cloudflare dynamic DNS via a RouterOS script plus scheduler. Null disables it.
 
-    RouterOS has no Namecheap or Cloudflare DDNS client; the only native option is
-    /ip cloud, which gives you <serial>.sn.mynetname.net instead of your own
-    hostname. So a real hostname means a scripted provider.
+    RouterOS has no Cloudflare DDNS client; the only native option is /ip cloud,
+    which gives you <serial>.sn.mynetname.net instead of your own hostname. So a
+    real hostname means a scripted update against the Cloudflare API.
 
     This is load-bearing, not cosmetic: WireGuard client configs use the DDNS
     hostname as their endpoint, so a stale record breaks remote VPN access at the
     next WAN address change.
 
-    namecheap needs ddns_host + ddns_domain (sensitive, from SOPS). Uses the
-    update endpoint at dynamicdns.park-your-domain.com, so no record lookup is
-    required.
-
-    cloudflare needs zone_id + record_id + record_name, and the A record must
-    already exist. Create it in environments/prod/cloudflare, not here.
+    The record name is ddns_host.ddns_domain (sensitive, from SOPS). zone_id and
+    record_id identify the existing A record; the script updates it in place and
+    never creates one.
   EOT
   type = object({
-    provider = string
-    interval = optional(string, "5m")
-
-    # cloudflare
-    zone_id     = optional(string)
-    record_id   = optional(string)
-    record_name = optional(string)
-    ttl         = optional(number, 120)
+    interval  = optional(string, "5m")
+    zone_id   = string
+    record_id = string
+    ttl       = optional(number, 120)
   })
   default = null
-
-  validation {
-    condition     = var.ddns == null ? true : contains(["namecheap", "cloudflare"], var.ddns.provider)
-    error_message = "ddns.provider must be namecheap or cloudflare."
-  }
-
-  validation {
-    condition = var.ddns == null ? true : (
-      var.ddns.provider != "cloudflare" ||
-      (var.ddns.zone_id != null && var.ddns.record_id != null && var.ddns.record_name != null)
-    )
-    error_message = "ddns.provider = cloudflare requires zone_id, record_id and record_name."
-  }
 }
 
 variable "ddns_host" {
-  description = "Namecheap DDNS host label (e.g. `ddns`). From SOPS."
+  description = "DDNS host label (e.g. `ddns`). From SOPS."
   type        = string
   default     = null
   sensitive   = true
 }
 
 variable "ddns_domain" {
-  description = "Namecheap DDNS domain. From SOPS: it ties the repo to an identity."
+  description = "DDNS zone (the Cloudflare zone holding the record). From SOPS."
   type        = string
   default     = null
   sensitive   = true
@@ -485,8 +465,8 @@ variable "ddns_domain" {
 
 variable "ddns_credential" {
   description = <<-EOT
-    The DDNS secret: a Namecheap dynamic-DNS password, or a Cloudflare API token
-    scoped to Zone:DNS:Edit. Comes from SOPS, never a literal.
+    The DDNS secret: a Cloudflare API token scoped to Zone:DNS:Edit on the one
+    zone. Comes from SOPS, never a literal.
 
     NOTE: this ends up stored in the RouterOS script body on the router, where any
     account with read+policy rights can display it. That is inherent to scripted

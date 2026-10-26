@@ -1,9 +1,9 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 ## DYNAMIC DNS
 ##
-## RouterOS has no built-in Namecheap or Cloudflare DDNS client. The only native
+## RouterOS has no built-in Cloudflare DDNS client. The only native
 ## option is `/ip cloud` (MikroTik's own DDNS), which gives you
-## <serial>.sn.mynetname.net rather than your own hostname. So a custom provider
+## <serial>.sn.mynetname.net rather than your own hostname. So your own hostname
 ## means a script on the router plus a scheduler entry to run it.
 ##
 ## The script SOURCE lives in this repo (templates/ddns-*.rsc) and Terraform
@@ -21,26 +21,16 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 
 locals {
-  # Render whichever provider is selected. Both templates take the WAN interface
-  # so they read the DHCP lease rather than calling an external "what is my IP"
-  # service, which would be another dependency in the path.
-  ddns_script = var.ddns == null ? null : (
-    var.ddns.provider == "namecheap"
-    ? templatefile("${path.module}/templates/ddns-namecheap.rsc", {
-      host          = var.ddns_host
-      domain        = var.ddns_domain
-      credential    = var.ddns_credential
-      wan_interface = var.wan_interface
-    })
-    : templatefile("${path.module}/templates/ddns-cloudflare.rsc", {
-      zone_id       = var.ddns.zone_id
-      record_id     = var.ddns.record_id
-      record_name   = var.ddns.record_name
-      ttl           = var.ddns.ttl
-      credential    = var.ddns_credential
-      wan_interface = var.wan_interface
-    })
-  )
+  # The template reads the WAN DHCP lease rather than calling an external "what
+  # is my IP" service, which would be another dependency in the path.
+  ddns_script = var.ddns == null ? null : templatefile("${path.module}/templates/ddns-cloudflare.rsc", {
+    zone_id       = var.ddns.zone_id
+    record_id     = var.ddns.record_id
+    record_name   = "${var.ddns_host}.${var.ddns_domain}"
+    ttl           = var.ddns.ttl
+    credential    = var.ddns_credential
+    wan_interface = var.wan_interface
+  })
 }
 
 resource "routeros_system_script" "ddns" {
@@ -51,8 +41,8 @@ resource "routeros_system_script" "ddns" {
 
   lifecycle {
     precondition {
-      condition     = var.ddns.provider != "namecheap" || (var.ddns_host != null && var.ddns_domain != null)
-      error_message = "ddns.provider = namecheap requires ddns_host and ddns_domain."
+      condition     = var.ddns_host != null && var.ddns_domain != null && var.ddns_credential != null
+      error_message = "ddns requires ddns_host, ddns_domain and ddns_credential."
     }
   }
 
@@ -65,7 +55,7 @@ resource "routeros_system_script" "ddns" {
   # a different user. The scheduler owns this global, so it is unnecessary.
   policy = ["read", "write", "test"]
 
-  comment = "Dynamic DNS via ${var.ddns.provider} (terraform)"
+  comment = "Dynamic DNS via Cloudflare (terraform)"
 }
 
 resource "routeros_system_scheduler" "ddns" {

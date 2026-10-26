@@ -7,11 +7,11 @@
 #
 # Replaces the VyOS `cloudflare-ddns` Podman container. RouterOS has no
 # Cloudflare DDNS provider, so this is a scheduled script against the Cloudflare
-# API. Unlike Namecheap this needs the zone id and the record id up front; the
-# record must already exist. Create it in environments/prod/cloudflare, not here.
+# API. It updates an existing A record by id and never creates one.
 #
-# If this record is a WireGuard endpoint, it is load-bearing: when it stops
-# updating, remote VPN access breaks at the next WAN IP change.
+# This record is load-bearing: WireGuard client configs use it as their endpoint,
+# so if this stops updating, remote VPN access breaks the next time the WAN IP
+# changes. The logging below is deliberately noisy on failure for that reason.
 # ---------------------------------------------------------------------------------------------------------------------
 
 :local zone "${zone_id}"
@@ -46,14 +46,22 @@
       "\",\"ttl\":" . $ttl . ",\"proxied\":false}")
 
     :do {
-      /tool fetch http-method=put url=$url \
+      # An HTTP error status makes fetch throw (on-error below). Also check the
+      # body's "success", so an unexpected 200 is not cached as done.
+      :local result [/tool fetch http-method=put url=$url \
         http-header-field=("Authorization: Bearer " . $token . ",Content-Type: application/json") \
-        http-data=$payload keep-result=no
-      # Only remember it on success, so a failed update retries next interval.
-      :set ddnsLastAddress $address
-      :log info ("ddns: " . $name . " updated to " . $address)
+        http-data=$payload output=user as-value]
+      :if (($result->"data") ~ "\"success\": *true") do={
+        # Only remember it on success, so a failed update retries next interval.
+        :set ddnsLastAddress $address
+        :log info ("ddns: " . $name . " updated to " . $address)
+      } else={
+        :log error ("ddns: Cloudflare REJECTED update for " . $name . \
+          " (" . $address . ") - check the API token; remote VPN access may break")
+      }
     } on-error={
-      :log error ("ddns: update FAILED for " . $name . " (" . $address . ")")
+      :log error ("ddns: update FAILED for " . $name . \
+        " (" . $address . ") - remote VPN access may break")
     }
   }
 }

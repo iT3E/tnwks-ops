@@ -132,7 +132,7 @@ VyOS's bare `eth1` as switch management.
 | `service snmp` | mktxp over the read-only API instead |
 | `system conntrack` tuning | `ip_firewall_connection_tracking` |
 | `system offload` | RouterOS fasttrack, already in the port |
-| `service dns dynamic` (namecheap) | ⚠️ no RouterOS namecheap provider — see below |
+| `service dns dynamic` (namecheap) | dropped: consolidated on Cloudflare, see below |
 | `system syslog` | already ported from VyOS |
 | `system time-zone`, `host-name` | already ported |
 
@@ -141,10 +141,9 @@ VyOS's bare `eth1` as switch management.
 - ERL: Namecheap DDNS for the WireGuard endpoint hostname.
 - VyOS: a `cloudflare-ddns` container for `tnwks.us`.
 
-RouterOS has `ip_cloud` (MikroTik's own DDNS) and Cloudflare via a scheduler
-script, but **no Namecheap provider**. Options: consolidate on Cloudflare, use
-`ip_cloud`, or run a `system_scheduler` script hitting the Namecheap API. Needs a
-decision, and the Namecheap credential needs rotating either way.
+The WireGuard clients use the Cloudflare record as their endpoint, so the RB5009
+keeps that one current with a scheduler script (`modules/mikrotik/ddns.tf`). The
+Namecheap DDNS is not carried over.
 
 ### Not portable
 

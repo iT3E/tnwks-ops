@@ -276,15 +276,13 @@ SYSLOG_REMOTE = WSL_HOST
 # masquerade rule commented out precisely because the ERL was doing it.
 WAN_INTERFACE = "ether1"
 
-# DDNS, from the EdgeRouter's `service dns dynamic interface eth0 service
-# namecheap`, NOT from VyOS (VyOS ran a Cloudflare container for a different
-# domain). Kept on Namecheap because the WireGuard client configs use this exact
-# hostname as their endpoint: changing providers means reissuing every client
-# config, so the record stays put and the migration keeps one less moving part.
-# Host and domain come from SOPS, not from here.
+# DDNS: the Cloudflare A record the WireGuard clients use as their endpoint,
+# which VyOS's `cloudflare-ddns` container kept current. The record must already
+# exist; the router updates it by id. Host and domain come from SOPS.
 DDNS = {
-    "provider": "namecheap",
     "interval": "5m",
+    "zone_id": "42d48ba8c41db9079e8eed11ef0250cb",
+    "record_id": "b0b3f0ae9b559627df2814e83cd06f39",
 }
 SYSTEM_RE = re.compile(r"^set system (\S+(?: \S+)*) '?([^']*)'?$")
 
@@ -1575,12 +1573,12 @@ def main() -> int:
                        "the full internet-edge load (table-size 32768, tcp loose enable)."))
     body.append("\n")
     body.append(assign("ddns", DDNS,
-                       "From the EdgeRouter's `service dns dynamic` (namecheap), not VyOS.\n"
-                       "RouterOS has no Namecheap client, so the module renders a script +\n"
-                       "scheduler onto the router; see modules/mikrotik/ddns.tf.\n"
+                       "Replaces VyOS's cloudflare-ddns container. RouterOS has no Cloudflare\n"
+                       "client, so the module renders a script + scheduler onto the router;\n"
+                       "see modules/mikrotik/ddns.tf.\n"
                        "LOAD-BEARING: the WireGuard client configs use this hostname as\n"
                        "their endpoint, so a stale record breaks remote VPN access at the\n"
-                       "next WAN address change. Host, domain and password come from SOPS."))
+                       "next WAN address change. Host, domain and API token come from SOPS."))
     body.append("\n")
     body.append(assign("wireguard_interfaces", wg_out,
                        "Private keys are injected from SOPS in main.tf, never stored here."))
