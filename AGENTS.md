@@ -117,9 +117,11 @@ system actually owns the change:
   the PR triggers a speculative plan via
   `.github/workflows/terraform-plan.yaml` (Terraform Cloud workspace
   `tnwks-ops-aws-prod`); the plan summary is posted as a PR comment with
-  a run link. Squash-merging triggers `terraform-apply.yaml`, which
-  creates and auto-confirms a real run in the same workspace. Validate
-  via the run link or the TFC UI.
+  a run link. Squash-merging triggers `terraform-apply.yaml`, which waits
+  for approval in the `prod` GitHub environment, then creates and
+  confirms a real run in the same workspace. Validate via the run link or
+  the TFC UI. Plans run automatically only for the owner's same-repo PRs;
+  anything else waits in the `external-contributions` environment.
 
 - **Terraform Cloudflare (`infrastructure/terraform/environments/prod/cloudflare/**`)** —
   not wired into CI. After the PR merges, run `task terraform:apply`
