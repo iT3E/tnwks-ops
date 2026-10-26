@@ -37,9 +37,9 @@ default_config:
 # proxy trust) unless an admin confirms it within 5 minutes, and is ignored
 # from then on. Proxy trust (Trust X-Forwarded-For + the pod CIDR) is set
 # once under Settings > System > Network, over a port-forward — see
-# docs/apps/home-assistant.md. Leave IP banning off: through the Cloudflare
-# tunnel every client arrives as the cloudflared pod, and from the LAN as
-# the Windows portproxy, so a ban would lock out everyone on that path.
+# docs/apps/home-assistant.md. Leave login attempts before a ban at
+# unlimited (the default): every LAN client arrives as the Windows
+# portproxy, so a ban would lock out the whole LAN.
 
 recorder:
   db_url: !env_var HASS_RECORDER_DB_URL
@@ -48,9 +48,19 @@ recorder:
 # SSO against the tnwks-auth Cognito pool (hass-oidc-auth; app client in
 # infrastructure/terraform/modules/aws/cognito.tf). Public client + PKCE.
 # Cognito has no `groups` scope and puts membership in `cognito:groups`.
-# The local owner account from onboarding stays as the break-glass login
-# (https://hass.<domain>/?skip_oidc_redirect=true). It's internet-facing,
-# so it carries TOTP MFA (docs/apps/home-assistant.md).
+# The login page shows a small welcome screen: "Login with tnwks", plus a
+# link to the local HA login, used by the owner account from onboarding (the
+# break-glass admin; it's internet-facing, so it carries TOTP MFA — see
+# docs/apps/home-assistant.md).
+#
+# Deliberately not set:
+#   - force_https: URLs follow the request scheme. Behind ingress-nginx HA
+#     reads X-Forwarded-Proto: https (once proxy trust is on), so callbacks
+#     are https anyway; forcing it broke plain-http access over a
+#     port-forward (http://localhost:8123 → https://localhost:8123).
+#   - default_redirect: skipping the welcome screen sends every login
+#     straight to Cognito, a dead end over the port-forward (no localhost
+#     callback is registered) and it hides the local login.
 auth_oidc:
   client_id: !env_var HASS_OIDC_CLIENT_ID
   discovery_url: !env_var HASS_OIDC_DISCOVERY_URL
@@ -66,8 +76,6 @@ auth_oidc:
     user: viewers
   features:
     include_groups_scope: false
-    force_https: true
-    default_redirect: true
 
 lovelace:
   # Frontend resources are git-owned too; the card files themselves are
