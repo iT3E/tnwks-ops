@@ -1,3 +1,3 @@
 kind: Added
-body: Home Assistant runs on homelab-wsl (2026.10, was pinned at 2025.3) with Cognito SSO, the Frigate integration, a Security camera dashboard and night-time person alerts to Telegram; its config lives in the repo and CI runs check_config on it
+body: Home Assistant runs on homelab-wsl (2026.10, was pinned at 2025.3) at hass.tnwks.us and hass.internal.tnwks.us with Cognito SSO, the Frigate integration, a Security camera dashboard and night-time person alerts as Companion app pushes (entry-point cameras break through Do Not Disturb); its config lives in the repo and CI runs check_config on it
 time: 2026-10-26T00:07:00.256854873-07:00

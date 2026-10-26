@@ -78,7 +78,11 @@ spec:
             env:
               - name: TZ
                 value: "${TIMEZONE}"
-              - name: HASS_URL
+              # Public (Cloudflare tunnel) and LAN entry points; the Companion
+              # app switches to the internal one on the home Wi-Fi.
+              - name: HASS_EXTERNAL_URL
+                value: "https://hass.${SECRET_DOMAIN}"
+              - name: HASS_INTERNAL_URL
                 value: "https://hass.${INTERNAL_DOMAIN}"
               # Public app-client ID (cognito_home_assistant_client_id output
               # of the AWS workspace), like the onboard client's.
@@ -86,8 +90,6 @@ spec:
                 value: "CLIENT_ID_PENDING_TERRAFORM_APPLY"
               - name: HASS_OIDC_DISCOVERY_URL
                 value: "${COGNITO_OIDC_ISSUER_URL}/.well-known/openid-configuration"
-              - name: FRIGATE_API_URL
-                value: "http://frigate.production.svc.cluster.local:5000"
               - name: FRIGATE_UI_URL
                 value: "https://frigate.${CLUSTER_DOMAIN}"
               # CNPG app password from the reflected `postgres-app` secret;
@@ -141,17 +143,21 @@ spec:
         ports:
           http:
             port: *port
+    # Public + LAN, like jellyfin. No oauth2-proxy gate on either: HA does
+    # its own OIDC (auth_oidc), and the Companion app's native API, websocket
+    # and webhook calls can't carry an oauth2-proxy session.
     ingress:
       app:
-        className: nginx-internal
+        className: nginx
         annotations:
+          external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
           hajimari.io/icon: mdi:home-assistant
           # The frontend holds one long-lived websocket; don't let nginx's
           # 60s default idle timeout cut it.
           nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
           nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
         hosts:
-          - host: &host hass.${INTERNAL_DOMAIN}
+          - host: &host hass.${SECRET_DOMAIN}
             paths:
               - path: /
                 pathType: Prefix
@@ -161,6 +167,22 @@ spec:
         tls:
           - hosts:
               - *host
+      internal:
+        className: nginx-internal
+        annotations:
+          nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+          nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+        hosts:
+          - host: &internalHost hass.${INTERNAL_DOMAIN}
+            paths:
+              - path: /
+                pathType: Prefix
+                service:
+                  identifier: app
+                  port: http
+        tls:
+          - hosts:
+              - *internalHost
     persistence:
       configuration:
         type: configMap

@@ -26,8 +26,8 @@ homeassistant:
   unit_system: us_customary
   country: US
   currency: USD
-  internal_url: !env_var HASS_URL
-  external_url: !env_var HASS_URL
+  internal_url: !env_var HASS_INTERNAL_URL
+  external_url: !env_var HASS_EXTERNAL_URL
   packages: !include_dir_named packages
 
 default_config:
@@ -37,7 +37,9 @@ default_config:
 # proxy trust) unless an admin confirms it within 5 minutes, and is ignored
 # from then on. Proxy trust (Trust X-Forwarded-For + the pod CIDR) is set
 # once under Settings > System > Network, over a port-forward — see
-# docs/home-assistant.md.
+# docs/home-assistant.md. Leave IP banning off: through the Cloudflare
+# tunnel every client arrives as the cloudflared pod, and from the LAN as
+# the Windows portproxy, so a ban would lock out everyone on that path.
 
 recorder:
   db_url: !env_var HASS_RECORDER_DB_URL
@@ -46,8 +48,9 @@ recorder:
 # SSO against the tnwks-auth Cognito pool (hass-oidc-auth; app client in
 # infrastructure/terraform/modules/aws/cognito.tf). Public client + PKCE.
 # Cognito has no `groups` scope and puts membership in `cognito:groups`.
-# The local owner account from onboarding stays as the break-glass login:
-# https://hass.<domain>/?skip_oidc_redirect=true
+# The local owner account from onboarding stays as the break-glass login
+# (https://hass.<domain>/?skip_oidc_redirect=true). It's internet-facing,
+# so it carries TOTP MFA (docs/home-assistant.md).
 auth_oidc:
   client_id: !env_var HASS_OIDC_CLIENT_ID
   discovery_url: !env_var HASS_OIDC_DISCOVERY_URL

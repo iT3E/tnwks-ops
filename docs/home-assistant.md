@@ -1,10 +1,36 @@
 # Home Assistant
 
 Home Assistant runs on `homelab-wsl` from
-`kubernetes/apps/home-automation/home-assistant/`. It's at
-`https://hass.internal.tnwks.us`, with sign-in through the `tnwks-auth` Cognito
-pool. Its recorder writes to the shared CNPG cluster (database
-`home_assistant`).
+`kubernetes/apps/home-automation/home-assistant/`. Its recorder writes to the
+shared CNPG cluster (database `home_assistant`).
+
+## Access
+
+There are two entry points, laid out like Jellyfin's. Neither has an
+oauth2-proxy gate:
+
+| URL | Path | Reachable from |
+|---|---|---|
+| `https://hass.tnwks.us` | Cloudflare → tunnel → public ingress-nginx | anywhere |
+| `https://hass.internal.tnwks.us` | k8s-gateway DNS → nginx-internal | the LAN |
+
+The two hostnames are distinct, so there's no split-horizon DNS.
+
+HA authenticates users itself, with OIDC against the `tnwks-auth` Cognito pool
+(hass-oidc-auth). oauth2-proxy can't front it: the Companion app's native API,
+websocket and webhook calls never carry an oauth2-proxy session, and
+exempting those paths would leave HA's API public anyway.
+
+What follows from being internet-facing:
+
+- **The break-glass local login is public.** The owner account
+  (`?skip_oidc_redirect=true`) can be reached from anywhere, so it gets a long
+  password and TOTP MFA (setup step 4).
+- **IP banning stays off.** HA never sees real client IPs. Through the tunnel,
+  everyone arrives as the cloudflared pod (`X-Forwarded-For` is rewritten by
+  the public ingress-nginx). From the LAN, everyone arrives as the Windows
+  `netsh portproxy`. A ban would lock out every client on that path. Cognito
+  handles the main login's brute-force protection.
 
 ## What's in git and what isn't
 
@@ -81,32 +107,48 @@ kubectl -n home-automation port-forward svc/home-assistant 8123:8123
    use `http://localhost:8123/?skip_oidc_redirect=true` instead. SSO only works
    on the real hostname.
 3. **Proxy trust.** Settings > System > Network > HTTP server: turn on
-   *Trust X-Forwarded-For*, set *Trusted proxies* to the pod CIDR
-   (`10.42.0.0/16`, the cluster's `CLUSTER_CIDR`), and save. HA restarts and
-   the port-forward drops. Restart the port-forward and **confirm the new
-   settings within 5 minutes**, or HA reverts them. After that,
-   `https://hass.internal.tnwks.us` works.
-4. **SSO.** Sign in at `https://hass.internal.tnwks.us` with *Login with
-   tnwks*. Cognito group `admins` maps to HA administrator and `viewers` to HA
-   user. Anyone in neither group is rejected. HA creates the user and a person
-   on first login.
-5. **MQTT.** Settings > Devices & services > Add integration > MQTT. Use broker
+   *Trust X-Forwarded-For* and set *Trusted proxies* to the pod CIDR
+   (`10.42.0.0/16`, the cluster's `CLUSTER_CIDR`). Both ingress-nginx
+   controllers run in the pod network. Leave IP banning off (see
+   [Access](#access)) and save. HA restarts and the port-forward drops. Restart
+   the port-forward and **confirm the new settings within 5 minutes**, or HA
+   reverts them. After that, both URLs work.
+4. **MFA on the owner account.** Profile > Security > Multi-factor
+   authentication modules: enable *Authenticator app* (TOTP). The owner login is
+   internet-facing, so do this before going further.
+5. **SSO.** Sign in at `https://hass.tnwks.us` with *Login with tnwks*. Cognito
+   group `admins` maps to HA administrator and `viewers` to HA user. Anyone in
+   neither group is rejected. HA creates the user and a person on first login.
+6. **MQTT.** Settings > Devices & services > Add integration > MQTT. Use broker
    `mosquitto.home-automation.svc.cluster.local`, port `1883`, username
    `home-assistant`. The password is on the `home-assistant:` line of
    `sops -d kubernetes/apps/home-automation/mosquitto/app/secrets.sops.yaml`.
    Then reload automations (Tools > YAML > Automations). The night alert's
    MQTT trigger can't subscribe until the broker exists, so it needs the
    reload.
-6. **Frigate.** Add integration > Frigate, URL
+7. **Frigate.** Add integration > Frigate, URL
    `http://frigate.production.svc.cluster.local:5000`. This creates the
-   `camera.frigate_*` entities the Security dashboard uses.
-7. **Telegram.** Add integration > Telegram bot, platform *Broadcast*. Use the
-   bot token from
-   `sops -d kubernetes/apps/monitoring/alertmanager/app/secrets.sops.yaml`
-   (`telegram_bot_token`), or a new bot from @BotFather. Then use the
-   integration's ⋮ menu > *Add allowed chat ID* for the chat that should get
-   alerts. Alerts go to the first allow-listed chat.
-8. **Backups.** Settings > System > Backups: turn on automatic backups.
+   `camera.frigate_*` entities the Security dashboard uses. Then open the
+   integration's *Configure* and set the unauthenticated notification expiry to
+   `86400` (one day). The phone loads alert snapshots through HA without a
+   token. That's the integration's notification proxy, which by default serves
+   any event's snapshot and clip unauthenticated forever, and HA is public.
+8. **Phones.** On each phone that should get alerts:
+   - Install the Home Assistant Companion app and connect it to
+     `https://hass.tnwks.us`. With SSO the app shows a code to enter in the
+     phone's browser. This is hass-oidc-auth's device-code login. Registering
+     the app is all the alert needs, since it sends to every registered phone.
+   - **LAN URL:** in the app, Settings > Companion app > (server) set *Internal
+     URL* to `https://hass.internal.tnwks.us` and add the home Wi-Fi network(s).
+     The app needs location permission to read the network name. On those
+     networks the app goes direct to nginx-internal; everywhere else it uses
+     the public URL.
+   - So critical alerts can break through Do Not Disturb:
+     - **iOS:** allow *Critical Alerts* when the app asks, or later under
+       Settings > Notifications > Home Assistant > Critical Alerts.
+     - **Android:** make sure Do Not Disturb lets *Alarms* through (the
+       default), since critical alerts ring on the alarm stream.
+9. **Backups.** Settings > System > Backups: turn on automatic backups.
 
 Optional: add Z-Wave JS with URL
 `ws://zwave-js-ui.home-automation.svc.cluster.local:3000`, then assign devices
@@ -114,14 +156,27 @@ to areas so the Overview dashboard fills in.
 
 ## Night person alerts
 
-`config/packages/frigate_night_alerts.yaml` sends one Telegram photo per
-Frigate review, the first time the review becomes a person alert. It only
-fires for exterior cameras, between 23:00 and 06:00, and only while
-*Night person alerts* is on.
+`config/packages/frigate_night_alerts.yaml` sends one Companion app push per
+Frigate review, the first time the review becomes a person alert. The push has
+a snapshot and an *Open in Frigate* button, and tapping it opens the camera
+grid. It only fires for exterior cameras (`watched_cameras`), between 23:00 and
+06:00, and only while *Night person alerts* is on. Each alert also leaves an
+HA notification, one per camera.
 
-You can change the switch and the times on the Security dashboard's Alerts
+There are two tiers:
+
+| Tier | Which cameras | iOS | Android |
+|---|---|---|---|
+| Normal | `watched_cameras` | time-sensitive: gets through Focus, not DND or mute | high priority, channel *Security alerts* |
+| Critical | `critical_cameras` (front door, balcony), while *Critical night alerts* is on | critical alert: overrides DND and mute | alarm stream: rings through silent and vibrate, and through DND when alarms are allowed |
+
+The push goes through HA's mobile push relay (Apple/Google). The phone loads
+the snapshot from HA itself, through whichever URL the app is using, and the
+Frigate integration's notification proxy serves it.
+
+You can change the switches and the times on the Security dashboard's Alerts
 view, but only until the next restart. The YAML `initial` values win, so make
-lasting changes in the package. The switch defaulting to on is deliberate: a
+lasting changes in the package. Both switches default to on deliberately: a
 restart should never quietly leave alerting off.
 
 To test it, move the start and end times on the Alerts view so the window
@@ -130,7 +185,8 @@ window.
 
 ## Break-glass
 
-- **SSO broken:** `https://hass.internal.tnwks.us/?skip_oidc_redirect=true`
-  shows the local login, so use the owner account.
+- **SSO broken:** `https://hass.tnwks.us/?skip_oidc_redirect=true` (or the
+  internal URL) shows the local login, so use the owner account with its TOTP
+  code.
 - **Proxy settings broken** (UI unreachable through ingress): use the
   port-forward above and fix them under Settings > System > Network.
