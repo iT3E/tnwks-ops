@@ -184,6 +184,24 @@ DNS_RECORD_RETARGET_BY_ADDRESS = {
     "10.10.53.10": UNIFI_CONTROLLER_HOME,  # `unifi` inform host; unpoller uses https://unifi:8443
 }
 
+# Static DNS records for hosts that no longer exist. Dropped, with the reason
+# recorded in the locals footer.
+DNS_RECORD_DROP = {
+    "sce-vyos01.tnwks.local": "VyOS router, retired",
+    "sce-er01.tnwks.local": "EdgeRouter, retired",
+    "sce-pve01-ceph.tnwks.local": "Proxmox Ceph network, retired",
+    "sce-pve02-ceph.tnwks.local": "Proxmox Ceph network, retired",
+    "sce-pve03-ceph.tnwks.local": "Proxmox Ceph network, retired",
+    "s3.tnwks.local": "Proxmox Ceph network, retired",
+    "uisp.tnwks.us": "UISP ran as a VyOS container; no UISP server runs now",
+    "unms.tnwks.us": "UISP ran as a VyOS container; no UISP server runs now",
+}
+
+# Static DNS records with no VyOS source.
+EXTRA_DNS_RECORDS = {
+    "sce-rtr01.tnwks.local": "10.10.91.1",
+}
+
 IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 
 VLAN_ID_RE = re.compile(r"^set interfaces ethernet (\S+) vif (\d+) (\S+) '([^']*)'")
@@ -1294,6 +1312,15 @@ def main() -> int:
             rec["address"] = target
             notes.append("dns: %s retargeted %s -> %s (container moved)" % (rec["name"], addr, target))
 
+    for key in list(dns["static_records"]):
+        rec = dns["static_records"][key]
+        if rec["name"] in DNS_RECORD_DROP:
+            del dns["static_records"][key]
+            notes.append("dns: %s DROPPED (%s)" % (rec["name"], DNS_RECORD_DROP[rec["name"]]))
+    for name, addr in EXTRA_DNS_RECORDS.items():
+        key = re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_").lower()
+        dns["static_records"][key] = {"name": name, "type": "A", "address": addr, "comment": "generator"}
+
     # Things added to vyos-config after this generator was written. Not ported
     # by the generator; called out so they are not lost silently.
     system_text = (parts / "system.sh").read_text()
@@ -1472,18 +1499,12 @@ def main() -> int:
                 out += "  # %s\n" % line
         return out + "  %s = %s\n" % (name, hcl(value, 1))
 
-    # The VyOS box is sce-vyos01. This is a NEW device that will run alongside it
-    # until the trunk swings, so it gets its own name, matching the bootstrap
-    # script. Emitted rather than inherited so the two never collide on the wire.
+    # The router's own name, matching the bootstrap script, not VyOS's
+    # sce-vyos01. Its DNS record is in EXTRA_DNS_RECORDS.
     vyos_identity = system.get("identity", "sce-vyos01")
     identity = "sce-rtr01"
     if vyos_identity != identity:
-        notes.append(
-            "system: identity is %s, NOT the VyOS name %s -- the two run "
-            "concurrently until the trunk swings. The bind zone has an A record "
-            "for %s (172.16.1.250); add one for %s before cutover"
-            % (identity, vyos_identity, vyos_identity, identity)
-        )
+        notes.append("system: identity is %s, not the VyOS name %s" % (identity, vyos_identity))
 
     body = ["locals {\n"]
     body.append(assign("identity", identity))

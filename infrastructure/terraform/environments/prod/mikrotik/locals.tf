@@ -24,7 +24,7 @@
 ##   dstnat rules         8
 ##   Static routes        1
 ##   WireGuard listeners  2
-##   DNS static records   12
+##   DNS static records   5
 ##   DNS adlists          45
 ## ---------------------------------------------------------------------------------------------------------------------
 
@@ -635,55 +635,11 @@ locals {
         match_subdomain = true
         comment         = "blocky customDNS"
       }
-      s3_tnwks_local = {
-        name    = "s3.tnwks.local"
-        type    = "A"
-        comment = "bind db.tnwks.local"
-        address = "10.15.15.50"
-      }
       sce_ep01_tnwks_local = {
         name    = "sce-ep01.tnwks.local"
         type    = "A"
         comment = "bind db.tnwks.local"
         address = "10.10.140.140"
-      }
-      sce_er01_tnwks_local = {
-        name    = "sce-er01.tnwks.local"
-        type    = "A"
-        comment = "bind db.tnwks.local"
-        address = "172.16.1.1"
-      }
-      sce_pve01_ceph_tnwks_local = {
-        name    = "sce-pve01-ceph.tnwks.local"
-        type    = "A"
-        comment = "bind db.tnwks.local"
-        address = "10.15.15.50"
-      }
-      sce_pve02_ceph_tnwks_local = {
-        name    = "sce-pve02-ceph.tnwks.local"
-        type    = "A"
-        comment = "bind db.tnwks.local"
-        address = "10.15.15.51"
-      }
-      sce_pve03_ceph_tnwks_local = {
-        name    = "sce-pve03-ceph.tnwks.local"
-        type    = "A"
-        comment = "bind db.tnwks.local"
-        address = "10.15.15.52"
-      }
-      sce_vyos01_tnwks_local = {
-        name    = "sce-vyos01.tnwks.local"
-        type    = "A"
-        comment = "bind db.tnwks.local"
-        address = "172.16.1.250"
-      }
-      uisp_tnwks_us = {
-        name            = "uisp.tnwks.us"
-        address         = "10.10.91.1"
-        type            = "A"
-        ttl             = "1h"
-        match_subdomain = false
-        comment         = "blocky customDNS"
       }
       unifi = {
         name    = "unifi"
@@ -691,13 +647,11 @@ locals {
         comment = "bind db.unifi"
         address = "10.10.91.142"
       }
-      unms_tnwks_us = {
-        name            = "unms.tnwks.us"
-        address         = "10.10.91.1"
-        type            = "A"
-        ttl             = "1h"
-        match_subdomain = false
-        comment         = "blocky customDNS"
+      sce_rtr01_tnwks_local = {
+        name    = "sce-rtr01.tnwks.local"
+        type    = "A"
+        address = "10.10.91.1"
+        comment = "generator"
       }
     }
     adlists = [
@@ -902,18 +856,26 @@ locals {
   #   - dns: prowlarr.tnwks.local -> 10.10.120.51 DROPPED; address is in a retired VLAN
   #   - dns: qbittorrent.tnwks.local -> 10.10.120.51 DROPPED; address is in a retired VLAN
   #   - dns: radarr.tnwks.local -> 10.10.120.51 DROPPED; address is in a retired VLAN
+  #   - dns: s3.tnwks.local DROPPED (Proxmox Ceph network, retired)
+  #   - dns: sce-er01.tnwks.local DROPPED (EdgeRouter, retired)
   #   - dns: sce-hass01.tnwks.local -> 10.10.72.100 DROPPED; address is in a retired VLAN
+  #   - dns: sce-pve01-ceph.tnwks.local DROPPED (Proxmox Ceph network, retired)
   #   - dns: sce-pve01-ilo.tnwks.local -> 10.10.55.100 DROPPED; address is in a retired VLAN
   #   - dns: sce-pve01.tnwks.local -> 10.10.11.10 DROPPED; address is in a retired VLAN
+  #   - dns: sce-pve02-ceph.tnwks.local DROPPED (Proxmox Ceph network, retired)
   #   - dns: sce-pve02-ilo.tnwks.local -> 10.10.55.101 DROPPED; address is in a retired VLAN
   #   - dns: sce-pve02.tnwks.local -> 10.10.11.11 DROPPED; address is in a retired VLAN
+  #   - dns: sce-pve03-ceph.tnwks.local DROPPED (Proxmox Ceph network, retired)
   #   - dns: sce-pve03-ilo.tnwks.local -> 10.10.55.102 DROPPED; address is in a retired VLAN
   #   - dns: sce-pve03.tnwks.local -> 10.10.11.12 DROPPED; address is in a retired VLAN
   #   - dns: sce-uisp01.tnwks.local -> 10.10.72.101 DROPPED; address is in a retired VLAN
+  #   - dns: sce-vyos01.tnwks.local DROPPED (VyOS router, retired)
   #   - dns: sonarr.tnwks.local -> 10.10.120.51 DROPPED; address is in a retired VLAN
   #   - dns: synapse-admin.tnwks.local -> 10.10.120.51 DROPPED; address is in a retired VLAN
   #   - dns: thanos.tnwks.local -> 10.10.120.51 DROPPED; address is in a retired VLAN
+  #   - dns: uisp.tnwks.us DROPPED (UISP ran as a VyOS container; no UISP server runs now)
   #   - dns: unifi retargeted 10.10.53.10 -> 10.10.91.142 (container moved)
+  #   - dns: unms.tnwks.us DROPPED (UISP ran as a VyOS container; no UISP server runs now)
   #   - dns: zwave.tnwks.local -> 10.10.120.51 DROPPED; address is in a retired VLAN
   #   - iLO-550-containers: orphaned ruleset, no `firewall zone ... from` binding in the VyOS config, so it never applied (pre-existing VyOS drift)
   #   - k8s-120-containers: orphaned ruleset, no `firewall zone ... from` binding in the VyOS config, so it never applied (pre-existing VyOS drift)
@@ -943,7 +905,7 @@ locals {
   #   - system: 1 SSH public key(s) ported from VyOS `system login user`; the username came from ${SSH_VYOS_USERNAME} and is injected from SOPS in main.tf
   #   - system: VyOS flow export (sFlow, for monitoring/flow-collector) is not generated; the root module's flow_export (IPFIX) replaces it
   #   - system: VyOS task-scheduler (dhcp-leases-textfile.py -> node-exporter dhcp_lease_info, used for flow-collector client names) has no RouterOS port; client names need a RouterOS lease exporter (e.g. mktxp)
-  #   - system: identity is sce-rtr01, NOT the VyOS name sce-vyos01 -- the two run concurrently until the trunk swings. The bind zone has an A record for sce-vyos01 (172.16.1.250); add one for sce-rtr01 before cutover
+  #   - system: identity is sce-rtr01, not the VyOS name sce-vyos01
   #   - transit-10-containers rule 1 (accept_dns): moved to the input chain; native RouterOS DNS replaces the dnsdist container
   #   - transit-10-k8s-120: orphaned ruleset, no `firewall zone ... from` binding in the VyOS config, so it never applied (pre-existing VyOS drift)
   #   - transit-10-unifi-mgmt-900 rule 1: DROPPED; it names udmpro (stale UDM Pro entry pointing at the EdgeRouter)
