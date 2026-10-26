@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.2.7 - 2026-10-26
+
+### Fixed
+
+* Router DNS drops records for retired hosts and the absent UISP server, and adds sce-rtr01
+
 ## v1.2.6 - 2026-10-26
 
 ### Fixed

@@ -1,3 +1,0 @@
-kind: Fixed
-body: Router DNS drops records for retired hosts and the absent UISP server, and adds sce-rtr01
-time: 2026-10-25T20:09:32.944949822-07:00
