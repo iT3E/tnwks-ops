@@ -15,7 +15,7 @@ Per device:
 | --- | --- |
 | `config.sh` | Desired config: `show configuration commands` output, with `${name}` placeholders for secrets |
 | `secrets.sops.yaml` | Placeholder values plus the SSH login the tool uses (`ssh_*` keys) |
-| `device.json` | Address and SSH port |
+| `device.json` | Address, SSH port, pinned host key, and `ci_port` (the runner's forward to it) |
 
 ## Workflow
 
@@ -36,3 +36,16 @@ Edit `config.sh`, open a PR with the `task edgeos:plan` output, merge, then
 apply from `main`. Changes made on the device directly show up as drift in the
 next plan. To capture a deliberate on-device change, copy the relevant lines
 from `show configuration commands` into `config.sh`.
+
+## CI
+
+Same flow as the MikroTik root (`docs/mikrotik-ci.md`): `edgeos-plan.yaml`
+plans every device on the owner's PRs and comments the result;
+`edgeos-apply.yaml` applies on merge to `main`. Both run on the
+`tnwks-ops-runner` scale set, whose wireproxy sidecar forwards
+`127.0.0.1:<ci_port>` to each device through the router's `wg03` tunnel (the
+router allows `vpn-ci` only the EP-R6's SSH). CI logs in with its own key
+(`tnwks-ops-runner` in `config.sh`); the workstation uses the SOPS password.
+
+Adding a device: its directory, a `ci_port`, a forward in the runner's
+wireproxy config, and a `vpn-ci` rule in the generator's `CI_ZONE_RULES`.

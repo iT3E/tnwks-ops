@@ -14,12 +14,20 @@ secrets as ${name} placeholders filled from <device>/secrets.sops.yaml.
          confirms and saves. Nothing is saved before the confirm, so the
          rollback target is always the pre-change config.
 
-Stdlib only. Needs ssh, sshpass and sops on PATH (bin/sops inside the repo).
+The device's SSH host key is pinned (device.json host_key). Authentication is
+the ssh_* password from SOPS (sshpass), or a key when EDGEOS_SSH_KEY_FILE is
+set (CI). EDGEOS_VIA_TUNNEL=1 connects to 127.0.0.1:<ci_port> instead, the
+runner's wireproxy forward to the device (device.json ci_port).
+
+Stdlib only. Needs ssh and sops on PATH (bin/sops inside the repo), and
+sshpass for password logins.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import tempfile
 import re
 import shlex
 import subprocess
@@ -34,14 +42,12 @@ CONFIG_MGMT = "/opt/vyatta/sbin/vyatta-config-mgmt.pl"
 SHOW_CMDS = "/opt/vyatta/bin/vyatta-op-cmd-wrapper show configuration commands"
 PLACEHOLDER = re.compile(r"\$\{([a-z0-9_]+)\}")
 SSH_OPTS = [
-    "-q", "-o", "ConnectTimeout=10", "-o", "BatchMode=no",
-    "-o", "StrictHostKeyChecking=accept-new",
-    "-o", "PubkeyAuthentication=no",
-    "-o", "PreferredAuthentications=password,keyboard-interactive",
-    # EdgeOS 3.x still offers only these for the older OpenSSH it ships.
+    "-q", "-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=yes",
+    # Older EdgeOS images only offer these; harmless on newer ones.
     "-o", "KexAlgorithms=+diffie-hellman-group14-sha1",
-    "-o", "HostKeyAlgorithms=+ssh-rsa",
 ]
+PASSWORD_OPTS = ["-o", "BatchMode=no", "-o", "PubkeyAuthentication=no",
+                 "-o", "PreferredAuthentications=password,keyboard-interactive"]
 
 
 def die(msg: str) -> None:
@@ -70,12 +76,26 @@ def load_device(name: str) -> tuple[dict, dict, list[str]]:
 
 
 def ssh(device: dict, secrets: dict, remote: str, stdin: str | None = None) -> str:
-    cmd = ["sshpass", "-e", "ssh", *SSH_OPTS, "-p", str(device.get("port", 22)),
-           "%s@%s" % (secrets["ssh_user"], device["host"]), remote]
-    env = {"SSHPASS": secrets["ssh_password"], "PATH": "/usr/bin:/bin:/usr/local/bin"}
-    out = subprocess.run(cmd, input=stdin, capture_output=True, text=True, env=env, timeout=300)
+    if os.environ.get("EDGEOS_VIA_TUNNEL") == "1":
+        host, port = "127.0.0.1", int(device["ci_port"])
+    else:
+        host, port = device["host"], int(device.get("port", 22))
+    key_file = os.environ.get("EDGEOS_SSH_KEY_FILE")
+    with tempfile.NamedTemporaryFile("w", suffix=".known_hosts") as kh:
+        # Pin the host key for whatever address we actually connect to.
+        kh.write("%s %s\n" % (host if port == 22 else "[%s]:%d" % (host, port), device["host_key"]))
+        kh.flush()
+        opts = [*SSH_OPTS, "-o", "UserKnownHostsFile=" + kh.name, "-p", str(port)]
+        env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/tmp")}
+        if key_file:
+            cmd = ["ssh", *opts, "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-i", key_file]
+        else:
+            cmd = ["sshpass", "-e", "ssh", *opts, *PASSWORD_OPTS]
+            env["SSHPASS"] = secrets["ssh_password"]
+        cmd += ["%s@%s" % (secrets["ssh_user"], host), remote]
+        out = subprocess.run(cmd, input=stdin, capture_output=True, text=True, env=env, timeout=300)
     if out.returncode != 0:
-        die("ssh to %s failed (%d): %s" % (device["host"], out.returncode, out.stderr.strip()[-500:]))
+        die("ssh to %s:%d failed (%d): %s" % (host, port, out.returncode, out.stderr.strip()[-500:]))
     return out.stdout
 
 
@@ -83,11 +103,17 @@ def live_lines(device: dict, secrets: dict) -> list[str]:
     return [l.rstrip() for l in ssh(device, secrets, SHOW_CMDS).splitlines() if l.startswith("set ")]
 
 
+def tokens(line: str) -> tuple[str, ...]:
+    # Compare parsed tokens, not text: EdgeOS quotes some values (MACs, for
+    # one) that config.sh may write bare.
+    return tuple(shlex.split(line))
+
+
 def diff(live: list[str], desired: list[str]) -> tuple[list[str], list[str]]:
-    live_set, want_set = set(live), set(desired)
+    live_set, want_set = {tokens(l) for l in live}, {tokens(l) for l in desired}
     # Deepest paths first, so children go before their parents.
-    deletes = sorted((l for l in live if l not in want_set), key=lambda l: -len(shlex.split(l)))
-    sets = [l for l in desired if l not in live_set]
+    deletes = sorted((l for l in live if tokens(l) not in want_set), key=lambda l: -len(tokens(l)))
+    sets = [l for l in desired if tokens(l) not in live_set]
     return deletes, sets
 
 
