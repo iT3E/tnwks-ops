@@ -1,0 +1,3 @@
+kind: Security
+body: cloudflared runs 2026.10.4; versions before 2026.10.2 still trust the eight eMudhra (emSign) intermediates with weak private keys, so anyone holding those keys could impersonate the Cloudflare edge to the tunnel
+time: 2026-10-26T16:35:00.000000000-07:00

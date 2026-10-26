@@ -25,6 +25,16 @@
   // Tighten further (or remove) once the bulk catch-up settles.
   "prHourlyLimit": 4,
   "prConcurrentLimit": 12,
+  "packageRules": [
+    {
+      // prConcurrentLimit is easy to fill with stale PRs. cloudflared is the
+      // public edge, so its updates jump the queue instead of sitting
+      // rate-limited on the dashboard (2026.10.x emSign fix sat there).
+      "description": "Open cloudflared updates ahead of everything else",
+      "matchPackageNames": ["docker.io/cloudflare/cloudflared"],
+      "prPriority": 10
+    }
+  ],
   "pre-commit": {
     "enabled": true
   },
