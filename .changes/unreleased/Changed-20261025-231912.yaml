@@ -1,3 +1,0 @@
-kind: Changed
-body: The CI runner's tunnel also forwards the EP-R6's SSH, and the runner carries an SSH key for EdgeOS devices
-time: 2026-10-25T23:19:12.336371888-07:00

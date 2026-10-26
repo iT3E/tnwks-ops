@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.11.0 - 2026-10-26
+
+### Changed
+
+* The CI runner's tunnel also forwards the EP-R6's SSH, and the runner carries an SSH key for EdgeOS devices
+
 ## v1.10.0 - 2026-10-26
 
 ### Added
