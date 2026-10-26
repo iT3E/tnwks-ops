@@ -4,10 +4,11 @@
 ## site-specific is generated into locals.tf from the VyOS config, and secrets
 ## come from secrets.sops.yaml.
 ##
-## No variables.tf / terraform.tfvars here on purpose: this repo's other root
-## modules (environments/prod/aws, environments/prod/cloudflare,
+## No terraform.tfvars here on purpose: this repo's other root modules
+## (environments/prod/aws, environments/prod/cloudflare,
 ## environments/bootstrap/aws-init) all inline their values and read secrets from
-## SOPS. Same pattern, so `task mikrotik:plan` needs no -var-file.
+## SOPS. Same pattern, so `task mikrotik:plan` needs no -var-file. The one
+## variable (variables.tf) is optional and only CI sets it.
 ## ---------------------------------------------------------------------------------------------------------------------
 
 module "mikrotik" {

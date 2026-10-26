@@ -20,10 +20,10 @@
 ##   Port lists           1
 ##   Zone-pair chains     17
 ##   Firewall accepts     10 (expanded from VyOS tcp_udp / port-limit splits)
-##   Input-chain accepts  23
+##   Input-chain accepts  25
 ##   dstnat rules         8
 ##   Static routes        1
-##   WireGuard listeners  2
+##   WireGuard listeners  3
 ##   DNS static records   5
 ##   DNS adlists          45
 ## ---------------------------------------------------------------------------------------------------------------------
@@ -535,6 +535,18 @@ locals {
       dst_port          = "51820,51821"
       in_interface_list = "transit-10"
     }
+    "580-router-service" = {
+      comment           = "WireGuard from the LAN for the CI runner tunnel (wg03)"
+      protocol          = "udp"
+      dst_port          = "51822"
+      in_interface_list = "lan"
+    }
+    "590-router-service" = {
+      comment           = "REST API from the CI runner tunnel (wg03)"
+      protocol          = "tcp"
+      dst_port          = "443"
+      in_interface_list = "vpn-ci"
+    }
   }
 
   dstnat_rules = {
@@ -799,6 +811,19 @@ locals {
         }
       }
     }
+    wg03 = {
+      zone        = "vpn-ci"
+      address     = "10.10.32.1/24"
+      listen_port = 51822
+      comment     = "CI runner tunnel: router REST only"
+      peers = {
+        tnwks-ops-runner = {
+          public_key      = "IxyJADawWbOU6mJrvvEOfo97tJ52er79RdvunazeZh4="
+          allowed_address = ["10.10.32.10/32"]
+          comment         = "ARC scale set tnwks-ops-runner (wireproxy sidecar)"
+        }
+      }
+    }
   }
 
   # Translation notes (see docs/mikrotik-vyos-port.md):
@@ -919,6 +944,7 @@ locals {
   #   - vpn-mobile-containers rule 3: retargeted to vpn-mobile -> unifi-frontend-910 dst unifi_controller
   #   - vpn-mobile-containers rule 4: DROPPED; it targeted haproxy_frontend, which only existed for haproxy (not ported, its backends are gone)
   #   - wireguard: wg01/it-pc01 re-keyed for the RB5009 (WG_PEER_PUBLIC_KEYS)
+  #   - wireguard: wg03 (vpn-ci) added by the generator (EXTRA_WIREGUARD)
   #   - zone ad-110: retired; VLAN, DHCP and every pair to or from it are not emitted
   #   - zone app-720: retired; VLAN, DHCP and every pair to or from it are not emitted
   #   - zone bastion-410: retired; VLAN, DHCP and every pair to or from it are not emitted

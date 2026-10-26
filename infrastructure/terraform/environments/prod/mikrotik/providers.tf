@@ -10,7 +10,7 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 
 provider "routeros" {
-  hosturl  = data.sops_file.secrets.data["routeros_url"]
+  hosturl  = coalesce(var.routeros_url, data.sops_file.secrets.data["routeros_url"])
   username = data.sops_file.secrets.data["routeros_username"]
   password = data.sops_file.secrets.data["routeros_password"]
 

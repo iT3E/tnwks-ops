@@ -271,6 +271,28 @@ WG_PEER_PUBLIC_KEYS = {
     "wg01/it-pc01": "G50MJOM94BeGaX9wVFvChFDOy8YAbu32MpTIVSctsSE=",  # WSL on the desktop
 }
 
+# WireGuard listeners with no VyOS source. wg03 is the CI runner's tunnel
+# (docs/mikrotik-ci.md): its own zone with no zone pairs, so the terminal
+# forward drop covers everything, and an input accept for REST only. Joined
+# from the LAN only, never the WAN. Private keys come from SOPS
+# (wireguard_<name>_private_key).
+CI_ZONE = "vpn-ci"
+EXTRA_WIREGUARD = {
+    "wg03": {
+        "zone": CI_ZONE,
+        "address": "10.10.32.1/24",
+        "listen_port": 51822,
+        "comment": "CI runner tunnel: router REST only",
+        "peers": {
+            "tnwks-ops-runner": {
+                "public_key": "IxyJADawWbOU6mJrvvEOfo97tJ52er79RdvunazeZh4=",
+                "allowed_address": ["10.10.32.10/32"],
+                "comment": "ARC scale set tnwks-ops-runner (wireproxy sidecar)",
+            },
+        },
+    },
+}
+
 # Admin SSH public keys added on top of the ones ported from VyOS (comment
 # stripped). The VyOS-era RSA key stays for any machine that still has it.
 EXTRA_ADMIN_SSH_KEYS = [
@@ -1152,6 +1174,14 @@ def build_zone_policies(
         # the outside zone's list, so one rule covers both stages.
         {"comment": "WireGuard listeners (ERL port-forward, then WAN)",
          "protocol": "udp", "dst_port": "51820,51821", "in_interface_list": OUTSIDE_ZONE},
+        # Appended, not inserted, so existing rule numbers never shift.
+        # The CI runner (WSL cluster) joins wg03 from the LAN, and through it
+        # reaches the REST API and nothing else.
+        {"comment": "WireGuard from the LAN for the CI runner tunnel (wg03)",
+         "protocol": "udp", "dst_port": str(EXTRA_WIREGUARD["wg03"]["listen_port"]),
+         "in_interface_list": "lan"},
+        {"comment": "REST API from the CI runner tunnel (wg03)", "protocol": "tcp",
+         "dst_port": "443", "in_interface_list": CI_ZONE},
     ]):
         input_rules[f"{input_seq + (offset + 1) * 10:03d}-router-service"] = extra
 
@@ -1435,6 +1465,9 @@ def main() -> int:
             "comment": iface.get("comment", name),
             "peers": {k: v for k, v in sorted(iface["peers"].items())},
         }
+    for name, iface in EXTRA_WIREGUARD.items():
+        wg_out[name] = iface
+        notes.append("wireguard: %s (%s) added by the generator (EXTRA_WIREGUARD)" % (name, iface["zone"]))
 
     # Every enabled VLAN is a LAN interface. The WAN port is physical and is
     # deliberately absent, which is what makes the input-chain scoping safe.
