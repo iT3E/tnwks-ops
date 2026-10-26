@@ -38,8 +38,10 @@ task aws:ra-profile    # writes the tnwks-sops AWS CLI profile
 task aws:ra-check      # session ARN, then the iam-role-sops hop
 ```
 
-The repo's `.envrc` sets `AWS_PROFILE=tnwks-sops`, so sops (and the AWS CLI)
-inside the repo use it. Re-run `task aws:ra-cert` before the cert expires.
+Only sops uses the profile: `.envrc` puts `bin/` on PATH, and `bin/sops` runs
+the real sops with `AWS_PROFILE=tnwks-sops` for that process alone. Nothing
+else in the repo inherits it, so other AWS tooling (and its account) is
+unaffected. Re-run `task aws:ra-cert` before the cert expires.
 
 ## Adding or removing a machine
 

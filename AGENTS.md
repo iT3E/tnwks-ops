@@ -230,10 +230,11 @@ For Kubernetes paths only, `data` and `stringData` are encrypted (key
 names stay in plaintext).
 
 The KMS recipient needs AWS credentials that can assume `iam-role-sops`. On
-the workstation those come from IAM Roles Anywhere (`.envrc` sets
-`AWS_PROFILE=tnwks-sops`; set up with `task aws:ra-cert` and
-`task aws:ra-profile`, see
-`infrastructure/terraform/environments/prod/aws/rolesanywhere/README.md`).
+the workstation those come from IAM Roles Anywhere, for the sops process only:
+`bin/sops` (on PATH via `.envrc`) runs sops with `AWS_PROFILE=tnwks-sops` and
+nothing else in the repo inherits that profile. Set up with `task aws:ra-cert`
+and `task aws:ra-profile`; see
+`infrastructure/terraform/environments/prod/aws/rolesanywhere/README.md`.
 
 ### Terraform
 
