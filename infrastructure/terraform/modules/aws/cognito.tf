@@ -500,7 +500,13 @@ resource "aws_cognito_user_pool_client" "home_assistant" {
 
   generate_secret = false
 
-  callback_urls = ["https://hass.internal.tnwks.us/auth/oidc/callback"]
+  # HA is reachable on both hosts (public through the Cloudflare tunnel, LAN
+  # through nginx-internal) and hass-oidc-auth builds the callback from the
+  # host the login started on, so both must be registered.
+  callback_urls = [
+    "https://hass.tnwks.us/auth/oidc/callback",
+    "https://hass.internal.tnwks.us/auth/oidc/callback",
+  ]
 
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_flows_user_pool_client = true

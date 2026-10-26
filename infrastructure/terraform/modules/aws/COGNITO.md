@@ -15,7 +15,8 @@ pool that backs authentication for `*.internal.tnwks.us` services
     `https://oauth2.internal.tnwks.us/oauth2/callback`, scopes
     `openid email profile`, with secret
   - `home-assistant` — authorization_code + PKCE, public (no secret),
-    callback to `https://hass.internal.tnwks.us/auth/oidc/callback`,
+    callbacks to `https://hass.tnwks.us/auth/oidc/callback` (public) and
+    `https://hass.internal.tnwks.us/auth/oidc/callback` (LAN),
     scopes `openid email profile`. Used by the hass-oidc-auth integration;
     `cognito:groups` maps `admins` → HA administrator, `viewers` → HA user
   - `agent-ori` — client_credentials, scopes `tnwks-api/read`,
