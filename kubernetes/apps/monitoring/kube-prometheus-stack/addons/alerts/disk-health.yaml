@@ -8,7 +8,11 @@
 #     smartctl_device to say which physical drive it is.
 #   - windows_exporter diskdrive collector (Win32_DiskDrive status, job windows-exporter).
 # Counter alerts fire on *change* (new reallocations, new media errors), so a drive
-# that already carries old damage stays quiet until it gets worse.
+# that already carries old damage stays quiet until it gets worse. They compare
+# the raw value with itself an hour earlier, keyed by serial number (recording
+# rules below), not with increase(): SMART raw values are gauges, and increase()
+# would read a decrease (pending sectors cleared) as a counter reset and report
+# the new value as growth. Keying on serial also survives `device` renames.
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -26,6 +30,22 @@ spec:
             100 - min by (instance, job, device) (
               smartctl_device_attribute{attribute_value_type="value",
                 attribute_name=~"Wear_Leveling_Count|Media_Wearout_Indicator|SSD_Life_Left|Percent_Lifetime_Remain"}
+            )
+
+        # Error counters per physical drive, labelled by serial so an hour-ago
+        # comparison never mixes drives when smartctl's `device` names shift.
+        - record: smart:error_counter:raw
+          expr: |
+            max by (instance, model_name, serial_number, attribute_name) (
+              smartctl_device_attribute{attribute_value_type="raw",
+                attribute_name=~"Reallocated_Sector_Ct|Reallocated_Event_Count|Current_Pending_Sector|Offline_Uncorrectable|Reported_Uncorrect|Uncorrectable_Error_Cnt|Runtime_Bad_Block|Program_Fail_Cnt_Total|Program_Fail_Count|Erase_Fail_Count_Total|Erase_Fail_Count|CRC_Error_Count|UDMA_CRC_Error_Count"}
+              * on (instance, device) group_left (model_name, serial_number) smartctl_device
+            )
+        - record: smart:nvme_media_errors:raw
+          expr: |
+            max by (instance, model_name, serial_number) (
+              smartctl_device_media_errors
+              * on (instance, device) group_left (model_name, serial_number) smartctl_device
             )
 
         - alert: DiskSmartFailed
@@ -57,32 +77,26 @@ spec:
         - alert: DiskBadSectorsIncreasing
           expr: |
             (
-              max by (instance, job, device, attribute_name) (
-                increase(smartctl_device_attribute{attribute_value_type="raw",
-                  attribute_name=~"Reallocated_Sector_Ct|Reallocated_Event_Count|Current_Pending_Sector|Offline_Uncorrectable|Reported_Uncorrect|Uncorrectable_Error_Cnt|Runtime_Bad_Block|Program_Fail_Cnt_Total|Program_Fail_Count|Erase_Fail_Count_Total|Erase_Fail_Count"}[1h])
-              ) > 0
-            )
-            * on (instance, device) group_left (model_name, serial_number) smartctl_device
+              smart:error_counter:raw{attribute_name=~"Reallocated_Sector_Ct|Reallocated_Event_Count|Current_Pending_Sector|Offline_Uncorrectable|Reported_Uncorrect|Uncorrectable_Error_Cnt|Runtime_Bad_Block|Program_Fail_Cnt_Total|Program_Fail_Count|Erase_Fail_Count_Total|Erase_Fail_Count"}
+              - smart:error_counter:raw{attribute_name=~"Reallocated_Sector_Ct|Reallocated_Event_Count|Current_Pending_Sector|Offline_Uncorrectable|Reported_Uncorrect|Uncorrectable_Error_Cnt|Runtime_Bad_Block|Program_Fail_Cnt_Total|Program_Fail_Count|Erase_Fail_Count_Total|Erase_Fail_Count"} offset 1h
+            ) > 0
           labels:
             severity: warning
           annotations:
             summary: "{{ $labels.attribute_name }} increased on {{ $labels.model_name }}"
-            description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }}: {{ $labels.attribute_name }} went up by {{ $value | humanize }} in the last hour. The drive is remapping or failing to read/write blocks. Make sure it is backed up; repeated increases mean replace it."
+            description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} on {{ $labels.instance }}: {{ $labels.attribute_name }} went up by {{ $value | humanize }} in the last hour. The drive is remapping or failing to read/write blocks. Make sure it is backed up; repeated increases mean replace it."
 
         - alert: DiskSataCrcErrorsIncreasing
           expr: |
             (
-              max by (instance, job, device, attribute_name) (
-                increase(smartctl_device_attribute{attribute_value_type="raw",
-                  attribute_name=~"CRC_Error_Count|UDMA_CRC_Error_Count"}[1h])
-              ) > 5
-            )
-            * on (instance, device) group_left (model_name, serial_number) smartctl_device
+              smart:error_counter:raw{attribute_name=~"CRC_Error_Count|UDMA_CRC_Error_Count"}
+              - smart:error_counter:raw{attribute_name=~"CRC_Error_Count|UDMA_CRC_Error_Count"} offset 1h
+            ) > 5
           labels:
             severity: warning
           annotations:
             summary: "SATA link CRC errors on {{ $labels.model_name }}"
-            description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }}: {{ $value | humanize }} new interface CRC errors in the last hour. This is usually the SATA cable or port, not the flash. Reseat or swap the cable."
+            description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} on {{ $labels.instance }}: {{ $value | humanize }} new interface CRC errors in the last hour. This is usually the SATA cable or port, not the flash. Reseat or swap the cable."
 
         - alert: DiskNvmeCriticalWarning
           expr: |
@@ -97,13 +111,12 @@ spec:
 
         - alert: DiskNvmeMediaErrorsIncreasing
           expr: |
-            (increase(smartctl_device_media_errors[1h]) > 0)
-            * on (instance, device) group_left (model_name, serial_number) smartctl_device
+            (smart:nvme_media_errors:raw - smart:nvme_media_errors:raw offset 1h) > 0
           labels:
             severity: warning
           annotations:
             summary: "NVMe media errors increased on {{ $labels.model_name }}"
-            description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }} logged {{ $value | humanize }} new media/data integrity errors in the last hour (unrecovered read/write). Make sure it is backed up."
+            description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} on {{ $labels.instance }} logged {{ $value | humanize }} new media/data integrity errors in the last hour (unrecovered read/write). Make sure it is backed up."
 
         - alert: DiskNvmeSpareLow
           expr: |
