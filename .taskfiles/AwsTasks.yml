@@ -1,0 +1,41 @@
+---
+version: "3"
+
+# Workstation AWS access through IAM Roles Anywhere (SOPS KMS). See
+# infrastructure/terraform/environments/prod/aws/rolesanywhere/README.md.
+
+vars:
+  RA_DIR: "{{.TERRAFORM_DIR}}/environments/prod/aws/rolesanywhere"
+  RA_CN: '{{.RA_CN | default "it3e-wsl"}}'
+  RA_CERT_DIR: '{{.RA_CERT_DIR | default (printf "%s/.config/tnwks-ops/rolesanywhere" .HOME)}}'
+  RA_PROFILE: tnwks-sops
+
+tasks:
+  ra-cert:
+    desc: Issue (or renew) this workstation's Roles Anywhere certificate (RA_CN, default it3e-wsl)
+    cmds:
+      - "{{.RA_DIR}}/issue-cert.sh {{.RA_CN}} {{.RA_CERT_DIR}}"
+
+  ra-profile:
+    desc: Write the tnwks-sops AWS CLI profile (credential_process via aws_signing_helper)
+    dir: "{{.TERRAFORM_DIR}}/environments/prod/aws"
+    cmds:
+      - terraform init -input=false >/dev/null
+      - |
+        out="$(terraform output -json)"
+        get() { printf '%s' "$out" | python3 -I -c "import sys,json; print(json.load(sys.stdin)['$1']['value'])"; }
+        aws configure set "profile.{{.RA_PROFILE}}.region" us-west-2
+        aws configure set "profile.{{.RA_PROFILE}}.credential_process" \
+          "$(command -v aws_signing_helper) credential-process --trust-anchor-arn $(get rolesanywhere_trust_anchor_arn) --profile-arn $(get rolesanywhere_sops_profile_arn) --role-arn $(get rolesanywhere_sops_role_arn) --certificate {{.RA_CERT_DIR}}/{{.RA_CN}}.pem --private-key {{.RA_CERT_DIR}}/{{.RA_CN}}.key"
+        echo "profile {{.RA_PROFILE}} written"
+    preconditions:
+      - sh: command -v aws_signing_helper
+        msg: "aws_signing_helper is required (brew install rolesanywhere-credential-helper, or task init)"
+      - sh: test -f {{.RA_CERT_DIR}}/{{.RA_CN}}.pem
+        msg: "no certificate yet: run task aws:ra-cert"
+
+  ra-check:
+    desc: Confirm the Roles Anywhere session and SOPS KMS access
+    cmds:
+      - AWS_PROFILE={{.RA_PROFILE}} aws sts get-caller-identity --query Arn --output text
+      - AWS_PROFILE={{.RA_PROFILE}} aws sts assume-role --role-arn arn:aws:iam::654654220436:role/iam-role-sops --role-session-name ra-check --query AssumedRoleUser.Arn --output text

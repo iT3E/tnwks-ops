@@ -14,6 +14,7 @@ env:
 
 includes:
   ansible: .taskfiles/AnsibleTasks.yml
+  aws: .taskfiles/AwsTasks.yml
   bootstrap: .taskfiles/BootstrapTasks.yml
   cluster: .taskfiles/ClusterTasks.yml
   mikrotik: .taskfiles/MikrotikTasks.yml
@@ -51,6 +52,7 @@ tasks:
         kustomize
         pre-commit
         prettier
+        rolesanywhere-credential-helper
         sops
         stern
         terraform

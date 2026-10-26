@@ -24,7 +24,9 @@ jobs:
   terraform:
     name: "Terraform Apply"
     runs-on: ubuntu-latest
-    # The prod environment's required reviewers gate every real apply.
+    # No reviewer gate: merging to main is the approval. The prod environment
+    # only accepts deployments from protected branches (main), so its secrets
+    # and this apply cannot run from any other ref.
     environment:
       name: prod
     permissions:

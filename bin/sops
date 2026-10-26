@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# sops, with the tnwks-sops AWS profile (IAM Roles Anywhere) for this process
+# only. On PATH inside the repo via .envrc. The profile is deliberately NOT
+# exported repo-wide: other tools in the repo keep the caller's AWS_PROFILE.
+# Decryption normally succeeds through the age key; the profile matters for
+# the KMS recipient (encrypt, updatekeys, rotate).
+set -euo pipefail
+
+self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+real=""
+IFS=: read -r -a path_dirs <<<"$PATH"
+for d in "${path_dirs[@]}"; do
+  [[ -z "$d" || "$(cd "$d" 2>/dev/null && pwd)" == "$self_dir" ]] && continue
+  if [[ -x "$d/sops" ]]; then
+    real="$d/sops"
+    break
+  fi
+done
+[[ -n "$real" ]] || { echo "bin/sops: no sops binary on PATH" >&2; exit 127; }
+
+AWS_PROFILE="${TNWKS_SOPS_AWS_PROFILE:-tnwks-sops}" exec "$real" "$@"

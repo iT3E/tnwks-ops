@@ -117,9 +117,10 @@ system actually owns the change:
   the PR triggers a speculative plan via
   `.github/workflows/terraform-plan.yaml` (Terraform Cloud workspace
   `tnwks-ops-aws-prod`); the plan summary is posted as a PR comment with
-  a run link. Squash-merging triggers `terraform-apply.yaml`, which waits
-  for approval in the `prod` GitHub environment, then creates and
-  confirms a real run in the same workspace. Validate via the run link or
+  a run link. Squash-merging triggers `terraform-apply.yaml`, which creates
+  and confirms a real run in the same workspace with no manual approval:
+  the `prod` GitHub environment only allows deployments from protected
+  branches, so merging to `main` is the gate. Validate via the run link or
   the TFC UI. Plans run automatically only for the owner's same-repo PRs;
   anything else waits in the `external-contributions` environment.
 
@@ -228,6 +229,13 @@ under one of the matched path prefixes (`kubernetes/`, `ansible/`,
 `terraform/`, `infrastructure/terraform/`, `packer/`) so the rules apply.
 For Kubernetes paths only, `data` and `stringData` are encrypted (key
 names stay in plaintext).
+
+The KMS recipient needs AWS credentials that can assume `iam-role-sops`. On
+the workstation those come from IAM Roles Anywhere, for the sops process only:
+`bin/sops` (on PATH via `.envrc`) runs sops with `AWS_PROFILE=tnwks-sops` and
+nothing else in the repo inherits that profile. Set up with `task aws:ra-cert`
+and `task aws:ra-profile`; see
+`infrastructure/terraform/environments/prod/aws/rolesanywhere/README.md`.
 
 ### Terraform
 

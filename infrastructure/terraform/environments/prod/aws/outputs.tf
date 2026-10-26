@@ -73,3 +73,18 @@ output "smtp_password" {
   value     = module.aws.smtp_password
   sensitive = true
 }
+
+output "rolesanywhere_trust_anchor_arn" {
+  description = "Roles Anywhere trust anchor ARN."
+  value       = module.aws.rolesanywhere_trust_anchor_arn
+}
+
+output "rolesanywhere_sops_profile_arn" {
+  description = "Roles Anywhere profile ARN for SOPS sessions."
+  value       = module.aws.rolesanywhere_sops_profile_arn
+}
+
+output "rolesanywhere_sops_role_arn" {
+  description = "Role that Roles Anywhere SOPS sessions assume."
+  value       = module.aws.rolesanywhere_sops_role_arn
+}

@@ -53,6 +53,13 @@ data "aws_iam_policy_document" "custom_role_trust_policy" {
       variable = "aws:PrincipalArn"
       values   = ["arn:aws:iam::${aws_organizations_account.prod_aws_account.id}:role/tnwks-org-init-role"]
     }
+    # IAM Roles Anywhere workstation sessions (modules/aws/rolesanywhere.tf in
+    # the prod account). Same-key conditions merge into one OR list.
+    condition {
+      test     = "ArnLike"
+      variable = "aws:PrincipalArn"
+      values   = ["arn:aws:iam::${aws_organizations_account.prod_aws_account.id}:role/tnwks-rolesanywhere-sops"]
+    }
     principals {
       type        = "AWS"
       identifiers = ["*"]
