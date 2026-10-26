@@ -2,7 +2,8 @@
 # Which socat instances to install. Each maps to a 'case' arm in
 # tnwks-lan-bridge.sh: http→ingress 80, https→ingress 443, mqtt→1883,
 # netflow→flow-collector udp/2055 (Windows side: Start-TnwksUdpRelay.ps1),
-# syslog→vector-aggregator tcp/6001 (the router's remote logging).
+# syslog→vector-aggregator udp/6001 (the router's remote logging; Windows
+# side: a second Start-TnwksUdpRelay.ps1 instance).
 # 'dns' is intentionally omitted by default — netsh portproxy is TCP-only,
 # so the LAN-side DNS path goes via VyOS, not via this bridge.
 wsl_lan_bridge_instances:

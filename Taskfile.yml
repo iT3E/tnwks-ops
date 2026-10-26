@@ -20,6 +20,7 @@ includes:
   precommit: .taskfiles/PrecommitTasks.yml
   talos: .taskfiles/TalosTasks.yml
   terraform: .taskfiles/TerraformTasks.yml
+  wsl-host: .taskfiles/WslHostTasks.yml
 
 tasks:
   init:

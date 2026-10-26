@@ -1,0 +1,22 @@
+---
+version: "3"
+
+# Host-side plumbing that lets the LAN reach the WSL cluster
+# (docs/wsl-lan-exposure.md). Each task is idempotent. The Windows steps run
+# elevated through invoke-elevated.sh, so expect a UAC prompt.
+
+vars:
+  WSL_HOST_DIR: "{{.ROOT_DIR}}/infrastructure/wsl-host"
+
+tasks:
+  lan-bridge:
+    desc: Install the WSL socat bridges and sync the Windows TCP portproxy rules (UAC prompt)
+    dir: "{{.ANSIBLE_DIR}}"
+    cmds:
+      - ansible-playbook -i inventory/wsl.yml playbooks/wsl-lan-bridge.yml
+      - "{{.WSL_HOST_DIR}}/invoke-elevated.sh {{.WSL_HOST_DIR}}/Sync-TnwksLanBridge.ps1"
+
+  udp-relays:
+    desc: Register the Windows UDP relays for NetFlow (2055) and router syslog (6001) (UAC prompt)
+    cmds:
+      - "{{.WSL_HOST_DIR}}/invoke-elevated.sh {{.WSL_HOST_DIR}}/Register-TnwksUdpRelays.ps1"

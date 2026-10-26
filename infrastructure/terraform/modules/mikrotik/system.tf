@@ -18,8 +18,9 @@ resource "routeros_system_note" "this" {
 }
 
 # --- Remote syslog -----------------------------------------------------------
-# TCP syslog to monitoring/vector-aggregator (routeros_syslog source, :6001)
-# via the WSL host's LAN bridge; see docs/wsl-lan-exposure.md.
+# Syslog to monitoring/vector-aggregator (routeros_syslog source, :6001) via
+# the WSL host's relays; see docs/wsl-lan-exposure.md. Use UDP: RouterOS's TCP
+# syslog has no message framing.
 
 resource "routeros_system_logging_action" "remote" {
   count = var.syslog == null ? 0 : 1
