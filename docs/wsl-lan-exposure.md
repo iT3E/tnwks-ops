@@ -47,6 +47,13 @@ NIC-up events. The UDP relays re-resolve it every 60 seconds.
 | `k8s-gateway` | 10.5.0.201 | 53/UDP | not exposed: the router answers DNS | (`dns`, unused) |
 | `ingress-nginx-controller` (public) | 10.5.0.202 | 80, 443 | never exposed: fronted by cloudflared | — |
 
+The Windows host's own monitoring agents (windows_exporter `:9182`,
+smartctl_exporter `:9633`) are scraped by the cluster from inside the WSL NAT
+subnet, and their firewall rules accept only that subnet, not the LAN. They are
+installed and kept in line by `task wsl-host:monitoring`
+(`Install-TnwksWindowsMonitoring.ps1`; `task wsl-host:monitoring-check` reports
+drift without changing anything).
+
 The router's exports to the desktop:
 
 - **NetFlow v9** (`/ip traffic-flow`) to `10.10.91.142:2055` for

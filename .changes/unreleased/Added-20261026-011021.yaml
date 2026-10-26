@@ -1,0 +1,3 @@
+kind: Added
+body: 'Windows host monitoring agents as code: task wsl-host:monitoring installs windows_exporter, smartmontools and smartctl_exporter at pinned, checksummed versions and limits both exporters to the WSL subnet'
+time: 2026-10-26T01:10:21.201605201-07:00

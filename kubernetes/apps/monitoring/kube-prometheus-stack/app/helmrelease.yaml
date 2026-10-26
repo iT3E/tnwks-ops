@@ -160,7 +160,9 @@ spec:
 
           # SMART disk health on the Windows host. smartctl_exporter runs there as the
           # SYSTEM scheduled task \Prometheus\smartctl_exporter and re-reads the drives
-          # every 120s, so scraping faster than 60s only returns cached values.
+          # every 120s, so scraping faster than 60s only returns cached values. Both
+          # Windows exporters are installed by infrastructure/wsl-host/
+          # Install-TnwksWindowsMonitoring.ps1 (task wsl-host:monitoring).
           - job_name: smartctl-exporter
             scrape_interval: 60s
             scrape_timeout: 20s

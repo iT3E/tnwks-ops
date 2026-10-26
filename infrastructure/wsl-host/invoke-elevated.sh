@@ -14,7 +14,8 @@ win_tmp="$(powershell.exe -NoProfile -Command '[IO.Path]::GetTempPath()' | tr -d
 win_log="${win_tmp}tnwks-elevated-$$.log"
 
 set +e
-powershell.exe -NoProfile -Command "\$p = Start-Process powershell.exe -Verb RunAs -Wait -PassThru -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-Command','& ''${win_script}'' $* *> ''${win_log}''; exit \$LASTEXITCODE'; exit \$p.ExitCode"
+# A terminating error escapes `*>`, so it is caught and appended to the log too.
+powershell.exe -NoProfile -Command "\$p = Start-Process powershell.exe -Verb RunAs -Wait -PassThru -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-Command','try { & ''${win_script}'' $* *> ''${win_log}'' } catch { \$_ | Out-String | Out-File -Append -Encoding unicode ''${win_log}''; exit 1 }; exit \$LASTEXITCODE'; exit \$p.ExitCode"
 rc=$?
 set -e
 
