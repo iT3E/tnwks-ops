@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.2.5 - 2026-10-26
+
+### Fixed
+
+* Flow export uses NetFlow v9: the routeros provider only accepts IPFIX in a spelling RouterOS 7.25 rejects
+
 ## v1.2.4 - 2026-10-26
 
 ### Fixed

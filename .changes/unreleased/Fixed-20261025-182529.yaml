@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Flow export uses NetFlow v9: the routeros provider only accepts IPFIX in a spelling RouterOS 7.25 rejects'
-time: 2026-10-25T18:25:29.082108083-07:00
