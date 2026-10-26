@@ -1,0 +1,23 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: tnwks-ops-runner
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/tools/actions-runner-controller/ops-runner/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  # Needs the scale-set controller (AutoscalingRunnerSet CRD + listener).
+  dependsOn:
+    - name: actions-runner-controller
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

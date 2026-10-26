@@ -1,0 +1,119 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2beta2.json
+# Self-hosted runners for this repo's network-device Terraform (MikroTik
+# today), `runs-on: tnwks-ops-runner`. See docs/mikrotik-ci.md.
+#
+# The router's REST API is VPN-only, so each runner pod carries a wireproxy
+# sidecar: userspace WireGuard (no NET_ADMIN, no TUN, no kernel module) to the
+# router's wg03 listener, exposing REST as https://127.0.0.1:8443 inside the
+# pod only. wg03 is its own zone with no forwarding, so the tunnel reaches the
+# REST API and nothing else. secret.sops.yaml holds the tunnel config and the
+# CI-only age key, which decrypts the MikroTik secrets and nothing else.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: tnwks-ops-runner
+  namespace: tools
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: gha-runner-scale-set
+      version: 0.14.2
+      sourceRef:
+        kind: HelmRepository
+        name: actions-runner-controller
+        namespace: flux-system
+  maxHistory: 2
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  dependsOn:
+    - name: gha-runner-scale-set-controller
+  values:
+    githubConfigUrl: "https://github.com/iT3E/tnwks-ops"
+    runnerScaleSetName: tnwks-ops-runner
+    # Same GitHub App as sites-builder (one installation, both repos).
+    githubConfigSecret: sites-runner-github-app
+    # Idle costs nothing; one runner at a time so device applies never overlap.
+    minRunners: 0
+    maxRunners: 1
+    controllerServiceAccount:
+      namespace: tools
+      name: gha-runner-scale-set-controller-gha-rs-controller
+    template:
+      spec:
+        securityContext:
+          seccompProfile:
+            type: RuntimeDefault
+        initContainers:
+          # Native sidecar (restartPolicy: Always). The runner starts only once
+          # /readyz reports the router answering through the tunnel.
+          - name: wireproxy
+            # Post-v1.1.3 commit: includes the Landlock fix for TCPClientTunnel
+            # (windtf/wireproxy#219); v1.1.3 denies its own bind on this kernel.
+            image: ghcr.io/windtf/wireproxy:59258176bd8cbdf21602af795e081d3718678b3a@sha256:5d4f6b9e033bdacc218c8b434edb30011549ddf1298313c5193728e7b00bfaff
+            args: ["--config", "/etc/wireproxy/wireproxy.conf", "--info", "0.0.0.0:9080"]
+            restartPolicy: Always
+            startupProbe:
+              httpGet:
+                path: /readyz
+                port: 9080
+              periodSeconds: 3
+              failureThreshold: 40
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 65532
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            resources:
+              requests:
+                cpu: 10m
+                memory: 16Mi
+              limits:
+                memory: 64Mi
+            volumeMounts:
+              - name: tunnel
+                mountPath: /etc/wireproxy
+                readOnly: true
+        containers:
+          - name: runner
+            image: ghcr.io/actions/actions-runner:2.338.1@sha256:e275409999c37162649aa050ca573f03eab2eabcb3a1e7fcc47548de6b4f9690
+            command: ["/home/runner/run.sh"]
+            env:
+              # Read by the Terraform sops provider; decrypts only the
+              # MikroTik secrets (see .sops.yaml).
+              - name: SOPS_AGE_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: tnwks-ops-runner
+                    key: sops-age-key
+              # The KMS recipient is unusable here and the age key suffices;
+              # skip the EC2 metadata lookup the AWS SDK would otherwise try.
+              - name: AWS_EC2_METADATA_DISABLED
+                value: "true"
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                memory: 1Gi
+        volumes:
+          - name: tunnel
+            secret:
+              secretName: tnwks-ops-runner
+              items:
+                - key: wireproxy.conf
+                  path: wireproxy.conf

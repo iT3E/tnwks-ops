@@ -48,6 +48,8 @@ resources:
   - ./nfs-server-ks.yaml
   - ../../../apps/tools/actions-runner-controller/controller/ks.yaml
   - ../../../apps/tools/actions-runner-controller/runner/ks.yaml
+  # Network-device Terraform runners for this repo (docs/mikrotik-ci.md).
+  - ../../../apps/tools/actions-runner-controller/ops-runner/ks.yaml
 
   # Trimmed namespaces — per-namespace overlays sit alongside this file
   - ./home-automation

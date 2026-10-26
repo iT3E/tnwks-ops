@@ -1,0 +1,6 @@
+---
+# Self-hosted runner scale sets (kubernetes/apps/tools/actions-runner-controller).
+self-hosted-runner:
+  labels:
+    - tnwks-ops-runner
+    - sites-builder
