@@ -1,0 +1,75 @@
+---
+# Security dashboard (YAML mode, git-owned). Room/device tiles are not here:
+# HA's built-in Overview dashboard generates those from area assignments,
+# which are a UI-owned registry.
+#
+# Cameras come from the Frigate integration (camera.<frigate camera name>).
+# The card streams through go2rtc inside Frigate, proxied by the integration,
+# so no WebRTC port has to be reachable from the browser. The go2rtc stream
+# names are set explicitly because Frigate's camera names have no matching
+# go2rtc stream here (only the _hq / _lq restreams exist). The grid uses the
+# _lq substreams: they're H.264 on every camera and light enough to run six
+# at once.
+title: Security
+views:
+  - title: Cameras
+    path: cameras
+    icon: mdi:cctv
+    type: panel
+    cards:
+      - type: custom:advanced-camera-card
+        cameras_global:
+          live_provider: go2rtc
+        cameras:
+          - camera_entity: camera.frigate_loryta_fdoor
+            go2rtc:
+              stream: frigate_loryta_fdoor_lq
+          - camera_entity: camera.frigate_reolink_south
+            go2rtc:
+              stream: frigate_reolink_south_lq
+          - camera_entity: camera.frigate_sv3c_west
+            go2rtc:
+              stream: frigate_sv3c_west_lq
+          - camera_entity: camera.frigate_amcrest_balc
+            go2rtc:
+              stream: frigate_amcrest_balc_lq
+          - camera_entity: camera.frigate_loryta_pool
+            go2rtc:
+              stream: frigate_loryta_pool_lq
+          - camera_entity: camera.frigate_amcrest_kitchen
+            go2rtc:
+              stream: frigate_amcrest_kitchen_lq
+        live:
+          display:
+            mode: grid
+
+  - title: Alerts
+    path: alerts
+    icon: mdi:shield-moon
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Night person alerts
+          - type: tile
+            entity: input_boolean.night_person_alerts
+          - type: tile
+            entity: automation.security_person_at_night
+          - type: tile
+            entity: input_datetime.night_person_alerts_start
+          - type: tile
+            entity: input_datetime.night_person_alerts_end
+          - type: markdown
+            content: >-
+              Changes here last until the next restart. To make one stick,
+              edit `config/packages/frigate_night_alerts.yaml`.
+      - type: grid
+        cards:
+          - type: heading
+            heading: Recent alerts
+          - type: logbook
+            target:
+              entity_id: automation.security_person_at_night
+            hours_to_show: 72

@@ -6,6 +6,8 @@ metadata:
   name: home-assistant
   namespace: flux-system
 spec:
+  # cloudnative-pg-cluster owns the home_assistant Database and the
+  # postgres-app secret that reflector mirrors into home-automation.
   dependsOn:
     - name: cloudnative-pg-cluster
   path: ./kubernetes/apps/home-automation/home-assistant/app
@@ -13,7 +15,7 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
-  wait: false
+  wait: false # no flux ks dependents
   interval: 30m
   retryInterval: 1m
   timeout: 5m

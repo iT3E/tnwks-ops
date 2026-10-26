@@ -31,8 +31,10 @@ spec:
       securityContext:
         runAsUser: 568
         runAsGroup: 568
+        runAsNonRoot: true
         fsGroup: 568
         fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: { type: RuntimeDefault }
     controllers:
       home-assistant:
         type: statefulset
@@ -47,46 +49,107 @@ spec:
               globalMounts:
                 - path: /config
         initContainers:
-          01-init-db:
-            image:
-              repository: ghcr.io/onedr0p/postgres-init
-              tag: "17.4"
-              pullPolicy: IfNotPresent
-            envFrom: &envFrom
-              - secretRef:
-                  name: home-assistant-secrets
+          # Creates the UI-owned include files on a fresh volume and installs
+          # the pinned custom integrations + cards (scripts/prepare-config.sh).
+          # Same image as the app, which already ships bash, curl and unzip.
+          prepare-config:
+            image: &image
+              # onedr0p/home-assistant stopped at 2025.3.3; the images moved to
+              # home-operations.
+              repository: ghcr.io/home-operations/home-assistant
+              tag: 2026.10.4@sha256:81271a8bbe2a6019659e9d5cde98b884dd0d67fad6819bb4ab177dceb0c1c5e1
+            command: ["/bin/bash", "/scripts/prepare-config.sh", "/config"]
+            env:
+              # renovate: datasource=github-releases depName=christiaangoossens/hass-oidc-auth
+              HASS_OIDC_AUTH_VERSION: v1.2.1
+              # renovate: datasource=github-releases depName=blakeblackshear/frigate-hass-integration
+              FRIGATE_INTEGRATION_VERSION: v5.15.6
+              # renovate: datasource=github-releases depName=dermotduffy/advanced-camera-card
+              ADVANCED_CAMERA_CARD_VERSION: v8.1.0
+            securityContext: &securityContext
+              allowPrivilegeEscalation: false
+              capabilities: { drop: ["ALL"] }
         containers:
           app:
-            image:
-              repository: ghcr.io/onedr0p/home-assistant
-              tag: 2025.3.3@sha256:9e2a7177b4600653d6cb46dff01b1598189a5ae93be0b99242fbc039d32d79f1
+            image: *image
+            # A list, not a map: HASS_RECORDER_DB_URL expands
+            # $(POSTGRES_PASSWORD), which Kubernetes only resolves for
+            # variables defined earlier in the list.
             env:
-              TZ: America/New_York
-              POSTGRES_HOST: ${POSTGRES_SERVER}
-              POSTGRES_DB: home_assistant
-            envFrom: *envFrom
+              - name: TZ
+                value: "${TIMEZONE}"
+              - name: HASS_URL
+                value: "https://hass.${INTERNAL_DOMAIN}"
+              # Public app-client ID (cognito_home_assistant_client_id output
+              # of the AWS workspace), like the onboard client's.
+              - name: HASS_OIDC_CLIENT_ID
+                value: "CLIENT_ID_PENDING_TERRAFORM_APPLY"
+              - name: HASS_OIDC_DISCOVERY_URL
+                value: "${COGNITO_OIDC_ISSUER_URL}/.well-known/openid-configuration"
+              - name: FRIGATE_API_URL
+                value: "http://frigate.production.svc.cluster.local:5000"
+              - name: FRIGATE_UI_URL
+                value: "https://frigate.${CLUSTER_DOMAIN}"
+              # CNPG app password from the reflected `postgres-app` secret;
+              # composed into the recorder URL so it never lands in git.
+              - name: POSTGRES_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: postgres-app
+                    key: password
+              - name: HASS_RECORDER_DB_URL
+                value: "postgresql://app:$(POSTGRES_PASSWORD)@postgres-rw.databases.svc.cluster.local:5432/home_assistant"
+            # HASS_LATITUDE / HASS_LONGITUDE / HASS_ELEVATION
+            envFrom:
+              - secretRef:
+                  name: home-assistant-secret
             probes:
-              liveness:
-                enabled: false
-              readiness:
-                enabled: false
+              # /manifest.json is served unauthenticated by the frontend.
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /manifest.json
+                    port: &port 8123
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 5
+              readiness: *probes
+              # The first start after an image change rebuilds /config/.venv
+              # and pip-installs the custom integrations' requirements.
               startup:
-                enabled: false
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /manifest.json
+                    port: *port
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 60
+            securityContext: *securityContext
             resources:
               requests:
-                cpu: 10m
-                memory: 100Mi
+                cpu: 50m
+                memory: 512Mi
               limits:
-                memory: 750Mi
+                memory: 2Gi
     service:
       app:
         controller: home-assistant
         ports:
           http:
-            port: 8123
+            port: *port
     ingress:
       app:
         className: nginx-internal
+        annotations:
+          hajimari.io/icon: mdi:home-assistant
+          # The frontend holds one long-lived websocket; don't let nginx's
+          # 60s default idle timeout cut it.
+          nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+          nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
         hosts:
           - host: &host hass.${INTERNAL_DOMAIN}
             paths:
@@ -95,3 +158,40 @@ spec:
                 service:
                   identifier: app
                   port: http
+        tls:
+          - hosts:
+              - *host
+    persistence:
+      configuration:
+        type: configMap
+        name: home-assistant-config
+        advancedMounts:
+          home-assistant:
+            app:
+              - path: /config/configuration.yaml
+                subPath: configuration.yaml
+                readOnly: true
+      packages:
+        type: configMap
+        name: home-assistant-packages
+        advancedMounts:
+          home-assistant:
+            app:
+              - path: /config/packages
+                readOnly: true
+      dashboards:
+        type: configMap
+        name: home-assistant-dashboards
+        advancedMounts:
+          home-assistant:
+            app:
+              - path: /config/dashboards
+                readOnly: true
+      scripts:
+        type: configMap
+        name: home-assistant-scripts
+        advancedMounts:
+          home-assistant:
+            prepare-config:
+              - path: /scripts
+                readOnly: true
