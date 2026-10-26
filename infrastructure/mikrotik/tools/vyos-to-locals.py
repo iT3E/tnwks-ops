@@ -108,7 +108,7 @@ CONTAINER_DNS_ADDRESSES = {"10.10.53.4", "10.10.53.7"}
 # Where the UniFi Network controller (container 10.10.53.10) moves: Kubernetes
 # on the WSL desktop, reached from the LAN through the Windows host. The APs
 # need TCP 8080 (inform), UDP 3478 (STUN) and the UI on TCP 8443 relayed there
-# (docs/wsl-lan-exposure.md).
+# (docs/wsl/lan-exposure.md).
 UNIFI_CONTROLLER_HOME = WSL_HOST
 
 # Container address groups that still mean something after the move, mapped to
@@ -229,11 +229,11 @@ NAT_RE = re.compile(r"^set nat destination rule (\d+) (.+)$")
 ROUTE_RE = re.compile(r"^set protocols static route (\S+) next-hop (\S+)")
 
 # --------------------------------------------------------------------------
-# EdgeRouter Lite consolidation (docs/edgerouter-discovery.md).
+# EdgeRouter Lite consolidation (docs/network/migration/edgerouter-discovery.md).
 #
 # The RB5009 replaces sce-er01 too, so the transit hop disappears.
 # 172.16.1.252 and .254 are both dead (`ip neigh` FAILED, 100% ping loss; see
-# docs/edgerouter-discovery.md), yet both routers still route production
+# docs/network/migration/edgerouter-discovery.md), yet both routers still route production
 # subnets at them. Anything pointing at a dead next-hop is a bug, not a config to port.
 # --------------------------------------------------------------------------
 DEAD_NEXT_HOPS = {"172.16.1.252", "172.16.1.254"}
@@ -271,7 +271,7 @@ NATIVE_VLAN = {
 # Management access model: people reach sensitive systems (switch, UniFi and
 # UISP management, the router itself) only over the admin VPN. Services keep
 # their own narrow paths (UniFi controller <-> APs, mktxp -> router API).
-# Break-glass: docs/network-access.md.
+# Break-glass: docs/network/access.md.
 ADMIN_ZONE = "vpn"  # wg01
 
 # Admin peers on other WireGuard listeners, by peer name. They get the same
@@ -287,7 +287,7 @@ WG_PEER_PUBLIC_KEYS = {
 }
 
 # WireGuard listeners with no VyOS source. wg03 is the CI runner's tunnel
-# (docs/mikrotik-ci.md): its own zone with no zone pairs, so the terminal
+# (docs/network/ci.md): its own zone with no zone pairs, so the terminal
 # forward drop covers everything, and an input accept for REST only. Joined
 # from the LAN only, never the WAN. Private keys come from SOPS
 # (wireguard_<name>_private_key).
@@ -801,7 +801,7 @@ def parse_dns(vyos_root: Path) -> tuple[dict, list[str]]:
         if adlists:
             notes.append(
                 "dns: %d blocky blackList URLs become ip_dns_adlist entries -- "
-                "see the RAM warning in docs/mikrotik-vyos-port.md" % len(adlists)
+                "see the RAM warning in docs/network/migration/vyos-port.md" % len(adlists)
             )
         white = blocking.get("whiteLists") or {}
         white_urls = [u for urls in white.values() for u in (urls or [])]
@@ -1618,7 +1618,7 @@ def main() -> int:
     body.append("\n")
     body.append(assign("dns", dns,
                        "Replaces the blocky + dnsdist + bind container stack with native\n"
-                       "RouterOS DNS. See docs/mikrotik-vyos-port.md for what did not survive."))
+                       "RouterOS DNS. See docs/network/migration/vyos-port.md for what did not survive."))
     body.append("\n")
     body.append(assign("ntp", ntp,
                        "VyOS both consumed upstream NTP and served the LAN (allow-client),\n"
@@ -1667,7 +1667,7 @@ def main() -> int:
                        "Private keys are injected from SOPS in main.tf, never stored here."))
 
     if notes:
-        body.append("\n  # Translation notes (see docs/mikrotik-vyos-port.md):\n")
+        body.append("\n  # Translation notes (see docs/network/migration/vyos-port.md):\n")
         for note in sorted(set(notes)):
             body.append("  #   - %s\n" % note)
     body.append("}\n")

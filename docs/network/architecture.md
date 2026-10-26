@@ -5,7 +5,7 @@ VPN endpoint. Its configuration is Terraform
 (`infrastructure/terraform/modules/mikrotik`, values in the generated
 `environments/prod/mikrotik/locals.tf`). The EdgeRouter Lite and VyOS are
 retired and kept powered off as a rollback until Phase 5 of
-[`../mikrotik-cutover-checklist.md`](../mikrotik-cutover-checklist.md).
+[`migration/cutover-checklist.md`](migration/cutover-checklist.md).
 
 Diagrams are Mermaid in this file: GitHub renders them inline, and a change
 shows up as a readable diff. Edit them here; there is no build step.
@@ -79,7 +79,7 @@ management, for break-glass.
 Management of the router, switch, APs and radios is reachable only over the
 admin VPN or from an admin peer; nothing on the WAN answers except WireGuard.
 The full model and the break-glass steps are in
-[`../network-access.md`](../network-access.md).
+[`access.md`](access.md).
 
 ## Services on the router
 
@@ -93,7 +93,7 @@ The full model and the break-glass steps are in
 
 LAN clients reach services on the WSL cluster through the desktop:
 `*.internal.tnwks.us` resolves to `10.10.91.142`, which forwards into the
-cluster. See [`../wsl-lan-exposure.md`](../wsl-lan-exposure.md).
+cluster. See [`../wsl/lan-exposure.md`](../wsl/lan-exposure.md).
 
 ## Observability
 

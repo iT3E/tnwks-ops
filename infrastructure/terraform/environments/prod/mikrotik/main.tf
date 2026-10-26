@@ -43,7 +43,7 @@ module "mikrotik" {
 
   # EdgeRouter Lite consolidation. zone-lan scopes router services (DNS, NTP,
   # DHCP) to internal VLANs so they can never be answered on the WAN, which is
-  # what the ERL got wrong. See docs/edgerouter-discovery.md.
+  # what the ERL got wrong. See docs/network/migration/edgerouter-discovery.md.
   lan_interface_lists = local.lan_interface_lists
   connection_tracking = local.connection_tracking
 

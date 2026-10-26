@@ -14,7 +14,7 @@ the WAN except WireGuard.
 | --- | --- | --- | --- |
 | RouterOS (SSH 22, REST 443, Winbox 8291) | `10.10.30.1` on `wg01` | `wg01`, admin peers | — |
 | RouterOS read-only API (api-ssl 8729) | any router address | — | mktxp, from the WSL host only |
-| RouterOS REST 443, for CI | `10.10.32.1` on `wg03` | — | the self-hosted runner `tnwks-ops-runner` only (its own listener and zone; [`mikrotik-ci.md`](mikrotik-ci.md)) |
+| RouterOS REST 443, for CI | `10.10.32.1` on `wg03` | — | the self-hosted runner `tnwks-ops-runner` only (its own listener and zone; [`ci.md`](ci.md)) |
 | EP-R6 SSH, for CI | `10.10.140.140` | — | the same runner, through `wg03`: the one forward from `vpn-ci` (`infrastructure/edgeos`) |
 | Aruba SW03 management | `10.98.0.251` (untagged native VLAN) | `wg01`, admin peers | — |
 | UniFi APs | VLAN 900 | `wg01`, admin peers | UniFi controller (SSH adopt, STUN); APs inform to it |

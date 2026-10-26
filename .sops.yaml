@@ -4,7 +4,7 @@
 #   * AWS KMS  — multi-region MRK in account 654654220436
 #   * homelab-wsl age — per-cluster key for WSL (sops-age secret in flux-system)
 #   * homelab-ms-01 age — per-cluster key for MS-01 (added when MS-01 is bootstrapped)
-#   * network-devices CI age — the self-hosted runner's key (docs/mikrotik-ci.md).
+#   * network-devices CI age — the self-hosted runner's key (docs/network/ci.md).
 #     Only on the device secrets below, so a leaked CI key exposes those and
 #     nothing else in the repo.
 creation_rules:

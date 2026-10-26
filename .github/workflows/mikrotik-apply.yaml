@@ -2,7 +2,7 @@
 name: "MikroTik Apply"
 
 # Applies the MikroTik root module on merge to main, from the self-hosted
-# tnwks-ops-runner (docs/mikrotik-ci.md). Plan and apply run in one job, so
+# tnwks-ops-runner (docs/network/ci.md). Plan and apply run in one job, so
 # what is applied is exactly the plan computed here.
 
 on:

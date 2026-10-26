@@ -20,7 +20,7 @@
 # Talos-in-Docker on WSL2 — the clean-cilium-state init container
 # requests CAP_SYS_MODULE which the WSL2 kernel rejects in nested
 # containers regardless of bounding set or privileged flag. See the
-# upstream issues referenced in docs/bootstrap-wsl.md.)
+# upstream issues referenced in docs/wsl/bootstrap.md.)
 #
 # kube-proxy is kept enabled on WSL because Flannel doesn't replace it.
 # (MS-01 disables kube-proxy because Cilium does the replacement there.)

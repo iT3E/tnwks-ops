@@ -113,7 +113,7 @@ match on it and therefore cannot be answered from the WAN:
 
 People reach sensitive systems (router, switch, UniFi APs, UISP radios) only
 over `wg01`. The full access model and the break-glass procedures are in
-[`network-access.md`](network-access.md).
+[`network/access.md`](../access.md).
 | everything else | terminal drop |
 
 ## The four translations that are not one-to-one
@@ -379,7 +379,7 @@ Worth fixing in `vyos-config` regardless of the migration:
 ## Cutover runbook
 
 The step-by-step, with who does each step, is
-[`mikrotik-cutover-checklist.md`](mikrotik-cutover-checklist.md). In short:
+[`cutover-checklist.md`](cutover-checklist.md). In short:
 
 | Stage | What changes | Rollback |
 | --- | --- | --- |

@@ -14,7 +14,7 @@ param(
     [string]$WslDistro = 'Ubuntu',
     # Ports forwarded LAN -> Windows -> WSL eth0 -> socat -> MetalLB VIP.
     # 53/UDP is excluded here because netsh portproxy is TCP-only; UDP DNS
-    # is handled separately (see docs/wsl-lan-exposure.md — port 53 needs a
+    # is handled separately (see docs/wsl/lan-exposure.md — port 53 needs a
     # different forwarder, e.g. PortProxy with WinDivert or running k8s-gateway
     # DNS on a different LAN entry path).
     [int[]]$TcpPorts  = @(80, 443, 1883),

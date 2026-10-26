@@ -45,4 +45,4 @@ USB passthrough for Frigate (Coral TPU) and zwave-js-ui (Aeotec Z-Stick) on
 this cluster is straightforward — just plug the dongles into one of the
 MS-01s. Talos exposes them as `/dev/bus/usb/...`, and the pods claim them
 via the existing `securityContext` / hostPath patterns. See
-[docs/usb-passthrough.md](../../docs/usb-passthrough.md).
+[docs/wsl/usb-passthrough.md](../../docs/wsl/usb-passthrough.md).

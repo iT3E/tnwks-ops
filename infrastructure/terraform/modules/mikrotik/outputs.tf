@@ -47,7 +47,7 @@ output "unported_vyos_subsystems" {
   description = <<-EOT
     Explicit record of what this module intentionally does not reproduce, so a
     future reader does not assume the port is lossy by accident. See
-    docs/mikrotik-vyos-port.md for the reasoning behind each.
+    docs/network/migration/vyos-port.md for the reasoning behind each.
   EOT
   value = [
     "podman containers (blocky/dnsdist/bind/haproxy x3/unifi/uisp/node-exporter/speedtest-exporter/cloudflare-ddns)",

@@ -21,7 +21,7 @@
 #     breaks through Do Not Disturb and silent mode. iOS critical alerts need
 #     a one-time permission; Android plays on the alarm stream, which rings
 #     through silent/vibrate and through DND wherever DND allows alarms (the
-#     Android default). See docs/home-assistant.md.
+#     Android default). See docs/apps/home-assistant.md.
 #
 # The phone loads the snapshot from HA, through whichever URL the app is on
 # (the Frigate integration's notification proxy serves it).

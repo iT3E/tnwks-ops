@@ -2,7 +2,7 @@
 # wsl_usb_attach — install the attach script + templated systemd unit, then
 # enable+start one instance per dongle so each stays attached into the WSL VM
 # across WSL restarts. Inverts the old Windows-Scheduled-Task model; the
-# Windows side now only starts WSL. See docs/usb-passthrough.md.
+# Windows side now only starts WSL. See docs/wsl/usb-passthrough.md.
 
 - name: Install tnwks-usb-attach script
   ansible.builtin.copy:

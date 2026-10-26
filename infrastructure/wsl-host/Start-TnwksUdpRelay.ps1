@@ -4,7 +4,7 @@
 #
 # netsh portproxy (used by Sync-TnwksLanBridge.ps1 for 80/443/1883) is
 # TCP-only, so UDP services need their own forwarder. One instance (Scheduled
-# Task) per port; see docs/wsl-lan-exposure.md:
+# Task) per port; see docs/wsl/lan-exposure.md:
 #
 #   router udp/2055 (NetFlow) -> <windows-ip>:2055 (this relay)
 #     -> <wsl-ip>:2055 (socat: tnwks-lan-bridge@netflow)

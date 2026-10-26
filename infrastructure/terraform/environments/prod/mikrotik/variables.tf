@@ -7,7 +7,7 @@ variable "routeros_url" {
   description = <<-EOT
     Overrides the REST endpoint from secrets.sops.yaml (the router's wg01 address).
     CI sets TF_VAR_routeros_url to its wireproxy tunnel (https://127.0.0.1:8443,
-    which forwards over wg03 to the router), see docs/mikrotik-ci.md.
+    which forwards over wg03 to the router), see docs/network/ci.md.
   EOT
   type        = string
   default     = null

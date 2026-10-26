@@ -6,8 +6,8 @@ typed work an AI coding agent (or you) runs from this repo. Steps marked
 **(approve)** change something outside the repo and wait for a go-ahead.
 
 Background, design and the rationale for each stage are in
-[`mikrotik-vyos-port.md`](mikrotik-vyos-port.md). Access model and break-glass
-are in [`network-access.md`](network-access.md).
+[`vyos-port.md`](vyos-port.md). Access model and break-glass
+are in [`network/access.md`](../access.md).
 
 Nothing touches the live network until Phase 3, and every step from there is
 undone by moving one cable back.

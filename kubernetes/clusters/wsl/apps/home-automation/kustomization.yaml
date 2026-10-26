@@ -3,7 +3,7 @@
 #
 # zwave-js-ui is included — the Aeotec Z-Stick is plugged into the desktop
 # and passed through Windows -> WSL -> Docker -> Talos. See
-# docs/usb-passthrough.md for the chain.
+# docs/wsl/usb-passthrough.md for the chain.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

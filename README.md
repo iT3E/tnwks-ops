@@ -25,7 +25,7 @@ Two peer production clusters, one source of truth:
 
 | Cluster | Hardware | Storage | Notes |
 |---------|----------|---------|-------|
-| **`wsl`** | Talos in Docker on the WSL2 desktop (1 CP + 2 workers) | local-path | Hosts USB-attached apps (Frigate / Coral, zwave-js-ui / Z-Stick) via [usbipd-win](./docs/usb-passthrough.md) |
+| **`wsl`** | Talos in Docker on the WSL2 desktop (1 CP + 2 workers) | local-path | Hosts USB-attached apps (Frigate / Coral, zwave-js-ui / Z-Stick) via [usbipd-win](docs/wsl/usb-passthrough.md) |
 | **`ms-01`** | 3x Minisforum MS-01 i9-13900H, bare-metal Talos | Rook Ceph (3x 1TB NVMe) + democratic-csi NFS | Full stack including the public Cloudflare tunnel |
 
 Both share the manifests under `kubernetes/apps/` and the Flux machinery
@@ -61,11 +61,12 @@ tnwks-ops/
 │       │   └── apps/            # Trimmed namespace overlays
 │       └── ms-01/               # Flux entry point — full stack + Rook Ceph
 │           └── (same shape; apps/ pulls shared apps + storage)
-└── docs/
-    ├── bootstrap-wsl.md
-    ├── bootstrap-ms-01.md
-    ├── usb-passthrough.md
-    └── disaster-recovery.md
+└── docs/                        # index: docs/README.md
+    ├── network/                 # architecture, access, CI, finished RB5009 migration
+    ├── wsl/                     # bootstrap, LAN exposure, USB passthrough
+    ├── ms-01/                   # bootstrap, Ceph notes
+    ├── operations/              # disaster recovery, SOPS, kubeconfig renewal
+    └── apps/                    # per-app guides (Home Assistant)
 ```
 
 ---
@@ -79,21 +80,21 @@ export GITHUB_TOKEN=$(op read 'op://Private/GitHub Flux Token/credential')
 task bootstrap:wsl
 ```
 
-Detailed steps in [docs/bootstrap-wsl.md](./docs/bootstrap-wsl.md).
+Detailed steps in [docs/wsl/bootstrap.md](docs/wsl/bootstrap.md).
 
 ### MS-01 cluster
 
-See [docs/bootstrap-ms-01.md](./docs/bootstrap-ms-01.md) — currently a
+See [docs/ms-01/bootstrap.md](docs/ms-01/bootstrap.md) — currently a
 skeleton, will be filled in once MS-01 hardware is racked.
 
 ### USB passthrough (Coral, Z-Wave)
 
-See [docs/usb-passthrough.md](./docs/usb-passthrough.md). The MS-01 cluster
+See [docs/wsl/usb-passthrough.md](docs/wsl/usb-passthrough.md). The MS-01 cluster
 gets it natively; the WSL cluster needs `usbipd-win` on the host.
 
 ### Disaster recovery
 
-See [docs/disaster-recovery.md](./docs/disaster-recovery.md).
+See [docs/operations/disaster-recovery.md](docs/operations/disaster-recovery.md).
 
 ---
 
@@ -112,7 +113,7 @@ The WSL cluster has no LoadBalancer controller — Services are reached via
 CNI: [Cilium](https://cilium.io) on MS-01 (also providing L2/BGP for
 LoadBalancer IPs — MetalLB has been removed). On WSL, [Flannel](https://github.com/flannel-io/flannel)
 because Cilium can't run on Talos-in-Docker on WSL2 — see
-[bootstrap-wsl.md](./docs/bootstrap-wsl.md#why-flannel-on-wsl-instead-of-cilium).
+[docs/wsl/bootstrap.md](docs/wsl/bootstrap.md#why-flannel-on-wsl-instead-of-cilium).
 [cloudflared](https://github.com/cloudflare/cloudflared) provides the public
 ingress tunnel into the MS-01 cluster.
 
@@ -142,4 +143,4 @@ ingress tunnel into the MS-01 cluster.
 
 ## License
 
-See [LICENSE](./LICENSE).
+See [LICENSE](LICENSE).

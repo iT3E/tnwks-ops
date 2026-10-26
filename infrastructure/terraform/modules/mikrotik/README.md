@@ -5,7 +5,7 @@ RB5009UG+S+IN running RouterOS 7.
 
 Source of truth for the thing being ported: [`iT3E/vyos-config`](https://github.com/iT3E/vyos-config)
 (`config-parts/*.sh`). Reasoning, gaps and the cutover runbook live in
-[`docs/mikrotik-vyos-port.md`](../../../../docs/mikrotik-vyos-port.md).
+[`docs/network/migration/vyos-port.md`](../../../../docs/network/migration/vyos-port.md).
 
 ## File layout
 
