@@ -596,9 +596,12 @@ variable "flow_export" {
   type = object({
     collector_address = string # Windows host that relays udp into WSL
     collector_port    = optional(number, 2055)
-    src_address       = optional(string)          # e.g. the 910 gateway address
-    version           = optional(string, "ipfix") # RouterOS rejects "IPFIX"
-    interfaces        = optional(string)          # defaults to var.wan_interface
+    src_address       = optional(string) # e.g. the 910 gateway address
+    # NetFlow v9, not IPFIX: provider v1.99.1 only accepts "IPFIX", which
+    # RouterOS 7.25 rejects (it wants "ipfix"). flow-collector decodes v9
+    # with the same field ids.
+    version    = optional(string, "9")
+    interfaces = optional(string) # defaults to var.wan_interface
     # Export long flows every minute so per-client rates stay near real time.
     active_flow_timeout   = optional(string, "1m")
     inactive_flow_timeout = optional(string, "15s")
