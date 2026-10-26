@@ -14,7 +14,7 @@ set firewall name WAN_IN rule 10 action accept
 set firewall name WAN_IN rule 10 description 'Allow established/related'
 set firewall name WAN_IN rule 10 state established enable
 set firewall name WAN_IN rule 10 state related enable
-set firewall name WAN_IN rule 20 action accept
+set firewall name WAN_IN rule 20 action drop
 set firewall name WAN_IN rule 20 description 'Drop invalid state'
 set firewall name WAN_IN rule 20 log disable
 set firewall name WAN_IN rule 20 state invalid enable
@@ -24,7 +24,7 @@ set firewall name WAN_LOCAL rule 10 action accept
 set firewall name WAN_LOCAL rule 10 description 'Allow established/related'
 set firewall name WAN_LOCAL rule 10 state established enable
 set firewall name WAN_LOCAL rule 10 state related enable
-set firewall name WAN_LOCAL rule 20 action accept
+set firewall name WAN_LOCAL rule 20 action drop
 set firewall name WAN_LOCAL rule 20 description 'Drop invalid state'
 set firewall name WAN_LOCAL rule 20 log disable
 set firewall name WAN_LOCAL rule 20 state invalid enable
@@ -71,6 +71,9 @@ set service dhcp-server shared-network-name LAN subnet 10.60.10.0/24 default-rou
 set service dhcp-server shared-network-name LAN subnet 10.60.10.0/24 dns-server 10.10.140.1
 set service dhcp-server shared-network-name LAN subnet 10.60.10.0/24 lease 86400
 set service dhcp-server shared-network-name LAN subnet 10.60.10.0/24 start 10.60.10.38 stop 10.60.10.243
+set service dhcp-server shared-network-name LAN subnet 10.60.10.0/24 static-mapping airCube-ISP ip-address 10.60.10.46
+set service dhcp-server shared-network-name LAN subnet 10.60.10.0/24 static-mapping airCube-ISP mac-address 74:ac:b9:79:62:4f
+set service dhcp-server shared-network-name LAN subnet 10.60.10.0/24 static-mapping airCube-ISP static-mapping-parameters 'option domain-name-servers 8.8.8.8;'
 set service dhcp-server static-arp disable
 set service dhcp-server use-dnsmasq disable
 set service dns forwarding cache-size 150
@@ -89,15 +92,14 @@ set service ssh protocol-version v2
 set service unms connection '${uisp_connection}'
 set system analytics-handler send-analytics-report false
 set system crash-handler send-crash-report false
-set system host-name ubnt
+set system host-name sce-ep01
 set system login user ${admin_user} authentication encrypted-password '${admin_password_hash}'
 set system login user ${admin_user} authentication plaintext-password ''
+set system login user ${admin_user} authentication public-keys tnwks-ops-runner key AAAAC3NzaC1lZDI1NTE5AAAAIJ8ZmaafrhwP/nRajjq2gWf5Jo3byte+nHTTpeI30So+
+set system login user ${admin_user} authentication public-keys tnwks-ops-runner type ssh-ed25519
 set system login user ${admin_user} level admin
 set system name-server 10.10.140.1
-set system ntp server 0.ubnt.pool.ntp.org
-set system ntp server 1.ubnt.pool.ntp.org
-set system ntp server 2.ubnt.pool.ntp.org
-set system ntp server 3.ubnt.pool.ntp.org
+set system ntp server 10.10.140.1
 set system syslog global facility all level notice
 set system syslog global facility protocols level debug
 set system time-zone UTC

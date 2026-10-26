@@ -1,0 +1,3 @@
+kind: Changed
+body: 'EP-R6: hostname sce-ep01, its drop-invalid firewall rules drop, NTP from the router, the airCube gets public DNS for the clients behind it, and the CI runner''s SSH key'
+time: 2026-10-25T23:10:39.81491038-07:00
