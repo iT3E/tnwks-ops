@@ -26,6 +26,15 @@
 # (MS-01 disables kube-proxy because Cilium does the replacement there.)
 
 cluster:
+  controllerManager:
+    extraArgs:
+      # Delete finished pods promptly. Graceful node shutdowns (every WSL
+      # restart) leave pods Succeeded/Failed, and the default threshold
+      # (12500) means they are never collected. A Recreate Deployment waits
+      # for its pod count to reach zero, finished pods included, before
+      # starting the new pod, so leftovers stall its next rollout with no pod
+      # (seen on Grafana). 1 is the lowest value that keeps the collector on.
+      terminated-pod-gc-threshold: "1"
   network:
     cni:
       name: none
