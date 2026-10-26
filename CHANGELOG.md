@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.8.2 - 2026-10-26
+
+### Fixed
+
+* edgeos-sync applies over SSH: commit-confirm without EdgeOS's interactive prompt, and the confirm step checks the rollback job is really cancelled
+
 ## v1.8.1 - 2026-10-26
 
 ### Fixed
