@@ -194,7 +194,7 @@ spec:
         check_for_plugin_updates: false
         reporting_enabled: false
       dashboards:
-        default_home_dashboard_path: /tmp/dashboards/home.json
+        default_home_dashboard_path: /tmp/dashboards/tnwks-home.json
       date_formats:
         use_browser_locale: true
       explore:

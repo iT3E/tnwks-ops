@@ -5,7 +5,7 @@ namespace: monitoring
 configMapGenerator:
   - name: grafana-dashboard
     files:
-      - home.json
+      - tnwks-home.json
       - unms_overview.json
       - wan-latency.json
 generatorOptions:
