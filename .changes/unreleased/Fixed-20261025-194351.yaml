@@ -1,0 +1,3 @@
+kind: Fixed
+body: Router DDNS updates the Cloudflare record the WireGuard clients use as their endpoint; Terraform reaches the router over wg01
+time: 2026-10-25T19:43:51.177445876-07:00

@@ -40,8 +40,8 @@ so the router cannot restrict them; they are protected by their own logins.
   network (used on the bench).
 - Client `AllowedIPs` (split tunnel), at minimum: `10.10.30.0/24`,
   `10.98.0.0/24`, `10.10.90.0/24`, `10.10.140.0/24`, `10.60.10.0/24`.
-- Terraform runs over `wg01`: set `routeros_url` in SOPS to
-  `https://10.10.30.1`, with the WSL tunnel up.
+- Terraform runs over `wg01` (`routeros_url` in SOPS is
+  `https://10.10.30.1`), so the WSL tunnel must be up.
 
 ## Break-glass
 

@@ -21,7 +21,7 @@ flowchart TB
         svc["native services, no containers<br/>ip_dns + 45 adlists + static records<br/>DHCP per VLAN<br/>NTP server · mktxp API"]
         fw["forward chain<br/>per-pair default (drop or accept)<br/>terminal forward drop<br/>ordered via routeros_move_items"]
         wg["WireGuard<br/>wg01 10.10.30.1/24 · 3 peers<br/>wg02 10.10.31.1/24 · 2 peers"]
-        ddns["ddns-update script + scheduler<br/>Namecheap · every 5m<br/>WireGuard endpoint hostname"]
+        ddns["ddns-update script + scheduler<br/>Cloudflare · every 5m<br/>WireGuard endpoint hostname"]
         bridge["bridge-lan · VLAN filtering<br/>native VLAN 1 = switch mgmt (uplink only)"]
     end
 

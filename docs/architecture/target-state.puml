@@ -59,7 +59,7 @@ node "MikroTik RB5009UG+S+IN\n**sce-rtr01** · RouterOS 7" as rb #f7fbff {
 
   component "WireGuard — terminated here\nwg01 10.10.30.1/24 · 3 peers\nwg02 10.10.31.1/24 · 2 peers" as wg #e8f0fe
 
-  artifact "ddns-update\n/system/script + /system/scheduler\nNamecheap · every 5m\nWireGuard endpoint hostname" as ddns #fef6e7
+  artifact "ddns-update\n/system/script + /system/scheduler\nCloudflare · every 5m\nWireGuard endpoint hostname" as ddns #fef6e7
 
   component "bridge-lan · VLAN filtering\nnative VLAN 1 = switch mgmt (uplink only)" as bridge #e8f0fe
 }
