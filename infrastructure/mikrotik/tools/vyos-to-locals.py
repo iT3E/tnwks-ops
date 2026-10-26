@@ -175,6 +175,18 @@ EXTRA_ZONE_RULES = {
     }],
 }
 
+# Zone pairs for the CI runner's wg03 tunnel. Processed after every other pair,
+# so a pair added here is numbered last and never renumbers existing ones.
+CI_ZONE_RULES = {
+    # The EP-R6's SSH and nothing else on VLAN 140 (infrastructure/edgeos).
+    ("vpn-ci", "UISP-140"): [{  # CI_ZONE, defined below
+        "description": "CI runner SSH to the EP-R6 (edgeos-sync)",
+        "protocol": "tcp",
+        "dst_port": "22",
+        "dst_address": "10.10.140.140",
+    }],
+}
+
 # Static DNS records that pointed at container IPs. None drops the record;
 # a string retargets it. Per-name overrides win over per-address ones.
 DNS_RECORD_RETARGET_BY_NAME: dict[str, str | None] = {}
@@ -1139,10 +1151,11 @@ def build_zone_policies(
     # The switch resolves through the router like every other internal network.
     add_dns_input(NATIVE_VLAN["zone"], dns_rule, 0, "")
 
-    for (from_zone, to_zone), extra_rules in EXTRA_ZONE_RULES.items():
-        pol = get_pair(from_zone, to_zone, f"From {from_zone} to {to_zone}")
-        for num, rule in enumerate(extra_rules, start=1):
-            pol["rules"].extend(emit_variants(rule, num, f"{from_zone}-{to_zone} (camera policy)"))
+    for table, label in ((EXTRA_ZONE_RULES, "EXTRA_ZONE_RULES"), (CI_ZONE_RULES, "CI_ZONE_RULES")):
+        for (from_zone, to_zone), extra_rules in table.items():
+            pol = get_pair(from_zone, to_zone, f"From {from_zone} to {to_zone}")
+            for num, rule in enumerate(extra_rules, start=1):
+                pol["rules"].extend(emit_variants(rule, num, f"{from_zone}-{to_zone} ({label})"))
 
     # Router-destined services. VyOS left input unfiltered (no local zone), so
     # these are additions rather than ports. They are required for the router to
