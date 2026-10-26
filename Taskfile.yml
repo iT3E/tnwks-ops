@@ -17,6 +17,7 @@ includes:
   aws: .taskfiles/AwsTasks.yml
   bootstrap: .taskfiles/BootstrapTasks.yml
   cluster: .taskfiles/ClusterTasks.yml
+  edgeos: .taskfiles/EdgeosTasks.yml
   mikrotik: .taskfiles/MikrotikTasks.yml
   precommit: .taskfiles/PrecommitTasks.yml
   talos: .taskfiles/TalosTasks.yml

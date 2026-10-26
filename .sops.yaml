@@ -8,6 +8,15 @@
 #     Only on the device secrets below, so a leaked CI key exposes those and
 #     nothing else in the repo.
 creation_rules:
+  # EdgeOS devices (infrastructure/edgeos): same recipients as the MikroTik
+  # secrets, including the CI age key, so the same runner can manage them.
+  - path_regex: infrastructure/edgeos/.*\.sops\.ya?ml
+    age: >-
+      age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2,
+      age12uckcdwv9p2s75ae3h20wgn70taatdzzl44n9x6vr8h9qurzkaqqkhphz7,
+      age1hmmuna95ktwl9sf9j56wjjukyf22ukdyjd8c47nlf5fjgyeyk5rsmhtyjx,
+      age10s9j786hfegtvdv45thwh0u7czj75pep48f6x96uk6t496vd4quqtumfy6
+    kms: 'arn:aws:kms:us-west-2:654654220436:key/mrk-74c4597ebffd41d38a852228e13d76cc+arn:aws:iam::654654220436:role/iam-role-sops'
   # First: the general terraform/ rules below would match these paths too.
   - path_regex: infrastructure/terraform/environments/prod/mikrotik/.*\.sops\.ya?ml
     age: >-

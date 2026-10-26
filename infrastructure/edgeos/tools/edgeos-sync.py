@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""Plan/apply an EdgeOS device's configuration from this repo.
+
+The desired configuration is infrastructure/edgeos/<device>/config.sh: the
+device's `show configuration commands` output, one `set` line each, with
+secrets as ${name} placeholders filled from <device>/secrets.sops.yaml.
+
+  plan   diff live vs repo (secret values masked), then stage the changes in a
+         candidate session on the device and DISCARD them, so EdgeOS itself
+         validates every line without committing anything. Exit 2 on changes.
+  apply  session A stages the changes, schedules commit-confirm (the device
+         reboots into its saved config unless confirmed) and commits. Session
+         B, a fresh login that proves the device is still reachable,
+         confirms and saves. Nothing is saved before the confirm, so the
+         rollback target is always the pre-change config.
+
+Stdlib only. Needs ssh, sshpass and sops on PATH (bin/sops inside the repo).
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+REPO = ROOT.parents[1]
+SOPS = str(REPO / "bin" / "sops") if (REPO / "bin" / "sops").exists() else "sops"
+WRAPPER = "/opt/vyatta/sbin/vyatta-cfg-cmd-wrapper"
+CONFIG_MGMT = "/opt/vyatta/sbin/vyatta-config-mgmt.pl"
+SHOW_CMDS = "/opt/vyatta/bin/vyatta-op-cmd-wrapper show configuration commands"
+PLACEHOLDER = re.compile(r"\$\{([a-z0-9_]+)\}")
+SSH_OPTS = [
+    "-q", "-o", "ConnectTimeout=10", "-o", "BatchMode=no",
+    "-o", "StrictHostKeyChecking=accept-new",
+    "-o", "PubkeyAuthentication=no",
+    "-o", "PreferredAuthentications=password,keyboard-interactive",
+    # EdgeOS 3.x still offers only these for the older OpenSSH it ships.
+    "-o", "KexAlgorithms=+diffie-hellman-group14-sha1",
+    "-o", "HostKeyAlgorithms=+ssh-rsa",
+]
+
+
+def die(msg: str) -> None:
+    print(f"edgeos-sync: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def load_device(name: str) -> tuple[dict, dict, list[str]]:
+    d = ROOT / name
+    device = json.loads((d / "device.json").read_text())
+    out = subprocess.run(
+        [SOPS, "-d", "--output-type", "json", str(d / "secrets.sops.yaml")],
+        capture_output=True, text=True)
+    if out.returncode != 0:
+        die("cannot decrypt %s/secrets.sops.yaml: %s" % (name, out.stderr.strip()[-300:]))
+    secrets = {k: v for k, v in json.loads(out.stdout).items() if k != "sops"}
+    lines = []
+    for raw in (d / "config.sh").read_text().splitlines():
+        if not raw.startswith("set "):
+            continue
+        missing = [m for m in PLACEHOLDER.findall(raw) if m not in secrets]
+        if missing:
+            die("config.sh uses undefined secret(s): %s" % ", ".join(missing))
+        lines.append(PLACEHOLDER.sub(lambda m: str(secrets[m.group(1)]), raw))
+    return device, secrets, lines
+
+
+def ssh(device: dict, secrets: dict, remote: str, stdin: str | None = None) -> str:
+    cmd = ["sshpass", "-e", "ssh", *SSH_OPTS, "-p", str(device.get("port", 22)),
+           "%s@%s" % (secrets["ssh_user"], device["host"]), remote]
+    env = {"SSHPASS": secrets["ssh_password"], "PATH": "/usr/bin:/bin:/usr/local/bin"}
+    out = subprocess.run(cmd, input=stdin, capture_output=True, text=True, env=env, timeout=300)
+    if out.returncode != 0:
+        die("ssh to %s failed (%d): %s" % (device["host"], out.returncode, out.stderr.strip()[-500:]))
+    return out.stdout
+
+
+def live_lines(device: dict, secrets: dict) -> list[str]:
+    return [l.rstrip() for l in ssh(device, secrets, SHOW_CMDS).splitlines() if l.startswith("set ")]
+
+
+def diff(live: list[str], desired: list[str]) -> tuple[list[str], list[str]]:
+    live_set, want_set = set(live), set(desired)
+    # Deepest paths first, so children go before their parents.
+    deletes = sorted((l for l in live if l not in want_set), key=lambda l: -len(shlex.split(l)))
+    sets = [l for l in desired if l not in live_set]
+    return deletes, sets
+
+
+def mask(line: str, secrets: dict) -> str:
+    for k, v in secrets.items():
+        if k.startswith("ssh_") or not isinstance(v, str) or len(v) < 4:
+            continue
+        line = line.replace(v, "${%s}" % k)
+    return line
+
+
+def stage_script(deletes: list[str], sets: list[str]) -> str:
+    body = ["set -e", f"{WRAPPER} begin", f"trap '{WRAPPER} end' EXIT"]
+    body += ["%s delete %s" % (WRAPPER, " ".join(shlex.quote(t) for t in shlex.split(l)[1:])) for l in deletes]
+    body += ["%s set %s" % (WRAPPER, " ".join(shlex.quote(t) for t in shlex.split(l)[1:])) for l in sets]
+    return "\n".join(body) + "\n"
+
+
+def run_session(device: dict, secrets: dict, script: str) -> str:
+    # The config wrapper must run in the vyattacfg group; one bash keeps one
+    # session (the wrapper keys sessions on its parent PID).
+    return ssh(device, secrets, "sg vyattacfg -c '/bin/bash -s'", stdin=script)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("action", choices=["plan", "apply"])
+    ap.add_argument("device", help="directory under infrastructure/edgeos, e.g. ep-r6")
+    ap.add_argument("--confirm-minutes", type=int, default=5)
+    args = ap.parse_args()
+
+    device, secrets, desired = load_device(args.device)
+    live = live_lines(device, secrets)
+    deletes, sets = diff(live, desired)
+
+    print("%s (%s): %d to delete, %d to set" % (args.device, device["host"], len(deletes), len(sets)))
+    for l in deletes:
+        print("  - " + mask(l, secrets)[4:])
+    for l in sets:
+        print("  + " + mask(l, secrets)[4:])
+    if not deletes and not sets:
+        print("No changes. The device matches the repo.")
+        return 0
+
+    if args.action == "plan":
+        # Device-side validation: stage, then discard. Nothing is committed.
+        run_session(device, secrets, stage_script(deletes, sets).replace(
+            f"trap '{WRAPPER} end' EXIT", f"trap '{WRAPPER} discard; {WRAPPER} end' EXIT"))
+        print("Validated on the device (staged and discarded).")
+        return 2
+
+    commit = stage_script(deletes, sets) + "\n".join([
+        f"echo y | {CONFIG_MGMT} --action commit-confirm --minutes {args.confirm_minutes}",
+        f"{WRAPPER} commit",
+    ]) + "\n"
+    run_session(device, secrets, commit)
+    print("Committed with commit-confirm (%d min). Confirming from a new session..." % args.confirm_minutes)
+    run_session(device, secrets, f"{CONFIG_MGMT} --action confirm\n{WRAPPER} save\n")
+    after_deletes, after_sets = diff(live_lines(device, secrets), desired)
+    if after_deletes or after_sets:
+        die("confirmed and saved, but the device still differs from the repo (%d/%d)"
+            % (len(after_deletes), len(after_sets)))
+    print("Confirmed and saved. The device matches the repo.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
