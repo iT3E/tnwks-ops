@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.13.1 - 2026-10-26
+
+### Fixed
+
+* Grafana shows one Home dashboard (a stale provisioned duplicate is gone)
+
 ## v1.13.0 - 2026-10-26
 
 ### Removed
