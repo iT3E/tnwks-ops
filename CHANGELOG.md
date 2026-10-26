@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.12.0 - 2026-10-26
+
+### Added
+
+* EdgeOS devices plan on PRs and apply on merge from the self-hosted runner, like the MikroTik root
+
 ## v1.11.0 - 2026-10-26
 
 ### Changed
