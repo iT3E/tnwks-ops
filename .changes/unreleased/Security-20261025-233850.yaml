@@ -1,0 +1,3 @@
+kind: Security
+body: Router no longer routes the retired EdgeRouter transit VLAN 10 (172.16.1.0/24), so no VLAN can reach a device left there; the ERL fallback route is gone
+time: 2026-10-25T23:38:50.944954467-07:00

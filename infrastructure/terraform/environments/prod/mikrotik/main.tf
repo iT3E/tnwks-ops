@@ -23,9 +23,10 @@ module "mikrotik" {
   bridge_name         = local.bridge_name
   bridge_ports        = local.bridge_ports
 
-  # Out-of-band mgmt port (never bridged) and the staged-cutover wiring: the
-  # WAN port joins transit-10 so VyOS's internet-egress rules still apply, and
-  # the EdgeRouter stays the default route until the modem moves to ether1.
+  # Out-of-band mgmt port (never bridged). The WAN port is the transit-10
+  # zone, so VyOS's `X -> transit-10` internet-egress rules apply to it; that
+  # zone's own VLAN (the retired EdgeRouter hop) is disabled, and there is no
+  # fallback route (upstream_gateway is null).
   mgmt             = local.mgmt
   native_vlan      = local.native_vlan
   outside_zone     = local.outside_zone
@@ -63,9 +64,8 @@ module "mikrotik" {
   flow_export = {
     collector_address = "10.10.91.142" # Windows host, relays udp/2055 into WSL
     src_address       = "10.10.91.1"
-    # Internet traffic leaves via transit-10 (to the ERL) during the staged
-    # cutover and via ether1 afterwards; watching both covers either stage.
-    interfaces = "ether1,bridge-lan-vlan10"
+    # The WAN port: internet traffic, for per-client usage.
+    interfaces = "ether1"
   }
 
   dns    = local.dns

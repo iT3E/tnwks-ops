@@ -238,16 +238,19 @@ ROUTE_RE = re.compile(r"^set protocols static route (\S+) next-hop (\S+)")
 # --------------------------------------------------------------------------
 DEAD_NEXT_HOPS = {"172.16.1.252", "172.16.1.254"}
 
-# The old upstream router. Its static default is not ported as a VyOS route;
-# instead it becomes the module's upstream_gateway (distance 10), so the RB5009
-# can replace VyOS first while the ERL still holds the WAN, and the WAN DHCP
-# lease takes over the default automatically when the modem moves to ether1.
+# The old upstream router (EdgeRouter). It is retired, so there is no fallback
+# default route: the WAN DHCP lease on ether1 is the only one.
 RETIRED_UPSTREAM = "172.16.1.1"
-UPSTREAM_GATEWAY = RETIRED_UPSTREAM
+UPSTREAM_GATEWAY = None
 
 # VyOS reached the internet through transit-10, so `X -> transit-10` rulesets
 # are its internet-egress policy. The WAN port joins this zone's list.
 OUTSIDE_ZONE = "transit-10"
+# The outside zone's own VLAN 10 was the transit hop to the EdgeRouter. It is
+# disabled: no SVI, address or route for 172.16.1.0/24, so nothing on any VLAN
+# can reach whatever is still plugged in there. The zone itself stays, holding
+# only the WAN port, so the internet-egress pairs are unchanged.
+OUTSIDE_ZONE_VLAN_ENABLED = False
 
 # Out-of-band management. Standalone port, NOT in the LAN bridge: the bootstrap
 # script puts the REST API address here, and bridging it would invalidate that
@@ -1012,7 +1015,11 @@ def build_zone_policies(
             entry = {"comment": f"DNS from {from_zone}" + (f" (was {ruleset})" if ruleset else "")}
             if from_zone == OUTSIDE_ZONE:
                 # The outside zone's list also holds the WAN port, so matching
-                # the list would answer DNS on the internet. Pin to the SVI.
+                # the list would answer DNS on the internet. Pin to the SVI,
+                # or emit nothing when that VLAN is disabled (keeping the
+                # sequence number, so later rules are not renumbered).
+                if vlans.get(from_zone, {}).get("enabled") is False:
+                    continue
                 entry["in_interface"] = "bridge-lan-vlan%s" % vlans[from_zone]["vlan_id"]
             else:
                 # Scoped to the originating zone, so it can never be satisfied
@@ -1252,6 +1259,12 @@ def main() -> int:
     for name, vlan in vlans.items():
         if "dhcp" not in vlan and name not in active_zones:
             vlan["enabled"] = False
+    if not OUTSIDE_ZONE_VLAN_ENABLED and OUTSIDE_ZONE in vlans:
+        vlans[OUTSIDE_ZONE]["enabled"] = False
+        retired_vlan_notes = ["%s: VLAN disabled (EdgeRouter transit hop, retired); the zone "
+                              "keeps only the WAN port (OUTSIDE_ZONE_VLAN_ENABLED)" % OUTSIDE_ZONE]
+    else:
+        retired_vlan_notes = []
 
     # Retired zones: drop the VLAN and unbind every ruleset to or from it, before
     # any translation, so nothing is emitted on their behalf.
@@ -1310,6 +1323,7 @@ def main() -> int:
         rulesets, pairs, zone_iface, port_lists, vlans
     )
     notes.extend(retired_notes)
+    notes.extend(retired_vlan_notes)
 
     # Address and port lists nothing references any more (their rules went
     # with a retired zone or host) are not emitted.

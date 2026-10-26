@@ -63,7 +63,7 @@ zone pair with no rule falls to the terminal forward drop.
 | VLAN | Zone | Subnet (router) | Purpose |
 | --- | --- | --- | --- |
 | 1 (native) | `switch-mgmt` | `10.98.0.1/24` | Switch management, untagged on ether2 |
-| 10 | `transit-10` | `172.16.1.250/24` | Old upstream hop; `ether1` is in this zone as the outside |
+| — | `transit-10` | — | The outside (internet) zone: only `ether1`. Its old VLAN 10 transit hop is disabled, so `172.16.1.0/24` is not routed |
 | 140 | `UISP-140` | `10.10.140.1/24` | EP-R6 bridge; `10.60.10.0/24` is routed via `10.10.140.140` |
 | 610 | `seccam-610` | `10.10.60.1/24` | Cameras. Untrusted: router services only, Frigate pulls RTSP |
 | 900 | `unifi-mgmt-900` | `10.10.90.1/24` | UniFi AP management |
