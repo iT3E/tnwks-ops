@@ -52,3 +52,37 @@ talosctl cluster destroy --name homelab-wsl
 - USB-attached pods (Frigate, zwave-js-ui) require USB devices to be
   attached via usbipd-win → WSL before `01-talos-bootstrap.yml` runs;
   see [docs/usb-passthrough.md](../../docs/usb-passthrough.md)
+
+## Talos access (talosconfig) and break-glass
+
+The cluster's admin talosconfig lives at `~/.talos/config-homelab-wsl` (mode
+600), with a SOPS-encrypted copy in `talosconfig.sops.yaml`. Use it with
+`talosctl --talosconfig ~/.talos/config-homelab-wsl ...`; the context already
+points at the control plane's Docker-mapped API port and node `10.5.0.2`.
+
+If it is lost, expired, or the containers were recreated (new port, new CA),
+mint a fresh one from the cluster's own CA:
+
+```bash
+bash talos/wsl/mint-talosconfig.sh      # optional: number of days, default 365
+```
+
+It reads the CA from the control-plane container into RAM only, issues an
+`os:admin` client certificate, writes both files above, and wipes the rest.
+Nothing on the nodes changes. Talos has no certificate revocation: a minted
+config is valid until it expires, and revoking one early means
+`talosctl rotate-ca`. Commit the regenerated `talosconfig.sops.yaml`.
+
+To restore from the repo copy instead: `sops -d talos/wsl/talosconfig.sops.yaml
+> ~/.talos/config-homelab-wsl && chmod 600 ~/.talos/config-homelab-wsl`
+(the endpoint port in it is only valid for the containers it was minted for).
+
+### Applied machine-config patches
+
+`cluster-config.yaml` is used at cluster creation. Changes to it reach the
+running cluster only when patched in, e.g.:
+
+```bash
+talosctl --talosconfig ~/.talos/config-homelab-wsl -n 10.5.0.2 patch machineconfig \
+  --patch '{"cluster":{"controllerManager":{"extraArgs":{"terminated-pod-gc-threshold":"1"}}}}'
+```

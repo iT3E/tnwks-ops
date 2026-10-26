@@ -36,8 +36,10 @@ data "aws_iam_policy_document" "inline_iam_policy_adminaccess" {
 
 data "aws_iam_policy_document" "custom_role_trust_policy" {
   statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRole"]
+    effect = "Allow"
+    # SetSourceIdentity, TagSession: Roles Anywhere sessions carry a source
+    # identity and session tags into the role chain (modules/aws/rolesanywhere.tf).
+    actions = ["sts:AssumeRole", "sts:SetSourceIdentity", "sts:TagSession"]
     condition {
       test     = "ArnLike"
       variable = "aws:PrincipalArn"
@@ -52,6 +54,13 @@ data "aws_iam_policy_document" "custom_role_trust_policy" {
       test     = "ArnLike"
       variable = "aws:PrincipalArn"
       values   = ["arn:aws:iam::${aws_organizations_account.prod_aws_account.id}:role/tnwks-org-init-role"]
+    }
+    # IAM Roles Anywhere workstation sessions (modules/aws/rolesanywhere.tf in
+    # the prod account). Same-key conditions merge into one OR list.
+    condition {
+      test     = "ArnLike"
+      variable = "aws:PrincipalArn"
+      values   = ["arn:aws:iam::${aws_organizations_account.prod_aws_account.id}:role/tnwks-rolesanywhere-sops"]
     }
     principals {
       type        = "AWS"

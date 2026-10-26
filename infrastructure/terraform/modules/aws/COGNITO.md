@@ -14,6 +14,11 @@ pool that backs authentication for `*.internal.tnwks.us` services
   - `oauth2-proxy` — authorization_code, callback to
     `https://oauth2.internal.tnwks.us/oauth2/callback`, scopes
     `openid email profile`, with secret
+  - `home-assistant` — authorization_code + PKCE, public (no secret),
+    callbacks to `https://hass.tnwks.us/auth/oidc/callback` (public) and
+    `https://hass.internal.tnwks.us/auth/oidc/callback` (LAN),
+    scopes `openid email profile`. Used by the hass-oidc-auth integration;
+    `cognito:groups` maps `admins` → HA administrator, `viewers` → HA user
   - `agent-ori` — client_credentials, scopes `tnwks-api/read`,
     `tnwks-api/write`, with secret
 - **Hosted UI domain:** prefix `tnwks-auth.auth.us-west-2.amazoncognito.com`
@@ -34,6 +39,7 @@ pool that backs authentication for `*.internal.tnwks.us` services
 | `cognito_user_pool_endpoint`          | OIDC issuer URL |
 | `cognito_oauth2_proxy_client_id`      |            |
 | `cognito_oauth2_proxy_client_secret`  | sensitive  |
+| `cognito_home_assistant_client_id`    | public     |
 | `cognito_agent_client_id`             |            |
 | `cognito_agent_client_secret`         | sensitive  |
 | `cognito_hosted_ui_domain`            |            |

@@ -45,6 +45,11 @@ output "cognito_oauth2_proxy_client_secret" {
   sensitive   = true
 }
 
+output "cognito_home_assistant_client_id" {
+  description = "App client ID for Home Assistant (hass-oidc-auth). Public value — copied into kubernetes/apps/home-automation/home-assistant/app/helmrelease.yaml."
+  value       = module.aws.cognito_home_assistant_client_id
+}
+
 output "cognito_onboard_client_id" {
   description = "App client ID for the static onboarding site (onboard.tnwks.us). Public value — copied into kubernetes/apps/auth/onboard/app/static/config.js."
   value       = module.aws.cognito_onboard_client_id
@@ -72,4 +77,19 @@ output "smtp_username" {
 output "smtp_password" {
   value     = module.aws.smtp_password
   sensitive = true
+}
+
+output "rolesanywhere_trust_anchor_arn" {
+  description = "Roles Anywhere trust anchor ARN."
+  value       = module.aws.rolesanywhere_trust_anchor_arn
+}
+
+output "rolesanywhere_sops_profile_arn" {
+  description = "Roles Anywhere profile ARN for SOPS sessions."
+  value       = module.aws.rolesanywhere_sops_profile_arn
+}
+
+output "rolesanywhere_sops_role_arn" {
+  description = "Role that Roles Anywhere SOPS sessions assume."
+  value       = module.aws.rolesanywhere_sops_role_arn
 }

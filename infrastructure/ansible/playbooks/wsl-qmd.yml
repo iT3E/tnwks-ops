@@ -1,0 +1,29 @@
+---
+# Install QMD as a GPU-accelerated HTTP MCP server on the WSL host so the
+# OpenClaw gateway pods (CPU-only MS-01 cluster) can reach it over the LAN.
+#
+#   cd infrastructure/ansible
+#   ansible-playbook -i inventory/wsl.yml playbooks/wsl-qmd.yml
+#
+# Run from infrastructure/ so ansible.cfg's relative paths resolve.
+#
+# WHAT THIS DOES (WSL host only — does NOT touch the k8s cluster):
+#   - installs/pins @tobilu/qmd, registers collections, pre-warms the index
+#   - runs `qmd mcp --http` under systemd (tnwks-qmd.service, 127.0.0.1 only)
+#   - runs a socat LAN bridge (tnwks-qmd-bridge.service) since QMD won't bind
+#     non-loopback and ships no auth
+#
+# GATEWAY SIDE (separate, lives in kubernetes/ Flux manifests, NOT here):
+#   point openclaw.json mcp.servers.qmd at
+#     http://<wsl-host-lan-ip>:{{ qmd_bridge_listen_port }}/mcp
+#   and set memory.backend=qmd with mcporter disabled (remote server, not a
+#   locally-spawned stdio child).
+#
+# SECURITY: QMD HTTP MCP has no auth. The host firewall MUST restrict the
+# bridge port to the cluster CIDRs (see roles/qmd/defaults/main.yml).
+
+- hosts: localhost
+  become: true
+  gather_facts: true
+  roles:
+    - ../roles/qmd

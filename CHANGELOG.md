@@ -1,0 +1,210 @@
+# Changelog
+
+Notable changes to this repository, newest first. Each PR adds a Changie
+fragment under `.changes/unreleased/`; merging to `main` releases them.
+
+## v1.14.1 - 2026-10-26
+
+### Fixed
+
+* Mosquitto persists its database again; the PVC was mounted at /data while the broker saved to the read-only /mosquitto/data, so retained messages were lost on restart
+
+## v1.14.0 - 2026-10-26
+
+### Added
+
+* WSL Talos break-glass: a script that mints an admin talosconfig from the cluster's CA, and a SOPS-encrypted copy in the repo
+
+## v1.13.3 - 2026-10-26
+
+### Fixed
+
+* WSL Talos: finished pods are garbage-collected (terminated-pod-gc-threshold 1), so leftovers from node restarts can no longer stall Recreate rollouts
+
+## v1.13.2 - 2026-10-26
+
+### Fixed
+
+* Grafana restarts once per config change (Reloader no longer races the chart's own restart), which had left it with no pod
+
+## v1.13.1 - 2026-10-26
+
+### Fixed
+
+* Grafana shows one Home dashboard (a stale provisioned duplicate is gone)
+
+## v1.13.0 - 2026-10-26
+
+### Removed
+
+* Grafana: retired dashboards (Ceph, node-exporter, speedtest); the MikroTik dashboard moves to a Network folder
+
+## v1.12.1 - 2026-10-26
+
+### Security
+
+* Router no longer routes the retired EdgeRouter transit VLAN 10 (172.16.1.0/24), so no VLAN can reach a device left there; the ERL fallback route is gone
+
+## v1.12.0 - 2026-10-26
+
+### Added
+
+* EdgeOS devices plan on PRs and apply on merge from the self-hosted runner, like the MikroTik root
+
+## v1.11.0 - 2026-10-26
+
+### Changed
+
+* The CI runner's tunnel also forwards the EP-R6's SSH, and the runner carries an SSH key for EdgeOS devices
+
+## v1.10.0 - 2026-10-26
+
+### Added
+
+* The CI runner's wg03 tunnel can reach the EP-R6's SSH (and nothing else on VLAN 140)
+
+## v1.9.0 - 2026-10-26
+
+### Changed
+
+* EP-R6: hostname sce-ep01, its drop-invalid firewall rules drop, NTP from the router, the airCube gets public DNS for the clients behind it, and the CI runner's SSH key
+
+## v1.8.2 - 2026-10-26
+
+### Fixed
+
+* edgeos-sync applies over SSH: commit-confirm without EdgeOS's interactive prompt, and the confirm step checks the rollback job is really cancelled
+
+## v1.8.1 - 2026-10-26
+
+### Fixed
+
+* EP-R6 DHCP clients, DNS forwarder and resolver use the router (10.10.140.1) instead of the retired VyOS DNS container
+
+## v1.8.0 - 2026-10-26
+
+### Added
+
+* EP-R6 configuration as code: EdgeOS set commands in infrastructure/edgeos with a plan/apply tool (device-validated plans, commit-confirm applies)
+
+## v1.7.0 - 2026-10-26
+
+### Added
+
+* MikroTik changes plan on PRs and apply on merge from a self-hosted runner (tnwks-ops-runner) that reaches only the router's REST API over wg03
+
+## v1.6.0 - 2026-10-26
+
+### Added
+
+* Router wg03 listener for the CI runner: its own zone, REST API only, joined from the LAN; the MikroTik secrets gain a CI-only age recipient
+
+## v1.5.3 - 2026-10-26
+
+### Security
+
+* The four age-only SOPS files (MikroTik secrets, the Roles Anywhere CA key, the mktxp and raines-things-api Secrets) gain the KMS recipient, so they no longer depend on the age keys alone
+
+## v1.5.2 - 2026-10-26
+
+### Fixed
+
+* Roles Anywhere SOPS sessions can pass their session tags to iam-role-sops (sts:TagSession)
+
+## v1.5.1 - 2026-10-26
+
+### Fixed
+
+* Roles Anywhere SOPS sessions can assume iam-role-sops (sts:SetSourceIdentity), and tasks find the SOPS age key
+
+## v1.5.0 - 2026-10-26
+
+### Added
+
+* IAM Roles Anywhere for workstation SOPS KMS access: a self-managed CA, a prod-account role that can only assume iam-role-sops, and aws:ra-* tasks
+
+## v1.4.1 - 2026-10-26
+
+### Fixed
+
+* Router syslog reaches Loki: sent over UDP, since RouterOS TCP syslog has no message framing; the Windows and WSL relay setup is now task wsl-host:lan-bridge and task wsl-host:udp-relays
+
+## v1.4.0 - 2026-10-26
+
+### Added
+
+* Router syslog to Loki: vector-aggregator on the WSL cluster, a tcp/6001 LAN bridge, and RouterOS BSD-syslog output
+
+## v1.3.0 - 2026-10-26
+
+### Added
+
+* Router monitoring via mktxp: RouterOS metrics, router alerts, a MikroTik dashboard, and WAN throughput and client names from the router
+
+### Removed
+
+* VyOS and EdgeRouter scrape jobs, alerts and dashboards, and the EdgeRouter smokeping target
+
+## v1.2.7 - 2026-10-26
+
+### Fixed
+
+* Router DNS drops records for retired hosts and the absent UISP server, and adds sce-rtr01
+
+## v1.2.6 - 2026-10-26
+
+### Fixed
+
+* Router DDNS updates the Cloudflare record the WireGuard clients use as their endpoint; Terraform reaches the router over wg01
+
+## v1.2.5 - 2026-10-26
+
+### Fixed
+
+* Flow export uses NetFlow v9: the routeros provider only accepts IPFIX in a spelling RouterOS 7.25 rejects
+
+## v1.2.4 - 2026-10-26
+
+### Fixed
+
+* Flow export target uses RouterOS's lowercase ipfix version value
+
+## v1.2.3 - 2026-10-26
+
+### Fixed
+
+* MikroTik config matches how RouterOS stores values (durations, single-host addresses, booleans, DHCP lease identifiers), so plans after an apply are empty
+
+## v1.2.2 - 2026-10-26
+
+### Fixed
+
+* MikroTik module applies cleanly on RouterOS 7.25: NAT and flow export wait for VLAN interfaces, log prefixes fit 31 characters, the logging action name is alphanumeric, and the removed SSH password option is no longer set
+
+## v1.2.1 - 2026-10-26
+
+### Fixed
+
+* RouterOS bootstrap waits for the API certificate key instead of a fixed 5 s pause
+
+## v1.2.0 - 2026-10-26
+
+### Changed
+
+* Terraform CI: least-privilege tokens, applies gated on the prod environment, PR gating on author and source repo
+
+### Fixed
+
+* Release workflow no longer fails when another merge lands on main while it runs
+
+## v1.1.0 - 2026-10-26
+
+### Added
+
+* Terraform port of the VyOS router and the EdgeRouter onto a MikroTik RB5009: zone firewall, admin-VPN-only management, staged cutover checklist and break-glass docs
+
+## v1.0.0 - 2026-10-26
+
+### Added
+
+* Changie-driven changelog and releases: each PR adds a fragment, and merging to main cuts the version, tag and GitHub Release

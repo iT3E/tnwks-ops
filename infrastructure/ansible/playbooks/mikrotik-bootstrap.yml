@@ -1,0 +1,109 @@
+---
+## ---------------------------------------------------------------------------------------------------------------------
+## Post-bootstrap verification for the MikroTik RB5009.
+##
+## routeros-bootstrap.rsc is the first-touch bootstrap. This playbook runs AFTER
+## it, against the same REST API Terraform uses (https://<host>/rest, the
+## www-ssl service): asserts RouterOS 7.x and www-ssl, reports memory and
+## still-enabled services, and saves a pre-Terraform config snapshot. It is safe
+## to re-run against a live router (backups, drift audit).
+##
+## REST rather than the RouterOS API modules: the bootstrap disables the api and
+## api-ssl services, and REST needs no extra collection or Python library.
+##
+## Usage:
+##   task mikrotik:bootstrap
+##   ansible-playbook -i inventory/mikrotik.yml playbooks/mikrotik-bootstrap.yml
+## ---------------------------------------------------------------------------------------------------------------------
+
+- name: MikroTik RB5009 post-bootstrap verification
+  hosts: mikrotik
+  gather_facts: false
+  connection: local
+
+  vars:
+    backup_dir: "{{ playbook_dir }}/../../mikrotik/backups"
+    required_routeros_major: 7
+    rest: "https://{{ ansible_host }}/rest"
+    # Self-signed certificate from the bootstrap's local CA.
+    rest_args: &rest_args
+      user: "{{ routeros_username }}"
+      password: "{{ routeros_password }}"
+      force_basic_auth: true
+      validate_certs: false
+      return_content: true
+
+  tasks:
+    - name: Read system resource
+      ansible.builtin.uri:
+        <<: *rest_args
+        url: "{{ rest }}/system/resource"
+      register: sysres
+
+    - name: Assert RouterOS 7.x
+      # The provider targets 7.x REST. On 6.x everything below silently misbehaves.
+      ansible.builtin.assert:
+        that:
+          - sysres.json['version'] is version(required_routeros_major | string, '>=')
+        fail_msg: >-
+          RouterOS {{ sysres.json['version'] }} detected. Upgrade to 7.x before
+          running Terraform; the routeros provider targets 7.x REST.
+        success_msg: "RouterOS {{ sysres.json['version'] }} OK"
+
+    - name: Report memory
+      # RB5009 has 1GB; the DNS adlists live in RAM, so watch this after apply.
+      ansible.builtin.debug:
+        msg: >-
+          free-memory={{ sysres.json['free-memory'] }}
+          total-memory={{ sysres.json['total-memory'] }}
+          architecture={{ sysres.json['architecture-name'] }}
+
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: "0750"
+      delegate_to: localhost
+
+    - name: Export running configuration
+      # Pre-Terraform snapshot, so a plan can be diffed against what was on the
+      # box. /export hides sensitive values by default.
+      ansible.builtin.uri:
+        <<: *rest_args
+        url: "{{ rest }}/execute"
+        method: POST
+        body_format: json
+        body:
+          script: "/export terse"
+          as-string: true
+      register: running_config
+
+    - name: Write configuration snapshot
+      ansible.builtin.copy:
+        content: "{{ running_config.json.ret | default('') }}"
+        dest: "{{ backup_dir }}/{{ inventory_hostname }}-{{ lookup('pipe', 'date +%Y%m%dT%H%M%S') }}.rsc"
+        mode: "0640"
+      delegate_to: localhost
+
+    - name: Read services
+      ansible.builtin.uri:
+        <<: *rest_args
+        url: "{{ rest }}/ip/service"
+      register: services
+
+    - name: Assert www-ssl is enabled
+      # REST returns booleans as strings.
+      ansible.builtin.assert:
+        that:
+          - services.json | selectattr('name', 'equalto', 'www-ssl')
+            | selectattr('disabled', 'equalto', 'false') | list | length > 0
+        fail_msg: >-
+          www-ssl is disabled. Terraform talks to https://<host>/rest and cannot
+          enable the listener it authenticates through. Re-run
+          routeros-bootstrap.rsc section 3 first.
+
+    - name: Report services still enabled
+      ansible.builtin.debug:
+        msg: >-
+          Enabled: {{ services.json | selectattr('disabled', 'equalto', 'false')
+          | map(attribute='name') | list }}

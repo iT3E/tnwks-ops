@@ -1,0 +1,11 @@
+# Historical findings confirmed not to be secrets. None of these files exist at
+# HEAD; listed so a full-history scan is clean.
+# Format: <commit>:<path>:<rule>:<line> (the finding's Fingerprint).
+
+# maubot sample DSN from its upstream example config (placeholder user/password)
+414975364f22ab09043b3e0d1bef9a88325834f3:kubernetes/apps/production/matrix/maubot/config/config.yaml:generic-credential-uri:6
+# age PUBLIC key echoed into a packer provisioner (the private key is a variable)
+b98f664c53d6182af415442efc0f68001a803185:packer/proxmox/vyos/vyos.pkr.hcl:generic-api-key:193
+# packer build-time default password for a throwaway template VM
+6d6bde8dc1a8fb72bbb5a7622db25cb58b559ad4:packer/proxmox/ubuntu-server-focal/ubuntu-server-focal.pkr.hcl:hashicorp-tf-password:99
+9a12d1d6e769dda33a2c123a47d1e0a25aaee8c5:packer/proxmox/ubuntu-server-focal/ubuntu-server-focal.pkr.hcl:hashicorp-tf-password:99

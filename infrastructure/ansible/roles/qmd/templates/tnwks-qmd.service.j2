@@ -1,0 +1,33 @@
+{{ ansible_managed | comment }}
+# tnwks-qmd — QMD memory-search MCP server (HTTP transport) for OpenClaw.
+# Runs as {{ qmd_run_user }} so it can load GGUF models from that user's XDG
+# cache and reach the WSL GPU userspace libs. Binds 127.0.0.1:{{ qmd_http_port }}
+# ONLY (QMD hardcodes loopback); the tnwks-qmd-bridge unit exposes it to the LAN.
+#
+# Managed by Ansible (roles/qmd). Do not hand-edit on the host.
+
+[Unit]
+Description=QMD MCP server (HTTP) for OpenClaw memory search
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ qmd_run_user }}
+Group={{ qmd_run_group }}
+# Run in the foreground (NOT --daemon) so systemd owns the lifecycle directly.
+ExecStart={{ qmd_bin.stdout }} mcp --http --port {{ qmd_http_port }}
+Environment=HOME={{ qmd_home }}
+{% if qmd_force_cpu %}
+Environment=QMD_FORCE_CPU=1
+{% endif %}
+# WSL GPU userspace (CUDA stubs) — keep these on the library path for llama.cpp.
+Environment=LD_LIBRARY_PATH=/usr/lib/wsl/lib:{{ qmd_home }}/.nvm/versions
+Restart=on-failure
+RestartSec=5
+# QMD writes its index under XDG cache; give it room and don't sandbox the FS
+# (it needs the Obsidian vault on /mnt/c and the workspace under $HOME).
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

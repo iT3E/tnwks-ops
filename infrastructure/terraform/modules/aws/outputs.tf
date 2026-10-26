@@ -35,6 +35,11 @@ output "cognito_custom_domain_cloudfront_distribution" {
   value       = aws_cognito_user_pool_domain.tnwks_auth.cloudfront_distribution
 }
 
+output "cognito_home_assistant_client_id" {
+  description = "App client ID for Home Assistant (hass-oidc-auth). Public value — copied into kubernetes/apps/home-automation/home-assistant/app/helmrelease.yaml."
+  value       = aws_cognito_user_pool_client.home_assistant.id
+}
+
 output "cognito_hosted_ui_domain" {
   description = "Fully-qualified hosted UI domain."
   value       = aws_cognito_user_pool_domain.tnwks_auth.domain
@@ -78,4 +83,19 @@ output "smtp_username" {
 output "smtp_password" {
   value     = aws_iam_access_key.smtp_user.ses_smtp_password_v4
   sensitive = true
+}
+
+output "rolesanywhere_trust_anchor_arn" {
+  description = "Roles Anywhere trust anchor ARN (aws_signing_helper --trust-anchor-arn)."
+  value       = one(aws_rolesanywhere_trust_anchor.tnwks[*].arn)
+}
+
+output "rolesanywhere_sops_profile_arn" {
+  description = "Roles Anywhere profile ARN for SOPS sessions (aws_signing_helper --profile-arn)."
+  value       = one(aws_rolesanywhere_profile.sops[*].arn)
+}
+
+output "rolesanywhere_sops_role_arn" {
+  description = "Role Roles Anywhere sessions assume (aws_signing_helper --role-arn)."
+  value       = one(aws_iam_role.rolesanywhere_sops[*].arn)
 }

@@ -10,15 +10,19 @@ dotenv: [".config.env"]
 
 env:
   KUBECONFIG: "{{.ROOT_DIR}}/kubeconfig"
-  SOPS_AGE_KEY_FILE: ~/.config/sops/age/keys.txt
+  SOPS_AGE_KEY_FILE: "{{.HOME}}/.config/sops/age/keys.txt"
 
 includes:
   ansible: .taskfiles/AnsibleTasks.yml
+  aws: .taskfiles/AwsTasks.yml
   bootstrap: .taskfiles/BootstrapTasks.yml
   cluster: .taskfiles/ClusterTasks.yml
+  edgeos: .taskfiles/EdgeosTasks.yml
+  mikrotik: .taskfiles/MikrotikTasks.yml
   precommit: .taskfiles/PrecommitTasks.yml
   talos: .taskfiles/TalosTasks.yml
   terraform: .taskfiles/TerraformTasks.yml
+  wsl-host: .taskfiles/WslHostTasks.yml
 
 tasks:
   init:
@@ -35,6 +39,8 @@ tasks:
         age
         ansible
         awscli
+        betterleaks
+        changie
         cilium-cli
         cloudflare/cloudflare/cloudflared
         direnv
@@ -47,6 +53,7 @@ tasks:
         kustomize
         pre-commit
         prettier
+        rolesanywhere-credential-helper
         sops
         stern
         terraform

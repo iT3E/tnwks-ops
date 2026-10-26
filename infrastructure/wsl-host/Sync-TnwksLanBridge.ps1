@@ -3,7 +3,8 @@
 # Keeps Windows netsh portproxy rules in sync with the current WSL VM IP so
 # that LAN devices can reach the homelab-wsl cluster's internal services
 # (Ingress 80/443, k8s-gateway DNS 53/UDP, mosquitto 1883) through this
-# Windows host.
+# Windows host. UDP services (NetFlow 2055, syslog 6001) use
+# Start-TnwksUdpRelay.ps1 instead.
 #
 # Run elevated. Idempotent — safe to invoke from a Scheduled Task on logon
 # or whenever the WSL VM IP changes.
@@ -17,6 +18,9 @@ param(
     # different forwarder, e.g. PortProxy with WinDivert or running k8s-gateway
     # DNS on a different LAN entry path).
     [int[]]$TcpPorts  = @(80, 443, 1883),
+    # Ports this script used to forward. Their portproxy entry and firewall
+    # rule are removed on every run. 6001: syslog moved to UDP.
+    [int[]]$RetiredTcpPorts = @(6001),
     [string]$ListenAddress = '0.0.0.0'
 )
 
@@ -73,6 +77,21 @@ function Sync-FirewallRule {
     }
 }
 
+function Remove-RetiredPort {
+    param([string]$ListenAddress, [int]$Port)
+    $existing = netsh interface portproxy show v4tov4 |
+        Select-String -Pattern "^\s*$([regex]::Escape($ListenAddress))\s+$Port\s+"
+    if ($existing) {
+        & netsh interface portproxy delete v4tov4 listenaddress=$ListenAddress listenport=$Port | Out-Null
+        Write-Host "portproxy ${ListenAddress}:${Port} removed (retired)"
+    }
+    $rule = Get-NetFirewallRule -DisplayName "tnwks-lan-bridge-$Port" -ErrorAction SilentlyContinue
+    if ($rule) {
+        $rule | Remove-NetFirewallRule
+        Write-Host "firewall: removed tnwks-lan-bridge-$Port (retired)"
+    }
+}
+
 Require-Admin
 
 $wslIp = Get-WslIpv4 -Distro $WslDistro
@@ -81,6 +100,9 @@ Write-Host "WSL ($WslDistro) IPv4: $wslIp"
 foreach ($port in $TcpPorts) {
     Sync-PortProxy -ListenAddress $ListenAddress -Port $port -WslIp $wslIp
     Sync-FirewallRule -Port $port
+}
+foreach ($port in $RetiredTcpPorts) {
+    Remove-RetiredPort -ListenAddress $ListenAddress -Port $port
 }
 
 Write-Host ''

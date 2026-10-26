@@ -69,8 +69,12 @@ spec:
         accessMode: ReadWriteOnce
         size: 1Gi
         storageClass: "${STORAGE_CLASS_DEFAULT}"
+        # Must match persistence_location in mosquitto.conf. The PVC used to sit
+        # at /data while mosquitto wrote to /mosquitto/data on the read-only
+        # root filesystem, so every autosave failed with "Permission denied"
+        # and retained messages (e.g. frigate/available) were lost on restart.
         globalMounts:
-          - path: /data
+          - path: /mosquitto/data
       config-file:
         type: configMap
         name: mosquitto-configmap

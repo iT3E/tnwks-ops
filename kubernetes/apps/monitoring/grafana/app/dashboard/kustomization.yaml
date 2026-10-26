@@ -5,10 +5,8 @@ namespace: monitoring
 configMapGenerator:
   - name: grafana-dashboard
     files:
-      - home.json
+      - tnwks-home.json
       - unms_overview.json
-      - vyos.json
-      - edgerouter.json
       - wan-latency.json
 generatorOptions:
   disableNameSuffixHash: true

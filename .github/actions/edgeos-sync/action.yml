@@ -1,0 +1,69 @@
+---
+name: EdgeOS sync
+description: >-
+  Plan or apply every device under infrastructure/edgeos on the
+  tnwks-ops-runner scale set, through the runner's wireproxy forwards. Secret
+  values are masked in the tool's output; the config itself is public in
+  config.sh.
+inputs:
+  mode:
+    description: "plan or apply"
+    required: true
+outputs:
+  summary:
+    description: Markdown summary of every device's plan
+    value: ${{ steps.sync.outputs.summary }}
+runs:
+  using: composite
+  steps:
+    - name: Install sops
+      shell: bash
+      env:
+        SOPS_VERSION: v3.13.3
+        SOPS_SHA256: e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b
+      run: |
+        mkdir -p "$RUNNER_TEMP/bin"
+        curl -fsSL -o "$RUNNER_TEMP/bin/sops" \
+          "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64"
+        echo "${SOPS_SHA256}  $RUNNER_TEMP/bin/sops" | sha256sum -c -
+        chmod +x "$RUNNER_TEMP/bin/sops"
+        echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+    - name: SSH key
+      shell: bash
+      run: |
+        umask 077
+        printf '%s\n' "$EDGEOS_SSH_KEY" > "$RUNNER_TEMP/edgeos_ssh_key"
+
+    - name: Sync
+      id: sync
+      shell: bash
+      env:
+        EDGEOS_VIA_TUNNEL: "1"
+        EDGEOS_SSH_KEY_FILE: ${{ runner.temp }}/edgeos_ssh_key
+      run: |
+        rc_all=0
+        : > "$RUNNER_TEMP/edgeos.md"
+        for d in infrastructure/edgeos/*/device.json; do
+          dev="$(basename "$(dirname "$d")")"
+          set +e
+          infrastructure/edgeos/tools/edgeos-sync.py "${{ inputs.mode }}" "$dev" > "$RUNNER_TEMP/$dev.out" 2>&1
+          rc=$?
+          set -e
+          cat "$RUNNER_TEMP/$dev.out"
+          { echo "**${dev}**"; echo '```'; cat "$RUNNER_TEMP/$dev.out"; echo '```'; } >> "$RUNNER_TEMP/edgeos.md"
+          # plan exits 2 when there are changes.
+          if [ "$rc" -ne 0 ] && ! { [ "${{ inputs.mode }}" = plan ] && [ "$rc" -eq 2 ]; }; then rc_all=1; fi
+        done
+        cat "$RUNNER_TEMP/edgeos.md" >> "$GITHUB_STEP_SUMMARY"
+        {
+          echo 'summary<<EOF_SUMMARY'
+          cat "$RUNNER_TEMP/edgeos.md"
+          echo 'EOF_SUMMARY'
+        } >> "$GITHUB_OUTPUT"
+        exit "$rc_all"
+
+    - name: Clean up
+      if: always()
+      shell: bash
+      run: rm -f "$RUNNER_TEMP/edgeos_ssh_key"

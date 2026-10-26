@@ -1,0 +1,60 @@
+---
+name: "EdgeOS Plan"
+
+# Plans infrastructure/edgeos devices on the self-hosted tnwks-ops-runner (the
+# only thing besides the admin VPN that can reach them) and posts the result.
+
+on:
+  pull_request:
+    paths:
+      - "infrastructure/edgeos/**"
+      - ".github/actions/edgeos-sync/**"
+      - ".github/workflows/edgeos-*.yaml"
+
+permissions: {}
+
+concurrency:
+  group: edgeos-sync
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    # Never run fork or third-party code on the self-hosted runner.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == 'iT3E'
+    name: "EdgeOS Plan"
+    runs-on: tnwks-ops-runner
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Plan
+        id: sync
+        uses: ./.github/actions/edgeos-sync
+        with:
+          mode: plan
+
+      - name: Comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          SUMMARY: ${{ steps.sync.outputs.summary }}
+        with:
+          script: |
+            const marker = '<!-- edgeos-plan -->';
+            const body = `${marker}\n#### EdgeOS Plan\n${process.env.SUMMARY}\n[Run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo, issue_number: context.issue.number });
+            const prev = comments.find(c => c.body.startsWith(marker));
+            if (prev) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: prev.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }

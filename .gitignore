@@ -19,3 +19,12 @@ terraform.tfstate*
 # Draw.io
 /docs/diagrams/*.bkp
 # Packer
+# Python
+__pycache__/
+*.pyc
+
+# RouterOS config snapshots from playbooks/mikrotik-bootstrap.yml (serial numbers, topology)
+infrastructure/mikrotik/backups/
+
+# Agent worktrees
+.claude/worktrees/

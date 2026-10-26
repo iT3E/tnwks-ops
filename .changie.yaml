@@ -1,0 +1,35 @@
+---
+# Changie: https://changie.dev
+#   changie new     add a fragment for your PR (.changes/unreleased/)
+# Releases are cut automatically on merge to main by .github/workflows/release.yaml:
+# fragments are batched into .changes/<version>.md and CHANGELOG.md, tagged, and
+# published as a GitHub Release. The bump comes from the highest kind present.
+changesDir: .changes
+unreleasedDir: unreleased
+headerPath: header.tpl.md
+changelogPath: CHANGELOG.md
+versionExt: md
+versionFormat: '## {{.Version}} - {{.Time.Format "2006-01-02"}}'
+kindFormat: "### {{.Kind}}"
+changeFormat: "* {{.Body}}"
+kinds:
+  - label: Breaking
+    auto: major
+  - label: Added
+    auto: minor
+  - label: Changed
+    auto: minor
+  - label: Deprecated
+    auto: minor
+  - label: Removed
+    auto: minor
+  - label: Fixed
+    auto: patch
+  - label: Security
+    auto: patch
+newlines:
+  beforeChangelogVersion: 1
+  beforeKind: 1
+  afterKind: 1
+  endOfVersion: 1
+envPrefix: CHANGIE_
