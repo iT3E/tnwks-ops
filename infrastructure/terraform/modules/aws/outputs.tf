@@ -79,3 +79,18 @@ output "smtp_password" {
   value     = aws_iam_access_key.smtp_user.ses_smtp_password_v4
   sensitive = true
 }
+
+output "rolesanywhere_trust_anchor_arn" {
+  description = "Roles Anywhere trust anchor ARN (aws_signing_helper --trust-anchor-arn)."
+  value       = one(aws_rolesanywhere_trust_anchor.tnwks[*].arn)
+}
+
+output "rolesanywhere_sops_profile_arn" {
+  description = "Roles Anywhere profile ARN for SOPS sessions (aws_signing_helper --profile-arn)."
+  value       = one(aws_rolesanywhere_profile.sops[*].arn)
+}
+
+output "rolesanywhere_sops_role_arn" {
+  description = "Role Roles Anywhere sessions assume (aws_signing_helper --role-arn)."
+  value       = one(aws_iam_role.rolesanywhere_sops[*].arn)
+}
