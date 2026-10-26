@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.15.0 - 2026-10-26
+
+### Added
+
+* Cognito app client for Home Assistant SSO (public, PKCE) with managed login branding
+
 ## v1.14.1 - 2026-10-26
 
 ### Fixed
