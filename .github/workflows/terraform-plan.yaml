@@ -52,7 +52,9 @@ jobs:
   # Everyone else waits for a reviewer in the external-contributions
   # environment. Fork PRs receive no repository secrets under pull_request, so
   # for them this job cannot reach Terraform Cloud even once approved: it gates
-  # same-repo branches from other collaborators.
+  # same-repo branches from other collaborators. `deployment: false`: the
+  # environment is only an approval gate (required reviewers still apply), so
+  # it records no deployment for each plan.
   terraform-manual-approval:
     if: >-
       github.event.pull_request.head.repo.full_name != github.repository ||
@@ -60,6 +62,7 @@ jobs:
     name: "Terraform Plan External User"
     environment:
       name: external-contributions
+      deployment: false
     runs-on: ubuntu-latest
     permissions:
       contents: read
