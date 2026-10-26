@@ -1,3 +1,0 @@
-kind: Security
-body: The four age-only SOPS files (MikroTik secrets, the Roles Anywhere CA key, the mktxp and raines-things-api Secrets) gain the KMS recipient, so they no longer depend on the age keys alone
-time: 2026-10-25T22:16:01.841788519-07:00
