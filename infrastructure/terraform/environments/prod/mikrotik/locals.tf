@@ -18,8 +18,8 @@
 ##   DHCP static leases   12
 ##   Address lists        5 (11 members)
 ##   Port lists           1
-##   Zone-pair chains     17
-##   Firewall accepts     10 (expanded from VyOS tcp_udp / port-limit splits)
+##   Zone-pair chains     18
+##   Firewall accepts     11 (expanded from VyOS tcp_udp / port-limit splits)
 ##   Input-chain accepts  25
 ##   dstnat rules         8
 ##   Static routes        1
@@ -389,6 +389,19 @@ locals {
         {
           comment          = "admin peers (it-mobile)"
           src_address_list = "admin_peers"
+        },
+      ]
+    }
+    "180-vpn-ci-UISP-140" = {
+      from    = "vpn-ci"
+      to      = "UISP-140"
+      comment = "From vpn-ci to UISP-140"
+      rules = [
+        {
+          comment     = "CI runner SSH to the EP-R6 (edgeos-sync)"
+          dst_address = "10.10.140.140"
+          protocol    = "tcp"
+          dst_port    = "22"
         },
       ]
     }

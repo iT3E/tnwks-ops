@@ -1,0 +1,3 @@
+kind: Added
+body: The CI runner's wg03 tunnel can reach the EP-R6's SSH (and nothing else on VLAN 140)
+time: 2026-10-25T23:14:32.575156826-07:00
