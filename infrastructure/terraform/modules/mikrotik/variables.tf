@@ -513,8 +513,9 @@ variable "disabled_ip_services" {
     www     = 80
     api     = 8728
     api-ssl = 8729
-    # RouterOS 7.25+: shares 443 with www-ssl, which serves the REST API.
-    reverse-proxy = 443
+    # Not here: reverse-proxy (RouterOS 7.25+, shares 443 with www-ssl). The
+    # provider (v1.99.1) rejects that service name, so the bootstrap script
+    # disables it, the same way it owns www-ssl.
   }
 }
 
