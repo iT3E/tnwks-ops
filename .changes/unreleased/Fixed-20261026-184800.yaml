@@ -1,3 +1,0 @@
-kind: Fixed
-body: The LAN bridge's Scheduled Task re-syncs the portproxy rules after a WSL vNIC reset; its VmSwitch trigger listened on a log that never gets EventID 232, and it ran as SYSTEM, which can't see the WSL distro
-time: 2026-10-26T18:48:00.000000000-07:00
