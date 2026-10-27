@@ -28,8 +28,12 @@ Why each hop exists:
 
 The WSL VM gets a new address on every WSL restart and Windows reboot. The
 TCP side re-derives it in `Sync-TnwksLanBridge.ps1`, which a Scheduled Task
-(`Register-TnwksLanBridgeTask.ps1`) runs at logon and on Hyper-V `vmswitch`
-NIC-up events. The UDP relays re-resolve it every 60 seconds.
+(`Register-TnwksLanBridgeTask.ps1`) runs at logon and 15 seconds after each
+Hyper-V VmSwitch EventID 232 (VM NIC connected). That event is written to the
+**System** log; the `Microsoft-Windows-Hyper-V-VmSwitch-Operational` log never
+receives it, so a trigger on that log never fires. The task runs as the
+desktop user from `C:\ProgramData\tnwks-lan-bridge` and logs to `sync.log`
+there. The UDP relays re-resolve it every 60 seconds.
 
 > **Not taken:** WSL2 *mirrored* networking (`networkingMode=mirrored` in
 > `.wslconfig`) would share the host's addresses and make most of this
@@ -85,8 +89,10 @@ task wsl-host:udp-relays   # Windows UDP relays for 2055 and 6001
   is scoped to the senders, and the task runs as the desktop user (WSL distros
   are per-user, so SYSTEM cannot see `Ubuntu`).
 
-To register the TCP sync's Scheduled Task (once per machine), run
+To register the TCP sync's Scheduled Task, run
 `invoke-elevated.sh infrastructure/wsl-host/Register-TnwksLanBridgeTask.ps1`.
+It copies `Sync-TnwksLanBridge.ps1` into `C:\ProgramData\tnwks-lan-bridge`, so
+re-run it after editing the sync script.
 
 Adding a service: give it a fixed VIP in `cluster-settings.yaml`, add a
 `case` arm to `tnwks-lan-bridge.sh` and an instance to the role defaults,
