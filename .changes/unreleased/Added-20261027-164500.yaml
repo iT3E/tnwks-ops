@@ -1,3 +1,0 @@
-kind: Added
-body: '"WAN Traffic" Grafana dashboard: live and historical WAN usage per device, by app, category and destination network, from the router''s NetFlow; flow-collector now labels each flow with service, app and category from its port and remote network'
-time: 2026-10-27T16:45:00.000000000-07:00
