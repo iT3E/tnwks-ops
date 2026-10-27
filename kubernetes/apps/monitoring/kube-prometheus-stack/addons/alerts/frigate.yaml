@@ -1,0 +1,72 @@
+---
+# Frigate (production/frigate), scraped from /api/metrics by the ServiceMonitor
+# in production/frigate/app/helmrelease.yaml. Frigate's stats refresh every
+# ~15s, so the rate-free gauges below are fine at a 30s scrape.
+#
+# The failure these exist for (2026-10-26 17:19): a WSL vNIC reset dropped the
+# Coral's usbip link, Frigate's watchdog tried to restart the hung detector,
+# and the restart itself hung, so Frigate stayed blind for 16 minutes while
+# live view still worked and every pod stayed Running.
+#
+# A hung detector looks like this (reproduced by SIGSTOP on the detector,
+# 2026-10-26 18:48): frigate_detection_total_fps 0, frigate_detection_start 0
+# (start_or_restart resets it), and on every camera with motion process_fps
+# drops to ~0.2 while skipped_fps climbs to ~camera_fps, because each detect
+# call waits out a 5s timeout. A quiet scene with no motion never calls the
+# detector, so the stall only shows once something moves, which is when it
+# matters.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: frigate-alerts
+spec:
+  groups:
+    - name: frigate
+      rules:
+        - alert: FrigateDetectionStalled
+          expr: |
+            frigate_detection_total_fps == 0
+            and on ()
+            count(
+              frigate_skipped_fps > 0.5 * frigate_camera_fps
+              and frigate_camera_fps > 1
+            ) > 0
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Frigate object detection has stopped"
+            description: >-
+              Frigate has run no object detection for 3 minutes while cameras
+              with motion skip most frames.
+              Skipping now:{{ range query "round(frigate_skipped_fps > 0.5 * frigate_camera_fps and frigate_camera_fps > 1, 0.1)" | sortByLabel "camera_name" }} {{ reReplaceAll "^frigate_" "" .Labels.camera_name }} {{ . | value }}fps;{{ end }}
+              Person alerts are off until it recovers. Usually the Coral
+              detector hung after a USB/vNIC drop: check
+              `kubectl -n production logs deploy/frigate | grep -i detect`
+              for "Force killing" with no "Detection process has exited",
+              then restart the frigate pod (with the Coral attached).
+
+        - alert: FrigateAllCamerasDown
+          expr: sum(frigate_camera_fps) == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Frigate is getting no frames from any camera"
+            description: >-
+              Every Frigate camera has been at 0 fps for 5 minutes. Usually the
+              WSL network to the camera VLAN (610) is down, for example after a
+              vNIC reset. Check `kubectl -n production logs deploy/frigate`
+              for RTSP timeouts and the WSL host's network.
+
+        - alert: FrigateMetricsMissing
+          expr: absent(up{job="frigate-app"} == 1)
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Frigate is down or not answering /api/metrics"
+            description: >-
+              Prometheus has had no successful scrape of frigate-app for 5
+              minutes: the frigate pod is down, crash-looping or hung. Check
+              `kubectl -n production get pods -l app.kubernetes.io/name=frigate`.
