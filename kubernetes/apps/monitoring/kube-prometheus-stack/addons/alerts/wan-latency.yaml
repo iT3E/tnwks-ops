@@ -88,6 +88,9 @@ spec:
           expr: sum by (client_ip, asn, as_name) (rate(wan_client_receive_bytes_total[2m])) * 8
         # client_ip -> client, from the router's DHCP leases (mktxp). One name
         # per IP: the client's hostname, else the static lease's comment.
+        # Value is always 1: the rates below multiply by it. mktxp's lease
+        # series carry the lease's seconds-to-expiry as their value, which
+        # inflated every per-client rate ~80000x from #1382 until this fix.
         - record: wan:client_name
           expr: |
             topk by (client_ip) (1,
@@ -100,7 +103,7 @@ spec:
                   label_replace(mktxp_dhcp_lease_info{host_name="",comment!=""}, "client_ip", "$1", "address", "(.+)"),
                   "client", "$1", "comment", "(.+)")
               )
-            )
+            ) * 0 + 1
         # Same rates with a readable `client` label (hostname, else the IP).
         - record: wan:client_as_transmit_bits:rate2m
           expr: |
@@ -112,6 +115,30 @@ spec:
             (wan:client_as_receive_bits_by_ip:rate2m * on (client_ip) group_left (client) wan:client_name)
             or on (client_ip, asn)
             label_replace(wan:client_as_receive_bits_by_ip:rate2m, "client", "$1", "client_ip", "(.+)")
+        # Per client, app and destination, for the "WAN Traffic" dashboard
+        # (grafana/app/dashboard/wan-traffic.json). app/category/service come
+        # from the collector's classify(); the dashboard's "data in range"
+        # panels assume this group's 15s interval.
+        - record: wan:client_app_transmit_bits:rate2m
+          expr: |
+            (
+              sum by (client_ip, app, category, service, asn, as_name) (rate(wan_client_transmit_bytes_total[2m])) * 8
+              * on (client_ip) group_left (client) wan:client_name
+            )
+            or on (client_ip, app, category, service, asn)
+            label_replace(
+              sum by (client_ip, app, category, service, asn, as_name) (rate(wan_client_transmit_bytes_total[2m])) * 8,
+              "client", "$1", "client_ip", "(.+)")
+        - record: wan:client_app_receive_bits:rate2m
+          expr: |
+            (
+              sum by (client_ip, app, category, service, asn, as_name) (rate(wan_client_receive_bytes_total[2m])) * 8
+              * on (client_ip) group_left (client) wan:client_name
+            )
+            or on (client_ip, app, category, service, asn)
+            label_replace(
+              sum by (client_ip, app, category, service, asn, as_name) (rate(wan_client_receive_bytes_total[2m])) * 8,
+              "client", "$1", "client_ip", "(.+)")
 
     - name: wan-latency
       interval: 15s

@@ -17,9 +17,18 @@ the LAN client, so a public -> public flow whose post-NAT destination is
 private counts as a receive for that client. Uploads already carry the LAN
 source (pre-NAT), so they need nothing extra.
 
+Each flow is also classified (see classify()):
+  service  = the remote end's protocol/port (https, quic, dns, stun, ...)
+  app      = best guess at the application (Netflix, Steam, DNS, Web, ...)
+  category = a small fixed set (Streaming, Gaming, Calls, Cloud & CDN, ...)
+from a port table and a table of networks that belong to one service.
+It is a heuristic: most traffic is HTTPS on 443, and CDN/cloud networks
+(AWS, Fastly, Akamai, Cloudflare) carry many apps, so those keep the
+provider's name and the "Cloud & CDN" category.
+
 Exposed on :9300/metrics:
-  wan_client_transmit_bytes_total{client_ip, asn, as_name}
-  wan_client_receive_bytes_total{client_ip, asn, as_name}
+  wan_client_transmit_bytes_total{client_ip, asn, as_name, service, app, category}
+  wan_client_receive_bytes_total{client_ip, asn, as_name, service, app, category}
   flow_collector_* self-metrics
 
 Stdlib only, so it runs on a stock python image with this file mounted.
@@ -48,7 +57,7 @@ ASN_REFRESH_S = int(os.environ.get("ASN_DB_REFRESH_SECONDS", str(7 * 86400)))
 SERIES_TTL_S = int(os.environ.get("SERIES_TTL_SECONDS", "3600"))
 
 LOCK = threading.Lock()
-# (direction, client_ip, asn) -> [bytes, last_seen]
+# (direction, client_ip, asn, service) -> [bytes, last_seen]
 COUNTERS = {}
 STATS = {
     "packets": {},             # version -> count
@@ -144,6 +153,126 @@ def lookup_asn(ip_int):
     return 0, "unknown"
 
 
+# ---------------------------------------------------------------- classification
+# Remote (proto, port) -> service. Ranges are inclusive.
+PROTO_NAMES = {1: "icmp", 6: "tcp", 17: "udp", 47: "gre", 50: "esp", 58: "icmpv6"}
+_SERVICE_RANGES = [
+    ("tcp", 443, 443, "https"), ("udp", 443, 443, "quic"), ("tcp", 80, 80, "http"),
+    ("tcp", 8443, 8443, "https-alt"), ("tcp", 8080, 8080, "http-alt"),
+    ("udp", 53, 53, "dns"), ("tcp", 53, 53, "dns"),
+    ("tcp", 853, 853, "dns-over-tls"), ("udp", 853, 853, "dns-over-quic"),
+    ("udp", 123, 123, "ntp"),
+    ("udp", 3478, 3481, "stun"), ("tcp", 3478, 3478, "stun"), ("udp", 19302, 19309, "stun"),
+    ("udp", 51820, 51820, "wireguard"), ("udp", 500, 500, "ipsec"), ("udp", 4500, 4500, "ipsec"),
+    ("udp", 1194, 1194, "openvpn"), ("tcp", 1194, 1194, "openvpn"),
+    ("tcp", 22, 22, "ssh"), ("tcp", 3389, 3389, "rdp"), ("udp", 3389, 3389, "rdp"),
+    ("tcp", 25, 25, "smtp"), ("tcp", 465, 465, "smtp"), ("tcp", 587, 587, "smtp"),
+    ("tcp", 143, 143, "imap"), ("tcp", 993, 993, "imap"),
+    ("tcp", 110, 110, "pop3"), ("tcp", 995, 995, "pop3"),
+    ("tcp", 5228, 5230, "google-push"), ("tcp", 5223, 5223, "apple-push"),
+    ("tcp", 1883, 1883, "mqtt"), ("tcp", 8883, 8883, "mqtt"),
+    ("tcp", 554, 554, "rtsp"), ("udp", 554, 554, "rtsp"), ("tcp", 1935, 1935, "rtmp"),
+    ("udp", 8801, 8810, "zoom"), ("udp", 9000, 9000, "webex"),
+    ("udp", 27000, 27100, "steam"), ("udp", 3074, 3074, "xbox-live"),
+]
+# Services that say what the traffic is regardless of who is on the other end.
+STRONG_SERVICES = {
+    "dns": ("DNS", "Infrastructure"), "dns-over-tls": ("DNS", "Infrastructure"),
+    "dns-over-quic": ("DNS", "Infrastructure"), "ntp": ("NTP", "Infrastructure"),
+    "wireguard": ("VPN", "VPN & security"), "ipsec": ("VPN", "VPN & security"),
+    "openvpn": ("VPN", "VPN & security"), "esp": ("VPN", "VPN & security"),
+    "gre": ("VPN", "VPN & security"),
+    "ssh": ("SSH", "Remote access"), "rdp": ("RDP", "Remote access"),
+    "smtp": ("Email", "Email"), "imap": ("Email", "Email"), "pop3": ("Email", "Email"),
+    "google-push": ("Google push", "Notifications"), "apple-push": ("Apple push", "Notifications"),
+    "mqtt": ("MQTT", "IoT"), "rtsp": ("RTSP", "IoT"),
+    "zoom": ("Zoom", "Calls"),
+}
+# Services that only win when the network doesn't already name the app.
+WEAK_SERVICES = {
+    "stun": ("WebRTC", "Calls"), "webex": ("Webex", "Calls"), "rtmp": ("RTMP", "Streaming"),
+    "steam": ("Steam", "Gaming"), "xbox-live": ("Xbox Live", "Gaming"),
+}
+WEB_SERVICES = {"https", "quic", "http", "https-alt", "http-alt"}
+
+# Networks (ASNs) -> (app, category). HOSTING networks carry many unrelated
+# apps, so a port rule beats them and they keep the provider's name.
+ASN_APPS = {
+    # Streaming
+    2906: ("Netflix", "Streaming"), 40027: ("Netflix", "Streaming"), 55095: ("Netflix", "Streaming"),
+    43515: ("YouTube", "Streaming"), 36040: ("YouTube", "Streaming"),
+    46489: ("Twitch", "Streaming"), 23286: ("Hulu", "Streaming"), 8403: ("Spotify", "Streaming"),
+    # Social
+    32934: ("Meta", "Social"), 63293: ("Meta", "Social"), 54115: ("Meta", "Social"),
+    13414: ("X", "Social"), 35995: ("X", "Social"),
+    396986: ("TikTok", "Social"), 138699: ("TikTok", "Social"), 14413: ("LinkedIn", "Social"),
+    # Messaging / calls
+    62041: ("Telegram", "Messaging"), 59930: ("Telegram", "Messaging"), 62014: ("Telegram", "Messaging"),
+    44907: ("Telegram", "Messaging"), 211157: ("Telegram", "Messaging"),
+    13445: ("Webex", "Calls"), 30103: ("Zoom", "Calls"),
+    # Gaming
+    32590: ("Steam", "Gaming"), 57976: ("Blizzard", "Gaming"), 6507: ("Riot Games", "Gaming"),
+    22697: ("Roblox", "Gaming"),
+    # Big platforms: too mixed to split further from flows alone
+    15169: ("Google", "Google"), 19527: ("Google", "Google"),
+    8075: ("Microsoft", "Microsoft"), 8068: ("Microsoft", "Microsoft"), 8069: ("Microsoft", "Microsoft"),
+    714: ("Apple", "Apple"), 6185: ("Apple", "Apple"),
+    # Work / security proxies (traffic inside the tunnel is invisible)
+    55256: ("Netskope", "VPN & security"), 36692: ("Cisco Umbrella", "VPN & security"),
+    22616: ("Zscaler", "VPN & security"), 53813: ("Zscaler", "VPN & security"),
+    62044: ("Zscaler", "VPN & security"),
+    # Other single-purpose networks
+    399358: ("Anthropic", "AI"), 36459: ("GitHub", "Dev"), 41231: ("Canonical", "Dev"),
+    394161: ("Tesla", "IoT"), 19281: ("Quad9", "Infrastructure"),
+    198622: ("Ads", "Ads & tracking"), 19750: ("Ads", "Ads & tracking"), 26667: ("Ads", "Ads & tracking"),
+    62713: ("Ads", "Ads & tracking"), 29990: ("Ads", "Ads & tracking"), 23467: ("New Relic", "Ads & tracking"),
+}
+HOSTING = {
+    16509: "AWS", 14618: "AWS", 13335: "Cloudflare", 209242: "Cloudflare", 54113: "Fastly",
+    20940: "Akamai", 16625: "Akamai", 12222: "Akamai", 63949: "Akamai", 396982: "Google Cloud",
+    20473: "Vultr", 14061: "DigitalOcean", 16276: "OVH", 24940: "Hetzner", 31898: "Oracle Cloud",
+    15133: "Edgio", 22822: "Edgio", 19551: "Imperva", 199524: "Gcore", 45102: "Alibaba Cloud",
+    37963: "Alibaba Cloud",
+}
+
+
+def service_of(proto, remote_port, client_port):
+    """Name the remote end's service; fall back to a well-known client port (inbound)."""
+    pname = PROTO_NAMES.get(proto, "other")
+    if pname not in ("tcp", "udp"):
+        return pname
+    for port in (remote_port, client_port):
+        for p, lo, hi, name in _SERVICE_RANGES:
+            if p == pname and lo <= port <= hi:
+                return name
+    return f"{pname}-other"
+
+
+_CLASS_CACHE = {}
+
+
+def classify(asn, service):
+    """(asn, service) -> (app, category). Order: strong port, network, weak port, host, web."""
+    hit = _CLASS_CACHE.get((asn, service))
+    if hit:
+        return hit
+    if service in STRONG_SERVICES:
+        res = STRONG_SERVICES[service]
+    elif asn in ASN_APPS:
+        app, cat = ASN_APPS[asn]
+        res = (app, "Calls") if service == "stun" else (app, cat)
+    elif service in WEAK_SERVICES:
+        res = WEAK_SERVICES[service]
+    elif asn in HOSTING:
+        res = (HOSTING[asn], "Cloud & CDN")
+    elif service in WEB_SERVICES:
+        res = ("Web", "Web")
+    else:
+        res = ("Other", "Other")
+    _CLASS_CACHE[(asn, service)] = res
+    return res
+
+
 # ---------------------------------------------------------------- accounting
 
 def is_lan(ip_int):
@@ -151,7 +280,7 @@ def is_lan(ip_int):
     return any(ip in n for n in LAN_NETS)
 
 
-def account(src, dst, nbytes, now, post_nat_dst=None):
+def account(src, dst, nbytes, now, post_nat_dst=None, proto=0, sport=0, dport=0):
     if not nbytes:
         return
     s_lan, d_lan = is_lan(src), is_lan(dst)
@@ -164,10 +293,12 @@ def account(src, dst, nbytes, now, post_nat_dst=None):
         return  # inter-VLAN, or not involving the LAN at all
     if s_lan:
         direction, client, remote = "transmit", src, dst
+        remote_port, client_port = dport, sport
     else:
         direction, client, remote = "receive", dst, src
+        remote_port, client_port = sport, dport
     asn, _ = lookup_asn(remote)
-    key = (direction, client, asn)
+    key = (direction, client, asn, service_of(proto, remote_port, client_port))
     with LOCK:
         STATS["records_lan_wan"] += 1
         c = COUNTERS.get(key)
@@ -184,6 +315,8 @@ F_OCTETS = (1, 85)          # octetDeltaCount, octetTotalCount
 F_SRC4, F_DST4 = 8, 12      # source/destinationIPv4Address
 F_POST_NAT_DST4 = 226       # postNATDestinationIPv4Address (RouterOS, NetFlow v9 + IPFIX)
 F_OUT_BYTES = 23            # NetFlow v9 OUT_BYTES / postOctetDeltaCount
+F_PROTO = 4                 # protocolIdentifier
+F_SPORT, F_DPORT = 7, 11    # source/destinationTransportPort
 
 TEMPLATES = {}  # (version, domain, template_id) -> list[(field_id, length)]
 
@@ -225,7 +358,7 @@ def _parse_data_set(version, domain, tid, body, now):
     n = 0
     while off + min_len <= len(body) and min_len > 0:
         src = dst = post_nat_dst = None
-        octets = 0
+        octets = proto = sport = dport = 0
         start = off
         try:
             for ftype, flen in fields:
@@ -243,6 +376,12 @@ def _parse_data_set(version, domain, tid, body, now):
                     dst = _uint(val)
                 elif ftype == F_POST_NAT_DST4 and flen == 4:
                     post_nat_dst = _uint(val)
+                elif ftype == F_PROTO:
+                    proto = _uint(val)
+                elif ftype == F_SPORT:
+                    sport = _uint(val)
+                elif ftype == F_DPORT:
+                    dport = _uint(val)
                 elif ftype in F_OCTETS or (ftype == F_OUT_BYTES and not octets):
                     octets = max(octets, _uint(val))
         except (IndexError, struct.error):
@@ -253,7 +392,7 @@ def _parse_data_set(version, domain, tid, body, now):
             break  # zero padding parsed as a variable-length record
         n += 1
         if src is not None and dst is not None:
-            account(src, dst, octets, now, post_nat_dst)
+            account(src, dst, octets, now, post_nat_dst, proto, sport, dport)
     with LOCK:
         STATS["records"] += n
 
@@ -264,7 +403,11 @@ def _account_ip_header(h, nbytes, now):
         return False
     src = struct.unpack_from("!I", h, 12)[0]
     dst = struct.unpack_from("!I", h, 16)[0]
-    account(src, dst, nbytes, now)
+    proto, ihl = h[9], (h[0] & 0xF) * 4
+    sport = dport = 0
+    if proto in (6, 17) and len(h) >= ihl + 4:
+        sport, dport = struct.unpack_from("!HH", h, ihl)
+    account(src, dst, nbytes, now, None, proto, sport, dport)
     return True
 
 
@@ -348,7 +491,9 @@ def handle_packet(data, now):
                 break
             src, dst = struct.unpack_from("!II", data, off)
             octets = struct.unpack_from("!I", data, off + 20)[0]
-            account(src, dst, octets, now)
+            sport, dport = struct.unpack_from("!HH", data, off + 32)
+            proto = data[off + 38]
+            account(src, dst, octets, now, None, proto, sport, dport)
         with LOCK:
             STATS["records"] += count
         return
@@ -411,12 +556,14 @@ def render():
         lines.append(f"# HELP {metric} Bytes between a LAN client and the internet "
                      f"({'upload' if direction == 'transmit' else 'download'}), by remote network.")
         lines.append(f"# TYPE {metric} counter")
-        for (d, client, asn), (nbytes, _) in rows:
+        for (d, client, asn, service), (nbytes, _) in rows:
             if d != direction:
                 continue
             as_name = names.get(asn, "unknown") if asn else "unknown"
+            app, category = classify(asn, service)
             lines.append(f'{metric}{{client_ip="{ipaddress.IPv4Address(client)}",asn="{asn}",'
-                         f'as_name="{_esc(as_name)}"}} {nbytes}')
+                         f'as_name="{_esc(as_name)}",service="{service}",app="{_esc(app)}",'
+                         f'category="{_esc(category)}"}} {nbytes}')
     lines.append("# TYPE flow_collector_packets_total counter")
     for v, c in sorted(stats["packets"].items(), key=lambda kv: str(kv[0])):
         lines.append(f'flow_collector_packets_total{{version="{v}"}} {c}')

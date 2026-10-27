@@ -11,7 +11,9 @@
 #
 # The collector is a stdlib-only Python script (config/flow_collector.py) on a
 # stock python image. ASN data: iptoasn.com (public domain), refreshed weekly
-# into an emptyDir. Metrics: wan_client_{transmit,receive}_bytes_total.
+# into an emptyDir. Metrics: wan_client_{transmit,receive}_bytes_total, with
+# app/category/service labels from a port + network heuristic (classify()).
+# Dashboard: grafana/app/dashboard/wan-traffic.json
 # Alerts: kube-prometheus-stack/addons/alerts/wan-latency.yaml
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
