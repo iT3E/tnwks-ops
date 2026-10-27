@@ -1,0 +1,3 @@
+kind: Fixed
+body: WAN download usage per client is counted again; since the RB5009 cutover every download flow carried the router's public address and was dropped, so the "Top users" download line in WAN alerts was empty
+time: 2026-10-26T19:30:00.000000000-07:00

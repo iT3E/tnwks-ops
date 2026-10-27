@@ -10,6 +10,13 @@ For every flow with exactly one private (LAN) endpoint:
   LAN -> internet bytes count as transmit (upload), internet -> LAN as receive.
 Flows with two private endpoints (inter-VLAN) or none are ignored.
 
+Exported on the WAN port (RouterOS traffic-flow on ether1), a download is
+recorded as it arrives, before NAT is undone: its destination is the router's
+public address. RouterOS adds postNATDestinationIPv4Address (field 226) with
+the LAN client, so a public -> public flow whose post-NAT destination is
+private counts as a receive for that client. Uploads already carry the LAN
+source (pre-NAT), so they need nothing extra.
+
 Exposed on :9300/metrics:
   wan_client_transmit_bytes_total{client_ip, asn, as_name}
   wan_client_receive_bytes_total{client_ip, asn, as_name}
@@ -47,6 +54,7 @@ STATS = {
     "packets": {},             # version -> count
     "records": 0,
     "records_lan_wan": 0,
+    "records_post_nat": 0,
     "templates": 0,
     "missing_template": 0,
     "decode_errors": 0,
@@ -143,10 +151,15 @@ def is_lan(ip_int):
     return any(ip in n for n in LAN_NETS)
 
 
-def account(src, dst, nbytes, now):
+def account(src, dst, nbytes, now, post_nat_dst=None):
     if not nbytes:
         return
     s_lan, d_lan = is_lan(src), is_lan(dst)
+    if not s_lan and not d_lan and post_nat_dst is not None and is_lan(post_nat_dst):
+        # A download seen on the WAN port before NAT is undone (see the docstring).
+        dst, d_lan = post_nat_dst, True
+        with LOCK:
+            STATS["records_post_nat"] += 1
     if s_lan == d_lan:
         return  # inter-VLAN, or not involving the LAN at all
     if s_lan:
@@ -169,6 +182,7 @@ def account(src, dst, nbytes, now):
 # IANA IPFIX / NetFlow v9 field ids we use
 F_OCTETS = (1, 85)          # octetDeltaCount, octetTotalCount
 F_SRC4, F_DST4 = 8, 12      # source/destinationIPv4Address
+F_POST_NAT_DST4 = 226       # postNATDestinationIPv4Address (RouterOS, NetFlow v9 + IPFIX)
 F_OUT_BYTES = 23            # NetFlow v9 OUT_BYTES / postOctetDeltaCount
 
 TEMPLATES = {}  # (version, domain, template_id) -> list[(field_id, length)]
@@ -210,7 +224,7 @@ def _parse_data_set(version, domain, tid, body, now):
     off = 0
     n = 0
     while off + min_len <= len(body) and min_len > 0:
-        src = dst = None
+        src = dst = post_nat_dst = None
         octets = 0
         start = off
         try:
@@ -227,6 +241,8 @@ def _parse_data_set(version, domain, tid, body, now):
                     src = _uint(val)
                 elif ftype == F_DST4 and flen == 4:
                     dst = _uint(val)
+                elif ftype == F_POST_NAT_DST4 and flen == 4:
+                    post_nat_dst = _uint(val)
                 elif ftype in F_OCTETS or (ftype == F_OUT_BYTES and not octets):
                     octets = max(octets, _uint(val))
         except (IndexError, struct.error):
@@ -237,7 +253,7 @@ def _parse_data_set(version, domain, tid, body, now):
             break  # zero padding parsed as a variable-length record
         n += 1
         if src is not None and dst is not None:
-            account(src, dst, octets, now)
+            account(src, dst, octets, now, post_nat_dst)
     with LOCK:
         STATS["records"] += n
 
@@ -406,6 +422,7 @@ def render():
         lines.append(f'flow_collector_packets_total{{version="{v}"}} {c}')
     for name, help_ in (("records", "Flow records decoded"),
                         ("records_lan_wan", "Flow records between the LAN and the internet"),
+                        ("records_post_nat", "Downloads matched to a LAN client by the post-NAT destination"),
                         ("missing_template", "Data sets dropped because no template was seen yet"),
                         ("decode_errors", "Packets that failed to decode")):
         lines.append(f"# HELP flow_collector_{name}_total {help_}")
