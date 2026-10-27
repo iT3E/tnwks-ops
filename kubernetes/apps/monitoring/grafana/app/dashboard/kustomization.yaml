@@ -8,6 +8,7 @@ configMapGenerator:
       - tnwks-home.json
       - unms_overview.json
       - wan-latency.json
+      - wan-traffic.json
 generatorOptions:
   disableNameSuffixHash: true
   annotations:
