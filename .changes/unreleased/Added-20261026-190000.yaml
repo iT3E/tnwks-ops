@@ -1,0 +1,3 @@
+kind: Added
+body: Prometheus scrapes Frigate, and the War Room gets an alert when Frigate's object detection stalls, every camera feed is down, or Frigate stops answering; a hung Coral detector left person alerts off for 16 minutes on 2026-10-26 with every pod Running
+time: 2026-10-26T19:00:00.000000000-07:00

@@ -10,3 +10,4 @@ resources:
   - ./router.yaml
   - ./wan-latency.yaml
   - ./flow-collector.yaml
+  - ./frigate.yaml

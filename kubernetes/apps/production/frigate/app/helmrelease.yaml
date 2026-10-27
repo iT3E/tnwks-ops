@@ -92,6 +92,24 @@ spec:
           webrtc-udp:
             port: 8555
             protocol: UDP
+    # Frigate's Prometheus endpoint, for the detection/camera alerts in
+    # monitoring/kube-prometheus-stack/addons/alerts/frigate.yaml. Only the
+    # series those use are kept: the per-process cpu/mem series are labeled by
+    # pid and churn on every ffmpeg restart.
+    serviceMonitor:
+      app:
+        enabled: ${SERVICE_MONITOR_ENABLED}
+        serviceName: frigate-app
+        endpoints:
+          - port: http
+            scheme: http
+            path: /api/metrics
+            interval: 30s
+            scrapeTimeout: 10s
+            metricRelabelings:
+              - sourceLabels: [__name__]
+                regex: frigate_(camera_fps|process_fps|skipped_fps|detection_fps|detection_total_fps|detection_start|detector_inference_speed_seconds|service_uptime_seconds|service_info|camera_events_total|storage_.+)
+                action: keep
     # The ingress fronts port 5000, Frigate's unauthenticated API (its own
     # auth is on 8971), so gate it with oauth2-proxy like grafana: the shared
     # .tnwks.us SSO session gets a browser straight through. Without the gate
