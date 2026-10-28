@@ -10,28 +10,17 @@ resource "cloudflare_ruleset" "waf_custom_rules" {
   kind    = "zone"
   phase   = "http_request_firewall_custom"
 
-  dynamic "rules" {
-    for_each = var.waf_custom_rules
-    iterator = rule
-    content {
-      enabled     = rule.value.enabled
-      description = rule.value.description
-      expression  = rule.value.expression
-      action      = rule.value.action
-
-      dynamic "logging" {
-        for_each = length(keys(rule.value.logging)) > 0 ? [true] : []
-        content {
-          enabled = lookup(rule.value.logging, "enabled", null)
-        }
-      }
-
-      dynamic "action_parameters" {
-        for_each = length(keys(rule.value.action_parameters)) > 0 ? [true] : []
-        content {
-          ruleset = lookup(rule.value.action_parameters, "ruleset", null)
-        }
-      }
+  # v5: rules is a list attribute instead of repeated blocks.
+  rules = [
+    for rule in var.waf_custom_rules : {
+      enabled     = rule.enabled
+      description = rule.description
+      expression  = rule.expression
+      action      = rule.action
+      logging     = length(keys(rule.logging)) > 0 ? { enabled = lookup(rule.logging, "enabled", null) } : null
+      action_parameters = length(keys(rule.action_parameters)) > 0 ? {
+        ruleset = lookup(rule.action_parameters, "ruleset", null)
+      } : null
     }
-  }
+  ]
 }

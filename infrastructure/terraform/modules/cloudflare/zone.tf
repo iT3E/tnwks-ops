@@ -1,6 +1,6 @@
 resource "cloudflare_zone" "zone" {
-  zone       = var.domain
-  account_id = var.account_id
-  plan       = "free"
-  type       = "full"
+  name    = var.domain
+  account = { id = var.account_id }
+  type    = "full"
+  # v5 dropped `plan`; the zone stays on its existing (free) subscription.
 }
