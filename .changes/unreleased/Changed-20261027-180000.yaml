@@ -1,3 +1,0 @@
-kind: Changed
-body: Cloudflare Terraform moved to provider v5 (cloudflare_dns_record, per-setting cloudflare_zone_setting, list-style ruleset rules); state migrated with moved/import blocks, Cloudflare itself unchanged
-time: 2026-10-27T18:00:00.000000000-07:00
