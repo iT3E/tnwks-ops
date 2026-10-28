@@ -59,7 +59,7 @@ module "kms_sops" {
       principals = [
         {
           type        = "AWS"
-          identifiers = [module.iam_assumable_role_sops.iam_role_arn]
+          identifiers = [module.iam_assumable_role_sops.arn]
         }
       ]
       actions = [
