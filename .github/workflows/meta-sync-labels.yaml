@@ -7,13 +7,22 @@ on:
     branches: ["main"]
     paths: [".github/labels.yaml"]
 
+permissions: {}
+
 jobs:
   labels:
     name: Sync Labels
     runs-on: ubuntu-latest
+    # Creating, editing and deleting labels needs issues: write; the default
+    # read-only token failed every sync with a 403.
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Sync Labels
         uses: EndBug/label-sync@52074158190acb45f3077f9099fea818aa43f97a # v2.3.3
