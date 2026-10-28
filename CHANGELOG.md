@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.22.0 - 2026-10-28
+
+### Added
+
+* Renovate tiers: app patches (and non-0.x minors, weekly) automerge once the new Kubernetes CI passes (flate render + image exists); platform, Terraform, majors, 0.x minors and stateful-app minors get impact/high and are never automerged. Flux error events now page the War Room through Alertmanager
+
 ## v1.21.0 - 2026-10-28
 
 ### Changed
