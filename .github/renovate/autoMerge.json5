@@ -1,33 +1,162 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "packageRules": [
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  // Who merges what. Two outcomes only, so nothing sits untriaged:
+  //   * automerge: Renovate merges the PR itself once every status check is
+  //     green, including "Build Success" from .github/workflows/kubernetes.yaml
+  //     (flate render + image exists). Flux error events page the War Room if
+  //     a merged bump then fails to reconcile (flux-system/addons/alerts).
+  //   * impact/high: never automerged. Ori is woken only for these.
+  // Rules are evaluated in order and later rules win, so the impact/high
+  // block at the bottom overrides any automerge rule above it.
+  packageRules: [
+    // ---------------------------------------------------------------- automerge
     {
-      "description": "Auto merge GitHub Actions",
-      "matchManagers": ["github-actions"],
-      "automerge": true,
-      "automergeType": "branch",
-      "ignoreTests": true,
-      "matchUpdateTypes": ["minor", "patch", "digest"]
-    },
-    {
-      "description": "Auto merge container digests",
-      "matchDatasources": ["docker"],
-      "automerge": true,
-      "automergeType": "branch",
-      "ignoreTests": true,
-      "matchUpdateTypes": ["digest"]
-    },
-    {
-      "description": "Auto merge specific container images always",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": [
-        "ghcr.io/onedr0p/radarr-develop",
-        "ghcr.io/onedr0p/prowlarr-develop",
-        "ghcr.io/onedr0p/sonarr-develop"
+      description: "App images and charts: patch and digest updates",
+      matchFileNames: [
+        "kubernetes/apps/ai/**",
+        "kubernetes/apps/cache/**",
+        "kubernetes/apps/default/**",
+        "kubernetes/apps/home-automation/**",
+        "kubernetes/apps/media/**",
+        "kubernetes/apps/monitoring/**",
+        "kubernetes/apps/production/**",
+        "kubernetes/apps/selfhosted/**",
       ],
-      "automerge": true,
-      "automergeType": "branch",
-      "ignoreTests": true
-    }
-  ]
+      matchUpdateTypes: ["patch", "digest"],
+      automerge: true,
+    },
+    {
+      // 0.x minors can break at any time (zer0ver), so they stay manual.
+      description: "App images and charts: minor updates, outside 0.x, weekly",
+      matchFileNames: [
+        "kubernetes/apps/ai/**",
+        "kubernetes/apps/cache/**",
+        "kubernetes/apps/default/**",
+        "kubernetes/apps/home-automation/**",
+        "kubernetes/apps/media/**",
+        "kubernetes/apps/monitoring/**",
+        "kubernetes/apps/production/**",
+        "kubernetes/apps/selfhosted/**",
+      ],
+      matchUpdateTypes: ["minor"],
+      matchCurrentVersion: "!/^v?0\\./",
+      automerge: true,
+      schedule: ["before 7am on monday"],
+    },
+    {
+      description: "GitHub Actions: minor, patch and digest, 3 days after release",
+      matchManagers: ["github-actions"],
+      matchUpdateTypes: ["minor", "patch", "digest"],
+      minimumReleaseAge: "3 days",
+      automerge: true,
+    },
+    {
+      description: "GitHub's own actions/*: no wait",
+      matchManagers: ["github-actions"],
+      matchPackageNames: ["/^actions\\//"],
+      matchUpdateTypes: ["minor", "patch", "digest"],
+      minimumReleaseAge: null,
+      automerge: true,
+    },
+    {
+      description: "CI tools pinned in workflows (# renovate: comments): minor and patch",
+      matchFileNames: [".github/workflows/**"],
+      matchManagers: ["custom.regex"],
+      matchUpdateTypes: ["minor", "patch"],
+      automerge: true,
+    },
+    {
+      // requirements.yml only; nothing runs Ansible automatically.
+      description: "Ansible collections and roles: minor and patch",
+      matchDatasources: ["galaxy", "galaxy-collection"],
+      matchUpdateTypes: ["minor", "patch"],
+      automerge: true,
+    },
+    {
+      description: "pre-commit hooks: minor, patch and digest",
+      matchManagers: ["pre-commit"],
+      matchUpdateTypes: ["minor", "patch", "digest"],
+      automerge: true,
+    },
+
+    // -------------------------------------------------------------- impact/high
+    {
+      // Everything outside the automerge paths: cluster plumbing (CNI, load
+      // balancer, ingress, DNS, certs, storage, databases, auth, Flux, the
+      // runner controller), Talos, Terraform, and anything new. Negated-only
+      // patterns match every file that none of them match.
+      description: "Platform and everything else: always reviewed",
+      matchFileNames: [
+        "!kubernetes/apps/ai/**",
+        "!kubernetes/apps/cache/**",
+        "!kubernetes/apps/default/**",
+        "!kubernetes/apps/home-automation/**",
+        "!kubernetes/apps/media/**",
+        "!kubernetes/apps/monitoring/**",
+        "!kubernetes/apps/production/**",
+        "!kubernetes/apps/selfhosted/**",
+        "!.github/workflows/**",
+        "!infrastructure/ansible/requirements.yml",
+        "!.pre-commit-config.yaml",
+      ],
+      automerge: false,
+      addLabels: ["impact/high"],
+    },
+    {
+      description: "Platform packages wherever they are referenced",
+      matchPackageNames: [
+        "/app-template/",
+        "/kube-prometheus-stack/",
+        "/fluxcd/",
+        "/siderolabs/",
+        "/cloudnative-pg/",
+        "/rook/",
+      ],
+      automerge: false,
+      addLabels: ["impact/high"],
+    },
+    {
+      // AWS applies on merge (terraform-apply.yaml); every bump needs a plan.
+      description: "Terraform: always reviewed",
+      matchManagers: ["terraform"],
+      automerge: false,
+      addLabels: ["impact/high"],
+    },
+    {
+      description: "Majors: always reviewed",
+      matchUpdateTypes: ["major"],
+      automerge: false,
+      addLabels: ["impact/high"],
+    },
+    {
+      // Their "minor" is often a monthly release with on-disk format changes
+      // (ClickHouse 24.3 -> 24.12) or a breaking-changes release (Home
+      // Assistant 2026.10 -> 2026.11), and a bad one loses data or the house,
+      // not just uptime.
+      description: "Databases, stateful stores, calendar-versioned apps: minors reviewed",
+      matchPackageNames: [
+        "/clickhouse/",
+        "/postgres/",
+        "/couchdb/",
+        "/mariadb/",
+        "/mysql/",
+        "/mongo/",
+        "/valkey/",
+        "/redis/",
+        "/mosquitto/",
+        "/vaultwarden/",
+        "/home-assistant/",
+      ],
+      matchUpdateTypes: ["minor"],
+      automerge: false,
+      addLabels: ["impact/high"],
+    },
+    {
+      description: "0.x minors: always reviewed",
+      matchUpdateTypes: ["minor"],
+      matchCurrentVersion: "/^v?0\\./",
+      automerge: false,
+      addLabels: ["impact/high"],
+    },
+  ],
 }

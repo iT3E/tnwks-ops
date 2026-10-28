@@ -1,14 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended",
+    "config:best-practices",
     "docker:enableMajor",
     ":disableRateLimiting",
     ":dependencyDashboard",
     ":semanticCommits",
     ":enablePreCommit",
-    ":automergeDigest",
-    ":automergeBranch",
     "github>iT3E/tnwks-ops//.github/renovate/autoMerge.json5",
     "github>iT3E/tnwks-ops//.github/renovate/commitMessage.json5",
     "github>iT3E/tnwks-ops//.github/renovate/groups.json5",
@@ -16,6 +14,18 @@
     "github>iT3E/tnwks-ops//.github/renovate/semanticCommits.json5",
     "helpers:pinGitHubActionDigests"
   ],
+  // best-practices also pins every image to a digest and refreshes lock files
+  // weekly. Pinning would rewrite every HelmRelease in one PR and add a digest
+  // PR per rebuild; lock-file refreshes are real Terraform provider upgrades
+  // (AWS applies on merge). Both stay off.
+  "ignorePresets": ["docker:pinDigests", ":maintainLockFilesWeekly"],
+  // Automerge through a PR so .github/workflows/kubernetes.yaml runs, and only
+  // when every status check is green. Renovate merges it itself
+  // (platformAutomerge off), squash per the main ruleset.
+  "automergeType": "pr",
+  "platformAutomerge": false,
+  "automergeStrategy": "squash",
+  "ignoreTests": false,
   "dependencyDashboard": true,
   "dependencyDashboardTitle": "Renovate Dashboard 🤖",
   "suppressNotifications": ["prIgnoreNotification"],
@@ -60,7 +70,8 @@
       "description": "Process generic # renovate: datasource=… depName=… version comments",
       "managerFilePatterns": [
         "/ansible/.+\\.ya?ml(\\.j2)?$/",
-        "/kubernetes/.+\\.ya?ml$/"
+        "/kubernetes/.+\\.ya?ml$/",
+        "/\\.github/workflows/.+\\.ya?ml$/"
       ],
       "matchStrings": [
         "datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( registryUrl=(?<registryUrl>\\S+))?\\n.*?[\"']?(?<currentValue>[^\"'\\s]+)[\"']?\\n"

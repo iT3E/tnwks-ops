@@ -5,6 +5,9 @@
   pod, instance, ...), plus runbook and graph links, so a grouped
   "FIRING:2" no longer shows two identical lines.
 
+  Flux events (flux-system/addons/alerts) carry their error text in the
+  `message` annotation, so that is the last fallback for the alert line.
+
   Rendered with: amtool template render --template.glob=telegram.tmpl \
     --template.text='{{ template "telegram.message" . }}'
 */}}
@@ -15,7 +18,7 @@
 <i>{{ . }}</i>
 {{- end }}
 {{ range $i, $a := .Alerts }}{{ if lt $i 8 }}
-• {{ with $a.Annotations.description }}{{ . }}{{ else }}{{ with $a.Annotations.summary }}{{ . }}{{ end }}{{ end }}
+• {{ with $a.Annotations.description }}{{ . }}{{ else }}{{ with $a.Annotations.summary }}{{ . }}{{ else }}{{ with $a.Annotations.message }}{{ . }}{{ end }}{{ end }}{{ end }}
 {{ template "telegram.labels" $a }}
 {{- if $a.Annotations.runbook_url }} <a href="{{ $a.Annotations.runbook_url }}">runbook</a>{{ end }}{{ if $a.GeneratorURL }} <a href="{{ $a.GeneratorURL }}">graph</a>{{ end }}
 {{ end }}{{ end -}}

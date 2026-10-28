@@ -1,0 +1,46 @@
+---
+# Flux error events -> Alertmanager -> War Room (Telegram). This is the
+# safety net for Renovate automerge: a merged bump whose HelmRelease or
+# Kustomization fails to reconcile pages instead of failing quietly.
+# Alertmanager names each alert Flux<Kind><Reason> (for example
+# FluxHelmReleaseUpgradeFailed) and puts the error text in the `message`
+# annotation, which telegram.tmpl prints.
+apiVersion: notification.toolkit.fluxcd.io/v1beta3
+kind: Provider
+metadata:
+  name: alertmanager
+  namespace: flux-system
+spec:
+  type: alertmanager
+  address: http://alertmanager.monitoring.svc.cluster.local:9093/api/v2/alerts/
+---
+apiVersion: notification.toolkit.fluxcd.io/v1beta3
+kind: Alert
+metadata:
+  name: alertmanager
+  namespace: flux-system
+spec:
+  providerRef:
+    name: alertmanager
+  eventSeverity: error
+  eventSources:
+    - kind: GitRepository
+      name: "*"
+    - kind: HelmRepository
+      name: "*"
+    - kind: OCIRepository
+      name: "*"
+    - kind: HelmChart
+      name: "*"
+    - kind: Kustomization
+      name: "*"
+    - kind: HelmRelease
+      name: "*"
+  # Transient source fetch errors retry on their own; don't page for them.
+  exclusionList:
+    - "error.*lookup.*github"
+    - "dial.*tcp.*timeout"
+    - "dial.*tcp.*unreachable"
+    - "waiting.*socket"
+    - "context deadline exceeded"
+    - "TLS handshake timeout"
