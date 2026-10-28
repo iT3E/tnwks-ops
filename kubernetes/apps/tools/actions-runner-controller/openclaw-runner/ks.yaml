@@ -1,0 +1,19 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: openclaw-hooks-runner
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/tools/actions-runner-controller/openclaw-runner/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  # Needs the scale-set controller (AutoscalingRunnerSet CRD + listener).
+  dependsOn:
+    - name: actions-runner-controller
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

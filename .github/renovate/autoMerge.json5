@@ -5,7 +5,8 @@
   //     green, including "Build Success" from .github/workflows/kubernetes.yaml
   //     (flate render + image exists). Flux error events page the War Room if
   //     a merged bump then fails to reconcile (flux-system/addons/alerts).
-  //   * impact/high: never automerged. Ori is woken only for these.
+  //   * impact/high: never automerged. renovate-review.yaml hands these to
+  //     Ori's reviewer agent (docs/operations/renovate.md).
   // Rules are evaluated in order and later rules win, so the impact/high
   // block at the bottom overrides any automerge rule above it.
   packageRules: [

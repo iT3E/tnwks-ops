@@ -40,6 +40,7 @@ Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md)
 | [`operations/disaster-recovery.md`](operations/disaster-recovery.md) | Rebuilding from the repo |
 | [`operations/sops.md`](operations/sops.md) | Secrets: recipients, editing, re-keying |
 | [`operations/renew-kubeconfig-cert.md`](operations/renew-kubeconfig-cert.md) | Renewing the kubeconfig client certificate |
+| [`operations/renovate.md`](operations/renovate.md) | Renovate tiers, and how impact/high PRs reach Ori's reviewer agent |
 
 ## Apps
 
