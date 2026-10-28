@@ -25,7 +25,7 @@ module "kms_sops" {
           identifiers = ["*"]
         }
       ]
-      conditions = [
+      condition = [
         {
           test     = "StringLike"
           variable = "aws:PrincipalArn"
