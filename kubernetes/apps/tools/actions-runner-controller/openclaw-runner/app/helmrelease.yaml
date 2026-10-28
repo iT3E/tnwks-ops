@@ -1,0 +1,70 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2beta2.json
+# Runner for .github/workflows/renovate-review.yaml, `runs-on: openclaw-hooks`.
+# Its one job is a curl to the OpenClaw gateway on the WSL host (reached from
+# the pod network at the docker bridge gateway, 10.5.0.1), which then waits
+# for Ori's reviewer agent to finish. See docs/operations/renovate.md.
+#
+# One runner at a time is the review queue: GitHub holds the next job until
+# this one finishes, so reviews never overlap. It has no secrets of its own;
+# the hook token comes from the workflow's `openclaw-hooks` environment.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: openclaw-hooks
+  namespace: tools
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: gha-runner-scale-set
+      version: 0.14.2
+      sourceRef:
+        kind: HelmRepository
+        name: actions-runner-controller
+        namespace: flux-system
+  maxHistory: 2
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  dependsOn:
+    - name: gha-runner-scale-set-controller
+  values:
+    githubConfigUrl: "https://github.com/iT3E/tnwks-ops"
+    runnerScaleSetName: openclaw-hooks
+    # Same GitHub App as sites-builder (one installation, both repos).
+    githubConfigSecret: sites-runner-github-app
+    minRunners: 0
+    maxRunners: 1
+    controllerServiceAccount:
+      namespace: tools
+      name: gha-runner-scale-set-controller-gha-rs-controller
+    template:
+      spec:
+        securityContext:
+          # The image's USER is the name `runner`; runAsNonRoot needs the uid.
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          seccompProfile:
+            type: RuntimeDefault
+        containers:
+          - name: runner
+            image: ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232
+            command: ["/home/runner/run.sh"]
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
+            resources:
+              requests:
+                cpu: 10m
+                memory: 128Mi
+              limits:
+                memory: 512Mi

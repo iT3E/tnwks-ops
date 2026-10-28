@@ -50,6 +50,8 @@ resources:
   - ../../../apps/tools/actions-runner-controller/runner/ks.yaml
   # Network-device Terraform runners for this repo (docs/network/ci.md).
   - ../../../apps/tools/actions-runner-controller/ops-runner/ks.yaml
+  # Hands impact/high Renovate PRs to Ori (docs/operations/renovate.md).
+  - ../../../apps/tools/actions-runner-controller/openclaw-runner/ks.yaml
 
   # Trimmed namespaces — per-namespace overlays sit alongside this file
   - ./home-automation

@@ -45,6 +45,10 @@
 # Renovate: never automerged, wakes Ori (.github/renovate/autoMerge.json5)
 - name: impact/high
   color: "B60205"
+# Ori left an impact/high PR open; renovate-review.yaml skips it until a new
+# push or the label is removed (docs/operations/renovate.md)
+- name: ori/blocked
+  color: "5319E7"
 # Uncategorized
 - name: bug
   color: "ee0701"

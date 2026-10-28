@@ -1,0 +1,209 @@
+---
+name: "Renovate review"
+
+# Hands each impact/high Renovate PR to Ori's reviewer agent, which merges it
+# or leaves it open with a comment and the ori/blocked label. Everything that
+# decides *whether* a PR gets reviewed lives here, in the open; the agent only
+# does the review. See docs/operations/renovate.md.
+#
+#   select  (GitHub-hosted)  which PRs are eligible right now
+#   review  (openclaw-hooks) POST /hooks/agent on the WSL gateway, wait for
+#                            the run to finish, fail if it didn't end ok
+#
+# A PR is eligible when it is open, opened by Renovate from this repo, labeled
+# impact/high, not labeled ori/blocked, and Build Success passed on its head.
+# It is picked up the moment the last of those becomes true:
+#   - the impact/high label lands               (pull_request_target: labeled)
+#   - Build Success finishes                    (workflow_run: Kubernetes)
+#   - Ivan removes ori/blocked                  (pull_request_target: unlabeled)
+# A new push clears ori/blocked, so each Renovate version gets its own review.
+# The daily run re-sends anything still eligible (a review that failed, or
+# one missed while the gateway was down).
+#
+# No job here checks out or runs PR code, so pull_request_target and
+# workflow_run are safe: they run this file from main.
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] no PR code is checked out or run
+    types: [labeled, unlabeled, synchronize, reopened]
+  workflow_run: # zizmor: ignore[dangerous-triggers] reads only the run's PR number
+    workflows: ["Kubernetes"]
+    types: [completed]
+  schedule:
+    - cron: "0 16 * * *"
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "PR number (empty: every eligible PR)"
+        required: false
+        type: string
+
+permissions: {}
+
+env:
+  # OpenClaw gateway on the WSL host, as seen from the cluster's pod network
+  # (the Talos docker bridge gateway).
+  OPENCLAW_URL: "http://10.5.0.1:18789"
+
+jobs:
+  select:
+    name: "Select"
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'pull_request_target' &&
+        ((github.event.action == 'labeled' && github.event.label.name == 'impact/high') ||
+         (github.event.action == 'unlabeled' && github.event.label.name == 'ori/blocked') ||
+         github.event.action == 'synchronize' || github.event.action == 'reopened')) ||
+      (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.conclusion == 'success') ||
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    permissions:
+      checks: read
+      pull-requests: write
+    outputs:
+      prs: ${{ steps.select.outputs.prs }}
+    steps:
+      - name: Clear ori/blocked on a new push
+        if: >-
+          github.event_name == 'pull_request_target' &&
+          github.event.action == 'synchronize' &&
+          contains(github.event.pull_request.labels.*.name, 'ori/blocked')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh api -X DELETE "repos/${REPO}/issues/${PR}/labels/ori%2Fblocked" --silent
+
+      - name: Select eligible PRs
+        id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ONE_PR: >-
+            ${{ github.event.pull_request.number ||
+                github.event.workflow_run.pull_requests[0].number ||
+                inputs.pr }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${ONE_PR// /}" ]]; then
+            candidates="${ONE_PR// /}"
+          else
+            candidates="$(gh pr list --repo "$REPO" --state open --label impact/high \
+              --limit 100 --json number --jq '.[].number')"
+          fi
+          prs='[]'
+          for n in $candidates; do
+            [[ "$n" =~ ^[0-9]+$ ]] || { echo "::error::not a PR number: $n"; exit 1; }
+            pr="$(gh api "repos/${REPO}/pulls/${n}")"
+            state="$(jq -r .state <<<"$pr")"
+            author="$(jq -r .user.login <<<"$pr")"
+            head_repo="$(jq -r .head.repo.full_name <<<"$pr")"
+            sha="$(jq -r .head.sha <<<"$pr")"
+            labels="$(jq -c '[.labels[].name]' <<<"$pr")"
+            why=""
+            if [[ "$state" != open ]]; then why="state is $state"
+            elif [[ "$author" != "renovate[bot]" ]]; then why="author is $author"
+            elif [[ "$head_repo" != "$REPO" ]]; then why="head repo is $head_repo"
+            elif ! jq -e 'index("impact/high")' <<<"$labels" >/dev/null; then why="no impact/high label"
+            elif jq -e 'index("ori/blocked")' <<<"$labels" >/dev/null; then why="labeled ori/blocked"
+            else
+              build="$(gh api "repos/${REPO}/commits/${sha}/check-runs?check_name=Build%20Success" \
+                --jq '[.check_runs[] | .conclusion // .status] | first // "missing"')"
+              [[ "$build" == success ]] || why="Build Success is $build on ${sha:0:7}"
+            fi
+            if [[ -n "$why" ]]; then
+              echo "#${n}: skipped, ${why}"
+              continue
+            fi
+            echo "#${n}: eligible at ${sha:0:7}"
+            prs="$(jq -c --argjson n "$n" --arg sha "$sha" '. + [{pr: $n, sha: $sha}]' <<<"$prs")"
+          done
+          echo "prs=${prs}" >>"$GITHUB_OUTPUT"
+
+  review:
+    name: "Review #${{ matrix.pr }}"
+    needs: select
+    if: needs.select.outputs.prs != '[]' && needs.select.outputs.prs != ''
+    runs-on: openclaw-hooks
+    # Holds the hook token (secret) and the Telegram destination (variables).
+    # Deployments are limited to main, so a PR branch's copy of this file
+    # can't read them.
+    environment: openclaw-hooks
+    permissions:
+      pull-requests: read
+    # Two events for the same PR (label + CI finishing) queue one review, not
+    # two: a newer pending job replaces an older one for the same PR.
+    concurrency:
+      group: renovate-review-${{ matrix.pr }}
+      cancel-in-progress: false
+    # The agent's own turn timeout is 3600s; leave room for admission.
+    timeout-minutes: 70
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include: ${{ fromJSON(needs.select.outputs.prs) }}
+    steps:
+      # The job may have queued behind another review. Skip if the PR moved on
+      # in the meantime (merged, closed, new push, or blocked).
+      - name: Still eligible
+        id: still
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ matrix.pr }}
+          SHA: ${{ matrix.sha }}
+        run: |
+          set -euo pipefail
+          pr="$(curl -sS --fail-with-body -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${REPO}/pulls/${PR}")"
+          if jq -e --arg sha "$SHA" '.state == "open" and .head.sha == $sha and
+              ([.labels[].name] | index("ori/blocked") | not)' <<<"$pr" >/dev/null; then
+            echo "go=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "#${PR}: no longer eligible at ${SHA:0:7}, skipping"
+            echo "go=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Hand the PR to the reviewer agent
+        if: steps.still.outputs.go == 'true'
+        env:
+          OPENCLAW_HOOK_TOKEN: ${{ secrets.OPENCLAW_HOOK_TOKEN }}
+          NOTIFY_CHANNEL: ${{ vars.OPENCLAW_NOTIFY_CHANNEL }}
+          NOTIFY_ACCOUNT: ${{ vars.OPENCLAW_NOTIFY_ACCOUNT }}
+          NOTIFY_TO: ${{ vars.OPENCLAW_NOTIFY_TO }}
+          REPO: ${{ github.repository }}
+          PR: ${{ matrix.pr }}
+          SHA: ${{ matrix.sha }}
+        run: |
+          set -euo pipefail
+          # The message is data only. The agent's instructions live in its
+          # workspace, and it re-checks every gate above before acting.
+          body="$(jq -n \
+            --arg repo "$REPO" --argjson pr "$PR" --arg sha "$SHA" \
+            --arg channel "$NOTIFY_CHANNEL" --arg account "$NOTIFY_ACCOUNT" --arg to "$NOTIFY_TO" \
+            '{
+              message: ({repo: $repo, pr: $pr, head_sha: $sha} | tojson),
+              name: "renovate-review #\($pr)",
+              agentId: "renovate",
+              channel: $channel, accountId: $account, to: $to,
+              waitForCompletion: true,
+              timeoutSeconds: 3600
+            }')"
+          # Same PR and sha = same key, so a re-run replays the first run's
+          # result instead of starting a second review.
+          resp="$(curl -sS --fail-with-body --max-time 4000 \
+            -H "Authorization: Bearer ${OPENCLAW_HOOK_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -H "Idempotency-Key: renovate-review-${PR}-${SHA}" \
+            --data "$body" "${OPENCLAW_URL}/hooks/agent")"
+          jq . <<<"$resp"
+          status="$(jq -r '.completion.status // "missing"' <<<"$resp")"
+          delivered="$(jq -r '.completion.delivered // false' <<<"$resp")"
+          if [[ "$status" != ok ]]; then
+            echo "::error::#${PR}: review run ended with status ${status}"
+            exit 1
+          fi
+          if [[ "$delivered" != true ]]; then
+            echo "::warning::#${PR}: review finished but the Telegram summary was not delivered"
+          fi
