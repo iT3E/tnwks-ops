@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.22.1 - 2026-10-28
+
+### Fixed
+
+* Flux failure alerts cover HelmReleases in every app namespace (an Alert event source only matches one namespace); CI fails if a namespace with a HelmRelease is left out
+
 ## v1.22.0 - 2026-10-28
 
 ### Added
