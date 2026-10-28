@@ -1,3 +1,0 @@
-kind: Added
-body: 'Renovate review workflow: impact/high Renovate PRs go straight to Ori''s reviewer agent through an OpenClaw hook on a new openclaw-hooks runner, with ori/blocked tracking what was left open'
-time: 2026-10-28T13:17:01.000000-07:00

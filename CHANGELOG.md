@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.23.0 - 2026-10-28
+
+### Added
+
+* Renovate review workflow: impact/high Renovate PRs go straight to Ori's reviewer agent through an OpenClaw hook on a new openclaw-hooks runner, with ori/blocked tracking what was left open
+
 ## v1.22.1 - 2026-10-28
 
 ### Fixed
