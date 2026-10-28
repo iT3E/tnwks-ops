@@ -32,9 +32,59 @@ spec:
       name: "*"
     - kind: HelmChart
       name: "*"
+    # Kustomizations and sources all live in flux-system.
     - kind: Kustomization
       name: "*"
+    # An event source only matches its own namespace ("*" works for names,
+    # not namespaces), so HelmReleases are listed per namespace. CI fails if a
+    # kubernetes/apps/<namespace> with a HelmRelease is missing here.
     - kind: HelmRelease
+      namespace: ai
+      name: "*"
+    - kind: HelmRelease
+      namespace: auth
+      name: "*"
+    - kind: HelmRelease
+      namespace: cache
+      name: "*"
+    - kind: HelmRelease
+      namespace: cert-manager
+      name: "*"
+    - kind: HelmRelease
+      namespace: databases
+      name: "*"
+    - kind: HelmRelease
+      namespace: default
+      name: "*"
+    - kind: HelmRelease
+      namespace: flux-system
+      name: "*"
+    - kind: HelmRelease
+      namespace: home-automation
+      name: "*"
+    - kind: HelmRelease
+      namespace: kube-system
+      name: "*"
+    - kind: HelmRelease
+      namespace: media
+      name: "*"
+    - kind: HelmRelease
+      namespace: monitoring
+      name: "*"
+    - kind: HelmRelease
+      namespace: networking
+      name: "*"
+    - kind: HelmRelease
+      namespace: production
+      name: "*"
+    - kind: HelmRelease
+      namespace: selfhosted
+      name: "*"
+    - kind: HelmRelease
+      namespace: storage
+      name: "*"
+    - kind: HelmRelease
+      namespace: tools
       name: "*"
   # Transient source fetch errors retry on their own; don't page for them.
   exclusionList:
