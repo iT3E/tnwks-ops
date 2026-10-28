@@ -54,6 +54,24 @@ jobs:
       - name: Render all Kustomizations and HelmReleases
         run: flate test all --no-progress -p kubernetes
 
+      # A Flux Alert event source only matches one namespace, so every
+      # namespace with a HelmRelease needs its own entry, or its failures
+      # never page the War Room.
+      - name: Every HelmRelease namespace pages on failure
+        run: |
+          set -euo pipefail
+          alert=kubernetes/apps/flux-system/addons/alerts/alertmanager.yaml
+          missing=""
+          for dir in kubernetes/apps/*/; do
+            ns="$(basename "${dir}")"
+            grep -rlq '^kind: HelmRelease' "${dir}" || continue
+            grep -qE "^\s+namespace: ${ns}$" "${alert}" || missing="${missing} ${ns}"
+          done
+          if [ -n "${missing}" ]; then
+            echo "::error file=${alert}::add HelmRelease event sources for:${missing}"
+            exit 1
+          fi
+
       - name: Images added by this PR
         id: images
         if: github.event_name == 'pull_request'
