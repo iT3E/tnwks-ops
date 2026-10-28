@@ -1,0 +1,117 @@
+---
+name: "Kubernetes"
+
+# Renders every Flux Kustomization and HelmRelease under kubernetes/ with flate
+# (charts are fetched and templated, values are schema-checked), and checks
+# that every container image a PR adds actually exists in its registry.
+# "Build Success" is the single status Renovate's automerge waits on
+# (.github/renovate/autoMerge.json5), so a dependency bump that doesn't render
+# or points at a missing tag never merges on its own.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # renovate: datasource=github-releases depName=home-operations/flate
+  FLATE_VERSION: "0.6.5"
+
+jobs:
+  flate:
+    name: "Render"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      images: ${{ steps.images.outputs.images }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install flate
+        run: |
+          set -euo pipefail
+          base="https://github.com/home-operations/flate/releases/download/v${FLATE_VERSION}"
+          tarball="flate_${FLATE_VERSION}_linux_amd64.tar.gz"
+          curl -fsSLO "${base}/${tarball}"
+          curl -fsSL "${base}/${tarball}.sha256" | awk '{print $1"  '"${tarball}"'"}' | sha256sum -c -
+          tar -xzf "${tarball}" flate
+          sudo install -m 0755 flate /usr/local/bin/flate
+
+      # -p kubernetes (not a cluster dir): the cluster entrypoints pull the
+      # repo through the flux-system GitRepository, which flate would fetch
+      # from GitHub main instead of this PR's tree.
+      - name: Render all Kustomizations and HelmReleases
+        run: flate test all --no-progress -p kubernetes
+
+      - name: Images added by this PR
+        id: images
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          images="$(flate diff images --no-progress --base "origin/${BASE_REF}" -p kubernetes -o json)"
+          echo "${images}"
+          {
+            echo "images<<EOF"
+            echo "${images}" | jq -c .
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+  images:
+    name: "Image exists"
+    needs: flate
+    if: github.event_name == 'pull_request' && needs.flate.outputs.images != '[]' && needs.flate.outputs.images != ''
+    runs-on: ubuntu-latest
+    permissions: {}
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        image: ${{ fromJSON(needs.flate.outputs.images) }}
+    steps:
+      - name: Inspect manifest
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          ref="${IMAGE}"
+          # name:tag@sha256:... -> name@sha256:... (the digest is what gets pulled)
+          if [[ "${ref}" == *@sha256:* ]]; then
+            name="${ref%%@*}"; digest="${ref#*@}"
+            [[ "${name##*/}" == *:* ]] && name="${name%:*}"
+            ref="${name}@${digest}"
+          fi
+          for attempt in 1 2 3; do
+            if skopeo inspect --raw "docker://${ref}" > /dev/null; then
+              echo "ok: ${ref}"; exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          echo "::error::image not found or not pullable: ${IMAGE}"
+          exit 1
+
+  status:
+    name: "Build Success"
+    if: ${{ !cancelled() }}
+    needs: [flate, images]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Any job failed?
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "${RESULTS}"
+          if echo "${RESULTS}" | grep -qE '"(failure|cancelled)"'; then exit 1; fi
