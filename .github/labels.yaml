@@ -12,7 +12,8 @@
   color: "72ccf3"
   description: >-
     Changes made in the kubernetes directory
-- name: area/template
+# Name must match .github/labeler.yaml
+- name: area/templates
   color: "72ccf3"
   description: >-
     Changes made in the tmpl directory
@@ -56,6 +57,8 @@
   color: "ee0701"
 - name: docs
   color: "F4D1B7"
+  # Renames GitHub's default label, keeping it on the old issues that use it
+  aliases: ["documentation"]
 - name: enhancement
   color: "84b6eb"
 - name: broken-links
