@@ -48,7 +48,7 @@ spec:
           app:
             image:
               repository: docker.io/library/python
-              tag: 3.13-alpine@sha256:8bcfa47b04b853a17aaf909362b847b2112fd6ec4105ea553ef9a43bafbb5916
+              tag: 3.15-alpine@sha256:0aa144e9ec2ae8fd80dfd94070ef3e432a0df17b6e5e0091dc05323974ce9913
             command: ["python3", "-u", "/app/flow_collector.py"]
             env:
               FLOW_PORT: "2055"
