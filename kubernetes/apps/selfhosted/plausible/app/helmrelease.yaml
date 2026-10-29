@@ -109,7 +109,7 @@ spec:
           clickhouse:
             image:
               repository: clickhouse/clickhouse-server
-              tag: 24.3-alpine
+              tag: 24.12-alpine
             # The clickhouse-server entrypoint starts as root and chowns
             # /var/lib/clickhouse to the clickhouse user itself, so no fsGroup
             # or init chown is needed (cf. the WSL emptyDir fsGroup caveat).
