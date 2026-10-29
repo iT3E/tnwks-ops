@@ -43,7 +43,7 @@ spec:
           app:
             image:
               repository: nico640/docker-unms
-              tag: 3.0.159
+              tag: 3.1.69
             env:
               TZ: ${TIMEZONE}
               PUID: 911
