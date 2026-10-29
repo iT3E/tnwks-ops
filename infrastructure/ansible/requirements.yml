@@ -22,4 +22,4 @@ roles:
     src: https://github.com/geerlingguy/ansible-role-ntp.git
     version: 4.0.1
   - name: githubixx.cilium_cli
-    version: 3.1.0+0.19.2
+    version: 4.0.0+0.20.0
