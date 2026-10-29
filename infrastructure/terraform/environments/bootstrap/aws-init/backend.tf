@@ -12,5 +12,5 @@ terraform {
       name = "tnwks-ops-aws-init"
     }
   }
-  required_version = "~> 1.15.0"
+  required_version = "~> 1.17.0"
 }
