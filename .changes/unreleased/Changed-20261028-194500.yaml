@@ -1,3 +1,0 @@
-kind: Changed
-body: 'Renovate: updates that only touch MS-01 manifests or Talos config (Cilium, Rook Ceph, Thanos, Vector agent, UISP, node-feature-discovery, CNPG backups) automerge behind Build Success while MS-01 is not live, instead of going to review'
-time: 2026-10-28T19:45:00-07:00
