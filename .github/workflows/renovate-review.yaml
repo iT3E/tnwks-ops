@@ -1,22 +1,29 @@
 ---
 name: "Renovate review"
 
-# Hands each impact/high Renovate PR to Ori's reviewer agent, which merges it
-# or leaves it open with a comment and the ori/blocked label. Everything that
-# decides *whether* a PR gets reviewed lives here, in the open; the agent only
-# does the review. See docs/operations/renovate.md.
+# Hands each impact/high Renovate PR to Ori's reviewer agent. The agent does
+# whatever migration the bump needs and merges it, or leaves it open with a
+# comment and the ori/blocked label. impact/critical PRs get the same review,
+# but the agent stops at ori/awaiting-approval and merges only after Ivan adds
+# ivan/approved. Everything that decides *whether* a PR gets reviewed lives
+# here, in the open; the agent only does the review. See
+# docs/operations/renovate.md.
 #
 #   select  (GitHub-hosted)  which PRs are eligible right now
 #   review  (openclaw-hooks) POST /hooks/agent on the WSL gateway, wait for
 #                            the run to finish, fail if it didn't end ok
 #
 # A PR is eligible when it is open, opened by Renovate from this repo, labeled
-# impact/high, not labeled ori/blocked, and Build Success passed on its head.
+# impact/high, not labeled ori/blocked, not waiting on Ivan (ori/awaiting-
+# approval without ivan/approved), and Build Success passed on its head.
 # It is picked up the moment the last of those becomes true:
 #   - the impact/high label lands               (pull_request_target: labeled)
 #   - Build Success finishes                    (workflow_run: Kubernetes)
 #   - Ivan removes ori/blocked                  (pull_request_target: unlabeled)
-# A new push clears ori/blocked, so each Renovate version gets its own review.
+#   - Ivan adds ivan/approved                   (pull_request_target: labeled)
+# A new push (Renovate's, or a migration commit from the agent) clears
+# ori/blocked, ori/awaiting-approval and ivan/approved, so each new head gets
+# its own review and an approval never carries over to different code.
 # The daily run re-sends anything still eligible (a review that failed, or
 # one missed while the gateway was down).
 #
@@ -50,7 +57,8 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       (github.event_name == 'pull_request_target' &&
-        ((github.event.action == 'labeled' && github.event.label.name == 'impact/high') ||
+        ((github.event.action == 'labeled' &&
+           (github.event.label.name == 'impact/high' || github.event.label.name == 'ivan/approved')) ||
          (github.event.action == 'unlabeled' && github.event.label.name == 'ori/blocked') ||
          github.event.action == 'synchronize' || github.event.action == 'reopened')) ||
       (github.event_name == 'workflow_run' &&
@@ -63,16 +71,23 @@ jobs:
     outputs:
       prs: ${{ steps.select.outputs.prs }}
     steps:
-      - name: Clear ori/blocked on a new push
+      - name: Clear review state on a new push
         if: >-
           github.event_name == 'pull_request_target' &&
-          github.event.action == 'synchronize' &&
-          contains(github.event.pull_request.labels.*.name, 'ori/blocked')
+          github.event.action == 'synchronize'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
-        run: gh api -X DELETE "repos/${REPO}/issues/${PR}/labels/ori%2Fblocked" --silent
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          set -euo pipefail
+          for l in ori/blocked ori/awaiting-approval ivan/approved; do
+            if jq -e --arg l "$l" 'index($l)' <<<"$LABELS" >/dev/null; then
+              gh api -X DELETE "repos/${REPO}/issues/${PR}/labels/${l/\//%2F}" --silent
+              echo "#${PR}: cleared ${l}"
+            fi
+          done
 
       - name: Select eligible PRs
         id: select
@@ -106,6 +121,8 @@ jobs:
             elif [[ "$head_repo" != "$REPO" ]]; then why="head repo is $head_repo"
             elif ! jq -e 'index("impact/high")' <<<"$labels" >/dev/null; then why="no impact/high label"
             elif jq -e 'index("ori/blocked")' <<<"$labels" >/dev/null; then why="labeled ori/blocked"
+            elif jq -e 'index("ori/awaiting-approval") and (index("ivan/approved") | not)' \
+                <<<"$labels" >/dev/null; then why="waiting for ivan/approved"
             else
               build="$(gh api "repos/${REPO}/commits/${sha}/check-runs?check_name=Build%20Success" \
                 --jq '[.check_runs[] | .conclusion // .status] | first // "missing"')"
@@ -145,7 +162,8 @@ jobs:
         include: ${{ fromJSON(needs.select.outputs.prs) }}
     steps:
       # The job may have queued behind another review. Skip if the PR moved on
-      # in the meantime (merged, closed, new push, or blocked).
+      # in the meantime (merged, closed, new push, blocked, or now waiting on
+      # Ivan).
       - name: Still eligible
         id: still
         env:
@@ -158,7 +176,9 @@ jobs:
           pr="$(curl -sS --fail-with-body -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${REPO}/pulls/${PR}")"
           if jq -e --arg sha "$SHA" '.state == "open" and .head.sha == $sha and
-              ([.labels[].name] | index("ori/blocked") | not)' <<<"$pr" >/dev/null; then
+              ([.labels[].name] | (index("ori/blocked") | not) and
+                (index("ori/awaiting-approval") == null or index("ivan/approved") != null))' \
+              <<<"$pr" >/dev/null; then
             echo "go=true" >>"$GITHUB_OUTPUT"
           else
             echo "#${PR}: no longer eligible at ${SHA:0:7}, skipping"
