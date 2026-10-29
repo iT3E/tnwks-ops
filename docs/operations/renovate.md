@@ -30,6 +30,14 @@ Every Renovate PR lands in one of three tiers, decided by
   migration with no downgrade, a CRD or API removal, data that gets wiped, a
   Terraform plan that changes real resources). Only Ivan removes it.
 
+**MS-01-only paths automerge for now.** MS-01 isn't built, so updates that
+touch only what `kubernetes/clusters/ms-01` deploys and WSL doesn't (Cilium,
+Rook Ceph, Thanos, the Vector agent, UISP, node-feature-discovery, the CNPG
+backup bits, `talos/ms-01`, `kubernetes/clusters/ms-01`) automerge behind
+Build Success at any update type, and never get an `impact/*` label. The
+path regex lives in the last rule of `autoMerge.json5` and is negated in
+every review rule. When MS-01 goes live, delete that rule and the negations.
+
 The agent pushes and merges as Ivan's GitHub account, so `ivan/approved` is a
 rule the workflow and the agent follow, not something GitHub enforces.
 Moving Ori onto its own GitHub App identity would make it enforceable with a
