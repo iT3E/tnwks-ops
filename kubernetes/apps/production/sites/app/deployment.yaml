@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: nginx
-          image: docker.io/library/nginx:1.27-alpine
+          image: docker.io/library/nginx:1.31-alpine
           ports:
             - name: http
               containerPort: 80
