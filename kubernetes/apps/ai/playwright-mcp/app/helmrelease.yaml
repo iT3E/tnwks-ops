@@ -33,7 +33,7 @@ spec:
           app:
             image:
               repository: docker.io/acuvity/mcp-server-playwright
-              tag: 0.0.56
+              tag: 1.0.0
             env:
               # Run in SSE transport mode for network-accessible MCP
               - name: TRANSPORT
