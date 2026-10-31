@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.35.0 - 2026-10-31
+
+### Changed
+
+* Kitchen display: members use neutral keys (adult1, adult2, kid1, kid2) in entity IDs, and display names come from the home-assistant Secret, so no family names are in the repo. Stars carry over through the counters' initial values
+
 ## v1.34.0 - 2026-10-31
 
 ### Changed
