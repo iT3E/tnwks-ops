@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.30.3 - 2026-10-31
+
+### Fixed
+
+* Flux manages its own install on WSL: kubernetes/clusters/wsl includes ./flux-system, so a merged Flux upgrade (gotk-components.yaml) rolls out on reconcile instead of needing a manual apply
+
 ## v1.30.2 - 2026-10-31
 
 ### Fixed

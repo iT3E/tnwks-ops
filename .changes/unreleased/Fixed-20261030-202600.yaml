@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Flux manages its own install on WSL: kubernetes/clusters/wsl includes ./flux-system, so a merged Flux upgrade (gotk-components.yaml) rolls out on reconcile instead of needing a manual apply'
-time: 2026-10-30T20:26:00-07:00
