@@ -13,7 +13,7 @@ metadata:
 spec:
   talos:
     # renovate: datasource=docker depName=ghcr.io/siderolabs/talos
-    version: v1.13.2
+    version: v1.13.12
   healthChecks:
     - apiVersion: v1
       kind: Node
