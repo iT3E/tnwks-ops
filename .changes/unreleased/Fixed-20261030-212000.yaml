@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'k8s-gateway moves to the k8s-gateway project chart 4.0.1 on Codeberg (image codeberg.org/k8s-gateway/k8s_gateway 1.9.2). The old quay.io/oriedge/k8s_gateway image is gone, so the pod only ran from worker-1''s image cache'
+time: 2026-10-30T21:20:00-07:00
