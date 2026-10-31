@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.30.0 - 2026-10-31
+
+### Changed
+
+* Flux Alert and Provider for the War Room move from notification.toolkit.fluxcd.io/v1beta3 to v1 (deprecated in Flux 2.10)
+
 ## v1.29.0 - 2026-10-31
 
 ### Changed
