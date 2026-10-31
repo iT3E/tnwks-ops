@@ -46,7 +46,7 @@
 # Renovate: never automerged, wakes Ori (.github/renovate/autoMerge.json5)
 - name: impact/high
   color: "B60205"
-# Renovate: a bad merge can't be undone by a revert. Ori prepares it, Ivan
+# Renovate: a bad merge can't be undone by a revert. Ori prepares it, the owner
 # approves it (.github/renovate/autoMerge.json5, docs/operations/renovate.md)
 - name: impact/critical
   color: "000000"
@@ -54,12 +54,12 @@
 # push or the label is removed (docs/operations/renovate.md)
 - name: ori/blocked
   color: "5319E7"
-# Ori prepared an impact/critical PR and is waiting for ivan/approved
+# Ori prepared an impact/critical PR and is waiting for owner/approved
 - name: ori/awaiting-approval
   color: "FBCA04"
-# Ivan approves the head commit Ori named in its "ready" comment. Cleared by
+# The owner approves the head commit Ori named in its "ready" comment. Cleared by
 # any new push, so an approval never carries over to different code.
-- name: ivan/approved
+- name: owner/approved
   color: "0E8A16"
 # Uncategorized
 - name: bug

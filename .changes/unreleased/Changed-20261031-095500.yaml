@@ -1,0 +1,3 @@
+kind: Changed
+body: 'Renovate approval label is now owner/approved (was named after a person); docs and the review workflow say "the owner". Drops a commented-out Frigate camera'
+time: 2026-10-31T09:55:00-07:00

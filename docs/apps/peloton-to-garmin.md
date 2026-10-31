@@ -72,8 +72,8 @@ source of the earlier `429 Too Many Requests`.
 
 Fixed in [#1344](https://github.com/iT3E/tnwks-ops/pull/1344). Consequence
 worth remembering: the `-mh` credentials have never actually been exercised
-end-to-end, so when the version upgrade happens, expect to validate Megan's
-Peloton *and* Garmin logins from scratch.
+end-to-end, so when the version upgrade happens, expect to validate the `-mh`
+account's Peloton *and* Garmin logins from scratch.
 
 ## Options when picking this back up
 
