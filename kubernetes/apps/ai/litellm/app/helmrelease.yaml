@@ -33,10 +33,13 @@ spec:
           app:
             image:
               repository: ghcr.io/berriai/litellm
-              # litellm's rolling stable tag — pinned semver `main-vX.Y.Z`
-              # tags exist but lag releases; `main-stable` is the documented
-              # production tag and is what upstream recommends for deployments.
-              tag: main-stable
+              # Pinned release + digest so Renovate can bump it. Upstream
+              # publishes plain `vX.Y.Z` release tags (plus -rc/-dev, the old
+              # `-stable` suffix ended at v1.83.14, and moving `main-*` tags);
+              # Renovate only follows the plain ones (.github/renovate). This is
+              # the image the old rolling `main-stable` tag had cached on the
+              # node, so pinning it changes nothing that runs.
+              tag: v1.86.2@sha256:cae1ac3492d6d0bea69c26f4485381624e073eb753f3534ae7703a4204a4ce6b
             args:
               - --config
               - /etc/litellm/config.yaml

@@ -43,6 +43,16 @@
       "description": "Open cloudflared updates ahead of everything else",
       "matchPackageNames": ["docker.io/cloudflare/cloudflared"],
       "prPriority": 10
+    },
+    {
+      // ghcr.io/berriai/litellm carries several tag schemes: plain vX.Y.Z
+      // releases, unprefixed X.Y.Z copies, vX.Y.Z-rc.N / -dev.N, the retired
+      // vX.Y.Z-stable(.patchN) line, and moving main-* tags. Follow only the
+      // plain releases.
+      "description": "LiteLLM: release tags only",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/berriai/litellm"],
+      "allowedVersions": "/^v\\d+\\.\\d+\\.\\d+$/"
     }
   ],
   "pre-commit": {
