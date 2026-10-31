@@ -73,6 +73,8 @@ jobs:
             -e FRIGATE_UI_URL=https://frigate.example.test \
             -e HASS_RECORDER_DB_URL=sqlite:////tmp/ci.db \
             -e HASS_LATITUDE=0 -e HASS_LONGITUDE=0 -e HASS_ELEVATION=0 \
+            -e KITCHEN_ADULT1_NAME=Adult1 -e KITCHEN_ADULT2_NAME=Adult2 \
+            -e KITCHEN_KID1_NAME=Kid1 -e KITCHEN_KID2_NAME=Kid2 \
             -v "$RUNNER_TEMP/config:/config" \
             --entrypoint python3 "$IMAGE" -m homeassistant --script check_config --config /config \
             2>&1 | sed 's/\x1b\[[0-9;]*m//g' | tee "$RUNNER_TEMP/check_config.log"

@@ -44,8 +44,8 @@ views:
           - type: custom:kitchen-stack-card
             columns: 2
             cards:
-              - { type: custom:kitchen-kid-card, member: raine }
-              - { type: custom:kitchen-kid-card, member: river }
+              - { type: custom:kitchen-kid-card, member: kid1 }
+              - { type: custom:kitchen-kid-card, member: kid2 }
           - type: custom:kitchen-stack-card
             columns: 2
             cards:
@@ -106,13 +106,13 @@ views:
             columns: 2
             grow: true
             cards:
-              - { type: custom:kitchen-routine-card, member: raine }
-              - { type: custom:kitchen-routine-card, member: river }
+              - { type: custom:kitchen-routine-card, member: kid1 }
+              - { type: custom:kitchen-routine-card, member: kid2 }
           - type: custom:kitchen-stack-card
             columns: 2
             cards:
-              - { type: custom:kitchen-adult-card, member: megan }
-              - { type: custom:kitchen-adult-card, member: ivan }
+              - { type: custom:kitchen-adult-card, member: adult2 }
+              - { type: custom:kitchen-adult-card, member: adult1 }
 
   - title: Lists
     path: lists

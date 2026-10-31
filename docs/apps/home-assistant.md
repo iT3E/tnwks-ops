@@ -220,6 +220,13 @@ and stars stay. A reward goal per kid is two helpers (`input_text` +
 `input_number`) you can set from the UI; the Routines view shows progress
 toward it.
 
+Members have neutral keys (`adult1`, `adult2`, `kid1`, `kid2`) in every
+entity ID and attribute, because the repo is public. Display names live in
+`secrets.sops.yaml` (`KITCHEN_<KEY>_NAME`) and become the friendly names of
+the `counter.stars_<key>` helpers through `!env_var`. The cards read a
+person's name from that counter and match calendar events on it, so a new
+person needs a key in `FAMILY` (kitchen-cards.js), a counter and an env var.
+
 kiosk-mode hides HA's header and sidebar on a device once the dashboard has
 been opened there with `?kiosk` (it remembers). Open it with `?clear_km_cache`
 to undo that.

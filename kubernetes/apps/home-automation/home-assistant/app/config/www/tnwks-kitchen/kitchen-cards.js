@@ -12,16 +12,32 @@
  * this file changes.
  */
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 
 // The family. Trackers drive the "home" dot; keywords put calendar events in
-// a person's column (an event naming nobody spans every column).
+// a person's column (an event naming nobody spans every column). Names aren't
+// in this file (the repo is public): a person's display name is the friendly
+// name of their stars counter, which HA reads from an env var
+// (packages/kitchen_routines.yaml), and syncFamily() picks it up from hass.
 const FAMILY = [
-  { key: "ivan", name: "Ivan", color: "#ef6f8a", tracker: "device_tracker.pixel_8_pro", keywords: ["ivan"] },
-  { key: "megan", name: "Megan", color: "#a98bf0", tracker: "device_tracker.pixel_9a", keywords: ["megan"] },
-  { key: "raine", name: "Raine", color: "#4fb3f0", kid: true, keywords: ["raine", "kids"] },
-  { key: "river", name: "River", color: "#f07a5f", kid: true, keywords: ["river", "kids"] },
+  { key: "adult1", color: "#ef6f8a", tracker: "device_tracker.pixel_8_pro" },
+  { key: "adult2", color: "#a98bf0", tracker: "device_tracker.pixel_9a" },
+  { key: "kid1", color: "#4fb3f0", kid: true },
+  { key: "kid2", color: "#f07a5f", kid: true },
 ];
+for (const m of FAMILY) {
+  m.name = m.key;
+  m.keywords = m.kid ? ["kids"] : [];
+}
+
+function syncFamily(hass) {
+  for (const m of FAMILY) {
+    const n = hass?.states?.[`counter.stars_${m.key}`]?.attributes?.friendly_name;
+    if (!n || n === m.name) continue;
+    m.name = n;
+    m.keywords = [n.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), ...(m.kid ? ["kids"] : [])];
+  }
+}
 const MEMBER = Object.fromEntries(FAMILY.map((m) => [m.key, m]));
 
 const PERIODS = [
@@ -174,6 +190,7 @@ class KitchenCard extends HTMLElement {
     this._queue();
   }
   set hass(h) {
+    syncFamily(h);
     const first = !this._hass;
     this._hass = h;
     if (first) this.firstHass?.();
