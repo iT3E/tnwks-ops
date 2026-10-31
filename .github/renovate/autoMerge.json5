@@ -159,6 +159,8 @@
         "/mosquitto/",
         "/vaultwarden/",
         "/home-assistant/",
+        // Migrates its Postgres schema on start, and ships a minor most weeks.
+        "/berriai\\/litellm/",
       ],
       matchUpdateTypes: ["minor"],
       matchFileNames: ["!/^(talos/ms-01|kubernetes/clusters/ms-01|kubernetes/apps/(kube-system/cilium|monitoring/thanos|monitoring/vector/agent|production/uisp|storage/rook-ceph|tools/node-feature-discovery|databases/cloudnative-pg/cluster-backup))//"],
