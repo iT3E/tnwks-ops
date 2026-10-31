@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.33.0 - 2026-10-31
+
+### Added
+
+* Privacy check: bin/privacy-check flags family names and personal emails from a SOPS-encrypted denylist on every PR (CI reads it from the PRIVACY_TERMS secret); report-only until the existing hits are cleaned up
+
 ## v1.32.0 - 2026-10-31
 
 ### Changed
