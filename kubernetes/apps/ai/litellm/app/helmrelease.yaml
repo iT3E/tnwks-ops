@@ -36,10 +36,10 @@ spec:
               # Pinned release + digest so Renovate can bump it. Upstream
               # publishes plain `vX.Y.Z` release tags (plus -rc/-dev, the old
               # `-stable` suffix ended at v1.83.14, and moving `main-*` tags);
-              # Renovate only follows the plain ones (.github/renovate). This is
-              # the image the old rolling `main-stable` tag had cached on the
-              # node, so pinning it changes nothing that runs.
-              tag: v1.86.2@sha256:cae1ac3492d6d0bea69c26f4485381624e073eb753f3534ae7703a4204a4ce6b
+              # Renovate only follows the plain ones (.github/renovate).
+              # Since v1.104 the proxy refuses to start on an unset, empty or
+              # public (sk-1234) master key; LITELLM_MASTER_KEY below is fine.
+              tag: v1.106.6@sha256:37e2dafb088a7723beb998590682957386dfc83ffea1848486f8e0e5cfac0b06
             args:
               - --config
               - /etc/litellm/config.yaml
