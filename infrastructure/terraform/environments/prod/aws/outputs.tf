@@ -34,6 +34,17 @@ output "cognito_hosted_ui_domain" {
   value       = module.aws.cognito_hosted_ui_domain
 }
 
+output "cognito_mealie_client_id" {
+  description = "App client ID for Mealie (built-in OIDC)."
+  value       = module.aws.cognito_mealie_client_id
+}
+
+output "cognito_mealie_client_secret" {
+  description = "App client secret for Mealie. Copied into the mealie Secret (SOPS) in kubernetes/apps/production/mealie/app."
+  value       = module.aws.cognito_mealie_client_secret
+  sensitive   = true
+}
+
 output "cognito_oauth2_proxy_client_id" {
   description = "App client ID for oauth2-proxy."
   value       = module.aws.cognito_oauth2_proxy_client_id

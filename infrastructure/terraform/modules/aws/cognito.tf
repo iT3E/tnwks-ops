@@ -599,6 +599,113 @@ resource "terraform_data" "home_assistant_managed_login" {
   }
 }
 
+# Mealie (recipes) logs users in itself with its built-in OIDC support rather
+# than sitting behind oauth2-proxy: the Home Assistant Mealie integration and
+# the mobile apps talk to Mealie's API with Mealie-issued tokens, which a
+# proxy-level session would block. Mealie's OIDC flow runs in its backend, so
+# this is a confidential client (with secret). cognito:groups maps to Mealie
+# roles: admins -> admin, viewers -> user; anyone in neither is rejected.
+resource "aws_cognito_user_pool_client" "mealie" {
+  name         = "mealie"
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+
+  generate_secret = true
+
+  # Mealie sends people back to <BASE_URL>/login after the IdP.
+  callback_urls = [
+    "https://recipes.tnwks.us/login",
+  ]
+
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_scopes                 = ["openid", "email", "profile"]
+
+  supported_identity_providers = ["COGNITO"]
+
+  explicit_auth_flows = [
+    "ALLOW_USER_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH",
+  ]
+
+  # Mealie reads the id_token once at login and then runs its own session.
+  access_token_validity  = 1
+  id_token_validity      = 1
+  refresh_token_validity = 30
+
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
+
+  prevent_user_existence_errors = "ENABLED"
+  enable_token_revocation       = true
+}
+
+resource "terraform_data" "mealie_managed_login" {
+  triggers_replace = [
+    aws_cognito_user_pool.tnwks_auth.id,
+    aws_cognito_user_pool_client.mealie.id,
+    data.aws_region.current.name,
+    local.cognito_mfa_role_arn,
+  ]
+
+  provisioner "local-exec" {
+    when    = create
+    command = <<-EOT
+      set -eu
+      creds=$(aws sts assume-role \
+        --role-arn ${local.cognito_mfa_role_arn} \
+        --role-session-name tfc-mealie-managed-login \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
+      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
+      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
+      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
+      existing=$(aws cognito-idp describe-managed-login-branding-by-client \
+        --region ${data.aws_region.current.name} \
+        --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
+        --client-id ${aws_cognito_user_pool_client.mealie.id} \
+        --query 'ManagedLoginBranding.ManagedLoginBrandingId' \
+        --output text 2>/dev/null) || existing=""
+      if [ -z "$existing" ] || [ "$existing" = "None" ]; then
+        aws cognito-idp create-managed-login-branding \
+          --region ${data.aws_region.current.name} \
+          --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
+          --client-id ${aws_cognito_user_pool_client.mealie.id} \
+          --use-cognito-provided-values
+      fi
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      set -eu
+      creds=$(aws sts assume-role \
+        --role-arn ${self.triggers_replace[3]} \
+        --role-session-name tfc-mealie-managed-login \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
+      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
+      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
+      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
+      branding_id=$(aws cognito-idp describe-managed-login-branding-by-client \
+        --region ${self.triggers_replace[2]} \
+        --user-pool-id ${self.triggers_replace[0]} \
+        --client-id ${self.triggers_replace[1]} \
+        --query 'ManagedLoginBranding.ManagedLoginBrandingId' \
+        --output text 2>/dev/null) || branding_id=""
+      if [ -n "$branding_id" ] && [ "$branding_id" != "None" ]; then
+        aws cognito-idp delete-managed-login-branding \
+          --region ${self.triggers_replace[2]} \
+          --user-pool-id ${self.triggers_replace[0]} \
+          --managed-login-branding-id "$branding_id"
+      fi
+    EOT
+  }
+}
+
 resource "aws_cognito_user_pool_client" "agent_ori" {
   name         = "agent-ori"
   user_pool_id = aws_cognito_user_pool.tnwks_auth.id
