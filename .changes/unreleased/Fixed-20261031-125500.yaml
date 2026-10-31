@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Mealie: OIDC login asks Cognito only for openid email profile (it rejected cognito:groups as a scope) and takes the display name from the email claim'
-time: 2026-10-31T12:55:00-07:00

@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.40.2 - 2026-10-31
+
+### Fixed
+
+* Mealie: OIDC login asks Cognito only for openid email profile (it rejected cognito:groups as a scope) and takes the display name from the email claim
+
 ## v1.40.1 - 2026-10-31
 
 ### Fixed
