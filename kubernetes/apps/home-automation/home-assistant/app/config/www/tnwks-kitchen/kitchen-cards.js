@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.3.0";
+const VERSION = "1.3.1";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -1525,7 +1525,7 @@ class RoutineCard extends KitchenCard {
     .seg button.on { color:#111; font-weight:500; }
     .seg button.done:not(.on) { color:var(--ok); }
     .sec { font-size:13px; color:var(--sub); text-transform:uppercase; letter-spacing:.06em; margin-top:4px; }
-    .ch { display:flex; align-items:center; gap:12px; background:var(--card2); border-radius:16px; padding:12px; font-size:18px; min-height:68px; width:100%; }
+    .ch { display:flex; align-items:center; gap:12px; background:var(--card2); border-radius:16px; padding:10px 12px; font-size:18px; min-height:60px; width:100%; }
     .ch .ic { font-size:26px; width:34px; text-align:center; flex:none; }
     .ch .tt { flex:1; }
     .ch .p { font-size:13px; color:var(--accent); font-weight:500; white-space:nowrap; }
@@ -2302,6 +2302,8 @@ class PagesCard extends HTMLElement {
 
 // --------------------------------------------------------------- holiday
 
+// "<holiday>-<year>" tokens; a fresh input_text reads "unknown", which isn't one.
+const answeredTokens = (v) => String(v || "").split(",").filter((x) => /^[a-z0-9]+-\d{4}$/.test(x));
 /** The holiday offer to show now, or null: in a holiday's window, its theme off, not answered yet. */
 function holidayOffer(hass) {
   const h = holidayNow();
@@ -2309,14 +2311,14 @@ function holidayOffer(hass) {
   const ans = hass.states[THEME_ANSWERED];
   if (!h || !s || !ans || s.state === h.key) return null;
   const tok = `${h.key}-${h.year}`;
-  if ((ans.state || "").split(",").includes(tok) || holidayOffer.local === tok) return null;
+  if (answeredTokens(ans.state).includes(tok) || holidayOffer.local === tok) return null;
   const when = h.days === 0 ? "is today" : h.days < 0 ? "was yesterday" : h.days === 1 ? "is tomorrow" : `is in ${h.days} days`;
   return { ...h, tok, text: `${h.theme.name} ${when}!` };
 }
 function answerHoliday(hass, on, rect) {
   const o = holidayOffer(hass);
   if (!o) return;
-  const prev = (hass.states[THEME_ANSWERED]?.state || "").split(",").filter((x) => x && x !== o.tok);
+  const prev = answeredTokens(hass.states[THEME_ANSWERED]?.state).filter((x) => x !== o.tok);
   hass.callService("input_text", "set_value", { entity_id: THEME_ANSWERED, value: [...prev, o.tok].slice(-8).join(",").slice(-250) });
   if (on) {
     hass.callService("input_select", "select_option", { entity_id: THEME_ENTITY, option: o.key });
