@@ -17,7 +17,8 @@
 # Stars are counters, seeded with the Apolosign totals on 2026-10-30
 # (Raine 90, River 54). `initial` only applies when there's no restored
 # state, so fix a balance with counter.set_value, not by editing this file.
-# Unchecking a chore by hand takes its stars back; the midnight reset doesn't.
+# Unchecking a chore by hand takes its stars back; the midnight reset doesn't
+# (only unchecks that carry a user_id count).
 #
 # Generated once from the Apolosign chore list (week of 2026-11-01); edit
 # this file directly from here on.
@@ -586,7 +587,7 @@ template:
 automation:
 - id: kitchen_routines_stars
   alias: 'Kitchen routines: award stars'
-  description: Adds a chore's stars when it's checked off, takes them back when a person unchecks it. Changes made by automations (the midnight reset) are skipped.
+  description: Adds a chore's stars when it's checked off, takes them back when a person unchecks it. Unchecks without a user (the midnight reset) keep the stars.
   mode: queued
   max: 50
   triggers:
@@ -675,8 +676,11 @@ automation:
     to: 'off'
     id: undone
   conditions:
+  # Only take stars back when a person unchecked it (a dashboard tap carries
+  # their user_id). The midnight reset runs from a time trigger, whose context
+  # has neither a user_id nor a parent_id, so parent_id can't tell them apart.
   - condition: template
-    value_template: "{{ trigger.to_state.context.parent_id is none }}"
+    value_template: "{{ trigger.id == 'done' or trigger.to_state.context.user_id is not none }}"
   variables:
     points: "{% set a = trigger.to_state.attributes %}{{ (a.points_by_day | default({})).get(now().strftime('%a') | lower, a.points | default(0)) | int(0) }}"
     counter_entity: "counter.stars_{{ trigger.to_state.attributes.member }}"
