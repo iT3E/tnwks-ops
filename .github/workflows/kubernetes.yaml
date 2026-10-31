@@ -48,11 +48,17 @@ jobs:
           tar -xzf "${tarball}" flate
           sudo install -m 0755 flate /usr/local/bin/flate
 
-      # -p kubernetes (not a cluster dir): the cluster entrypoints pull the
-      # repo through the flux-system GitRepository, which flate would fetch
-      # from GitHub main instead of this PR's tree.
+      # -p kubernetes renders every app once, MS-01-only ones included. When
+      # both clusters define a Flux Kustomization with the same name (frigate
+      # has a WSL overlay), only one of them renders here, so the live
+      # cluster also gets its own run below. flate aliases the flux-system
+      # GitRepository to this checkout because its URL matches the origin
+      # remote, so a cluster entrypoint renders this PR's tree.
       - name: Render all Kustomizations and HelmReleases
         run: flate test all --no-progress -p kubernetes
+
+      - name: Render the live cluster (wsl) from its entrypoint
+        run: flate test all --no-progress -p kubernetes/clusters/wsl
 
       # A Flux Alert event source only matches one namespace, so every
       # namespace with a HelmRelease needs its own entry, or its failures
@@ -72,14 +78,32 @@ jobs:
             exit 1
           fi
 
+      # Diffed per cluster. With -p kubernetes, changed-only mode picked the
+      # MS-01 frigate Kustomization, which gets no postBuild substitution, so
+      # ${SERVICE_MONITOR_ENABLED} reached the chart as a string and every
+      # frigate PR failed here (#1451). MS-01 isn't live and has known render
+      # failures, so its diff only warns. Add a cluster to BLOCKING_CLUSTERS
+      # once it runs workloads.
       - name: Images added by this PR
         id: images
         if: github.event_name == 'pull_request'
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BLOCKING_CLUSTERS: wsl
         run: |
           set -euo pipefail
-          images="$(flate diff images --no-progress --base "origin/${BASE_REF}" -p kubernetes -o json)"
+          images='[]'
+          for dir in kubernetes/clusters/*/; do
+            cluster="$(basename "${dir}")"
+            if out="$(flate diff images --no-progress --base "origin/${BASE_REF}" -p "${dir%/}" -o json)"; then
+              images="$(jq -c --argjson add "${out}" '. + $add | unique' <<<"${images}")"
+            elif [[ " ${BLOCKING_CLUSTERS} " == *" ${cluster} "* ]]; then
+              echo "::error::flate diff images failed for cluster ${cluster}"
+              exit 1
+            else
+              echo "::warning::flate diff images failed for cluster ${cluster} (not live, not blocking); its images are unchecked"
+            fi
+          done
           echo "${images}"
           {
             echo "images<<EOF"
@@ -99,9 +123,18 @@ jobs:
       matrix:
         image: ${{ fromJSON(needs.flate.outputs.images) }}
     steps:
+      # A tag can exist and still not be a container image: Acuvity pushes
+      # its Helm chart into the image repo as tag 1.0.0 (#1485), and kubelet
+      # can't run that. Reject manifests whose config isn't an image config,
+      # and indexes with no platform entries.
+      # A registry rate limit (ECR Public returns "toomanyrequests: Data
+      # limit exceeded" to shared runner IPs) says nothing about the tag. On a
+      # Renovate PR the tag came from Renovate's own lookup in that registry,
+      # so a persistent throttle only warns there. Anyone else's PR fails.
       - name: Inspect manifest
         env:
           IMAGE: ${{ matrix.image }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           set -euo pipefail
           ref="${IMAGE}"
@@ -111,12 +144,30 @@ jobs:
             [[ "${name##*/}" == *:* ]] && name="${name%:*}"
             ref="${name}@${digest}"
           fi
-          for attempt in 1 2 3; do
-            if skopeo inspect --raw "docker://${ref}" > /dev/null; then
-              echo "ok: ${ref}"; exit 0
+          throttled=false
+          for attempt in 1 2 3 4; do
+            if raw="$(skopeo inspect --raw "docker://${ref}" 2>err.txt)"; then
+              kind="$(jq -r '
+                if (.manifests | type) == "array" then
+                  if any(.manifests[]; .platform.architecture? and .platform.architecture != "unknown")
+                  then "image" else "index without platforms" end
+                elif (.config.mediaType // "") | IN("application/vnd.oci.image.config.v1+json", "application/vnd.docker.container.image.v1+json")
+                then "image"
+                else "config " + (.config.mediaType // "missing") end' <<<"${raw}")"
+              if [[ "${kind}" == image ]]; then
+                echo "ok: ${ref}"; exit 0
+              fi
+              echo "::error::${IMAGE} is not a container image (${kind})"
+              exit 1
             fi
-            sleep $((attempt * 10))
+            cat err.txt >&2
+            grep -q toomanyrequests err.txt && throttled=true
+            sleep $((attempt * 20))
           done
+          if [[ "${throttled}" == true && "${PR_AUTHOR}" == "renovate[bot]" ]]; then
+            echo "::warning::registry rate-limited every attempt; ${IMAGE} not verified (tag comes from Renovate's own registry lookup)"
+            exit 0
+          fi
           echo "::error::image not found or not pullable: ${IMAGE}"
           exit 1
 
