@@ -31,23 +31,30 @@ spec:
           reloader.stakater.com/auto: "true"
         containers:
           app:
+            # Microsoft's own image. The Acuvity rebuild it replaced lagged
+            # upstream by ~27 releases and pushes its Helm chart into the same
+            # repo as tag 1.0.0, which Renovate can't tell apart from an image.
+            # The entrypoint already runs headless Chromium with --no-sandbox;
+            # these args add the HTTP transport (/mcp, plus legacy /sse).
             image:
-              repository: docker.io/acuvity/mcp-server-playwright
-              tag: 0.0.56
-            env:
-              # Run in SSE transport mode for network-accessible MCP
-              - name: TRANSPORT
-                value: sse
-              - name: PORT
-                value: "8000"
+              repository: mcr.microsoft.com/playwright/mcp
+              tag: v0.0.83
+            args:
+              - --port=8000
+              - --host=0.0.0.0
+              # Requests arrive with the ingress hostname or the Service name
+              # as Host; the default only allows localhost.
+              - --allowed-hosts=*
+              # Fresh in-memory browser profile per session.
+              - --isolated
             probes:
+              # No health endpoint (GET / is a 400), so probe the socket.
               liveness: &probes
                 enabled: true
                 custom: true
                 spec:
-                  httpGet:
-                    path: /
-                    port: 8080
+                  tcpSocket:
+                    port: 8000
                   initialDelaySeconds: 10
                   periodSeconds: 30
                   timeoutSeconds: 5
@@ -57,9 +64,8 @@ spec:
                 enabled: true
                 custom: true
                 spec:
-                  httpGet:
-                    path: /
-                    port: 8080
+                  tcpSocket:
+                    port: 8000
                   initialDelaySeconds: 5
                   periodSeconds: 5
                   timeoutSeconds: 5
@@ -100,9 +106,9 @@ spec:
           playwright-mcp:
             app:
               - path: /tmp
-      playwright-data:
+      home:
         type: emptyDir
         advancedMounts:
           playwright-mcp:
             app:
-              - path: /app/ms-playwright/mcp-chromium
+              - path: /home/node
