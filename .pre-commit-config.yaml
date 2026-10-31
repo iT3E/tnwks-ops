@@ -2,6 +2,10 @@
 # Install once per clone: task precommit:init
 # Run everything:         task precommit:run
 fail_fast: false
+# commit-msg runs the privacy check on the message. `task precommit:init`
+# installs both hook types.
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
 repos:
   # Secret scanning on staged changes. Config: .betterleaks.toml (extends the
   # upstream rules with a prose-credential rule for docs). The same scan runs
@@ -11,8 +15,9 @@ repos:
     rev: v1.9.0
     hooks:
       - id: betterleaks
-  # Family names and personal emails (bin/privacy-check, AGENTS.md "Privacy").
-  # Decrypts the denylist with your SOPS age key; CI runs the same check.
+  # Family names and personal emails (bin/privacy-check, AGENTS.md "Privacy"):
+  # the staged files and your git identity, then the commit message. Decrypts
+  # the denylist with your SOPS age key; CI runs the same checks.
   - repo: local
     hooks:
       - id: privacy-check
@@ -20,4 +25,10 @@ repos:
         entry: bin/privacy-check --cached
         language: system
         pass_filenames: false
+        always_run: true
+      - id: privacy-check-message
+        name: privacy-check (commit message)
+        entry: bin/privacy-check --message
+        language: system
+        stages: [commit-msg]
         always_run: true

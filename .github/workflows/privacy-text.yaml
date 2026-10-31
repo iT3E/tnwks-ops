@@ -1,0 +1,81 @@
+---
+name: "Privacy (comments)"
+
+# The privacy denylist (bin/privacy-check --text) on what people post to
+# GitHub: issue and PR comments, review comments, review bodies, and issue
+# titles and bodies. PR titles and bodies are privacy.yaml (a required check).
+# GitHub can't refuse a comment, so this runs right after it's posted: a
+# comment with a hit is deleted (deleting also drops its edit history), a
+# review body is replaced, and an issue only fails the run, since editing it
+# would keep the old text in its history. Bots are skipped (Renovate's text
+# is third-party release notes). Separate from privacy.yaml so a skipped job
+# here never stands in for the required "privacy" check on a PR head.
+
+on:
+  issue_comment:
+    types: [created, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+  pull_request_review:
+    types: [submitted, edited]
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  text:
+    name: privacy-text
+    if: github.event.sender.type != 'Bot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Check
+        env:
+          PRIVACY_TERMS: ${{ secrets.PRIVACY_TERMS }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          REVIEW_ID: ${{ github.event.review.id }}
+          REVIEW_BODY: ${{ github.event.review.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          ISSUE_TEXT: ${{ github.event.issue.title }} ${{ github.event.issue.body }}
+          URL: ${{ github.event.comment.html_url || github.event.review.html_url || github.event.issue.html_url }}
+        run: |
+          if [ -z "${PRIVACY_TERMS}" ]; then
+            echo "::warning::PRIVACY_TERMS is not available to this run; skipped"
+            exit 0
+          fi
+          case "$EVENT" in
+            issue_comment | pull_request_review_comment) text="$COMMENT_BODY" ;;
+            pull_request_review) text="$REVIEW_BODY" ;;
+            issues) text="$ISSUE_TEXT" ;;
+          esac
+          if printf '%s' "$text" | bin/privacy-check --text; then
+            exit 0
+          fi
+          case "$EVENT" in
+            issue_comment)
+              gh api -X DELETE "repos/$REPO/issues/comments/$COMMENT_ID"
+              echo "::error::Deleted a comment with a privacy hit: $URL" ;;
+            pull_request_review_comment)
+              gh api -X DELETE "repos/$REPO/pulls/comments/$COMMENT_ID"
+              echo "::error::Deleted a review comment with a privacy hit: $URL" ;;
+            pull_request_review)
+              gh api -X PUT "repos/$REPO/pulls/$PR_NUMBER/reviews/$REVIEW_ID" \
+                -f body="(Removed by the privacy check.)" >/dev/null
+              echo "::error::Replaced a review body with a privacy hit: $URL" ;;
+            issues)
+              echo "::error::Issue title or body has a privacy hit; edit it and delete the old revision from its history: $URL" ;;
+          esac
+          exit 1

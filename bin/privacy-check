@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Fail if any denylisted term (family names, personal emails) appears in the
-# repo. The repo is public; see "Privacy" in AGENTS.md.
+# repo, a commit or a GitHub text. The repo is public; see "Privacy" in
+# AGENTS.md.
 #
 #   bin/privacy-check                 # tracked files (working tree) + paths
-#   bin/privacy-check --cached        # the index instead (pre-commit)
-#   bin/privacy-check --commits A..B  # also commit messages and identities
+#   bin/privacy-check --cached        # the index + your git identity (pre-commit)
+#   bin/privacy-check --commits A..B  # also those commits' messages and identities
+#   bin/privacy-check --message FILE  # a commit message only (commit-msg hook)
+#   bin/privacy-check --text          # stdin only (a PR body or comment you're about to post)
 #
 # Terms come from $PRIVACY_TERMS (CI: the PRIVACY_TERMS Actions secret) or
 # else from .github/privacy-terms.sops.yaml (`terms`, one per line). Edit the
@@ -16,8 +19,9 @@
 # and "xs-api" are hits). Text in $PRIVACY_EXTRA_TEXT (CI: the PR title and
 # body) is checked too.
 #
-# Exceptions: .github/privacy-allow lists git pathspec globs to skip (files
-# and paths), and a line that contains "privacy:allow" is skipped.
+# Exceptions (files only): .github/privacy-allow lists git pathspec globs to
+# skip, and a line that contains "privacy:allow" is skipped. Messages, PR
+# text and comments have no exceptions.
 #
 # Hits print as "term #N: <where>". The matched text is never printed, since
 # CI logs on a public repo are public.
@@ -25,14 +29,27 @@ set -euo pipefail
 
 cached=""
 range=""
+message=""
+text_mode=""
 while (($#)); do
   case "$1" in
     --cached) cached="--cached" ;;
     --commits) range="${2:?--commits needs a range}"; shift ;;
-    *) echo "usage: privacy-check [--cached] [--commits A..B]" >&2; exit 2 ;;
+    --message) message="${2:?--message needs a file}"; shift ;;
+    --text) text_mode=1 ;;
+    *) echo "usage: privacy-check [--cached] [--commits A..B] [--message FILE] [--text]" >&2; exit 2 ;;
   esac
   shift
 done
+
+# Read the text inputs before changing directory (relative paths, stdin).
+input=""
+if [[ -n "${message}" ]]; then
+  # What git keeps: drop comment lines and everything below the scissors line.
+  input="$(sed -e '/^# -\{8,\} >8 -\{8,\}$/,$d' -e '/^#/d' "${message}")"
+elif [[ -n "${text_mode}" ]]; then
+  input="$(cat)"
+fi
 
 cd "$(git rev-parse --show-toplevel)"
 terms_file=".github/privacy-terms.sops.yaml"
@@ -66,10 +83,20 @@ pattern() {
 
 hits=0
 report() { echo "term #$1: $2"; hits=$((hits + 1)); }
+has() { grep -q -P -e "$1" <<<"$2"; }
 
 for i in "${!terms[@]}"; do
   n=$((i + 1))
   p="$(pattern "${terms[$i]}")"
+
+  if [[ -n "${message}" ]]; then
+    if has "${p}" "${input}"; then report "${n}" "commit message"; fi
+    continue
+  fi
+  if [[ -n "${text_mode}" ]]; then
+    if has "${p}" "${input}"; then report "${n}" "text"; fi
+    continue
+  fi
 
   # File contents, as path:line.
   while IFS= read -r loc; do
@@ -81,6 +108,15 @@ for i in "${!terms[@]}"; do
     report "${n}" "path ${f}"
   done < <(git ls-files -- "${pathspec[@]}" | grep -P -e "${p}" || true)
 
+  # The identity the next commit gets.
+  if [[ -n "${cached}" ]]; then
+    for v in GIT_AUTHOR_IDENT GIT_COMMITTER_IDENT; do
+      if has "${p}" "$(git var "${v}" 2>/dev/null || true)"; then
+        report "${n}" "${v} (git config user.name/user.email)"
+      fi
+    done
+  fi
+
   if [[ -n "${range}" ]]; then
     while IFS= read -r sha; do
       report "${n}" "commit ${sha:0:12} (message or author/committer)"
@@ -88,7 +124,7 @@ for i in "${!terms[@]}"; do
       perl -0 -ne 'BEGIN { $re = shift @ARGV } print substr($_, 0, 40), "\n" if /$re/' "${p}" || true)
   fi
 
-  if [[ -n "${PRIVACY_EXTRA_TEXT:-}" ]] && grep -q -P -e "${p}" <<<"${PRIVACY_EXTRA_TEXT}"; then
+  if [[ -n "${PRIVACY_EXTRA_TEXT:-}" ]] && has "${p}" "${PRIVACY_EXTRA_TEXT}"; then
     report "${n}" "PR title or body"
   fi
 done
