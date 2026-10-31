@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.30.2 - 2026-10-31
+
+### Fixed
+
+* k8s-gateway moves to the k8s-gateway project chart 4.0.1 on Codeberg (image codeberg.org/k8s-gateway/k8s_gateway 1.9.2). The old quay.io/oriedge/k8s_gateway image is gone, so the pod only ran from worker-1's image cache
+
 ## v1.30.1 - 2026-10-31
 
 ### Fixed
