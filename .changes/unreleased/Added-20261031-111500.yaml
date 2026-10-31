@@ -1,3 +1,0 @@
-kind: Added
-body: 'Privacy check covers commit messages (commit-msg hook) and your git identity at commit time, re-checks PR titles and bodies on edit, and deletes GitHub comments or replaces review bodies that contain a denylisted term (privacy-text.yaml)'
-time: 2026-10-31T11:15:00-07:00
