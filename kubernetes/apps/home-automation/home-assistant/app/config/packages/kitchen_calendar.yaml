@@ -1,0 +1,20 @@
+---
+# The family calendar on the kitchen display (calendar.family).
+#
+# calendar.family is a Remote Calendar config entry (UI-owned: the URL is the
+# Google calendar's secret iCal address, so it stays out of git). Remote
+# Calendar only re-downloads the feed once a day, which is far too slow for a
+# family calendar, so this asks for a refresh every 15 minutes. Google's
+# private iCal feed itself can lag edits by a few minutes.
+automation:
+  - id: kitchen_calendar_refresh
+    alias: Kitchen calendar refresh
+    description: Re-download the family calendar feed every 15 minutes (Remote Calendar polls daily).
+    mode: single
+    triggers:
+      - trigger: time_pattern
+        minutes: /15
+    actions:
+      - action: homeassistant.update_entity
+        target:
+          entity_id: calendar.family

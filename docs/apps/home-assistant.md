@@ -243,6 +243,11 @@ calendar), `calendar.mealie_breakfast`, `_lunch`, `_dinner` and `_snack`
 connected" or "not set up yet" note until its entity exists; the Notes card on
 Home stays hidden instead.
 
+`calendar.family` is a Remote Calendar entry pointing at the Google Family
+calendar's secret iCal address (UI-owned, so the URL stays out of git).
+Remote Calendar only re-downloads once a day, so
+`packages/kitchen_calendar.yaml` refreshes it every 15 minutes.
+
 The Companion app and browsers keep the card module in memory until the page
 reloads, while HA pushes a new dashboard config to them live. So the cards
 compare their own `?v=` with the resource URL HA serves (`lovelace/resources`,
