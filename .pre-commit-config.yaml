@@ -11,3 +11,13 @@ repos:
     rev: v1.9.0
     hooks:
       - id: betterleaks
+  # Family names and personal emails (bin/privacy-check, AGENTS.md "Privacy").
+  # Decrypts the denylist with your SOPS age key; CI runs the same check.
+  - repo: local
+    hooks:
+      - id: privacy-check
+        name: privacy-check
+        entry: bin/privacy-check --cached
+        language: system
+        pass_filenames: false
+        always_run: true

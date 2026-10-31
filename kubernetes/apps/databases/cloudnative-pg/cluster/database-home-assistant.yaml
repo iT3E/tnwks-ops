@@ -2,7 +2,7 @@
 # Declarative database creation for Home Assistant's recorder
 # (home-assistant, home-automation ns).
 #
-# Sibling of database-raines.yaml. The Database CRD reconciles continuously,
+# Sibling of the other database-*.yaml files. The Database CRD reconciles continuously,
 # so adding a database to an already-running cluster is pure GitOps.
 # `ensure: present` is idempotent. Home Assistant connects via the reflected
 # `postgres-app` secret — owner `app` matches that credential.

@@ -1,0 +1,7 @@
+# bin/privacy-check exceptions: git pathspec globs whose files and paths the
+# check skips. Keep this list name-free (globs, not names) and short. A single
+# line elsewhere can opt out with a trailing "privacy:allow" comment.
+#
+# The storefront app is public under its own name (owner's call, 2026-10-31).
+kubernetes/apps/production/*-things-api/**
+kubernetes/apps/databases/cloudnative-pg/cluster/database-things-api.yaml
