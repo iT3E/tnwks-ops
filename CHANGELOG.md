@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.38.0 - 2026-10-31
+
+### Added
+
+* Kitchen display: closer to the Apolosign app. Calendar tab with Family, Week, Month and List views, day/week/month paging and a person filter; a Meals tab (week grid from the Mealie calendars); a Lists tab with several lists, an add box, tap to check off and a Completed section; sticky notes (todo.notes) on Home and Lists; a greeting line with chores left, events and groceries; labelled routine periods and stars earned today
+
+### Fixed
+
+* Kitchen display: the cards reload the page when HA serves a new version of them, so a wall display or phone that kept the old code after a restart no longer crashes on a new dashboard config. A card that hits an error shows it in place instead of blanking
+
 ## v1.37.0 - 2026-10-31
 
 ### Added
