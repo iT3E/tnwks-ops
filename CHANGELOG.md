@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.26.0 - 2026-10-31
+
+### Changed
+
+* playwright-mcp runs Microsoft's official image (mcr.microsoft.com/playwright/mcp v0.0.83) instead of the Acuvity rebuild, which lagged upstream by ~27 releases and published its Helm chart as image tag 1.0.0
+
 ## v1.25.1 - 2026-10-31
 
 ### Fixed
