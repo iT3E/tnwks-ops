@@ -231,10 +231,24 @@ kiosk-mode hides HA's header and sidebar on a device once the dashboard has
 been opened there with `?kiosk` (it remembers). Open it with `?clear_km_cache`
 to undo that.
 
+Views: Home, Calendar (Family, Week, Month and List, with paging and a
+person filter), Routines, Meals (a week grid, one column per Mealie meal
+calendar) and Lists (several to-do lists plus sticky notes).
+
 Calendars, the meal plan and extra to-do lists are integrations, so they're
 UI-owned. The dashboard expects `calendar.family` (the family Google
-calendar) and `calendar.mealie_dinner` (Mealie), and shows a "not connected"
-placeholder until they exist.
+calendar), `calendar.mealie_breakfast`, `_lunch`, `_dinner` and `_snack`
+(Mealie), and the Local To-do lists `todo.things_to_do`, `todo.someday` and
+`todo.notes` (Groceries is `todo.shopping_list`). Each card shows a "not
+connected" or "not set up yet" note until its entity exists; the Notes card on
+Home stays hidden instead.
+
+The Companion app and browsers keep the card module in memory until the page
+reloads, while HA pushes a new dashboard config to them live. So the cards
+compare their own `?v=` with the resource URL HA serves (`lovelace/resources`,
+on load, on every reconnect and every 15 minutes) and reload the page when they
+differ, at most once every 10 minutes. That only works if the `?v=` changes
+with the file.
 
 ## Break-glass
 

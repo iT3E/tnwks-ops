@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Kitchen display: the cards reload the page when HA serves a new version of them, so a wall display or phone that kept the old code after a restart no longer crashes on a new dashboard config. A card that hits an error shows it in place instead of blanking'
+time: 2026-10-31T12:00:00-07:00
