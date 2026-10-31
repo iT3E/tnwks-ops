@@ -11,158 +11,137 @@
 # kiosk-mode hides HA's header and sidebar only where the dashboard was opened
 # with ?kiosk once (it remembers that per device), i.e. on the wall display.
 # Everywhere else the header stays, so the dashboard is still editable and
-# reachable. The big tabs at the top of each view replace the header tabs.
+# reachable.
+#
+# One HA view holds everything: kitchen-pages-card draws the header, the big
+# tabs and each tab's cards as pages that stay mounted, so switching tabs is
+# instant (an HA view change rebuilt every card and refetched its data). The
+# tab is in the URL hash: /kitchen-display/home#calendar.
 #
 # Entities that don't exist yet render as a "not connected" placeholder:
 #   calendar.family       the family Google calendar (Google Calendar or
 #                         Remote Calendar integration, UI-owned)
 #   calendar.mealie_*     Mealie's meal plan, one calendar per meal type
 #                         (Mealie integration, UI-owned)
+#   todo.kitchen_routines
+#                         the routines (Local To-do list, UI-owned; one item
+#                         per routine, edited from the Routines tab)
 #   todo.things_to_do, todo.someday, todo.notes
 #                         extra Local To-do lists (UI-owned); todo.shopping_list
 #                         (Groceries) is the Shopping List integration
 title: Kitchen
 
 views:
-  - title: Home
+  - title: Kitchen
     path: home
     type: panel
     background: "#111318"
     cards:
-      - type: custom:kitchen-stack-card
+      - type: custom:kitchen-pages-card
         padding: 16
-        cards:
-          - type: custom:kitchen-header-card
-          - &tabs
-            type: custom:kitchen-tabs-card
-            views:
-              - { path: home, title: Home }
-              - { path: calendar, title: Calendar }
-              - { path: routines, title: Routines }
-              - { path: meals, title: Meals }
-              - { path: lists, title: Lists }
-          - type: custom:kitchen-family-day-card
-            calendars: [calendar.family]
-            start_hour: 7
-            end_hour: 21
-            height: 260
-          - type: custom:kitchen-stack-card
-            columns: 2
+        idle_home: 5
+        pages:
+          - path: home
+            title: Home
+            # While a holiday is coming up, the header's greeting line offers its
+            # theme (🎨 next to the tabs picks one any time).
             cards:
-              - { type: custom:kitchen-kid-card, member: kid1 }
-              - { type: custom:kitchen-kid-card, member: kid2 }
-          - type: custom:kitchen-stack-card
-            columns: 2
-            cards:
-              - type: custom:kitchen-meals-card
-                title: Dinner
-                calendar: calendar.mealie_dinner
-                days: 3
-              - type: custom:kitchen-todo-card
-                entity: todo.shopping_list
-                title: Groceries
-                max: 4
-          - type: custom:kitchen-stack-card
-            columns: 2
-            cards:
-              - type: custom:kitchen-agenda-card
-                title: Coming up
-                style: list
+              - type: custom:kitchen-family-day-card
                 calendars: [calendar.family]
-                from_tomorrow: true
-                days: 3
-                max: 4
-              # The message board; post notes from the Lists tab. Hidden
-              # until todo.notes exists, and then Coming up takes the row.
+                start_hour: 7
+                end_hour: 21
+                height: 250
+              - type: custom:kitchen-stack-card
+                columns: 2
+                cards:
+                  - { type: custom:kitchen-kid-card, member: kid1 }
+                  - { type: custom:kitchen-kid-card, member: kid2 }
+              - type: custom:kitchen-stack-card
+                columns: 2
+                cards:
+                  - type: custom:kitchen-meals-card
+                    title: Dinner
+                    calendar: calendar.mealie_dinner
+                    days: 3
+                  - type: custom:kitchen-todo-card
+                    entity: todo.shopping_list
+                    title: Groceries
+                    max: 4
+              - type: custom:kitchen-stack-card
+                columns: 2
+                cards:
+                  - type: custom:kitchen-agenda-card
+                    title: Coming up
+                    style: list
+                    calendars: [calendar.family]
+                    from_tomorrow: true
+                    days: 3
+                    max: 4
+                  # The message board; post notes from the Lists tab. Hidden
+                  # until todo.notes exists, and then Coming up takes the row.
+                  - type: custom:kitchen-notes-card
+                    entity: todo.notes
+                    title: Notes
+                    hide_missing: true
+                    add: false
+                    columns: 1
+                    max: 3
+              - type: custom:kitchen-chips-card
+                chips:
+                  - { entity: binary_sensor.dishwasher_power, name: Dishwasher, on_text: Running, off_text: Idle }
+                  - { entity: binary_sensor.washer_power, name: Washer, on_text: Running, off_text: Idle }
+                  - { entity: binary_sensor.dryer_power, name: Dryer, on_text: Running, off_text: Idle }
+                  - { entity: weather.forecast_home, name: Wind, attribute: wind_speed, unit: " mph" }
+
+          - path: calendar
+            title: Calendar
+            cards:
+              # Family (a day, a column per person), Week, Month and List, like
+              # the Apolosign calendar. Taps on a day in Week or Month open it in
+              # Family; it goes back to today after 10 minutes untouched.
+              - type: custom:kitchen-calendar-card
+                calendars: [calendar.family]
+                start_hour: 6
+                end_hour: 22
+                height: 1000
+
+          - path: routines
+            title: Routines
+            cards:
+              # + (add) and ✎ (edit) next to each name; long-press any
+              # routine to change it.
+              - type: custom:kitchen-stack-card
+                columns: 2
+                grow: true
+                cards:
+                  - { type: custom:kitchen-routine-card, member: kid1 }
+                  - { type: custom:kitchen-routine-card, member: kid2 }
+              - type: custom:kitchen-stack-card
+                columns: 2
+                cards:
+                  - { type: custom:kitchen-adult-card, member: adult2 }
+                  - { type: custom:kitchen-adult-card, member: adult1 }
+
+          - path: meals
+            title: Meals
+            cards:
+              - type: custom:kitchen-meal-week-card
+                title: Meals
+                height: 880
+                slots:
+                  - { calendar: calendar.mealie_breakfast, label: Breakfast, icon: "🍳", emoji: "🥞" }
+                  - { calendar: calendar.mealie_lunch, label: Lunch, icon: "🥪", emoji: "🥪" }
+                  - { calendar: calendar.mealie_dinner, label: Dinner, icon: "🍽️", emoji: "🍲" }
+                  - { calendar: calendar.mealie_snack, label: Snack, icon: "🍎", emoji: "🍎" }
+
+          - path: lists
+            title: Lists
+            cards:
+              - type: custom:kitchen-lists-card
+                lists:
+                  - { entity: todo.shopping_list, title: Groceries, icon: "🛒" }
+                  - { entity: todo.things_to_do, title: Things to do, icon: "✅" }
+                  - { entity: todo.someday, title: Someday, icon: "💭" }
               - type: custom:kitchen-notes-card
                 entity: todo.notes
                 title: Notes
-                hide_missing: true
-                add: false
-                columns: 1
-                max: 3
-          - type: custom:kitchen-chips-card
-            chips:
-              - { entity: binary_sensor.dishwasher_power, name: Dishwasher, on_text: Running, off_text: Idle }
-              - { entity: binary_sensor.washer_power, name: Washer, on_text: Running, off_text: Idle }
-              - { entity: binary_sensor.dryer_power, name: Dryer, on_text: Running, off_text: Idle }
-              - { entity: weather.forecast_home, name: Wind, attribute: wind_speed, unit: " mph" }
-
-  - title: Calendar
-    path: calendar
-    type: panel
-    background: "#111318"
-    cards:
-      - type: custom:kitchen-stack-card
-        padding: 16
-        cards:
-          - { type: custom:kitchen-header-card, compact: true }
-          - *tabs
-          # Family (a day, a column per person), Week, Month and List, like
-          # the Apolosign calendar. Taps on a day in Week or Month open it in
-          # Family; it goes back to today after 10 minutes untouched.
-          - type: custom:kitchen-calendar-card
-            calendars: [calendar.family]
-            start_hour: 6
-            end_hour: 22
-            height: 1000
-
-  - title: Routines
-    path: routines
-    type: panel
-    background: "#111318"
-    cards:
-      - type: custom:kitchen-stack-card
-        padding: 16
-        cards:
-          - { type: custom:kitchen-header-card, compact: true }
-          - *tabs
-          - type: custom:kitchen-stack-card
-            columns: 2
-            grow: true
-            cards:
-              - { type: custom:kitchen-routine-card, member: kid1 }
-              - { type: custom:kitchen-routine-card, member: kid2 }
-          - type: custom:kitchen-stack-card
-            columns: 2
-            cards:
-              - { type: custom:kitchen-adult-card, member: adult2 }
-              - { type: custom:kitchen-adult-card, member: adult1 }
-
-  - title: Meals
-    path: meals
-    type: panel
-    background: "#111318"
-    cards:
-      - type: custom:kitchen-stack-card
-        padding: 16
-        cards:
-          - { type: custom:kitchen-header-card, compact: true }
-          - *tabs
-          - type: custom:kitchen-meal-week-card
-            title: Meals
-            height: 880
-            slots:
-              - { calendar: calendar.mealie_breakfast, label: Breakfast, icon: "🍳", emoji: "🥞" }
-              - { calendar: calendar.mealie_lunch, label: Lunch, icon: "🥪", emoji: "🥪" }
-              - { calendar: calendar.mealie_dinner, label: Dinner, icon: "🍽️", emoji: "🍲" }
-              - { calendar: calendar.mealie_snack, label: Snack, icon: "🍎", emoji: "🍎" }
-
-  - title: Lists
-    path: lists
-    type: panel
-    background: "#111318"
-    cards:
-      - type: custom:kitchen-stack-card
-        padding: 16
-        cards:
-          - { type: custom:kitchen-header-card, compact: true }
-          - *tabs
-          - type: custom:kitchen-lists-card
-            lists:
-              - { entity: todo.shopping_list, title: Groceries, icon: "🛒" }
-              - { entity: todo.things_to_do, title: Things to do, icon: "✅" }
-              - { entity: todo.someday, title: Someday, icon: "💭" }
-          - type: custom:kitchen-notes-card
-            entity: todo.notes
-            title: Notes

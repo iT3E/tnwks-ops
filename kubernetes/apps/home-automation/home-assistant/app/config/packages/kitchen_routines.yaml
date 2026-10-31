@@ -4,474 +4,29 @@
 # config/www/tnwks-kitchen/kitchen-cards.js and the Kitchen dashboard
 # (config/dashboards/kitchen.yaml).
 #
-# One input_boolean per chore. Its customize attributes say who it belongs
-# to and when it shows up:
-#   member        kid1 | kid2 | adult2 | adult1
-#   period        morning | afternoon | evening | anytime
-#   points        stars for checking it off (points_by_day overrides per day)
-#   days          sun..sat it appears on
-#   emoji, order  how the cards draw and sort it
-# To add a chore: add the input_boolean and its customize block, and add the
-# entity to both automations' entity lists below (award + reset).
+# The routines themselves are UI-owned data, so the family can add, change
+# and delete them on the display (Routines tab: ＋ Add routine, ✎ Edit,
+# long-press). They're the items of the Local To-do list
+# todo.kitchen_routines ("Kitchen routines"), one item per routine:
+#   summary       the routine's name
+#   status        completed = done today
+#   description   JSON: {"member": kid1|kid2|adult2|adult1,
+#                 "period": morning|afternoon|evening|anytime,
+#                 "points": stars, "days": [sun..sat], "emoji": "🪥",
+#                 optional "points_by_day": {"mon": 5}}
+# The 37 routines that used to be input_booleans here were moved into that
+# list on 2026-10-31.
+#
+# This file keeps the rest: the stars counters, the reward goals,
+# sensor.kitchen_routines (the list's items as an attribute, for templates),
+# the done/total sensors behind the week grid, script.kitchen_routine_set
+# (check or uncheck one and move its stars), and the midnight reset.
 #
 # Stars are counters, seeded with the Apolosign totals on 2026-10-30
 # (kid1 90, kid2 54). `initial` only applies when there's no restored
 # state, so fix a balance with counter.set_value, not by editing this file.
-# Unchecking a chore by hand takes its stars back; the midnight reset doesn't
-# (only unchecks that carry a user_id count).
-#
-# Generated once from the Apolosign chore list (week of 2026-11-01); edit
-# this file directly from here on.
-homeassistant:
-  customize:
-    input_boolean.chore_kid1_brush_teeth_and_hair:
-      kitchen_chore: true
-      member: kid1
-      title: Brush teeth and hair
-      emoji: 🪥
-      period: morning
-      points: 0
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 0
-    input_boolean.chore_kid1_clean_your_room:
-      kitchen_chore: true
-      member: kid1
-      title: Clean your room
-      emoji: 🧹
-      period: morning
-      points: 0
-      days: [sun]
-      order: 1
-    input_boolean.chore_kid1_eat_breakfast:
-      kitchen_chore: true
-      member: kid1
-      title: Eat breakfast
-      emoji: 🥣
-      period: morning
-      points: 0
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 2
-    input_boolean.chore_kid1_get_dressed:
-      kitchen_chore: true
-      member: kid1
-      title: Get dressed
-      emoji: 👕
-      period: morning
-      points: 0
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 3
-    input_boolean.chore_kid1_pack_backpack:
-      kitchen_chore: true
-      member: kid1
-      title: Pack backpack
-      emoji: 🎒
-      period: morning
-      points: 0
-      days: [mon, tue, wed, thu, fri]
-      order: 4
-    input_boolean.chore_kid1_pack_lunch:
-      kitchen_chore: true
-      member: kid1
-      title: Pack lunch
-      emoji: 🌮
-      period: morning
-      points: 3
-      days: [mon, tue, wed, thu, fri]
-      order: 5
-      points_by_day:
-        mon: 5
-        fri: 2
-    input_boolean.chore_kid1_free_dress:
-      kitchen_chore: true
-      member: kid1
-      title: Free dress
-      emoji: 👗
-      period: morning
-      points: 0
-      days: [mon]
-      order: 6
-    input_boolean.chore_kid1_pack_piano_books:
-      kitchen_chore: true
-      member: kid1
-      title: Pack piano books
-      emoji: 🎹
-      period: morning
-      points: 0
-      days: [tue]
-      order: 7
-    input_boolean.chore_kid1_homework:
-      kitchen_chore: true
-      member: kid1
-      title: Homework
-      emoji: 📝
-      period: afternoon
-      points: 0
-      days: [mon, tue, wed, thu]
-      order: 8
-    input_boolean.chore_kid1_unpack_backpack_and_lunchbox:
-      kitchen_chore: true
-      member: kid1
-      title: Unpack backpack and lunchbox
-      emoji: 🎒
-      period: afternoon
-      points: 0
-      days: [mon, tue, wed, thu, fri]
-      order: 9
-    input_boolean.chore_kid1_clean_up_all_toys:
-      kitchen_chore: true
-      member: kid1
-      title: Clean up all toys
-      emoji: 🧸
-      period: evening
-      points: 0
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 10
-    input_boolean.chore_kid1_pick_clothes_for_the_week:
-      kitchen_chore: true
-      member: kid1
-      title: Pick clothes for the week
-      emoji: 👚
-      period: evening
-      points: 5
-      days: [thu]
-      order: 11
-    input_boolean.chore_kid1_potty_and_brush_teeth:
-      kitchen_chore: true
-      member: kid1
-      title: Potty and brush teeth
-      emoji: 🪥
-      period: evening
-      points: 0
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 12
-    input_boolean.chore_kid1_practice_violin_for_5_minutes:
-      kitchen_chore: true
-      member: kid1
-      title: Practice violin for 5 minutes
-      emoji: 🎻
-      period: evening
-      points: 3
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 13
-    input_boolean.chore_kid1_shower_and_pjs:
-      kitchen_chore: true
-      member: kid1
-      title: Shower and PJs
-      emoji: 🚿
-      period: evening
-      points: 0
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 14
-    input_boolean.chore_kid1_dishes_by_sink:
-      kitchen_chore: true
-      member: kid1
-      title: Dishes by sink
-      emoji: 🍽️
-      period: anytime
-      points: 1
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 15
-    input_boolean.chore_kid1_piano_for_10_minutes:
-      kitchen_chore: true
-      member: kid1
-      title: Piano for 10 minutes
-      emoji: 🎹
-      period: anytime
-      points: 0
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 16
-    input_boolean.chore_kid1_read_for_15_minutes:
-      kitchen_chore: true
-      member: kid1
-      title: Read for 15 minutes
-      emoji: 📖
-      period: anytime
-      points: 1
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 17
-    input_boolean.chore_kid2_brush_teeth_and_hair:
-      kitchen_chore: true
-      member: kid2
-      title: Brush teeth and hair
-      emoji: 🪥
-      period: morning
-      points: 0
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 18
-    input_boolean.chore_kid2_clean_your_room:
-      kitchen_chore: true
-      member: kid2
-      title: Clean your room
-      emoji: 🧹
-      period: morning
-      points: 0
-      days: [sun]
-      order: 19
-    input_boolean.chore_kid2_eat_breakfast:
-      kitchen_chore: true
-      member: kid2
-      title: Eat breakfast
-      emoji: 🥣
-      period: morning
-      points: 0
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 20
-    input_boolean.chore_kid2_get_dressed:
-      kitchen_chore: true
-      member: kid2
-      title: Get dressed
-      emoji: 👕
-      period: morning
-      points: 0
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 21
-    input_boolean.chore_kid2_help_fold_clothes:
-      kitchen_chore: true
-      member: kid2
-      title: Help fold clothes
-      emoji: 👚
-      period: afternoon
-      points: 3
-      days: [thu]
-      order: 22
-    input_boolean.chore_kid2_clean_up_all_toys:
-      kitchen_chore: true
-      member: kid2
-      title: Clean up all toys
-      emoji: 🧸
-      period: evening
-      points: 0
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 23
-    input_boolean.chore_kid2_help_put_dishes_away:
-      kitchen_chore: true
-      member: kid2
-      title: Help put dishes away
-      emoji: 🍽️
-      period: evening
-      points: 3
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 24
-    input_boolean.chore_kid2_pick_clothes_for_the_week:
-      kitchen_chore: true
-      member: kid2
-      title: Pick clothes for the week
-      emoji: 👚
-      period: evening
-      points: 5
-      days: [thu]
-      order: 25
-    input_boolean.chore_kid2_potty_and_brush_teeth:
-      kitchen_chore: true
-      member: kid2
-      title: Potty and brush teeth
-      emoji: 🪥
-      period: evening
-      points: 0
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 26
-    input_boolean.chore_kid2_shower_and_pjs:
-      kitchen_chore: true
-      member: kid2
-      title: Shower and PJs
-      emoji: 🚿
-      period: evening
-      points: 0
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 27
-    input_boolean.chore_kid2_dishes_by_sink:
-      kitchen_chore: true
-      member: kid2
-      title: Dishes by sink
-      emoji: 🍽️
-      period: anytime
-      points: 1
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 28
-    input_boolean.chore_kid2_practice_letters:
-      kitchen_chore: true
-      member: kid2
-      title: Practice letters
-      emoji: ✏️
-      period: anytime
-      points: 5
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 29
-    input_boolean.chore_kid2_water_plants:
-      kitchen_chore: true
-      member: kid2
-      title: Water plants
-      emoji: 🪴
-      period: anytime
-      points: 5
-      days: [sun]
-      order: 30
-    input_boolean.chore_adult2_10000_steps:
-      kitchen_chore: true
-      member: adult2
-      title: 10000 steps
-      emoji: 👟
-      period: anytime
-      points: 1
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 31
-    input_boolean.chore_adult2_exercise_for_5_minutes:
-      kitchen_chore: true
-      member: adult2
-      title: Exercise for 5 minutes
-      emoji: 💪
-      period: anytime
-      points: 1
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 32
-    input_boolean.chore_adult2_exercise_for_10_15_minutes:
-      kitchen_chore: true
-      member: adult2
-      title: Exercise for 10-15 minutes
-      emoji: 🏃‍♀️
-      period: anytime
-      points: 3
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 33
-    input_boolean.chore_adult2_exercise_for_20_minutes:
-      kitchen_chore: true
-      member: adult2
-      title: Exercise for 20 minutes
-      emoji: 🔥
-      period: anytime
-      points: 5
-      days: [sun, mon, tue, wed, thu, fri, sat]
-      order: 34
-    input_boolean.chore_adult1_check_mail:
-      kitchen_chore: true
-      member: adult1
-      title: Check mail
-      emoji: 📬
-      period: anytime
-      points: 0
-      days: [sun]
-      order: 35
-    input_boolean.chore_adult1_take_out_trash:
-      kitchen_chore: true
-      member: adult1
-      title: Take out trash
-      emoji: 🗑️
-      period: anytime
-      points: 0
-      days: [sun]
-      order: 36
-input_boolean:
-  chore_kid1_brush_teeth_and_hair:
-    name: 'Kid1: Brush teeth and hair'
-    icon: mdi:toothbrush
-  chore_kid1_clean_your_room:
-    name: 'Kid1: Clean your room'
-    icon: mdi:broom
-  chore_kid1_eat_breakfast:
-    name: 'Kid1: Eat breakfast'
-    icon: mdi:bowl-mix
-  chore_kid1_get_dressed:
-    name: 'Kid1: Get dressed'
-    icon: mdi:tshirt-crew
-  chore_kid1_pack_backpack:
-    name: 'Kid1: Pack backpack'
-    icon: mdi:bag-personal
-  chore_kid1_pack_lunch:
-    name: 'Kid1: Pack lunch'
-    icon: mdi:food-takeout-box
-  chore_kid1_free_dress:
-    name: 'Kid1: Free dress'
-    icon: mdi:hanger
-  chore_kid1_pack_piano_books:
-    name: 'Kid1: Pack piano books'
-    icon: mdi:piano
-  chore_kid1_homework:
-    name: 'Kid1: Homework'
-    icon: mdi:pencil
-  chore_kid1_unpack_backpack_and_lunchbox:
-    name: 'Kid1: Unpack backpack and lunchbox'
-    icon: mdi:bag-personal-off
-  chore_kid1_clean_up_all_toys:
-    name: 'Kid1: Clean up all toys'
-    icon: mdi:teddy-bear
-  chore_kid1_pick_clothes_for_the_week:
-    name: 'Kid1: Pick clothes for the week'
-    icon: mdi:wardrobe
-  chore_kid1_potty_and_brush_teeth:
-    name: 'Kid1: Potty and brush teeth'
-    icon: mdi:toothbrush-paste
-  chore_kid1_practice_violin_for_5_minutes:
-    name: 'Kid1: Practice violin for 5 minutes'
-    icon: mdi:violin
-  chore_kid1_shower_and_pjs:
-    name: 'Kid1: Shower and PJs'
-    icon: mdi:shower
-  chore_kid1_dishes_by_sink:
-    name: 'Kid1: Dishes by sink'
-    icon: mdi:silverware-clean
-  chore_kid1_piano_for_10_minutes:
-    name: 'Kid1: Piano for 10 minutes'
-    icon: mdi:piano
-  chore_kid1_read_for_15_minutes:
-    name: 'Kid1: Read for 15 minutes'
-    icon: mdi:book-open-variant
-  chore_kid2_brush_teeth_and_hair:
-    name: 'Kid2: Brush teeth and hair'
-    icon: mdi:toothbrush
-  chore_kid2_clean_your_room:
-    name: 'Kid2: Clean your room'
-    icon: mdi:broom
-  chore_kid2_eat_breakfast:
-    name: 'Kid2: Eat breakfast'
-    icon: mdi:bowl-mix
-  chore_kid2_get_dressed:
-    name: 'Kid2: Get dressed'
-    icon: mdi:tshirt-crew
-  chore_kid2_help_fold_clothes:
-    name: 'Kid2: Help fold clothes'
-    icon: mdi:tshirt-v
-  chore_kid2_clean_up_all_toys:
-    name: 'Kid2: Clean up all toys'
-    icon: mdi:teddy-bear
-  chore_kid2_help_put_dishes_away:
-    name: 'Kid2: Help put dishes away'
-    icon: mdi:silverware-fork-knife
-  chore_kid2_pick_clothes_for_the_week:
-    name: 'Kid2: Pick clothes for the week'
-    icon: mdi:wardrobe
-  chore_kid2_potty_and_brush_teeth:
-    name: 'Kid2: Potty and brush teeth'
-    icon: mdi:toothbrush-paste
-  chore_kid2_shower_and_pjs:
-    name: 'Kid2: Shower and PJs'
-    icon: mdi:shower
-  chore_kid2_dishes_by_sink:
-    name: 'Kid2: Dishes by sink'
-    icon: mdi:silverware-clean
-  chore_kid2_practice_letters:
-    name: 'Kid2: Practice letters'
-    icon: mdi:alphabetical-variant
-  chore_kid2_water_plants:
-    name: 'Kid2: Water plants'
-    icon: mdi:watering-can
-  chore_adult2_10000_steps:
-    name: 'Adult2: 10000 steps'
-    icon: mdi:walk
-  chore_adult2_exercise_for_5_minutes:
-    name: 'Adult2: Exercise for 5 minutes'
-    icon: mdi:arm-flex
-  chore_adult2_exercise_for_10_15_minutes:
-    name: 'Adult2: Exercise for 10-15 minutes'
-    icon: mdi:run
-  chore_adult2_exercise_for_20_minutes:
-    name: 'Adult2: Exercise for 20 minutes'
-    icon: mdi:fire
-  chore_adult1_check_mail:
-    name: 'Adult1: Check mail'
-    icon: mdi:mailbox
-  chore_adult1_take_out_trash:
-    name: 'Adult1: Take out trash'
-    icon: mdi:trash-can
+# Unchecking a routine on the display takes its stars back; the midnight
+# reset doesn't (it reopens the items without going through the script).
 counter:
   stars_kid1:
     name: !env_var KITCHEN_KID1_NAME
@@ -525,217 +80,165 @@ input_number:
     step: 1
     mode: box
     icon: mdi:star-circle
+
+script:
+  kitchen_routine_set:
+    alias: 'Kitchen routines: check or uncheck'
+    description: Marks a routine done or not done for today and moves its stars. Called by the Kitchen dashboard.
+    icon: mdi:checkbox-marked-circle-outline
+    mode: queued
+    max: 30
+    fields:
+      uid:
+        description: The routine's to-do item uid in todo.kitchen_routines.
+        required: true
+        selector:
+          text:
+      done:
+        description: True to check it off, false to uncheck it.
+        required: true
+        selector:
+          boolean:
+    sequence:
+    - action: todo.get_items
+      target:
+        entity_id: todo.kitchen_routines
+      response_variable: r
+    - variables:
+        item: "{{ r['todo.kitchen_routines']['items'] | selectattr('uid', 'eq', uid) | first | default(none) }}"
+    # Nothing to do for a deleted routine or one already in that state (a double tap).
+    - condition: template
+      value_template: "{{ item is not none and (item.status == 'completed') != (done | bool) }}"
+    - variables:
+        meta: "{{ (item.description or '{}') | from_json(default={}) }}"
+        points: "{{ (meta.points_by_day | default({})).get(now().strftime('%a') | lower, meta.points | default(0)) | int(0) }}"
+        counter_entity: "counter.stars_{{ meta.member | default('none') }}"
+    - action: todo.update_item
+      target:
+        entity_id: todo.kitchen_routines
+      data:
+        item: "{{ uid }}"
+        status: "{{ 'completed' if done | bool else 'needs_action' }}"
+    - condition: template
+      value_template: "{{ points | int(0) > 0 and states(counter_entity) | is_number }}"
+    - action: counter.set_value
+      target:
+        entity_id: "{{ counter_entity }}"
+      data:
+        value: "{% set cur = states(counter_entity) | int(0) %}{{ cur + points | int(0) if done | bool else [cur - points | int(0), 0] | max }}"
 template:
+# The routines list as an attribute, refreshed whenever the list changes (its
+# state is the open count, so a check or uncheck triggers it) and every minute
+# for edits that don't change the count.
+- triggers:
+  - trigger: state
+    entity_id: todo.kitchen_routines
+  - trigger: time_pattern
+    minutes: /1
+  - trigger: homeassistant
+    event: start
+  conditions:
+  - condition: template
+    value_template: "{{ states('todo.kitchen_routines') not in ['unknown', 'unavailable'] }}"
+  actions:
+  - action: todo.get_items
+    target:
+      entity_id: todo.kitchen_routines
+    response_variable: r
+  sensor:
+  - name: Kitchen routines
+    unique_id: kitchen_routines_items
+    icon: mdi:format-list-checks
+    state: "{{ r['todo.kitchen_routines']['items'] | count }}"
+    attributes:
+      items: >-
+        {% set ns = namespace(out=[]) %}
+        {% for i in r['todo.kitchen_routines']['items'] %}
+        {% set m = (i.description or '{}') | from_json(default={}) %}
+        {% if m is mapping and m.member is defined %}
+        {% set ns.out = ns.out + [{'uid': i.uid, 'title': i.summary, 'member': m.member, 'period': m.period | default('anytime'),
+          'days': m.days | default(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']), 'done': i.status == 'completed'}] %}
+        {% endif %}
+        {% endfor %}
+        {{ ns.out }}
 - sensor:
   - name: Kid1 routines done
     unique_id: kitchen_routines_kid1_done
     icon: mdi:checkbox-marked-circle-outline
-    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'kid1') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list %}{{ d | selectattr('state', 'eq', 'on') | list | count }}"
+    state: "{{ ((state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'kid1') | selectattr('days', 'contains', now().strftime('%a') | lower) | list) | selectattr('done') | list | count }}"
     attributes:
-      total: "{{ (states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'kid1') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list) | count }}"
+      total: "{{ ((state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'kid1') | selectattr('days', 'contains', now().strftime('%a') | lower) | list) | count }}"
   - name: Kid2 routines done
     unique_id: kitchen_routines_kid2_done
     icon: mdi:checkbox-marked-circle-outline
-    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'kid2') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list %}{{ d | selectattr('state', 'eq', 'on') | list | count }}"
+    state: "{{ ((state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'kid2') | selectattr('days', 'contains', now().strftime('%a') | lower) | list) | selectattr('done') | list | count }}"
     attributes:
-      total: "{{ (states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'kid2') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list) | count }}"
+      total: "{{ ((state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'kid2') | selectattr('days', 'contains', now().strftime('%a') | lower) | list) | count }}"
   - name: Adult2 routines done
     unique_id: kitchen_routines_adult2_done
     icon: mdi:checkbox-marked-circle-outline
-    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'adult2') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list %}{{ d | selectattr('state', 'eq', 'on') | list | count }}"
+    state: "{{ ((state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'adult2') | selectattr('days', 'contains', now().strftime('%a') | lower) | list) | selectattr('done') | list | count }}"
     attributes:
-      total: "{{ (states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'adult2') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list) | count }}"
+      total: "{{ ((state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'adult2') | selectattr('days', 'contains', now().strftime('%a') | lower) | list) | count }}"
   - name: Adult1 routines done
     unique_id: kitchen_routines_adult1_done
     icon: mdi:checkbox-marked-circle-outline
-    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'adult1') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list %}{{ d | selectattr('state', 'eq', 'on') | list | count }}"
+    state: "{{ ((state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'adult1') | selectattr('days', 'contains', now().strftime('%a') | lower) | list) | selectattr('done') | list | count }}"
     attributes:
-      total: "{{ (states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'adult1') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list) | count }}"
+      total: "{{ ((state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'adult1') | selectattr('days', 'contains', now().strftime('%a') | lower) | list) | count }}"
 - binary_sensor:
   - name: Kid1 routines am done
     unique_id: kitchen_routines_kid1_am
     icon: mdi:star-check
-    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'kid1') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['morning', 'afternoon']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+    state: "{% set d = (state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'kid1') | selectattr('days', 'contains', now().strftime('%a') | lower) | selectattr('period', 'in', ['morning', 'afternoon']) | list %}{{ d | count > 0 and d | rejectattr('done') | list | count == 0 }}"
   - name: Kid1 routines pm done
     unique_id: kitchen_routines_kid1_pm
     icon: mdi:star-check
-    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'kid1') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['evening']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+    state: "{% set d = (state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'kid1') | selectattr('days', 'contains', now().strftime('%a') | lower) | selectattr('period', 'in', ['evening']) | list %}{{ d | count > 0 and d | rejectattr('done') | list | count == 0 }}"
   - name: Kid2 routines am done
     unique_id: kitchen_routines_kid2_am
     icon: mdi:star-check
-    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'kid2') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['morning', 'afternoon']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+    state: "{% set d = (state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'kid2') | selectattr('days', 'contains', now().strftime('%a') | lower) | selectattr('period', 'in', ['morning', 'afternoon']) | list %}{{ d | count > 0 and d | rejectattr('done') | list | count == 0 }}"
   - name: Kid2 routines pm done
     unique_id: kitchen_routines_kid2_pm
     icon: mdi:star-check
-    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'kid2') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['evening']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+    state: "{% set d = (state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'kid2') | selectattr('days', 'contains', now().strftime('%a') | lower) | selectattr('period', 'in', ['evening']) | list %}{{ d | count > 0 and d | rejectattr('done') | list | count == 0 }}"
   - name: Adult2 routines am done
     unique_id: kitchen_routines_adult2_am
     icon: mdi:star-check
-    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'adult2') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['morning', 'afternoon']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+    state: "{% set d = (state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'adult2') | selectattr('days', 'contains', now().strftime('%a') | lower) | selectattr('period', 'in', ['morning', 'afternoon']) | list %}{{ d | count > 0 and d | rejectattr('done') | list | count == 0 }}"
   - name: Adult2 routines pm done
     unique_id: kitchen_routines_adult2_pm
     icon: mdi:star-check
-    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'adult2') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['evening']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+    state: "{% set d = (state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'adult2') | selectattr('days', 'contains', now().strftime('%a') | lower) | selectattr('period', 'in', ['evening']) | list %}{{ d | count > 0 and d | rejectattr('done') | list | count == 0 }}"
   - name: Adult1 routines am done
     unique_id: kitchen_routines_adult1_am
     icon: mdi:star-check
-    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'adult1') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['morning', 'afternoon']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+    state: "{% set d = (state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'adult1') | selectattr('days', 'contains', now().strftime('%a') | lower) | selectattr('period', 'in', ['morning', 'afternoon']) | list %}{{ d | count > 0 and d | rejectattr('done') | list | count == 0 }}"
   - name: Adult1 routines pm done
     unique_id: kitchen_routines_adult1_pm
     icon: mdi:star-check
-    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'adult1') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['evening']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+    state: "{% set d = (state_attr('sensor.kitchen_routines', 'items') or []) | selectattr('member', 'eq', 'adult1') | selectattr('days', 'contains', now().strftime('%a') | lower) | selectattr('period', 'in', ['evening']) | list %}{{ d | count > 0 and d | rejectattr('done') | list | count == 0 }}"
 automation:
-- id: kitchen_routines_stars
-  alias: 'Kitchen routines: award stars'
-  description: Adds a chore's stars when it's checked off, takes them back when a person unchecks it. Unchecks without a user (the midnight reset) keep the stars.
-  mode: queued
-  max: 50
-  triggers:
-  - trigger: state
-    entity_id:
-    - input_boolean.chore_kid1_brush_teeth_and_hair
-    - input_boolean.chore_kid1_clean_your_room
-    - input_boolean.chore_kid1_eat_breakfast
-    - input_boolean.chore_kid1_get_dressed
-    - input_boolean.chore_kid1_pack_backpack
-    - input_boolean.chore_kid1_pack_lunch
-    - input_boolean.chore_kid1_free_dress
-    - input_boolean.chore_kid1_pack_piano_books
-    - input_boolean.chore_kid1_homework
-    - input_boolean.chore_kid1_unpack_backpack_and_lunchbox
-    - input_boolean.chore_kid1_clean_up_all_toys
-    - input_boolean.chore_kid1_pick_clothes_for_the_week
-    - input_boolean.chore_kid1_potty_and_brush_teeth
-    - input_boolean.chore_kid1_practice_violin_for_5_minutes
-    - input_boolean.chore_kid1_shower_and_pjs
-    - input_boolean.chore_kid1_dishes_by_sink
-    - input_boolean.chore_kid1_piano_for_10_minutes
-    - input_boolean.chore_kid1_read_for_15_minutes
-    - input_boolean.chore_kid2_brush_teeth_and_hair
-    - input_boolean.chore_kid2_clean_your_room
-    - input_boolean.chore_kid2_eat_breakfast
-    - input_boolean.chore_kid2_get_dressed
-    - input_boolean.chore_kid2_help_fold_clothes
-    - input_boolean.chore_kid2_clean_up_all_toys
-    - input_boolean.chore_kid2_help_put_dishes_away
-    - input_boolean.chore_kid2_pick_clothes_for_the_week
-    - input_boolean.chore_kid2_potty_and_brush_teeth
-    - input_boolean.chore_kid2_shower_and_pjs
-    - input_boolean.chore_kid2_dishes_by_sink
-    - input_boolean.chore_kid2_practice_letters
-    - input_boolean.chore_kid2_water_plants
-    - input_boolean.chore_adult2_10000_steps
-    - input_boolean.chore_adult2_exercise_for_5_minutes
-    - input_boolean.chore_adult2_exercise_for_10_15_minutes
-    - input_boolean.chore_adult2_exercise_for_20_minutes
-    - input_boolean.chore_adult1_check_mail
-    - input_boolean.chore_adult1_take_out_trash
-    from: 'off'
-    to: 'on'
-    id: done
-  - trigger: state
-    entity_id:
-    - input_boolean.chore_kid1_brush_teeth_and_hair
-    - input_boolean.chore_kid1_clean_your_room
-    - input_boolean.chore_kid1_eat_breakfast
-    - input_boolean.chore_kid1_get_dressed
-    - input_boolean.chore_kid1_pack_backpack
-    - input_boolean.chore_kid1_pack_lunch
-    - input_boolean.chore_kid1_free_dress
-    - input_boolean.chore_kid1_pack_piano_books
-    - input_boolean.chore_kid1_homework
-    - input_boolean.chore_kid1_unpack_backpack_and_lunchbox
-    - input_boolean.chore_kid1_clean_up_all_toys
-    - input_boolean.chore_kid1_pick_clothes_for_the_week
-    - input_boolean.chore_kid1_potty_and_brush_teeth
-    - input_boolean.chore_kid1_practice_violin_for_5_minutes
-    - input_boolean.chore_kid1_shower_and_pjs
-    - input_boolean.chore_kid1_dishes_by_sink
-    - input_boolean.chore_kid1_piano_for_10_minutes
-    - input_boolean.chore_kid1_read_for_15_minutes
-    - input_boolean.chore_kid2_brush_teeth_and_hair
-    - input_boolean.chore_kid2_clean_your_room
-    - input_boolean.chore_kid2_eat_breakfast
-    - input_boolean.chore_kid2_get_dressed
-    - input_boolean.chore_kid2_help_fold_clothes
-    - input_boolean.chore_kid2_clean_up_all_toys
-    - input_boolean.chore_kid2_help_put_dishes_away
-    - input_boolean.chore_kid2_pick_clothes_for_the_week
-    - input_boolean.chore_kid2_potty_and_brush_teeth
-    - input_boolean.chore_kid2_shower_and_pjs
-    - input_boolean.chore_kid2_dishes_by_sink
-    - input_boolean.chore_kid2_practice_letters
-    - input_boolean.chore_kid2_water_plants
-    - input_boolean.chore_adult2_10000_steps
-    - input_boolean.chore_adult2_exercise_for_5_minutes
-    - input_boolean.chore_adult2_exercise_for_10_15_minutes
-    - input_boolean.chore_adult2_exercise_for_20_minutes
-    - input_boolean.chore_adult1_check_mail
-    - input_boolean.chore_adult1_take_out_trash
-    from: 'on'
-    to: 'off'
-    id: undone
-  conditions:
-  # Only take stars back when a person unchecked it (a dashboard tap carries
-  # their user_id). The midnight reset runs from a time trigger, whose context
-  # has neither a user_id nor a parent_id, so parent_id can't tell them apart.
-  - condition: template
-    value_template: "{{ trigger.id == 'done' or trigger.to_state.context.user_id is not none }}"
-  variables:
-    points: "{% set a = trigger.to_state.attributes %}{{ (a.points_by_day | default({})).get(now().strftime('%a') | lower, a.points | default(0)) | int(0) }}"
-    counter_entity: "counter.stars_{{ trigger.to_state.attributes.member }}"
-  actions:
-  - condition: template
-    value_template: "{{ points | int(0) > 0 }}"
-  - action: counter.set_value
-    target:
-      entity_id: "{{ counter_entity }}"
-    data:
-      value: "{% set cur = states(counter_entity) | int(0) %}{{ cur + points | int(0) if trigger.id == 'done' else [cur - points | int(0), 0] | max }}"
 - id: kitchen_routines_reset
   alias: 'Kitchen routines: midnight reset'
-  description: Unchecks every chore at midnight. Stars stay.
+  description: Reopens every routine at midnight. Stars stay.
   triggers:
   - trigger: time
     at: 00:00:00
   actions:
-  - action: input_boolean.turn_off
+  - action: todo.get_items
     target:
-      entity_id:
-      - input_boolean.chore_kid1_brush_teeth_and_hair
-      - input_boolean.chore_kid1_clean_your_room
-      - input_boolean.chore_kid1_eat_breakfast
-      - input_boolean.chore_kid1_get_dressed
-      - input_boolean.chore_kid1_pack_backpack
-      - input_boolean.chore_kid1_pack_lunch
-      - input_boolean.chore_kid1_free_dress
-      - input_boolean.chore_kid1_pack_piano_books
-      - input_boolean.chore_kid1_homework
-      - input_boolean.chore_kid1_unpack_backpack_and_lunchbox
-      - input_boolean.chore_kid1_clean_up_all_toys
-      - input_boolean.chore_kid1_pick_clothes_for_the_week
-      - input_boolean.chore_kid1_potty_and_brush_teeth
-      - input_boolean.chore_kid1_practice_violin_for_5_minutes
-      - input_boolean.chore_kid1_shower_and_pjs
-      - input_boolean.chore_kid1_dishes_by_sink
-      - input_boolean.chore_kid1_piano_for_10_minutes
-      - input_boolean.chore_kid1_read_for_15_minutes
-      - input_boolean.chore_kid2_brush_teeth_and_hair
-      - input_boolean.chore_kid2_clean_your_room
-      - input_boolean.chore_kid2_eat_breakfast
-      - input_boolean.chore_kid2_get_dressed
-      - input_boolean.chore_kid2_help_fold_clothes
-      - input_boolean.chore_kid2_clean_up_all_toys
-      - input_boolean.chore_kid2_help_put_dishes_away
-      - input_boolean.chore_kid2_pick_clothes_for_the_week
-      - input_boolean.chore_kid2_potty_and_brush_teeth
-      - input_boolean.chore_kid2_shower_and_pjs
-      - input_boolean.chore_kid2_dishes_by_sink
-      - input_boolean.chore_kid2_practice_letters
-      - input_boolean.chore_kid2_water_plants
-      - input_boolean.chore_adult2_10000_steps
-      - input_boolean.chore_adult2_exercise_for_5_minutes
-      - input_boolean.chore_adult2_exercise_for_10_15_minutes
-      - input_boolean.chore_adult2_exercise_for_20_minutes
-      - input_boolean.chore_adult1_check_mail
-      - input_boolean.chore_adult1_take_out_trash
+      entity_id: todo.kitchen_routines
+    data:
+      status: completed
+    response_variable: r
+  - repeat:
+      for_each: "{{ r['todo.kitchen_routines']['items'] | map(attribute='uid') | list }}"
+      sequence:
+      - action: todo.update_item
+        target:
+          entity_id: todo.kitchen_routines
+        data:
+          item: "{{ repeat.item }}"
+          status: needs_action

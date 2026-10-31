@@ -44,6 +44,11 @@ default_config:
 recorder:
   db_url: !env_var HASS_RECORDER_DB_URL
   purge_keep_days: 14
+  # The routines list as one big attribute; the done/total sensors built
+  # from it are what's worth keeping (they drive the week grid).
+  exclude:
+    entities:
+      - sensor.kitchen_routines
 
 # SSO against the tnwks-auth Cognito pool (hass-oidc-auth; app client in
 # infrastructure/terraform/modules/aws/cognito.tf). Public client + PKCE.
@@ -86,7 +91,7 @@ lovelace:
       type: module
     # /local is cached for weeks: the ?v= is what makes browsers (and the
     # kitchen display) fetch a new copy. Bump it with every change to the file.
-    - url: /local/tnwks-kitchen/kitchen-cards.js?v=1.2.0
+    - url: /local/tnwks-kitchen/kitchen-cards.js?v=1.3.0
       type: module
     - url: /local/kiosk-mode/kiosk-mode.js?v=15.0.0
       type: module
