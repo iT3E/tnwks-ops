@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'CI: the image diff renders each cluster from its own entrypoint, so PRs that touch frigate no longer fail on an unsubstituted ${SERVICE_MONITOR_ENABLED}; the live WSL cluster also gets its own render test. Image exists rejects tags that are not container images (Helm charts pushed into an image repo), and a registry rate limit on a Renovate PR warns instead of failing'
-time: 2026-10-30T18:30:00-07:00
