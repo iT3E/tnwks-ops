@@ -1,0 +1,14 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/source.toolkit.fluxcd.io/helmrepository_v1.json
+# k8s_gateway moved from ori-edge to the k8s-gateway project on Codeberg,
+# which publishes the chart only as an OCI artifact. The old ori-edge image
+# (quay.io/oriedge/k8s_gateway) is no longer pullable.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: k8s-gateway
+  namespace: flux-system
+spec:
+  type: oci
+  interval: 2h
+  url: oci://codeberg.org/k8s-gateway/charts

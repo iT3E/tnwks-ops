@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - ./actions-runner-controller.yaml
   - ./home-operations.yaml
+  - ./k8s-gateway.yaml

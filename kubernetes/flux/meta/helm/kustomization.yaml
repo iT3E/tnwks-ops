@@ -17,7 +17,6 @@ resources:
   - ./ingress-nginx.yaml
   - ./jetstack.yaml
   - ./k8s-at-home.yaml
-  - ./k8s-gateway.yaml
   - ./metallb.yaml
   - ./metrics-server.yaml
   - ./node-feature-discovery.yaml
