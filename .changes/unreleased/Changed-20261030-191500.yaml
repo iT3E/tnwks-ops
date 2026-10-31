@@ -1,3 +1,0 @@
-kind: Changed
-body: 'WSL cluster on Talos 1.13.12 (from 1.13.2), rolled node by node with `task talos:upgrade:wsl`'
-time: 2026-10-30T19:15:00-07:00

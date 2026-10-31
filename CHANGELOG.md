@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.29.0 - 2026-10-31
+
+### Changed
+
+* WSL cluster on Talos 1.13.12 (from 1.13.2), rolled node by node with `task talos:upgrade:wsl`
+
 ## v1.28.0 - 2026-10-31
 
 ### Changed
