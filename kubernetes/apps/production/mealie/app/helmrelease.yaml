@@ -81,6 +81,15 @@ spec:
                 value: "cognito:groups"
               - name: OIDC_REMEMBER_ME
                 value: "true"
+              # Mealie asks for the groups claim as a scope by default, and
+              # Cognito rejects "cognito:groups" as invalid_scope. The claim is
+              # in the id_token anyway.
+              - name: OIDC_SCOPES_OVERRIDE
+                value: "openid email profile"
+              # Cognito users have no "name" attribute, and Mealie refuses a
+              # login with a missing claim.
+              - name: OIDC_NAME_CLAIM
+                value: "email"
     service:
       app:
         controller: mealie
