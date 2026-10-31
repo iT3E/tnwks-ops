@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.40.0 - 2026-10-31
+
+### Added
+
+* Mealie: log in with tnwks-auth (Cognito) through Mealie's built-in OIDC; admins become Mealie admins, viewers users, anyone else is refused. Password login stays for the break-glass admin
+
 ## v1.39.0 - 2026-10-31
 
 ### Added
