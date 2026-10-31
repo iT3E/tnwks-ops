@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.41.0 - 2026-10-31
+
+### Added
+
+* Kitchen display: the family calendar (Remote Calendar on the Google calendar's secret iCal feed) refreshes every 15 minutes instead of Remote Calendar's daily poll
+
 ## v1.40.2 - 2026-10-31
 
 ### Fixed
