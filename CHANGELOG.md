@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.31.0 - 2026-10-31
+
+### Added
+
+* home-assistant: Kitchen dashboard for the Apolosign wall display, with chores and stars (routines package), our own frontend cards served from a ConfigMap, and kiosk-mode
+
 ## v1.30.3 - 2026-10-31
 
 ### Fixed
