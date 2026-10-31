@@ -15,6 +15,7 @@ configMapGenerator:
   - name: home-assistant-packages
     files:
       - config/packages/frigate_night_alerts.yaml
+      - config/packages/kitchen_calendar.yaml
       - config/packages/kitchen_routines.yaml
   - name: home-assistant-dashboards
     files:
