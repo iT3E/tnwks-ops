@@ -79,6 +79,7 @@
         --kubernetes-version {{ wsl_versions.kubernetes | regex_replace('^v', '') }}
         --image ghcr.io/siderolabs/talos:{{ wsl_versions.talos }}
         --config-patch @{{ talos_dir }}/cluster-config.yaml
+        --config-patch @{{ talos_dir }}/patches/kubelet-image-gc.yaml
         --config-patch-controlplanes @{{ talos_dir }}/patches/talos-api-access.yaml
       when:
         - cluster_target == 'wsl'
