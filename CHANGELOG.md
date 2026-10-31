@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.31.1 - 2026-10-31
+
+### Fixed
+
+* litellm: pin the image to v1.86.2 with its digest instead of the rolling main-stable tag, so Renovate can track it; Renovate follows only plain vX.Y.Z releases and LiteLLM minors are reviewed, not automerged
+
 ## v1.31.0 - 2026-10-31
 
 ### Added
