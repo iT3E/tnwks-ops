@@ -706,6 +706,124 @@ resource "terraform_data" "mealie_managed_login" {
   }
 }
 
+# Immich (photos, the kitchen screensaver's photo store) logs users in itself
+# with its built-in OAuth support, like Mealie: the mobile app and the Home
+# Assistant slideshow use Immich-issued sessions and API keys, which a proxy
+# session in front would block. The code exchange runs in Immich's backend,
+# so this is a confidential client. Immich can't map cognito:groups to its
+# roles, so it has auto-register off: only people with an Immich account
+# (matched by email) get in, and admin rights are set in Immich.
+resource "aws_cognito_user_pool_client" "immich" {
+  name         = "immich"
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+
+  generate_secret = true
+
+  # Web login (/auth/login), linking an account from the user settings page
+  # (/user-settings), and the mobile app through Immich's https redirect
+  # (Cognito can't take the app's app.immich:/// scheme).
+  callback_urls = [
+    "https://immich.internal.tnwks.us/auth/login",
+    "https://immich.internal.tnwks.us/user-settings",
+    "https://immich.internal.tnwks.us/api/oauth/mobile-redirect",
+  ]
+
+  # Immich's logout sends the browser to Cognito's /logout, which only
+  # redirects to a registered logout_uri.
+  logout_urls = [
+    "https://immich.internal.tnwks.us/auth/login",
+  ]
+
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_scopes                 = ["openid", "email", "profile"]
+
+  supported_identity_providers = ["COGNITO"]
+
+  explicit_auth_flows = [
+    "ALLOW_USER_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH",
+  ]
+
+  # Immich reads the id_token once at login and then runs its own session.
+  access_token_validity  = 1
+  id_token_validity      = 1
+  refresh_token_validity = 30
+
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
+
+  prevent_user_existence_errors = "ENABLED"
+  enable_token_revocation       = true
+}
+
+resource "terraform_data" "immich_managed_login" {
+  triggers_replace = [
+    aws_cognito_user_pool.tnwks_auth.id,
+    aws_cognito_user_pool_client.immich.id,
+    data.aws_region.current.name,
+    local.cognito_mfa_role_arn,
+  ]
+
+  provisioner "local-exec" {
+    when    = create
+    command = <<-EOT
+      set -eu
+      creds=$(aws sts assume-role \
+        --role-arn ${local.cognito_mfa_role_arn} \
+        --role-session-name tfc-immich-managed-login \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
+      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
+      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
+      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
+      existing=$(aws cognito-idp describe-managed-login-branding-by-client \
+        --region ${data.aws_region.current.name} \
+        --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
+        --client-id ${aws_cognito_user_pool_client.immich.id} \
+        --query 'ManagedLoginBranding.ManagedLoginBrandingId' \
+        --output text 2>/dev/null) || existing=""
+      if [ -z "$existing" ] || [ "$existing" = "None" ]; then
+        aws cognito-idp create-managed-login-branding \
+          --region ${data.aws_region.current.name} \
+          --user-pool-id ${aws_cognito_user_pool.tnwks_auth.id} \
+          --client-id ${aws_cognito_user_pool_client.immich.id} \
+          --use-cognito-provided-values
+      fi
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      set -eu
+      creds=$(aws sts assume-role \
+        --role-arn ${self.triggers_replace[3]} \
+        --role-session-name tfc-immich-managed-login \
+        --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+        --output text)
+      export AWS_ACCESS_KEY_ID=$(echo "$creds" | cut -f1)
+      export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | cut -f2)
+      export AWS_SESSION_TOKEN=$(echo "$creds" | cut -f3)
+      branding_id=$(aws cognito-idp describe-managed-login-branding-by-client \
+        --region ${self.triggers_replace[2]} \
+        --user-pool-id ${self.triggers_replace[0]} \
+        --client-id ${self.triggers_replace[1]} \
+        --query 'ManagedLoginBranding.ManagedLoginBrandingId' \
+        --output text 2>/dev/null) || branding_id=""
+      if [ -n "$branding_id" ] && [ "$branding_id" != "None" ]; then
+        aws cognito-idp delete-managed-login-branding \
+          --region ${self.triggers_replace[2]} \
+          --user-pool-id ${self.triggers_replace[0]} \
+          --managed-login-branding-id "$branding_id"
+      fi
+    EOT
+  }
+}
+
 resource "aws_cognito_user_pool_client" "agent_ori" {
   name         = "agent-ori"
   user_pool_id = aws_cognito_user_pool.tnwks_auth.id

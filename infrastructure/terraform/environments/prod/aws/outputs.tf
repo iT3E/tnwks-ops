@@ -34,6 +34,17 @@ output "cognito_hosted_ui_domain" {
   value       = module.aws.cognito_hosted_ui_domain
 }
 
+output "cognito_immich_client_id" {
+  description = "App client ID for Immich (built-in OAuth)."
+  value       = module.aws.cognito_immich_client_id
+}
+
+output "cognito_immich_client_secret" {
+  description = "App client secret for Immich. Copied into the immich Secret (SOPS) in kubernetes/apps/selfhosted/immich/app."
+  value       = module.aws.cognito_immich_client_secret
+  sensitive   = true
+}
+
 output "cognito_mealie_client_id" {
   description = "App client ID for Mealie (built-in OIDC)."
   value       = module.aws.cognito_mealie_client_id

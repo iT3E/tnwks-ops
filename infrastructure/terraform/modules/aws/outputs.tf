@@ -45,6 +45,17 @@ output "cognito_hosted_ui_domain" {
   value       = aws_cognito_user_pool_domain.tnwks_auth.domain
 }
 
+output "cognito_immich_client_id" {
+  description = "App client ID for Immich (built-in OAuth)."
+  value       = aws_cognito_user_pool_client.immich.id
+}
+
+output "cognito_immich_client_secret" {
+  description = "App client secret for Immich. Copied into the immich Secret (SOPS) in kubernetes/apps/selfhosted/immich/app."
+  value       = aws_cognito_user_pool_client.immich.client_secret
+  sensitive   = true
+}
+
 output "cognito_mealie_client_id" {
   description = "App client ID for Mealie (built-in OIDC)."
   value       = aws_cognito_user_pool_client.mealie.id
