@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.39.0 - 2026-10-31
+
+### Added
+
+* Cognito: a mealie app client (confidential, authorization code) for Mealie's built-in OIDC login, with its client ID and secret as outputs
+
 ## v1.38.0 - 2026-10-31
 
 ### Added
