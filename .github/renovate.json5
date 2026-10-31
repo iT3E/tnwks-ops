@@ -71,6 +71,7 @@
       "managerFilePatterns": [
         "/ansible/.+\\.ya?ml(\\.j2)?$/",
         "/kubernetes/.+\\.ya?ml$/",
+        "/^talos/.+\\.ya?ml$/",
         "/\\.github/workflows/.+\\.ya?ml$/"
       ],
       "matchStrings": [

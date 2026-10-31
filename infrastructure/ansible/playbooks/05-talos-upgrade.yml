@@ -1,0 +1,91 @@
+---
+# Roll the WSL Talos-in-Docker nodes onto the Talos version in
+# talos/wsl/versions.yaml (Renovate bumps it).
+#
+# Talos refuses in-place upgrades in container mode, so each node container
+# is swapped for one on the new image with the same volumes, env, address
+# and limits (talos/wsl/roll-node.sh). One node at a time, control plane
+# first: check the cluster is healthy, cordon and drain, swap, wait for the
+# node to report the new Talos version and Ready, uncordon. A node already on
+# the target is skipped, so a re-run after a failure picks up where it
+# stopped.
+#
+# The single control plane means the Kubernetes API is down for a minute or
+# two while it restarts; workloads keep running.
+#
+# Run via:
+#   task talos:upgrade:wsl
+#   ansible-playbook -i ansible/inventory/wsl.yml ansible/playbooks/05-talos-upgrade.yml
+#
+# Kubernetes versions are separate: tuppr's KubernetesUpgrade
+# (kubernetes/apps/system-upgrade/tuppr). docs/operations/cluster-upgrades.md.
+
+- name: Roll WSL Talos nodes onto the pinned Talos version
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: false
+
+  vars:
+    cluster_name: homelab-wsl
+    repo_root: "{{ playbook_dir }}/../../.."
+    talos_dir: "{{ repo_root }}/talos/wsl"
+    target_version: "{{ (lookup('ansible.builtin.file', talos_dir ~ '/versions.yaml') | from_yaml).talos }}"
+    target_image: "ghcr.io/siderolabs/talos:{{ target_version }}"
+    # Control plane first (Talos upgrade order), then the workers.
+    nodes:
+      - homelab-wsl-controlplane-1
+      - homelab-wsl-worker-1
+      - homelab-wsl-worker-2
+
+  environment:
+    KUBECONFIG: "{{ ansible_env.HOME }}/.kube/config-{{ cluster_name }}"
+    TALOSCONFIG: "{{ ansible_env.HOME }}/.talos/config-{{ cluster_name }}"
+
+  tasks:
+    - name: Show the target
+      ansible.builtin.debug:
+        msg: "Rolling {{ nodes | join(', ') }} onto {{ target_image }}"
+
+    - name: CloudNativePG clusters
+      ansible.builtin.command: >-
+        kubectl get clusters.postgresql.cnpg.io -A
+        -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}'
+      register: cnpg_clusters
+      changed_when: false
+
+    # A single-instance CNPG cluster's PDB allows 0 disruptions, so draining
+    # its node would wait forever. The maintenance window drops the PDB and
+    # has the operator recreate the pod on its PVC once the node is back.
+    # Fields Flux doesn't own, so the next reconcile leaves them alone.
+    - name: Roll the nodes inside a CNPG maintenance window
+      block:
+        - name: Open the CNPG maintenance window
+          ansible.builtin.command: >-
+            kubectl -n {{ item.split('/')[0] }} patch clusters.postgresql.cnpg.io {{ item.split('/')[1] }}
+            --type merge -p '{"spec":{"nodeMaintenanceWindow":{"inProgress":true,"reusePVC":true}}}'
+          loop: "{{ cnpg_clusters.stdout_lines }}"
+          changed_when: true
+
+        - name: Roll each node
+          ansible.builtin.include_tasks: tasks/talos-roll-node.yml
+          loop: "{{ nodes }}"
+          loop_control:
+            loop_var: node
+      always:
+        - name: Close the CNPG maintenance window
+          ansible.builtin.command: >-
+            kubectl -n {{ item.split('/')[0] }} patch clusters.postgresql.cnpg.io {{ item.split('/')[1] }}
+            --type merge -p '{"spec":{"nodeMaintenanceWindow":{"inProgress":false}}}'
+          loop: "{{ cnpg_clusters.stdout_lines }}"
+          register: cnpg_close
+          until: cnpg_close.rc == 0
+          retries: 10
+          delay: 15
+          changed_when: true
+
+    - name: Final cluster health
+      ansible.builtin.command: >-
+        talosctl -n 10.5.0.2 health --wait-timeout 10m
+        --control-plane-nodes 10.5.0.2 --worker-nodes 10.5.0.3,10.5.0.4
+      changed_when: false

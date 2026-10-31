@@ -5,9 +5,11 @@
 #     --name homelab-wsl \
 #     --workers 2 \
 #     --cpus-controlplanes 4.0 --cpus-workers 4.0 \
-#     --memory-controlplanes 4GiB --memory-workers 8GiB \
-#     --kubernetes-version 1.34.0 \
-#     --config-patch @talos/wsl/cluster-config.yaml
+#     --memory-controlplanes 4GiB --memory-workers 13GiB \
+#     --kubernetes-version <kubernetes from talos/wsl/versions.yaml> \
+#     --image ghcr.io/siderolabs/talos:<talos from talos/wsl/versions.yaml> \
+#     --config-patch @talos/wsl/cluster-config.yaml \
+#     --config-patch-controlplanes @talos/wsl/patches/talos-api-access.yaml
 #
 # WSL2 VM ceiling: needs to accommodate ~20GiB Talos + Docker + WSL
 # services. Set `memory=24GB` in C:\Users\<user>\.wslconfig and run

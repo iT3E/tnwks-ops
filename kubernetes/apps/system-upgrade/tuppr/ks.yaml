@@ -1,0 +1,43 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: tuppr
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/system-upgrade/tuppr/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  # tuppr-upgrades applies resources of the CRDs this chart installs, and its
+  # admission webhook must be serving before they are created.
+  wait: true
+  healthChecks:
+    - apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      name: tuppr
+      namespace: system-upgrade
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: tuppr-upgrades
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: tuppr
+  path: ./kubernetes/apps/system-upgrade/tuppr/upgrades
+  # Deleting a KubernetesUpgrade doesn't downgrade anything, but keep the
+  # object (and its status history) if the path ever moves.
+  prune: false
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false # no flux ks dependents
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

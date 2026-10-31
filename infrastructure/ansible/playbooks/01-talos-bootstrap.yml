@@ -22,6 +22,10 @@
     cluster_name: "homelab-{{ cluster_target }}"
     talos_dir: "{{ playbook_dir }}/../../../talos/{{ cluster_target }}"
     kubeconfig_path: "{{ ansible_env.HOME }}/.kube/config-{{ cluster_name }}"
+    # Talos image and initial Kubernetes version (Renovate-managed). After
+    # creation the cluster follows tuppr's KubernetesUpgrade and
+    # 05-talos-upgrade.yml; see docs/operations/cluster-upgrades.md.
+    wsl_versions: "{{ lookup('ansible.builtin.file', talos_dir ~ '/versions.yaml') | from_yaml if cluster_target == 'wsl' else {} }}"
 
   tasks:
     - name: Ensure talosctl is installed
@@ -72,8 +76,10 @@
         --cpus-workers 4.0
         --memory-controlplanes 4GiB
         --memory-workers 13GiB
-        --kubernetes-version 1.34.0
+        --kubernetes-version {{ wsl_versions.kubernetes | regex_replace('^v', '') }}
+        --image ghcr.io/siderolabs/talos:{{ wsl_versions.talos }}
         --config-patch @{{ talos_dir }}/cluster-config.yaml
+        --config-patch-controlplanes @{{ talos_dir }}/patches/talos-api-access.yaml
       when:
         - cluster_target == 'wsl'
         - cluster_containers.stdout | trim | length == 0
@@ -261,8 +267,11 @@
                 privileged: true
                 read_only: true
                 shm_size: 64M
-                memory: 8G
-                cpus: 4
+                # Keep whatever the running container has (the create task
+                # above sets 13GiB per worker); a hardcoded 8G here used to
+                # shrink worker-2 on every augmentation recreate.
+                memory: "{{ w2_info.container.HostConfig.Memory }}"
+                cpus: "{{ (w2_info.container.HostConfig.NanoCpus | int) / 1000000000 }}"
                 security_opts:
                   - seccomp=unconfined
                   - label=disable

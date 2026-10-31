@@ -30,6 +30,11 @@ Every Renovate PR lands in one of three tiers, decided by
   migration with no downgrade, a CRD or API removal, data that gets wiped, a
   Terraform plan that changes real resources). Only Ivan removes it.
 
+**Talos and Kubernetes versions** are Renovate groups with one PR per minor.
+Kubernetes bumps roll out through tuppr when they merge; a Talos bump on WSL
+also needs `task talos:upgrade:wsl` after the merge. Order and support-matrix
+rules: [cluster-upgrades.md](cluster-upgrades.md).
+
 **MS-01-only paths automerge for now.** MS-01 isn't built, so updates that
 touch only what `kubernetes/clusters/ms-01` deploys and WSL doesn't (Cilium,
 Rook Ceph, Thanos, the Vector agent, UISP, node-feature-discovery, the CNPG

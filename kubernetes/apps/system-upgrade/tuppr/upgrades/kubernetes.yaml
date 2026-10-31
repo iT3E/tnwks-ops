@@ -1,0 +1,23 @@
+---
+# The cluster's Kubernetes version. Renovate bumps it (grouped with the
+# bootstrap pin in talos/wsl/versions.yaml); once Flux applies the change,
+# tuppr runs `talosctl upgrade-k8s` from a Job: API server, controller
+# manager and scheduler on the control plane, then kube-proxy and the
+# kubelet on every node.
+#
+# One minor at a time, and only within what the running Talos supports
+# (Talos 1.13: Kubernetes 1.31-1.36; 1.14: up to 1.37). See
+# docs/operations/cluster-upgrades.md.
+apiVersion: tuppr.home-operations.com/v1alpha1
+kind: KubernetesUpgrade
+metadata:
+  name: kubernetes
+spec:
+  kubernetes:
+    # renovate: datasource=docker depName=ghcr.io/siderolabs/kubelet
+    version: v1.34.0
+  healthChecks:
+    - apiVersion: v1
+      kind: Node
+      expr: status.conditions.exists(c, c.type == "Ready" && c.status == "True")
+      timeout: 10m

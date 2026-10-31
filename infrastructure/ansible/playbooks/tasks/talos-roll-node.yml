@@ -1,0 +1,56 @@
+---
+# One node of 05-talos-upgrade.yml. Expects `node` (container name) and
+# `target_image`, `target_version`, `talos_dir`.
+
+- name: "{{ node }}: current image"
+  ansible.builtin.command: docker inspect -f '{{ '{{' }}.Config.Image{{ '}}' }}' {{ node }}
+  register: current_image
+  changed_when: false
+
+- name: "{{ node }}: roll"
+  when: current_image.stdout != target_image
+  block:
+    - name: "{{ node }}: node address"
+      ansible.builtin.command: >-
+        docker inspect -f '{{ '{{' }}(index .NetworkSettings.Networks "{{ cluster_name }}").IPAddress{{ '}}' }}' {{ node }}
+      register: node_ip
+      changed_when: false
+
+    - name: "{{ node }}: every node Ready before starting"
+      ansible.builtin.command: kubectl wait --for=condition=Ready nodes --all --timeout=300s
+      changed_when: false
+
+    # --force: bare pods (no controller) would block the drain forever; they
+    # are lost on any node restart anyway. The drain fails, and the play stops
+    # before touching the node, if a PodDisruptionBudget can't be met in time.
+    - name: "{{ node }}: drain"
+      ansible.builtin.command: >-
+        kubectl drain {{ node }} --ignore-daemonsets --delete-emptydir-data
+        --force --timeout=600s
+      changed_when: true
+
+    - name: "{{ node }}: swap the container onto {{ target_image }}"
+      ansible.builtin.command: "{{ talos_dir }}/roll-node.sh {{ node }} {{ target_image }}"
+      changed_when: true
+
+    - name: "{{ node }}: wait for Talos {{ target_version }}"
+      ansible.builtin.command: talosctl -n {{ node_ip.stdout }} version
+      register: talos_version
+      until: >-
+        talos_version.rc == 0 and
+        (talos_version.stdout.split('Server:') | last) is regex('Tag:\\s+' ~ (target_version | regex_escape) ~ '\\s')
+      retries: 60
+      delay: 10
+      changed_when: false
+
+    - name: "{{ node }}: wait for Ready"
+      ansible.builtin.command: kubectl wait --for=condition=Ready node/{{ node }} --timeout=600s
+      register: node_ready
+      until: node_ready.rc == 0
+      retries: 3
+      delay: 20
+      changed_when: false
+
+    - name: "{{ node }}: uncordon"
+      ansible.builtin.command: kubectl uncordon {{ node }}
+      changed_when: true

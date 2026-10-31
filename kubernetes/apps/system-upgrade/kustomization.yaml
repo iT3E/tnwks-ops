@@ -1,0 +1,10 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# tuppr drives Kubernetes (and, on MS-01, Talos) version upgrades from
+# custom resources that Renovate bumps. See docs/operations/cluster-upgrades.md.
+# The TalosUpgrade is MS-01-only and added by that cluster's overlay: Talos in
+# Docker (WSL) refuses in-place upgrades, so WSL rolls node containers instead.
+resources:
+  - ./namespace.yaml
+  - ./tuppr/ks.yaml

@@ -37,6 +37,7 @@ resources:
   - ../../../apps/media
   - ../../../apps/monitoring
   - ../../../apps/selfhosted
+  - ../../../apps/system-upgrade
   - ../../../apps/tools
   # Sites platform — WSL-only. The NFS server gives nginx + the GHA runner a
   # shared RWX volume on top of WSL's RWO-only local-path. On MS-01 this would

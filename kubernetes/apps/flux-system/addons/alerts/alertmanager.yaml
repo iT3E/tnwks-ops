@@ -84,6 +84,9 @@ spec:
       namespace: storage
       name: "*"
     - kind: HelmRelease
+      namespace: system-upgrade
+      name: "*"
+    - kind: HelmRelease
       namespace: tools
       name: "*"
   # Transient source fetch errors retry on their own; don't page for them.
