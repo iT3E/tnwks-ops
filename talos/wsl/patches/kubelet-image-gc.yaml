@@ -1,0 +1,18 @@
+---
+# Delete images no container has used for a week, whatever the disk usage.
+#
+# The kubelet's normal image GC (imageGCHighThresholdPercent, 85%) looks at
+# the node filesystem, and on WSL that is the whole 1 TB ext4 inside
+# E:\WSL\Ubuntu\ext4.vhdx. It sat at 35%, so GC never ran: every image any
+# pod ever pulled stayed, 72G on worker-1 and 52G on worker-2 by 2026-10-30,
+# while the vhdx kept growing and E: crossed 90% (WindowsDiskCritical).
+# Pruning unused images then freed 91 GiB.
+#
+# Applies without a reboot (the kubelet restarts):
+#   talosctl --talosconfig ~/.talos/config-homelab-wsl \
+#     -n 10.5.0.2,10.5.0.3,10.5.0.4 patch mc --mode=no-reboot \
+#     --patch @talos/wsl/patches/kubelet-image-gc.yaml
+machine:
+  kubelet:
+    extraConfig:
+      imageMaximumGCAge: 168h

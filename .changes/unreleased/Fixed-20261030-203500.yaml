@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'WSL kubelets delete images no container has used for a week (imageMaximumGCAge 168h). Disk-based image GC never ran because the node filesystem is the 1 TB WSL disk, so old images piled up (124G across the workers) and filled E:'
+time: 2026-10-30T20:35:00-07:00

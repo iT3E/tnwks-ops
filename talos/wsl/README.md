@@ -89,6 +89,8 @@ talosctl --talosconfig ~/.talos/config-homelab-wsl -n 10.5.0.2 patch machineconf
 
 `patches/talos-api-access.yaml` (Talos API access for tuppr) is applied to
 the control plane; the command is in the file.
+`patches/kubelet-image-gc.yaml` (delete images unused for a week) is applied
+to all three nodes; the command and the reason are in the file.
 
 ## Upgrades
 

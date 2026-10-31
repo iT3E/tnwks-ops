@@ -9,6 +9,7 @@
 #     --kubernetes-version <kubernetes from talos/wsl/versions.yaml> \
 #     --image ghcr.io/siderolabs/talos:<talos from talos/wsl/versions.yaml> \
 #     --config-patch @talos/wsl/cluster-config.yaml \
+#     --config-patch @talos/wsl/patches/kubelet-image-gc.yaml \
 #     --config-patch-controlplanes @talos/wsl/patches/talos-api-access.yaml
 #
 # WSL2 VM ceiling: needs to accommodate ~20GiB Talos + Docker + WSL
