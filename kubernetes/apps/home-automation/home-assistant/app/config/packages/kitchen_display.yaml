@@ -1,0 +1,32 @@
+---
+# Kitchen display settings the whole house shares (every screen showing the
+# Kitchen dashboard follows these). See config/www/tnwks-kitchen/kitchen-cards.js
+# ("themes").
+#
+# kitchen_theme: the display's look. "default" is the everyday dark theme;
+# the rest are holidays. The Home tab offers each holiday's theme in the days
+# before it, the 🎨 button next to the tabs picks one any time, and a holiday
+# theme switches itself back to default in the week after its holiday.
+# No `initial`, so the choice survives restarts.
+#
+# kitchen_theme_answered: which holiday offers were already answered (yes or
+# no), as "<holiday>-<year>" tokens, so each one is asked once.
+input_select:
+  kitchen_theme:
+    name: Kitchen display theme
+    icon: mdi:palette
+    options:
+      - default
+      - newyear
+      - valentines
+      - stpatricks
+      - easter
+      - july4
+      - halloween
+      - thanksgiving
+      - christmas
+input_text:
+  kitchen_theme_answered:
+    name: Kitchen theme offers answered
+    icon: mdi:party-popper
+    max: 255

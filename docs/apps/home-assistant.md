@@ -212,13 +212,22 @@ Its cards are ours, in `config/www/tnwks-kitchen/kitchen-cards.js`: plain
 custom elements, no build step. HA caches `/local` for a long time, so bump
 the `?v=` on its resource in `configuration.yaml` with every change to it.
 
-Chores live in `config/packages/kitchen_routines.yaml`: one `input_boolean`
-per chore, with `customize` attributes for who, when (period, days) and how
-many stars. Checking one off adds its stars to `counter.stars_<member>`;
-unchecking it by hand takes them back. Everything is unchecked at midnight,
-and stars stay. A reward goal per kid is two helpers (`input_text` +
-`input_number`) you can set from the UI; the Routines view shows progress
-toward it.
+Routines (chores) are UI-owned data, so the family can add, change and
+delete them on the display: `+` and `✎` next to each name on the Routines tab,
+or long-press a routine. They're the items of the Local To-do list
+`todo.kitchen_routines` ("Kitchen routines"), one per routine. The item's name
+is the routine, its status is "done today", and its description is JSON with
+who (`member`), when (`period`, `days`), the `emoji` and the stars (`points`,
+optional `points_by_day`). Editing that JSON in HA's to-do panel works too,
+but the dashboard is the easier way. `config/packages/kitchen_routines.yaml`
+keeps the machinery: `script.kitchen_routine_set` checks or unchecks one and
+adds or takes back its stars on `counter.stars_<member>`, the midnight reset
+reopens everything (stars stay), `sensor.kitchen_routines` copies the list
+into an attribute for templates, and the done/total and AM/PM sensors behind
+the week grid are built from it. A reward goal per kid is two helpers
+(`input_text` + `input_number`) you can set from the UI; the Routines tab
+shows progress toward it. Until 2026-10-31 the routines were `input_boolean`s
+in that package; they were moved into the list with their state.
 
 Members have neutral keys (`adult1`, `adult2`, `kid1`, `kid2`) in every
 entity ID and attribute, because the repo is public. Display names live in
@@ -231,15 +240,33 @@ kiosk-mode hides HA's header and sidebar on a device once the dashboard has
 been opened there with `?kiosk` (it remembers). Open it with `?clear_km_cache`
 to undo that.
 
-Views: Home, Calendar (Family, Week, Month and List, with paging and a
-person filter), Routines, Meals (a week grid, one column per Mealie meal
-calendar) and Lists (several to-do lists plus sticky notes).
+The dashboard is a single HA view. `kitchen-pages-card` draws the header, the
+tabs and every tab's cards as pages that stay mounted, so a tab switch only
+changes which page is visible (it used to be an HA view change, which rebuilt
+every card and refetched its data). Cards on hidden pages skip their renders
+until they're shown, and renders patch the DOM in place (`morph()`), which is
+what lets the tap animations and transitions play. The tab is in the URL hash
+(`/kitchen-display/home#calendar`), and the display goes back to Home after 5
+minutes untouched. Tabs: Home, Calendar (Family, Week, Month and List, with
+paging and a person filter), Routines, Meals (a week grid, one column per
+Mealie meal calendar) and Lists (several to-do lists plus sticky notes).
+
+Themes: `input_select.kitchen_theme` (`packages/kitchen_display.yaml`) picks
+the look for every screen at once: `default` or a holiday (New Year,
+Valentine's, St. Patrick's, Easter, 4th of July, Halloween, Thanksgiving,
+Christmas), each with its own colors, a garland next to the tabs and slow
+falling or drifting emoji. While a holiday is coming up, Home's greeting line
+offers its theme, once per holiday and year (answers are kept in
+`input_text.kitchen_theme_answered`). 🎨 next to the tabs picks a theme any
+time. A holiday theme switches back to `default` in the week after its
+holiday. Animations respect the device's reduced-motion setting.
 
 Calendars, the meal plan and extra to-do lists are integrations, so they're
 UI-owned. The dashboard expects `calendar.family` (the family Google
 calendar), `calendar.mealie_breakfast`, `_lunch`, `_dinner` and `_snack`
-(Mealie), and the Local To-do lists `todo.things_to_do`, `todo.someday` and
-`todo.notes` (Groceries is `todo.shopping_list`). Each card shows a "not
+(Mealie), and the Local To-do lists `todo.kitchen_routines`,
+`todo.things_to_do`, `todo.someday` and `todo.notes` (Groceries is
+`todo.shopping_list`). Each card shows a "not
 connected" or "not set up yet" note until its entity exists; the Notes card on
 Home stays hidden instead.
 

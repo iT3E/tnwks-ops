@@ -4,15 +4,15 @@
  *
  * Plain custom elements, no build step and no dependencies. Every card
  * renders into its own shadow root from `hass` and re-renders at most a few
- * times a second. Chores come from the input_booleans in
- * packages/kitchen_routines.yaml (attribute kitchen_chore: true).
+ * times a second (patched in place with morph(), not replaced). Routines are
+ * the items of the todo.kitchen_routines list (see "routines" below).
  *
  * Served from /local/tnwks-kitchen/ (a ConfigMap mount). HA caches /local for
  * a long time, so bump ?v= on the resource in configuration.yaml whenever
  * this file changes.
  */
 
-const VERSION = "1.2.0";
+const VERSION = "1.3.0";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -121,9 +121,24 @@ const startOfDay = (d = new Date()) => new Date(d.getFullYear(), d.getMonth(), d
 const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 const startOfWeek = (d = new Date()) => addDays(startOfDay(d), -d.getDay());
 
-/** All chores for a member, sorted, with today's due flag and points. */
+/** All routines for a member, sorted, with today's due flag and points. */
 function chores(hass, member) {
   const day = today();
+  if (Routines.active(hass)) {
+    Routines.sync(hass);
+    return Routines.all(member).map((r) => ({
+      id: r.uid,
+      routine: r,
+      title: r.title,
+      emoji: r.emoji,
+      period: r.period,
+      points: Number(r.points_by_day?.[day] ?? r.points ?? 0),
+      due: r.days.includes(day),
+      done: Routines.isDone(r),
+      order: r.index,
+    }));
+  }
+  // Before todo.kitchen_routines exists: the old git-defined input_booleans.
   return Object.values(hass.states)
     .filter((s) => s.entity_id.startsWith("input_boolean.") && s.attributes.kitchen_chore && s.attributes.member === member)
     .map((s) => {
@@ -141,6 +156,10 @@ function chores(hass, member) {
       };
     })
     .sort((a, b) => a.order - b.order);
+}
+function setChore(hass, id, done) {
+  if (id.startsWith("input_boolean.")) return hass.callService("input_boolean", done ? "turn_on" : "turn_off", { entity_id: id });
+  return Routines.set(hass, id, done);
 }
 
 function stars(hass, member) {
@@ -196,13 +215,517 @@ function eventColor(ev) {
   return "#f2d36b";
 }
 
+// ------------------------------------------------------------- DOM morph
+
+// Renders used to replace a card's whole shadow DOM on every change, which
+// costs a full re-layout on the tablet, resets scroll positions and cuts
+// every CSS transition short. morph() patches the live DOM to match the new
+// HTML instead: unchanged nodes stay put, changed attributes are updated in
+// place (so class changes animate), and elements with a data-k key are
+// matched by key (a new key is a new element, so its entrance animation runs).
+function morphChildren(a, b) {
+  let cur = a.firstChild;
+  for (const nb of Array.from(b.childNodes)) {
+    const key = nb.nodeType === 1 ? nb.getAttribute("data-k") : null;
+    if (key != null) {
+      let hit = cur;
+      while (hit && !(hit.nodeType === 1 && hit.getAttribute("data-k") === key && hit.nodeName === nb.nodeName)) hit = hit.nextSibling;
+      if (hit) {
+        if (hit !== cur) a.insertBefore(hit, cur);
+        morphNode(hit, nb);
+        cur = hit.nextSibling;
+      } else a.insertBefore(nb, cur);
+      continue;
+    }
+    if (cur && cur.nodeType === nb.nodeType && cur.nodeName === nb.nodeName && !(cur.nodeType === 1 && cur.hasAttribute("data-k"))) {
+      morphNode(cur, nb);
+      cur = cur.nextSibling;
+    } else a.insertBefore(nb, cur);
+  }
+  while (cur) {
+    const n = cur.nextSibling;
+    a.removeChild(cur);
+    cur = n;
+  }
+}
+function morphNode(a, b) {
+  if (a.nodeType !== 1) {
+    if (a.nodeValue !== b.nodeValue) a.nodeValue = b.nodeValue;
+    return;
+  }
+  for (const { name } of Array.from(a.attributes)) if (!b.hasAttribute(name)) a.removeAttribute(name);
+  for (const { name, value } of Array.from(b.attributes)) if (a.getAttribute(name) !== value) a.setAttribute(name, value);
+  if (a.nodeName === "INPUT" || a.nodeName === "TEXTAREA" || a.nodeName === "SELECT") return; // keep what's being typed
+  morphChildren(a, b);
+}
+const tpl = document.createElement("template");
+function morph(root, html) {
+  tpl.innerHTML = html;
+  morphChildren(root, tpl.content);
+}
+
+// ------------------------------------------------------------ animations
+
+const REDUCED = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const MOTION_CSS = `
+  button { position:relative; overflow:hidden; transition:transform .14s ease, background-color .25s, color .25s, opacity .25s, filter .14s; }
+  button:active { transform:scale(.96); filter:brightness(1.12); }
+  .rip { position:absolute; border-radius:50%; background:currentColor; opacity:.25; transform:scale(0); pointer-events:none;
+    animation:krip .55s ease-out forwards; }
+  @keyframes krip { to { transform:scale(1); opacity:0; } }
+  @keyframes kin { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+  @keyframes kfade { from { opacity:0; } to { opacity:1; } }
+  @keyframes kpop { 0% { transform:scale(.5); } 60% { transform:scale(1.22); } 100% { transform:scale(1); } }
+  @keyframes kbump { 0% { transform:scale(1); } 35% { transform:scale(1.3); color:#ffd54a; } 100% { transform:scale(1); } }
+  @keyframes kout { to { opacity:0; transform:translateX(28px); } }
+  .enter { animation:kin .26s ease-out both; }
+  .fade { animation:kfade .22s ease-out both; }
+  .bump { display:inline-block; animation:kbump .6s ease-out; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
+`;
+const FX_CSS = `
+  .f { position:fixed; left:0; top:0; pointer-events:none; will-change:transform, opacity; font-family:Roboto,"Noto Sans",sans-serif; }
+  .float { font-size:24px; font-weight:700; color:#ffd54a; text-shadow:0 2px 6px rgba(0,0,0,.5); animation:fxup 1.1s ease-out forwards; }
+  @keyframes fxup { 0% { opacity:0; transform:translate(-50%,-50%) scale(.6); } 15% { opacity:1; transform:translate(-50%,-70%) scale(1.15); }
+    100% { opacity:0; transform:translate(-50%,-260%) scale(1); } }
+  .spark { width:9px; height:9px; border-radius:50%; animation:fxspark .6s ease-out forwards; }
+  @keyframes fxspark { from { opacity:1; transform:translate(-50%,-50%) rotate(var(--r)) translateX(0) scale(1); }
+    to { opacity:0; transform:translate(-50%,-50%) rotate(var(--r)) translateX(var(--d)) scale(.3); } }
+  .conf { width:10px; height:14px; border-radius:2px; animation:fxconf var(--t) cubic-bezier(.2,.6,.4,1) forwards; }
+  @keyframes fxconf { 0% { opacity:1; transform:translate(var(--x0),var(--y0)) rotate(0); }
+    100% { opacity:0; transform:translate(var(--x1),var(--y1)) rotate(var(--rot)); } }
+  .p { position:fixed; top:0; left:0; opacity:var(--o); will-change:transform; animation:var(--anim) var(--t) linear var(--delay) infinite; font-size:var(--s); }
+  @keyframes pfall { from { transform:translate3d(var(--x),-10vh,0) rotate(0); } to { transform:translate3d(calc(var(--x) + var(--sway)),110vh,0) rotate(var(--rot)); } }
+  @keyframes prise { from { transform:translate3d(var(--x),110vh,0) rotate(0); } to { transform:translate3d(calc(var(--x) + var(--sway)),-10vh,0) rotate(var(--rot)); } }
+  @keyframes pdrift { 0% { transform:translate3d(-12vw,var(--y),0) rotate(-8deg); } 50% { transform:translate3d(50vw,calc(var(--y) + var(--sway)),0) rotate(8deg); }
+    100% { transform:translate3d(112vw,var(--y),0) rotate(-8deg); } }
+  @keyframes ptwinkle { 0%,100% { opacity:0; transform:translate3d(var(--x),var(--y),0) scale(.6); } 50% { opacity:var(--o); transform:translate3d(var(--x),var(--y),0) scale(1.1); } }
+  @media (prefers-reduced-motion: reduce) { .f, .p { display:none; } }
+`;
+/** Tap feedback that outlives a re-render: drawn on one fixed layer over the whole page. */
+const FX = {
+  layer() {
+    if (!this._root || !this._host.isConnected) {
+      this._host = document.createElement("div");
+      this._host.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:9000;overflow:hidden";
+      this._root = this._host.attachShadow({ mode: "open" });
+      this._root.innerHTML = `<style>${FX_CSS}</style>`;
+      document.body.appendChild(this._host);
+    }
+    return this._root;
+  },
+  _add(cls, style, text, ms) {
+    if (REDUCED()) return;
+    const el = document.createElement("div");
+    el.className = `f ${cls}`;
+    el.style.cssText = style;
+    if (text) el.textContent = text;
+    this.layer().appendChild(el);
+    setTimeout(() => el.remove(), ms);
+  },
+  float(x, y, text) {
+    this._add("float", `left:${x}px;top:${y}px`, text, 1200);
+  },
+  burst(x, y, color = "#4cd17a", n = 10) {
+    for (let i = 0; i < n; i++)
+      this._add("spark", `left:${x}px;top:${y}px;background:${i % 3 ? color : "#ffd54a"};--r:${(360 / n) * i + Math.random() * 20}deg;--d:${34 + Math.random() * 26}px`, "", 700);
+  },
+  confetti(rect, colors) {
+    const cs = colors || ["#ff9f43", "#4cd17a", "#4fb3f0", "#f07a5f", "#ffd54a", "#a98bf0"];
+    const cx = rect.left + rect.width / 2;
+    for (let i = 0; i < 46; i++) {
+      const x0 = cx + (Math.random() - 0.5) * 40;
+      const y0 = rect.top + rect.height * 0.35;
+      const x1 = x0 + (Math.random() - 0.5) * rect.width * 1.3;
+      const y1 = y0 + 120 + Math.random() * rect.height * 0.9;
+      this._add("conf", `background:${cs[i % cs.length]};--x0:${x0}px;--y0:${y0}px;--x1:${x1}px;--y1:${y1}px;--rot:${(Math.random() - 0.5) * 900}deg;--t:${1.1 + Math.random() * 0.9}s`, "", 2200);
+    }
+  },
+  /** Center of an element, for anchoring an effect to what was tapped. */
+  at(el) {
+    const r = el.getBoundingClientRect();
+    return [r.left + r.width / 2, r.top + r.height / 2];
+  },
+};
+
+// ---------------------------------------------------------------- themes
+
+// Holiday themes: a palette, falling/rising/drifting emoji, a garland over
+// the header, and a greeting on the day. The dashboard offers each one in its
+// window (lead days before, through `after` days past the holiday) and the
+// choice is input_select.kitchen_theme (packages/kitchen_display.yaml), so
+// every screen in the house shows the same one. A holiday theme switches
+// itself off in the week after its holiday.
+function easter(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const n = h + l - 7 * m + 114;
+  return new Date(y, Math.floor(n / 31) - 1, (n % 31) + 1);
+}
+const nthWeekday = (y, mo, wd, n) => {
+  const first = new Date(y, mo, 1);
+  return new Date(y, mo, 1 + ((wd - first.getDay() + 7) % 7) + 7 * (n - 1));
+};
+const DEFAULT_THEME = { name: "Everyday", emoji: "🏠", vars: {} };
+const THEMES = {
+  newyear: { name: "New Year", emoji: "🎉", day: (y) => new Date(y, 0, 1), lead: 2, greet: "Happy New Year!",
+    vars: { accent: "#e9c46a", bg: "#0e0f1a", card: "#181a2b", card2: "#22253a", line: "#30344d" },
+    particles: ["✨", "🎉", "🎊", "⭐"], motion: "twinkle", garland: "🎉 ✨ 🎊 🥂 ✨" },
+  valentines: { name: "Valentine's", emoji: "💕", day: (y) => new Date(y, 1, 14), lead: 7, greet: "Happy Valentine's Day!",
+    vars: { accent: "#ff5c8a", bg: "#170d12", card: "#24151d", card2: "#311d28", line: "#432837" },
+    particles: ["💕", "💗", "❤️", "💘"], motion: "rise", garland: "💕 💌 💗 🌹 💘" },
+  stpatricks: { name: "St. Patrick's", emoji: "☘️", day: (y) => new Date(y, 2, 17), lead: 5, greet: "Happy St. Patrick's Day!",
+    vars: { accent: "#3ccf6e", bg: "#0c1510", card: "#15231a", card2: "#1d3024", line: "#284232" },
+    particles: ["☘️", "🍀", "🌈", "🪙"], motion: "fall", garland: "☘️ 🍀 🌈 🪙 ☘️" },
+  easter: { name: "Easter", emoji: "🐣", day: easter, lead: 7, greet: "Happy Easter!",
+    vars: { accent: "#b48cf2", bg: "#13121a", card: "#1e1c29", card2: "#292637", line: "#37334a" },
+    particles: ["🌷", "🐣", "🥚", "🐰", "🌼"], motion: "rise", garland: "🐣 🌷 🥚 🐰 🌼" },
+  july4: { name: "4th of July", emoji: "🎆", day: (y) => new Date(y, 6, 4), lead: 4, greet: "Happy 4th of July!",
+    vars: { accent: "#4f8cff", bg: "#0d1220", card: "#161d30", card2: "#1f283f", line: "#2c3753" },
+    particles: ["⭐", "🎆", "🎇", "✨"], motion: "twinkle", garland: "🎆 ⭐ 🇺🇸 ⭐ 🎇" },
+  halloween: { name: "Halloween", emoji: "🎃", day: (y) => new Date(y, 9, 31), lead: 14, greet: "Happy Halloween!",
+    vars: { accent: "#ff7a1a", bg: "#120d17", card: "#1d1626", card2: "#2a2035", line: "#3a2d48" },
+    particles: ["🦇", "👻", "🎃", "🕸️", "🦇"], motion: "drift", garland: "🎃 🦇 🕸️ 👻 🍬" },
+  thanksgiving: { name: "Thanksgiving", emoji: "🦃", day: (y) => nthWeekday(y, 10, 4, 4), lead: 7, greet: "Happy Thanksgiving!",
+    vars: { accent: "#e08a3c", bg: "#15110d", card: "#221b14", card2: "#2e251b", line: "#3d3125" },
+    particles: ["🍂", "🍁", "🍂", "🌰"], motion: "fall", garland: "🍂 🦃 🥧 🌽 🍁" },
+  christmas: { name: "Christmas", emoji: "🎄", day: (y) => new Date(y, 11, 25), lead: 24, after: 1, greet: "Merry Christmas!",
+    vars: { accent: "#e5484d", ok: "#3fbf6a", bg: "#0d1512", card: "#16211c", card2: "#1f2d26", line: "#2b3d33" },
+    particles: ["❄️", "❄️", "✨", "❄️"], motion: "fall", garland: "🎄 ❄️ 🎁 ⛄ ✨" },
+};
+const MS_DAY = 86400000;
+/** The holiday whose window today falls in: { key, theme, date, days } (days until it, 0 = today). */
+function holidayNow(now = new Date()) {
+  const t = startOfDay(now);
+  for (const [key, th] of Object.entries(THEMES)) {
+    for (const y of [t.getFullYear(), t.getFullYear() + 1]) {
+      const d = th.day(y);
+      const days = Math.round((d - t) / MS_DAY);
+      if (days <= th.lead && days >= -(th.after || 0)) return { key, theme: th, date: d, year: d.getFullYear(), days };
+    }
+  }
+  return null;
+}
+/** True for a holiday theme in the month after its holiday (time to switch it off). */
+function themeExpired(key, now = new Date()) {
+  const th = THEMES[key];
+  if (!th) return false;
+  const t = startOfDay(now);
+  return [t.getFullYear() - 1, t.getFullYear()].some((y) => {
+    const end = addDays(th.day(y), th.after || 0);
+    return t > end && t - end <= 7 * MS_DAY;
+  });
+}
+const THEME_ENTITY = "input_select.kitchen_theme";
+const THEME_ANSWERED = "input_text.kitchen_theme_answered";
+const Theme = {
+  key: "default",
+  current() {
+    return THEMES[this.key] || DEFAULT_THEME;
+  },
+  apply(hass) {
+    const s = hass?.states?.[THEME_ENTITY];
+    let key = s && THEMES[s.state] ? s.state : "default";
+    if (key !== "default" && themeExpired(key)) {
+      // One screen switches it back for the house; the rest follow its state.
+      if (!this._expiring) {
+        this._expiring = true;
+        hass.callService("input_select", "select_option", { entity_id: THEME_ENTITY, option: "default" }).finally(() => (this._expiring = false));
+      }
+      key = "default";
+    }
+    if (key === this.key) return;
+    this.key = key;
+    const th = this.current();
+    const root = document.documentElement.style;
+    for (const v of ["accent", "ink", "bg", "card", "card2", "line", "ok"]) {
+      if (th.vars[v]) root.setProperty(`--k-${v}`, th.vars[v]);
+      else root.removeProperty(`--k-${v}`);
+    }
+    this._particles(th);
+    window.dispatchEvent(new CustomEvent("kitchen-theme", { detail: key }));
+  },
+  // A dozen slow emoji over the page. Only transform and opacity animate, so
+  // the tablet's GPU does the work and the cards never re-layout.
+  _particles(th) {
+    this._host?.remove();
+    this._host = null;
+    if (!th.particles || REDUCED()) return;
+    const host = document.createElement("div");
+    host.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:8000;overflow:hidden";
+    const root = host.attachShadow({ mode: "open" });
+    const n = th.motion === "twinkle" ? 14 : 12;
+    let html = `<style>${FX_CSS}</style>`;
+    for (let i = 0; i < n; i++) {
+      const anim = { fall: "pfall", rise: "prise", drift: "pdrift", twinkle: "ptwinkle" }[th.motion] || "pfall";
+      const t = th.motion === "drift" ? 26 + Math.random() * 22 : th.motion === "twinkle" ? 3 + Math.random() * 4 : 16 + Math.random() * 18;
+      const style = [
+        `--x:${Math.round(Math.random() * 100)}vw`, `--y:${Math.round(8 + Math.random() * 80)}vh`, `--sway:${Math.round((Math.random() - 0.5) * 120)}px`,
+        `--rot:${Math.round((Math.random() - 0.5) * 540)}deg`, `--t:${t.toFixed(1)}s`, `--delay:${(-Math.random() * t).toFixed(1)}s`,
+        `--s:${Math.round(18 + Math.random() * 14)}px`, `--o:${(0.35 + Math.random() * 0.3).toFixed(2)}`, `--anim:${anim}`,
+      ].join(";");
+      html += `<div class="p" style="${style}">${th.particles[i % th.particles.length]}</div>`;
+    }
+    root.innerHTML = html;
+    document.body.appendChild(host);
+    this._host = host;
+  },
+};
+
+// -------------------------------------------------------------- routines
+
+// Routines live in a Local To-do list (todo.kitchen_routines, UI-owned), one
+// item per routine, so the family can add and edit them on the display. The
+// item's summary is the routine's name, its status is "done today", and its
+// description is JSON: {"member","emoji","period","points","days"[,
+// "points_by_day"]}. Checking one off goes through script.kitchen_routine_set
+// (packages/kitchen_routines.yaml), which also moves the stars; the midnight
+// reset reopens everything. Before that list exists, the cards fall back to
+// the old input_boolean chores.
+const ROUTINES = "todo.kitchen_routines";
+const ALL_DAYS = DAYS;
+function parseRoutine(i, index) {
+  let m = {};
+  try {
+    m = JSON.parse(i.description || "{}") || {};
+  } catch (_) {}
+  if (!m.member) return null;
+  return {
+    uid: i.uid, index, title: i.summary, member: m.member, emoji: m.emoji || "✅", period: m.period || "anytime",
+    points: Number(m.points) || 0, points_by_day: m.points_by_day || null, days: Array.isArray(m.days) && m.days.length ? m.days : ALL_DAYS,
+    done: i.status === "completed",
+  };
+}
+const Routines = {
+  items: null,
+  pending: new Map(),
+  _sub: null,
+  active(hass) {
+    return !!hass?.states?.[ROUTINES];
+  },
+  sync(hass) {
+    if (this._sub || !this.active(hass)) return;
+    this._sub = hass.connection
+      .subscribeMessage((msg) => {
+        this.items = (msg.items || []).map(parseRoutine).filter(Boolean);
+        for (const r of this.items) {
+          const p = this.pending.get(r.uid);
+          if (p && (p.done === r.done || Date.now() - p.t > 10000)) this.pending.delete(r.uid);
+        }
+        this._notify();
+      }, { type: "todo/item/subscribe", entity_id: ROUTINES })
+      .catch(() => {
+        this._sub = null;
+        return null;
+      });
+  },
+  _notify() {
+    window.dispatchEvent(new Event("kitchen-routines"));
+  },
+  all(member) {
+    return (this.items || []).filter((r) => !member || r.member === member);
+  },
+  isDone(r) {
+    const p = this.pending.get(r.uid);
+    return p && Date.now() - p.t < 10000 ? p.done : r.done;
+  },
+  set(hass, uid, done) {
+    this.pending.set(uid, { done, t: Date.now() });
+    this._notify();
+    if (hass.states["script.kitchen_routine_set"]) return hass.callService("script", "kitchen_routine_set", { uid, done });
+    return hass.callService("todo", "update_item", { item: uid, status: done ? "completed" : "needs_action" }, { entity_id: ROUTINES });
+  },
+  save(hass, r, uid) {
+    const meta = { member: r.member, emoji: r.emoji, period: r.period, points: Number(r.points) || 0, days: r.days };
+    if (r.points_by_day) meta.points_by_day = r.points_by_day;
+    const description = JSON.stringify(meta);
+    if (uid) return hass.callService("todo", "update_item", { item: uid, rename: r.title, description }, { entity_id: ROUTINES });
+    return hass.callService("todo", "add_item", { item: r.title, description }, { entity_id: ROUTINES });
+  },
+  remove(hass, uid) {
+    return hass.callService("todo", "remove_item", { item: uid }, { entity_id: ROUTINES });
+  },
+};
+
+// ----------------------------------------------------------------- sheet
+
+// A bottom-sheet dialog on its own layer (the routine editor, the theme
+// picker). `render(state)` returns the body HTML; `onAction(action, data,
+// sheet)` handles taps on [data-action]; sheet.update() redraws (morphed, so
+// inputs keep their text); sheet.close() animates it away.
+const SHEET_CSS = `
+  .bd { position:fixed; inset:0; background:rgba(0,0,0,.55); animation:kfade .2s ease-out both; }
+  .sh { position:fixed; left:50%; top:7vh; width:min(660px,94vw); max-height:84vh; overflow:auto; transform:translateX(-50%);
+    background:var(--card); border-radius:24px; padding:20px; box-shadow:0 18px 50px rgba(0,0,0,.6); animation:shin .26s cubic-bezier(.2,.9,.3,1.1) both; }
+  @keyframes shin { from { opacity:0; transform:translate(-50%,24px) scale(.97); } to { opacity:1; transform:translate(-50%,0); } }
+  .closing .bd { animation:kfade .18s reverse both; }
+  .closing .sh { animation:shin .18s reverse both; }
+  .tt { font-size:22px; font-weight:500; margin-bottom:14px; display:flex; align-items:center; gap:10px; }
+  .lb { font-size:13px; color:var(--sub); text-transform:uppercase; letter-spacing:.06em; margin:14px 0 8px; }
+  input.tx { width:100%; background:var(--card2); border:1px solid var(--line); border-radius:14px; color:var(--txt); font:inherit; font-size:18px; padding:14px 16px; outline:none; }
+  input.tx:focus { border-color:var(--accent); }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chips button { padding:10px 14px; border-radius:14px; background:var(--card2); font-size:15px; color:var(--sub); display:flex; align-items:center; gap:8px; }
+  .chips button.on { background:var(--accent); color:var(--ink); font-weight:500; }
+  .chips button .av { width:24px; height:24px; font-size:12px; }
+  .emo { display:grid; grid-template-columns:repeat(10,1fr); gap:6px; }
+  .emo button { font-size:24px; height:46px; border-radius:12px; background:var(--card2); display:grid; place-items:center; }
+  .emo button.on { background:var(--accent); }
+  .step { display:flex; align-items:center; gap:14px; }
+  .step button { width:46px; height:46px; border-radius:14px; background:var(--card2); font-size:24px; display:grid; place-items:center; }
+  .step b { font-size:24px; min-width:70px; text-align:center; }
+  .hint { color:var(--sub); font-size:13px; margin-top:6px; }
+  .acts { display:flex; gap:10px; margin-top:22px; }
+  .acts button { padding:14px 20px; border-radius:14px; background:var(--card2); font-size:16px; font-weight:500; }
+  .acts .go { background:var(--accent); color:var(--ink); margin-left:auto; }
+  .acts .go[disabled] { opacity:.4; }
+  .acts .del { color:#ff8a80; }
+  .acts .del.arm { background:#c62828; color:#fff; }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .grid button { background:var(--card2); border-radius:16px; padding:16px 10px; text-align:center; font-size:15px; }
+  .grid button span { display:block; font-size:34px; margin-bottom:6px; }
+  .grid button.on { outline:3px solid var(--accent); }
+`;
+function openSheet({ render, onAction, onInput }) {
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;inset:0;z-index:9500";
+  const root = host.attachShadow({ mode: "open" });
+  root.innerHTML = `<style>${BASE_CSS}${MOTION_CSS}${SHEET_CSS}</style><div class="wrap"><div class="bd" data-action="cancel"></div><div class="sh"></div></div>`;
+  const sh = root.querySelector(".sh");
+  const sheet = {
+    root,
+    update() {
+      morph(sh, render());
+    },
+    close() {
+      root.querySelector(".wrap").classList.add("closing");
+      setTimeout(() => host.remove(), 180);
+    },
+  };
+  root.addEventListener("click", (e) => {
+    const el = e.composedPath().find((n) => n.dataset && n.dataset.action);
+    if (!el || el.disabled) return;
+    if (el.dataset.action === "cancel") return sheet.close();
+    onAction(el.dataset.action, el.dataset, sheet, e);
+  });
+  root.addEventListener("pointerdown", ripple);
+  root.addEventListener("input", (e) => onInput?.(e.target, sheet));
+  document.body.appendChild(host);
+  sheet.update();
+  return sheet;
+}
+function ripple(e) {
+  if (REDUCED()) return;
+  const b = e.composedPath().find((n) => n.tagName === "BUTTON");
+  if (!b) return;
+  const r = b.getBoundingClientRect();
+  const size = Math.max(r.width, r.height) * 2.2;
+  const s = document.createElement("span");
+  s.className = "rip";
+  s.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - r.left - size / 2}px;top:${e.clientY - r.top - size / 2}px`;
+  b.appendChild(s);
+  setTimeout(() => s.remove(), 600);
+}
+
+const ROUTINE_EMOJI = ["🪥", "🛏️", "👕", "🥣", "🎒", "🌮", "🧹", "🧸", "📚", "📝", "🎹", "🎻", "🚿", "🛁", "🍽️", "🧺", "🌱", "🐱", "🗑️", "📬",
+  "🏃", "🧘", "💧", "🍎", "🥦", "🦷", "💊", "🎨", "⚽", "🚲", "👟", "🧴", "🪴", "🐶", "🧼", "📖", "✏️", "🎵", "⭐", "✅"];
+const fmtDays = (days) => {
+  const s = new Set(days);
+  if (s.size === 7) return "Every day";
+  if (s.size === 5 && ["mon", "tue", "wed", "thu", "fri"].every((d) => s.has(d))) return "Weekdays";
+  if (s.size === 2 && s.has("sat") && s.has("sun")) return "Weekends";
+  return DAYS.filter((d) => s.has(d)).map((d) => d[0].toUpperCase() + d.slice(1, 3)).join(", ");
+};
+/** The add / edit routine dialog, like the Apolosign "New routine" screen. */
+function routineEditor(hass, { member: who, routine }) {
+  const st = routine
+    ? { ...routine, days: [...routine.days] }
+    : { title: "", member: who, emoji: "⭐", period: currentPeriod(), points: 1, days: [...ALL_DAYS], points_by_day: null };
+  let armed = false;
+  const sheet = openSheet({
+    render() {
+      const people = FAMILY.map((m) => `<button class="${st.member === m.key ? "on" : ""}" data-action="member" data-key="${m.key}"><div class="av" style="background:${m.color}">${esc(m.name[0])}</div>${esc(m.name)}</button>`).join("");
+      const per = PERIODS.map((p) => `<button class="${st.period === p.key ? "on" : ""}" data-action="period" data-key="${p.key}">${p.icon} ${p.label}</button>`).join("");
+      const days = DAYS.map((d) => `<button class="${st.days.includes(d) ? "on" : ""}" data-action="day" data-key="${d}">${d[0].toUpperCase()}${d.slice(1, 3)}</button>`).join("");
+      const quick = [["Every day", ALL_DAYS], ["Weekdays", ["mon", "tue", "wed", "thu", "fri"]], ["Weekends", ["sun", "sat"]]]
+        .map(([l, ds]) => `<button data-action="days" data-key="${ds.join(",")}">${l}</button>`).join("");
+      const emo = ROUTINE_EMOJI.map((e) => `<button class="${st.emoji === e ? "on" : ""}" data-action="emoji" data-key="${e}">${e}</button>`).join("");
+      const pbd = st.points_by_day ? Object.entries(st.points_by_day).map(([d, n]) => `${d[0].toUpperCase()}${d.slice(1, 3)} ${n}`).join(", ") : "";
+      return `<div class="tt">${st.emoji} ${routine ? "Edit routine" : "New routine"}</div>
+        <input class="tx" name="title" placeholder="What needs doing? (e.g. Feed the cat)" value="${esc(st.title)}" autocomplete="off" autocapitalize="sentences" enterkeyhint="done">
+        <div class="lb">Who</div><div class="chips">${people}</div>
+        <div class="lb">When</div><div class="chips">${per}</div>
+        <div class="lb">Days</div><div class="chips">${days}</div><div class="chips" style="margin-top:8px">${quick}</div>
+        <div class="lb">Stars</div><div class="step"><button data-action="pts" data-key="-1">−</button><b>⭐ ${st.points}</b><button data-action="pts" data-key="1">+</button></div>
+        ${pbd ? `<div class="hint">Some days are worth more: ${esc(pbd)}. Changing the stars here replaces that.</div>` : ""}
+        <div class="lb">Icon</div><div class="emo">${emo}</div>
+        <div class="acts">${routine ? `<button class="del ${armed ? "arm" : ""}" data-action="delete">${armed ? "Tap again to delete" : "Delete"}</button>` : ""}
+          <button data-action="cancel">Cancel</button><button class="go" data-action="save" ${st.title.trim() && st.days.length ? "" : "disabled"}>${routine ? "Save" : "Add routine"}</button></div>`;
+    },
+    onInput(t, s) {
+      if (t.name === "title") {
+        st.title = t.value;
+        s.update();
+      }
+    },
+    onAction(a, d, s) {
+      if (a !== "delete") armed = false;
+      if (a === "member") st.member = d.key;
+      else if (a === "period") st.period = d.key;
+      else if (a === "day") st.days = st.days.includes(d.key) ? st.days.filter((x) => x !== d.key) : DAYS.filter((x) => x === d.key || st.days.includes(x));
+      else if (a === "days") st.days = d.key.split(",");
+      else if (a === "emoji") st.emoji = d.key;
+      else if (a === "pts") {
+        st.points = Math.max(0, Math.min(20, st.points + Number(d.key)));
+        st.points_by_day = null;
+      } else if (a === "delete") {
+        if (!armed) armed = true;
+        else {
+          Routines.remove(hass, routine.uid);
+          return s.close();
+        }
+      } else if (a === "save") {
+        if (!st.title.trim()) return;
+        Routines.save(hass, { ...st, title: st.title.trim() }, routine?.uid);
+        return s.close();
+      }
+      s.update();
+    },
+  });
+  if (!routine) setTimeout(() => sheet.root.querySelector("input.tx")?.focus(), 250);
+  return sheet;
+}
+/** The theme picker (🎨 next to the tabs). */
+function themePicker(hass) {
+  const sheet = openSheet({
+    render() {
+      const cur = Theme.key;
+      const opts = [["default", DEFAULT_THEME], ...Object.entries(THEMES)];
+      return `<div class="tt">🎨 Display theme</div><div class="grid">${opts
+        .map(([k, t]) => `<button class="${cur === k ? "on" : ""}" data-action="pick" data-key="${k}"><span>${t.emoji}</span>${esc(t.name)}</button>`)
+        .join("")}</div><div class="hint" style="margin-top:12px">Holiday themes also offer themselves on the Home tab when one is coming up, and switch off a few days after.</div>
+        <div class="acts"><button class="go" data-action="cancel">Done</button></div>`;
+    },
+    onAction(a, d, s) {
+      if (a !== "pick") return;
+      hass.callService("input_select", "select_option", { entity_id: THEME_ENTITY, option: d.key });
+      Theme.key = null; // repaint even if HA is slow to answer
+      Theme.apply({ ...hass, states: { ...hass.states, [THEME_ENTITY]: { state: d.key } } });
+      s.update();
+    },
+  });
+  return sheet;
+}
+
 // ------------------------------------------------------------- base class
 
 const BASE_CSS = `
-  :host { display:block; --bg:#111318; --card:#1c1f26; --card2:#252932; --line:#2e333d; --txt:#e8eaed;
-    --sub:#9aa0aa; --accent:#ff9f43; --ok:#4cd17a; color:var(--txt); font-family:Roboto,"Noto Sans",sans-serif; }
+  :host { display:block; --bg:var(--k-bg,#111318); --card:var(--k-card,#1c1f26); --card2:var(--k-card2,#252932); --line:var(--k-line,#2e333d);
+    --txt:var(--k-txt,#e8eaed); --sub:var(--k-sub,#9aa0aa); --accent:var(--k-accent,#ff9f43); --ink:var(--k-ink,#1b1206); --ok:var(--k-ok,#4cd17a);
+    color:var(--txt); font-family:Roboto,"Noto Sans",sans-serif; }
   * { box-sizing:border-box; }
-  .card { background:var(--card); border-radius:18px; padding:14px; height:100%; }
+  .card { background:var(--card); border-radius:18px; padding:14px; height:100%; transition:background-color .4s; }
   .h { font-size:13px; font-weight:500; color:var(--sub); letter-spacing:.06em; text-transform:uppercase;
     margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; }
   .h b { color:var(--txt); font-weight:500; text-transform:none; letter-spacing:0; }
@@ -219,14 +742,22 @@ class KitchenCard extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this._raf = null;
     this.shadowRoot.addEventListener("click", (e) => this._click(e));
+    this.shadowRoot.addEventListener("pointerdown", (e) => {
+      ripple(e);
+      this._pressStart(e);
+    });
+    for (const t of ["pointerup", "pointercancel", "pointerleave"]) this.shadowRoot.addEventListener(t, () => clearTimeout(this._press));
+    this._onShow = () => this._dirty && this._queue(true);
+    this._onRoutines = () => this._queue();
   }
   setConfig(config) {
     this.config = config || {};
-    this._queue();
+    this._queue(!!this._rendered);
   }
   set hass(h) {
     syncFamily(h);
     watchVersion(h);
+    Theme.apply(h);
     const first = !this._hass;
     this._hass = h;
     if (first) this.firstHass?.();
@@ -237,32 +768,65 @@ class KitchenCard extends HTMLElement {
   }
   connectedCallback() {
     this._tick = setInterval(() => this._queue(), this.tickMs || 30000);
+    window.addEventListener("kitchen-page-show", this._onShow);
+    window.addEventListener("kitchen-routines", this._onRoutines);
     this.connected?.();
+    if (this._dirty) this._queue(true);
   }
   disconnectedCallback() {
     clearInterval(this._tick);
+    window.removeEventListener("kitchen-page-show", this._onShow);
+    window.removeEventListener("kitchen-routines", this._onRoutines);
     this.disconnected?.();
+  }
+  // Visible means "its page is showing", judged by the parent: a card that
+  // hides itself (notes with hide_missing, the holiday banner) must still
+  // render, or it could never show itself again.
+  _visible() {
+    if (!this.isConnected) return false;
+    const p = this.parentNode?.nodeType === 1 ? this.parentNode : this;
+    return p.checkVisibility ? p.checkVisibility() : p.offsetParent !== null || p === document.body;
   }
   // hass is replaced on every state change in the house (Sense alone updates
   // several times a second), so renders are coalesced to at most ~4 a second.
-  _queue() {
+  // The first render, a tap and a page coming into view render right away.
+  // A card on a hidden page only marks itself dirty and catches up when its
+  // page is shown, so the five tabs cost what one does.
+  _queue(now) {
+    if (now) {
+      clearTimeout(this._raf);
+      this._raf = null;
+      return this._renderNow();
+    }
     if (this._raf) return;
     this._raf = setTimeout(() => {
       this._raf = null;
-      if (!this._hass || !this.config) return;
-      if (this.paint) return this._guard(() => this.paint());
-      let body;
-      try {
-        body = this.render();
-      } catch (err) {
-        body = this._errorHtml(err);
-      }
-      const html = `<style>${BASE_CSS}${this.css || ""}</style>${body}`;
-      if (html !== this._last) {
-        this._last = html;
-        this.shadowRoot.innerHTML = html;
-      }
-    }, 250);
+      this._renderNow();
+    }, this._rendered ? 250 : 0);
+  }
+  _renderNow() {
+    if (!this._hass || !this.config) return;
+    if (this._rendered && !this._visible()) {
+      this._dirty = true;
+      return;
+    }
+    this._dirty = false;
+    this._rendered = true;
+    if (this.paint) return this._guard(() => this.paint());
+    let body;
+    try {
+      body = this.render();
+    } catch (err) {
+      body = this._errorHtml(err);
+    }
+    if (body === this._last) return;
+    this._last = body;
+    if (!this._body) {
+      this.shadowRoot.innerHTML = `<style>${BASE_CSS}${MOTION_CSS}${this.css || ""}</style><div class="kroot"></div>`;
+      this._body = this.shadowRoot.querySelector(".kroot");
+    }
+    morph(this._body, body);
+    this.rendered?.();
   }
   // One broken card shows a small error box; the rest of the view keeps working.
   _errorHtml(err) {
@@ -275,18 +839,49 @@ class KitchenCard extends HTMLElement {
     } catch (err) {
       this.shadowRoot.innerHTML = `<style>${BASE_CSS}</style>${this._errorHtml(err)}`;
       this._built = false;
+      this._body = null;
     }
   }
+  // Long-press a routine to edit it.
+  _pressStart(e) {
+    const el = e.composedPath().find((n) => n.dataset && n.dataset.chore);
+    if (!el || !Routines.active(this._hass)) return;
+    clearTimeout(this._press);
+    this._press = setTimeout(() => {
+      this._swallow = Date.now();
+      const r = Routines.all().find((x) => x.uid === el.dataset.chore);
+      if (r) routineEditor(this._hass, { routine: r });
+    }, 600);
+  }
   _click(e) {
-    const el = e.composedPath().find((n) => n.dataset && (n.dataset.toggle || n.dataset.action));
+    if (this._swallow && Date.now() - this._swallow < 800) return;
+    const el = e.composedPath().find((n) => n.dataset && (n.dataset.chore || n.dataset.toggle || n.dataset.action));
     if (!el) return;
-    if (el.dataset.toggle) {
+    if (el.dataset.chore) {
+      const done = el.dataset.on !== "1";
+      el.classList.add(done ? "checking" : "pending");
+      if (done) {
+        const tick = el.querySelector(".tick, .chk") || el;
+        const [x, y] = FX.at(tick);
+        FX.burst(x, y, getComputedStyle(this).getPropertyValue("--ok").trim() || "#4cd17a");
+        const pts = Number(el.dataset.pts || 0);
+        if (pts) FX.float(x, y - 10, `+${pts} ⭐`);
+      }
+      setChore(this._hass, el.dataset.chore, done);
+    } else if (el.dataset.toggle) {
       const on = el.dataset.on === "1";
       el.classList.add("pending");
       this._hass.callService("input_boolean", on ? "turn_off" : "turn_on", { entity_id: el.dataset.toggle });
     } else {
-      this.action?.(el.dataset.action, el.dataset, e);
+      this.action?.(el.dataset.action, el.dataset, e, el);
     }
+  }
+  /** Confetti over this card when `key` (e.g. "all done") turns true; not on first render. */
+  _celebrate(key, now) {
+    this._cel = this._cel || {};
+    const before = this._cel[key];
+    this._cel[key] = now;
+    if (now && before === false) requestAnimationFrame(() => FX.confetti(this.getBoundingClientRect()));
   }
   getCardSize() {
     return 4;
@@ -330,8 +925,16 @@ class HeaderCard extends KitchenCard {
       background:var(--ok); border:2px solid var(--bg); }
     .away { opacity:.45; }
     :host([compact]) .clock { font-size:44px; }
-    .greet { margin:12px 6px 0; font-size:17px; }
+    .greet { margin:12px 6px 0; font-size:17px; min-height:24px; }
     .greet span { color:var(--sub); }
+    .offer { margin:8px 0 0; display:flex; align-items:center; gap:10px; background:var(--card2); border-radius:14px; padding:3px 3px 3px 12px; font-size:16px;
+      animation:kin .4s ease-out both; }
+    .offer .e { font-size:24px; display:inline-block; animation:kpop .6s ease-out both, hbob 2.4s ease-in-out .6s infinite alternate; }
+    @keyframes hbob { to { transform:translateY(-3px) rotate(8deg); } }
+    .offer .t { flex:1; }
+    .offer .t span { color:var(--sub); }
+    .offer button { padding:7px 12px; border-radius:12px; font-size:14px; font-weight:500; background:var(--card); }
+    .offer button.go { background:var(--hol); color:#140c05; }
   `;
   shouldRender() {
     if (this.config.compact) return true;
@@ -350,7 +953,11 @@ class HeaderCard extends KitchenCard {
   // "Good evening! 7 chores left · 2 more events today · 5 to buy", like the Apolosign home card.
   _greeting(now) {
     const h = now.getHours();
-    const hi = h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+    const hol = holidayNow(now);
+    const th = Theme.current();
+    const hi = th.greet && hol && hol.key === Theme.key && hol.days === 0
+      ? `${th.greet} ${th.emoji}`
+      : `${h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"}!`;
     const parts = [];
     let due = 0;
     let left = 0;
@@ -369,7 +976,11 @@ class HeaderCard extends KitchenCard {
     const todo = this._hass.states[this.config.list || "todo.shopping_list"];
     const k = Number(todo?.state);
     if (k > 0) parts.push(`${k} to buy`);
-    return `<div class="greet">${hi}!${parts.length ? ` <span>${parts.join(" · ")}</span>` : ""}</div>`;
+    return `<div class="greet">${hi}${parts.length ? ` <span>${parts.join(" · ")}</span>` : ""}</div>`;
+  }
+  action(a) {
+    if (a === "hol-on" || a === "hol-no") answerHoliday(this._hass, a === "hol-on", this.getBoundingClientRect());
+    this._queue(true);
   }
   render() {
     const now = new Date();
@@ -395,7 +1006,15 @@ class HeaderCard extends KitchenCard {
         ${!compact && w ? `<div class="d">${WEATHER_TEXT[w.state] || w.state}${f ? ` · H ${Math.round(f.temperature)}° L ${Math.round(f.templow)}°` : ""}</div>` : ""}
         ${compact ? "" : `<div class="people">${people}</div>`}
       </div>
-    </div>${compact ? "" : this._greeting(now)}`;
+    </div>${compact ? "" : this._offerOrGreeting(now)}`;
+  }
+  // While a holiday is coming up and its theme is off, the greeting line asks about it instead.
+  _offerOrGreeting(now) {
+    const o = this.config.holiday_offer === false ? null : holidayOffer(this._hass);
+    if (!o) return this._greeting(now);
+    return `<div class="offer" data-k="offer" style="--hol:${o.theme.vars.accent}"><span class="e">${o.theme.emoji}</span>
+      <div class="t">${esc(o.text)} <span>Dress up the display?</span></div>
+      <button data-action="hol-no">Not this year</button><button class="go" data-action="hol-on">Turn it on</button></div>`;
   }
 }
 
@@ -414,13 +1033,14 @@ class TabsCard extends KitchenCard {
   css = `
     .tabs { display:flex; gap:8px; padding:0 2px; flex-wrap:wrap; }
     .tab { padding:9px 16px; border-radius:20px; background:var(--card); color:var(--sub); font-size:15px; font-weight:500; }
-    .tab.on { background:var(--accent); color:#1b1206; }
+    .tab.on { background:var(--accent); color:var(--ink); }
   `;
   action(a, d) {
     if (a !== "go") return;
     const base = location.pathname.split("/")[1];
     history.pushState(null, "", `/${base}/${d.path}${location.search}`);
     window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+    this._queue(true);
   }
   render() {
     const cur = location.pathname.split("/")[2] || "";
@@ -438,7 +1058,7 @@ const CAL_CSS = `
   .colh .av { width:24px; height:24px; font-size:11px; }
   .colh.day { flex-direction:column; gap:2px; font-size:12px; color:var(--sub); font-weight:400; padding:0 0 6px; }
   .colh.day b { font-size:16px; color:var(--txt); font-weight:500; width:30px; height:30px; display:grid; place-items:center; border-radius:50%; }
-  .colh.day.td b { background:var(--accent); color:#1b1206; }
+  .colh.day.td b { background:var(--accent); color:var(--ink); }
   .allday { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 8px 44px; }
   .adg { display:grid; grid-template-columns:repeat(var(--cols),minmax(0,1fr)); gap:3px; margin:0 0 6px 44px; }
   .adg > div { display:flex; flex-direction:column; gap:3px; min-width:0; }
@@ -570,7 +1190,7 @@ const MONTH_CSS = `
   .mg { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:3px; }
   .mc { background:var(--card2); border-radius:8px; padding:4px 3px; display:flex; flex-direction:column; gap:2px; min-width:0; overflow:hidden; }
   .mc .n { font-size:13px; text-align:center; width:24px; height:24px; line-height:24px; border-radius:50%; align-self:center; flex:none; }
-  .mc.td .n { background:var(--accent); color:#1b1206; font-weight:500; }
+  .mc.td .n { background:var(--accent); color:var(--ink); font-weight:500; }
   .mc.om { opacity:.4; }
   .mc .chip { font-size:10.5px; padding:2px 4px; border-radius:5px; }
   .mc .more { font-size:10.5px; color:var(--sub); text-align:center; }
@@ -692,7 +1312,7 @@ class CalendarCard extends KitchenCard {
     .ctl { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
     .seg { display:flex; background:var(--card2); border-radius:12px; padding:3px; }
     .seg button { padding:8px 12px; border-radius:10px; font-size:14px; color:var(--sub); }
-    .seg button.on { background:var(--accent); color:#1b1206; font-weight:500; }
+    .seg button.on { background:var(--accent); color:var(--ink); font-weight:500; }
     .nav { margin-left:auto; display:flex; align-items:center; gap:4px; }
     .nav button { min-width:36px; height:36px; border-radius:10px; background:var(--card2); display:grid; place-items:center; font-size:18px; padding:0 10px; }
     .nav .lbl { font-size:14px; font-weight:500; min-width:110px; text-align:center; }
@@ -757,11 +1377,8 @@ class CalendarCard extends KitchenCard {
       this._mode = "family";
       this._anchor = startOfDay(new Date(d.date));
     } else return;
-    if (this._range().join() !== before) {
-      this._events = null;
-      this._load();
-    }
-    this._queue();
+    if (this._range().join() !== before) this._load();
+    this._queue(true);
   }
   _label() {
     const a = this._anchor;
@@ -799,7 +1416,7 @@ class CalendarCard extends KitchenCard {
     else if (this._mode === "month") body = monthHtml(evs, this._anchor, Math.floor((H - 30) / 6));
     else if (this._mode === "list") body = `<div style="max-height:${H - 50}px;overflow-y:auto">${agendaHtml(evs) || `<div class="empty">Nothing on the calendar.</div>`}</div>`;
     else body = familyDayHtml(evs, this._anchor, H - 40, sh, eh);
-    return `<div class="card">${ctl}${who}${body}</div>`;
+    return `<div class="card">${ctl}${who}<div class="fade" data-k="${this._mode}|${this._range()[0].getTime()}">${body}</div></div>`;
   }
 }
 
@@ -816,6 +1433,9 @@ const KID_CSS = `
   .next { margin-top:12px; display:flex; align-items:center; gap:10px; background:var(--card2); border-radius:14px; padding:12px; font-size:15px; width:100%; min-height:56px; }
   .next .chk { margin-left:auto; width:30px; height:30px; border-radius:50%; border:2px solid var(--sub); flex:none; }
   .next.alldone { color:var(--ok); justify-content:center; }
+  .next .chk { transition:background-color .25s, border-color .25s; display:grid; place-items:center; }
+  .next.checking .chk { background:var(--ok); border-color:var(--ok); animation:kpop .4s ease-out; }
+  .next.checking .chk::after { content:"✓"; color:#111; font-weight:700; }
   .pending { opacity:.5; }
 `;
 
@@ -871,13 +1491,16 @@ class KidCard extends KitchenCard {
     const wk = this._week?.startStars != null ? st - this._week.startStars : null;
     const n = nextChore(list);
     const next = n
-      ? `<button class="next" data-toggle="${n.id}" data-on="0">${n.emoji} ${esc(n.title)}<div class="chk"></div></button>`
-      : `<div class="next alldone">${due.length ? "All done today! 🎉" : "No chores today"}</div>`;
+      ? `<button class="next enter" data-k="${esc(n.id)}" data-chore="${esc(n.id)}" data-on="0" data-pts="${n.points}">${n.emoji} ${esc(n.title)}<div class="chk"></div></button>`
+      : `<div class="next alldone enter" data-k="alldone">${due.length ? "All done today! 🎉" : "No chores today"}</div>`;
+    if (this._lastSt != null && st > this._lastSt) this._bumpAt = st;
+    this._lastSt = st;
+    this._celebrate("all", due.length > 0 && done === due.length);
     return `<div class="card">
       <div class="row">
         <div class="ring" style="background:conic-gradient(${m.color} ${pct}%, var(--card2) 0)"><div style="color:${m.color}">${m.name[0]}</div></div>
         <div><div class="name">${m.name}</div><div class="meta">${done} of ${due.length} done</div></div>
-        <div class="stars">⭐ ${st}<small>${wk != null ? `+${Math.max(0, wk)} this week` : ""}</small></div>
+        <div class="stars"><span class="${this._bumpAt === st ? "bump" : ""}" data-k="s${st}">⭐ ${st}</span><small>${wk != null ? `+${Math.max(0, wk)} this week` : ""}</small></div>
       </div>
       ${next}
     </div>`;
@@ -889,10 +1512,11 @@ class KidCard extends KitchenCard {
 class RoutineCard extends KitchenCard {
   css = `${KID_CSS}
     .rk { background:var(--card); border-radius:22px; padding:16px; display:flex; flex-direction:column; gap:8px; min-height:100%; }
-    .hd { display:flex; align-items:center; gap:12px; }
+    .hd { display:flex; align-items:center; gap:10px; }
+    .hd .nm { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .hd .av { width:52px; height:52px; font-size:22px; }
     .nm { font-size:26px; font-weight:500; }
-    .pts { margin-left:auto; font-size:30px; font-weight:700; text-align:right; }
+    .pts { margin-left:auto; font-size:28px; font-weight:700; text-align:right; white-space:nowrap; }
     .pts small { display:block; font-size:12px; color:var(--sub); font-weight:400; }
     .bar { height:12px; border-radius:6px; background:var(--card2); overflow:hidden; }
     .bar div { height:100%; border-radius:6px; transition:width .3s; }
@@ -910,6 +1534,20 @@ class RoutineCard extends KitchenCard {
     .ch.done { opacity:.45; min-height:44px; padding:6px 8px; gap:6px; font-size:13px; border-radius:12px; }
     .ch.done .ic { font-size:16px; width:20px; }
     .ch.done .tick { border:0; background:var(--ok); color:#111; width:20px; height:20px; font-size:11px; }
+    .ch .tick { transition:background-color .25s, border-color .25s; }
+    .ch.checking { background:color-mix(in srgb, var(--ok) 20%, var(--card2)); }
+    .ch.checking .tick { background:var(--ok); border-color:var(--ok); animation:kpop .4s ease-out; }
+    .ch.checking .tick::after { content:"✓"; color:#111; font-weight:700; }
+    .ch.pending { opacity:.45; }
+    .tools { display:flex; gap:6px; flex:none; }
+    .tools button { width:34px; height:34px; border-radius:50%; background:var(--card2); color:var(--sub); font-size:20px; display:grid; place-items:center; }
+    .tools button.add { color:var(--txt); }
+    .tools button.on { background:var(--accent); color:var(--ink); width:auto; padding:0 14px; border-radius:18px; font-size:15px; font-weight:500; }
+    .er { display:flex; align-items:center; gap:10px; background:var(--card2); border-radius:12px; padding:7px 10px; width:100%; font-size:15px; }
+    .er .ic { font-size:20px; width:26px; text-align:center; }
+    .er .tt { flex:1; min-width:0; }
+    .er .tt i { display:block; font-style:normal; font-size:12px; color:var(--sub); margin-top:2px; }
+    .er .pen { color:var(--sub); font-size:16px; }
     .wk { background:var(--card2); border-radius:16px; padding:12px; }
     .wk .t { font-size:12px; color:var(--sub); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
     .wk .g { display:grid; grid-template-columns:repeat(7,1fr); gap:5px; text-align:center; font-size:11px; color:var(--sub); }
@@ -933,8 +1571,14 @@ class RoutineCard extends KitchenCard {
     if (a === "period") {
       this._period = d.period;
       this._periodSetAt = Date.now();
-      this._queue();
+    } else if (a === "add") routineEditor(this._hass, { member: this.config.member });
+    else if (a === "edit") this._edit = !this._edit;
+    else if (a === "editr") {
+      const r = Routines.all().find((x) => x.uid === d.uid);
+      if (r) routineEditor(this._hass, { routine: r });
+      return;
     }
+    this._queue(true);
   }
   render() {
     const m = member(this.config.member);
@@ -960,7 +1604,7 @@ class RoutineCard extends KitchenCard {
       })
       .join("");
     const row = (c) =>
-      `<button class="ch ${c.done ? "done" : ""}" data-toggle="${c.id}" data-on="${c.done ? 1 : 0}"><span class="ic">${c.emoji}</span><span class="tt">${esc(c.title)}</span>${
+      `<button class="ch ${c.done ? "done fade" : "enter"}" data-k="${esc(c.id)}" data-chore="${esc(c.id)}" data-on="${c.done ? 1 : 0}" data-pts="${c.points}"><span class="ic">${c.emoji}</span><span class="tt">${esc(c.title)}</span>${
         c.points && !c.done ? `<span class="p">+${c.points}</span>` : ""
       }<div class="tick">${c.done ? "✓" : ""}</div></button>`;
     const cur = list.filter((c) => c.period === this._period && !c.done);
@@ -971,6 +1615,21 @@ class RoutineCard extends KitchenCard {
     if (any.length) body += `<div class="sec">Anytime today</div>${any.map(row).join("")}`;
     if (done.length) body += `<div class="sec">Done today</div><div class="donegrid">${done.map(row).join("")}</div>`;
     if (!list.length) body = `<div class="none">No chores today.</div>`;
+    const editable = Routines.active(this._hass);
+    if (this._edit && editable) {
+      const mine = chores(this._hass, m.key);
+      body = `<div class="sec">All of ${esc(m.name)}'s routines · tap one to change it</div>${PERIODS.map((p) => {
+        const xs = mine.filter((c) => c.period === p.key);
+        return xs.length ? `<div class="sec">${p.icon} ${p.label}</div>${xs.map((c) => `<button class="er enter" data-k="e${esc(c.id)}" data-action="editr" data-uid="${esc(c.id)}"><span class="ic">${c.emoji}</span><span class="tt">${esc(c.title)}<i>${fmtDays(c.routine.days)}${c.routine.points ? ` · ⭐ ${c.routine.points}` : ""}</i></span><span class="pen">✎</span></button>`).join("")}` : "";
+      }).join("") || `<div class="none">No routines yet.</div>`}`;
+    }
+    const tools = editable
+      ? `<div class="tools"><button class="add" data-action="add" aria-label="Add a routine">+</button><button class="${this._edit ? "on" : ""}" data-action="edit" aria-label="Edit routines">${this._edit ? "Done" : "✎"}</button></div>`
+      : "";
+    if (this._lastSt != null && st > this._lastSt) this._bumpAt = st;
+    this._lastSt = st;
+    this._celebrate("all", list.length > 0 && done.length === list.length);
+    if (periods.length) this._celebrate(`p-${this._period}`, cur.length === 0 && list.some((c) => c.period === this._period));
 
     let week = "";
     if (m.kid && this._week?.grid) {
@@ -988,12 +1647,12 @@ class RoutineCard extends KitchenCard {
         : `<div class="goal">🎯 <b>${gs - st} more stars</b> to ${esc(gt)}</div>`;
     }
     return `<div class="rk">
-      <div class="hd"><div class="av" style="background:${m.color}">${m.name[0]}</div><div class="nm">${m.name}</div><div class="pts">⭐ ${st}<small>${todayPts ? `+${todayPts} today` : "stars"}</small></div></div>
+      <div class="hd"><div class="av" style="background:${m.color}">${m.name[0]}</div><div class="nm">${m.name}</div>${tools}<div class="pts"><span class="${this._bumpAt === st ? "bump" : ""}" data-k="s${st}">⭐ ${st}</span><small>${todayPts ? `+${todayPts} today` : "stars"}</small></div></div>
       <div class="bar"><div style="width:${pct}%;background:${m.color}"></div></div>
-      ${periods.length ? `<div class="seg">${seg}</div>` : ""}
-      ${body}
-      ${week}
-      ${goal}
+      ${periods.length && !this._edit ? `<div class="seg">${seg}</div>` : ""}
+      <div class="fade" data-k="${this._edit ? "edit" : this._period}" style="display:flex;flex-direction:column;gap:8px">${body}</div>
+      ${this._edit ? "" : week}
+      ${this._edit ? "" : goal}
     </div>`;
   }
 }
@@ -1008,17 +1667,24 @@ class AdultCard extends KitchenCard {
     .top .x { margin-left:auto; color:var(--sub); font-size:14px; }
     .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
     .chip { background:var(--card2); border-radius:12px; padding:8px 10px; font-size:13px; }
+    .chip { transition:opacity .3s, background-color .25s; }
     .chip.done { opacity:.4; text-decoration:line-through; }
+    .chip.checking { background:var(--ok); color:#111; }
+    .chip.add { color:var(--sub); padding:8px 12px; }
     .pending { opacity:.5; }
   `;
+  action(a) {
+    if (a === "add") routineEditor(this._hass, { member: this.config.member });
+  }
   render() {
     const m = member(this.config.member);
     const list = chores(this._hass, m.key).filter((c) => c.due);
     const done = list.filter((c) => c.done).length;
     const st = stars(this._hass, m.key);
+    const add = Routines.active(this._hass) ? `<button class="chip add" data-action="add" aria-label="Add a routine">+</button>` : "";
     return `<div class="ad"><div class="top"><div class="av" style="background:${m.color}">${m.name[0]}</div><div>${m.name}</div>
       <div class="x">${st ? `⭐ ${st} · ` : ""}${done} / ${list.length}</div></div>
-      ${list.length ? `<div class="chips">${list.map((c) => `<button class="chip ${c.done ? "done" : ""}" data-toggle="${c.id}" data-on="${c.done ? 1 : 0}">${c.emoji} ${esc(c.title)}</button>`).join("")}</div>` : `<div class="chips muted" style="font-size:13px">No routines today</div>`}
+      <div class="chips">${list.map((c) => `<button class="chip ${c.done ? "done" : ""}" data-k="${esc(c.id)}" data-chore="${esc(c.id)}" data-on="${c.done ? 1 : 0}" data-pts="${c.points}">${c.emoji} ${esc(c.title)}</button>`).join("")}${list.length ? "" : `<span class="muted" style="font-size:13px;padding:8px 0">No routines today</span>`}${add}</div>
     </div>`;
   }
 }
@@ -1102,13 +1768,13 @@ class TodoSubs {
 const LIST_CSS = `
   .tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
   .tabs button { padding:9px 14px; border-radius:14px; background:var(--card2); font-size:15px; color:var(--sub); }
-  .tabs button.on { background:var(--accent); color:#1b1206; font-weight:500; }
+  .tabs button.on { background:var(--accent); color:var(--ink); font-weight:500; }
   .tabs button b { font-weight:500; margin-left:4px; opacity:.8; }
   form.add { display:flex; gap:8px; margin-bottom:10px; }
   form.add input { flex:1; min-width:0; background:var(--card2); border:1px solid var(--line); border-radius:12px; color:var(--txt);
     font:inherit; font-size:16px; padding:12px 14px; outline:none; }
   form.add input:focus { border-color:var(--accent); }
-  form.add button { padding:0 18px; border-radius:12px; background:var(--accent); color:#1b1206; font-weight:500; font-size:15px; display:grid; place-items:center; }
+  form.add button { padding:0 18px; border-radius:12px; background:var(--accent); color:var(--ink); font-weight:500; font-size:15px; display:grid; place-items:center; }
   .li { display:flex; gap:12px; align-items:center; width:100%; background:var(--card2); border-radius:14px; padding:12px 14px; margin-bottom:6px; font-size:17px; min-height:56px; }
   .li .c { width:26px; height:26px; border-radius:50%; border:2.5px solid var(--sub); flex:none; display:grid; place-items:center; font-size:14px; }
   .li .t { flex:1; min-width:0; }
@@ -1117,6 +1783,13 @@ const LIST_CSS = `
   .li.done .t { text-decoration:line-through; }
   .li.done .c { border:0; background:var(--ok); color:#111; }
   .li.pending { opacity:.35; }
+  .li .c { transition:background-color .2s, border-color .2s; }
+  .li.leaving { animation:kout .3s ease-in forwards; }
+  .li.leaving .c { background:var(--ok); border-color:var(--ok); }
+  .li.leaving .t { text-decoration:line-through; }
+  .note.leaving { animation:nout .3s ease-in forwards; }
+  @keyframes nout { to { opacity:0; transform:scale(.6) rotate(-8deg); } }
+  .note.enter { animation:kpop .35s ease-out both; }
   .ch { display:flex; align-items:center; justify-content:space-between; margin:14px 2px 8px; font-size:13px; color:var(--sub);
     text-transform:uppercase; letter-spacing:.06em; }
   .ch button { color:var(--sub); padding:6px 10px; border-radius:10px; background:var(--card2); text-transform:none; letter-spacing:0; }
@@ -1149,13 +1822,16 @@ class ListsCard extends KitchenCard {
     this._subs.sync(h, (this.config.lists || []).map((l) => l.entity));
     return true;
   }
-  action(a, d) {
+  action(a, d, ev, el) {
     const e = this._cur;
     if (a === "list") {
       this._cur = d.entity;
       this._showDone = false;
     } else if (a === "done" || a === "undo") {
-      this._hass.callService("todo", "update_item", { item: d.uid, status: a === "done" ? "completed" : "needs_action" }, { entity_id: e });
+      // Let the row slide out before the list redraws without it.
+      el?.classList.add("leaving");
+      if (a === "done" && el) FX.burst(...FX.at(el.querySelector(".c") || el), "#4cd17a", 8);
+      setTimeout(() => this._hass.callService("todo", "update_item", { item: d.uid, status: a === "done" ? "completed" : "needs_action" }, { entity_id: e }), 260);
       return;
     } else if (a === "clear") {
       this._hass.callService("todo", "remove_completed_items", {}, { entity_id: e });
@@ -1212,9 +1888,12 @@ class ListsCard extends KitchenCard {
     if (!items) return this._set(".items", `<div class="empty">Loading…</div>`);
     const open = items.filter((i) => i.status === "needs_action");
     const done = items.filter((i) => i.status === "completed");
+    this._seen = this._seen || {};
+    const seen = this._seen[this._cur];
+    this._seen[this._cur] = new Set(items.map((i) => i.uid));
     const row = (i, isDone) => {
       const sub = [i.description, fmtDue(i.due)].filter(Boolean).map(esc).join(" · ");
-      return `<button class="li ${isDone ? "done" : ""}" data-action="${isDone ? "undo" : "done"}" data-uid="${esc(i.uid)}"><div class="c">${isDone ? "✓" : ""}</div><div class="t">${esc(i.summary)}${sub && !isDone ? `<i>${sub}</i>` : ""}</div></button>`;
+      return `<button class="li ${isDone ? "done" : ""} ${seen && !seen.has(i.uid) ? "enter" : ""}" data-action="${isDone ? "undo" : "done"}" data-uid="${esc(i.uid)}"><div class="c">${isDone ? "✓" : ""}</div><div class="t">${esc(i.summary)}${sub && !isDone ? `<i>${sub}</i>` : ""}</div></button>`;
     };
     let html = open.length ? open.map((i) => row(i, false)).join("") : `<div class="empty">Nothing on ${esc(cur.title)}. Add something above.</div>`;
     if (done.length) {
@@ -1246,8 +1925,10 @@ class NotesCard extends ListsCard {
     this._subs.sync(h, [this.config.entity]);
     return true;
   }
-  action(a, d) {
-    if (a === "done") this._hass.callService("todo", "update_item", { item: d.uid, status: "completed" }, { entity_id: this.config.entity });
+  action(a, d, ev, el) {
+    if (a !== "done") return;
+    el?.closest(".note")?.classList.add("leaving");
+    setTimeout(() => this._hass.callService("todo", "update_item", { item: d.uid, status: "completed" }, { entity_id: this.config.entity }), 260);
   }
   _build() {
     this.shadowRoot.innerHTML = `<style>${BASE_CSS}${this.css}</style><div class="card"><div class="h"><span class="ttl"></span></div>
@@ -1281,10 +1962,12 @@ class NotesCard extends ListsCard {
     this.shadowRoot.querySelector(".ttl").textContent = title;
     const items = (this._subs.items[this.config.entity] || []).filter((i) => i.status === "needs_action");
     const max = this.config.max || 9;
+    const seen = this._seenNotes;
+    this._seenNotes = new Set(items.map((i) => i.uid));
     const html = items.length
       ? `<div class="notes ${this.config.columns === 1 ? "one" : ""}" style="--cols:${this.config.columns || 3}">${items
           .slice(0, max)
-          .map((i, n) => `<div class="note" style="background:${NOTE_COLORS[n % NOTE_COLORS.length]}"><div class="tx">${esc(i.summary)}</div>${i.description ? `<i>${esc(i.description)}</i>` : ""}<button data-action="done" data-uid="${esc(i.uid)}" aria-label="Take down">✕</button></div>`)
+          .map((i, n) => `<div class="note ${seen && !seen.has(i.uid) ? "enter" : ""}" style="background:${NOTE_COLORS[n % NOTE_COLORS.length]}"><div class="tx">${esc(i.summary)}</div>${i.description ? `<i>${esc(i.description)}</i>` : ""}<button data-action="done" data-uid="${esc(i.uid)}" aria-label="Take down">✕</button></div>`)
           .join("")}</div>${items.length > max ? `<div class="foot">+${items.length - max} more</div>` : ""}`
       : `<div class="empty">No notes yet.${this.config.add === false ? "" : " Be the first one ✨"}</div>`;
     this._set(".items", html);
@@ -1379,9 +2062,8 @@ class MealWeekCard extends KitchenCard {
     else if (a === "today") this._wk = startOfWeek();
     else return;
     if (this._wk.getTime() === before) return;
-    this._events = null;
     this._load();
-    this._queue();
+    this._queue(true);
   }
   render() {
     const slots = this.config.slots || [];
@@ -1479,6 +2161,199 @@ class StackCard extends HTMLElement {
   }
 }
 
+// ----------------------------------------------------------------- pages
+
+// The whole display is one HA view with this card in it: the header, the big
+// tabs, and every tab's cards as pages that stay mounted. Switching tabs only
+// flips which page is visible, so it's instant: no HA view change, nothing
+// re-subscribes or refetches, and cards on hidden pages skip their renders
+// until they're shown (KitchenCard._renderNow). The page is kept in the URL
+// hash (#calendar), and the display goes back to Home after `idle_home`
+// minutes (default 5) without a touch.
+class PagesCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._built = {};
+    this._touched = Date.now();
+  }
+  setConfig(config) {
+    this.config = config;
+    this._build();
+  }
+  css = `
+    :host { display:block; }
+    .wrap { display:flex; flex-direction:column; gap:12px; min-height:100vh; background:var(--bg); transition:background-color .6s; position:relative; }
+    .garland { flex:1; display:flex; justify-content:space-evenly; font-size:19px; opacity:.9; pointer-events:none; overflow:hidden; min-width:0; }
+    .garland span { animation:gsw 3.2s ease-in-out infinite alternate; transform-origin:50% 0; }
+    .garland span:nth-child(odd) { animation-delay:-1.6s; }
+    @keyframes gsw { from { transform:rotate(-9deg); } to { transform:rotate(9deg); } }
+    .bar { display:flex; gap:8px; align-items:center; position:relative; padding:0 2px; }
+    .tabs { display:flex; gap:8px; position:relative; flex-wrap:wrap; }
+    .pill { position:absolute; left:0; top:0; height:38px; border-radius:20px; background:var(--accent); transition:transform .28s cubic-bezier(.3,.9,.3,1.1), width .28s, background-color .4s; }
+    .tab { padding:9px 16px; border-radius:20px; background:var(--card); color:var(--sub); font-size:15px; font-weight:500; height:38px; position:relative; transition:color .2s, background-color .4s; }
+    .tab.on { color:var(--ink); background:transparent; }
+    .theme { margin-left:auto; flex:none; width:38px; height:38px; border-radius:50%; background:var(--card); display:grid; place-items:center; font-size:18px; }
+    .page[hidden] { display:none; }
+    .page.enter { animation:kin .24s ease-out both; }
+  `;
+  async _build() {
+    const c = this.config;
+    this._helpers = this._helpers || (await window.loadCardHelpers());
+    const pad = c.padding ?? 16;
+    this.shadowRoot.innerHTML = `<style>${BASE_CSS}${MOTION_CSS}${this.css}</style>
+      <div class="wrap" style="padding:${pad}px"><div class="hdr"></div>
+      <div class="bar"><div class="tabs"><div class="pill"></div>${(c.pages || [])
+        .map((p) => `<button class="tab" data-page="${esc(p.path)}">${esc(p.title)}</button>`)
+        .join("")}</div><div class="garland"></div>${c.theme_button === false ? "" : `<button class="theme" data-theme aria-label="Theme">🎨</button>`}</div>
+      <div class="pages">${(c.pages || []).map((p) => `<div class="page" data-page="${esc(p.path)}" hidden></div>`).join("")}</div></div>`;
+    const root = this.shadowRoot;
+    root.addEventListener("pointerdown", (e) => {
+      this._touched = Date.now();
+      ripple(e);
+    });
+    root.addEventListener("click", (e) => {
+      const el = e.composedPath().find((n) => n.dataset && (n.dataset.page || "theme" in n.dataset) && n.tagName === "BUTTON");
+      if (!el) return;
+      if ("theme" in el.dataset) themePicker(this._hass);
+      else this.show(el.dataset.page);
+    });
+    this._header = this._helpers.createCardElement({ type: "custom:kitchen-header-card", ...(c.header || {}) });
+    root.querySelector(".hdr").appendChild(this._header);
+    if (this._hass) this._header.hass = this._hass;
+    window.addEventListener("hashchange", () => this.show(this._fromHash(), true));
+    window.addEventListener("kitchen-theme", () => this._garland());
+    this._garland();
+    this.show(this._fromHash(), true);
+    // Build the other pages once the first one is up, so the first visit to a tab is as quick as the rest.
+    setTimeout(() => (c.pages || []).forEach((p) => this._page(p.path)), 1200);
+    clearInterval(this._idle);
+    this._idle = setInterval(() => {
+      const home = (c.pages || [])[0]?.path;
+      if (home && this._cur !== home && Date.now() - this._touched > (c.idle_home ?? 5) * 60000) this.show(home);
+    }, 30000);
+  }
+  _fromHash() {
+    const h = decodeURIComponent(location.hash.slice(1));
+    const pages = this.config.pages || [];
+    return (pages.find((p) => p.path === h) || pages[0] || {}).path;
+  }
+  _page(path) {
+    if (this._built[path]) return this._built[path];
+    const p = (this.config.pages || []).find((x) => x.path === path);
+    const host = this.shadowRoot.querySelector(`.page[data-page="${CSS.escape(path)}"]`);
+    if (!p || !host) return null;
+    const el = this._helpers.createCardElement({ type: "custom:kitchen-stack-card", cards: p.cards || [], gap: p.gap ?? 12 });
+    if (this._hass) el.hass = this._hass;
+    host.appendChild(el);
+    this._built[path] = el;
+    return el;
+  }
+  show(path, initial) {
+    if (!path) return;
+    this._page(path);
+    const page = (this.config.pages || []).find((p) => p.path === path);
+    for (const el of this.shadowRoot.querySelectorAll(".page")) {
+      const on = el.dataset.page === path;
+      if (on && el.hidden) {
+        el.hidden = false;
+        if (!initial) {
+          el.classList.remove("enter");
+          void el.offsetWidth;
+          el.classList.add("enter");
+        }
+      } else if (!on) el.hidden = true;
+    }
+    for (const b of this.shadowRoot.querySelectorAll(".tab")) b.classList.toggle("on", b.dataset.page === path);
+    const compact = page?.compact_header ?? path !== (this.config.pages || [])[0]?.path;
+    if (!!this._header.config?.compact !== compact) this._header.setConfig({ type: "custom:kitchen-header-card", ...(this.config.header || {}), compact });
+    this._cur = path;
+    this._pill(initial);
+    if (decodeURIComponent(location.hash.slice(1)) !== path) history.replaceState(history.state, "", `${location.pathname}${location.search}#${encodeURIComponent(path)}`);
+    // Cards on the page that went stale while hidden render now, before the next frame.
+    window.dispatchEvent(new Event("kitchen-page-show"));
+  }
+  _pill(instant) {
+    const b = this.shadowRoot.querySelector(`.tab[data-page="${CSS.escape(this._cur)}"]`);
+    const pill = this.shadowRoot.querySelector(".pill");
+    if (!b || !pill) return;
+    if (!b.offsetWidth) return requestAnimationFrame(() => this._pill(true));
+    if (instant) pill.style.transition = "none";
+    pill.style.width = `${b.offsetWidth}px`;
+    pill.style.transform = `translate(${b.offsetLeft}px, ${b.offsetTop}px)`;
+    if (instant) requestAnimationFrame(() => (pill.style.transition = ""));
+  }
+  _garland() {
+    const g = this.shadowRoot.querySelector(".garland");
+    if (!g) return;
+    const t = Theme.current();
+    g.innerHTML = t.garland && !REDUCED() ? t.garland.split(" ").map((x) => `<span>${x}</span>`).join("") : "";
+  }
+  set hass(h) {
+    this._hass = h;
+    Theme.apply(h);
+    if (this._header) this._header.hass = h;
+    for (const el of Object.values(this._built)) el.hass = h;
+  }
+  getCardSize() {
+    return 20;
+  }
+}
+
+// --------------------------------------------------------------- holiday
+
+/** The holiday offer to show now, or null: in a holiday's window, its theme off, not answered yet. */
+function holidayOffer(hass) {
+  const h = holidayNow();
+  const s = hass.states[THEME_ENTITY];
+  const ans = hass.states[THEME_ANSWERED];
+  if (!h || !s || !ans || s.state === h.key) return null;
+  const tok = `${h.key}-${h.year}`;
+  if ((ans.state || "").split(",").includes(tok) || holidayOffer.local === tok) return null;
+  const when = h.days === 0 ? "is today" : h.days < 0 ? "was yesterday" : h.days === 1 ? "is tomorrow" : `is in ${h.days} days`;
+  return { ...h, tok, text: `${h.theme.name} ${when}!` };
+}
+function answerHoliday(hass, on, rect) {
+  const o = holidayOffer(hass);
+  if (!o) return;
+  const prev = (hass.states[THEME_ANSWERED]?.state || "").split(",").filter((x) => x && x !== o.tok);
+  hass.callService("input_text", "set_value", { entity_id: THEME_ANSWERED, value: [...prev, o.tok].slice(-8).join(",").slice(-250) });
+  if (on) {
+    hass.callService("input_select", "select_option", { entity_id: THEME_ENTITY, option: o.key });
+    if (rect) FX.confetti(rect, [o.theme.vars.accent, "#ffd54a", "#ffffff"]);
+  }
+  holidayOffer.local = o.tok; // hide it here right away
+}
+
+// "🎃 Halloween is in 3 days! Dress up the display?" on Home while a holiday
+// is coming up and its theme isn't on. Answers (either way) are remembered per
+// holiday and year in input_text.kitchen_theme_answered, house-wide.
+class HolidayCard extends KitchenCard {
+  tickMs = 600000;
+  css = `
+    .hb { display:flex; align-items:center; gap:14px; background:linear-gradient(120deg, var(--card2), var(--card)); border:1px solid var(--line);
+      border-radius:18px; padding:12px 14px; animation:kin .4s ease-out both; }
+    .hb .e { font-size:34px; animation:kpop .6s ease-out both, hbob 2.4s ease-in-out .6s infinite alternate; }
+    @keyframes hbob { to { transform:translateY(-4px) rotate(6deg); } }
+    .hb .t { flex:1; font-size:17px; }
+    .hb .t small { display:block; color:var(--sub); font-size:13px; margin-top:2px; }
+    .hb button { padding:11px 16px; border-radius:14px; font-size:15px; font-weight:500; background:var(--card2); }
+    .hb button.go { background:var(--hol); color:#140c05; }
+  `;
+  action(a) {
+    answerHoliday(this._hass, a === "on", this.getBoundingClientRect());
+    this._queue(true);
+  }
+  render() {
+    const o = holidayOffer(this._hass);
+    this.style.display = o ? "" : "none";
+    if (!o) return "";
+    return `<div class="hb" style="--hol:${o.theme.vars.accent}"><div class="e">${o.theme.emoji}</div>
+      <div class="t">${esc(o.text)}<small>Dress up the display for it?</small></div>
+      <button data-action="no">Not this year</button><button class="go" data-action="on">Turn it on</button></div>`;
+  }
+}
+
 // ------------------------------------------------------------ register
 
 const CARDS = {
@@ -1497,6 +2372,8 @@ const CARDS = {
   "kitchen-lists-card": [ListsCard, "Kitchen lists", "Several to-do lists with add, check off and clear"],
   "kitchen-notes-card": [NotesCard, "Kitchen notes", "Sticky notes from a to-do list"],
   "kitchen-meal-week-card": [MealWeekCard, "Kitchen meal week", "This week's meal plan, a column per meal"],
+  "kitchen-pages-card": [PagesCard, "Kitchen pages", "The whole display: header, tabs and every tab's cards, switched instantly"],
+  "kitchen-holiday-card": [HolidayCard, "Kitchen holiday", "Offers a holiday theme when one is coming up"],
 };
 window.customCards = window.customCards || [];
 for (const [tag, [cls, name, description]] of Object.entries(CARDS)) {
