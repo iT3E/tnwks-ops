@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.42.0 - 2026-10-31
+
+### Changed
+
+* Kitchen display: tabs switch instantly (one HA view with every tab kept mounted), taps and check-offs animate, routines can be added, edited and deleted on the display (they moved from input_booleans into the todo.kitchen_routines list), and holiday themes with an offer on Home and a 🎨 picker
+
 ## v1.41.0 - 2026-10-31
 
 ### Added

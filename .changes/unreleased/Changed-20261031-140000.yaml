@@ -1,3 +1,0 @@
-kind: Changed
-body: 'Kitchen display: tabs switch instantly (one HA view with every tab kept mounted), taps and check-offs animate, routines can be added, edited and deleted on the display (they moved from input_booleans into the todo.kitchen_routines list), and holiday themes with an offer on Home and a 🎨 picker'
-time: 2026-10-31T14:00:00-07:00
