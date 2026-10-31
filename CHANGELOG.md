@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.40.1 - 2026-10-31
+
+### Fixed
+
+* Home Assistant: the home location moved about 190 m to where the phones actually sit at night, so people at home read as home instead of away
+
 ## v1.40.0 - 2026-10-31
 
 ### Added
