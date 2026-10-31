@@ -1,0 +1,21 @@
+---
+version: "3"
+
+# Denylist for family names and personal emails: .github/privacy-terms.sops.yaml.
+# CI reads a copy from the PRIVACY_TERMS Actions secret; re-sync after edits.
+
+tasks:
+  check:
+    desc: Check tracked files and paths against the privacy denylist
+    cmds:
+      - "{{.ROOT_DIR}}/bin/privacy-check {{.CLI_ARGS}}"
+
+  edit:
+    desc: Edit the privacy denylist (then run task privacy:sync)
+    cmds:
+      - sops {{.ROOT_DIR}}/.github/privacy-terms.sops.yaml
+
+  sync:
+    desc: Copy the privacy denylist into the PRIVACY_TERMS Actions secret
+    cmds:
+      - sops -d --extract '["terms"]' {{.ROOT_DIR}}/.github/privacy-terms.sops.yaml | gh secret set PRIVACY_TERMS --repo iT3E/tnwks-ops

@@ -1,0 +1,59 @@
+---
+name: "Privacy"
+
+# Denylist check for family names and personal emails (bin/privacy-check):
+# every tracked file and path, the PR's commit messages and author/committer
+# identities, and the PR title and body. The list is the PRIVACY_TERMS
+# Actions secret, synced from .github/privacy-terms.sops.yaml with
+# `task privacy:sync`, so this job never needs a SOPS key. Hits print as
+# "term #N: path:line" without the matched text.
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  privacy:
+    name: privacy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check
+        env:
+          PRIVACY_TERMS: ${{ secrets.PRIVACY_TERMS }}
+          PRIVACY_EXTRA_TEXT: ${{ github.event.pull_request.title }} ${{ github.event.pull_request.body }}
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          # Report-only until the existing hits are cleaned up.
+          REPORT_ONLY: "true"
+        run: |
+          if [ -z "${PRIVACY_TERMS}" ]; then
+            # Fork PRs get no secrets.
+            echo "::warning::PRIVACY_TERMS is not available to this run; skipped"
+            exit 0
+          fi
+          if [ "$EVENT" = "pull_request" ]; then
+            range="${BASE_SHA}..${HEAD_SHA}"
+          elif [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            range="HEAD~1..HEAD"
+          else
+            range="${BEFORE_SHA}..HEAD"
+          fi
+          if bin/privacy-check --commits "$range"; then
+            exit 0
+          fi
+          if [ "$REPORT_ONLY" = "true" ]; then
+            echo "::warning::privacy-check found hits (report-only for now)"
+            exit 0
+          fi
+          exit 1

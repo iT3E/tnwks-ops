@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Fail if any denylisted term (family names, personal emails) appears in the
+# repo. The repo is public; see "Privacy" in AGENTS.md.
+#
+#   bin/privacy-check                 # tracked files (working tree) + paths
+#   bin/privacy-check --cached        # the index instead (pre-commit)
+#   bin/privacy-check --commits A..B  # also commit messages and identities
+#
+# Terms come from $PRIVACY_TERMS (CI: the PRIVACY_TERMS Actions secret) or
+# else from .github/privacy-terms.sops.yaml (`terms`, one per line). Edit the
+# list with `sops .github/privacy-terms.sops.yaml`, then `task privacy:sync`.
+#
+# Matching is case-insensitive. A term with "@" or "." matches anywhere. Any
+# other term matches as a word: no letter directly before it, and no letter
+# after it except a plural/possessive "s" (so "driver" passes, "chore_x_1"
+# and "xs-api" are hits). Text in $PRIVACY_EXTRA_TEXT (CI: the PR title and
+# body) is checked too.
+#
+# Hits print as "term #N: <where>". The matched text is never printed, since
+# CI logs on a public repo are public.
+set -euo pipefail
+
+cached=""
+range=""
+while (($#)); do
+  case "$1" in
+    --cached) cached="--cached" ;;
+    --commits) range="${2:?--commits needs a range}"; shift ;;
+    *) echo "usage: privacy-check [--cached] [--commits A..B]" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+cd "$(git rev-parse --show-toplevel)"
+terms_file=".github/privacy-terms.sops.yaml"
+
+if [[ -n "${PRIVACY_TERMS:-}" ]]; then
+  raw="${PRIVACY_TERMS}"
+else
+  raw="$(sops -d --extract '["terms"]' "${terms_file}")"
+fi
+mapfile -t terms < <(tr -d '\r' <<<"${raw}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v -e '^$' -e '^#' || true)
+((${#terms[@]})) || { echo "privacy-check: no terms loaded" >&2; exit 2; }
+
+pattern() {
+  local t q
+  t="$1"
+  q="$(sed -e 's/[][\\.^$*+?(){}|\/]/\\&/g' <<<"${t}")"
+  if [[ "${t}" == *[@.]* ]]; then
+    printf '(?i)%s' "${q}"
+  else
+    printf '(?i)(?<![a-z])%s(?:s)?(?![a-z])' "${q}"
+  fi
+}
+
+hits=0
+report() { echo "term #$1: $2"; hits=$((hits + 1)); }
+
+for i in "${!terms[@]}"; do
+  n=$((i + 1))
+  p="$(pattern "${terms[$i]}")"
+
+  # File contents, as path:line.
+  while IFS= read -r loc; do
+    report "${n}" "${loc}"
+  done < <(git grep ${cached} -I -n -P -e "${p}" -- . ":(exclude)${terms_file}" | cut -d: -f1,2 || true)
+
+  # File and directory names.
+  while IFS= read -r f; do
+    report "${n}" "path ${f}"
+  done < <(git ls-files | grep -P -e "${p}" || true)
+
+  if [[ -n "${range}" ]]; then
+    while IFS= read -r sha; do
+      report "${n}" "commit ${sha:0:12} (message or author/committer)"
+    done < <(git log --format='%H%x09%an <%ae>%x09%cn <%ce>%x09%B%x00' "${range}" |
+      perl -0 -ne 'BEGIN { $re = shift @ARGV } print substr($_, 0, 40), "\n" if /$re/' "${p}" || true)
+  fi
+
+  if [[ -n "${PRIVACY_EXTRA_TEXT:-}" ]] && grep -q -P -e "${p}" <<<"${PRIVACY_EXTRA_TEXT}"; then
+    report "${n}" "PR title or body"
+  fi
+done
+
+if ((hits)); then
+  echo "privacy-check: ${hits} hit(s). Remove the term or move it to a SOPS secret." >&2
+  exit 1
+fi
+echo "privacy-check: clean (${#terms[@]} terms)"
