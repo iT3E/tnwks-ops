@@ -19,6 +19,10 @@ pool that backs authentication for `*.internal.tnwks.us` services
     `https://hass.internal.tnwks.us/auth/oidc/callback` (LAN),
     scopes `openid email profile`. Used by the hass-oidc-auth integration;
     `cognito:groups` maps `admins` → HA administrator, `viewers` → HA user
+  - `mealie` — authorization_code, confidential (with secret), callback
+    `https://recipes.tnwks.us/login`, scopes `openid email profile`. Used by
+    Mealie's built-in OIDC; `cognito:groups` maps `admins` → Mealie admin,
+    `viewers` → user
   - `agent-ori` — client_credentials, scopes `tnwks-api/read`,
     `tnwks-api/write`, with secret
 - **Hosted UI domain:** prefix `tnwks-auth.auth.us-west-2.amazoncognito.com`
@@ -40,6 +44,8 @@ pool that backs authentication for `*.internal.tnwks.us` services
 | `cognito_oauth2_proxy_client_id`      |            |
 | `cognito_oauth2_proxy_client_secret`  | sensitive  |
 | `cognito_home_assistant_client_id`    | public     |
+| `cognito_mealie_client_id`            |            |
+| `cognito_mealie_client_secret`        | sensitive  |
 | `cognito_agent_client_id`             |            |
 | `cognito_agent_client_secret`         | sensitive  |
 | `cognito_hosted_ui_domain`            |            |
