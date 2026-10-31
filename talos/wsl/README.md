@@ -86,3 +86,15 @@ running cluster only when patched in, e.g.:
 talosctl --talosconfig ~/.talos/config-homelab-wsl -n 10.5.0.2 patch machineconfig \
   --patch '{"cluster":{"controllerManager":{"extraArgs":{"terminated-pod-gc-threshold":"1"}}}}'
 ```
+
+`patches/talos-api-access.yaml` (Talos API access for tuppr) is applied to
+the control plane; the command is in the file.
+
+## Upgrades
+
+Versions live in `versions.yaml` and Renovate bumps them. Kubernetes
+upgrades run in-cluster through tuppr when the bump merges. Talos can't
+upgrade itself in Docker, so after a Talos bump merges, roll the node
+containers onto the new image with `task talos:upgrade:wsl`
+(`roll-node.sh` does one node). Details and the version rules:
+[docs/operations/cluster-upgrades.md](../../docs/operations/cluster-upgrades.md).

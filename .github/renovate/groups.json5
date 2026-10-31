@@ -40,6 +40,27 @@
       "matchDatasources": ["helm"],
       "matchPackageNames": ["app-template"],
       "separateMinorPatch": true
+    },
+    {
+      // The KubernetesUpgrade (what tuppr rolls out) and the bootstrap pin in
+      // talos/wsl/versions.yaml move together. Kubernetes only supports
+      // upgrading one minor at a time, so each minor gets its own PR.
+      "description": "Kubernetes version: one PR per minor, every pin together",
+      "groupName": "Kubernetes",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/siderolabs/kubelet"],
+      "separateMultipleMinor": true,
+      "separateMinorPatch": true
+    },
+    {
+      // WSL's node image pin and MS-01's TalosUpgrade move together. Talos
+      // upgrades go one minor at a time (1.13 -> 1.14).
+      "description": "Talos version: one PR per minor, every pin together",
+      "groupName": "Talos",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/siderolabs/talos"],
+      "separateMultipleMinor": true,
+      "separateMinorPatch": true
     }
   ]
 }

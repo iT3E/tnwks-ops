@@ -21,4 +21,5 @@ resources:
   - ./networking
   - ./production
   - ./selfhosted
+  - ./system-upgrade
   - ./tools

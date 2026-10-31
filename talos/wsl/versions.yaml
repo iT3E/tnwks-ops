@@ -1,0 +1,20 @@
+---
+# Versions for the WSL Talos-in-Docker cluster. Renovate bumps both.
+#
+# talos: the node container image (ghcr.io/siderolabs/talos). Talos refuses
+#   in-place upgrades in container mode, so a bump is applied by rolling each
+#   node container onto the new image with its volumes kept:
+#   `task talos:upgrade:wsl` (infrastructure/ansible/playbooks/05-talos-upgrade.yml).
+#   Renovate groups this with the MS-01 TalosUpgrade in
+#   kubernetes/apps/system-upgrade/tuppr/talos/talos.yaml.
+# kubernetes: only used when 01-talos-bootstrap.yml creates the cluster. The
+#   running cluster follows the KubernetesUpgrade in
+#   kubernetes/apps/system-upgrade/tuppr/upgrades/kubernetes.yaml (tuppr), which
+#   Renovate bumps in the same PR.
+#
+# docs/operations/cluster-upgrades.md has the order and the support matrix.
+
+# renovate: datasource=docker depName=ghcr.io/siderolabs/talos
+talos: v1.13.2
+# renovate: datasource=docker depName=ghcr.io/siderolabs/kubelet
+kubernetes: v1.34.0

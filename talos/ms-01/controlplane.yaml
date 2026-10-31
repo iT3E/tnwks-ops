@@ -48,6 +48,14 @@ machine:
     hostDNS:
       enabled: true
       forwardKubeDNSToHost: true
+    # tuppr (system-upgrade namespace) drives Talos and Kubernetes upgrades
+    # through the Talos API. docs/operations/cluster-upgrades.md
+    kubernetesTalosAPIAccess:
+      enabled: true
+      allowedRoles:
+        - os:admin
+      allowedKubernetesNamespaces:
+        - system-upgrade
   kernel:
     modules:
       # Required for Rook Ceph

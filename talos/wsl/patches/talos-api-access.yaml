@@ -1,0 +1,17 @@
+---
+# Lets tuppr (system-upgrade namespace) drive the Talos API from inside the
+# cluster: its KubernetesUpgrade Job runs `talosctl upgrade-k8s`
+# (kubernetes/apps/system-upgrade/tuppr). Control plane only: Talos rejects
+# this feature on workers, and pods reach the API through the control plane.
+# Applies without a reboot on a running cluster:
+#   talosctl --talosconfig ~/.talos/config-homelab-wsl \
+#     -n 10.5.0.2 patch mc --mode=no-reboot \
+#     --patch @talos/wsl/patches/talos-api-access.yaml
+machine:
+  features:
+    kubernetesTalosAPIAccess:
+      enabled: true
+      allowedRoles:
+        - os:admin
+      allowedKubernetesNamespaces:
+        - system-upgrade

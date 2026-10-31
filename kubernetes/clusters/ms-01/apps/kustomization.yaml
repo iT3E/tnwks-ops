@@ -26,3 +26,4 @@ resources:
   # ObjectBucketClaim for thanos (cnpg's bucket is created via the
   # ks-cluster-backup path above; loki no longer needs an S3 bucket).
   - ../../../apps/monitoring/thanos/app/s3-thanos-bucket.yaml
+  - ./tuppr-talos-ks.yaml
