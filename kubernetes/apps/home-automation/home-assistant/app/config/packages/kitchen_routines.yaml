@@ -1,0 +1,737 @@
+---
+# Kitchen display routines (chores + stars), the HA replacement for the
+# Apolosign Routines screen. Read by the custom cards in
+# config/www/tnwks-kitchen/kitchen-cards.js and the Kitchen dashboard
+# (config/dashboards/kitchen.yaml).
+#
+# One input_boolean per chore. Its customize attributes say who it belongs
+# to and when it shows up:
+#   member        raine | river | megan | ivan
+#   period        morning | afternoon | evening | anytime
+#   points        stars for checking it off (points_by_day overrides per day)
+#   days          sun..sat it appears on
+#   emoji, order  how the cards draw and sort it
+# To add a chore: add the input_boolean and its customize block, and add the
+# entity to both automations' entity lists below (award + reset).
+#
+# Stars are counters, seeded with the Apolosign totals on 2026-10-30
+# (Raine 90, River 54). `initial` only applies when there's no restored
+# state, so fix a balance with counter.set_value, not by editing this file.
+# Unchecking a chore by hand takes its stars back; the midnight reset doesn't.
+#
+# Generated once from the Apolosign chore list (week of 2026-11-01); edit
+# this file directly from here on.
+homeassistant:
+  customize:
+    input_boolean.chore_raine_brush_teeth_and_hair:
+      kitchen_chore: true
+      member: raine
+      title: Brush teeth and hair
+      emoji: 🪥
+      period: morning
+      points: 0
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 0
+    input_boolean.chore_raine_clean_your_room:
+      kitchen_chore: true
+      member: raine
+      title: Clean your room
+      emoji: 🧹
+      period: morning
+      points: 0
+      days: [sun]
+      order: 1
+    input_boolean.chore_raine_eat_breakfast:
+      kitchen_chore: true
+      member: raine
+      title: Eat breakfast
+      emoji: 🥣
+      period: morning
+      points: 0
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 2
+    input_boolean.chore_raine_get_dressed:
+      kitchen_chore: true
+      member: raine
+      title: Get dressed
+      emoji: 👕
+      period: morning
+      points: 0
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 3
+    input_boolean.chore_raine_pack_backpack:
+      kitchen_chore: true
+      member: raine
+      title: Pack backpack
+      emoji: 🎒
+      period: morning
+      points: 0
+      days: [mon, tue, wed, thu, fri]
+      order: 4
+    input_boolean.chore_raine_pack_lunch:
+      kitchen_chore: true
+      member: raine
+      title: Pack lunch
+      emoji: 🌮
+      period: morning
+      points: 3
+      days: [mon, tue, wed, thu, fri]
+      order: 5
+      points_by_day:
+        mon: 5
+        fri: 2
+    input_boolean.chore_raine_free_dress:
+      kitchen_chore: true
+      member: raine
+      title: Free dress
+      emoji: 👗
+      period: morning
+      points: 0
+      days: [mon]
+      order: 6
+    input_boolean.chore_raine_pack_piano_books:
+      kitchen_chore: true
+      member: raine
+      title: Pack piano books
+      emoji: 🎹
+      period: morning
+      points: 0
+      days: [tue]
+      order: 7
+    input_boolean.chore_raine_homework:
+      kitchen_chore: true
+      member: raine
+      title: Homework
+      emoji: 📝
+      period: afternoon
+      points: 0
+      days: [mon, tue, wed, thu]
+      order: 8
+    input_boolean.chore_raine_unpack_backpack_and_lunchbox:
+      kitchen_chore: true
+      member: raine
+      title: Unpack backpack and lunchbox
+      emoji: 🎒
+      period: afternoon
+      points: 0
+      days: [mon, tue, wed, thu, fri]
+      order: 9
+    input_boolean.chore_raine_clean_up_all_toys:
+      kitchen_chore: true
+      member: raine
+      title: Clean up all toys
+      emoji: 🧸
+      period: evening
+      points: 0
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 10
+    input_boolean.chore_raine_pick_clothes_for_the_week:
+      kitchen_chore: true
+      member: raine
+      title: Pick clothes for the week
+      emoji: 👚
+      period: evening
+      points: 5
+      days: [thu]
+      order: 11
+    input_boolean.chore_raine_potty_and_brush_teeth:
+      kitchen_chore: true
+      member: raine
+      title: Potty and brush teeth
+      emoji: 🪥
+      period: evening
+      points: 0
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 12
+    input_boolean.chore_raine_practice_violin_for_5_minutes:
+      kitchen_chore: true
+      member: raine
+      title: Practice violin for 5 minutes
+      emoji: 🎻
+      period: evening
+      points: 3
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 13
+    input_boolean.chore_raine_shower_and_pjs:
+      kitchen_chore: true
+      member: raine
+      title: Shower and PJs
+      emoji: 🚿
+      period: evening
+      points: 0
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 14
+    input_boolean.chore_raine_dishes_by_sink:
+      kitchen_chore: true
+      member: raine
+      title: Dishes by sink
+      emoji: 🍽️
+      period: anytime
+      points: 1
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 15
+    input_boolean.chore_raine_piano_for_10_minutes:
+      kitchen_chore: true
+      member: raine
+      title: Piano for 10 minutes
+      emoji: 🎹
+      period: anytime
+      points: 0
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 16
+    input_boolean.chore_raine_read_for_15_minutes:
+      kitchen_chore: true
+      member: raine
+      title: Read for 15 minutes
+      emoji: 📖
+      period: anytime
+      points: 1
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 17
+    input_boolean.chore_river_brush_teeth_and_hair:
+      kitchen_chore: true
+      member: river
+      title: Brush teeth and hair
+      emoji: 🪥
+      period: morning
+      points: 0
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 18
+    input_boolean.chore_river_clean_your_room:
+      kitchen_chore: true
+      member: river
+      title: Clean your room
+      emoji: 🧹
+      period: morning
+      points: 0
+      days: [sun]
+      order: 19
+    input_boolean.chore_river_eat_breakfast:
+      kitchen_chore: true
+      member: river
+      title: Eat breakfast
+      emoji: 🥣
+      period: morning
+      points: 0
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 20
+    input_boolean.chore_river_get_dressed:
+      kitchen_chore: true
+      member: river
+      title: Get dressed
+      emoji: 👕
+      period: morning
+      points: 0
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 21
+    input_boolean.chore_river_help_fold_clothes:
+      kitchen_chore: true
+      member: river
+      title: Help fold clothes
+      emoji: 👚
+      period: afternoon
+      points: 3
+      days: [thu]
+      order: 22
+    input_boolean.chore_river_clean_up_all_toys:
+      kitchen_chore: true
+      member: river
+      title: Clean up all toys
+      emoji: 🧸
+      period: evening
+      points: 0
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 23
+    input_boolean.chore_river_help_put_dishes_away:
+      kitchen_chore: true
+      member: river
+      title: Help put dishes away
+      emoji: 🍽️
+      period: evening
+      points: 3
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 24
+    input_boolean.chore_river_pick_clothes_for_the_week:
+      kitchen_chore: true
+      member: river
+      title: Pick clothes for the week
+      emoji: 👚
+      period: evening
+      points: 5
+      days: [thu]
+      order: 25
+    input_boolean.chore_river_potty_and_brush_teeth:
+      kitchen_chore: true
+      member: river
+      title: Potty and brush teeth
+      emoji: 🪥
+      period: evening
+      points: 0
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 26
+    input_boolean.chore_river_shower_and_pjs:
+      kitchen_chore: true
+      member: river
+      title: Shower and PJs
+      emoji: 🚿
+      period: evening
+      points: 0
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 27
+    input_boolean.chore_river_dishes_by_sink:
+      kitchen_chore: true
+      member: river
+      title: Dishes by sink
+      emoji: 🍽️
+      period: anytime
+      points: 1
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 28
+    input_boolean.chore_river_practice_letters:
+      kitchen_chore: true
+      member: river
+      title: Practice letters
+      emoji: ✏️
+      period: anytime
+      points: 5
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 29
+    input_boolean.chore_river_water_plants:
+      kitchen_chore: true
+      member: river
+      title: Water plants
+      emoji: 🪴
+      period: anytime
+      points: 5
+      days: [sun]
+      order: 30
+    input_boolean.chore_megan_10000_steps:
+      kitchen_chore: true
+      member: megan
+      title: 10000 steps
+      emoji: 👟
+      period: anytime
+      points: 1
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 31
+    input_boolean.chore_megan_exercise_for_5_minutes:
+      kitchen_chore: true
+      member: megan
+      title: Exercise for 5 minutes
+      emoji: 💪
+      period: anytime
+      points: 1
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 32
+    input_boolean.chore_megan_exercise_for_10_15_minutes:
+      kitchen_chore: true
+      member: megan
+      title: Exercise for 10-15 minutes
+      emoji: 🏃‍♀️
+      period: anytime
+      points: 3
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 33
+    input_boolean.chore_megan_exercise_for_20_minutes:
+      kitchen_chore: true
+      member: megan
+      title: Exercise for 20 minutes
+      emoji: 🔥
+      period: anytime
+      points: 5
+      days: [sun, mon, tue, wed, thu, fri, sat]
+      order: 34
+    input_boolean.chore_ivan_check_mail:
+      kitchen_chore: true
+      member: ivan
+      title: Check mail
+      emoji: 📬
+      period: anytime
+      points: 0
+      days: [sun]
+      order: 35
+    input_boolean.chore_ivan_take_out_trash:
+      kitchen_chore: true
+      member: ivan
+      title: Take out trash
+      emoji: 🗑️
+      period: anytime
+      points: 0
+      days: [sun]
+      order: 36
+input_boolean:
+  chore_raine_brush_teeth_and_hair:
+    name: 'Raine: Brush teeth and hair'
+    icon: mdi:toothbrush
+  chore_raine_clean_your_room:
+    name: 'Raine: Clean your room'
+    icon: mdi:broom
+  chore_raine_eat_breakfast:
+    name: 'Raine: Eat breakfast'
+    icon: mdi:bowl-mix
+  chore_raine_get_dressed:
+    name: 'Raine: Get dressed'
+    icon: mdi:tshirt-crew
+  chore_raine_pack_backpack:
+    name: 'Raine: Pack backpack'
+    icon: mdi:bag-personal
+  chore_raine_pack_lunch:
+    name: 'Raine: Pack lunch'
+    icon: mdi:food-takeout-box
+  chore_raine_free_dress:
+    name: 'Raine: Free dress'
+    icon: mdi:hanger
+  chore_raine_pack_piano_books:
+    name: 'Raine: Pack piano books'
+    icon: mdi:piano
+  chore_raine_homework:
+    name: 'Raine: Homework'
+    icon: mdi:pencil
+  chore_raine_unpack_backpack_and_lunchbox:
+    name: 'Raine: Unpack backpack and lunchbox'
+    icon: mdi:bag-personal-off
+  chore_raine_clean_up_all_toys:
+    name: 'Raine: Clean up all toys'
+    icon: mdi:teddy-bear
+  chore_raine_pick_clothes_for_the_week:
+    name: 'Raine: Pick clothes for the week'
+    icon: mdi:wardrobe
+  chore_raine_potty_and_brush_teeth:
+    name: 'Raine: Potty and brush teeth'
+    icon: mdi:toothbrush-paste
+  chore_raine_practice_violin_for_5_minutes:
+    name: 'Raine: Practice violin for 5 minutes'
+    icon: mdi:violin
+  chore_raine_shower_and_pjs:
+    name: 'Raine: Shower and PJs'
+    icon: mdi:shower
+  chore_raine_dishes_by_sink:
+    name: 'Raine: Dishes by sink'
+    icon: mdi:silverware-clean
+  chore_raine_piano_for_10_minutes:
+    name: 'Raine: Piano for 10 minutes'
+    icon: mdi:piano
+  chore_raine_read_for_15_minutes:
+    name: 'Raine: Read for 15 minutes'
+    icon: mdi:book-open-variant
+  chore_river_brush_teeth_and_hair:
+    name: 'River: Brush teeth and hair'
+    icon: mdi:toothbrush
+  chore_river_clean_your_room:
+    name: 'River: Clean your room'
+    icon: mdi:broom
+  chore_river_eat_breakfast:
+    name: 'River: Eat breakfast'
+    icon: mdi:bowl-mix
+  chore_river_get_dressed:
+    name: 'River: Get dressed'
+    icon: mdi:tshirt-crew
+  chore_river_help_fold_clothes:
+    name: 'River: Help fold clothes'
+    icon: mdi:tshirt-v
+  chore_river_clean_up_all_toys:
+    name: 'River: Clean up all toys'
+    icon: mdi:teddy-bear
+  chore_river_help_put_dishes_away:
+    name: 'River: Help put dishes away'
+    icon: mdi:silverware-fork-knife
+  chore_river_pick_clothes_for_the_week:
+    name: 'River: Pick clothes for the week'
+    icon: mdi:wardrobe
+  chore_river_potty_and_brush_teeth:
+    name: 'River: Potty and brush teeth'
+    icon: mdi:toothbrush-paste
+  chore_river_shower_and_pjs:
+    name: 'River: Shower and PJs'
+    icon: mdi:shower
+  chore_river_dishes_by_sink:
+    name: 'River: Dishes by sink'
+    icon: mdi:silverware-clean
+  chore_river_practice_letters:
+    name: 'River: Practice letters'
+    icon: mdi:alphabetical-variant
+  chore_river_water_plants:
+    name: 'River: Water plants'
+    icon: mdi:watering-can
+  chore_megan_10000_steps:
+    name: 'Megan: 10000 steps'
+    icon: mdi:walk
+  chore_megan_exercise_for_5_minutes:
+    name: 'Megan: Exercise for 5 minutes'
+    icon: mdi:arm-flex
+  chore_megan_exercise_for_10_15_minutes:
+    name: 'Megan: Exercise for 10-15 minutes'
+    icon: mdi:run
+  chore_megan_exercise_for_20_minutes:
+    name: 'Megan: Exercise for 20 minutes'
+    icon: mdi:fire
+  chore_ivan_check_mail:
+    name: 'Ivan: Check mail'
+    icon: mdi:mailbox
+  chore_ivan_take_out_trash:
+    name: 'Ivan: Take out trash'
+    icon: mdi:trash-can
+counter:
+  stars_raine:
+    name: Raine stars
+    icon: mdi:star
+    initial: 90
+    restore: true
+    minimum: 0
+    step: 1
+  stars_river:
+    name: River stars
+    icon: mdi:star
+    initial: 54
+    restore: true
+    minimum: 0
+    step: 1
+  stars_megan:
+    name: Megan stars
+    icon: mdi:star
+    initial: 0
+    restore: true
+    minimum: 0
+    step: 1
+  stars_ivan:
+    name: Ivan stars
+    icon: mdi:star
+    initial: 0
+    restore: true
+    minimum: 0
+    step: 1
+input_text:
+  routines_goal_raine:
+    name: Raine reward goal
+    max: 60
+    icon: mdi:gift
+  routines_goal_river:
+    name: River reward goal
+    max: 60
+    icon: mdi:gift
+input_number:
+  routines_goal_stars_raine:
+    name: Raine reward goal stars
+    min: 0
+    max: 1000
+    step: 1
+    mode: box
+    icon: mdi:star-circle
+  routines_goal_stars_river:
+    name: River reward goal stars
+    min: 0
+    max: 1000
+    step: 1
+    mode: box
+    icon: mdi:star-circle
+template:
+- sensor:
+  - name: Raine routines done
+    unique_id: kitchen_routines_raine_done
+    icon: mdi:checkbox-marked-circle-outline
+    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'raine') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list %}{{ d | selectattr('state', 'eq', 'on') | list | count }}"
+    attributes:
+      total: "{{ (states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'raine') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list) | count }}"
+  - name: River routines done
+    unique_id: kitchen_routines_river_done
+    icon: mdi:checkbox-marked-circle-outline
+    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'river') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list %}{{ d | selectattr('state', 'eq', 'on') | list | count }}"
+    attributes:
+      total: "{{ (states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'river') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list) | count }}"
+  - name: Megan routines done
+    unique_id: kitchen_routines_megan_done
+    icon: mdi:checkbox-marked-circle-outline
+    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'megan') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list %}{{ d | selectattr('state', 'eq', 'on') | list | count }}"
+    attributes:
+      total: "{{ (states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'megan') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list) | count }}"
+  - name: Ivan routines done
+    unique_id: kitchen_routines_ivan_done
+    icon: mdi:checkbox-marked-circle-outline
+    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'ivan') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list %}{{ d | selectattr('state', 'eq', 'on') | list | count }}"
+    attributes:
+      total: "{{ (states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'ivan') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list) | count }}"
+- binary_sensor:
+  - name: Raine routines am done
+    unique_id: kitchen_routines_raine_am
+    icon: mdi:star-check
+    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'raine') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['morning', 'afternoon']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+  - name: Raine routines pm done
+    unique_id: kitchen_routines_raine_pm
+    icon: mdi:star-check
+    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'raine') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['evening']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+  - name: River routines am done
+    unique_id: kitchen_routines_river_am
+    icon: mdi:star-check
+    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'river') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['morning', 'afternoon']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+  - name: River routines pm done
+    unique_id: kitchen_routines_river_pm
+    icon: mdi:star-check
+    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'river') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['evening']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+  - name: Megan routines am done
+    unique_id: kitchen_routines_megan_am
+    icon: mdi:star-check
+    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'megan') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['morning', 'afternoon']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+  - name: Megan routines pm done
+    unique_id: kitchen_routines_megan_pm
+    icon: mdi:star-check
+    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'megan') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['evening']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+  - name: Ivan routines am done
+    unique_id: kitchen_routines_ivan_am
+    icon: mdi:star-check
+    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'ivan') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['morning', 'afternoon']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+  - name: Ivan routines pm done
+    unique_id: kitchen_routines_ivan_pm
+    icon: mdi:star-check
+    state: "{% set d = states.input_boolean | selectattr('attributes.kitchen_chore', 'defined') | selectattr('attributes.member', 'eq', 'ivan') | selectattr('attributes.days', 'contains', now().strftime('%a') | lower) | list | selectattr('attributes.period', 'in', ['evening']) | list %}{{ d | count > 0 and d | selectattr('state', 'eq', 'off') | list | count == 0 }}"
+automation:
+- id: kitchen_routines_stars
+  alias: 'Kitchen routines: award stars'
+  description: Adds a chore's stars when it's checked off, takes them back when a person unchecks it. Changes made by automations (the midnight reset) are skipped.
+  mode: queued
+  max: 50
+  triggers:
+  - trigger: state
+    entity_id:
+    - input_boolean.chore_raine_brush_teeth_and_hair
+    - input_boolean.chore_raine_clean_your_room
+    - input_boolean.chore_raine_eat_breakfast
+    - input_boolean.chore_raine_get_dressed
+    - input_boolean.chore_raine_pack_backpack
+    - input_boolean.chore_raine_pack_lunch
+    - input_boolean.chore_raine_free_dress
+    - input_boolean.chore_raine_pack_piano_books
+    - input_boolean.chore_raine_homework
+    - input_boolean.chore_raine_unpack_backpack_and_lunchbox
+    - input_boolean.chore_raine_clean_up_all_toys
+    - input_boolean.chore_raine_pick_clothes_for_the_week
+    - input_boolean.chore_raine_potty_and_brush_teeth
+    - input_boolean.chore_raine_practice_violin_for_5_minutes
+    - input_boolean.chore_raine_shower_and_pjs
+    - input_boolean.chore_raine_dishes_by_sink
+    - input_boolean.chore_raine_piano_for_10_minutes
+    - input_boolean.chore_raine_read_for_15_minutes
+    - input_boolean.chore_river_brush_teeth_and_hair
+    - input_boolean.chore_river_clean_your_room
+    - input_boolean.chore_river_eat_breakfast
+    - input_boolean.chore_river_get_dressed
+    - input_boolean.chore_river_help_fold_clothes
+    - input_boolean.chore_river_clean_up_all_toys
+    - input_boolean.chore_river_help_put_dishes_away
+    - input_boolean.chore_river_pick_clothes_for_the_week
+    - input_boolean.chore_river_potty_and_brush_teeth
+    - input_boolean.chore_river_shower_and_pjs
+    - input_boolean.chore_river_dishes_by_sink
+    - input_boolean.chore_river_practice_letters
+    - input_boolean.chore_river_water_plants
+    - input_boolean.chore_megan_10000_steps
+    - input_boolean.chore_megan_exercise_for_5_minutes
+    - input_boolean.chore_megan_exercise_for_10_15_minutes
+    - input_boolean.chore_megan_exercise_for_20_minutes
+    - input_boolean.chore_ivan_check_mail
+    - input_boolean.chore_ivan_take_out_trash
+    from: 'off'
+    to: 'on'
+    id: done
+  - trigger: state
+    entity_id:
+    - input_boolean.chore_raine_brush_teeth_and_hair
+    - input_boolean.chore_raine_clean_your_room
+    - input_boolean.chore_raine_eat_breakfast
+    - input_boolean.chore_raine_get_dressed
+    - input_boolean.chore_raine_pack_backpack
+    - input_boolean.chore_raine_pack_lunch
+    - input_boolean.chore_raine_free_dress
+    - input_boolean.chore_raine_pack_piano_books
+    - input_boolean.chore_raine_homework
+    - input_boolean.chore_raine_unpack_backpack_and_lunchbox
+    - input_boolean.chore_raine_clean_up_all_toys
+    - input_boolean.chore_raine_pick_clothes_for_the_week
+    - input_boolean.chore_raine_potty_and_brush_teeth
+    - input_boolean.chore_raine_practice_violin_for_5_minutes
+    - input_boolean.chore_raine_shower_and_pjs
+    - input_boolean.chore_raine_dishes_by_sink
+    - input_boolean.chore_raine_piano_for_10_minutes
+    - input_boolean.chore_raine_read_for_15_minutes
+    - input_boolean.chore_river_brush_teeth_and_hair
+    - input_boolean.chore_river_clean_your_room
+    - input_boolean.chore_river_eat_breakfast
+    - input_boolean.chore_river_get_dressed
+    - input_boolean.chore_river_help_fold_clothes
+    - input_boolean.chore_river_clean_up_all_toys
+    - input_boolean.chore_river_help_put_dishes_away
+    - input_boolean.chore_river_pick_clothes_for_the_week
+    - input_boolean.chore_river_potty_and_brush_teeth
+    - input_boolean.chore_river_shower_and_pjs
+    - input_boolean.chore_river_dishes_by_sink
+    - input_boolean.chore_river_practice_letters
+    - input_boolean.chore_river_water_plants
+    - input_boolean.chore_megan_10000_steps
+    - input_boolean.chore_megan_exercise_for_5_minutes
+    - input_boolean.chore_megan_exercise_for_10_15_minutes
+    - input_boolean.chore_megan_exercise_for_20_minutes
+    - input_boolean.chore_ivan_check_mail
+    - input_boolean.chore_ivan_take_out_trash
+    from: 'on'
+    to: 'off'
+    id: undone
+  conditions:
+  - condition: template
+    value_template: "{{ trigger.to_state.context.parent_id is none }}"
+  variables:
+    points: "{% set a = trigger.to_state.attributes %}{{ (a.points_by_day | default({})).get(now().strftime('%a') | lower, a.points | default(0)) | int(0) }}"
+    counter_entity: "counter.stars_{{ trigger.to_state.attributes.member }}"
+  actions:
+  - condition: template
+    value_template: "{{ points | int(0) > 0 }}"
+  - action: counter.set_value
+    target:
+      entity_id: "{{ counter_entity }}"
+    data:
+      value: "{% set cur = states(counter_entity) | int(0) %}{{ cur + points | int(0) if trigger.id == 'done' else [cur - points | int(0), 0] | max }}"
+- id: kitchen_routines_reset
+  alias: 'Kitchen routines: midnight reset'
+  description: Unchecks every chore at midnight. Stars stay.
+  triggers:
+  - trigger: time
+    at: 00:00:00
+  actions:
+  - action: input_boolean.turn_off
+    target:
+      entity_id:
+      - input_boolean.chore_raine_brush_teeth_and_hair
+      - input_boolean.chore_raine_clean_your_room
+      - input_boolean.chore_raine_eat_breakfast
+      - input_boolean.chore_raine_get_dressed
+      - input_boolean.chore_raine_pack_backpack
+      - input_boolean.chore_raine_pack_lunch
+      - input_boolean.chore_raine_free_dress
+      - input_boolean.chore_raine_pack_piano_books
+      - input_boolean.chore_raine_homework
+      - input_boolean.chore_raine_unpack_backpack_and_lunchbox
+      - input_boolean.chore_raine_clean_up_all_toys
+      - input_boolean.chore_raine_pick_clothes_for_the_week
+      - input_boolean.chore_raine_potty_and_brush_teeth
+      - input_boolean.chore_raine_practice_violin_for_5_minutes
+      - input_boolean.chore_raine_shower_and_pjs
+      - input_boolean.chore_raine_dishes_by_sink
+      - input_boolean.chore_raine_piano_for_10_minutes
+      - input_boolean.chore_raine_read_for_15_minutes
+      - input_boolean.chore_river_brush_teeth_and_hair
+      - input_boolean.chore_river_clean_your_room
+      - input_boolean.chore_river_eat_breakfast
+      - input_boolean.chore_river_get_dressed
+      - input_boolean.chore_river_help_fold_clothes
+      - input_boolean.chore_river_clean_up_all_toys
+      - input_boolean.chore_river_help_put_dishes_away
+      - input_boolean.chore_river_pick_clothes_for_the_week
+      - input_boolean.chore_river_potty_and_brush_teeth
+      - input_boolean.chore_river_shower_and_pjs
+      - input_boolean.chore_river_dishes_by_sink
+      - input_boolean.chore_river_practice_letters
+      - input_boolean.chore_river_water_plants
+      - input_boolean.chore_megan_10000_steps
+      - input_boolean.chore_megan_exercise_for_5_minutes
+      - input_boolean.chore_megan_exercise_for_10_15_minutes
+      - input_boolean.chore_megan_exercise_for_20_minutes
+      - input_boolean.chore_ivan_check_mail
+      - input_boolean.chore_ivan_take_out_trash

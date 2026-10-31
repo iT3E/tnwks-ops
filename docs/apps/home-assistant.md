@@ -75,7 +75,8 @@ app/
 ├── config/
 │   ├── configuration.yaml     # → /config/configuration.yaml
 │   ├── packages/*.yaml        # → /config/packages/
-│   └── dashboards/*.yaml      # → /config/dashboards/
+│   ├── dashboards/*.yaml      # → /config/dashboards/
+│   └── www/tnwks-kitchen/     # → /config/www/tnwks-kitchen/ (our own cards, /local/tnwks-kitchen/)
 └── scripts/prepare-config.sh  # init container: installs custom integrations + cards
 ```
 
@@ -96,8 +97,8 @@ fragment, because automation and dashboard tuning doesn't cut a release. A PR
 that touches anything else (including a new config file, since that edits
 `kustomization.yaml`) needs one as usual.
 
-Renovate bumps the image and the three pinned add-ons (`hass-oidc-auth`, the
-Frigate integration, the Advanced Camera Card). The same check runs on those
+Renovate bumps the image and the pinned add-ons (`hass-oidc-auth`, the
+Frigate integration, the Advanced Camera Card, kiosk-mode). The same check runs on those
 PRs, which catches HA's frequent renames of trigger and condition keys.
 
 ## First-time setup
@@ -202,6 +203,31 @@ restart should never quietly leave alerting off.
 To test it, move the start and end times on the Alerts view so the window
 covers now, then walk past a camera. Restarting HA restores the real
 window.
+
+## Kitchen display
+
+The Apolosign display in the kitchen (2160x3840 at 480 dpi, so a 720x1280 CSS
+viewport) runs the **Kitchen** dashboard, `config/dashboards/kitchen.yaml`.
+Its cards are ours, in `config/www/tnwks-kitchen/kitchen-cards.js`: plain
+custom elements, no build step. HA caches `/local` for a long time, so bump
+the `?v=` on its resource in `configuration.yaml` with every change to it.
+
+Chores live in `config/packages/kitchen_routines.yaml`: one `input_boolean`
+per chore, with `customize` attributes for who, when (period, days) and how
+many stars. Checking one off adds its stars to `counter.stars_<member>`;
+unchecking it by hand takes them back. Everything is unchecked at midnight,
+and stars stay. A reward goal per kid is two helpers (`input_text` +
+`input_number`) you can set from the UI; the Routines view shows progress
+toward it.
+
+kiosk-mode hides HA's header and sidebar on a device once the dashboard has
+been opened there with `?kiosk` (it remembers). Open it with `?clear_km_cache`
+to undo that.
+
+Calendars, the meal plan and extra to-do lists are integrations, so they're
+UI-owned. The dashboard expects `calendar.family` (the family Google
+calendar) and `calendar.mealie_dinner` (Mealie), and shows a "not connected"
+placeholder until they exist.
 
 ## Break-glass
 

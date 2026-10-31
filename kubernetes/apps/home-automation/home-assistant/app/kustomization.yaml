@@ -7,7 +7,7 @@ resources:
   - ./helmrelease.yaml
 # Home Assistant's own configuration, one ConfigMap per directory it mounts
 # into (ConfigMaps are flat). New files under config/packages/ or
-# config/dashboards/ must be listed here too.
+# config/dashboards/ (or config/www/) must be listed here too.
 configMapGenerator:
   - name: home-assistant-config
     files:
@@ -15,9 +15,14 @@ configMapGenerator:
   - name: home-assistant-packages
     files:
       - config/packages/frigate_night_alerts.yaml
+      - config/packages/kitchen_routines.yaml
   - name: home-assistant-dashboards
     files:
+      - config/dashboards/kitchen.yaml
       - config/dashboards/security.yaml
+  - name: home-assistant-www-kitchen
+    files:
+      - config/www/tnwks-kitchen/kitchen-cards.js
   - name: home-assistant-scripts
     files:
       - scripts/prepare-config.sh

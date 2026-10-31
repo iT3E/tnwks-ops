@@ -1,0 +1,130 @@
+---
+# Kitchen dashboard (YAML mode, git-owned): the Apolosign wall display in the
+# kitchen, replacing the Apolosign app. Laid out for the display's browser
+# viewport, 720x1280 CSS px in portrait (2160x3840 at 480 dpi), so at most two
+# columns. Phones get the same layout.
+#
+# Cards are the custom ones in config/www/tnwks-kitchen/kitchen-cards.js
+# (resource in configuration.yaml); chores and stars come from
+# packages/kitchen_routines.yaml.
+#
+# kiosk-mode hides HA's header and sidebar only where the dashboard was opened
+# with ?kiosk once (it remembers that per device), i.e. on the wall display.
+# Everywhere else the header stays, so the dashboard is still editable and
+# reachable. The big tabs at the top of each view replace the header tabs.
+#
+# Entities that don't exist yet render as a "not connected" placeholder:
+#   calendar.family       the family Google calendar (Google Calendar or
+#                         Remote Calendar integration, UI-owned)
+#   calendar.mealie_dinner Mealie's dinner plan (Mealie integration, UI-owned)
+title: Kitchen
+
+views:
+  - title: Home
+    path: home
+    type: panel
+    background: "#111318"
+    cards:
+      - type: custom:kitchen-stack-card
+        padding: 16
+        cards:
+          - type: custom:kitchen-header-card
+          - &tabs
+            type: custom:kitchen-tabs-card
+            views:
+              - { path: home, title: Home }
+              - { path: calendar, title: Calendar }
+              - { path: routines, title: Routines }
+              - { path: lists, title: Lists }
+          - type: custom:kitchen-family-day-card
+            calendars: [calendar.family]
+            start_hour: 7
+            end_hour: 21
+            height: 340
+          - type: custom:kitchen-stack-card
+            columns: 2
+            cards:
+              - { type: custom:kitchen-kid-card, member: raine }
+              - { type: custom:kitchen-kid-card, member: river }
+          - type: custom:kitchen-stack-card
+            columns: 2
+            cards:
+              - type: custom:kitchen-meals-card
+                title: Dinner
+                calendar: calendar.mealie_dinner
+                days: 3
+              - type: custom:kitchen-todo-card
+                entity: todo.shopping_list
+                title: Groceries
+                max: 5
+          - type: custom:kitchen-agenda-card
+            title: Coming up
+            style: list
+            calendars: [calendar.family]
+            from_tomorrow: true
+            days: 3
+            max: 4
+          - type: custom:kitchen-chips-card
+            chips:
+              - { entity: binary_sensor.dishwasher_power, name: Dishwasher, on_text: Running, off_text: Idle }
+              - { entity: binary_sensor.washer_power, name: Washer, on_text: Running, off_text: Idle }
+              - { entity: binary_sensor.dryer_power, name: Dryer, on_text: Running, off_text: Idle }
+              - { entity: weather.forecast_home, name: Wind, attribute: wind_speed, unit: " mph" }
+
+  - title: Calendar
+    path: calendar
+    type: panel
+    background: "#111318"
+    cards:
+      - type: custom:kitchen-stack-card
+        padding: 16
+        cards:
+          - { type: custom:kitchen-header-card, compact: true }
+          - *tabs
+          - type: custom:kitchen-family-day-card
+            calendars: [calendar.family]
+            start_hour: 7
+            end_hour: 21
+            height: 420
+          - type: custom:kitchen-agenda-card
+            title: Next two weeks
+            calendars: [calendar.family]
+            from_tomorrow: true
+            days: 14
+
+  - title: Routines
+    path: routines
+    type: panel
+    background: "#111318"
+    cards:
+      - type: custom:kitchen-stack-card
+        padding: 16
+        cards:
+          - { type: custom:kitchen-header-card, compact: true }
+          - *tabs
+          - type: custom:kitchen-stack-card
+            columns: 2
+            grow: true
+            cards:
+              - { type: custom:kitchen-routine-card, member: raine }
+              - { type: custom:kitchen-routine-card, member: river }
+          - type: custom:kitchen-stack-card
+            columns: 2
+            cards:
+              - { type: custom:kitchen-adult-card, member: megan }
+              - { type: custom:kitchen-adult-card, member: ivan }
+
+  - title: Lists
+    path: lists
+    type: panel
+    background: "#111318"
+    cards:
+      - type: custom:kitchen-stack-card
+        padding: 16
+        cards:
+          - { type: custom:kitchen-header-card, compact: true }
+          - *tabs
+          # HA's own to-do card: adding, editing and reordering items.
+          - type: todo-list
+            entity: todo.shopping_list
+            title: Groceries
