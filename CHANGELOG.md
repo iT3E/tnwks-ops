@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.42.1 - 2026-10-31
+
+### Fixed
+
+* Kitchen display: holiday offer answers no longer keep the "unknown" placeholder, and routine rows are a little shorter so a long Saturday fits
+
 ## v1.42.0 - 2026-10-31
 
 ### Changed
