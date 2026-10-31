@@ -89,7 +89,7 @@ fragment under `.changes/unreleased/`; merging to `main` releases them.
 
 ### Changed
 
-* Renovate review: Ori now migrates and lands impact/high PRs instead of leaving majors open, and a new impact/critical tier (Flux, cluster version, CNI, data store majors) merges only after Ivan adds ivan/approved; ARC controller and scale sets are grouped, and image-only bumps of the generated Flux manifest are off
+* Renovate review: Ori now migrates and lands impact/high PRs instead of leaving majors open, and a new impact/critical tier (Flux, cluster version, CNI, data store majors) merges only after the owner adds owner/approved; ARC controller and scale sets are grouped, and image-only bumps of the generated Flux manifest are off
 
 ## v1.23.0 - 2026-10-28
 

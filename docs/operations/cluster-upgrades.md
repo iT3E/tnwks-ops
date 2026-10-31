@@ -11,7 +11,7 @@ What happens after the merge depends on the cluster:
 | MS-01 (bare metal) | Same as WSL | Automatic: tuppr's `TalosUpgrade` |
 
 Both groups get one PR per minor (`separateMultipleMinor`) and a separate PR
-for patches. Minors carry `impact/critical`, so Ivan approves them; patches
+for patches. Minors carry `impact/critical`, so the owner approves them; patches
 are `impact/high` (`autoMerge.json5`).
 
 ## Rules for a version bump

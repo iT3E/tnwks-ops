@@ -315,18 +315,6 @@ cameras:
   #     height: 576
   #     fps: 10
 
-  # frigate_river:
-  #   ffmpeg:
-  #     inputs:
-  #       - path: rtsp://localhost:8554/frigate_river_lq
-  #         roles: ["detect"]
-  #       - path: rtsp://localhost:8554/frigate_river_hq
-  #         roles: ["record"]
-  #   detect:
-  #     width: 1280
-  #     height: 720
-  #     fps: 10
-
   # frigate_study:
   #   ffmpeg:
   #     inputs:
