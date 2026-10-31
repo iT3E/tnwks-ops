@@ -288,3 +288,22 @@ plus `talos/ms-01/patches/` are applied with `talosctl apply-config`.
   HelmRepository in `kubernetes/flux/meta/helm/bjw-s.yaml`.
 - The repo is public — do not introduce AI-attribution trailers, identifying
   commit metadata, or anything tying commits to non-public identity.
+
+## Privacy
+
+Nothing in this repo may identify the family: no names (first names,
+nicknames, surname), personal email addresses, or the household details a
+list can't catch: schools, kids' activities and schedules, ages or
+birthdays, street addresses, license plates, and camera, zone or entity
+names that say who is where. That covers files, paths, resource names,
+commit messages and PR titles and bodies.
+
+- Use neutral keys (`adult1`, `kid1`) in IDs. Real display names go in a
+  SOPS Secret and reach the app at runtime (Home Assistant: `!env_var`).
+- `bin/privacy-check` (`task privacy:check`) checks a denylist kept in
+  `.github/privacy-terms.sops.yaml`; run it before opening a PR. CI runs it
+  on every PR (`.github/workflows/privacy.yaml`) from the `PRIVACY_TERMS`
+  Actions secret. After editing the list (`task privacy:edit`), run
+  `task privacy:sync`.
+- The denylist only knows exact terms. The rest of this section is on you:
+  read your diff for anything else that points at a person before you push.

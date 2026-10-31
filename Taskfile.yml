@@ -20,6 +20,7 @@ includes:
   edgeos: .taskfiles/EdgeosTasks.yml
   mikrotik: .taskfiles/MikrotikTasks.yml
   precommit: .taskfiles/PrecommitTasks.yml
+  privacy: .taskfiles/PrivacyTasks.yml
   talos: .taskfiles/TalosTasks.yml
   terraform: .taskfiles/TerraformTasks.yml
   wsl-host: .taskfiles/WslHostTasks.yml
