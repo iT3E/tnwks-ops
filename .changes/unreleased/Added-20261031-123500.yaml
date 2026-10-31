@@ -1,0 +1,3 @@
+kind: Added
+body: 'Mealie: log in with tnwks-auth (Cognito) through Mealie''s built-in OIDC; admins become Mealie admins, viewers users, anyone else is refused. Password login stays for the break-glass admin'
+time: 2026-10-31T12:35:00-07:00
