@@ -292,11 +292,12 @@ plus `talos/ms-01/patches/` are applied with `talosctl apply-config`.
 ## Privacy
 
 Nothing in this repo may identify the family: no names (first names,
-nicknames, surname), personal email addresses, or the household details a
-list can't catch: schools, kids' activities and schedules, ages or
-birthdays, street addresses, license plates, and camera, zone or entity
-names that say who is where. That covers files, paths, resource names,
-commit messages and PR titles and bodies.
+nicknames, surname), personal email addresses, or the details a list can't
+catch: schools, ages or birthdays, street addresses, license plates, and
+camera, zone or entity names that say who is where. Chores, routines and
+schedules are fine under neutral keys; tying them to a real name isn't.
+That covers files, paths, resource names, commit messages and PR titles and
+bodies.
 
 - Use neutral keys (`adult1`, `kid1`) in IDs. Real display names go in a
   SOPS Secret and reach the app at runtime (Home Assistant: `!env_var`).
