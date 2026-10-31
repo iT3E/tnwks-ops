@@ -16,6 +16,9 @@
 # and "xs-api" are hits). Text in $PRIVACY_EXTRA_TEXT (CI: the PR title and
 # body) is checked too.
 #
+# Exceptions: .github/privacy-allow lists git pathspec globs to skip (files
+# and paths), and a line that contains "privacy:allow" is skipped.
+#
 # Hits print as "term #N: <where>". The matched text is never printed, since
 # CI logs on a public repo are public.
 set -euo pipefail
@@ -33,6 +36,14 @@ done
 
 cd "$(git rev-parse --show-toplevel)"
 terms_file=".github/privacy-terms.sops.yaml"
+allow_file=".github/privacy-allow"
+
+pathspec=(. ":(exclude)${terms_file}")
+if [[ -f "${allow_file}" ]]; then
+  while IFS= read -r g; do
+    [[ -z "${g}" || "${g}" == \#* ]] || pathspec+=(":(exclude,glob)${g}")
+  done <"${allow_file}"
+fi
 
 if [[ -n "${PRIVACY_TERMS:-}" ]]; then
   raw="${PRIVACY_TERMS}"
@@ -63,12 +74,12 @@ for i in "${!terms[@]}"; do
   # File contents, as path:line.
   while IFS= read -r loc; do
     report "${n}" "${loc}"
-  done < <(git grep ${cached} -I -n -P -e "${p}" -- . ":(exclude)${terms_file}" | cut -d: -f1,2 || true)
+  done < <(git grep ${cached} -I -n -P -e "${p}" -- "${pathspec[@]}" | grep -v -F 'privacy:allow' | cut -d: -f1,2 || true)
 
   # File and directory names.
   while IFS= read -r f; do
     report "${n}" "path ${f}"
-  done < <(git ls-files | grep -P -e "${p}" || true)
+  done < <(git ls-files -- "${pathspec[@]}" | grep -P -e "${p}" || true)
 
   if [[ -n "${range}" ]]; then
     while IFS= read -r sha; do

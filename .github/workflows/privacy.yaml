@@ -6,7 +6,8 @@ name: "Privacy"
 # identities, and the PR title and body. The list is the PRIVACY_TERMS
 # Actions secret, synced from .github/privacy-terms.sops.yaml with
 # `task privacy:sync`, so this job never needs a SOPS key. Hits print as
-# "term #N: path:line" without the matched text.
+# "term #N: path:line" without the matched text. Exceptions:
+# .github/privacy-allow. Required by the main ruleset.
 
 on:
   pull_request:
@@ -34,8 +35,6 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BEFORE_SHA: ${{ github.event.before }}
-          # Report-only until the existing hits are cleaned up.
-          REPORT_ONLY: "true"
         run: |
           if [ -z "${PRIVACY_TERMS}" ]; then
             # Fork PRs get no secrets.
@@ -49,11 +48,4 @@ jobs:
           else
             range="${BEFORE_SHA}..HEAD"
           fi
-          if bin/privacy-check --commits "$range"; then
-            exit 0
-          fi
-          if [ "$REPORT_ONLY" = "true" ]; then
-            echo "::warning::privacy-check found hits (report-only for now)"
-            exit 0
-          fi
-          exit 1
+          bin/privacy-check --commits "$range"

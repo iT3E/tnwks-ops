@@ -304,7 +304,11 @@ bodies.
 - `bin/privacy-check` (`task privacy:check`) checks a denylist kept in
   `.github/privacy-terms.sops.yaml`; run it before opening a PR. CI runs it
   on every PR (`.github/workflows/privacy.yaml`) from the `PRIVACY_TERMS`
-  Actions secret. After editing the list (`task privacy:edit`), run
+  Actions secret, and the pre-commit hook runs it on the index. It blocks
+  merges. After editing the list (`task privacy:edit`), run
   `task privacy:sync`.
+- Exceptions are the owner's call: a name-free glob in
+  `.github/privacy-allow`, or `privacy:allow` on a single line. Don't add
+  one to get a PR through.
 - The denylist only knows exact terms. The rest of this section is on you:
   read your diff for anything else that points at a person before you push.

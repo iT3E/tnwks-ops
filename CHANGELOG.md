@@ -315,7 +315,7 @@ fragment under `.changes/unreleased/`; merging to `main` releases them.
 
 ### Security
 
-* The four age-only SOPS files (MikroTik secrets, the Roles Anywhere CA key, the mktxp and raines-things-api Secrets) gain the KMS recipient, so they no longer depend on the age keys alone
+* The four age-only SOPS files (MikroTik secrets, the Roles Anywhere CA key, the mktxp and storefront API Secrets) gain the KMS recipient, so they no longer depend on the age keys alone
 
 ## v1.5.2 - 2026-10-26
 
