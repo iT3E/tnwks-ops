@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.32.0 - 2026-10-31
+
+### Changed
+
+* litellm: v1.86.2 -> v1.106.6. Runs new Prisma migrations on start; the master key already meets v1.104's refuse-to-start check
+
 ## v1.31.1 - 2026-10-31
 
 ### Fixed
