@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.34.0 - 2026-10-31
+
+### Changed
+
+* Renovate approval label is now owner/approved (was named after a person); docs and the review workflow say "the owner". Drops a commented-out Frigate camera
+
 ## v1.33.0 - 2026-10-31
 
 ### Added
