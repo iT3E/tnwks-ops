@@ -5,7 +5,7 @@
 # Alertmanager names each alert Flux<Kind><Reason> (for example
 # FluxHelmReleaseUpgradeFailed) and puts the error text in the `message`
 # annotation, which telegram.tmpl prints.
-apiVersion: notification.toolkit.fluxcd.io/v1beta3
+apiVersion: notification.toolkit.fluxcd.io/v1
 kind: Provider
 metadata:
   name: alertmanager
@@ -14,7 +14,7 @@ spec:
   type: alertmanager
   address: http://alertmanager.monitoring.svc.cluster.local:9093/api/v2/alerts/
 ---
-apiVersion: notification.toolkit.fluxcd.io/v1beta3
+apiVersion: notification.toolkit.fluxcd.io/v1
 kind: Alert
 metadata:
   name: alertmanager
