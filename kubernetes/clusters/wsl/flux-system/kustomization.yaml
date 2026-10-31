@@ -20,3 +20,21 @@ patches:
     group: kustomize.toolkit.fluxcd.io
     kind: Kustomization
     name: flux-system
+# The flux-system Namespace is owned by cluster-apps
+# (kubernetes/apps/flux-system/namespace.yaml). Two Kustomizations applying it
+# would keep relabelling it, so drop it from this build.
+- patch: |-
+    $patch: delete
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: flux-system
+# Flux owns its CRDs now. Never let a prune remove them (deleting a CRD
+# deletes every object of that kind) if this directory ever drops out of the
+# build.
+- patch: |-
+    - op: add
+      path: /metadata/annotations/kustomize.toolkit.fluxcd.io~1prune
+      value: disabled
+  target:
+    kind: CustomResourceDefinition

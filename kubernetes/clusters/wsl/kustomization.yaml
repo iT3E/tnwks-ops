@@ -1,11 +1,14 @@
 ---
-# Aggregator for the user-managed files in this cluster's entry point.
-# Excludes ./flux-system/ — that directory is created and managed by
-# `flux bootstrap github --path=kubernetes/clusters/wsl`. After bootstrap,
-# add `- ../` to flux-system/kustomization.yaml so Flux pulls these in.
+# Entry point of the flux-system Kustomization (gotk-sync.yaml, path
+# ./kubernetes/clusters/wsl). ./flux-system is included so Flux applies its
+# own controllers and CRDs: a merged Flux upgrade (gotk-components.yaml,
+# regenerated with `flux install --export`) rolls out on reconcile like
+# everything else. Until 2026-10-30 it was left out, so Flux upgrades only
+# reached the cluster through a manual apply (v2.10.0, #1468).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - ./flux-system
   - ./cluster-settings.yaml
   - ./cluster-secrets.sops.yaml
   - ./meta.yaml
