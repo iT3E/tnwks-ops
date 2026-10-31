@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.28.0 - 2026-10-31
+
+### Changed
+
+* WSL cluster on Kubernetes 1.35.10 (from 1.34.0), rolled out by tuppr; Flux 2.10 needs 1.35.2 or newer
+
 ## v1.27.0 - 2026-10-31
 
 ### Added
