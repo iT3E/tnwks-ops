@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.36.0 - 2026-10-31
+
+### Changed
+
+* Privacy check now blocks: required in the main ruleset and run by a pre-commit hook. Exceptions live in .github/privacy-allow (name-free globs) or a privacy:allow line comment; the storefront app is the first
+
 ## v1.35.0 - 2026-10-31
 
 ### Changed
