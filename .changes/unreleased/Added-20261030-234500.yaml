@@ -1,0 +1,3 @@
+kind: Added
+body: 'home-assistant: Kitchen dashboard for the Apolosign wall display, with chores and stars (routines package), our own frontend cards served from a ConfigMap, and kiosk-mode'
+time: 2026-10-30T23:45:00-07:00

@@ -1,0 +1,862 @@
+/*
+ * tnwks kitchen cards: the custom cards behind the Kitchen dashboard
+ * (dashboards/kitchen.yaml) on the Apolosign wall display.
+ *
+ * Plain custom elements, no build step and no dependencies. Every card
+ * renders into its own shadow root from `hass` and re-renders at most a few
+ * times a second. Chores come from the input_booleans in
+ * packages/kitchen_routines.yaml (attribute kitchen_chore: true).
+ *
+ * Served from /local/tnwks-kitchen/ (a ConfigMap mount). HA caches /local for
+ * a long time, so bump ?v= on the resource in configuration.yaml whenever
+ * this file changes.
+ */
+
+const VERSION = "1.0.0";
+
+// The family. Trackers drive the "home" dot; keywords put calendar events in
+// a person's column (an event naming nobody spans every column).
+const FAMILY = [
+  { key: "ivan", name: "Ivan", color: "#ef6f8a", tracker: "device_tracker.pixel_8_pro", keywords: ["ivan"] },
+  { key: "megan", name: "Megan", color: "#a98bf0", tracker: "device_tracker.pixel_9a", keywords: ["megan"] },
+  { key: "raine", name: "Raine", color: "#4fb3f0", kid: true, keywords: ["raine", "kids"] },
+  { key: "river", name: "River", color: "#f07a5f", kid: true, keywords: ["river", "kids"] },
+];
+const MEMBER = Object.fromEntries(FAMILY.map((m) => [m.key, m]));
+
+const PERIODS = [
+  { key: "morning", label: "Morning", icon: "🌅" },
+  { key: "afternoon", label: "Afternoon", icon: "☀️" },
+  { key: "evening", label: "Evening", icon: "🌙" },
+  { key: "anytime", label: "Anytime", icon: "⭐" },
+];
+
+const WEATHER_ICON = {
+  "clear-night": "🌙", cloudy: "☁️", exceptional: "⚠️", fog: "🌫️", hail: "🌨️",
+  lightning: "🌩️", "lightning-rainy": "⛈️", partlycloudy: "⛅", pouring: "🌧️",
+  rainy: "🌦️", snowy: "❄️", "snowy-rainy": "🌨️", sunny: "☀️", windy: "💨",
+  "windy-variant": "💨",
+};
+const WEATHER_TEXT = {
+  "clear-night": "Clear", cloudy: "Cloudy", fog: "Fog", hail: "Hail", lightning: "Lightning",
+  "lightning-rainy": "Storms", partlycloudy: "Partly cloudy", pouring: "Heavy rain", rainy: "Rain",
+  snowy: "Snow", "snowy-rainy": "Sleet", sunny: "Sunny", windy: "Windy", "windy-variant": "Windy",
+};
+
+// ---------------------------------------------------------------- helpers
+
+const esc = (s) =>
+  String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+const today = () => DAYS[new Date().getDay()];
+
+function currentPeriod(d = new Date()) {
+  const h = d.getHours() + d.getMinutes() / 60;
+  if (h < 12) return "morning";
+  if (h < 17) return "afternoon";
+  return "evening";
+}
+
+function fmtTime(d) {
+  let h = d.getHours();
+  const m = d.getMinutes();
+  const ap = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return m ? `${h}:${String(m).padStart(2, "0")} ${ap}` : `${h} ${ap}`;
+}
+const fmtDay = (d) => d.toLocaleDateString(undefined, { weekday: "short" });
+const startOfDay = (d = new Date()) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const startOfWeek = (d = new Date()) => addDays(startOfDay(d), -d.getDay());
+
+/** All chores for a member, sorted, with today's due flag and points. */
+function chores(hass, member) {
+  const day = today();
+  return Object.values(hass.states)
+    .filter((s) => s.entity_id.startsWith("input_boolean.") && s.attributes.kitchen_chore && s.attributes.member === member)
+    .map((s) => {
+      const a = s.attributes;
+      const pbd = a.points_by_day || {};
+      return {
+        id: s.entity_id,
+        title: a.title || a.friendly_name,
+        emoji: a.emoji || "✅",
+        period: a.period || "anytime",
+        points: Number(pbd[day] ?? a.points ?? 0),
+        due: (a.days || DAYS).includes(day),
+        done: s.state === "on",
+        order: a.order ?? 0,
+      };
+    })
+    .sort((a, b) => a.order - b.order);
+}
+
+function stars(hass, member) {
+  const s = hass.states[`counter.stars_${member}`];
+  return s ? Number(s.state) || 0 : 0;
+}
+
+/** The next chore a member should do now: current period, then anytime, then later periods. */
+function nextChore(list) {
+  const order = ["morning", "afternoon", "evening"];
+  const cur = currentPeriod();
+  const later = order.slice(order.indexOf(cur));
+  for (const p of [cur, "anytime", ...later.slice(1)]) {
+    const c = list.find((x) => x.due && !x.done && x.period === p);
+    if (c) return c;
+  }
+  // Earlier periods that were missed.
+  return list.find((x) => x.due && !x.done) || null;
+}
+
+// Calendar events across several calendars, cached per range for a few minutes.
+const calCache = new Map();
+async function fetchEvents(hass, entities, start, end) {
+  const key = `${entities.join(",")}|${start.toISOString()}|${end.toISOString()}`;
+  const hit = calCache.get(key);
+  if (hit && Date.now() - hit.t < 4 * 60 * 1000) return hit.p;
+  const p = Promise.all(
+    entities
+      .filter((e) => hass.states[e])
+      .map((e) =>
+        hass
+          .callApi("GET", `calendars/${e}?start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}`)
+          .then((evs) => evs.map((ev) => normalizeEvent(ev, e)))
+          .catch(() => [])
+      )
+  ).then((lists) => lists.flat().sort((a, b) => a.start - b.start));
+  calCache.set(key, { t: Date.now(), p });
+  return p;
+}
+
+function normalizeEvent(ev, calendar) {
+  const allDay = !!(ev.start && ev.start.date);
+  const parse = (x) => (x.dateTime ? new Date(x.dateTime) : new Date(`${x.date}T00:00:00`));
+  const start = parse(ev.start);
+  const end = parse(ev.end);
+  const text = `${ev.summary || ""} ${ev.description || ""}`.toLowerCase();
+  let who = FAMILY.filter((m) => m.keywords.some((k) => new RegExp(`\\b${k}\\b`).test(text))).map((m) => m.key);
+  return { title: ev.summary || "(no title)", start, end, allDay, who, calendar };
+}
+
+function eventColor(ev) {
+  if (ev.who.length === 1) return MEMBER[ev.who[0]].color;
+  return "#f2d36b";
+}
+
+// ------------------------------------------------------------- base class
+
+const BASE_CSS = `
+  :host { display:block; --bg:#111318; --card:#1c1f26; --card2:#252932; --line:#2e333d; --txt:#e8eaed;
+    --sub:#9aa0aa; --accent:#ff9f43; --ok:#4cd17a; color:var(--txt); font-family:Roboto,"Noto Sans",sans-serif; }
+  * { box-sizing:border-box; }
+  .card { background:var(--card); border-radius:18px; padding:14px; height:100%; }
+  .h { font-size:13px; font-weight:500; color:var(--sub); letter-spacing:.06em; text-transform:uppercase;
+    margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; }
+  .h b { color:var(--txt); font-weight:500; text-transform:none; letter-spacing:0; }
+  .av { width:34px; height:34px; border-radius:50%; display:grid; place-items:center; font-weight:700;
+    font-size:15px; color:#111; position:relative; flex:none; }
+  .muted { color:var(--sub); }
+  .empty { color:var(--sub); font-size:14px; padding:6px 0; }
+  button { all:unset; box-sizing:border-box; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+`;
+
+class KitchenCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._raf = null;
+    this.shadowRoot.addEventListener("click", (e) => this._click(e));
+  }
+  setConfig(config) {
+    this.config = config || {};
+    this._queue();
+  }
+  set hass(h) {
+    const first = !this._hass;
+    this._hass = h;
+    if (first) this.firstHass?.();
+    if (this.shouldRender ? this.shouldRender(h) : true) this._queue();
+  }
+  get hass() {
+    return this._hass;
+  }
+  connectedCallback() {
+    this._tick = setInterval(() => this._queue(), this.tickMs || 30000);
+    this.connected?.();
+  }
+  disconnectedCallback() {
+    clearInterval(this._tick);
+    this.disconnected?.();
+  }
+  // hass is replaced on every state change in the house (Sense alone updates
+  // several times a second), so renders are coalesced to at most ~4 a second.
+  _queue() {
+    if (this._raf) return;
+    this._raf = setTimeout(() => {
+      this._raf = null;
+      if (!this._hass || !this.config) return;
+      const html = `<style>${BASE_CSS}${this.css || ""}</style>${this.render()}`;
+      if (html !== this._last) {
+        this._last = html;
+        this.shadowRoot.innerHTML = html;
+      }
+    }, 250);
+  }
+  _click(e) {
+    const el = e.composedPath().find((n) => n.dataset && (n.dataset.toggle || n.dataset.action));
+    if (!el) return;
+    if (el.dataset.toggle) {
+      const on = el.dataset.on === "1";
+      el.classList.add("pending");
+      this._hass.callService("input_boolean", on ? "turn_off" : "turn_on", { entity_id: el.dataset.toggle });
+    } else {
+      this.action?.(el.dataset.action, el.dataset, e);
+    }
+  }
+  getCardSize() {
+    return 4;
+  }
+}
+
+// -------------------------------------------------------------- header
+
+class HeaderCard extends KitchenCard {
+  tickMs = 10000;
+  firstHass() {
+    this._subscribeForecast();
+  }
+  disconnected() {
+    this._unsub?.then((u) => u()).catch(() => {});
+    this._unsub = null;
+  }
+  connected() {
+    if (this._hass && !this._unsub) this._subscribeForecast();
+  }
+  _subscribeForecast() {
+    const e = this.config?.weather || "weather.forecast_home";
+    if (!this._hass.states[e] || this._unsub) return;
+    this._unsub = this._hass.connection
+      .subscribeMessage((m) => {
+        this._forecast = m.forecast;
+        this._queue();
+      }, { type: "weather/subscribe_forecast", forecast_type: "daily", entity_id: e })
+      .catch(() => null);
+  }
+  css = `
+    .top { display:flex; justify-content:space-between; align-items:flex-start; padding:4px 6px 0; }
+    .clock { font-size:64px; line-height:1; letter-spacing:-.02em; }
+    .clock small { font-size:24px; color:var(--sub); margin-left:6px; }
+    .date { font-size:20px; color:var(--sub); margin-top:6px; }
+    .wx { text-align:right; }
+    .wx .t { font-size:40px; line-height:1; }
+    .wx .d { font-size:15px; color:var(--sub); margin-top:4px; }
+    .people { display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
+    .home::after { content:""; position:absolute; right:-2px; bottom:-2px; width:11px; height:11px; border-radius:50%;
+      background:var(--ok); border:2px solid var(--bg); }
+    .away { opacity:.45; }
+    :host([compact]) .clock { font-size:44px; }
+  `;
+  render() {
+    const now = new Date();
+    let h = now.getHours();
+    const ap = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+    const w = this._hass.states[this.config.weather || "weather.forecast_home"];
+    const f = this._forecast?.[0];
+    const temp = w ? Math.round(w.attributes.temperature) : null;
+    const people = FAMILY.map((m) => {
+      const t = m.tracker && this._hass.states[m.tracker];
+      const cls = t ? (t.state === "home" ? "home" : "away") : "";
+      return `<div class="av ${cls}" style="background:${m.color}">${m.name[0]}</div>`;
+    }).join("");
+    const compact = this.config.compact;
+    return `<div class="top">
+      <div>
+        <div class="clock" style="${compact ? "font-size:44px" : ""}">${h}:${String(now.getMinutes()).padStart(2, "0")}<small>${ap}</small></div>
+        <div class="date" style="${compact ? "font-size:16px" : ""}">${now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
+      </div>
+      <div class="wx">
+        ${w ? `<div class="t" style="${compact ? "font-size:30px" : ""}">${WEATHER_ICON[w.state] || ""} ${temp}°</div>` : ""}
+        ${!compact && w ? `<div class="d">${WEATHER_TEXT[w.state] || w.state}${f ? ` · H ${Math.round(f.temperature)}° L ${Math.round(f.templow)}°` : ""}</div>` : ""}
+        ${compact ? "" : `<div class="people">${people}</div>`}
+      </div>
+    </div>`;
+  }
+}
+
+// ---------------------------------------------------------------- tabs
+
+class TabsCard extends KitchenCard {
+  connected() {
+    this._loc = () => this._queue();
+    window.addEventListener("location-changed", this._loc);
+    window.addEventListener("popstate", this._loc);
+  }
+  disconnected() {
+    window.removeEventListener("location-changed", this._loc);
+    window.removeEventListener("popstate", this._loc);
+  }
+  css = `
+    .tabs { display:flex; gap:8px; padding:0 2px; flex-wrap:wrap; }
+    .tab { padding:9px 16px; border-radius:20px; background:var(--card); color:var(--sub); font-size:15px; font-weight:500; }
+    .tab.on { background:var(--accent); color:#1b1206; }
+  `;
+  action(a, d) {
+    if (a !== "go") return;
+    const base = location.pathname.split("/")[1];
+    history.pushState(null, "", `/${base}/${d.path}${location.search}`);
+    window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+  }
+  render() {
+    const cur = location.pathname.split("/")[2] || "";
+    return `<div class="tabs">${(this.config.views || [])
+      .map((v) => `<button class="tab ${v.path === cur ? "on" : ""}" data-action="go" data-path="${esc(v.path)}">${esc(v.title)}</button>`)
+      .join("")}</div>`;
+  }
+}
+
+// --------------------------------------------------- family day calendar
+
+class FamilyDayCard extends KitchenCard {
+  tickMs = 60000;
+  css = `
+    .colhs { display:grid; grid-template-columns:44px repeat(4,1fr); }
+    .colh { display:flex; align-items:center; gap:6px; font-size:14px; font-weight:500; padding:0 4px 8px; }
+    .colh .av { width:24px; height:24px; font-size:11px; }
+    .allday { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 8px 44px; }
+    .chip { border-radius:9px; padding:4px 8px; font-size:12.5px; color:#111; font-weight:500; }
+    .grid { position:relative; }
+    .hl { position:absolute; left:44px; right:0; border-top:1px solid var(--line); opacity:.6; }
+    .hr { position:absolute; left:0; width:38px; text-align:right; font-size:11px; color:var(--sub); transform:translateY(-50%); }
+    .lane { position:absolute; top:0; bottom:0; border-left:1px solid var(--line); }
+    .ev { position:absolute; border-radius:9px; padding:5px 7px; font-size:12.5px; line-height:1.25; color:#111;
+      overflow:hidden; font-weight:500; }
+    .ev i { display:block; font-style:normal; font-weight:400; font-size:11px; opacity:.75; margin-top:2px; }
+    .ev.short { white-space:nowrap; text-overflow:ellipsis; padding:3px 7px; }
+    .ev.span { opacity:.55; }
+    .ev.past { opacity:.38; }
+    .now { position:absolute; left:40px; right:0; border-top:2px solid #ff4d4d; }
+    .now::before { content:""; position:absolute; left:-4px; top:-5px; width:8px; height:8px; border-radius:50%; background:#ff4d4d; }
+  `;
+  shouldRender() {
+    this._load();
+    return true;
+  }
+  _load() {
+    const cals = this.config.calendars || [];
+    const s = startOfDay();
+    const key = s.toDateString();
+    if (this._loadedKey === key && Date.now() - this._loadedAt < 5 * 60 * 1000) return;
+    this._loadedKey = key;
+    this._loadedAt = Date.now();
+    fetchEvents(this._hass, cals, s, addDays(s, 1)).then((evs) => {
+      this._events = evs;
+      this._queue();
+    });
+  }
+  render() {
+    const cals = (this.config.calendars || []).filter((e) => this._hass.states[e]);
+    const head = `<div class="h">Today <b>${this._events ? `${this._events.length} event${this._events.length === 1 ? "" : "s"}` : ""}</b></div>`;
+    if (!cals.length) return `<div class="card">${head}<div class="empty">No calendar connected yet. Add the family Google calendar in Home Assistant and it shows up here.</div></div>`;
+    const H = this.config.height || 392;
+    const sh = this.config.start_hour ?? 7;
+    const eh = this.config.end_hour ?? 21;
+    const ph = H / (eh - sh);
+    const day0 = startOfDay();
+    const y = (d) => Math.max(0, Math.min(H, ((d - day0) / 3600000 - sh) * ph));
+    const evs = this._events || [];
+    const allDay = evs.filter((e) => e.allDay);
+    const timed = evs.filter((e) => !e.allDay);
+    const now = new Date();
+    // lanes: 4 columns at 44px + n*(w/4); positioned by percentage of the remaining width
+    const colL = (i) => `calc(44px + (100% - 44px) * ${i} / 4)`;
+    const colW = (n) => `calc((100% - 44px) * ${n} / 4)`;
+    let html = "";
+    for (let hr = sh; hr <= eh; hr += 2) {
+      const t = (hr - sh) * ph;
+      html += `<div class="hl" style="top:${t}px"></div><div class="hr" style="top:${t}px">${hr % 12 || 12}${hr >= 12 ? "p" : "a"}</div>`;
+    }
+    for (let i = 0; i < 4; i++) html += `<div class="lane" style="left:${colL(i)}"></div>`;
+    // events per column, with simple side-by-side split when they overlap
+    const placed = [];
+    for (const e of timed) {
+      const cols = e.who.length ? e.who.map((k) => FAMILY.findIndex((m) => m.key === k)) : null;
+      const top = y(e.start);
+      const hgt = Math.max(22, y(e.end) - top);
+      if (top >= H) continue;
+      const past = (e.end < now ? " past" : "") + (hgt <= 34 ? " short" : "");
+      const label = `${esc(e.title)}${hgt > 34 ? `<i>${fmtTime(e.start)} – ${fmtTime(e.end)}</i>` : ""}`;
+      if (!cols) {
+        placed.push(`<div class="ev span${past}" style="top:${top}px;height:${hgt}px;left:calc(${colL(0)} + 4px);width:calc(${colW(4)} - 8px);background:${eventColor(e)}">${label}</div>`);
+        continue;
+      }
+      for (const c of cols) {
+        const same = timed.filter((o) => o !== e && o.who.includes(FAMILY[c].key) && o.start < e.end && e.start < o.end);
+        const idx = [e, ...same].sort((a, b) => a.start - b.start || a.title.localeCompare(b.title)).indexOf(e);
+        const n = same.length + 1;
+        placed.push(`<div class="ev${past}" style="top:${top}px;height:${hgt}px;left:calc(${colL(c)} + 4px + (${colW(1)} - 8px) * ${idx} / ${n});width:calc((${colW(1)} - 8px) / ${n} - 2px);background:${eventColor(e)}">${label}</div>`);
+      }
+    }
+    html += placed.join("");
+    const nh = now.getHours() + now.getMinutes() / 60;
+    if (nh >= sh && nh <= eh) html += `<div class="now" style="top:${(nh - sh) * ph}px"></div>`;
+    const colhs = `<div class="colhs"><div></div>${FAMILY.map((m) => `<div class="colh"><div class="av" style="background:${m.color}">${m.name[0]}</div>${m.name}</div>`).join("")}</div>`;
+    const chips = allDay.length
+      ? `<div class="allday">${allDay.map((e) => `<div class="chip" style="background:${eventColor(e)}">${esc(e.title)}</div>`).join("")}</div>`
+      : "";
+    return `<div class="card">${head}${colhs}${chips}<div class="grid" style="height:${H}px">${html}</div></div>`;
+  }
+}
+
+// ------------------------------------------------------ upcoming / agenda
+
+class AgendaCard extends KitchenCard {
+  tickMs = 60000;
+  css = `
+    .up { display:grid; grid-template-columns:86px 1fr auto; gap:7px 10px; font-size:14.5px; align-items:center; }
+    .up .d { color:var(--sub); font-size:13px; }
+    .dots { display:flex; gap:3px; } .dots span { width:10px; height:10px; border-radius:50%; }
+    .day { font-size:15px; font-weight:500; margin:14px 0 6px; color:var(--accent); }
+    .day:first-of-type { margin-top:0; }
+    .row { display:flex; gap:12px; align-items:center; background:var(--card2); border-radius:12px; padding:10px 12px; margin-bottom:6px; }
+    .row .bar { width:5px; align-self:stretch; border-radius:3px; }
+    .row .tm { width:96px; color:var(--sub); font-size:13px; flex:none; }
+    .row .t { font-size:15px; flex:1; }
+  `;
+  shouldRender() {
+    const s = startOfDay();
+    const from = this.config.from_tomorrow ? addDays(s, 1) : s;
+    const key = from.toDateString();
+    if (this._key !== key || Date.now() - (this._at || 0) > 5 * 60 * 1000) {
+      this._key = key;
+      this._at = Date.now();
+      fetchEvents(this._hass, this.config.calendars || [], from, addDays(from, this.config.days || 3)).then((e) => {
+        this._events = e;
+        this._queue();
+      });
+    }
+    return true;
+  }
+  render() {
+    const cals = (this.config.calendars || []).filter((e) => this._hass.states[e]);
+    const title = this.config.title || "Coming up";
+    if (!cals.length) return `<div class="card"><div class="h">${esc(title)}</div><div class="empty">No calendar connected yet.</div></div>`;
+    const evs = (this._events || []).slice(0, this.config.max || 999);
+    const dots = (e) =>
+      `<div class="dots">${(e.who.length ? e.who : FAMILY.map((m) => m.key)).map((k) => `<span style="background:${MEMBER[k].color}"></span>`).join("")}</div>`;
+    if (this.config.style === "list") {
+      if (!evs.length) return `<div class="card"><div class="h">${esc(title)}</div><div class="empty">Nothing coming up.</div></div>`;
+      return `<div class="card"><div class="h">${esc(title)}</div><div class="up">${evs
+        .map((e) => `<div class="d">${fmtDay(e.start)} ${e.allDay ? "" : fmtTime(e.start)}</div><div>${esc(e.title)}</div>${dots(e)}`)
+        .join("")}</div></div>`;
+    }
+    // grouped by day
+    let out = "";
+    let last = "";
+    for (const e of evs) {
+      const d = e.start.toDateString();
+      if (d !== last) {
+        last = d;
+        const isToday = d === new Date().toDateString();
+        out += `<div class="day">${isToday ? "Today" : e.start.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}</div>`;
+      }
+      out += `<div class="row"><div class="bar" style="background:${eventColor(e)}"></div><div class="tm">${e.allDay ? "All day" : `${fmtTime(e.start)}`}</div><div class="t">${esc(e.title)}</div>${dots(e)}</div>`;
+    }
+    return `<div class="card"><div class="h">${esc(title)}</div>${out || '<div class="empty">Nothing on the calendar.</div>'}</div>`;
+  }
+}
+
+// ---------------------------------------------------------- kid summary
+
+const KID_CSS = `
+  .row { display:flex; align-items:center; gap:12px; }
+  .ring { width:58px; height:58px; border-radius:50%; display:grid; place-items:center; flex:none; }
+  .ring div { width:44px; height:44px; border-radius:50%; background:var(--card); display:grid; place-items:center; font-size:20px; font-weight:700; color:#111; }
+  .name { font-size:20px; font-weight:500; }
+  .meta { font-size:13px; color:var(--sub); margin-top:2px; }
+  .stars { margin-left:auto; text-align:right; font-size:22px; font-weight:700; }
+  .stars small { display:block; font-size:11px; color:var(--sub); font-weight:400; }
+  .next { margin-top:12px; display:flex; align-items:center; gap:10px; background:var(--card2); border-radius:14px; padding:12px; font-size:15px; width:100%; min-height:56px; }
+  .next .chk { margin-left:auto; width:30px; height:30px; border-radius:50%; border:2px solid var(--sub); flex:none; }
+  .next.alldone { color:var(--ok); justify-content:center; }
+  .pending { opacity:.5; }
+`;
+
+/** Weekly stars (counter delta since Sunday) and the AM/PM sticker grid, from recorder history. */
+const histCache = new Map();
+function weekHistory(hass, member) {
+  const key = `${member}|${startOfWeek().toDateString()}|${Math.floor(Date.now() / 300000)}`;
+  if (histCache.has(key)) return histCache.get(key);
+  const start = startOfWeek();
+  const ids = [`counter.stars_${member}`, `binary_sensor.${member}_routines_am_done`, `binary_sensor.${member}_routines_pm_done`];
+  const p = hass
+    .callApi("GET", `history/period/${start.toISOString()}?filter_entity_id=${ids.join(",")}&minimal_response&no_attributes`)
+    .then((res) => {
+      const by = {};
+      for (const series of res) if (series.length) by[series[0].entity_id] = series;
+      const ctr = by[ids[0]];
+      const startStars = ctr ? Number(ctr[0].state) : null;
+      const grid = { am: Array(7).fill(false), pm: Array(7).fill(false) };
+      for (const half of ["am", "pm"]) {
+        const s = by[ids[half === "am" ? 1 : 2]] || [];
+        for (const st of s) {
+          if (st.state !== "on") continue;
+          const t = new Date(st.last_changed);
+          const di = Math.floor((startOfDay(t) - start) / 86400000);
+          if (di >= 0 && di < 7) grid[half][di] = true;
+        }
+      }
+      return { startStars, grid };
+    })
+    .catch(() => ({ startStars: null, grid: null }));
+  histCache.set(key, p);
+  return p;
+}
+
+class KidCard extends KitchenCard {
+  css = KID_CSS;
+  shouldRender(h) {
+    weekHistory(h, this.config.member).then((w) => {
+      if (w !== this._week) {
+        this._week = w;
+        this._queue();
+      }
+    });
+    return true;
+  }
+  render() {
+    const m = MEMBER[this.config.member];
+    const list = chores(this._hass, m.key);
+    const due = list.filter((c) => c.due);
+    const done = due.filter((c) => c.done).length;
+    const pct = due.length ? Math.round((100 * done) / due.length) : 0;
+    const st = stars(this._hass, m.key);
+    const wk = this._week?.startStars != null ? st - this._week.startStars : null;
+    const n = nextChore(list);
+    const next = n
+      ? `<button class="next" data-toggle="${n.id}" data-on="0">${n.emoji} ${esc(n.title)}<div class="chk"></div></button>`
+      : `<div class="next alldone">${due.length ? "All done today! 🎉" : "No chores today"}</div>`;
+    return `<div class="card">
+      <div class="row">
+        <div class="ring" style="background:conic-gradient(${m.color} ${pct}%, var(--card2) 0)"><div style="color:${m.color}">${m.name[0]}</div></div>
+        <div><div class="name">${m.name}</div><div class="meta">${done} of ${due.length} done</div></div>
+        <div class="stars">⭐ ${st}<small>${wk != null ? `+${Math.max(0, wk)} this week` : ""}</small></div>
+      </div>
+      ${next}
+    </div>`;
+  }
+}
+
+// ------------------------------------------------------- routine column
+
+class RoutineCard extends KitchenCard {
+  css = `${KID_CSS}
+    .rk { background:var(--card); border-radius:22px; padding:16px; display:flex; flex-direction:column; gap:10px; min-height:100%; }
+    .hd { display:flex; align-items:center; gap:12px; }
+    .hd .av { width:52px; height:52px; font-size:22px; }
+    .nm { font-size:26px; font-weight:500; }
+    .pts { margin-left:auto; font-size:30px; font-weight:700; text-align:right; }
+    .pts small { display:block; font-size:12px; color:var(--sub); font-weight:400; }
+    .bar { height:12px; border-radius:6px; background:var(--card2); overflow:hidden; }
+    .bar div { height:100%; border-radius:6px; transition:width .3s; }
+    .seg { display:flex; gap:6px; }
+    .seg button { flex:1; text-align:center; padding:9px 0; border-radius:12px; background:var(--card2); font-size:13px; color:var(--sub); }
+    .seg button.on { color:#111; font-weight:500; }
+    .seg button.done:not(.on) { color:var(--ok); }
+    .sec { font-size:13px; color:var(--sub); text-transform:uppercase; letter-spacing:.06em; margin-top:4px; }
+    .ch { display:flex; align-items:center; gap:12px; background:var(--card2); border-radius:16px; padding:12px; font-size:18px; min-height:68px; width:100%; }
+    .ch .ic { font-size:26px; width:34px; text-align:center; flex:none; }
+    .ch .tt { flex:1; }
+    .ch .p { font-size:13px; color:var(--accent); font-weight:500; white-space:nowrap; }
+    .ch .tick { width:36px; height:36px; border-radius:50%; border:2.5px solid var(--sub); flex:none; display:grid; place-items:center; font-size:20px; }
+    .donegrid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+    .ch.done { opacity:.45; min-height:44px; padding:6px 8px; gap:6px; font-size:13px; border-radius:12px; }
+    .ch.done .ic { font-size:16px; width:20px; }
+    .ch.done .tick { border:0; background:var(--ok); color:#111; width:20px; height:20px; font-size:11px; }
+    .wk { background:var(--card2); border-radius:16px; padding:12px; }
+    .wk .t { font-size:12px; color:var(--sub); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
+    .wk .g { display:grid; grid-template-columns:repeat(7,1fr); gap:5px; text-align:center; font-size:11px; color:var(--sub); }
+    .wk .c { height:26px; border-radius:7px; background:var(--card); display:grid; place-items:center; font-size:14px; }
+    .wk .c.y { background:rgba(255,200,60,.18); }
+    .wk .c.td { outline:1px solid var(--sub); }
+    .goal { background:var(--card2); border-radius:16px; padding:12px; font-size:14px; color:var(--sub); }
+    .goal b { color:var(--txt); font-weight:500; }
+    .none { color:var(--sub); font-size:15px; padding:8px 2px; }
+  `;
+  shouldRender(h) {
+    weekHistory(h, this.config.member).then((w) => {
+      if (w !== this._week) {
+        this._week = w;
+        this._queue();
+      }
+    });
+    return true;
+  }
+  action(a, d) {
+    if (a === "period") {
+      this._period = d.period;
+      this._periodSetAt = Date.now();
+      this._queue();
+    }
+  }
+  render() {
+    const m = MEMBER[this.config.member];
+    const list = chores(this._hass, m.key).filter((c) => c.due);
+    // Follow the clock unless someone picked a period in the last 10 minutes.
+    if (!this._period || Date.now() - (this._periodSetAt || 0) > 10 * 60 * 1000) this._period = currentPeriod();
+    const done = list.filter((c) => c.done);
+    const pct = list.length ? (100 * done.length) / list.length : 0;
+    const st = stars(this._hass, m.key);
+    const periods = PERIODS.filter((p) => p.key !== "anytime" && list.some((c) => c.period === p.key));
+    if (!periods.some((p) => p.key === this._period) && periods.length) {
+      // e.g. no afternoon chores today: show the next period that has some.
+      const order = ["morning", "afternoon", "evening"];
+      this._period = periods.find((p) => order.indexOf(p.key) >= order.indexOf(this._period))?.key || periods[periods.length - 1].key;
+    }
+    const seg = periods
+      .map((p) => {
+        const items = list.filter((c) => c.period === p.key);
+        const all = items.every((c) => c.done);
+        const on = p.key === this._period;
+        return `<button class="${on ? "on" : ""} ${all ? "done" : ""}" style="${on ? `background:${m.color}` : ""}" data-action="period" data-period="${p.key}">${p.icon} ${on ? p.label : all ? "✓" : ""}</button>`;
+      })
+      .join("");
+    const row = (c) =>
+      `<button class="ch ${c.done ? "done" : ""}" data-toggle="${c.id}" data-on="${c.done ? 1 : 0}"><span class="ic">${c.emoji}</span><span class="tt">${esc(c.title)}</span>${
+        c.points && !c.done ? `<span class="p">+${c.points}</span>` : ""
+      }<div class="tick">${c.done ? "✓" : ""}</div></button>`;
+    const cur = list.filter((c) => c.period === this._period && !c.done);
+    const any = list.filter((c) => c.period === "anytime" && !c.done);
+    const curLabel = PERIODS.find((p) => p.key === this._period)?.label || "";
+    let body = "";
+    if (periods.length) body += `<div class="sec">${curLabel}</div>${cur.length ? cur.map(row).join("") : `<div class="none">All done ✓</div>`}`;
+    if (any.length) body += `<div class="sec">Anytime today</div>${any.map(row).join("")}`;
+    if (done.length) body += `<div class="sec">Done today</div><div class="donegrid">${done.map(row).join("")}</div>`;
+    if (!list.length) body = `<div class="none">No chores today.</div>`;
+
+    let week = "";
+    if (m.kid && this._week?.grid) {
+      const di = new Date().getDay();
+      const cells = DAYS.map((d) => `<div>${d[0].toUpperCase()}</div>`).join("") +
+        ["am", "pm"].map((h) => this._week.grid[h].map((y, i) => `<div class="c ${y ? "y" : ""} ${i === di ? "td" : ""}">${y ? "⭐" : ""}</div>`).join("")).join("");
+      week = `<div class="wk"><div class="t">This week · AM / PM</div><div class="g">${cells}</div></div>`;
+    }
+    let goal = "";
+    const gt = this._hass.states[`input_text.routines_goal_${m.key}`]?.state;
+    const gs = Number(this._hass.states[`input_number.routines_goal_stars_${m.key}`]?.state || 0);
+    if (gt && gt !== "unknown" && gs > 0) {
+      goal = st >= gs
+        ? `<div class="goal">🎉 <b>Goal reached!</b> ${esc(gt)}</div>`
+        : `<div class="goal">🎯 <b>${gs - st} more stars</b> to ${esc(gt)}</div>`;
+    }
+    return `<div class="rk">
+      <div class="hd"><div class="av" style="background:${m.color}">${m.name[0]}</div><div class="nm">${m.name}</div><div class="pts">⭐ ${st}<small>stars</small></div></div>
+      <div class="bar"><div style="width:${pct}%;background:${m.color}"></div></div>
+      ${periods.length ? `<div class="seg">${seg}</div>` : ""}
+      ${body}
+      ${week}
+      ${goal}
+    </div>`;
+  }
+}
+
+// --------------------------------------------------------- adult strip
+
+class AdultCard extends KitchenCard {
+  css = `
+    .ad { background:var(--card); border-radius:18px; padding:12px 14px; }
+    .top { display:flex; align-items:center; gap:10px; font-size:15px; }
+    .top .av { width:30px; height:30px; font-size:13px; }
+    .top .x { margin-left:auto; color:var(--sub); font-size:14px; }
+    .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+    .chip { background:var(--card2); border-radius:12px; padding:8px 10px; font-size:13px; }
+    .chip.done { opacity:.4; text-decoration:line-through; }
+    .pending { opacity:.5; }
+  `;
+  render() {
+    const m = MEMBER[this.config.member];
+    const list = chores(this._hass, m.key).filter((c) => c.due);
+    const done = list.filter((c) => c.done).length;
+    const st = stars(this._hass, m.key);
+    return `<div class="ad"><div class="top"><div class="av" style="background:${m.color}">${m.name[0]}</div><div>${m.name}</div>
+      <div class="x">${st ? `⭐ ${st} · ` : ""}${done} / ${list.length}</div></div>
+      ${list.length ? `<div class="chips">${list.map((c) => `<button class="chip ${c.done ? "done" : ""}" data-toggle="${c.id}" data-on="${c.done ? 1 : 0}">${c.emoji} ${esc(c.title)}</button>`).join("")}</div>` : `<div class="chips muted" style="font-size:13px">No routines today</div>`}
+    </div>`;
+  }
+}
+
+// ----------------------------------------------------------------- todo
+
+class TodoCard extends KitchenCard {
+  css = `
+    .li { display:flex; gap:10px; align-items:center; font-size:15px; padding:7px 0; width:100%; }
+    .li .c { width:20px; height:20px; border-radius:6px; border:2px solid var(--sub); flex:none; }
+    .li.pending { opacity:.4; }
+    .more { color:var(--sub); font-size:13px; margin-top:4px; }
+  `;
+  firstHass() {
+    this._sub();
+  }
+  connected() {
+    if (this._hass && !this._unsub) this._sub();
+  }
+  disconnected() {
+    this._unsub?.then((u) => u && u()).catch(() => {});
+    this._unsub = null;
+  }
+  _sub() {
+    const e = this.config?.entity;
+    if (!e || !this._hass.states[e] || this._unsub) return;
+    this._unsub = this._hass.connection
+      .subscribeMessage((m) => {
+        this._items = (m.items || []).filter((i) => i.status === "needs_action");
+        this._queue();
+      }, { type: "todo/item/subscribe", entity_id: e })
+      .catch(() => null);
+  }
+  action(a, d) {
+    if (a === "complete") {
+      this._hass.callService("todo", "update_item", { item: d.uid, status: "completed" }, { entity_id: this.config.entity });
+    }
+  }
+  render() {
+    const e = this._hass.states[this.config.entity];
+    const title = this.config.title || e?.attributes.friendly_name || "List";
+    if (!e) return `<div class="card"><div class="h">${esc(title)}</div><div class="empty">List not set up yet.</div></div>`;
+    const items = this._items || [];
+    const max = this.config.max || 6;
+    return `<div class="card"><div class="h">${esc(title)} <b>${items.length || ""}</b></div>
+      ${items.length ? items.slice(0, max).map((i) => `<button class="li" data-action="complete" data-uid="${esc(i.uid)}"><div class="c"></div>${esc(i.summary)}</button>`).join("") : `<div class="empty">Nothing on the list.</div>`}
+      ${items.length > max ? `<div class="more">+${items.length - max} more</div>` : ""}
+    </div>`;
+  }
+}
+
+// ---------------------------------------------------------------- meals
+
+class MealsCard extends KitchenCard {
+  tickMs = 300000;
+  css = `
+    .meal { display:flex; gap:12px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); }
+    .meal:last-child { border:0; }
+    .meal .e { width:44px; height:44px; border-radius:12px; background:var(--card2); display:grid; place-items:center; font-size:24px; flex:none; }
+    .meal .l { font-size:12px; color:var(--sub); }
+    .meal .n { font-size:15px; }
+  `;
+  shouldRender() {
+    const s = startOfDay();
+    const key = s.toDateString();
+    if (this._key !== key || Date.now() - (this._at || 0) > 10 * 60 * 1000) {
+      this._key = key;
+      this._at = Date.now();
+      fetchEvents(this._hass, [this.config.calendar].filter(Boolean), s, addDays(s, this.config.days || 3)).then((e) => {
+        this._events = e;
+        this._queue();
+      });
+    }
+    return true;
+  }
+  render() {
+    const title = this.config.title || "Dinner";
+    if (!this.config.calendar || !this._hass.states[this.config.calendar])
+      return `<div class="card"><div class="h">${esc(title)}</div><div class="empty">Meal plan not connected yet.</div></div>`;
+    const s = startOfDay();
+    const rows = [];
+    for (let i = 0; i < (this.config.days || 3); i++) {
+      const d = addDays(s, i);
+      const ev = (this._events || []).find((e) => startOfDay(e.start).getTime() === d.getTime());
+      rows.push(`<div class="meal"><div class="e">${ev ? "🍽️" : "·"}</div><div><div class="l">${i === 0 ? "Tonight" : fmtDay(d)}</div><div class="n ${ev ? "" : "muted"}">${ev ? esc(ev.title) : "Nothing planned"}</div></div></div>`);
+    }
+    return `<div class="card"><div class="h">${esc(title)}</div>${rows.join("")}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------- chips
+
+class ChipsCard extends KitchenCard {
+  css = `
+    .house { display:flex; gap:8px; }
+    .chip { flex:1; background:var(--card); border-radius:14px; padding:10px; font-size:13px; color:var(--sub); min-width:0; }
+    .chip b { display:block; color:var(--txt); font-size:15px; font-weight:500; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .chip.on b { color:var(--accent); }
+  `;
+  render() {
+    const out = (this.config.chips || []).map((c) => {
+      const s = this._hass.states[c.entity];
+      if (!s) return "";
+      let val;
+      let on = false;
+      if (c.attribute) val = `${Math.round(Number(s.attributes[c.attribute]))}${c.unit || ""}`;
+      else if (c.on_text || c.off_text) {
+        on = s.state === "on";
+        val = on ? c.on_text || "On" : c.off_text || "Off";
+      } else val = s.state;
+      return `<div class="chip ${on ? "on" : ""}">${esc(c.name)}<b>${esc(val)}</b></div>`;
+    });
+    return `<div class="house">${out.join("")}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------- stack
+
+// Lays out child cards (any card type) in a padded column, or `columns: 2`
+// side by side, with the wall display's spacing. HA's own stacks have no
+// padding inside a panel view and a different gap.
+class StackCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+  }
+  setConfig(config) {
+    this.config = config;
+    this._build();
+  }
+  async _build() {
+    const c = this.config;
+    const helpers = await window.loadCardHelpers();
+    const gap = c.gap ?? 12;
+    const root = document.createElement("div");
+    root.style.cssText = c.columns
+      ? `display:grid;grid-template-columns:repeat(${c.columns},minmax(0,1fr));gap:${gap}px;align-items:stretch`
+      : `display:flex;flex-direction:column;gap:${gap}px;padding:${c.padding ?? 0}px;min-height:${c.padding ? `calc(100vh - ${2 * c.padding}px)` : "auto"}`;
+    this._cards = (c.cards || []).map((cc) => {
+      const el = helpers.createCardElement(cc);
+      if (cc.grow) el.style.flex = "1";
+      if (this._hass) el.hass = this._hass;
+      root.appendChild(el);
+      return el;
+    });
+    this.shadowRoot.replaceChildren(root);
+  }
+  set hass(h) {
+    this._hass = h;
+    for (const el of this._cards || []) el.hass = h;
+  }
+  getCardSize() {
+    return 10;
+  }
+}
+
+// ------------------------------------------------------------ register
+
+const CARDS = {
+  "kitchen-stack-card": [StackCard, "Kitchen stack", "Padded layout for the wall display"],
+  "kitchen-header-card": [HeaderCard, "Kitchen header", "Clock, weather and who's home"],
+  "kitchen-tabs-card": [TabsCard, "Kitchen tabs", "Big view tabs for the wall display"],
+  "kitchen-family-day-card": [FamilyDayCard, "Kitchen family day", "Today's calendar, one column per person"],
+  "kitchen-agenda-card": [AgendaCard, "Kitchen agenda", "Upcoming events"],
+  "kitchen-kid-card": [KidCard, "Kitchen kid summary", "Progress, stars and the next chore"],
+  "kitchen-routine-card": [RoutineCard, "Kitchen routines", "A person's chores for today"],
+  "kitchen-adult-card": [AdultCard, "Kitchen adult routines", "Compact routines for a grown-up"],
+  "kitchen-todo-card": [TodoCard, "Kitchen list", "A to-do list with tap to check off"],
+  "kitchen-meals-card": [MealsCard, "Kitchen meals", "The next few dinners from a meal plan calendar"],
+  "kitchen-chips-card": [ChipsCard, "Kitchen status chips", "A row of house status tiles"],
+};
+window.customCards = window.customCards || [];
+for (const [tag, [cls, name, description]] of Object.entries(CARDS)) {
+  if (!customElements.get(tag)) customElements.define(tag, cls);
+  window.customCards.push({ type: tag, name, description });
+}
+console.info(`%c tnwks kitchen cards ${VERSION} `, "background:#ff9f43;color:#1b1206;border-radius:4px");

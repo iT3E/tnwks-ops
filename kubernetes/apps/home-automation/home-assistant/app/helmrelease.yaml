@@ -66,6 +66,8 @@ spec:
               FRIGATE_INTEGRATION_VERSION: v5.15.6
               # renovate: datasource=github-releases depName=dermotduffy/advanced-camera-card
               ADVANCED_CAMERA_CARD_VERSION: v8.1.0
+              # renovate: datasource=github-releases depName=NemesisRE/kiosk-mode
+              KIOSK_MODE_VERSION: v15.0.0
             securityContext: &securityContext
               allowPrivilegeEscalation: false
               capabilities: { drop: ["ALL"] }
@@ -208,6 +210,17 @@ spec:
           home-assistant:
             app:
               - path: /config/dashboards
+                readOnly: true
+      # Our own frontend cards (the kitchen display's), served as
+      # /local/tnwks-kitchen/. Third-party cards are installed onto the PVC by
+      # prepare-config.sh instead.
+      www-kitchen:
+        type: configMap
+        name: home-assistant-www-kitchen
+        advancedMounts:
+          home-assistant:
+            app:
+              - path: /config/www/tnwks-kitchen
                 readOnly: true
       scripts:
         type: configMap

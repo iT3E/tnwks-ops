@@ -9,6 +9,7 @@
 #   HASS_OIDC_AUTH_VERSION        christiaangoossens/hass-oidc-auth
 #   FRIGATE_INTEGRATION_VERSION   blakeblackshear/frigate-hass-integration
 #   ADVANCED_CAMERA_CARD_VERSION  dermotduffy/advanced-camera-card
+#   KIOSK_MODE_VERSION            NemesisRE/kiosk-mode
 #
 # Each install records its version in a .tnwks-version file and is skipped
 # when that already matches, so a plain restart needs no network.
@@ -24,7 +25,8 @@ config="${1:-/config}"
 
 # install <name> <version> <destination dir> <url> <subpath in archive>
 # Downloads <url> (.zip or .tar.gz), and replaces <destination dir> with the
-# archive's <subpath> ("." for the archive root).
+# archive's <subpath> ("." for the archive root). A plain .js <url> is a
+# single-file card: it lands in <destination dir> under its own name (subpath ".").
 install() {
     local name="$1" version="$2" dest="$3" url="$4" subpath="$5"
     if [[ "$(cat "${dest}/.tnwks-version" 2>/dev/null)" == "${version}" ]]; then
@@ -39,6 +41,7 @@ install() {
     case "${url}" in
         *.zip) unzip -q "${work}/archive" -d "${work}/x" ;;
         *.tar.gz) tar -xzf "${work}/archive" -C "${work}/x" ;;
+        *.js) cp "${work}/archive" "${work}/x/$(basename "${url}")" ;;
         *) echo "unsupported archive: ${url}" >&2; return 1 ;;
     esac
     # GitHub source tarballs wrap everything in <repo>-<version>/.
@@ -68,3 +71,8 @@ install advanced-camera-card "${ADVANCED_CAMERA_CARD_VERSION}" \
     "${config}/www/advanced-camera-card" \
     "https://github.com/dermotduffy/advanced-camera-card/releases/download/${ADVANCED_CAMERA_CARD_VERSION}/advanced-camera-card.zip" \
     dist
+
+install kiosk-mode "${KIOSK_MODE_VERSION}" \
+    "${config}/www/kiosk-mode" \
+    "https://github.com/NemesisRE/kiosk-mode/releases/download/${KIOSK_MODE_VERSION}/kiosk-mode.js" \
+    .

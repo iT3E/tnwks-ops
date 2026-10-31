@@ -84,12 +84,23 @@ lovelace:
   resources:
     - url: /local/advanced-camera-card/advanced-camera-card.js
       type: module
+    # /local is cached for weeks: the ?v= is what makes browsers (and the
+    # kitchen display) fetch a new copy. Bump it with every change to the file.
+    - url: /local/tnwks-kitchen/kitchen-cards.js?v=1.0.0
+      type: module
+    - url: /local/kiosk-mode/kiosk-mode.js?v=15.0.0
+      type: module
   dashboards:
     home-security:
       mode: yaml
       filename: dashboards/security.yaml
       title: Security
       icon: mdi:cctv
+    kitchen-display:
+      mode: yaml
+      filename: dashboards/kitchen.yaml
+      title: Kitchen
+      icon: mdi:countertop
 
 # Automations, scripts and scenes are split by owner: the ones under
 # packages/ are git-owned (read-only in the UI), and these three files on
