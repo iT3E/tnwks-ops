@@ -6,11 +6,14 @@ name: "Privacy"
 # identities, and the PR title and body. The list is the PRIVACY_TERMS
 # Actions secret, synced from .github/privacy-terms.sops.yaml with
 # `task privacy:sync`, so this job never needs a SOPS key. Hits print as
-# "term #N: path:line" without the matched text. Exceptions:
+# "term #N: path:line" without the matched text. Comments and reviews are
+# privacy-text.yaml. Exceptions:
 # .github/privacy-allow. Required by the main ruleset.
 
 on:
   pull_request:
+    # edited: a changed title or body is checked again.
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: ["main"]
 
@@ -30,7 +33,9 @@ jobs:
       - name: Check
         env:
           PRIVACY_TERMS: ${{ secrets.PRIVACY_TERMS }}
-          PRIVACY_EXTRA_TEXT: ${{ github.event.pull_request.title }} ${{ github.event.pull_request.body }}
+          # A bot's PR body is third-party text (Renovate's release notes
+          # name upstream contributors), so only its title counts.
+          PRIVACY_EXTRA_TEXT: ${{ github.event.pull_request.title }} ${{ github.event.pull_request.user.type != 'Bot' && github.event.pull_request.body || '' }}
           EVENT: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}

@@ -296,17 +296,26 @@ nicknames, surname), personal email addresses, or the details a list can't
 catch: schools, ages or birthdays, street addresses, license plates, and
 camera, zone or entity names that say who is where. Chores, routines and
 schedules are fine under neutral keys; tying them to a real name isn't.
-That covers files, paths, resource names, commit messages and PR titles and
-bodies.
+That covers files, paths, resource names, commit messages, your git
+identity, and everything posted to GitHub: PR and issue titles and bodies,
+comments, reviews and review comments.
 
 - Use neutral keys (`adult1`, `kid1`) in IDs. Real display names go in a
   SOPS Secret and reach the app at runtime (Home Assistant: `!env_var`).
 - `bin/privacy-check` (`task privacy:check`) checks a denylist kept in
-  `.github/privacy-terms.sops.yaml`; run it before opening a PR. CI runs it
-  on every PR (`.github/workflows/privacy.yaml`) from the `PRIVACY_TERMS`
-  Actions secret, and the pre-commit hook runs it on the index. It blocks
-  merges. After editing the list (`task privacy:edit`), run
-  `task privacy:sync`.
+  `.github/privacy-terms.sops.yaml`. After editing the list
+  (`task privacy:edit`), run `task privacy:sync`.
+  - Commits: `task precommit:init` installs a pre-commit hook (staged files
+    and git identity) and a commit-msg hook (the message).
+  - PRs: `.github/workflows/privacy.yaml` (required) checks the tree, the
+    PR's commits and the title and body, again whenever they're edited.
+  - Before you post a PR body, comment or review, write it to a file, run
+    `bin/privacy-check --text < file`, and post it with `--body-file`.
+    GitHub can't refuse a comment, so `.github/workflows/privacy-text.yaml`
+    deletes one with a hit after the fact, and by then notifications have
+    gone out.
+  - `privacycanary` is a test term on the list: use it to test the checks, <!-- privacy:allow -->
+    never a real name.
 - Exceptions are the owner's call: a name-free glob in
   `.github/privacy-allow`, or `privacy:allow` on a single line. Don't add
   one to get a PR through.
