@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.27.0 - 2026-10-31
+
+### Added
+
+* Cluster upgrades through Renovate: tuppr (system-upgrade) rolls out Kubernetes versions from a KubernetesUpgrade on merge, MS-01 also gets a TalosUpgrade, and the WSL Talos version is pinned in talos/wsl/versions.yaml and rolled with `task talos:upgrade:wsl`, which swaps each node container onto the new image with its volumes. Renovate groups each version across files with one PR per minor (docs/operations/cluster-upgrades.md)
+
+### Fixed
+
+* The worker-2 augmentation recreate in 01-talos-bootstrap.yml keeps the container's memory and CPU limits instead of resetting memory to 8G
+
 ## v1.26.0 - 2026-10-31
 
 ### Changed
