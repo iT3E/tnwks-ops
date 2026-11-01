@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.56.0 - 2026-11-01
+
+### Added
+
+* home-assistant: robovac room scripts (playroom, kitchen, living room by the app's segment ids) with Clean buttons on Home, Sonos on Home; the wall display opens Mealie full screen inside the kiosk. Cards 1.8.0.
+
 ## v1.55.0 - 2026-11-01
 
 ### Added
