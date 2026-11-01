@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.64.0 - 2026-11-01
+
+### Changed
+
+* grafana: database moves from SQLite to Postgres (CNPG grafana database); the SQLite file stays on the PVC as a rollback.
+
 ## v1.63.0 - 2026-11-01
 
 ### Added
