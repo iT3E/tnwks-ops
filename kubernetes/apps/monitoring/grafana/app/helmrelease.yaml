@@ -67,14 +67,6 @@ spec:
               path: /var/lib/grafana/dashboards/unpoller
             orgId: 1
             type: file
-          - name: windows
-            disableDeletion: false
-            editable: true
-            folder: "Windows"
-            options:
-              path: /var/lib/grafana/dashboards/windows
-            orgId: 1
-            type: file
           - name: nginx
             disableDeletion: false
             editable: true
@@ -161,15 +153,6 @@ spec:
           datasource:
             - name: "DS_PROMETHEUS"
               value: Prometheus
-      windows:
-      # Ref: https://grafana.com/grafana/dashboards/14694-windows-exporter-dashboard/
-        windows-exporter:
-          gnetId: 14694
-          revision: 2
-          datasource:
-            - name: "DS_PROMETHEUS"
-              value: Prometheus
-
       nginx:
       # Ref: https://grafana.com/grafana/dashboards/14314-kubernetes-nginx-ingress-controller-nextgen-devops-nirvana/
         nginx-ingress:
