@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'home-assistant: an overdue robovac part shows as a red "due" tile (a gauge from 0 drew it empty); shorter reset names.'
+time: 2026-11-01T13:35:00-08:00
