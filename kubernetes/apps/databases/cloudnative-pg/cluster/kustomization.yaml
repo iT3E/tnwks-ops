@@ -10,6 +10,8 @@ resources:
   - ./database-vantrip.yaml
   - ./database-things-api.yaml
   - ./database-home-assistant.yaml
+  - ./secret-grafana-role.sops.yaml
+  - ./database-grafana.yaml
 # PrometheusRule lives in cluster-prometheusrules/ behind its own
 # Kustomization that depends on kube-prometheus-stack so the CRD
 # exists before apply.

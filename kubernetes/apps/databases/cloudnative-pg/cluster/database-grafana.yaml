@@ -1,0 +1,17 @@
+---
+# Grafana's own database (users, preferences, alert state, anything made in
+# the UI; the metrics stay in Prometheus/Loki/Tempo). Owned by its own
+# `grafana` role (managed.roles in cluster.yaml), so Grafana doesn't need the
+# shared `app` credential.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: grafana
+  namespace: databases
+spec:
+  cluster:
+    name: postgres
+  name: grafana
+  owner: grafana
+  ensure: present
+  databaseReclaimPolicy: retain

@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: monitoring
 resources:
   - ./secret.sops.yaml
+  - ./secret-database.sops.yaml
   - ./helmrelease.yaml
   - ./dashboard
   - ./ingress-embed.yaml
