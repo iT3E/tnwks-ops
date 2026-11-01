@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.47.0 - 2026-11-01
+
+### Added
+
+* kitchen-screensaver: our own page for the kitchen display's screensaver, with face-aware photo crops, stacked landscape pairs, and Home Assistant weather, events (all-day handled), dinner, stars and the house theme; Immich previews raised to 2160 px for the 4K panel. ImmichFrame stays as the fallback.
+
 ## v1.46.0 - 2026-11-01
 
 ### Added
