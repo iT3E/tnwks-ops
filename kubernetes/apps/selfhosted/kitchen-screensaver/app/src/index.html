@@ -39,8 +39,8 @@
   a 502, and HTTP errors don't count.) The next page load reports which one
   worked as via= in its ping. In a normal browser it uses location.reload().
 
-  Test knobs (query string): interval=<s> between photos, reload=<s> until
-  the safety reload (default 6 h).
+  Test knobs (query string, only together with test=1): interval=<s>
+  between photos, reload=<s> until the safety reload (default 6 h).
 -->
 <style>
   :root { --accent:#ff9f43; --bg:#111318; --card:#1c1f26; --card2:#252932; --ok:#4cd17a; --fade:2s; }
@@ -102,8 +102,11 @@
 (() => {
   const Q = new URLSearchParams(location.search);
   const SECRET = Q.get("authsecret") || "";
-  const INTERVAL = Math.max(5, Number(Q.get("interval")) || 30) * 1000;
-  const RELOAD_MS = (Number(Q.get("reload")) || 6 * 3600) * 1000;
+  // The test knobs only count with test=1, so a test URL left on the display
+  // can't keep it reloading every minute.
+  const TEST = Q.get("test") === "1";
+  const INTERVAL = Math.max(5, (TEST && Number(Q.get("interval"))) || 30) * 1000;
+  const RELOAD_MS = ((TEST && Number(Q.get("reload"))) || 6 * 3600) * 1000;
   const INFO_MS = 3 * 60 * 1000;
   const PHOTOS_MS = 30 * 60 * 1000;
   const MARGIN = 22, DRIFT = 26, GAP = 4;
