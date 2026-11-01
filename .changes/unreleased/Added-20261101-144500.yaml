@@ -1,3 +1,0 @@
-kind: Added
-body: 'grafana: grafana-embed host for frames, signed in only by the kiosk JWT (Viewer); internal ingress allows snippet annotations; cookie_samesite fixed to lax.'
-time: 2026-11-01T14:45:00-08:00

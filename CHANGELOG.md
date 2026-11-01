@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.62.0 - 2026-11-01
+
+### Added
+
+* grafana: grafana-embed host for frames, signed in only by the kiosk JWT (Viewer); internal ingress allows snippet annotations; cookie_samesite fixed to lax.
+
 ## v1.61.0 - 2026-11-01
 
 ### Changed
