@@ -1,0 +1,59 @@
+---
+# Robovac (Roborock S5 on the Mi Home app; Xiaomi Miio integration, UI-owned).
+# Room cleaning uses the rooms made in the app, by their segment ids, which
+# the Xiaomi Cloud Map Extractor shows in image.robovac_live_map's `rooms`
+# attribute. Top to bottom on the map:
+#   17  Playroom
+#   18  Kitchen
+#   16  Living room
+# (The old hass-config scripts used hand-drawn app_zoned_clean rectangles
+# over the same three areas; segments follow the app's room edits instead.)
+#
+# script.robovac_clean_rooms takes any of them at once, in the order given;
+# the three per-room scripts are what buttons and voice assistants call.
+script:
+  robovac_clean_rooms:
+    alias: Robovac clean rooms
+    icon: mdi:robot-vacuum
+    mode: single
+    fields:
+      rooms:
+        name: Rooms
+        description: Room segment ids from the Mi Home app (17 playroom, 18 kitchen, 16 living room).
+        required: true
+        example: [18]
+        selector:
+          select:
+            multiple: true
+            options:
+              - { label: Playroom, value: "17" }
+              - { label: Kitchen, value: "18" }
+              - { label: Living room, value: "16" }
+    sequence:
+      - action: vacuum.send_command
+        target:
+          entity_id: vacuum.roborock_vacuum_s5
+        data:
+          command: app_segment_clean
+          params: "{{ rooms | map('int') | list }}"
+
+  robovac_clean_playroom:
+    alias: Clean playroom
+    icon: mdi:toy-brick
+    sequence:
+      - action: script.robovac_clean_rooms
+        data: { rooms: ["17"] }
+
+  robovac_clean_kitchen:
+    alias: Clean kitchen
+    icon: mdi:countertop
+    sequence:
+      - action: script.robovac_clean_rooms
+        data: { rooms: ["18"] }
+
+  robovac_clean_living_room:
+    alias: Clean living room
+    icon: mdi:sofa
+    sequence:
+      - action: script.robovac_clean_rooms
+        data: { rooms: ["16"] }
