@@ -1,3 +1,0 @@
-kind: Changed
-body: 'grafana: new sign-ins get Viewer instead of Admin; home-assistant: the Monitoring dashboard is visible to everyone, not only admins.'
-time: 2026-11-01T14:15:00-08:00

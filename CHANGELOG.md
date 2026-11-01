@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.61.0 - 2026-11-01
+
+### Changed
+
+* grafana: new sign-ins get Viewer instead of Admin; home-assistant: the Monitoring dashboard is visible to everyone, not only admins.
+
 ## v1.60.0 - 2026-11-01
 
 ### Added
