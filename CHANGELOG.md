@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.44.0 - 2026-11-01
+
+### Added
+
+* Immich photo library on homelab-wsl (`immich.internal.tnwks.us`, tnwks-auth login), the photo store for the kitchen screensaver.
+
 ## v1.43.0 - 2026-11-01
 
 ### Added
