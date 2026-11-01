@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.49.0 - 2026-11-01
+
+### Changed
+
+* kitchen: theme and dark/light mode are per device. The wall display sets the house choice (and its screensaver); phones and browsers keep their own pick, with "Same as kitchen display" to go back. Cards 1.5.0.
+
 ## v1.48.4 - 2026-11-01
 
 ### Fixed

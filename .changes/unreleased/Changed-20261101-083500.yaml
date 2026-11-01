@@ -1,3 +1,0 @@
-kind: Changed
-body: 'kitchen: theme and dark/light mode are per device. The wall display sets the house choice (and its screensaver); phones and browsers keep their own pick, with "Same as kitchen display" to go back. Cards 1.5.0.'
-time: 2026-11-01T08:35:00-08:00
