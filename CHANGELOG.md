@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.46.0 - 2026-11-01
+
+### Added
+
+* ImmichFrame on homelab-wsl, the kitchen display's Android screensaver - Immich's "Kitchen screensaver" album with a 12-hour clock and today's family events, behind an auth secret (docs/apps/immichframe.md).
+
 ## v1.45.0 - 2026-11-01
 
 ### Added
