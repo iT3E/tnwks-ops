@@ -214,9 +214,30 @@ spec:
         provisioning: /etc/grafana/provisioning
       security:
         allow_embedding: true
-        cookie_samesite: grafana
+        # Lax: the frame inside HA (hass.internal) is same-site.
+        cookie_samesite: lax
       server:
         root_url: https://grafana.${INTERNAL_DOMAIN}
+      # The kiosk identity (the kitchen wall display's Monitoring frame in HA).
+        # Cognito's login page refuses to load in a frame, so the frame signs
+        # in with a JWT in the URL (?auth_token=, kept in the SPA for its API
+        # calls) on grafana-embed (ingress-embed.yaml, no oauth2-proxy).
+        # Ori mints the token with a key only it holds; Grafana checks it
+        # against the public key below. sub/email = the Cognito kiosk user's
+        # email, so it's the same Grafana user either way; role comes from
+        # the token (Viewer) and strict means no role, no access.
+      auth.jwt:
+        enabled: true
+        header_name: X-JWT-Assertion
+        url_login: true
+        username_claim: email
+        email_claim: email
+        jwk_set_file: /etc/grafana/kiosk-jwks/kiosk-jwks.json
+        expect_claims: '{"iss": "tnwks-kiosk", "aud": "grafana"}'
+        auto_sign_up: true
+        role_attribute_path: role
+        role_attribute_strict: true
+        allow_assign_grafana_admin: false
       auth.proxy:
         enabled: true
         # X-Auth-Request-User from oauth2-proxy is the Cognito `sub` (a GUID).
@@ -317,6 +338,11 @@ spec:
       tls:
         - hosts:
             - *host
+    extraConfigmapMounts:
+      - name: kiosk-jwks
+        mountPath: /etc/grafana/kiosk-jwks
+        configMap: grafana-kiosk-jwks
+        readOnly: true
     persistence:
       enabled: true
       storageClassName: "${STORAGE_CLASS_DEFAULT}"

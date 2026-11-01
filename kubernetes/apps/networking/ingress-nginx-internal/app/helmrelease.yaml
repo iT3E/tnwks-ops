@@ -60,6 +60,13 @@ spec:
         keep-alive-requests: 10000
         proxy-body-size: "100M"
         ssl-protocols: "TLSv1.3 TLSv1.2"
+        # Snippet annotations (off by default since CVE-2024-7646; that CVE is
+        # about untrusted Ingress authors, and Ingresses here only come from
+        # git). grafana-embed needs a configuration-snippet to clear the
+        # oauth2-proxy identity headers and refuse /login; there's no
+        # non-snippet way to drop request headers per Ingress.
+        allow-snippet-annotations: "true"
+        annotations-risk-level: "Critical"
       metrics:
         enabled: ${SERVICE_MONITOR_ENABLED}
         serviceMonitor:
