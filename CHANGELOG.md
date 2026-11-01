@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.64.2 - 2026-11-01
+
+### Fixed
+
+* grafana: Windows Exporter NTP offset panel (no data, W32Time counters absent on the desktop) becomes clock skew between Windows and Prometheus.
+
 ## v1.64.1 - 2026-11-01
 
 ### Fixed
