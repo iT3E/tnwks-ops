@@ -1,0 +1,12 @@
+---
+# Monitoring dashboard (YAML mode, git-owned): Grafana, full height, inside
+# HA. It opens Grafana's own home page with its navigation, so every Grafana
+# dashboard and folder is reachable from here without listing them in HA.
+# Grafana allows embedding (security.allow_embedding) and sits behind
+# oauth2-proxy on the same site, so the shared session cookie works in the
+# frame; the first visit on a device may need a Grafana login in the frame.
+# The URL comes from the HASS_GRAFANA_URL env var (helmrelease.yaml).
+title: Monitoring
+strategy:
+  type: iframe
+  url: !env_var HASS_GRAFANA_URL
