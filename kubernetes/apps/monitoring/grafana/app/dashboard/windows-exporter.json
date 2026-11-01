@@ -838,9 +838,9 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "windows_time_computed_time_offset_seconds{instance=\"$server\"}",
+          "expr": "windows_time_current_timestamp_seconds{instance=~\"$server\"} - timestamp(windows_time_current_timestamp_seconds{instance=~\"$server\"})",
           "interval": "",
-          "legendFormat": "{{ instance}}",
+          "legendFormat": "skew",
           "refId": "A",
           "datasource": {
             "type": "prometheus",
@@ -852,7 +852,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "NTP Status(NTP Offset)",
+      "title": "Clock skew vs cluster (Windows - Prometheus)",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -869,7 +869,7 @@
       "yaxes": [
         {
           "$$hashKey": "object:209",
-          "format": "short",
+          "format": "s",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -889,7 +889,8 @@
       "yaxis": {
         "align": false,
         "alignLevel": null
-      }
+      },
+      "description": "Windows clock minus Prometheus scrape time. Includes up to one scrape duration (~0.2s) of latency."
     },
     {
       "cacheTimeout": null,
