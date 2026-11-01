@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.48.3 - 2026-11-01
+
+### Fixed
+
+* kitchen-screensaver: the page's test knobs (interval, reload) only apply together with test=1, so a test URL left in the display's app can't keep it reloading.
+
 ## v1.48.2 - 2026-11-01
 
 ### Fixed
