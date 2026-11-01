@@ -133,13 +133,25 @@ playroom / kitchen / living room buttons on Home run. The map card on Home
 (`custom:xiaomi-vacuum-map-card`, resource in configuration.yaml) selects
 the same rooms; its outlines are the image's `rooms` boxes.
 
+Consumables on the Robovac view are gauges from each part's full life
+(Roborock S5: filter 150 h, main brush 300 h, side brush 200 h, sensors 30 h)
+that go yellow near the end and red when due, each with a reset button that
+asks first. The remaining-time sensors show hours through the entity
+registry's display unit (UI-owned).
+
 ### Other devices
 
 Local integrations added by host (UI-owned; discovery doesn't reach the pod):
 LIFX (four pool-area Minis), Google Cast (kitchen speaker, kitchen display,
 living room TV), Denon AVR-S750H, Tesla Wall Connector. Sonos has no
 manual-host flow, so its speakers are under `sonos:` in configuration.yaml.
-All of them are by DHCP address, so a lease that moves needs a new host (a
+`light.pool_lights` (packages/lights.yaml) groups the four LIFX bulbs. The
+Pool themes card on Home (`custom:tnwks-lifx-themes-card`, in
+kitchen-cards.js) paints them with `lifx.paint_theme`. Its theme list is read
+at runtime from that action's selector, i.e. the aiolifx-themes library that
+tracks the LIFX app's themes, so new LIFX themes arrive with HA updates and
+none are listed in git. The card only sorts them into groups and picks
+"In season" ones by month. A name it doesn't know lands in Moods. All of them are by DHCP address, so a lease that moves needs a new host (a
 static lease in the MikroTik Terraform avoids that). The LG TV wasn't
 answering on its webOS ports (3000/3001) when this was set up; add it with
 the TV on (webOS TV, accept the pairing prompt on screen).

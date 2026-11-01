@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.8.0";
+const VERSION = "1.9.0";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -2934,6 +2934,135 @@ class HolidayCard extends KitchenCard {
   }
 }
 
+// ------------------------------------------------------------ LIFX themes
+
+// The theme list is whatever HA's lifx.paint_theme offers (its selector
+// options, from the aiolifx-themes library that follows the LIFX app), read
+// at runtime, so new LIFX themes show up with HA updates and nothing here
+// lists them. This only sorts them: by name into groups, and seasonal ones
+// by the months they suit. Unknown names land in Moods.
+const LIFX_GROUPS = [
+  ["Holidays", "🎉", "halloween blood_moon bloodlust book_of_the_dead calaveras fright_night ghostly graveyard_chill haunted_fog paranormal pumpkin pumpkin_glow pumpkin_party redrum scream_queen slasher spiders_lair toxic_cauldron vampires_den witchs_ritual witchy zombie zombie_apocalypse thanksgiving turkey_dinner cranberry_harvest christmas baubles candy_cane candy_cane_twist deck_the_halls festive holly mistletoe santa santas_candy santas_workshop gold_star hanukkah menorah kwanzaa be_my_valentine valentines st_patricks_day shamrock lucky_shamrock leprechaun_treasure molly_malone whats_the_craic the_tricolour snake_banisher independence old_glory memorial_day arlington taps canada_day parade pride proud diwali ramadan oktoberfest"],
+  ["Seasons", "🍂", "autumn autumn_table fall pumpkin_spice wheat_glow warm_ember sage_and_cedar spring cherry_blossom poppy winter_night winter_wonderland snowflake arctic pine_glow crystal_twist"],
+  ["Music", "🎵", "classic_rock classical dance_pop disco funk garage_rock hip_hop_rap indie_pop jazz lo_fi pop psychedelic_rock punk synthwave vaporwave party neon"],
+  ["Art", "🎨", "bijutsukai gauguin hokusai kandinsky klimt matisse mondrian monet rousseau van_gogh"],
+  ["Space", "🪐", "aurora aurora_borealis extraterrestrial galaxy jupiter mars mercury moon neptune pluto saturn sci_fi spacey stardust sun uranus venus earth cyberpunk"],
+  ["Nature", "🌊", "beach clouds coral_reef deep_sea desert fire forest outback storm_front tropical water ocean"],
+  ["Moods", "✨", ""],
+];
+// Months (1-12) each seasonal theme suits; "In season" is this month's.
+const LIFX_MONTHS = {
+  10: "halloween blood_moon bloodlust book_of_the_dead fright_night ghostly graveyard_chill haunted_fog paranormal pumpkin pumpkin_glow pumpkin_party redrum scream_queen slasher spiders_lair toxic_cauldron vampires_den witchs_ritual witchy zombie zombie_apocalypse oktoberfest diwali autumn fall pumpkin_spice",
+  11: "calaveras thanksgiving turkey_dinner cranberry_harvest autumn autumn_table fall pumpkin_spice wheat_glow warm_ember sage_and_cedar diwali",
+  12: "christmas baubles candy_cane candy_cane_twist deck_the_halls festive holly mistletoe santa santas_candy santas_workshop gold_star hanukkah menorah kwanzaa winter_wonderland snowflake pine_glow crystal_twist winter_night",
+  1: "winter_night winter_wonderland snowflake arctic crystal_twist",
+  2: "be_my_valentine valentines love romance winter_night snowflake",
+  3: "st_patricks_day shamrock lucky_shamrock leprechaun_treasure molly_malone whats_the_craic the_tricolour snake_banisher spring cherry_blossom",
+  4: "spring cherry_blossom poppy",
+  5: "spring cherry_blossom poppy memorial_day arlington taps",
+  6: "pride proud old_glory",
+  7: "independence old_glory canada_day parade",
+  8: "beach tropical sun",
+  9: "autumn fall oktoberfest pumpkin_spice wheat_glow",
+};
+// Library spellings that duplicate another theme.
+const LIFX_DUPES = { energising: "energizing", forrest: "forest" };
+const lifxLabel = (t) => t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bSt\b/, "St.").replace(/\bS\b/, "s").replace(/Witchs/, "Witch's").replace(/Santas/, "Santa's").replace(/Whats/, "What's").replace(/Lo Fi/, "Lo-fi");
+
+class LifxThemesCard extends HTMLElement {
+  setConfig(config) {
+    if (!Array.isArray(config.entities) || !config.entities.length) throw new Error("entities: the LIFX lights to paint");
+    this.config = config;
+    this._open = null;
+    this._key = `tnwks-lifx-theme:${config.entities.join(",")}`;
+    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+    this._themes = null;
+    this._render();
+  }
+  set hass(hass) {
+    this._hass = hass;
+    const opts = hass.services?.lifx?.paint_theme?.fields?.theme?.selector?.select?.options;
+    const list = (opts || []).map((o) => (typeof o === "string" ? o : o.value)).filter((t) => !(LIFX_DUPES[t] && opts.includes(LIFX_DUPES[t])));
+    if (list.join() !== (this._themes || []).join()) {
+      this._themes = list;
+      this._render();
+    }
+  }
+  getCardSize() {
+    return 3;
+  }
+  getGridOptions() {
+    return { columns: 12, min_columns: 6 };
+  }
+  _groups() {
+    const known = new Map();
+    for (const [name, icon, names] of LIFX_GROUPS) for (const t of names.split(" ").filter(Boolean)) known.set(t, name);
+    const out = LIFX_GROUPS.map(([name, icon]) => ({ name, icon, themes: [] }));
+    for (const t of this._themes) out.find((g) => g.name === (known.get(t) || "Moods")).themes.push(t);
+    return out.filter((g) => g.themes.length);
+  }
+  _render() {
+    const root = this.shadowRoot;
+    if (!root || !this.config) return;
+    const last = localStorage.getItem(this._key);
+    const chip = (t) => `<button class="chip${t === last ? " on" : ""}" data-theme="${esc(t)}">${esc(lifxLabel(t))}</button>`;
+    let body;
+    if (!this._themes) body = `<div class="none">Waiting for Home Assistant…</div>`;
+    else if (!this._themes.length) body = `<div class="none">The LIFX integration offers no themes (is it loaded?).</div>`;
+    else {
+      const month = new Date().getMonth() + 1;
+      const now = (LIFX_MONTHS[month] || "").split(" ").filter((t) => this._themes.includes(t));
+      const groups = this._groups();
+      body = `${now.length ? `<div class="lbl">In season</div><div class="chips">${now.map(chip).join("")}</div>` : ""}
+        <div class="tabs">${groups.map((g) => `<button class="tab${this._open === g.name ? " on" : ""}" data-group="${esc(g.name)}">${g.icon} ${esc(g.name)} <span>${g.themes.length}</span></button>`).join("")}</div>
+        ${this._open ? `<div class="chips">${(groups.find((g) => g.name === this._open)?.themes || []).map(chip).join("")}</div>` : ""}`;
+    }
+    root.innerHTML = `<style>
+      ha-card { padding:12px 14px 14px; }
+      .top { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+      .top b { flex:1; font-size:16px; font-weight:500; }
+      .top button { font:inherit; font-size:13px; padding:6px 12px; border-radius:16px; border:0; cursor:pointer; background:var(--secondary-background-color); color:var(--primary-text-color); }
+      .lbl { font-size:12px; color:var(--secondary-text-color); margin:8px 0 6px; text-transform:uppercase; letter-spacing:.04em; }
+      .chips, .tabs { display:flex; flex-wrap:wrap; gap:6px; }
+      .tabs { margin-top:10px; }
+      .chips + .tabs { margin-top:12px; }
+      .tabs + .chips { margin-top:10px; }
+      button.chip, button.tab { font:inherit; font-size:13px; padding:7px 12px; border-radius:16px; border:1px solid var(--divider-color); background:none; color:var(--primary-text-color); cursor:pointer; }
+      button.tab span { color:var(--secondary-text-color); font-size:12px; }
+      button.tab.on { background:var(--secondary-background-color); }
+      button.chip.on { background:var(--primary-color); border-color:var(--primary-color); color:var(--text-primary-color, #fff); }
+      button.chip.busy { opacity:.5; }
+      .none { color:var(--secondary-text-color); font-size:14px; padding:6px 0; }
+    </style><ha-card><div class="top"><b>${esc(this.config.title || "Light themes")}</b>${this._themes?.length ? `<button data-shuffle>🔀 Surprise me</button>` : ""}</div>${body}</ha-card>`;
+    root.onclick = (e) => {
+      const el = e.composedPath().find((n) => n.dataset && (n.dataset.theme || n.dataset.group || "shuffle" in n.dataset));
+      if (!el) return;
+      if (el.dataset.group) {
+        this._open = this._open === el.dataset.group ? null : el.dataset.group;
+        return this._render();
+      }
+      let t = el.dataset.theme;
+      if (!t) {
+        const month = new Date().getMonth() + 1;
+        const pool = (LIFX_MONTHS[month] || "").split(" ").filter((x) => this._themes.includes(x));
+        const from = pool.length ? pool : this._themes;
+        t = from[Math.floor(Math.random() * from.length)];
+      }
+      this._paint(t, el);
+    };
+  }
+  async _paint(theme, el) {
+    el.classList.add("busy");
+    try {
+      await this._hass.callService("lifx", "paint_theme", { theme, transition: this.config.transition ?? 1, power_on: true }, { entity_id: this.config.entities });
+      localStorage.setItem(this._key, theme);
+    } catch (err) {
+      console.warn("tnwks lifx themes:", err);
+    }
+    this._render();
+  }
+}
+
 // ------------------------------------------------------------ register
 
 const CARDS = {
@@ -2954,6 +3083,7 @@ const CARDS = {
   "kitchen-meal-week-card": [MealWeekCard, "Kitchen meal week", "This week's meal plan, a column per meal"],
   "kitchen-pages-card": [PagesCard, "Kitchen pages", "The whole display: header, tabs and every tab's cards, switched instantly"],
   "kitchen-holiday-card": [HolidayCard, "Kitchen holiday", "Offers a holiday theme when one is coming up"],
+  "tnwks-lifx-themes-card": [LifxThemesCard, "LIFX themes", "Paint LIFX lights with the themes HA's LIFX integration offers"],
 };
 window.customCards = window.customCards || [];
 for (const [tag, [cls, name, description]] of Object.entries(CARDS)) {

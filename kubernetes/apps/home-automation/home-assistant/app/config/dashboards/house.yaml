@@ -73,6 +73,14 @@ views:
             heading: Lights
             icon: mdi:lightbulb-group
           - { type: tile, entity: light.pool_lights, name: All pool lights, features: [{ type: light-brightness }], grid_options: { columns: full } }
+          # LIFX themes, listed live from HA's lifx.paint_theme (kitchen-cards.js).
+          - type: custom:tnwks-lifx-themes-card
+            title: Pool themes
+            entities:
+              - light.pool1_lifx_mini_318ee9_pump_room
+              - light.pool1_lifx_mini_31589a_middle_left
+              - light.pool1_lifx_mini_318e9a_middle_right
+              - light.pool1_lifx_mini_3189f4_far_right
           - &light { type: tile, entity: light.pool1_lifx_mini_318ee9_pump_room, tap_action: { action: toggle }, grid_options: { columns: 6 } }
           - { <<: *light, entity: light.pool1_lifx_mini_31589a_middle_left, name: Middle left }
           - { <<: *light, entity: light.pool1_lifx_mini_318e9a_middle_right, name: Middle right }
@@ -175,11 +183,19 @@ views:
           - type: heading
             heading: Consumables
             heading_style: subtitle
-          # Hours left; hold a tile to see its reset button in the device page.
-          - &cons { type: tile, entity: sensor.roborock_vacuum_s5_filter_remaining, name: Filter, icon: mdi:air-filter, grid_options: { columns: 6 } }
-          - { <<: *cons, entity: sensor.roborock_vacuum_s5_main_brush_remaining, name: Main brush, icon: mdi:brush }
-          - { <<: *cons, entity: sensor.roborock_vacuum_s5_side_brush_remaining, name: Side brush, icon: mdi:brush-variant }
-          - { <<: *cons, entity: sensor.roborock_vacuum_s5_sensor_dirty_remaining, name: Sensors, icon: mdi:eye-outline }
+          # Hours left (the sensors display in hours via the entity registry).
+          # Gauges run from the part's full life (Roborock S5: filter 150 h,
+          # main brush 300 h, side brush 200 h, sensors 30 h) and turn yellow
+          # under ~15% and red when it's due. Reset after replacing or
+          # cleaning; each reset asks first.
+          - &gauge { type: gauge, entity: sensor.roborock_vacuum_s5_filter_remaining, name: Filter, unit: h, min: 0, max: 150, needle: true, severity: { green: 25, yellow: 5, red: -10000 }, grid_options: { columns: 6, rows: 2 } }
+          - { <<: *gauge, entity: sensor.roborock_vacuum_s5_main_brush_remaining, name: Main brush, max: 300, severity: { green: 45, yellow: 10, red: -10000 } }
+          - &reset { type: button, entity: button.roborock_vacuum_s5_reset_filter, name: Filter replaced, icon: mdi:air-filter, show_state: false, tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.roborock_vacuum_s5_reset_filter }, confirmation: { text: "Reset the filter timer? Do this after putting in a new filter." } }, grid_options: { columns: 6, rows: 1 } }
+          - { <<: *reset, entity: button.roborock_vacuum_s5_reset_main_brush, name: Main brush replaced, icon: mdi:brush, tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.roborock_vacuum_s5_reset_main_brush }, confirmation: { text: "Reset the main brush timer? Do this after putting in a new main brush." } } }
+          - { <<: *gauge, entity: sensor.roborock_vacuum_s5_side_brush_remaining, name: Side brush, max: 200, severity: { green: 30, yellow: 7, red: -10000 } }
+          - { <<: *gauge, entity: sensor.roborock_vacuum_s5_sensor_dirty_remaining, name: Sensors, max: 30, severity: { green: 5, yellow: 1, red: -10000 } }
+          - { <<: *reset, entity: button.roborock_vacuum_s5_reset_side_brush, name: Side brush replaced, icon: mdi:brush-variant, tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.roborock_vacuum_s5_reset_side_brush }, confirmation: { text: "Reset the side brush timer? Do this after putting in a new side brush." } } }
+          - { <<: *reset, entity: button.roborock_vacuum_s5_reset_sensor_dirty, name: Sensors wiped, icon: mdi:eye-outline, tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.roborock_vacuum_s5_reset_sensor_dirty }, confirmation: { text: "Reset the sensor timer? Do this after wiping the sensors with a dry cloth." } } }
 
   - title: Energy
     path: energy
