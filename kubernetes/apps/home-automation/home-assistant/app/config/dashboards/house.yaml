@@ -185,12 +185,13 @@ views:
             heading_style: subtitle
           # Hours left (the sensors display in hours via the entity registry).
           # Gauges run from the part's full life (Roborock S5: filter 150 h,
-          # main brush 300 h, side brush 200 h, sensors 30 h) and turn yellow
-          # under ~15% and red when it's due. Reset after replacing or
-          # cleaning; each reset asks first.
-          - &gauge { type: gauge, entity: sensor.roborock_vacuum_s5_filter_remaining, name: Filter, unit: h, min: 0, max: 150, needle: true, severity: { green: 25, yellow: 5, red: -10000 }, grid_options: { columns: 6, rows: 2 } }
+          # main brush 300 h, side brush 200 h, sensors 30 h); the arc is green,
+          # yellow under ~15% and red when it's due. (unit " ": the state
+          # already reads "68h 2m".) Reset after replacing or cleaning; each
+          # reset asks first.
+          - &gauge { type: gauge, entity: sensor.roborock_vacuum_s5_filter_remaining, name: Filter, unit: " ", min: 0, max: 150, severity: { green: 25, yellow: 5, red: -10000 }, grid_options: { columns: 6, rows: 2 } }
           - { <<: *gauge, entity: sensor.roborock_vacuum_s5_main_brush_remaining, name: Main brush, max: 300, severity: { green: 45, yellow: 10, red: -10000 } }
-          - &reset { type: button, entity: button.roborock_vacuum_s5_reset_filter, name: Filter replaced, icon: mdi:air-filter, show_state: false, tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.roborock_vacuum_s5_reset_filter }, confirmation: { text: "Reset the filter timer? Do this after putting in a new filter." } }, grid_options: { columns: 6, rows: 1 } }
+          - &reset { type: tile, entity: button.roborock_vacuum_s5_reset_filter, name: Filter replaced, icon: mdi:air-filter, hide_state: true, tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.roborock_vacuum_s5_reset_filter }, confirmation: { text: "Reset the filter timer? Do this after putting in a new filter." } }, grid_options: { columns: 6 } }
           - { <<: *reset, entity: button.roborock_vacuum_s5_reset_main_brush, name: Main brush replaced, icon: mdi:brush, tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.roborock_vacuum_s5_reset_main_brush }, confirmation: { text: "Reset the main brush timer? Do this after putting in a new main brush." } } }
           - { <<: *gauge, entity: sensor.roborock_vacuum_s5_side_brush_remaining, name: Side brush, max: 200, severity: { green: 30, yellow: 7, red: -10000 } }
           - { <<: *gauge, entity: sensor.roborock_vacuum_s5_sensor_dirty_remaining, name: Sensors, max: 30, severity: { green: 5, yellow: 1, red: -10000 } }
