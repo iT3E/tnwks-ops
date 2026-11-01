@@ -263,6 +263,13 @@ picks a theme or mode on it; that choice stays on that device (localStorage
 `tnwks-kitchen-theme` / `tnwks-kitchen-mode`), and **Same as kitchen display**
 in the 🎨 sheet drops it. Only the wall display shows the holiday offer.
 
+Weather (top right of the header): `weather.forecast_home` (met.no) only
+refreshes about hourly, so the temperature shown is interpolated from the
+hourly forecast between its two nearest hours, and today's high and low come
+from the daily entry dated today. Tap it for details: humidity, wind, UV,
+clouds, dew point, pressure, sunrise and sunset, the next 12 hours and the
+next days.
+
 Dark or light: `input_select.kitchen_mode` (`auto`, `dark` or `light`, in
 `packages/kitchen_display.yaml`, set from the 🎨 sheet) applies to every
 screen. `auto` is dark while `sun.sun` is below the horizon. Dark is the

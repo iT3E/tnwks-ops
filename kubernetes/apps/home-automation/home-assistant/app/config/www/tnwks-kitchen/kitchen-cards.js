@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.5.0";
+const VERSION = "1.6.0";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -864,6 +864,23 @@ const SHEET_CSS = `
   .seg3 button { flex:1; text-align:center; padding:11px 6px; border-radius:12px; font-size:16px; color:var(--sub); }
   .seg3 button.on { background:var(--accent); color:var(--ink); font-weight:500; }
   .acts .menu { color:var(--sub); font-size:15px; display:flex; align-items:center; gap:8px; }
+  .wgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .ws { background:var(--card2); border-radius:14px; padding:10px 12px; }
+  .ws small { display:block; color:var(--sub); font-size:12px; margin-bottom:3px; }
+  .ws b { font-size:17px; font-weight:500; }
+  .whs { display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; }
+  .wh { flex:none; width:62px; background:var(--card2); border-radius:14px; padding:8px 4px; text-align:center; display:flex; flex-direction:column; gap:3px; }
+  .wh small { color:var(--sub); font-size:12px; }
+  .wh span { font-size:24px; }
+  .wh b { font-size:16px; font-weight:500; }
+  .wh i { font-style:normal; font-size:11px; color:var(--acct); min-height:13px; }
+  .wds { display:flex; flex-direction:column; gap:6px; }
+  .wd { display:grid; grid-template-columns:62px 34px 40px 1fr 40px 44px; align-items:center; gap:8px; background:var(--card2); border-radius:14px; padding:8px 12px; font-size:16px; }
+  .wd span { font-size:22px; }
+  .wd small { color:var(--sub); text-align:right; font-size:15px; }
+  .wd i { font-style:normal; font-size:12px; color:var(--acct); text-align:right; }
+  .wd .bar { position:relative; height:6px; border-radius:3px; background:var(--line); }
+  .wd .bar div { position:absolute; top:0; bottom:0; border-radius:3px; background:linear-gradient(90deg, #6bb7ff, var(--accent)); }
 `;
 function openSheet({ render, onAction, onInput }) {
   const host = document.createElement("div");
@@ -1017,6 +1034,58 @@ function themePicker(hass) {
       s.update();
     },
   });
+  return sheet;
+}
+
+/** Weather details (tap the weather on the header): now, the next 12 hours, the next days, the sun. */
+function weatherSheet(card) {
+  const sheet = openSheet({
+    render() {
+      const h = card._hass, now = new Date();
+      const e = card.config?.weather || "weather.forecast_home";
+      const w = h.states[e];
+      if (!w) return `<div class="tt">Weather</div><div class="empty">No weather entity.</div>`;
+      const isDay = h.states["sun.sun"]?.state !== "below_horizon";
+      const hourly = card._hourly ? Object.assign(card._hourly, { isDay }) : null;
+      const n = weatherNow(w, hourly, now);
+      const td = todayForecast(card._forecast, now);
+      const a = w.attributes, u = a.wind_speed_unit || "mph";
+      const stat = (k, v) => (v == null || v === "" ? "" : `<div class="ws"><small>${k}</small><b>${v}</b></div>`);
+      const sun = h.states["sun.sun"]?.attributes || {};
+      const rise = sun.next_rising && new Date(sun.next_rising), set = sun.next_setting && new Date(sun.next_setting);
+      const hours = (card._hourly || []).map((x) => ({ ...x, t: new Date(x.datetime) })).filter((x) => x.t > new Date(now - 3600000)).slice(0, 12);
+      const hourRow = hours.map((x) => {
+        const night = rise && set ? (set < rise ? x.t > set && x.t < rise : x.t > set || x.t < rise) : false;
+        const icon = x.condition === "sunny" && night ? WEATHER_ICON["clear-night"] : WEATHER_ICON[x.condition] || "";
+        return `<div class="wh"><small>${x.t.toLocaleTimeString(undefined, { hour: "numeric" })}</small><span>${icon}</span><b>${Math.round(x.temperature)}°</b>${x.precipitation > 0 ? `<i>${x.precipitation}″</i>` : "<i></i>"}</div>`;
+      }).join("");
+      const days = card._forecast || [];
+      const lo = Math.min(...days.map((d) => d.templow ?? d.temperature)), hi = Math.max(...days.map((d) => d.temperature));
+      const dayRows = days.map((d) => {
+        const t = new Date(d.datetime), l = d.templow ?? d.temperature;
+        const left = ((l - lo) / Math.max(1, hi - lo)) * 100, width = ((d.temperature - l) / Math.max(1, hi - lo)) * 100;
+        return `<div class="wd"><b>${sameDay(t, now) ? "Today" : t.toLocaleDateString(undefined, { weekday: "short" })}</b><span>${WEATHER_ICON[d.condition] || ""}</span>
+          <small>${Math.round(l)}°</small><div class="bar"><div style="left:${left}%;width:${Math.max(4, width)}%"></div></div><b>${Math.round(d.temperature)}°</b>
+          <i>${d.precipitation > 0 ? `${d.precipitation}″` : ""}</i></div>`;
+      }).join("");
+      return `<div class="tt"><span style="font-size:40px">${WEATHER_ICON[n.condition] || ""}</span><span><b style="font-size:40px;font-weight:400">${Math.round(n.temp)}°</b>
+          <span class="muted" style="font-size:17px;margin-left:8px">${esc(WEATHER_TEXT[n.condition] || n.condition)}${td ? ` · H ${Math.round(td.temperature)}° L ${Math.round(td.templow)}°` : ""}</span></span></div>
+        <div class="wgrid">${stat("Humidity", n.humidity != null ? `${Math.round(n.humidity)}%` : null)}${stat("Wind", n.wind != null ? `${Math.round(n.wind)} ${esc(u)} ${compass(n.bearing)}` : null)}
+          ${stat("UV index", n.uv != null ? n.uv.toFixed(1) : null)}${stat("Clouds", n.cloud != null ? `${Math.round(n.cloud)}%` : null)}
+          ${stat("Dew point", a.dew_point != null ? `${Math.round(a.dew_point)}°` : null)}${stat("Pressure", a.pressure != null ? `${a.pressure} ${esc(a.pressure_unit || "")}` : null)}
+          ${stat("Sunrise", rise ? hm(rise) : null)}${stat("Sunset", set ? hm(set) : null)}</div>
+        ${hourRow ? `<div class="lb">Next 12 hours</div><div class="whs">${hourRow}</div>` : ""}
+        ${dayRows ? `<div class="lb">Next days</div><div class="wds">${dayRows}</div>` : ""}
+        <div class="hint">${esc(a.attribution || "")}</div>
+        <div class="acts"><button class="go" data-action="cancel">Done</button></div>`;
+    },
+    onAction() {},
+  });
+  const close = sheet.close;
+  sheet.close = () => {
+    card._wxSheet = null;
+    close();
+  };
   return sheet;
 }
 
@@ -1195,34 +1264,65 @@ class KitchenCard extends HTMLElement {
 
 // -------------------------------------------------------------- header
 
+// The weather entity (met.no) only refreshes about once an hour, so "now"
+// is read off the hourly forecast between its two nearest hours; the entity
+// state is the fallback. Tapping the weather opens weatherSheet().
+const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+const compass = (deg) => (deg == null ? "" : COMPASS[Math.round(deg / 45) % 8]);
+const sameDay = (a, b) => a.toDateString() === b.toDateString();
+const hm = (d) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+/** Now, from the hourly forecast: temperature interpolated, the rest from the current hour. */
+function weatherNow(w, hourly, now = new Date()) {
+  const a = w?.attributes || {};
+  const out = { condition: w?.state, temp: a.temperature, humidity: a.humidity, wind: a.wind_speed, bearing: a.wind_bearing,
+    uv: a.uv_index, cloud: a.cloud_coverage, dew: a.dew_point, pressure: a.pressure };
+  const h = (hourly || []).map((x) => ({ ...x, t: new Date(x.datetime) })).filter((x) => !isNaN(x.t));
+  const i = h.findIndex((x) => x.t > now);
+  if (i > 0) {
+    const p = h[i - 1], n = h[i], f = (now - p.t) / (n.t - p.t);
+    if (p.temperature != null && n.temperature != null) out.temp = p.temperature + (n.temperature - p.temperature) * f;
+    const c = f < 0.5 ? p : n;
+    for (const [k, v] of [["condition", c.condition], ["humidity", c.humidity], ["wind", c.wind_speed], ["bearing", c.wind_bearing], ["uv", c.uv_index], ["cloud", c.cloud_coverage]])
+      if (v != null) out[k] = v;
+    if (out.condition === "sunny" && !(hourly.isDay ?? true)) out.condition = "clear-night";
+  }
+  return out;
+}
+/** Today's entry of the daily forecast (not just the first one). */
+const todayForecast = (daily, now = new Date()) => (daily || []).find((d) => sameDay(new Date(d.datetime), now)) || daily?.[0];
+
 class HeaderCard extends KitchenCard {
   tickMs = 10000;
   firstHass() {
     this._subscribeForecast();
   }
   disconnected() {
-    this._unsub?.then((u) => u()).catch(() => {});
-    this._unsub = null;
+    for (const u of this._unsubs || []) u.then((f) => f?.()).catch(() => {});
+    this._unsubs = null;
   }
   connected() {
-    if (this._hass && !this._unsub) this._subscribeForecast();
+    if (this._hass && !this._unsubs) this._subscribeForecast();
   }
   _subscribeForecast() {
     const e = this.config?.weather || "weather.forecast_home";
-    if (!this._hass.states[e] || this._unsub) return;
-    this._unsub = this._hass.connection
-      .subscribeMessage((m) => {
-        this._forecast = m.forecast;
-        this._queue();
-      }, { type: "weather/subscribe_forecast", forecast_type: "daily", entity_id: e })
-      .catch(() => null);
+    if (!this._hass.states[e] || this._unsubs) return;
+    const sub = (type, key) =>
+      this._hass.connection
+        .subscribeMessage((m) => {
+          this[key] = m.forecast;
+          this._queue();
+          this._wxSheet?.update();
+        }, { type: "weather/subscribe_forecast", forecast_type: type, entity_id: e })
+        .catch(() => null);
+    this._unsubs = [sub("daily", "_forecast"), sub("hourly", "_hourly")];
   }
   css = `
     .top { display:flex; justify-content:space-between; align-items:flex-start; padding:4px 6px 0; }
     .clock { font-size:64px; line-height:1; letter-spacing:-.02em; }
     .clock small { font-size:24px; color:var(--sub); margin-left:6px; }
     .date { font-size:20px; color:var(--sub); margin-top:6px; }
-    .wx { text-align:right; }
+    .wx { text-align:right; cursor:pointer; border-radius:14px; padding:4px 6px; margin:-4px -6px; }
+    .wx:active { background:var(--card2); }
     .wx .t { font-size:40px; line-height:1; }
     .wx .d { font-size:15px; color:var(--sub); margin-top:4px; }
     .people { display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
@@ -1284,6 +1384,10 @@ class HeaderCard extends KitchenCard {
     return `<div class="greet">${hi}${parts.length ? ` <span>${parts.join(" · ")}</span>` : ""}</div>`;
   }
   action(a) {
+    if (a === "wx") {
+      this._wxSheet = weatherSheet(this);
+      return;
+    }
     if (a === "hol-on" || a === "hol-no") answerHoliday(this._hass, a === "hol-on", this.getBoundingClientRect());
     this._queue(true);
   }
@@ -1293,8 +1397,9 @@ class HeaderCard extends KitchenCard {
     const ap = h >= 12 ? "PM" : "AM";
     h = h % 12 || 12;
     const w = this._hass.states[this.config.weather || "weather.forecast_home"];
-    const f = this._forecast?.[0];
-    const temp = w ? Math.round(w.attributes.temperature) : null;
+    const f = todayForecast(this._forecast, now);
+    const wn = w ? weatherNow(w, this._hourly && Object.assign(this._hourly, { isDay: this._hass.states["sun.sun"]?.state !== "below_horizon" }), now) : null;
+    const temp = wn ? Math.round(wn.temp) : null;
     const people = FAMILY.map((m) => {
       const t = m.tracker && this._hass.states[m.tracker];
       const cls = t ? (t.state === "home" ? "home" : "away") : "";
@@ -1306,9 +1411,9 @@ class HeaderCard extends KitchenCard {
         <div class="clock" style="${compact ? "font-size:44px" : ""}">${h}:${String(now.getMinutes()).padStart(2, "0")}<small>${ap}</small></div>
         <div class="date" style="${compact ? "font-size:16px" : ""}">${now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
       </div>
-      <div class="wx">
-        ${w ? `<div class="t" style="${compact ? "font-size:30px" : ""}">${WEATHER_ICON[w.state] || ""} ${temp}°</div>` : ""}
-        ${!compact && w ? `<div class="d">${WEATHER_TEXT[w.state] || w.state}${f ? ` · H ${Math.round(f.temperature)}° L ${Math.round(f.templow)}°` : ""}</div>` : ""}
+      <div class="wx"${w ? ` data-action="wx" role="button"` : ""}>
+        ${w ? `<div class="t" style="${compact ? "font-size:30px" : ""}">${WEATHER_ICON[wn.condition] || ""} ${temp}°</div>` : ""}
+        ${!compact && w ? `<div class="d">${WEATHER_TEXT[wn.condition] || wn.condition}${f ? ` · H ${Math.round(f.temperature)}° L ${Math.round(f.templow)}°` : ""} ›</div>` : ""}
         ${compact ? "" : `<div class="people">${people}</div>`}
       </div>
     </div>${compact ? "" : this._offerOrGreeting(now)}`;
