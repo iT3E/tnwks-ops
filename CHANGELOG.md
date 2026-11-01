@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.50.0 - 2026-11-01
+
+### Changed
+
+* kitchen-screensaver: the shuffled pass is remembered between screensaver runs, so every photo shows before any repeats; album changes show up within about 15 minutes (server re-reads every 5, page every 10).
+
 ## v1.49.0 - 2026-11-01
 
 ### Changed
