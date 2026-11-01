@@ -1,6 +1,6 @@
 ---
-# Kitchen dashboard (YAML mode, git-owned): the Apolosign wall display in the
-# kitchen, replacing the Apolosign app. Laid out for the display's browser
+# Wall display dashboard (YAML mode, git-owned; URL /kitchen-display): the
+# Apolosign tablet in the kitchen, replacing the Apolosign app. Laid out for the display's browser
 # viewport, 720x1280 CSS px in portrait (2160x3840 at 480 dpi), so at most two
 # columns. Phones get the same layout.
 #
@@ -8,12 +8,19 @@
 # (resource in configuration.yaml); chores and stars come from
 # packages/kitchen_routines.yaml.
 #
-# kiosk-mode hides HA's header and sidebar only where the dashboard was opened
-# with ?kiosk, i.e. on the wall display. Everywhere else the header stays, so
-# the dashboard is still editable and reachable. On the wall display, 🎨 >
-# "Home Assistant menu" reloads it with ?disable_km (so no kiosk_mode config
-# here may set ignore_disable_km), and a "Back to kitchen" pill or 5 idle
-# minutes bring the kiosk back.
+# kiosk-mode hides HA's header and sidebar on this dashboard only, and only in
+# the tablet's browser (kiosk_mode below matches its user agent; WALL_UA in
+# kitchen-cards.js must match too). Phones and browsers get the header, so the
+# dashboard stays editable. On the tablet, "Home Assistant" in the tab bar
+# goes to the rest of HA (Overview, with the sidebar), and "Wall display" in
+# the sidebar or 5 idle minutes bring the kiosk back. ?kiosk still works for
+# trying it elsewhere; ?disable_km turns it off for one load, so nothing here
+# may set ignore_disable_km.
+#
+# Taps: a card with tap_page goes to that page when tapped outside its own
+# buttons (kids -> Routines, Dinner -> Meals, Groceries/Notes -> Lists, Today
+# and Coming up -> Calendar). Any event opens its details; a planned meal also
+# offers "Open in Mealie" (recipe slug from mealie.get_mealplan).
 #
 # One HA view holds everything: kitchen-pages-card draws the header, the big
 # tabs and each tab's cards as pages that stay mounted, so switching tabs is
@@ -31,7 +38,10 @@
 #   todo.things_to_do, todo.someday, todo.notes
 #                         extra Local To-do lists (UI-owned); todo.shopping_list
 #                         (Groceries) is the Shopping List integration
-title: Kitchen
+title: Wall display
+
+kiosk_mode:
+  kiosk: "[[[ /Apolosign/i.test(navigator.userAgent) ]]]"
 
 views:
   - title: Kitchen
@@ -44,6 +54,8 @@ views:
       - type: custom:kitchen-pages-card
         padding: 16
         idle_home: 5
+        # Where "Home Assistant" in the tab bar goes.
+        ha_path: /lovelace
         pages:
           - path: home
             title: Home
@@ -52,14 +64,15 @@ views:
             cards:
               - type: custom:kitchen-family-day-card
                 calendars: [calendar.family]
+                tap_page: calendar
                 start_hour: 7
                 end_hour: 21
                 height: 250
               - type: custom:kitchen-stack-card
                 columns: 2
                 cards:
-                  - { type: custom:kitchen-kid-card, member: kid1 }
-                  - { type: custom:kitchen-kid-card, member: kid2 }
+                  - { type: custom:kitchen-kid-card, member: kid1, tap_page: routines }
+                  - { type: custom:kitchen-kid-card, member: kid2, tap_page: routines }
               - type: custom:kitchen-stack-card
                 columns: 2
                 cards:
@@ -67,10 +80,13 @@ views:
                     title: Dinner
                     calendar: calendar.mealie_dinner
                     days: 3
+                    tap_page: meals
+                    mealie: &mealie { url: "https://recipes.tnwks.us", group: home, entry: 01M69Q1P5QTVNB7W0BJF1KDXAM }
                   - type: custom:kitchen-todo-card
                     entity: todo.shopping_list
                     title: Groceries
                     max: 4
+                    tap_page: lists
               - type: custom:kitchen-stack-card
                 columns: 2
                 cards:
@@ -81,6 +97,7 @@ views:
                     from_tomorrow: true
                     days: 3
                     max: 4
+                    tap_page: calendar
                   # The message board; post notes from the Lists tab. Hidden
                   # until todo.notes exists, and then Coming up takes the row.
                   - type: custom:kitchen-notes-card
@@ -90,6 +107,7 @@ views:
                     add: false
                     columns: 1
                     max: 3
+                    tap_page: lists
               - type: custom:kitchen-chips-card
                 chips:
                   - { entity: binary_sensor.dishwasher_power, name: Dishwasher, on_text: Running, off_text: Idle }
@@ -132,6 +150,7 @@ views:
               - type: custom:kitchen-meal-week-card
                 title: Meals
                 height: 880
+                mealie: *mealie
                 slots:
                   - { calendar: calendar.mealie_breakfast, label: Breakfast, icon: "🍳", emoji: "🥞" }
                   - { calendar: calendar.mealie_lunch, label: Lunch, icon: "🥪", emoji: "🥪" }

@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.6.0";
+const VERSION = "1.7.0";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -207,7 +207,32 @@ function normalizeEvent(ev, calendar) {
   const end = parse(ev.end);
   const text = `${ev.summary || ""} ${ev.description || ""}`.toLowerCase();
   let who = FAMILY.filter((m) => m.keywords.some((k) => new RegExp(`\\b${k}\\b`).test(text))).map((m) => m.key);
-  return { title: ev.summary || "(no title)", start, end, allDay, who, calendar };
+  return { title: ev.summary || "(no title)", start, end, allDay, who, calendar, description: ev.description || "", location: ev.location || "" };
+}
+
+// Events drawn anywhere carry data-action="ev" data-ev=<id>; a tap opens
+// eventSheet(). fetchEvents caches its results, so an event keeps its id
+// across renders.
+const EVENTS = new Map();
+let evSeq = 0;
+function evId(e) {
+  if (!e._id) {
+    e._id = `e${++evSeq}`;
+    EVENTS.set(e._id, e);
+    if (EVENTS.size > 3000) EVENTS.delete(EVENTS.keys().next().value);
+  }
+  return e._id;
+}
+const evAttr = (e) => ` data-action="ev" data-ev="${evId(e)}"`;
+/** Switch the wall display to another of its pages (Home, Calendar, ...). */
+function goPage(path) {
+  if (decodeURIComponent(location.hash.slice(1)) !== path) location.hash = encodeURIComponent(path);
+}
+/** Open a link outside HA: the HA app hands it to Android (an installed PWA such as Mealie catches its own links), browsers get a new tab. */
+function openExternal(url, win) {
+  if (KM._inApp()) location.href = url;
+  else if (win) win.location = url;
+  else window.open(url, "_blank", "noopener");
 }
 
 function eventColor(ev) {
@@ -668,6 +693,16 @@ document.addEventListener("visibilitychange", () => document.visibilityState ===
 // also from another HA page. Only the HA app counts as a device (a desktop
 // browser tried with ?kiosk shouldn't start jumping back), and ?clear_km_cache
 // forgets it, like kiosk-mode.
+// The wall display's browser (the HA app on the Apolosign tablet). Keep in step
+// with kiosk_mode in dashboards/kitchen.yaml.
+const WALL_UA = /Apolosign/i;
+/** Leave the kiosk for the rest of HA, inside the app, without a reload. */
+function leaveToHA(path) {
+  history.pushState(null, "", path);
+  window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+}
+// mdi:home-assistant
+const HA_LOGO = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.8,13H20V21H13V17.67L15.79,14.88L16.5,15C17.66,15 18.6,14.06 18.6,12.9C18.6,11.74 17.66,10.8 16.5,10.8A2.1,2.1 0 0,0 14.4,12.9L14.5,13.61L13,15.13V9.65C13.66,9.29 14.1,8.6 14.1,7.8A2.1,2.1 0 0,0 12,5.7A2.1,2.1 0 0,0 9.9,7.8C9.9,8.6 10.34,9.29 11,9.65V15.13L9.5,13.61L9.6,12.9A2.1,2.1 0 0,0 7.5,10.8A2.1,2.1 0 0,0 5.4,12.9A2.1,2.1 0 0,0 7.5,15L8.21,14.88L11,17.67V21H4V13H2.25C1.83,13 1.42,13 1.42,12.79C1.43,12.57 1.85,12.15 2.28,11.72L11,3C11.33,2.67 11.67,2.33 12,2.33C12.33,2.33 12.67,2.67 13,3L17,7V6H19V9L21.78,11.78C22.18,12.18 22.59,12.59 22.6,12.8C22.6,13 22.2,13 21.8,13M7.5,12A0.9,0.9 0 0,1 8.4,12.9A0.9,0.9 0 0,1 7.5,13.8A0.9,0.9 0 0,1 6.6,12.9A0.9,0.9 0 0,1 7.5,12M16.5,12C17,12 17.4,12.4 17.4,12.9C17.4,13.4 17,13.8 16.5,13.8A0.9,0.9 0 0,1 15.6,12.9A0.9,0.9 0 0,1 16.5,12M12,6.9C12.5,6.9 12.9,7.3 12.9,7.8C12.9,8.3 12.5,8.7 12,8.7C11.5,8.7 11.1,8.3 11.1,7.8C11.1,7.3 11.5,6.9 12,6.9Z"/></svg>`;
 const KM = {
   KEY: "tnwks-kitchen-kiosk",
   touched: Date.now(),
@@ -686,9 +721,9 @@ const KM = {
       return null;
     }
   },
-  /** kiosk-mode was told to hide things: by the URL, or by its own cache (?...&cache). */
+  /** kiosk-mode was told to hide things: by the dashboard's kiosk_mode (the wall display's user agent), the URL, or its own cache. */
   _asked() {
-    return this._has("kiosk", "hide_header", "hide_sidebar") || ["kmKiosk", "kmHideHeader", "kmHideSidebar"].some((k) => this._store(k) === "true");
+    return WALL_UA.test(navigator.userAgent) || this._has("kiosk", "hide_header", "hide_sidebar") || ["kmKiosk", "kmHideHeader", "kmHideSidebar"].some((k) => this._store(k) === "true");
   },
   active() {
     return !this._has("disable_km") && this._asked();
@@ -721,7 +756,7 @@ const KM = {
   kitchenUrl(hash) {
     const path = this.home() || location.pathname;
     let t = path === location.pathname ? this._tokens().filter((x) => x.split("=")[0] !== "disable_km") : [];
-    const asked = t.some((x) => ["kiosk", "hide_header", "hide_sidebar"].includes(x.split("=")[0])) || ["kmKiosk", "kmHideHeader", "kmHideSidebar"].some((k) => this._store(k) === "true");
+    const asked = WALL_UA.test(navigator.userAgent) || t.some((x) => ["kiosk", "hide_header", "hide_sidebar"].includes(x.split("=")[0])) || ["kmKiosk", "kmHideHeader", "kmHideSidebar"].some((k) => this._store(k) === "true");
     if (!asked) t = [...t, "kiosk"];
     return this._url(path, t, hash ?? (path === location.pathname ? location.hash : ""));
   },
@@ -864,6 +899,9 @@ const SHEET_CSS = `
   .seg3 button { flex:1; text-align:center; padding:11px 6px; border-radius:12px; font-size:16px; color:var(--sub); }
   .seg3 button.on { background:var(--accent); color:var(--ink); font-weight:500; }
   .acts .menu { color:var(--sub); font-size:15px; display:flex; align-items:center; gap:8px; }
+  .evbar { width:6px; align-self:stretch; border-radius:3px; flex:none; }
+  .evl { display:flex; align-items:center; gap:8px; font-size:17px; margin:6px 0; }
+  .evd { background:var(--card2); border-radius:14px; padding:12px 14px; margin-top:12px; font-size:15px; line-height:1.45; max-height:40vh; overflow:auto; white-space:normal; overflow-wrap:anywhere; }
   .wgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
   .ws { background:var(--card2); border-radius:14px; padding:10px 12px; }
   .ws small { display:block; color:var(--sub); font-size:12px; margin-bottom:3px; }
@@ -1012,7 +1050,7 @@ function themePicker(hass) {
       const ownMode = wall ? null : Local.get(Local.MODE);
       const ms = ownMode || h.states[MODE_ENTITY]?.state;
       const mode = MODES.map((m) => `<button class="${ms === m.key ? "on" : ""}" data-action="mode" data-key="${m.key}">${m.icon} ${m.label}</button>`).join("");
-      const menu = KM.active() ? `<button class="menu" data-action="ha-menu">☰ Home Assistant menu</button>` : "";
+      const menu = "";
       return `<div class="tt">🎨 Display theme</div><div class="grid">${opts
         .map(([k, t]) => `<button class="${cur === k ? "on" : ""}" data-action="pick" data-key="${k}"><span>${t.emoji}</span>${esc(t.name)}</button>`)
         .join("")}</div><div class="hint" style="margin-top:12px">Holiday themes also offer themselves on the Home tab when one is coming up, and switch off a few days after.</div>
@@ -1087,6 +1125,57 @@ function weatherSheet(card) {
     close();
   };
   return sheet;
+}
+
+/** Details of a calendar event (or a planned meal), from a tap on it anywhere. */
+function eventSheet(e, card) {
+  if (!e) return;
+  const hass = card._hass;
+  const meal = /^calendar\.mealie_/.test(e.calendar) && card.config?.mealie;
+  const sameD = (a, b) => a.toDateString() === b.toDateString();
+  const dl = (d) => d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  let when;
+  if (e.allDay) {
+    const last = addDays(e.end, -1);
+    when = sameD(e.start, last) || last < e.start ? `${dl(e.start)} · All day` : `${dl(e.start)} – ${dl(last)}`;
+  } else when = sameD(e.start, e.end) ? `${dl(e.start)} · ${fmtTime(e.start)} – ${fmtTime(e.end)}` : `${dl(e.start)} ${fmtTime(e.start)} – ${dl(e.end)} ${fmtTime(e.end)}`;
+  const who = e.who.length ? e.who.map((k) => MEMBER[k]) : [];
+  const cal = hass.states[e.calendar]?.attributes?.friendly_name || e.calendar;
+  // Calendar descriptions are often HTML from Google; show them as text.
+  const desc = e.description ? new DOMParser().parseFromString(e.description.replace(/<br\s*\/?>/gi, "\n"), "text/html").body.textContent.trim() : "";
+  return openSheet({
+    render() {
+      return `<div class="tt"><span class="evbar" style="background:${eventColor(e)}"></span>${esc(e.title)}</div>
+        <div class="evl">🕒 ${esc(when)}</div>
+        ${e.location ? `<div class="evl">📍 ${esc(e.location)}</div>` : ""}
+        ${who.length ? `<div class="evl">${who.map((m) => `<span class="av" style="background:${m.color};width:26px;height:26px;font-size:12px">${m.name[0]}</span> ${esc(m.name)}`).join(" &nbsp; ")}</div>` : ""}
+        ${desc ? `<div class="evd">${esc(desc).replace(/\n/g, "<br>")}</div>` : ""}
+        <div class="hint">${esc(cal)}</div>
+        <div class="acts">${e.location ? `<button data-action="map">Directions</button>` : ""}${meal ? `<button data-action="recipe">Open in Mealie ↗</button>` : ""}<button class="go" data-action="cancel">Done</button></div>`;
+    },
+    onAction(a) {
+      if (a === "map") openExternal(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(e.location)}`);
+      else if (a === "recipe") openRecipe(hass, meal, e);
+    },
+  });
+}
+const mealieBase = (m) => String(m.url || "").replace(/\/$/, "");
+const mealiePlanner = (m) => `${mealieBase(m)}/household/mealplan/planner/view`;
+/** Open the recipe behind a meal plan event in Mealie (its slug from mealie.get_mealplan), else the planner. */
+async function openRecipe(hass, m, e) {
+  const win = KM._inApp() ? null : window.open("about:blank", "_blank");
+  let url = mealiePlanner(m);
+  try {
+    const day = `${e.start.getFullYear()}-${String(e.start.getMonth() + 1).padStart(2, "0")}-${String(e.start.getDate()).padStart(2, "0")}`;
+    const r = await hass.callService("mealie", "get_mealplan", { config_entry_id: m.entry, start_date: day, end_date: day }, undefined, false, true);
+    const plans = r?.response?.mealplan || [];
+    const type = e.calendar.replace("calendar.mealie_", "");
+    const p = plans.find((x) => x.entry_type === type && (x.recipe?.name === e.title || x.title === e.title)) || plans.find((x) => x.recipe?.name === e.title);
+    if (p?.recipe?.slug) url = `${mealieBase(m)}/g/${m.group || "home"}/r/${p.recipe.slug}`;
+  } catch (err) {
+    console.warn("tnwks kitchen cards: mealie lookup", err);
+  }
+  openExternal(url, win);
 }
 
 // ------------------------------------------------------------- base class
@@ -1230,7 +1319,13 @@ class KitchenCard extends HTMLElement {
   _click(e) {
     if (this._swallow && Date.now() - this._swallow < 800) return;
     const el = e.composedPath().find((n) => n.dataset && (n.dataset.chore || n.dataset.toggle || n.dataset.action));
-    if (!el) return;
+    if (!el) {
+      // A tap on the card itself (not one of its buttons) goes to its page.
+      if (this.config?.tap_page) goPage(this.config.tap_page);
+      return;
+    }
+    if (el.dataset.action === "ev") return eventSheet(EVENTS.get(el.dataset.ev), this);
+    if (el.dataset.action === "page") return goPage(el.dataset.page);
     if (el.dataset.chore) {
       const done = el.dataset.on !== "1";
       el.classList.add(done ? "checking" : "pending");
@@ -1531,7 +1626,7 @@ function timeGridHtml(timed, { H, sh, eh, ncols, colsOf, dayOf, nowCol, narrow }
   for (const { e, cols } of placed) {
     if (!cols) {
       const { top, hgt } = box(e, dayOf(0));
-      html += `<div class="ev span${cls(e, hgt)}" style="top:${top}px;height:${hgt}px;left:calc(${colL(0)} + 4px);width:calc(${colW(ncols)} - 8px);background:${eventColor(e)}">${label(e, hgt)}</div>`;
+      html += `<div class="ev span${cls(e, hgt)}"${evAttr(e)} style="top:${top}px;height:${hgt}px;left:calc(${colL(0)} + 4px);width:calc(${colW(ncols)} - 8px);background:${eventColor(e)}">${label(e, hgt)}</div>`;
       continue;
     }
     for (const c of cols) {
@@ -1540,7 +1635,7 @@ function timeGridHtml(timed, { H, sh, eh, ncols, colsOf, dayOf, nowCol, narrow }
       const idx = [e, ...same].sort((a, b) => a.start - b.start || a.title.localeCompare(b.title)).indexOf(e);
       const n = same.length + 1;
       const pad = narrow ? 2 : 4;
-      html += `<div class="ev${cls(e, hgt)}" style="top:${top}px;height:${hgt}px;left:calc(${colL(c)} + ${pad}px + (${colW(1)} - ${2 * pad}px) * ${idx} / ${n});width:calc((${colW(1)} - ${2 * pad}px) / ${n} - 2px);background:${eventColor(e)}">${label(e, hgt)}</div>`;
+      html += `<div class="ev${cls(e, hgt)}"${evAttr(e)} style="top:${top}px;height:${hgt}px;left:calc(${colL(c)} + ${pad}px + (${colW(1)} - ${2 * pad}px) * ${idx} / ${n});width:calc((${colW(1)} - ${2 * pad}px) / ${n} - 2px);background:${eventColor(e)}">${label(e, hgt)}</div>`;
     }
   }
   const nh = now.getHours() + now.getMinutes() / 60;
@@ -1558,7 +1653,7 @@ function familyDayHtml(evs, day, H, sh, eh) {
   const allDay = evs.filter((e) => e.allDay);
   const timed = evs.filter((e) => !e.allDay);
   const colhs = `<div class="colhs" style="--cols:${FAMILY.length}"><div></div>${FAMILY.map((m) => `<div class="colh"><div class="av" style="background:${m.color}">${m.name[0]}</div>${esc(m.name)}</div>`).join("")}</div>`;
-  const chips = allDay.length ? `<div class="allday">${allDay.map((e) => `<div class="chip" style="background:${eventColor(e)}">${esc(e.title)}</div>`).join("")}</div>` : "";
+  const chips = allDay.length ? `<div class="allday">${allDay.map((e) => `<div class="chip"${evAttr(e)} style="background:${eventColor(e)}">${esc(e.title)}</div>`).join("")}</div>` : "";
   const grid = timeGridHtml(timed, {
     H, sh, eh, ncols: FAMILY.length,
     colsOf: (e) => (e.who.length ? e.who.map((k) => FAMILY.findIndex((m) => m.key === k)) : null),
@@ -1582,7 +1677,7 @@ function weekHtml(evs, wk0, H, sh, eh) {
     adg = `<div class="adg" style="--cols:7">${days
       .map((d) => {
         const on = allDay.filter((e) => onDay(e, d));
-        return `<div>${on.slice(0, 2).map((e) => `<div class="chip" style="background:${eventColor(e)}">${esc(e.title)}</div>`).join("")}${on.length > 2 ? `<div class="muted" style="font-size:11px">+${on.length - 2}</div>` : ""}</div>`;
+        return `<div>${on.slice(0, 2).map((e) => `<div class="chip"${evAttr(e)} style="background:${eventColor(e)}">${esc(e.title)}</div>`).join("")}${on.length > 2 ? `<div class="muted" style="font-size:11px">+${on.length - 2}</div>` : ""}</div>`;
       })
       .join("")}</div>`;
   }
@@ -1620,7 +1715,7 @@ function monthHtml(evs, anchor, rowH) {
     const on = evs.filter((e) => onDay(e, d)).sort((a, b) => b.allDay - a.allDay || a.start - b.start);
     const shown = on.length > max ? on.slice(0, max - 1) : on;
     cells += `<button class="mc ${d.getMonth() !== anchor.getMonth() ? "om" : ""} ${d.getTime() === td ? "td" : ""}" style="height:${rowH}px" data-action="day" data-date="${d.toISOString()}">
-      <div class="n">${d.getDate()}</div>${shown.map((e) => `<div class="chip" style="background:${eventColor(e)}">${esc(e.title)}</div>`).join("")}${on.length > shown.length ? `<div class="more">+${on.length - shown.length} more</div>` : ""}</button>`;
+      <div class="n">${d.getDate()}</div>${shown.map((e) => `<div class="chip"${evAttr(e)} style="background:${eventColor(e)}">${esc(e.title)}</div>`).join("")}${on.length > shown.length ? `<div class="more">+${on.length - shown.length} more</div>` : ""}</button>`;
   }
   return `<div class="mh">${DAYS.map((d) => `<div>${d[0].toUpperCase()}${d.slice(1)}</div>`).join("")}</div><div class="mg">${cells}</div>`;
 }
@@ -1639,7 +1734,7 @@ function agendaHtml(evs) {
       const isToday = d === new Date().toDateString();
       out += `<div class="day">${isToday ? "Today" : e.start.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}</div>`;
     }
-    out += `<div class="row"><div class="bar" style="background:${eventColor(e)}"></div><div class="tm">${e.allDay ? "All day" : `${fmtTime(e.start)}`}</div><div class="t">${esc(e.title)}</div>${whoDots(e)}</div>`;
+    out += `<div class="row"${evAttr(e)}><div class="bar" style="background:${eventColor(e)}"></div><div class="tm">${e.allDay ? "All day" : `${fmtTime(e.start)}`}</div><div class="t">${esc(e.title)}</div>${whoDots(e)}</div>`;
   }
   return out;
 }
@@ -1698,7 +1793,7 @@ class AgendaCard extends KitchenCard {
     if (this.config.style === "list") {
       if (!evs.length) return `<div class="card"><div class="h">${esc(title)}</div><div class="empty">Nothing coming up.</div></div>`;
       return `<div class="card"><div class="h">${esc(title)}</div><div class="up">${evs
-        .map((e) => `<div class="d">${fmtDay(e.start)} ${e.allDay ? "" : fmtTime(e.start)}</div><div>${esc(e.title)}</div>${whoDots(e)}`)
+        .map((e) => `<div class="d"${evAttr(e)}>${fmtDay(e.start)} ${e.allDay ? "" : fmtTime(e.start)}</div><div${evAttr(e)}>${esc(e.title)}</div>${whoDots(e)}`)
         .join("")}</div></div>`;
     }
     return `<div class="card"><div class="h">${esc(title)}</div>${agendaHtml(evs) || '<div class="empty">Nothing on the calendar.</div>'}</div>`;
@@ -2417,7 +2512,7 @@ class MealsCard extends KitchenCard {
     for (let i = 0; i < (this.config.days || 3); i++) {
       const d = addDays(s, i);
       const ev = (this._events || []).find((e) => startOfDay(e.start).getTime() === d.getTime());
-      rows.push(`<div class="meal"><div class="e">${ev ? "🍽️" : "·"}</div><div><div class="l">${i === 0 ? "Tonight" : fmtDay(d)}</div><div class="n ${ev ? "" : "muted"}">${ev ? esc(ev.title) : "Nothing planned"}</div></div></div>`);
+      rows.push(`<div class="meal"${ev ? evAttr(ev) : ""}><div class="e">${ev ? "🍽️" : "·"}</div><div><div class="l">${i === 0 ? "Tonight" : fmtDay(d)}</div><div class="n ${ev ? "" : "muted"}">${ev ? esc(ev.title) : "Nothing planned"}</div></div></div>`);
     }
     return `<div class="card"><div class="h">${esc(title)}</div>${rows.join("")}</div>`;
   }
@@ -2467,6 +2562,7 @@ class MealWeekCard extends KitchenCard {
   }
   action(a) {
     this._touched = Date.now();
+    if (a === "mealie" && this.config.mealie) return openExternal(mealiePlanner(this.config.mealie));
     const before = this._wk.getTime();
     if (a === "prev") this._wk = addDays(this._wk, -7);
     else if (a === "next") this._wk = addDays(this._wk, 7);
@@ -2483,7 +2579,8 @@ class MealWeekCard extends KitchenCard {
       return `<div class="card"><div class="h">${esc(title)}</div><div class="empty">Meal plan not connected yet. Add the Mealie integration in Home Assistant and this week fills in.</div></div>`;
     const md = (x) => x.toLocaleDateString(undefined, { month: "short", day: "numeric" });
     const isNow = this._wk.getTime() === startOfWeek().getTime();
-    const ctl = `<div class="ctl"><button data-action="prev">‹</button><button data-action="next">›</button><div class="lbl">${md(this._wk)} – ${md(addDays(this._wk, 6))}</div>${isNow ? "" : `<button class="tdb" data-action="today">This week</button>`}</div>`;
+    const ml = this.config.mealie ? `<button class="tdb" data-action="mealie">Open Mealie ↗</button>` : "";
+    const ctl = `<div class="ctl"><button data-action="prev">‹</button><button data-action="next">›</button><div class="lbl">${md(this._wk)} – ${md(addDays(this._wk, 6))}</div>${isNow ? "" : `<button class="tdb" data-action="today">This week</button>`}${ml}</div>`;
     const rowH = Math.floor((this.config.height || 840) / 7);
     const td = startOfDay().getTime();
     let g = `<div></div>${slots.map((s, i) => `<div class="sh" style="background:${SLOT_TINT[i % 4]}">${s.icon || ""} ${esc(s.label)}</div>`).join("")}`;
@@ -2494,7 +2591,7 @@ class MealWeekCard extends KitchenCard {
       slots.forEach((s, si) => {
         const evs = (this._events?.[si] || []).filter((e) => onDay(e, d));
         const inner = evs.length
-          ? `<div class="e">${s.emoji || "🍽️"}</div>${evs.map((e) => `<div>${esc(e.title)}</div>`).join("")}`
+          ? `<div class="e">${s.emoji || "🍽️"}</div>${evs.map((e) => `<div class="m"${evAttr(e)}>${esc(e.title)}</div>`).join("")}`
           : `<div class="x">·</div>`;
         g += `<div class="c ${isTd ? "td" : ""}" style="background:${SLOT_TINT[si % 4]};height:${rowH}px">${inner}</div>`;
       });
@@ -2632,7 +2729,9 @@ class PagesCard extends HTMLElement {
     .pill { position:absolute; left:0; top:0; height:38px; border-radius:20px; background:var(--accent); transition:transform .28s cubic-bezier(.3,.9,.3,1.1), width .28s, background-color .4s; }
     .tab { padding:9px 16px; border-radius:20px; background:var(--card); color:var(--sub); font-size:15px; font-weight:500; height:38px; position:relative; transition:color .2s, background-color .4s; }
     .tab.on { color:var(--ink); background:transparent; }
-    .theme { margin-left:auto; flex:none; width:38px; height:38px; border-radius:50%; background:var(--card); display:grid; place-items:center; font-size:18px; }
+    .tools { margin-left:auto; flex:none; display:flex; gap:8px; }
+    .tool { display:flex; align-items:center; gap:6px; padding:9px 13px; }
+    .tool svg { width:18px; height:18px; fill:currentColor; }
     .page[hidden] { display:none; }
     .page.enter { animation:kin .24s ease-out both; }
   `;
@@ -2644,7 +2743,7 @@ class PagesCard extends HTMLElement {
       <div class="wrap" style="padding:${pad}px"><div class="hdr"></div>
       <div class="bar"><div class="tabs"><div class="pill"></div>${(c.pages || [])
         .map((p) => `<button class="tab" data-page="${esc(p.path)}">${esc(p.title)}</button>`)
-        .join("")}</div><div class="garland"></div>${c.theme_button === false ? "" : `<button class="theme" data-theme aria-label="Theme">🎨</button>`}</div>
+        .join("")}</div><div class="garland"></div><div class="tools">${c.theme_button === false ? "" : `<button class="tab tool" data-theme aria-label="Display settings">🎨</button>`}${KM.active() ? `<button class="tab tool ha" data-ha aria-label="Home Assistant">${HA_LOGO} Home Assistant</button>` : ""}</div></div>
       <div class="pages">${(c.pages || []).map((p) => `<div class="page" data-page="${esc(p.path)}" hidden></div>`).join("")}</div></div>`;
     const root = this.shadowRoot;
     root.addEventListener("pointerdown", (e) => {
@@ -2652,9 +2751,10 @@ class PagesCard extends HTMLElement {
       ripple(e);
     });
     root.addEventListener("click", (e) => {
-      const el = e.composedPath().find((n) => n.dataset && (n.dataset.page || "theme" in n.dataset) && n.tagName === "BUTTON");
+      const el = e.composedPath().find((n) => n.dataset && (n.dataset.page || "theme" in n.dataset || "ha" in n.dataset) && n.tagName === "BUTTON");
       if (!el) return;
-      if ("theme" in el.dataset) themePicker(this._hass);
+      if ("ha" in el.dataset) leaveToHA(this.config.ha_path || "/lovelace");
+      else if ("theme" in el.dataset) themePicker(this._hass);
       else this.show(el.dataset.page);
     });
     this._header = this._helpers.createCardElement({ type: "custom:kitchen-header-card", ...(c.header || {}) });
