@@ -98,11 +98,14 @@ The sidebar, top to bottom:
 - **Energy**: the built-in one (sources in `.storage/energy`, UI-owned).
 - **Monitoring** (`/home-monitoring`, everyone): Grafana in a frame, at its
   home page with its own navigation, so every Grafana dashboard is reachable
-  without listing it here; Grafana's role decides what each person can do
-  (Viewer by default). The URL is `HASS_GRAFANA_URL`. The frame needs an
-  oauth2-proxy session on that device, which it gets silently only while the
-  device's Cognito session is fresh (Cognito's login page won't load in a
-  frame): sign in to HA with tnwks, then open Monitoring within the hour.
+  without listing it here. It's signed in as the kiosk identity (a Grafana
+  Viewer) on every device, through `grafana-embed` with a JWT in the URL
+  (`HASS_GRAFANA_URL`, in home-assistant-secret): Cognito's login page won't
+  load in a frame, so oauth2-proxy can't be in front of it. To edit in
+  Grafana, open it directly at `grafana.<internal domain>`. Any HA user can
+  read that URL from the dashboard config, so it's a Viewer credential by
+  design. The token expires 2028-10-31. Ori mints a new one with the key in
+  its credentials store, then updates the secret.
 - **Wall display** (`/kitchen-display`): the tablet's kiosk.
 
 UI-owned and set over the websocket API (not in git): `default_panel` in the

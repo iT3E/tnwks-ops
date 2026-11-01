@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "use": "sig",
+      "alg": "RS256",
+      "kid": "tnwks-kiosk-2026-11",
+      "n": "p8Fa7vai8yHRf0PPgkZ02KIsaJL7imraPmZgRQkfgB6Lxj-GcQNO4GEwplN5uLLRZdFzK3Zl-tKQOC8601Jn66E6n80eEPyEPKhwReyNkjRHoYnB-2WR9EjVrGFFiHnmSTbdwO6CbSHvZH6JW3R4gpp7P3YFPmrW1dHo9ZXhRAbqxsa6Om_z5ScZ18Wx2fm8AXe6zWgTUGfF1mlP_UE-ygRgtd_ewC2oZJg2cu_yfV8yaHaYq8Dwzzyxk0T5qHgjpznzOXXA84UONVYbH7mI6SFuoSmuEu-74Cx1y29EK7wvO0j7uHYqnL8Zre61dJ4-mZm-ZM4DomGR65HrGwMgAw",
+      "e": "AQAB"
+    }
+  ]
+}

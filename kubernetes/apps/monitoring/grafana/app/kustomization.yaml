@@ -6,6 +6,15 @@ resources:
   - ./secret.sops.yaml
   - ./helmrelease.yaml
   - ./dashboard
+  - ./ingress-embed.yaml
+configMapGenerator:
+  # Public key for the kiosk JWT (auth.jwt in helmrelease.yaml). The private
+  # key is in Ori's credentials store, not here.
+  - name: grafana-kiosk-jwks
+    files:
+      - kiosk-jwks.json
+generatorOptions:
+  disableNameSuffixHash: true
 commonLabels:
   app.kubernetes.io/name: grafana
   app.kubernetes.io/instance: grafana

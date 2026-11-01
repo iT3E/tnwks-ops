@@ -2,16 +2,11 @@
 # Monitoring dashboard (YAML mode, git-owned): Grafana, full height, inside
 # HA. It opens Grafana's own home page with its navigation, so every Grafana
 # dashboard and folder is reachable from here without listing them in HA.
-# Grafana allows embedding (security.allow_embedding) and sits behind
-# oauth2-proxy, whose session cookie (.tnwks.us, SameSite=Lax, 30 days,
-# refreshed daily) is same-site here, so it works in the frame. What can't
-# work in the frame is Cognito's login page (it refuses framing,
-# ERR_BLOCKED_BY_RESPONSE). A device gets its oauth2-proxy session silently
-# while its Cognito session is fresh: sign in to HA with tnwks, then open
-# this dashboard within the hour. Everyone sees it; what they can do in
-# Grafana is their Grafana role (Viewer unless promoted; the wall display is
-# the kiosk identity, a Viewer).
-# The URL comes from the HASS_GRAFANA_URL env var (helmrelease.yaml).
+# It's signed in as the kiosk identity, a Grafana Viewer, on every device:
+# the URL is grafana-embed with the kiosk JWT (auth_token), from the
+# HASS_GRAFANA_URL env var (home-assistant-secret). Cognito's login page
+# won't load in a frame, so the oauth2-proxy route can't be used here. To
+# edit dashboards, open Grafana itself.
 title: Monitoring
 strategy:
   type: iframe

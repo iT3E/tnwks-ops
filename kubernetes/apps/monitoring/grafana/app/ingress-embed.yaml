@@ -1,0 +1,39 @@
+---
+# grafana-embed: Grafana for frames inside HA, signed in only by the kiosk
+# JWT in the URL (auth.jwt in helmrelease.yaml). No oauth2-proxy here,
+# because Cognito's login page won't load in a frame. Internal ingress only
+# (home network and WireGuard). The ingress sees every client as the same
+# SNAT address, so there's no source-IP allowlist; instead nothing but a
+# valid JWT gets in:
+#   - the auth.proxy headers (X-Auth-Request-*) and Authorization are
+#     cleared, so oauth2-proxy identities and basic auth can't be forged or
+#     used through this host;
+#   - /login is refused, so the password form (break-glass admin) isn't
+#     reachable here. A request without a valid token ends on that 403.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-embed
+  annotations:
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header X-Auth-Request-User "";
+      proxy_set_header X-Auth-Request-Email "";
+      proxy_set_header X-Auth-Request-Groups "";
+      proxy_set_header Authorization "";
+      if ($uri ~* "^/login") { return 403; }
+spec:
+  ingressClassName: nginx-internal
+  rules:
+    - host: &host "grafana-embed.${INTERNAL_DOMAIN}"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - *host
