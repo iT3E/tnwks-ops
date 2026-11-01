@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.7.0";
+const VERSION = "1.8.0";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -227,6 +227,39 @@ const evAttr = (e) => ` data-action="ev" data-ev="${evId(e)}"`;
 /** Switch the wall display to another of its pages (Home, Calendar, ...). */
 function goPage(path) {
   if (decodeURIComponent(location.hash.slice(1)) !== path) location.hash = encodeURIComponent(path);
+}
+/**
+ * Mealie on the wall display: full screen inside HA, in a frame, with a bar
+ * to close it. The tablet's launcher can't install the PWA, and Chrome would
+ * take the screen over from the kiosk. Elsewhere Mealie opens outside HA.
+ */
+function openMealie(url, win) {
+  if (!KM.active()) return openExternal(url, win);
+  win?.close();
+  document.querySelector(".tnwks-mealie")?.remove();
+  const host = document.createElement("div");
+  host.className = "tnwks-mealie";
+  host.style.cssText = "position:fixed;inset:0;z-index:9600";
+  const root = host.attachShadow({ mode: "open" });
+  root.innerHTML = `<style>${BASE_CSS}${MOTION_CSS}
+    .mv { position:fixed; inset:0; display:flex; flex-direction:column; background:var(--bg); animation:kfade .2s ease-out both; }
+    .mb { display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--card); }
+    .mb b { flex:1; font-size:18px; font-weight:500; }
+    .mb button { padding:10px 18px; border-radius:14px; background:var(--card2); font-size:16px; font-weight:500; }
+    .mb .x { background:var(--accent); color:var(--ink); }
+    iframe { flex:1; width:100%; border:0; background:#fff; }</style>
+    <div class="mv"><div class="mb"><b>🍲 Mealie</b><button data-a="home">Recipes</button><button class="x" data-a="close">✕ Close</button></div>
+    <iframe allow="clipboard-write; fullscreen; screen-wake-lock" referrerpolicy="strict-origin"></iframe></div>`;
+  const frame = root.querySelector("iframe");
+  frame.src = url;
+  root.addEventListener("click", (e) => {
+    const b = e.composedPath().find((n) => n.dataset?.a);
+    if (!b) return;
+    if (b.dataset.a === "close") host.remove();
+    else frame.src = new URL("/", url).href;
+  });
+  root.addEventListener("pointerdown", ripple);
+  document.body.appendChild(host);
 }
 /** Open a link outside HA: the HA app hands it to Android (an installed PWA such as Mealie catches its own links), browsers get a new tab. */
 function openExternal(url, win) {
@@ -1163,7 +1196,7 @@ const mealieBase = (m) => String(m.url || "").replace(/\/$/, "");
 const mealiePlanner = (m) => `${mealieBase(m)}/household/mealplan/planner/view`;
 /** Open the recipe behind a meal plan event in Mealie (its slug from mealie.get_mealplan), else the planner. */
 async function openRecipe(hass, m, e) {
-  const win = KM._inApp() ? null : window.open("about:blank", "_blank");
+  const win = KM._inApp() || KM.active() ? null : window.open("about:blank", "_blank");
   let url = mealiePlanner(m);
   try {
     const day = `${e.start.getFullYear()}-${String(e.start.getMonth() + 1).padStart(2, "0")}-${String(e.start.getDate()).padStart(2, "0")}`;
@@ -1175,7 +1208,7 @@ async function openRecipe(hass, m, e) {
   } catch (err) {
     console.warn("tnwks kitchen cards: mealie lookup", err);
   }
-  openExternal(url, win);
+  openMealie(url, win);
 }
 
 // ------------------------------------------------------------- base class
@@ -2562,7 +2595,7 @@ class MealWeekCard extends KitchenCard {
   }
   action(a) {
     this._touched = Date.now();
-    if (a === "mealie" && this.config.mealie) return openExternal(mealiePlanner(this.config.mealie));
+    if (a === "mealie" && this.config.mealie) return openMealie(mealiePlanner(this.config.mealie));
     const before = this._wk.getTime();
     if (a === "prev") this._wk = addDays(this._wk, -7);
     else if (a === "next") this._wk = addDays(this._wk, 7);

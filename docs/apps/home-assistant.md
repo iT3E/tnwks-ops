@@ -122,9 +122,13 @@ integrations:
    It gives `vacuum.roborock_vacuum_s5` (start/stop/dock, fan speed, room
    cleaning through `app_segment_clean`) and consumable sensors.
 
-The card on Home is `custom:xiaomi-vacuum-map-card` (resource in
-configuration.yaml): tap rooms on the map, then start. Room ids and outlines
-come from the image's `rooms` attribute; the labels are the room names.
+Rooms are the ones made in the Mi Home app, cleaned by segment id
+(`app_segment_clean`), top to bottom on the map: 17 Playroom, 18 Kitchen,
+16 Living room. `packages/robovac.yaml` has `script.robovac_clean_rooms`
+(any of them, `rooms: ["18"]`) and one script per room, which the Clean
+playroom / kitchen / living room buttons on Home run. The map card on Home
+(`custom:xiaomi-vacuum-map-card`, resource in configuration.yaml) selects
+the same rooms; its outlines are the image's `rooms` boxes.
 
 ### Other devices
 
@@ -314,8 +318,12 @@ Notes to Lists, Today and Coming up to Calendar). Any event, on any page,
 opens its details (time, place with Directions, who, description). A planned
 meal adds **Open in Mealie**, which opens the recipe (slug from
 `mealie.get_mealplan`; `mealie.entry` in the card config is the Mealie config
-entry id), and the Meals tab has **Open Mealie** for the planner. Links leave
-the HA app through Android, so with the Mealie PWA installed they open there.
+entry id), and the Meals tab has **Open Mealie** for the planner. On the
+tablet Mealie opens full screen inside the kiosk, in a frame with Recipes and
+Close buttons (the tablet's launcher, the Apolosign calendar app, can't pin
+shortcuts, so Chrome offers no PWA install there, and Chrome would take the
+screen from the kiosk). Elsewhere links leave HA, so an installed Mealie PWA
+on a phone catches them.
 
 Theme and mode are per device. The wall display (the HA app that has shown
 the dashboard in kiosk mode, localStorage `tnwks-kitchen-kiosk`) sets the house

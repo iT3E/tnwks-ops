@@ -18,6 +18,7 @@ configMapGenerator:
       - config/packages/kitchen_calendar.yaml
       - config/packages/kitchen_display.yaml
       - config/packages/kitchen_routines.yaml
+      - config/packages/robovac.yaml
   - name: home-assistant-dashboards
     files:
       - config/dashboards/house.yaml

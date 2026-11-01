@@ -12,8 +12,10 @@
 # entity registry (UI-owned) so no names live here; HA shows their names.
 # Robovac: Xiaomi Miio (vacuum.roborock_vacuum_s5, added with host + token)
 # and Xiaomi Cloud Map Extractor (image.robovac_live_map, with the rooms and
-# calibration as attributes); both UI-owned. Room ids come from the map's
-# `rooms` attribute; their outlines below are its x0/y0/x1/y1 boxes.
+# calibration as attributes); both UI-owned. The rooms are the app's
+# (segment ids from the map's `rooms` attribute, outlines from its
+# x0/y0/x1/y1 boxes): 17 Playroom, 18 Kitchen, 16 Living room, the same ids
+# as the scripts in packages/robovac.yaml.
 # Lights (LIFX), media (Google Cast, Denon, Sonos) and the Tesla Wall
 # Connector are local integrations, UI-owned except Sonos (configuration.yaml).
 title: Home
@@ -123,6 +125,8 @@ views:
           - { <<: *media, entity: media_player.living_room_tv_2, name: Living room TV }
           - { <<: *media, entity: media_player.kitchen_speaker, name: Kitchen speaker }
           - { <<: *media, entity: media_player.kitchen_display, name: Kitchen display }
+          - { <<: *media, entity: media_player.kitchen_sonos_kitchen_sonos, name: Kitchen Sonos }
+          - { <<: *media, entity: media_player.patio_sonos_patio_sonos, name: Patio Sonos }
 
       - type: grid
         column_span: 2
@@ -146,12 +150,16 @@ views:
             map_modes:
               - template: vacuum_clean_segment
                 predefined_selections:
-                  - { id: "17", outline: [[22050, 28450], [30400, 28450], [30400, 34800], [22050, 34800]], label: { text: "Room 17", x: 26225, y: 31625, offset_y: 30 }, icon: { name: "mdi:broom", x: 26225, y: 31625 } }
-                  - { id: "18", outline: [[19150, 24750], [28700, 24750], [28700, 29250], [19150, 29250]], label: { text: "Room 18", x: 23925, y: 27000, offset_y: 30 }, icon: { name: "mdi:broom", x: 23925, y: 27000 } }
-                  - { id: "16", outline: [[18100, 11950], [29000, 11950], [29000, 24950], [18100, 24950]], label: { text: "Room 16", x: 23550, y: 18450, offset_y: 30 }, icon: { name: "mdi:broom", x: 23550, y: 18450 } }
+                  - { id: "17", outline: [[22050, 28450], [30400, 28450], [30400, 34800], [22050, 34800]], label: { text: "Playroom", x: 26225, y: 31625, offset_y: 30 }, icon: { name: "mdi:broom", x: 26225, y: 31625 } }
+                  - { id: "18", outline: [[19150, 24750], [28700, 24750], [28700, 29250], [19150, 29250]], label: { text: "Kitchen", x: 23925, y: 27000, offset_y: 30 }, icon: { name: "mdi:broom", x: 23925, y: 27000 } }
+                  - { id: "16", outline: [[18100, 11950], [29000, 11950], [29000, 24950], [18100, 24950]], label: { text: "Living room", x: 23550, y: 18450, offset_y: 30 }, icon: { name: "mdi:broom", x: 23550, y: 18450 } }
               - template: vacuum_clean_zone
               - template: vacuum_goto
             grid_options: { columns: full }
+          # The app's rooms (packages/robovac.yaml): one tap cleans that room.
+          - &room { type: tile, entity: script.robovac_clean_playroom, name: Clean playroom, icon: mdi:toy-brick, tap_action: { action: perform-action, perform_action: script.turn_on, target: { entity_id: script.robovac_clean_playroom } }, grid_options: { columns: 4 } }
+          - { <<: *room, entity: script.robovac_clean_kitchen, name: Clean kitchen, icon: mdi:countertop, tap_action: { action: perform-action, perform_action: script.turn_on, target: { entity_id: script.robovac_clean_kitchen } } }
+          - { <<: *room, entity: script.robovac_clean_living_room, name: Clean living room, icon: mdi:sofa, tap_action: { action: perform-action, perform_action: script.turn_on, target: { entity_id: script.robovac_clean_living_room } } }
           - type: tile
             entity: vacuum.roborock_vacuum_s5
             name: Robovac
