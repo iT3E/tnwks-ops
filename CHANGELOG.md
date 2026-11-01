@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.51.0 - 2026-11-01
+
+### Added
+
+* kitchen: tap the weather on the header for details (now, next 12 hours, next days, sunrise/sunset); the shown temperature follows the hourly forecast instead of waiting for the hourly met.no refresh. Cards 1.6.0.
+
 ## v1.50.0 - 2026-11-01
 
 ### Changed
