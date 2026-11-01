@@ -1,0 +1,3 @@
+kind: Added
+body: Cognito app client `immich` so Immich can log people in with tnwks-auth through its built-in OAuth.
+time: 2026-10-31T17:15:00-07:00

@@ -23,6 +23,11 @@ pool that backs authentication for `*.internal.tnwks.us` services
     `https://recipes.tnwks.us/login`, scopes `openid email profile`. Used by
     Mealie's built-in OIDC; `cognito:groups` maps `admins` → Mealie admin,
     `viewers` → user
+  - `immich` — authorization_code, confidential (with secret), callbacks
+    `https://immich.internal.tnwks.us/auth/login`, `/user-settings` and
+    `/api/oauth/mobile-redirect`, logout URL `/auth/login`, scopes
+    `openid email profile`. Used by Immich's built-in OAuth; auto-register
+    is off, so only people with an Immich account (matched by email) get in
   - `agent-ori` — client_credentials, scopes `tnwks-api/read`,
     `tnwks-api/write`, with secret
 - **Hosted UI domain:** prefix `tnwks-auth.auth.us-west-2.amazoncognito.com`
@@ -44,6 +49,8 @@ pool that backs authentication for `*.internal.tnwks.us` services
 | `cognito_oauth2_proxy_client_id`      |            |
 | `cognito_oauth2_proxy_client_secret`  | sensitive  |
 | `cognito_home_assistant_client_id`    | public     |
+| `cognito_immich_client_id`            |            |
+| `cognito_immich_client_secret`        | sensitive  |
 | `cognito_mealie_client_id`            |            |
 | `cognito_mealie_client_secret`        | sensitive  |
 | `cognito_agent_client_id`             |            |
