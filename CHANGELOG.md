@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.48.1 - 2026-11-01
+
+### Fixed
+
+* kitchen-screensaver: the 6-hourly safety reload no longer uses location.reload(), which the ImmichFrame app treats as a navigation and crashes its screensaver on; the page now has the app reload it (a deliberately failed request to /api/drop). /favicon.ico answers 204.
+
 ## v1.48.0 - 2026-11-01
 
 ### Added
