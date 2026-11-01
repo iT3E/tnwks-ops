@@ -33,7 +33,9 @@ $WindowsExporter = @{
     Dir        = 'C:\Program Files\windows_exporter'
     Port       = 9182
     # diskdrive feeds the WindowsDiskDriveStatusBad alert (disk-health.yaml).
-    # time feeds the NTP offset panel on the Windows Exporter dashboard.
+    # time feeds the clock skew panel on the Windows Exporter dashboard
+    # (windows_time_current_timestamp_seconds; the NTP counters are absent
+    # because W32Time is trigger-start on this desktop).
     Collectors = 'cpu,logical_disk,memory,net,os,physical_disk,service,system,diskdrive,time'
 }
 $Smartmontools = @{
