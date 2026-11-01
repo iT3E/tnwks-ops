@@ -30,11 +30,14 @@
   Every 6 hours the page has itself loaded afresh, in case anything in the
   WebView grows over days. Not with location.reload(): the app's WebViewClient
   treats that as a navigation too, and starting the browser from the
-  screensaver crashes the app. Instead the page requests /api/drop, which the
-  server answers by closing the connection; the app reacts to any failed
-  request by loading its URL again 5 s later (onReceivedError), which is a
-  load from the app's side and allowed. In a normal browser it falls back to
-  location.reload().
+  screensaver crashes the app. Instead the page loads an image that can't
+  load: https://127.0.0.1:1 (nothing listens there on the display), then,
+  if that didn't do it, https://reload.invalid (no such name). The app reacts
+  to a request failing like that by loading its URL again 5 s later
+  (onReceivedError), which is a load from the app's side and allowed. (A
+  dropped connection at this server doesn't work: the ingress turns it into
+  a 502, and HTTP errors don't count.) The next page load reports which one
+  worked as via= in its ping. In a normal browser it uses location.reload().
 
   Test knobs (query string): interval=<s> between photos, reload=<s> until
   the safety reload (default 6 h).
@@ -518,11 +521,15 @@
       if (r.ok) {
         try { localStorage.setItem("ks_reload", new Date().toISOString()); } catch (e) {}
         if (!IN_APP) { location.reload(); return; }
-        const probe = new Image();
-        probe.src = `/api/drop?t=${Date.now()}`;
-        // The app loads the page again 5 s after the failure. If it hasn't
-        // within a minute, carry on and try again in an hour.
-        await wait(60000);
+        // The app loads the page again 5 s after the failure. If neither
+        // probe does it, carry on and try again in an hour.
+        for (const [via, url] of [["port", "https://127.0.0.1:1/"], ["dns", "https://reload.invalid/"]]) {
+          try { localStorage.setItem("ks_reload_via", via); } catch (e) {}
+          const probe = new Image();
+          probe.src = `${url}?t=${Date.now()}`;
+          await wait(30000);
+        }
+        try { localStorage.removeItem("ks_reload_via"); } catch (e) {}
       }
     } catch (e) {}
     reloadDue = false;
@@ -530,9 +537,13 @@
     setTimeout(show, 1000);
   }
 
+  // Which safety-reload probe brought this page here, reported once.
+  let via = "";
+  try { via = localStorage.getItem("ks_reload_via") || ""; localStorage.removeItem("ks_reload_via"); } catch (e) {}
   function ping() {
     const m = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : "";
-    const q = new URLSearchParams({ boot: BOOT, loads, up: Math.round((performance.now() - LOADED) / 1000), mem: m, slides: shown, w: innerWidth, h: innerHeight });
+    const q = new URLSearchParams({ boot: BOOT, loads, up: Math.round((performance.now() - LOADED) / 1000), mem: m, slides: shown, w: innerWidth, h: innerHeight, via });
+    via = "";
     get(`/api/ping?${q}`).catch(() => {});
   }
 

@@ -71,7 +71,6 @@ Immich with its own read-only credentials, so the display holds neither.
 | `/api/photos`     | The album's photos: id, size, face boxes (fractions of the photo).                                                                              |
 | `/img/<id>`       | A photo from the album (Immich's preview), nothing else.                                                                                        |
 | `/api/ping`       | The page checks in every 10 minutes; the pod log shows `ping boot=... loads=... up=... mem=... slides=...` (page loads, uptime, JS heap in MB). |
-| `/api/drop`       | Closes the connection without an answer, no secret: the page's safety reload (below).                                                           |
 | `/healthz`        | Liveness, no secret.                                                                                                                            |
 
 - **Refresh:** the page asks for `/api/info` every 3 minutes and at
@@ -102,11 +101,14 @@ Immich with its own read-only credentials, so the display holds neither.
   (`AndroidRuntimeException: Calling startActivity() from outside of an
   Activity context requires the FLAG_ACTIVITY_NEW_TASK flag`, seen on the
   display on 2026-10-31; the dream ends and the dashboard shows). Instead the
-  page loads `/api/drop`, which the service answers by closing the
-  connection. The app reloads its URL 5 s after any failed request
-  (`onReceivedError`), and that load comes from the app, so it's allowed.
-  The pod log shows `drop: the page asked for a fresh load`, then the page
-  again. In a normal browser the page uses `location.reload()`.
+  page loads an image that can't load: `https://127.0.0.1:1` (nothing listens
+  there on the display), then, if that didn't do it, `https://reload.invalid`
+  (no such name). The app reloads its URL 5 s after a request fails like
+  that (`onReceivedError`), and that load comes from the app, so it's
+  allowed. A dropped connection at this service doesn't work: the ingress
+  answers it with a 502, and HTTP errors don't count. After a safety reload
+  the next `ping` line in the pod log carries `via=port` or `via=dns`. In a
+  normal browser the page uses `location.reload()`.
 - **Pod restarts:** for the same reason, a restart of this pod shows up on
   the display as a short black gap (or the app's error page), then the page
   again.
