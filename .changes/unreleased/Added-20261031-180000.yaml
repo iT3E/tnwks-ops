@@ -1,0 +1,3 @@
+kind: Added
+body: Hourly Immich sync for the kitchen screensaver, mirroring the Google Photos shared albums on Home Assistant's "Screensaver albums" list (originals, photos only) into per-album and combined Immich albums.
+time: 2026-10-31T18:00:00-07:00

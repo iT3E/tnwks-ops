@@ -1,0 +1,92 @@
+---
+# Mirrors the Google Photos shared albums on Home Assistant's list
+# todo.screensaver_albums into Immich, as the screensaver service account.
+# Script and safety rules: scripts/sync.py. A failed run (an album Google
+# won't serve, a scraper broken by a Google change) exits non-zero without
+# removing anything, and the failed Job raises KubeJobFailed.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: immich-sync
+spec:
+  schedule: "17 * * * *"
+  timeZone: "${TIMEZONE}"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 900
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      # One retry for a transient failure. A Job that still fails stays for
+      # 2h, so a one-off failure clears and a lasting one keeps alerting
+      # (a new failed Job every hour).
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 7200
+      # The script stops starting downloads after MAX_RUNTIME and picks up
+      # the rest next hour.
+      activeDeadlineSeconds: 3300
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: immich-sync
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 65534
+            runAsGroup: 65534
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: sync
+              image: docker.io/library/python:3.14.10-alpine@sha256:eb2c62658b8d51bff0acc408504b76521d02030de56a8a3c1e830083e89b89d2
+              command: ["python3", "/app/sync.py"]
+              env:
+                - name: TZ
+                  value: "${TIMEZONE}"
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+                - name: PYTHONUNBUFFERED
+                  value: "1"
+                - name: HASS_URL
+                  value: "http://home-assistant.home-automation.svc.cluster.local:8123"
+                - name: TODO_ENTITY
+                  value: "todo.screensaver_albums"
+                - name: IMMICH_URL
+                  value: "http://immich-server.selfhosted.svc.cluster.local:2283"
+                - name: COMBINED_ALBUM_NAME
+                  value: "Kitchen screensaver"
+                # Pause between Google downloads; the job runs one download
+                # at a time.
+                - name: DOWNLOAD_DELAY
+                  value: "1.0"
+                - name: MAX_RUNTIME
+                  value: "2700"
+              envFrom:
+                # HASS_TOKEN (long-lived token on HA's Ori user),
+                # IMMICH_API_KEY (screensaver account, sync permissions only)
+                - secretRef:
+                    name: immich-sync-secret
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 64Mi
+                limits:
+                  memory: 512Mi
+              volumeMounts:
+                - name: scripts
+                  mountPath: /app
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: scripts
+              configMap:
+                name: immich-sync-scripts
+            - name: tmp
+              emptyDir: {}

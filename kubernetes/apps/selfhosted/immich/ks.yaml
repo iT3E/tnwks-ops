@@ -24,3 +24,28 @@ spec:
   interval: 30m
   retryInterval: 1m
   timeout: 10m
+---
+# Hourly mirror of the Google Photos albums on Home Assistant's "Screensaver
+# albums" list into Immich (docs/apps/immich.md, "Screensaver sync").
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: immich-sync
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: immich
+  path: ./kubernetes/apps/selfhosted/immich/sync
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  # The Home Assistant token and the Immich API key ship as a SOPS Secret.
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  wait: false # no flux ks dependents
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
