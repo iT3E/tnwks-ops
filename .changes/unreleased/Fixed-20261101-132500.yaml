@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'home-assistant: robovac consumable gauges fill with their status color and read "68h 2m" (not "68h 2m h"); reset buttons are compact tiles.'
+time: 2026-11-01T13:25:00-08:00

@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.9.0";
+const VERSION = "1.9.1";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -2967,7 +2967,7 @@ const LIFX_MONTHS = {
 };
 // Library spellings that duplicate another theme.
 const LIFX_DUPES = { energising: "energizing", forrest: "forest" };
-const lifxLabel = (t) => t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bSt\b/, "St.").replace(/\bS\b/, "s").replace(/Witchs/, "Witch's").replace(/Santas/, "Santa's").replace(/Whats/, "What's").replace(/Lo Fi/, "Lo-fi");
+const lifxLabel = (t) => t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bSt\b/, "St.").replace(/\bS\b/, "s").replace(/Witchs/, "Witch's").replace(/Santas/, "Santa's").replace(/Whats/, "What's").replace(/Lo Fi/, "Lo-fi").replace(/ (And|Of|The|For|In) /g, (m) => m.toLowerCase());
 
 class LifxThemesCard extends HTMLElement {
   setConfig(config) {
