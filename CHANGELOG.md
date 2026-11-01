@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.60.0 - 2026-11-01
+
+### Added
+
+* aws: Cognito kiosk user (shared identity for the kitchen wall display) in the viewers group, created without an invitation email.
+
 ## v1.59.2 - 2026-11-01
 
 ### Fixed
