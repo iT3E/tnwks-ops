@@ -1,0 +1,3 @@
+kind: Changed
+body: 'mealie: sessions last 30 days (TOKEN_TIME 720) so the wall display''s Mealie sign-in survives quiet weeks.'
+time: 2026-11-01T12:00:00-08:00
