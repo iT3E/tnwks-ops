@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.48.0 - 2026-11-01
+
+### Added
+
+* Kitchen display: dark, light or auto (by the sun) mode from the 🎨 sheet (input_select.kitchen_mode), with a light palette for every theme and the Android status and navigation bars following it on the wall display; a "Home Assistant menu" button there that opens HA's menu with ?disable_km, and a "Back to kitchen" pill (or 5 idle minutes) to return to the kiosk.
+
 ## v1.47.0 - 2026-11-01
 
 ### Added
