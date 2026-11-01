@@ -1,6 +1,6 @@
 ---
-# Home dashboard (YAML mode, git-owned; URL /house, HA's default dashboard
-# via frontend system data `default_panel`, which is UI-owned). The everyday
+# Home dashboard (YAML mode, git-owned; URL /home-hub, HA's default dashboard
+# via frontend system data `default_panel` = home-hub, which is UI-owned). The everyday
 # view of the house on phones: who's home, weather, power, appliances,
 # cameras. The built-in Overview (areas) is hidden from the sidebar but still
 # at /home; the tablet has its own dashboard (Wall display).

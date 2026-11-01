@@ -105,12 +105,12 @@ lovelace:
       filename: dashboards/security.yaml
       title: Security
       icon: mdi:cctv
-    house:
+    home-hub:
       mode: yaml
       filename: dashboards/house.yaml
       title: Home
       icon: mdi:home
-    monitoring:
+    home-monitoring:
       mode: yaml
       filename: dashboards/monitoring.yaml
       title: Monitoring

@@ -88,18 +88,18 @@ reads with `!env_var`.
 
 The sidebar, top to bottom:
 
-- **Home** (`/house`, `dashboards/house.yaml`): the default dashboard. Who's
+- **Home** (`/home-hub`, `dashboards/house.yaml`): the default dashboard. Who's
   home, weather, power (Sense, solar per inverter by day), appliances, the
   wall display's theme, cameras (a tap opens Security).
 - **Security** (`/home-security`): cameras and Frigate reviews.
 - **Energy**: the built-in one (sources in `.storage/energy`, UI-owned).
-- **Monitoring** (`/monitoring`, admins): Grafana in a frame, at its home
+- **Monitoring** (`/home-monitoring`, admins): Grafana in a frame, at its home
   page with its own navigation, so every Grafana dashboard is reachable
   without listing it here. The URL is `HASS_GRAFANA_URL`.
 - **Wall display** (`/kitchen-display`): the tablet's kiosk.
 
 UI-owned and set over the websocket API (not in git): `default_panel` in the
-frontend system data (`frontend/set_system_data`, key `core`) is `house`; the
+frontend system data (`frontend/set_system_data`, key `core`) is `home-hub`; the
 built-in Overview (`/home`, the areas view), Map, Logbook and History are
 hidden from the sidebar (`frontend/update_panel` `show_in_sidebar: false`,
 and `lovelace/dashboards/update` for Map). They still work by URL. A user can
