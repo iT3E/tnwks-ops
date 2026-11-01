@@ -9,9 +9,11 @@
 # packages/kitchen_routines.yaml.
 #
 # kiosk-mode hides HA's header and sidebar only where the dashboard was opened
-# with ?kiosk once (it remembers that per device), i.e. on the wall display.
-# Everywhere else the header stays, so the dashboard is still editable and
-# reachable.
+# with ?kiosk, i.e. on the wall display. Everywhere else the header stays, so
+# the dashboard is still editable and reachable. On the wall display, 🎨 >
+# "Home Assistant menu" reloads it with ?disable_km (so no kiosk_mode config
+# here may set ignore_disable_km), and a "Back to kitchen" pill or 5 idle
+# minutes bring the kiosk back.
 #
 # One HA view holds everything: kitchen-pages-card draws the header, the big
 # tabs and each tab's cards as pages that stay mounted, so switching tabs is
@@ -35,7 +37,9 @@ views:
   - title: Kitchen
     path: home
     type: panel
-    background: "#111318"
+    # No view background: the cards paint the page, and HA's background follows
+    # the dashboard's dark/light mode (kitchen-cards.js sets
+    # --primary-background-color while it's on screen).
     cards:
       - type: custom:kitchen-pages-card
         padding: 16

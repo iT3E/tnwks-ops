@@ -9,6 +9,10 @@
 # theme switches itself back to default in the week after its holiday.
 # No `initial`, so the choice survives restarts.
 #
+# kitchen_mode: dark, light or auto (dark from sunset to sunrise, by sun.sun).
+# Light keeps each theme's accent on light cards. The Android status and
+# navigation bars follow it on the wall display. No `initial` either.
+#
 # kitchen_theme_answered: which holiday offers were already answered (yes or
 # no), as "<holiday>-<year>" tokens, so each one is asked once.
 input_select:
@@ -25,6 +29,13 @@ input_select:
       - halloween
       - thanksgiving
       - christmas
+  kitchen_mode:
+    name: Kitchen display dark or light
+    icon: mdi:theme-light-dark
+    options:
+      - auto
+      - dark
+      - light
 input_text:
   kitchen_theme_answered:
     name: Kitchen theme offers answered
