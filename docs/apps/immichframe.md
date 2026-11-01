@@ -33,6 +33,10 @@ GPL-3.0).
 - No progress bar, photo date, location, album, people or tag captions, and no
   weather (see below).
 
+Only the family calendar is shown: events from other Google calendars
+(holidays, for one) that the Apolosign's own widget showed aren't there. Add
+their iCal addresses to `Webcalendars` to show them.
+
 Calendar quirks (upstream, v1.0.39.0):
 
 - An all-day event shows as "Saturday, October 31 12:00 AM - Sunday,
@@ -132,10 +136,23 @@ Apolosign, Android 16, 2160x3840 portrait; driving it over ADB is in Ori's
   adb shell settings put secure screensaver_components com.immichframe.immichframe/.ScreenSaverService
   adb shell settings put secure screensaver_enabled 1
   adb shell settings get system screen_off_timeout   # 300000: dream after 5 idle minutes
-  adb shell am start -n com.android.systemui/.Somnambulator   # start the screensaver now (test)
+  adb shell dumpsys dreams | grep -m1 mCurrentDream  # which dream is running
   ```
-  A tap ends it and shows whatever was underneath (the Home Assistant
-  dashboard) without passing the tap on.
+  It starts after 5 idle minutes while the display is on power. There's no
+  shell way to start it now (`cmd dreams start-dreaming` needs root and the
+  Somnambulator shortcut does nothing on this firmware); Android's screen saver
+  settings (`adb shell am start -a android.settings.DREAM_SETTINGS`) have a
+  Preview button. A tap ends it and shows the dashboard underneath without
+  passing the tap on; from adb, send `input keyevent KEYCODE_BACK`.
+- **Apolosign calendar widget: None.** The Apolosign screensaver app
+  (`com.elclcd.screensaver`) draws its own clock and agenda over whichever
+  dream runs, as a full-screen overlay window that also swallows taps, so no
+  tap could wake the screensaver. Its General > Calendar Widget is set to
+  None (it was Standard); the Apolosign packages themselves are untouched.
+  Its settings screen:
+  ```bash
+  adb shell am start -n com.elclcd.screensaver/.view.DreamSettingActivity
+  ```
 - The app's own full-screen activity also starts a small unauthenticated
   remote-control server on port 53287 (next, previous, brightness), and it
   keeps running until that activity is destroyed. The screensaver doesn't
@@ -143,12 +160,15 @@ Apolosign, Android 16, 2160x3840 portrait; driving it over ADB is in Ori's
   `adb shell am force-stop com.immichframe.immichframe` and go back to the
   dashboard.
 
-**Restore the previous screensaver** (Google Photos, which the Apolosign's
-clock-and-agenda overlay draws over):
+**Restore the previous screensaver** (Google Photos with the Apolosign's
+clock-and-agenda overlay):
 
 ```bash
 adb shell settings put secure screensaver_components com.google.android.apps.photos/com.google.android.apps.photos.daydream.PhotosDreamService
 ```
+
+then set the Apolosign screensaver app's Calendar Widget back to Standard (a
+tap doesn't end that dream; its overlay handles taps).
 
 The ImmichFrame server can stay; scale it to zero or remove the ks from the
 WSL apps kustomization if it's no longer wanted.
