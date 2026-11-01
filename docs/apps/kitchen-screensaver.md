@@ -71,6 +71,7 @@ Immich with its own read-only credentials, so the display holds neither.
 | `/api/photos`     | The album's photos: id, size, face boxes (fractions of the photo).                                                                              |
 | `/img/<id>`       | A photo from the album (Immich's preview), nothing else.                                                                                        |
 | `/api/ping`       | The page checks in every 10 minutes; the pod log shows `ping boot=... loads=... up=... mem=... slides=...` (page loads, uptime, JS heap in MB). |
+| `/api/drop`       | Closes the connection without an answer, no secret: the page's safety reload (below).                                                           |
 | `/healthz`        | Liveness, no secret.                                                                                                                            |
 
 - **Refresh:** the page asks for `/api/info` every 3 minutes and at
@@ -88,17 +89,27 @@ Immich with its own read-only credentials, so the display holds neither.
   through the websocket (`weather/subscribe_forecast`), because the
   `weather.get_forecasts` service needs control rights the read-only user
   doesn't have.
-- **No navigation:** the ImmichFrame app's screensaver WebView sends every
-  navigation it sees (a link, a redirect, `location.href = ...`) to the
-  external browser (`shouldOverrideUrlLoading` in its
-  `ScreenSaverService.kt`). Everything after the first load is `fetch()`.
-- **Days of running:** the page reuses its DOM, frees each photo when it's
-  gone, and reloads itself (`location.reload()`) every 6 hours, at a photo
-  change and only when `/healthz` answers. A reload isn't a navigation to a
-  new URL, so the WebView keeps it rather than handing it to the browser.
-  The app itself reloads the page 5 s after any failed request
-  (`onReceivedError`), so a restart of this pod shows up as a short black
-  gap, then the page again.
+- **No navigation:** the ImmichFrame app's screensaver WebView tries to send
+  every navigation it sees (a link, a redirect, `location.href = ...`, even
+  `location.reload()`) to the external browser (`shouldOverrideUrlLoading` in
+  its `ScreenSaverService.kt`), and from the screensaver that crashes the
+  app. Everything after the first load is `fetch()`.
+- **Days of running:** the page reuses its DOM and frees each photo when
+  it's gone. Every 6 hours, at a photo change and only when `/healthz`
+  answers, it has itself loaded afresh. Not with `location.reload()`: the
+  app's WebViewClient treats a reload as a navigation too, and its attempt to
+  start the browser from the screensaver crashes the app
+  (`AndroidRuntimeException: Calling startActivity() from outside of an
+  Activity context requires the FLAG_ACTIVITY_NEW_TASK flag`, seen on the
+  display on 2026-10-31; the dream ends and the dashboard shows). Instead the
+  page loads `/api/drop`, which the service answers by closing the
+  connection. The app reloads its URL 5 s after any failed request
+  (`onReceivedError`), and that load comes from the app, so it's allowed.
+  The pod log shows `drop: the page asked for a fresh load`, then the page
+  again. In a normal browser the page uses `location.reload()`.
+- **Pod restarts:** for the same reason, a restart of this pod shows up on
+  the display as a short black gap (or the app's error page), then the page
+  again.
 
 ### Accounts and secrets
 

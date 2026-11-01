@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'kitchen-screensaver: the 6-hourly safety reload no longer uses location.reload(), which the ImmichFrame app treats as a navigation and crashes its screensaver on; the page now has the app reload it (a deliberately failed request to /api/drop). /favicon.ico answers 204.'
+time: 2026-10-31T21:50:00-07:00

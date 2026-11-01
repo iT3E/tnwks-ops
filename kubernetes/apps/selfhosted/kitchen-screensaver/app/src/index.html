@@ -27,6 +27,15 @@
   when it would cover the photo's main face, and shifts a few pixels every few
   minutes to spare the panel.
 
+  Every 6 hours the page has itself loaded afresh, in case anything in the
+  WebView grows over days. Not with location.reload(): the app's WebViewClient
+  treats that as a navigation too, and starting the browser from the
+  screensaver crashes the app. Instead the page requests /api/drop, which the
+  server answers by closing the connection; the app reacts to any failed
+  request by loading its URL again 5 s later (onReceivedError), which is a
+  load from the app's side and allowed. In a normal browser it falls back to
+  location.reload().
+
   Test knobs (query string): interval=<s> between photos, reload=<s> until
   the safety reload (default 6 h).
 -->
@@ -498,19 +507,27 @@
     setTimeout(show, Math.max(1000, (el ? INTERVAL : 30000) - (performance.now() - t0)));
   }
 
-  // A fresh page every few hours, in case anything in the WebView grows over
-  // days. location.reload() isn't a navigation to a new URL, so the app's
-  // WebViewClient doesn't send it to the browser (checked on the display).
+  // A fresh page every few hours (see the comment at the top): only when the
+  // server is up, so the reload can't land on an error page.
+  const IN_APP = /; wv\)/.test(navigator.userAgent); // an Android WebView, i.e. the ImmichFrame app
   let reloadDue = false;
   setTimeout(() => (reloadDue = true), RELOAD_MS);
   async function safetyReload() {
     try {
       const r = await fetch("/healthz", { cache: "no-store" });
-      if (r.ok) { try { localStorage.setItem("ks_reload", new Date().toISOString()); } catch (e) {} location.reload(); return; }
+      if (r.ok) {
+        try { localStorage.setItem("ks_reload", new Date().toISOString()); } catch (e) {}
+        if (!IN_APP) { location.reload(); return; }
+        const probe = new Image();
+        probe.src = `/api/drop?t=${Date.now()}`;
+        // The app loads the page again 5 s after the failure. If it hasn't
+        // within a minute, carry on and try again in an hour.
+        await wait(60000);
+      }
     } catch (e) {}
     reloadDue = false;
-    setTimeout(() => (reloadDue = true), 10 * 60000);
-    setTimeout(show, INTERVAL);
+    setTimeout(() => (reloadDue = true), 60 * 60000);
+    setTimeout(show, 1000);
   }
 
   function ping() {
