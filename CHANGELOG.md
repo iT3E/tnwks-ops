@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.59.1 - 2026-11-01
+
+### Fixed
+
+* home-assistant: robovac consumable gauges fill with their status color and read "68h 2m" (not "68h 2m h"); reset buttons are compact tiles.
+
 ## v1.59.0 - 2026-11-01
 
 ### Added
