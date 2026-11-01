@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.48.4 - 2026-11-01
+
+### Fixed
+
+* kitchen: "Home Assistant menu" and "Back to kitchen" on the wall display reload inside the HA app (homeassistant://navigate) instead of opening Chrome.
+
 ## v1.48.3 - 2026-11-01
 
 ### Fixed
