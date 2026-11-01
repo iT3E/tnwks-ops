@@ -40,6 +40,9 @@ resources:
   # Immich (photo library for the kitchen screensaver): WSL-only, its library
   # sits on local-path-bulk. See docs/apps/immich.md.
   - ../../../apps/selfhosted/immich/ks.yaml
+  # ImmichFrame (the kitchen display's screensaver), next to Immich. See
+  # docs/apps/immichframe.md.
+  - ../../../apps/selfhosted/immichframe/ks.yaml
   - ../../../apps/system-upgrade
   - ../../../apps/tools
   # Sites platform — WSL-only. The NFS server gives nginx + the GHA runner a

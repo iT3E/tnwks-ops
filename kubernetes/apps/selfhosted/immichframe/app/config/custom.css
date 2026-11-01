@@ -1,0 +1,49 @@
+/* ImmichFrame custom CSS (docs/apps/immichframe.md), served as
+   /static/custom.css. Tuned for the kitchen display: portrait, a 720x1280
+   CSS viewport (2160x3840 at 480 dpi). */
+
+/* ImageFill: upstream's photo box shrinks to the photo (place-self-center
+   with no size), so on a portrait screen a landscape photo stays a band
+   across the middle even with object-fit: cover. Make the box the whole
+   screen so the photo really fills it. */
+.immichframe_image {
+  place-self: stretch !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Today's events: upstream only shows them on screens 1024 CSS px wide and
+   up (Tailwind lg:block). Show them on the portrait display too, top right. */
+#appointments {
+  display: block !important;
+  max-width: 55% !important;
+  min-width: 40% !important;
+  margin: 1.5rem !important;
+}
+#appointments > div > div {
+  background: rgb(0 0 0 / 0.45) !important;
+  backdrop-filter: blur(8px);
+  font-size: 1.35rem;
+  line-height: 1.3;
+  padding: 0.6rem 0.9rem !important;
+}
+#appointments p.text-xs {
+  font-size: 1rem !important;
+  opacity: 0.85;
+}
+
+/* Clock bottom left, sized for a wall display seen from across the room. */
+#clock {
+  padding: 1.5rem 2rem !important;
+  text-align: left !important;
+}
+#clockdate {
+  font-size: 2rem !important;
+  font-weight: 400 !important;
+  text-shadow: 0 2px 8px rgb(0 0 0 / 0.8);
+}
+#clocktime {
+  font-size: 6.5rem !important;
+  line-height: 1 !important;
+  text-shadow: 0 3px 14px rgb(0 0 0 / 0.8);
+}
