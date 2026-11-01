@@ -10,8 +10,12 @@
 # Frigate (cameras), the kitchen display helpers (packages/kitchen_display.yaml).
 # person.adult1 / person.adult2 are the two adults' persons, renamed in the
 # entity registry (UI-owned) so no names live here; HA shows their names.
-# The robot vacuum card goes here once the Xiaomi Miio integration exists
-# (UI-owned; docs/apps/home-assistant.md).
+# Robovac: Xiaomi Miio (vacuum.roborock_vacuum_s5, added with host + token)
+# and Xiaomi Cloud Map Extractor (image.robovac_live_map, with the rooms and
+# calibration as attributes); both UI-owned. Room ids come from the map's
+# `rooms` attribute; their outlines below are its x0/y0/x1/y1 boxes.
+# Lights (LIFX), media (Google Cast, Denon, Sonos) and the Tesla Wall
+# Connector are local integrations, UI-owned except Sonos (configuration.yaml).
 title: Home
 views:
   - title: Home
@@ -92,6 +96,69 @@ views:
                 show_name: true
           - { type: tile, entity: input_select.kitchen_theme, name: Theme, features: [{ type: select-options }], grid_options: { columns: full } }
           - { type: tile, entity: input_select.kitchen_mode, name: Dark or light, features: [{ type: select-options }], grid_options: { columns: full } }
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Lights
+            icon: mdi:lightbulb-group
+          - &light { type: tile, entity: light.pool1_lifx_mini_318ee9_pump_room, features: [{ type: light-brightness }], grid_options: { columns: full } }
+          - { <<: *light, entity: light.pool1_lifx_mini_31589a_middle_left }
+          - { <<: *light, entity: light.pool1_lifx_mini_318e9a_middle_right }
+          - { <<: *light, entity: light.pool1_lifx_mini_3189f4_far_right }
+          - type: heading
+            heading: EV charger
+            icon: mdi:ev-station
+          - { type: tile, entity: sensor.tesla_wall_connector_status, name: Status }
+          - { type: tile, entity: sensor.tesla_wall_connector_total_power, name: Power }
+          - { type: tile, entity: sensor.tesla_wall_connector_session_energy, name: This session }
+          - { type: tile, entity: sensor.tesla_wall_connector_energy, name: Lifetime }
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Media
+            icon: mdi:speaker-multiple
+          - &media { type: tile, entity: media_player.denon_avr_s750h, name: Receiver, features: [{ type: media-player-volume-slider }], grid_options: { columns: full } }
+          - { <<: *media, entity: media_player.living_room_tv_2, name: Living room TV }
+          - { <<: *media, entity: media_player.kitchen_speaker, name: Kitchen speaker }
+          - { <<: *media, entity: media_player.kitchen_display, name: Kitchen display }
+
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Robovac
+            icon: mdi:robot-vacuum
+            badges:
+              - type: entity
+                entity: sensor.roborock_vacuum_s5_battery
+                name: Battery
+                show_name: false
+          - type: custom:xiaomi-vacuum-map-card
+            entity: vacuum.roborock_vacuum_s5
+            vacuum_platform: default
+            map_source: { camera: image.robovac_live_map }
+            calibration_source: { camera: true }
+            map_locked: true
+            two_finger_pan: true
+            # Tap rooms, then Start: app_segment_clean with their ids.
+            map_modes:
+              - template: vacuum_clean_segment
+                predefined_selections:
+                  - { id: "17", outline: [[22050, 28450], [30400, 28450], [30400, 34800], [22050, 34800]], label: { text: "Room 17", x: 26225, y: 31625, offset_y: 30 }, icon: { name: "mdi:broom", x: 26225, y: 31625 } }
+                  - { id: "18", outline: [[19150, 24750], [28700, 24750], [28700, 29250], [19150, 29250]], label: { text: "Room 18", x: 23925, y: 27000, offset_y: 30 }, icon: { name: "mdi:broom", x: 23925, y: 27000 } }
+                  - { id: "16", outline: [[18100, 11950], [29000, 11950], [29000, 24950], [18100, 24950]], label: { text: "Room 16", x: 23550, y: 18450, offset_y: 30 }, icon: { name: "mdi:broom", x: 23550, y: 18450 } }
+              - template: vacuum_clean_zone
+              - template: vacuum_goto
+            grid_options: { columns: full }
+          - type: tile
+            entity: vacuum.roborock_vacuum_s5
+            name: Robovac
+            features:
+              - type: vacuum-commands
+                commands: [start_pause, stop, return_home, locate]
+            grid_options: { columns: full }
 
       - type: grid
         column_span: 3
