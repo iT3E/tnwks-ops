@@ -282,7 +282,7 @@ browser). Open it with `?clear_km_cache` to clear that cache. The dashboard's ow
 (its user agent contains "Apolosign"; `WALL_UA` in kitchen-cards.js matches
 the same), so after a restart or from the sidebar it's a kiosk again without
 `?kiosk`. To reach the rest of HA from the tablet, tap **Home Assistant** at
-the right of the tab bar: it goes to Overview inside the app (no reload), with
+the right of the tab bar: it goes to Home (`/home-hub`) inside the app (no reload), with
 the header and sidebar. **Wall display** in the sidebar, or 5 minutes
 untouched, brings the kiosk back: an HA app that has shown the dashboard in
 kiosk mode remembers it (localStorage `tnwks-kitchen-kiosk`, cleared by
