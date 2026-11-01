@@ -209,6 +209,13 @@ class HTTP(unittest.TestCase):
     def test_health_is_open(self):
         self.assertEqual(self.req("/healthz")[0], 200)
 
+    def test_favicon_and_drop_need_no_secret(self):
+        self.assertEqual(self.req("/favicon.ico")[0], 204)
+        # /api/drop answers nothing: the connection just closes.
+        import http.client
+        with self.assertRaises((http.client.RemoteDisconnected, ConnectionError, urllib.error.URLError)):
+            self.req("/api/drop?t=1")
+
     def test_page_needs_secret(self):
         s, _, body = self.req("/")
         self.assertEqual(s, 401)

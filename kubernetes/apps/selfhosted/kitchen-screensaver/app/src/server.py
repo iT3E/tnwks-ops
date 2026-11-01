@@ -12,6 +12,7 @@ the display holds neither.
     GET  /api/photos       the album's photos: id, size, face boxes
     GET  /img/<id>         a photo, Immich's screen-sized preview (or ?size=thumbnail)
     GET  /api/ping         the page checks in (logged: loads, uptime, memory)
+    GET  /api/drop         no response at all, no secret (the page's safety reload, see index.html)
     GET  /healthz          liveness, no secret
 
 Everything but /healthz needs the auth secret, as ?authsecret=<secret> (how
@@ -588,6 +589,17 @@ def make_handler(app):
             path = u.path
             if path == "/healthz":
                 return self._send(200, b"ok")
+            if path == "/favicon.ico":
+                return self._send(204)
+            if path == "/api/drop":
+                # Close the connection without an answer. Inside the ImmichFrame app
+                # that failed request makes the app load the page again 5 s later
+                # (its WebViewClient.onReceivedError); the page's own
+                # location.reload() would be a navigation, which crashes the app's
+                # screensaver.
+                log.info("drop: the page asked for a fresh load")
+                self.close_connection = True
+                return None
             if not app.authorized(self.headers, q):
                 if path == "/":
                     return self._send(401, b"<!doctype html><title>Kitchen screensaver</title>"
