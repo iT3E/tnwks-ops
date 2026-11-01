@@ -1,0 +1,3 @@
+kind: Added
+body: 'kitchen: the dashboard is now "Wall display", kiosk only on the tablet (by user agent, no ?kiosk needed), a Home Assistant button in the tab bar, Home cards tap through to their pages, event details on tap, and Open in Mealie for meals and the Meals tab. Cards 1.7.0.'
+time: 2026-11-01T11:00:00-08:00

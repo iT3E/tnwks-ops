@@ -242,18 +242,27 @@ A tap ends it and shows the dashboard again.
 
 kiosk-mode hides HA's header and sidebar on a page opened with `?kiosk` (the
 tabs keep it in the URL; with `&cache` kiosk-mode also remembers it in that
-browser). Open it with `?clear_km_cache` to clear that cache. To reach HA's
-menu on the wall display, open 🎨 next to the tabs and tap **Home Assistant
-menu**: it reloads the dashboard with `?disable_km` (kiosk-mode's off switch
-for one page load; nothing may set `ignore_disable_km`), so the header and
-sidebar come back. A **Back to kitchen** pill at the bottom reloads it without
-that. Inside the Android HA app both reload through the app's own
-`homeassistant://navigate/...` link, because a plain page reload there opened
-Chrome instead of staying in the app. An HA app that has shown the dashboard in kiosk mode remembers it
-(localStorage `tnwks-kitchen-kiosk`, cleared by `?clear_km_cache`), and after
-5 minutes untouched it goes back to the kiosk dashboard by itself, also from
-another HA page. Phones and browsers without `?kiosk` get neither the button
-nor the pill.
+browser). Open it with `?clear_km_cache` to clear that cache. The dashboard's own `kiosk_mode` turns kiosk on in the tablet's browser only
+(its user agent contains "Apolosign"; `WALL_UA` in kitchen-cards.js matches
+the same), so after a restart or from the sidebar it's a kiosk again without
+`?kiosk`. To reach the rest of HA from the tablet, tap **Home Assistant** at
+the right of the tab bar: it goes to Overview inside the app (no reload), with
+the header and sidebar. **Wall display** in the sidebar, or 5 minutes
+untouched, brings the kiosk back: an HA app that has shown the dashboard in
+kiosk mode remembers it (localStorage `tnwks-kitchen-kiosk`, cleared by
+`?clear_km_cache`) and returns to it from any HA page. `?disable_km` still
+shows HA's menu on the dashboard itself, with a **Back to kitchen** pill
+(inside the Android app that reload goes through `homeassistant://navigate/...`,
+because a plain reload there opened Chrome).
+
+Taps on the Home page: a card with `tap_page` goes to that page when tapped
+outside its own buttons (kids to Routines, Dinner to Meals, Groceries and
+Notes to Lists, Today and Coming up to Calendar). Any event, on any page,
+opens its details (time, place with Directions, who, description). A planned
+meal adds **Open in Mealie**, which opens the recipe (slug from
+`mealie.get_mealplan`; `mealie.entry` in the card config is the Mealie config
+entry id), and the Meals tab has **Open Mealie** for the planner. Links leave
+the HA app through Android, so with the Mealie PWA installed they open there.
 
 Theme and mode are per device. The wall display (the HA app that has shown
 the dashboard in kiosk mode, localStorage `tnwks-kitchen-kiosk`) sets the house
