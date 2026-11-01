@@ -188,7 +188,21 @@ spec:
             - name: "DS_PROMETHEUS"
               value: Prometheus
 
+    # Grafana's own data (users, preferences, alert state, UI-made
+    # dashboards) lives in Postgres on the CNPG cluster, like HA's and
+    # Mealie's. Metrics stay in Prometheus/Loki/Tempo. The old SQLite file is
+    # still on the PVC (data/grafana.db) as a rollback: drop this section and
+    # Grafana goes back to it.
+    envFromSecrets:
+      - name: grafana-database
     grafana.ini:
+      database:
+        type: postgres
+        host: postgres-rw.databases.svc.cluster.local:5432
+        name: grafana
+        ssl_mode: require
+        # user/password: GF_DATABASE_USER / GF_DATABASE_PASSWORD from
+        # grafana-database (secret-database.sops.yaml).
       analytics:
         check_for_updates: false
         check_for_plugin_updates: false
