@@ -29,6 +29,9 @@
 #   todo.things_to_do, todo.someday, todo.notes
 #                         extra Local To-do lists (UI-owned); todo.shopping_list
 #                         (Groceries) is the Shopping List integration
+#   camera.album_slideshow_kitchen_screensaver
+#                         the screensaver's photos (Album Slideshow integration,
+#                         UI-owned); without it the screensaver is just the box
 title: Kitchen
 
 views:
@@ -40,6 +43,17 @@ views:
       - type: custom:kitchen-pages-card
         padding: 16
         idle_home: 5
+        # After `after` minutes untouched, the photo slideshow covers the
+        # display (the album_slideshow integration's camera, UI-owned) with
+        # the time, the date, the weather and the rest of today's calendar
+        # in a box bottom-left. A tap dismisses it and lands on Home.
+        # `screensaver: false` turns it off.
+        screensaver:
+          after: 5
+          camera: camera.album_slideshow_kitchen_screensaver
+          calendars: [calendar.family]
+          weather: weather.forecast_home
+          max_events: 5
         pages:
           - path: home
             title: Home

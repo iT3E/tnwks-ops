@@ -68,6 +68,9 @@ spec:
               ADVANCED_CAMERA_CARD_VERSION: v8.1.0
               # renovate: datasource=github-releases depName=NemesisRE/kiosk-mode
               KIOSK_MODE_VERSION: v15.0.0
+              # The kitchen screensaver's photos (Immich album -> camera).
+              # renovate: datasource=github-releases depName=eyalgal/album_slideshow
+              ALBUM_SLIDESHOW_VERSION: v1.16.0
             securityContext: &securityContext
               allowPrivilegeEscalation: false
               capabilities: { drop: ["ALL"] }

@@ -98,7 +98,7 @@ that touches anything else (including a new config file, since that edits
 `kustomization.yaml`) needs one as usual.
 
 Renovate bumps the image and the pinned add-ons (`hass-oidc-auth`, the
-Frigate integration, the Advanced Camera Card, kiosk-mode). The same check runs on those
+Frigate integration, the Advanced Camera Card, kiosk-mode, Album Slideshow). The same check runs on those
 PRs, which catches HA's frequent renames of trigger and condition keys.
 
 ## First-time setup
@@ -281,6 +281,61 @@ compare their own `?v=` with the resource URL HA serves (`lovelace/resources`,
 on load, on every reconnect and every 15 minutes) and reload the page when they
 differ, at most once every 10 minutes. That only works if the `?v=` changes
 with the file.
+
+### Screensaver
+
+After 5 minutes untouched (`screensaver.after` on `kitchen-pages-card` in
+`dashboards/kitchen.yaml`; `screensaver: false` turns it off) the display
+shows photos full screen, with a small box bottom-left: the time, the date,
+the weather and what's left of today on `calendar.family` (up to
+`max_events`, 5). The box takes the holiday theme's colors and drifts a few
+dozen pixels every minute and a half, against burn-in. A tap anywhere only
+dismisses it (nothing under the finger gets pressed) and lands on Home. With
+reduced motion on, photos switch without a fade and the box jumps instead of
+drifting.
+
+The photos are the Immich album **Kitchen screensaver** (see
+[immich.md](immich.md)), which an hourly job fills from the Google Photos
+shared albums on Home Assistant's **Screensaver albums** list
+(`todo.screensaver_albums`). To add an album, add its share link to that
+list in HA's To-do lists panel (the HA app on a phone is the easy place to
+paste one); to drop an album, check it off. New photos reach Immich within
+the hour, and the slideshow picks them up at its next album refresh (once a
+day, or now with **Refresh album** on its device page).
+
+Home Assistant reads the album with the
+[Album Slideshow](https://github.com/eyalgal/album_slideshow) custom
+integration (pinned in `helmrelease.yaml`, installed by `prepare-config.sh`).
+It renders each slide on the server, sized and cropped for the panel, and
+exposes it as `camera.album_slideshow_kitchen_screensaver`. It also ships the
+card that draws it (`album-slideshow-card`, registered by the integration, no
+resource needed); `kitchen-cards.js` puts that card under the box and lays a
+true crossfade over its fade. Without the camera the screensaver is just the
+box on the theme's background.
+
+The integration's config entry is UI-owned (Settings > Devices & services >
+Album Slideshow), so it isn't in git:
+
+| Setting               | Value                                                            | Why                                                                                                                         |
+| --------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Provider              | Immich, `http://immich-server.selfhosted.svc.cluster.local:2283` | in-cluster, no ingress or login                                                                                             |
+| API key               | Immich's `home-assistant album_slideshow (read-only)` key        | read scopes only ([immich.md](immich.md#accounts-and-keys))                                                                 |
+| Albums                | Kitchen screensaver only                                         | the combined album the sync fills                                                                                           |
+| Image size            | Full size                                                        | Immich's preview is 1440 px on the short side, too small for 2160x3840; full size renders in about 0.5 s (1.4 s for a pair) |
+| Videos, Live Photos   | off                                                              | the sync copies photos only                                                                                                 |
+| Aspect ratio          | 9:16                                                             | the panel, portrait                                                                                                         |
+| Max resolution        | 4K (2160p)                                                       | the panel's physical pixels                                                                                                 |
+| Fill mode             | Cover                                                            | crops to the panel, keeping Immich's detected faces in frame                                                                |
+| Orientation mismatch  | Pair                                                             | two landscape photos stacked, instead of cropping one to a third of its width                                               |
+| Pair minimum gap      | 10 %                                                             | pairs photos at least ~12 apart, not two shots of the same moment                                                           |
+| Pair divider          | 6 px, `#111318`                                                  | the dashboard's background color                                                                                            |
+| Order, slide interval | Random, 30 s                                                     |                                                                                                                             |
+| Pause when not viewed | on                                                               | the slideshow holds (no downloads or renders) a minute after the screensaver closes                                         |
+
+Everything below Videos is one of the integration's entities on that device,
+so it can be changed live. To hide a photo from the slideshow without
+touching Immich or Google, press **Hide current photo** on the device page
+while it's on screen.
 
 ## Break-glass
 

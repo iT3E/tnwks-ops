@@ -4,7 +4,8 @@ Self-hosted photo library at `https://immich.internal.tnwks.us` (LAN and
 admin VPN only, `nginx-internal`). Its first job is holding the photos the
 kitchen screensaver shows: an hourly job mirrors the Google Photos shared
 albums listed in Home Assistant into Immich, and Home Assistant's slideshow
-reads them back through a read-only API key.
+reads them back through a read-only API key (home-assistant.md,
+[Screensaver](home-assistant.md#screensaver)).
 
 Manifests: `kubernetes/apps/selfhosted/immich/`. WSL-only (wired from
 `kubernetes/clusters/wsl/apps/kustomization.yaml`), version

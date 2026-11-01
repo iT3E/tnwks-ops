@@ -1,0 +1,3 @@
+kind: Added
+body: Kitchen display photo screensaver. After 5 idle minutes the display shows the Immich "Kitchen screensaver" album full screen through the pinned Album Slideshow integration, with the time, date, weather and the rest of today's calendar in a small theme-tinted box; a tap dismisses it and lands on Home.
+time: 2026-10-31T19:00:00-07:00

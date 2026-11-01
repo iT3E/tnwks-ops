@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.3.1";
+const VERSION = "1.4.0";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -2169,7 +2169,8 @@ class StackCard extends HTMLElement {
 // re-subscribes or refetches, and cards on hidden pages skip their renders
 // until they're shown (KitchenCard._renderNow). The page is kept in the URL
 // hash (#calendar), and the display goes back to Home after `idle_home`
-// minutes (default 5) without a touch.
+// minutes (default 5) without a touch. After `screensaver.after` minutes
+// (default 5) it shows the photo screensaver (see "screensaver" below).
 class PagesCard extends HTMLElement {
   constructor() {
     super();
@@ -2232,6 +2233,32 @@ class PagesCard extends HTMLElement {
       const home = (c.pages || [])[0]?.path;
       if (home && this._cur !== home && Date.now() - this._touched > (c.idle_home ?? 5) * 60000) this.show(home);
     }, 30000);
+    this._screensaver(c);
+  }
+  // Idle time is measured on the monotonic clock, so a wall-clock jump (NTP) can't start or skip it.
+  _screensaver(c) {
+    clearInterval(this._saverTick);
+    if (c.screensaver === false) return this._saver?._hide();
+    const cfg = { after: 5, ...(c.screensaver || {}) };
+    this._input = performance.now();
+    if (!this._onInput) {
+      this._onInput = () => (this._input = performance.now());
+      for (const t of ["pointerdown", "keydown", "wheel"]) window.addEventListener(t, this._onInput, { capture: true, passive: true });
+    }
+    this._saver = this._saver || document.createElement("kitchen-screensaver");
+    this._saver.configure(cfg, () => {
+      this._touched = Date.now();
+      const home = (c.pages || [])[0]?.path;
+      if (home) this.show(home);
+    });
+    const ms = Number(cfg.after) * 60000;
+    this._saverTick = setInterval(() => {
+      if (this._saver.on || !this.isConnected || document.visibilityState === "hidden") return;
+      if (performance.now() - this._input >= ms) {
+        this._saver.hass = this._hass;
+        this._saver.show();
+      }
+    }, Math.min(15000, Math.max(500, ms / 4)));
   }
   _fromHash() {
     const h = decodeURIComponent(location.hash.slice(1));
@@ -2294,9 +2321,218 @@ class PagesCard extends HTMLElement {
     Theme.apply(h);
     if (this._header) this._header.hass = h;
     for (const el of Object.values(this._built)) el.hass = h;
+    if (this._saver?.on) this._saver.hass = h;
   }
   getCardSize() {
     return 20;
+  }
+}
+
+// ----------------------------------------------------------- screensaver
+
+// After `screensaver.after` minutes without a touch (default 5), the pages
+// card covers the display with the photo slideshow: the album_slideshow
+// integration's camera, drawn by that integration's own card
+// (album-slideshow-card, which it registers in the frontend itself; it does
+// the crossfades, preloads each photo before showing it and checks in so
+// "Pause when not viewed" holds the slideshow while nobody's looking). A small
+// box bottom-left shows the time, the date, the weather and what's left of
+// today's calendar, tinted by the theme, and drifts a little every minute or
+// so to spare the panel. The first tap anywhere only dismisses it and lands
+// on Home: the layer stays on top until that finger lifts and swallows the
+// click, so nothing underneath gets pressed. Without the camera (or before
+// its card has loaded) it's the box on the theme's background.
+const SAVER_CAMERA = "camera.album_slideshow_kitchen_screensaver";
+const SAVER_CSS = `
+  :host { position:fixed; inset:0; z-index:9700; display:block; background:#000; opacity:0; transition:opacity .9s ease;
+    touch-action:none; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent;
+    --ha-card-border-radius:0; --ha-card-border-width:0; --ha-card-box-shadow:none; --ha-card-background:#000; }
+  :host(.on) { opacity:1; }
+  :host(.out) { opacity:0; transition:opacity .35s ease; }
+  .photo { position:absolute; inset:0; overflow:hidden; pointer-events:none; isolation:isolate; }
+  .photo > * { display:block; width:100%; }
+  .plain { position:absolute; inset:0; background:radial-gradient(120% 80% at 20% 100%, var(--card2), var(--bg) 70%); }
+  .box { position:absolute; z-index:1; left:24px; bottom:24px; width:max-content; min-width:280px; max-width:calc(100vw - 96px); padding:16px 20px 14px;
+    border-radius:26px; color:#fff; pointer-events:none; will-change:transform; transition:transform 60s ease-in-out;
+    background:color-mix(in srgb, var(--bg) 52%, transparent); border:1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    -webkit-backdrop-filter:blur(18px) saturate(1.2); backdrop-filter:blur(18px) saturate(1.2); box-shadow:0 10px 40px rgba(0,0,0,.35);
+    text-shadow:0 1px 3px rgba(0,0,0,.35); }
+  .time { font-size:80px; line-height:.92; letter-spacing:-.035em; font-variant-numeric:tabular-nums; }
+  .time small { font-size:26px; letter-spacing:0; margin-left:8px; color:rgba(255,255,255,.78); }
+  .date { font-size:22px; margin-top:8px; display:flex; align-items:center; gap:10px; white-space:nowrap; }
+  .date .wx { color:rgba(255,255,255,.8); }
+  .evs { margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,.16); }
+  .ev { display:flex; gap:12px; align-items:baseline; font-size:18px; line-height:1.45; min-width:0; }
+  .ev .t { flex:none; min-width:72px; color:var(--accent); font-weight:500; font-variant-numeric:tabular-nums; }
+  .ev .n { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; max-width:400px; }
+  .ev.now .t::before { content:""; display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); margin-right:7px; vertical-align:2px; }
+  .none, .more { font-size:16px; color:rgba(255,255,255,.75); line-height:1.45; }
+  @media (prefers-reduced-motion: reduce) { :host, :host(.out), .box { transition:none !important; } }
+`;
+class Screensaver extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this.shadowRoot.innerHTML = `<style>${BASE_CSS}${SAVER_CSS}</style><div class="photo"></div><div class="box"></div>`;
+    this._photoHost = this.shadowRoot.querySelector(".photo");
+    this._box = this.shadowRoot.querySelector(".box");
+    // Everything that reaches the layer stops here: it's on top of the whole page, so nothing below sees the tap.
+    for (const t of ["pointerdown", "pointerup", "pointercancel", "mousedown", "mouseup", "click", "dblclick", "contextmenu", "touchstart", "touchend"]) {
+      this.addEventListener(t, (e) => this._swallow(e), { passive: false });
+    }
+    this._onTheme = () => this.on && this._render();
+  }
+  configure(cfg, onWake) {
+    this.cfg = cfg;
+    this._onWake = onWake;
+  }
+  set hass(h) {
+    this._hass = h;
+    // hass changes several times a second; the slideshow only needs its camera's frame_id.
+    if (this._card && !this._passT) this._passT = setTimeout(() => {
+      this._passT = null;
+      if (this._card) this._card.hass = this._hass;
+    }, 300);
+  }
+  get on() {
+    return !!this._shownAt;
+  }
+  show() {
+    if (this.on || !this._hass) return;
+    this._shownAt = Date.now();
+    this.classList.remove("out", "on");
+    document.body.appendChild(this);
+    this._photo();
+    this._evAt = 0;
+    this._render();
+    this._drift(true);
+    clearInterval(this._tick);
+    this._tick = setInterval(() => this._render(), 10000);
+    window.addEventListener("kitchen-theme", this._onTheme);
+    requestAnimationFrame(() => requestAnimationFrame(() => this.classList.add("on")));
+  }
+  _photo() {
+    const cam = this.cfg.camera || SAVER_CAMERA;
+    const ready = this._hass.states[cam] && customElements.get("album-slideshow-card");
+    if (!ready) {
+      if (!this._photoHost.firstChild) this._photoHost.innerHTML = `<div class="plain"></div>`;
+      // The integration registers its card a moment after the page loads; switch over once it has.
+      if (this._hass.states[cam] && !this._waiting) {
+        this._waiting = true;
+        customElements.whenDefined("album-slideshow-card").then(() => {
+          this._waiting = false;
+          if (this.on) this._photo();
+        });
+      }
+      return;
+    }
+    if (!this._card) this._card = document.createElement("album-slideshow-card");
+    // The card keeps the screen's aspect ratio, so the camera's 9:16 frames fill the portrait panel exactly.
+    const key = `${cam}|${innerWidth}/${innerHeight}|${REDUCED()}`;
+    if (this._cardKey !== key) {
+      this._cardKey = key;
+      this._card.setConfig({
+        type: "custom:album-slideshow-card", entity: cam, transition: REDUCED() ? "none" : "fade", duration: 1500, easing: "ease-in-out",
+        aspect_ratio: `${innerWidth}/${innerHeight}`, fit: "auto", background: "#000", tap_action: "none", tap_pause_seconds: 0,
+        videos: false, photo_controls: "off", captions: [],
+      });
+    }
+    this._card.hass = this._hass;
+    if (this._card.parentNode !== this._photoHost) this._photoHost.replaceChildren(this._card);
+    this._crossfade();
+  }
+  // The card's fade takes the old photo out while the new one comes in, so half-way through the panel is
+  // a quarter darker. Keep the old one opaque under the new one instead (a true crossfade). Its layers are
+  // internal: if a later version renames them, this matches nothing and the card's own fade stays.
+  _crossfade() {
+    const sr = this._card.shadowRoot;
+    if (!sr || sr.querySelector("style[data-tnwks]")) return;
+    const st = document.createElement("style");
+    st.dataset.tnwks = "";
+    st.textContent = ".layer.t-fade.show { z-index:2; } .layer.t-fade.exit { z-index:1; opacity:1; }";
+    sr.appendChild(st);
+  }
+  _swallow(e) {
+    e.stopPropagation();
+    if (e.cancelable) e.preventDefault();
+    if (!this.on) return;
+    if (e.type === "pointerdown" || e.type === "touchstart" || e.type === "mousedown") this._wake();
+    if (this._leaving && (e.type === "pointerup" || e.type === "pointercancel" || e.type === "touchend")) this._lifted();
+  }
+  _wake() {
+    if (this._leaving) return;
+    this._leaving = true;
+    this._onWake?.();
+    this.classList.add("out");
+    this.classList.remove("on");
+    // In case the lift never reaches us (the finger slid off the screen).
+    this._safety = setTimeout(() => this._hide(), 5000);
+  }
+  // The click that follows the lift lands on the layer too; leave once it's had time to arrive.
+  _lifted() {
+    clearTimeout(this._lift);
+    this._lift = setTimeout(() => this._hide(), 450);
+  }
+  _hide() {
+    clearTimeout(this._safety);
+    clearTimeout(this._lift);
+    clearInterval(this._tick);
+    clearTimeout(this._driftT);
+    clearTimeout(this._passT);
+    this._passT = null;
+    window.removeEventListener("kitchen-theme", this._onTheme);
+    this._shownAt = 0;
+    this._leaving = false;
+    // Off the page, the card stops checking in, and the integration holds the slideshow after a minute.
+    this._card?.remove();
+    this.remove();
+  }
+  // A new spot for the box every 90 s, eased over a minute (with reduced motion: a jump every 5 minutes).
+  _drift(first) {
+    clearTimeout(this._driftT);
+    const reduced = REDUCED();
+    const x = Math.round(Math.random() * 44);
+    const y = -Math.round(Math.random() * 56);
+    if (first) this._box.style.transition = "none";
+    this._box.style.transform = `translate(${x}px, ${y}px)`;
+    if (first) requestAnimationFrame(() => (this._box.style.transition = ""));
+    this._driftT = setTimeout(() => this.on && this._drift(), reduced ? 300000 : 90000);
+  }
+  _render() {
+    if (!this.on) return;
+    const now = new Date();
+    const cals = this.cfg.calendars || ["calendar.family"];
+    if (Date.now() - (this._evAt || 0) > 5 * 60 * 1000 || this._evDay !== now.toDateString()) {
+      this._evAt = Date.now();
+      this._evDay = now.toDateString();
+      const s = startOfDay(now);
+      fetchEvents(this._hass, cals, s, addDays(s, 1)).then((evs) => {
+        this._events = evs;
+        this._render();
+      });
+    }
+    let h = now.getHours();
+    const ap = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+    const w = this._hass.states[this.cfg.weather || "weather.forecast_home"];
+    const wx = w && Number.isFinite(Number(w.attributes.temperature))
+      ? `<span class="wx">· ${WEATHER_ICON[w.state] || ""} ${Math.round(w.attributes.temperature)}°</span>` : "";
+    const th = Theme.key !== "default" ? Theme.current().emoji : "";
+    const date = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+    let evs = "";
+    if (cals.some((c) => this._hass.states[c])) {
+      const left = (this._events || []).filter((e) => e.allDay || e.end > now);
+      const max = this.cfg.max_events ?? 5;
+      const rows = left.slice(0, max).map((e) => {
+        const live = !e.allDay && e.start <= now;
+        const t = e.allDay ? "All day" : live ? "Now" : fmtTime(e.start);
+        return `<div class="ev ${live ? "now" : ""}" data-k="${esc(`${e.calendar}|${e.title}|${+e.start}`)}"><span class="t">${t}</span><span class="n">${esc(e.title)}</span></div>`;
+      }).join("");
+      const more = left.length > max ? `<div class="more">+${left.length - max} more today</div>` : "";
+      evs = `<div class="evs">${this._events ? rows || `<div class="none">Nothing else today</div>` : ""}${more}</div>`;
+    }
+    morph(this._box, `<div class="time">${h}:${String(now.getMinutes()).padStart(2, "0")}<small>${ap}</small></div>
+      <div class="date">${esc(date)}${th ? ` <span>${th}</span>` : ""} ${wx}</div>${evs}`);
   }
 }
 
@@ -2382,4 +2618,5 @@ for (const [tag, [cls, name, description]] of Object.entries(CARDS)) {
   if (!customElements.get(tag)) customElements.define(tag, cls);
   window.customCards.push({ type: tag, name, description });
 }
+if (!customElements.get("kitchen-screensaver")) customElements.define("kitchen-screensaver", Screensaver);
 console.info(`%c tnwks kitchen cards ${VERSION} `, "background:#ff9f43;color:#1b1206;border-radius:4px");

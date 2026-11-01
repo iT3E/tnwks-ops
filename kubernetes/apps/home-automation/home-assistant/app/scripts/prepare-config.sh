@@ -10,6 +10,7 @@
 #   FRIGATE_INTEGRATION_VERSION   blakeblackshear/frigate-hass-integration
 #   ADVANCED_CAMERA_CARD_VERSION  dermotduffy/advanced-camera-card
 #   KIOSK_MODE_VERSION            NemesisRE/kiosk-mode
+#   ALBUM_SLIDESHOW_VERSION       eyalgal/album_slideshow
 #
 # Each install records its version in a .tnwks-version file and is skipped
 # when that already matches, so a plain restart needs no network.
@@ -75,4 +76,11 @@ install advanced-camera-card "${ADVANCED_CAMERA_CARD_VERSION}" \
 install kiosk-mode "${KIOSK_MODE_VERSION}" \
     "${config}/www/kiosk-mode" \
     "https://github.com/NemesisRE/kiosk-mode/releases/download/${KIOSK_MODE_VERSION}/kiosk-mode.js" \
+    .
+
+# The release zip is the integration folder itself (its card is in www/ and
+# registers itself with the frontend).
+install album_slideshow "${ALBUM_SLIDESHOW_VERSION}" \
+    "${config}/custom_components/album_slideshow" \
+    "https://github.com/eyalgal/album_slideshow/releases/download/${ALBUM_SLIDESHOW_VERSION}/album_slideshow.zip" \
     .
