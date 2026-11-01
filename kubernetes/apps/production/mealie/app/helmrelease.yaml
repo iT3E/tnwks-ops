@@ -41,6 +41,13 @@ spec:
                 value: "${TIMEZONE}"
               - name: ALLOW_SIGNUP
                 value: "false"
+              # Sessions last TOKEN_TIME hours and slide while used. The
+              # kitchen wall display signs in once as the local `kitchen`
+              # user (password login; Cognito's login page refuses to load
+              # in HA's frame), so 48h (the default) would sign it out after
+              # a quiet weekend.
+              - name: TOKEN_TIME
+                value: "720"
               - name: BASE_URL
                 value: "https://recipes.${SECRET_DOMAIN}"
               - name: DB_ENGINE

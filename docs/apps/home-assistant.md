@@ -320,7 +320,12 @@ meal adds **Open in Mealie**, which opens the recipe (slug from
 `mealie.get_mealplan`; `mealie.entry` in the card config is the Mealie config
 entry id), and the Meals tab has **Open Mealie** for the planner. On the
 tablet Mealie opens full screen inside the kiosk, in a frame with Recipes and
-Close buttons (the tablet's launcher, the Apolosign calendar app, can't pin
+Close buttons, signed in as Mealie's local `kitchen` user (household
+Family, can organize; password in Ori's credentials store, not in git), because
+"Login with tnwks" sends the frame to Cognito, whose login page refuses to
+load in a frame. Mealie's `TOKEN_TIME` is 720 hours so that session survives
+quiet weeks; if it lapses, sign in again with that user (the tablet's
+launcher, the Apolosign calendar app, can't pin
 shortcuts, so Chrome offers no PWA install there, and Chrome would take the
 screen from the kiosk). Elsewhere links leave HA, so an installed Mealie PWA
 on a phone catches them.
