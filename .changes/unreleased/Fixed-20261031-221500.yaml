@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'kitchen-screensaver: the page''s test knobs (interval, reload) only apply together with test=1, so a test URL left in the display''s app can''t keep it reloading.'
+time: 2026-10-31T22:15:00-07:00

@@ -199,8 +199,9 @@ with the credentials from `kitchen-screensaver.env` and
 `http://localhost:8765/?authsecret=<secret>` at a 720x1280 viewport
 (Playwright: intercept `/api/info` and `/api/photos` to try themes,
 calendars and photo mixes; `page.clock.set_fixed_time` for a date).
-`?interval=<s>` shortens the time between photos and `?reload=<s>` the time
-until the safety reload.
+With `test=1` in the query string, `interval=<s>` shortens the time between
+photos and `reload=<s>` the time until the safety reload; without it both are
+ignored, so a test URL left in the app can't keep the display reloading.
 
 ## Troubleshooting
 
