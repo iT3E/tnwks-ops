@@ -107,8 +107,10 @@ Immich with its own read-only credentials, so the display holds neither.
   that (`onReceivedError`), and that load comes from the app, so it's
   allowed. A dropped connection at this service doesn't work: the ingress
   answers it with a 502, and HTTP errors don't count. After a safety reload
-  the next `ping` line in the pod log carries `via=port` or `via=dns`. In a
-  normal browser the page uses `location.reload()`.
+  the next `ping` line in the pod log carries `via=port` or `via=dns`
+  (checked on the display on 2026-10-31 with `test=1&reload=60`: a fresh
+  load with `via=port` every minute or so, the screensaver kept running). In
+  a normal browser the page uses `location.reload()`.
 - **Pod restarts:** for the same reason, a restart of this pod shows up on
   the display as a short black gap (or the app's error page), then the page
   again.
@@ -204,6 +206,13 @@ photos and `reload=<s>` the time until the safety reload; without it both are
 ignored, so a test URL left in the app can't keep the display reloading.
 
 ## Troubleshooting
+
+- **The display is dark and off the network after a screensaver test:** a
+  crash of the app's screensaver (any navigation in the page does it, see
+  "No navigation") ends the dream with the idle timeout long past, so the
+  display goes straight to sleep, and asleep it drops off Wi-Fi (no ping, no
+  adb). A touch or the power button brings it back; adb's wireless port can
+  be a different one afterwards.
 
 - **Display shows ImmichFrame's error page or "Unauthorized":** the app's
   secret doesn't match `AUTH_SECRET`, or the host doesn't resolve from the
