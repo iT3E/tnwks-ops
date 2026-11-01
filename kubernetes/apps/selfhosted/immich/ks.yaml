@@ -1,0 +1,26 @@
+---
+# Immich: self-hosted photo library. Its first job is holding the photos the
+# kitchen screensaver shows (docs/apps/immich.md). WSL-only for now: it's
+# wired from kubernetes/clusters/wsl/apps/kustomization.yaml rather than the
+# shared selfhosted group, because the library sits on local-path-bulk.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: immich
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/selfhosted/immich/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  # The database password, the Valkey password and the OAuth client secret
+  # ship as a SOPS-encrypted Secret.
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  wait: false # no flux ks dependents
+  interval: 30m
+  retryInterval: 1m
+  timeout: 10m

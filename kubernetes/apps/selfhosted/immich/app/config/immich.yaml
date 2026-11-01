@@ -1,0 +1,68 @@
+# Immich system config (IMMICH_CONFIG_FILE). Anything left out keeps
+# Immich's default. While this file is in use, the admin settings page is
+# read-only: change settings here, not in the UI.
+#
+# The __OAUTH_*__ placeholders are filled in from
+# immich-secret by the render-config init container at pod start, so the
+# secret never sits in this ConfigMap.
+server:
+  externalDomain: "https://immich.${INTERNAL_DOMAIN}"
+  # Hide the user list from the share dialog's search for non-admins.
+  publicUsers: false
+oauth:
+  # tnwks-auth (Cognito), app client `immich`
+  # (infrastructure/terraform/modules/aws/cognito.tf).
+  enabled: true
+  issuerUrl: "__OAUTH_ISSUER_URL__"
+  clientId: "__OAUTH_CLIENT_ID__"
+  clientSecret: "__OAUTH_CLIENT_SECRET__"
+  tokenEndpointAuthMethod: client_secret_post
+  scope: "openid email profile"
+  buttonText: "Log in with tnwks"
+  # Show the login page (OAuth button plus the password form) instead of
+  # bouncing straight to Cognito, so the break-glass admin can still get in.
+  autoLaunch: false
+  # Immich can't turn cognito:groups into roles (its role claim must hold the
+  # literal value admin or user), so nobody registers themselves: an admin
+  # creates the person's Immich account with their Cognito email, and the
+  # first OAuth login links to it.
+  autoRegister: false
+  # Cognito's /logout only redirects to a logout_uri registered on the client.
+  endSessionEndpoint: "https://auth.tnwks.us/logout?client_id=__OAUTH_CLIENT_ID__&logout_uri=https%3A%2F%2Fimmich.${INTERNAL_DOMAIN}%2Fauth%2Flogin"
+  # The mobile app's app.immich:/// redirect isn't a URI Cognito accepts, so
+  # the app goes through Immich's https redirect page.
+  mobileOverrideEnabled: true
+  mobileRedirectUri: "https://immich.${INTERNAL_DOMAIN}/api/oauth/mobile-redirect"
+passwordLogin:
+  # Break-glass admin (~/.openclaw/credentials/immich-admin.env on the
+  # workstation) and the screensaver service account.
+  enabled: true
+machineLearning:
+  enabled: true
+  urls:
+    - "http://immich-machine-learning:3003"
+  # Face detection stays on: the screensaver crops photos to the screen and
+  # keeps detected faces in frame.
+  facialRecognition:
+    enabled: true
+  # Text recognition is CPU heavy and nothing here needs it.
+  ocr:
+    enabled: false
+ffmpeg:
+  # No videos get synced; don't spend CPU transcoding anything uploaded by hand
+  # unless the browser can't play it.
+  transcode: required
+newVersionCheck:
+  # Renovate tracks the version.
+  enabled: false
+backup:
+  # Nightly pg_dumpall into the library volume (/data/backups), 14 kept.
+  database:
+    enabled: true
+    cronExpression: "0 02 * * *"
+    keepLastAmount: 14
+trash:
+  # Deleted photos (including ones the screensaver sync removes) stay in the
+  # trash this long before they're gone for good.
+  enabled: true
+  days: 30
