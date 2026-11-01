@@ -21,7 +21,7 @@ script:
         name: Rooms
         description: Room segment ids from the Mi Home app (17 playroom, 18 kitchen, 16 living room).
         required: true
-        example: [18]
+        example: "18"
         selector:
           select:
             multiple: true
