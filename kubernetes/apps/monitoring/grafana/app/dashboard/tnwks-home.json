@@ -427,7 +427,7 @@
       },
       "targets": [
         {
-          "expr": "1 - (windows_os_physical_memory_free_bytes{instance=\"DESKTOP-HKE05KI\"} / windows_cs_physical_memory_bytes{instance=\"DESKTOP-HKE05KI\"})",
+          "expr": "1 - (windows_memory_physical_free_bytes{instance=\"DESKTOP-HKE05KI\"} / windows_memory_physical_total_bytes{instance=\"DESKTOP-HKE05KI\"})",
           "refId": "A"
         }
       ],

@@ -9,6 +9,15 @@ configMapGenerator:
       - unms_overview.json
       - wan-latency.json
       - wan-traffic.json
+  # grafana.com 14694 rev 2, vendored because its queries use metrics that
+  # windows_exporter 0.30+ removed (cs collector, windows_os_* memory gauges).
+  # The sidecar puts it in the "Windows" folder via the grafana_folder annotation.
+  - name: grafana-dashboard-windows
+    files:
+      - windows-exporter.json
+    options:
+      annotations:
+        grafana_folder: Windows
 generatorOptions:
   disableNameSuffixHash: true
   annotations:
