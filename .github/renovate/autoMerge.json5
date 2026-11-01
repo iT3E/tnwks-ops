@@ -161,6 +161,9 @@
         "/home-assistant/",
         // Migrates its Postgres schema on start, and ships a minor most weeks.
         "/berriai\\/litellm/",
+        // Migrates its database on start; minors have carried breaking
+        // changes (config keys, the vector extension).
+        "/immich-app\\/immich-/",
       ],
       matchUpdateTypes: ["minor"],
       matchFileNames: ["!/^(talos/ms-01|kubernetes/clusters/ms-01|kubernetes/apps/(kube-system/cilium|monitoring/thanos|monitoring/vector/agent|production/uisp|storage/rook-ceph|tools/node-feature-discovery|databases/cloudnative-pg/cluster-backup))//"],

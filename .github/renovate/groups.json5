@@ -61,6 +61,18 @@
       "matchPackageNames": ["ghcr.io/siderolabs/talos"],
       "separateMultipleMinor": true,
       "separateMinorPatch": true
+    },
+    {
+      // Immich's server and machine-learning images are released together
+      // and must run the same version. The render-config init container
+      // reuses the server image, so it moves with them.
+      "description": "Immich server and machine learning together",
+      "groupName": "Immich",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": [
+        "ghcr.io/immich-app/immich-server",
+        "ghcr.io/immich-app/immich-machine-learning"
+      ]
     }
   ]
 }

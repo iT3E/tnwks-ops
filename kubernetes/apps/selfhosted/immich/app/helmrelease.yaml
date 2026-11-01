@@ -1,0 +1,349 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app immich
+spec:
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  interval: 30m
+  maxHistory: 2
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  values:
+    defaultPodOptions:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+    controllers:
+      # API, web UI and the background workers (thumbnails, metadata,
+      # database backups). Migrates its database schema on start.
+      server:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        # The library volume is ReadWriteOnce.
+        strategy: Recreate
+        initContainers:
+          # Fills the OAuth placeholders in config/immich.yaml from
+          # immich-secret, so the client secret stays out of the ConfigMap.
+          render-config:
+            image: &serverImage
+              repository: ghcr.io/immich-app/immich-server
+              tag: v3.3.5@sha256:485d546a2e31d6a8b4db8423fcba5c109de8c218d93410af115fd1ccfc4352a6
+            command:
+              - /bin/sh
+              - -c
+              - >-
+                sed -e "s|__OAUTH_ISSUER_URL__|$OAUTH_ISSUER_URL|g"
+                -e "s|__OAUTH_CLIENT_ID__|$OAUTH_CLIENT_ID|g"
+                -e "s|__OAUTH_CLIENT_SECRET__|$OAUTH_CLIENT_SECRET|g"
+                /config-template/immich.yaml > /config/immich.yaml
+            envFrom:
+              - secretRef:
+                  name: immich-secret
+        containers:
+          app:
+            image: *serverImage
+            env:
+              TZ: "${TIMEZONE}"
+              IMMICH_CONFIG_FILE: /config/immich.yaml
+              # ingress-nginx pods; lets Immich log the real client address.
+              IMMICH_TRUSTED_PROXIES: "${CLUSTER_CIDR}"
+              DB_HOSTNAME: immich-postgres
+              DB_USERNAME: immich
+              DB_DATABASE_NAME: immich
+              DB_PASSWORD:
+                valueFrom:
+                  secretKeyRef:
+                    name: immich-secret
+                    key: DB_PASSWORD
+              DB_VECTOR_EXTENSION: vectorchord
+              REDIS_HOSTNAME: immich-valkey
+              REDIS_PASSWORD:
+                valueFrom:
+                  secretKeyRef:
+                    name: immich-secret
+                    key: REDIS_PASSWORD
+            probes:
+              liveness: &serverProbe
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/server/ping
+                    port: &serverPort 2283
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+              readiness: *serverProbe
+              # Schema migrations run before the API listens.
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/server/ping
+                    port: *serverPort
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 60
+            resources:
+              requests:
+                cpu: 100m
+                memory: 512Mi
+              limits:
+                memory: 3Gi
+
+      # Face detection and smart search (CLIP), on CPU. Models download into
+      # the cache volume on first use.
+      machine-learning:
+        strategy: Recreate
+        containers:
+          app:
+            image:
+              repository: ghcr.io/immich-app/immich-machine-learning
+              tag: v3.3.5@sha256:5b28c9352c8374b8a1ed96fbdd8d6755fea6e43510ec43fdf6538aa02ea40f56
+            env:
+              TZ: "${TIMEZONE}"
+              # Unload models after 5 idle minutes; the sync job only adds
+              # photos once an hour.
+              MACHINE_LEARNING_MODEL_TTL: "300"
+              MACHINE_LEARNING_WORKERS: "1"
+            probes:
+              liveness: &mlProbe
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /ping
+                    port: &mlPort 3003
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+              readiness: *mlProbe
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /ping
+                    port: *mlPort
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 30
+            resources:
+              requests:
+                cpu: 100m
+                memory: 512Mi
+              limits:
+                memory: 4Gi
+
+      # Job queue (BullMQ) for the server. Nothing in it outlives a restart
+      # that matters: unfinished jobs get queued again by Immich's nightly
+      # and on-upload scans, so no volume.
+      valkey:
+        containers:
+          app:
+            image:
+              repository: docker.io/valkey/valkey
+              tag: 9.1.3-alpine@sha256:bf09d58e96d6b4524a15396b65b242bbe18beebbcc15a04d8ee75ddac62fae0b
+            args:
+              - valkey-server
+              - --requirepass
+              - $(REDIS_PASSWORD)
+              - --save
+              - ""
+              - --appendonly
+              - "no"
+              # Queues must never be evicted.
+              - --maxmemory-policy
+              - noeviction
+            env:
+              REDIS_PASSWORD:
+                valueFrom:
+                  secretKeyRef:
+                    name: immich-secret
+                    key: REDIS_PASSWORD
+            securityContext:
+              runAsUser: 999
+              runAsGroup: 999
+              runAsNonRoot: true
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            probes:
+              liveness:
+                enabled: true
+              readiness:
+                enabled: true
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 256Mi
+
+      # Immich's own Postgres build with the VectorChord extension it needs
+      # for search and faces. Dedicated to Immich; the shared CNPG cluster in
+      # `databases` doesn't carry the extension.
+      postgres:
+        type: statefulset
+        annotations:
+          reloader.stakater.com/auto: "true"
+        statefulset:
+          volumeClaimTemplates:
+            - name: data
+              accessMode: ReadWriteOnce
+              size: 10Gi
+              storageClass: "${STORAGE_CLASS_DATABASE}"
+              globalMounts:
+                - path: /var/lib/postgresql/data
+        containers:
+          app:
+            image:
+              repository: ghcr.io/immich-app/postgres
+              tag: 17-vectorchord0.4.3@sha256:79b95b795f0911e95ffa4d092a2162c4d81a984d5629bc8f786afe0bc0657671
+            env:
+              POSTGRES_USER: immich
+              POSTGRES_DB: immich
+              POSTGRES_INITDB_ARGS: "--data-checksums"
+              PGDATA: /var/lib/postgresql/data/pgdata
+              POSTGRES_PASSWORD:
+                valueFrom:
+                  secretKeyRef:
+                    name: immich-secret
+                    key: DB_PASSWORD
+            probes:
+              liveness: &pgProbe
+                enabled: true
+                custom: true
+                spec:
+                  exec:
+                    command: ["pg_isready", "-U", "immich", "-d", "immich"]
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+              readiness: *pgProbe
+            resources:
+              requests:
+                cpu: 50m
+                memory: 256Mi
+              limits:
+                memory: 2Gi
+
+    service:
+      server:
+        controller: server
+        ports:
+          http:
+            port: *serverPort
+      machine-learning:
+        controller: machine-learning
+        ports:
+          http:
+            port: *mlPort
+      valkey:
+        controller: valkey
+        ports:
+          valkey:
+            port: 6379
+      postgres:
+        controller: postgres
+        ports:
+          postgres:
+            port: 5432
+
+    ingress:
+      server:
+        className: nginx-internal
+        annotations:
+          hajimari.io/appName: Photos
+          hajimari.io/group: Home
+          hajimari.io/icon: mdi:image-multiple
+          # Uploads from the web UI and the mobile app can be large videos.
+          nginx.ingress.kubernetes.io/proxy-body-size: "0"
+          nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+          nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+        hosts:
+          - host: &host "immich.${INTERNAL_DOMAIN}"
+            paths:
+              - path: /
+                pathType: Prefix
+                service:
+                  identifier: server
+                  port: http
+        # The controller's default cert (*.internal.tnwks.us) covers the
+        # host; listing it makes nginx redirect plain http to https.
+        tls:
+          - hosts:
+              - *host
+
+    persistence:
+      # Originals, thumbnails, encoded video and the nightly database dumps.
+      # local-path-bulk (the WSL distro disk, which lives on the Windows E:
+      # drive): the 200Gi size isn't enforced by local-path, so the real
+      # ceiling is E:'s free space. Grow by editing the size (the class
+      # allows expansion) and freeing space on E:.
+      library:
+        type: persistentVolumeClaim
+        accessMode: ReadWriteOnce
+        size: 200Gi
+        storageClass: local-path-bulk
+        advancedMounts:
+          server:
+            app:
+              - path: /data
+      model-cache:
+        type: persistentVolumeClaim
+        accessMode: ReadWriteOnce
+        size: 10Gi
+        storageClass: "${STORAGE_CLASS_DEFAULT}"
+        advancedMounts:
+          machine-learning:
+            app:
+              - path: /cache
+      config-template:
+        type: configMap
+        name: immich-config
+        advancedMounts:
+          server:
+            render-config:
+              - path: /config-template
+                readOnly: true
+      config:
+        type: emptyDir
+        advancedMounts:
+          server:
+            render-config:
+              - path: /config
+            app:
+              - path: /config
+                readOnly: true
+      postgres-shm:
+        type: emptyDir
+        medium: Memory
+        sizeLimit: 256Mi
+        advancedMounts:
+          postgres:
+            app:
+              - path: /dev/shm
+      valkey-data:
+        type: emptyDir
+        advancedMounts:
+          valkey:
+            app:
+              - path: /data
