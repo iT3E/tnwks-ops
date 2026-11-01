@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.59.0 - 2026-11-01
+
+### Added
+
+* home-assistant: LIFX theme picker for the pool lights (themes read live from lifx.paint_theme), robovac consumable gauges with reset buttons. Cards 1.9.0.
+
 ## v1.58.0 - 2026-11-01
 
 ### Changed
