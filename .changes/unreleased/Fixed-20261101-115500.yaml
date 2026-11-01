@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'home-assistant: robovac_clean_rooms failed validation (a field example must be a string), which disabled it and the room buttons.'
+time: 2026-11-01T11:55:00-08:00
