@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.54.0 - 2026-11-01
+
+### Changed
+
+* kitchen: the wall display's Home Assistant button goes to the new Home dashboard.
+
 ## v1.53.0 - 2026-11-01
 
 ### Added
