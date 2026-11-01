@@ -1,0 +1,3 @@
+kind: Changed
+body: 'kitchen-screensaver: the shuffled pass is remembered between screensaver runs, so every photo shows before any repeats; album changes show up within about 15 minutes (server re-reads every 5, page every 10).'
+time: 2026-11-01T09:50:00-08:00

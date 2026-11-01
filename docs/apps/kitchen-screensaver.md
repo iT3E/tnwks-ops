@@ -32,8 +32,12 @@ This page does those things and keeps both credentials server-side.
     blurred copy of itself.
   - The crop keeps the faces Immich detected in view (`object-position` from
     the face boxes, with room for hair and chin).
-  - Order: a shuffled pass through the album, then another. Album changes
-    (the sync job runs hourly) show up within 30 minutes.
+  - Order: a shuffled pass through the album, then another. The pass is
+    remembered between screensaver runs (localStorage `ks_deck` in the
+    ImmichFrame app), so every photo shows once before any repeats; photos
+    added mid-pass join it at random spots. The sync job runs hourly; the
+    server re-reads the album every 5 minutes (`ALBUM_TTL`) and the page
+    every 10, so a synced change shows up within about 15 minutes.
 - **The box** (bottom left, translucent, tinted by the house theme):
   - 12-hour time, weekday and date;
   - weather from `weather.forecast_home`: icon, temperature, condition and

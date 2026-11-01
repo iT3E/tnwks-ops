@@ -108,7 +108,7 @@
   const INTERVAL = Math.max(5, (TEST && Number(Q.get("interval"))) || 30) * 1000;
   const RELOAD_MS = ((TEST && Number(Q.get("reload"))) || 6 * 3600) * 1000;
   const INFO_MS = 3 * 60 * 1000;
-  const PHOTOS_MS = 30 * 60 * 1000;
+  const PHOTOS_MS = 10 * 60 * 1000;
   const MARGIN = 22, DRIFT = 26, GAP = 4;
   const REDUCED = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
   const FADE = () => (REDUCED() ? 0 : 2000);
@@ -343,7 +343,24 @@
   }
 
   // ------------------------------------------------------------ photos
-  let photos = [], deck = [], lastIds = [];
+  let photos = [], deck = [], lastIds = [], pass = new Set();
+  // The shuffled pass survives the screensaver closing: what's left of the
+  // deck and the pass's photo ids are kept in localStorage, so every photo
+  // shows once before any repeats, across runs.
+  const DECK_KEY = "ks_deck";
+  function saveDeck() {
+    try { localStorage.setItem(DECK_KEY, JSON.stringify({ deck: deck.map((p) => p.id), pass: [...pass], last: lastIds })); } catch (e) {}
+  }
+  function restoreDeck() {
+    try {
+      const d = JSON.parse(localStorage.getItem(DECK_KEY) || "null");
+      if (!d || !Array.isArray(d.deck) || !Array.isArray(d.pass)) return;
+      const byId = new Map(photos.map((p) => [p.id, p]));
+      deck = d.deck.map((id) => byId.get(id)).filter(Boolean);
+      pass = new Set(d.pass);
+      if (Array.isArray(d.last)) lastIds = d.last;
+    } catch (e) {}
+  }
   const isLand = (p) => p.w > p.h * 1.05;
   function shuffle(a) {
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
@@ -353,11 +370,17 @@
     try {
       const r = await getJSON("/api/photos");
       photos = r.photos || [];
+      if (!pass.size) restoreDeck(); // first load of this run: carry on with the saved pass
       const ids = new Set(photos.map((p) => p.id));
       const inDeck = new Set(deck.map((p) => p.id));
       // Keep the running order; drop removed photos, shuffle new ones in.
       deck = deck.filter((p) => ids.has(p.id)).map((p) => photos.find((x) => x.id === p.id));
-      for (const p of photos) if (!inDeck.has(p.id) && deck.length) deck.splice(Math.floor(Math.random() * (deck.length + 1)), 0, p);
+      // New to this pass (not shown yet, not waiting): a random spot in what's left.
+      for (const p of photos) if (!inDeck.has(p.id) && !pass.has(p.id) && deck.length) {
+        deck.splice(Math.floor(Math.random() * (deck.length + 1)), 0, p);
+        pass.add(p.id);
+      }
+      saveDeck();
     } catch (e) { /* keep the old list */ }
     stage.classList.toggle("empty", !photos.length);
   }
@@ -365,13 +388,15 @@
     if (!photos.length) return null;
     if (!deck.length) {
       deck = shuffle(photos.slice());
+      pass = new Set(deck.map((p) => p.id));
       // Don't start the new round with what's on screen.
       if (deck.length > 2 && lastIds.includes(deck[0].id)) deck.push(deck.shift());
     }
     const p = deck.shift();
-    if (!isLand(p)) return { kind: "single", photos: [p] };
+    if (!isLand(p)) { saveDeck(); return { kind: "single", photos: [p] }; }
     const i = deck.findIndex(isLand);
-    if (i >= 0) return { kind: "pair", photos: [p, deck.splice(i, 1)[0]] };
+    if (i >= 0) { const q = deck.splice(i, 1)[0]; saveDeck(); return { kind: "pair", photos: [p, q] }; }
+    saveDeck();
     const others = photos.filter((x) => isLand(x) && x.id !== p.id && !lastIds.includes(x.id));
     if (others.length) return { kind: "pair", photos: [p, others[Math.floor(Math.random() * others.length)]] };
     return { kind: "blur", photos: [p] };
