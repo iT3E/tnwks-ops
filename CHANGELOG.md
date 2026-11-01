@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.52.0 - 2026-11-01
+
+### Added
+
+* kitchen: the dashboard is now "Wall display", kiosk only on the tablet (by user agent, no ?kiosk needed), a Home Assistant button in the tab bar, Home cards tap through to their pages, event details on tap, and Open in Mealie for meals and the Meals tab. Cards 1.7.0.
+
 ## v1.51.0 - 2026-11-01
 
 ### Added
