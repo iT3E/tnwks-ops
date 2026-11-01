@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.56.1 - 2026-11-01
+
+### Fixed
+
+* home-assistant: robovac_clean_rooms failed validation (a field example must be a string), which disabled it and the room buttons.
+
 ## v1.56.0 - 2026-11-01
 
 ### Added
