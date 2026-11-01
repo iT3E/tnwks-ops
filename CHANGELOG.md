@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.45.0 - 2026-11-01
+
+### Added
+
+* Hourly Immich sync for the kitchen screensaver, mirroring the Google Photos shared albums on Home Assistant's "Screensaver albums" list (originals, photos only) into per-album and combined Immich albums.
+
 ## v1.44.0 - 2026-11-01
 
 ### Added
