@@ -1,0 +1,3 @@
+kind: Changed
+body: 'grafana: database moves from SQLite to Postgres (CNPG grafana database); the SQLite file stays on the PVC as a rollback.'
+time: 2026-11-01T15:10:00-08:00
