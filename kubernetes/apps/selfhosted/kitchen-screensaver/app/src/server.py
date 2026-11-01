@@ -12,7 +12,6 @@ the display holds neither.
     GET  /api/photos       the album's photos: id, size, face boxes
     GET  /img/<id>         a photo, Immich's screen-sized preview (or ?size=thumbnail)
     GET  /api/ping         the page checks in (logged: loads, uptime, memory)
-    GET  /api/drop         no response at all, no secret (the page's safety reload, see index.html)
     GET  /healthz          liveness, no secret
 
 Everything but /healthz needs the auth secret, as ?authsecret=<secret> (how
@@ -534,8 +533,12 @@ SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
 }
+# https://127.0.0.1:1 and https://reload.invalid are the page's safety reload
+# inside the ImmichFrame app: images that can't load (nothing listens there,
+# the name doesn't exist), see index.html.
 PAGE_CSP = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
-            "img-src 'self' blob: data:; connect-src 'self'; base-uri 'none'; form-action 'none'")
+            "img-src 'self' blob: data: https://127.0.0.1:1 https://reload.invalid; connect-src 'self'; "
+            "base-uri 'none'; form-action 'none'")
 
 
 def make_handler(app):
@@ -591,15 +594,6 @@ def make_handler(app):
                 return self._send(200, b"ok")
             if path == "/favicon.ico":
                 return self._send(204)
-            if path == "/api/drop":
-                # Close the connection without an answer. Inside the ImmichFrame app
-                # that failed request makes the app load the page again 5 s later
-                # (its WebViewClient.onReceivedError); the page's own
-                # location.reload() would be a navigation, which crashes the app's
-                # screensaver.
-                log.info("drop: the page asked for a fresh load")
-                self.close_connection = True
-                return None
             if not app.authorized(self.headers, q):
                 if path == "/":
                     return self._send(401, b"<!doctype html><title>Kitchen screensaver</title>"
@@ -618,7 +612,7 @@ def make_handler(app):
             if path == "/api/photos":
                 return self._json({"photos": app.photos.get()})
             if path == "/api/ping":
-                keep = {k: (q.get(k) or [""])[0][:40] for k in ("boot", "loads", "up", "mem", "slides", "w", "h")}
+                keep = {k: (q.get(k) or [""])[0][:40] for k in ("boot", "loads", "up", "mem", "slides", "w", "h", "via")}
                 log.info("ping %s", " ".join(f"{k}={v}" for k, v in keep.items() if v))
                 return self._json({"ok": True, "server_up": round(time.time() - app.started)})
             if path.startswith("/img/"):
