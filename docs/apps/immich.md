@@ -44,6 +44,10 @@ own queue.
   While a config file is in use, the admin settings page is read-only, so
   change settings in git. The OAuth placeholders in it are filled from
   `immich-secret` by the `render-config` init container at pod start.
+  Previews are 2160 px on the short side (default 1440), sized for the
+  kitchen display ([`kitchen-screensaver.md`](kitchen-screensaver.md)); after
+  changing that, regenerate them (Administration > Job Queues > Generate
+  Thumbnails > All).
 - **Users, albums, API keys:** in the database (UI-owned, not in git).
 
 For now the screensaver albums in Immich are a mirror: Google Photos is the
@@ -76,6 +80,7 @@ API keys that a proxy session would block.
 | `gphotos-sync (cluster CronJob)`              | API key on screensaver            | the sync job                      | `immich.env` (`IMMICH_SYNC_API_KEY`), `sync/secrets.sops.yaml`                               |
 | `home-assistant album_slideshow (read-only)`  | API key on screensaver            | Home Assistant's slideshow        | `immich.env` (`IMMICH_HA_API_KEY`)                                                           |
 | `immichframe kitchen screensaver (read-only)` | API key on screensaver            | ImmichFrame                       | `immich.env` (`IMMICH_FRAME_API_KEY`), `immichframe/app/secrets.sops.yaml`                   |
+| `kitchen-screensaver (read-only)`             | API key on screensaver            | the kitchen screensaver page      | `kitchen-screensaver.env` (`IMMICH_API_KEY`), `kitchen-screensaver/app/secrets.sops.yaml`    |
 | HA token `immich-screensaver-sync`            | long-lived token on HA's Ori user | the sync job                      | `~/.openclaw/credentials/hass.env` (`HASS_SCREENSAVER_SYNC_TOKEN`), `sync/secrets.sops.yaml` |
 
 The screensaver account owns the synced photos so the sync job can't reach
@@ -87,6 +92,8 @@ ImmichFrame use see only those photos. Key permissions:
   `albumAsset.create`, `albumAsset.delete`.
 - Home Assistant: `server.about`, `asset.read`, `asset.view`,
   `asset.download`, `album.read`, `person.read`, `face.read`.
+- Kitchen screensaver: `album.read`, `asset.read`, `asset.view`,
+  `face.read`.
 - ImmichFrame (upstream's list): `album.read`, `album.statistics`,
   `asset.view`, `asset.read`, `asset.statistics`, `face.read`, `memory.read`,
   `person.read`, `person.statistics`, `tag.read`.

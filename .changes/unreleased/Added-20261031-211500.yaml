@@ -1,0 +1,3 @@
+kind: Added
+body: 'kitchen-screensaver: our own page for the kitchen display''s screensaver, with face-aware photo crops, stacked landscape pairs, and Home Assistant weather, events (all-day handled), dinner, stars and the house theme; Immich previews raised to 2160 px for the 4K panel. ImmichFrame stays as the fallback.'
+time: 2026-10-31T21:15:00-07:00

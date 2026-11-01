@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>Kitchen screensaver</title>
+<!--
+  The kitchen display's screensaver (docs/apps/kitchen-screensaver.md).
+
+  One self-contained page, no navigation: the ImmichFrame Android app shows it
+  in its screensaver WebView, which hands every navigation (links, redirects,
+  location changes) to the external browser. Everything after the first load
+  is fetch() against this page's own server, with the auth secret from the
+  page URL as a Bearer token.
+
+  Photos crossfade every 30 s. The new photo is fetched and decoded before it
+  starts fading in over the old one, which stays opaque underneath, so there's
+  no dark frame between photos. Portrait photos fill the screen; two landscape
+  photos are stacked; a lone landscape photo sits on a blurred copy of itself.
+  The crop keeps Immich's detected faces in frame.
+
+  The box shows the time, date, weather, today's remaining events, a holiday
+  line, tonight's dinner and the kids' stars, tinted by the house theme
+  (input_select.kitchen_theme; palettes and holiday dates follow the Kitchen
+  dashboard's kitchen-cards.js). It sits bottom left, moves to another corner
+  when it would cover the photo's main face, and shifts a few pixels every few
+  minutes to spare the panel.
+
+  Test knobs (query string): interval=<s> between photos, reload=<s> until
+  the safety reload (default 6 h).
+-->
+<style>
+  :root { --accent:#ff9f43; --bg:#111318; --card:#1c1f26; --card2:#252932; --ok:#4cd17a; --fade:2s; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:#000; overflow:hidden; cursor:none; }
+  body { font-family:Roboto, "Noto Sans", system-ui, sans-serif; color:#fff; -webkit-font-smoothing:antialiased;
+    user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; }
+  #stage { position:fixed; inset:0; background:#000; }
+  #stage.empty { background:radial-gradient(120% 80% at 20% 100%, var(--card2), var(--bg) 70%); }
+  .slide { position:absolute; inset:0; overflow:hidden; background:#000; opacity:0; transition:opacity var(--fade) ease-in-out; }
+  .slide.in { opacity:1; }
+  .slide img { position:absolute; display:block; object-fit:cover; }
+  .single img { left:0; top:0; width:100%; height:100%; }
+  .pair img.a { left:0; top:0; width:100%; height:calc(50% - 2px); }
+  .pair img.b { left:0; bottom:0; width:100%; height:calc(50% - 2px); }
+  .blur canvas { position:absolute; left:-4%; top:-4%; width:108%; height:108%; }
+  .blur img { left:0; top:0; width:100%; height:100%; object-fit:contain; }
+
+  #box { position:fixed; z-index:2; width:max-content; min-width:340px; max-width:calc(100vw - 100px);
+    padding:18px 24px 18px; border-radius:30px; color:#fff;
+    background:rgba(17,19,24,.55); background:color-mix(in srgb, var(--bg) 58%, transparent);
+    border:1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+    -webkit-backdrop-filter:blur(18px) saturate(1.15); backdrop-filter:blur(18px) saturate(1.15);
+    box-shadow:0 10px 40px rgba(0,0,0,.35); text-shadow:0 1px 3px rgba(0,0,0,.4);
+    transition:opacity .7s ease, transform 4s ease-in-out; will-change:transform; }
+  #box.bl { left:22px; bottom:22px; } #box.br { right:22px; bottom:22px; }
+  #box.tl { left:22px; top:22px; } #box.tr { right:22px; top:22px; }
+  #box.hide { opacity:0; }
+  .top { display:flex; align-items:flex-start; justify-content:space-between; gap:28px; }
+  .time { font-size:92px; line-height:.9; letter-spacing:-.035em; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .time small { font-size:28px; letter-spacing:0; margin-left:8px; color:rgba(255,255,255,.8); }
+  .date { font-size:25px; margin-top:10px; white-space:nowrap; }
+  .wx { text-align:right; white-space:nowrap; padding-top:4px; }
+  .wx .t { font-size:40px; line-height:1; }
+  .wx .d { font-size:18px; margin-top:8px; color:rgba(255,255,255,.82); }
+  .hol { margin-top:12px; font-size:23px; color:var(--accent); font-weight:500; white-space:nowrap; }
+  .evs { margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,.16); }
+  .ev { display:flex; gap:14px; align-items:baseline; font-size:21px; line-height:1.42; min-width:0; }
+  .ev .t { flex:none; min-width:86px; color:var(--accent); font-weight:500; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .ev .n { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; max-width:470px; }
+  .ev.now .t::before { content:""; display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--accent);
+    margin-right:7px; vertical-align:2px; }
+  .none, .more { font-size:19px; color:rgba(255,255,255,.75); line-height:1.42; }
+  .foot { margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,.16); display:flex; flex-direction:column; gap:6px; }
+  .dinner { font-size:21px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:560px; }
+  .dinner span { color:rgba(255,255,255,.7); }
+  .stars { display:flex; gap:22px; font-size:21px; white-space:nowrap; }
+  .st { display:flex; align-items:center; gap:8px; }
+  .st i { width:12px; height:12px; border-radius:50%; flex:none; }
+  .st b { font-weight:500; font-variant-numeric:tabular-nums; }
+  @media (prefers-reduced-motion: reduce) { .slide, #box { transition:none !important; } }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="box" class="bl"></div>
+<script>
+"use strict";
+(() => {
+  const Q = new URLSearchParams(location.search);
+  const SECRET = Q.get("authsecret") || "";
+  const INTERVAL = Math.max(5, Number(Q.get("interval")) || 30) * 1000;
+  const RELOAD_MS = (Number(Q.get("reload")) || 6 * 3600) * 1000;
+  const INFO_MS = 3 * 60 * 1000;
+  const PHOTOS_MS = 30 * 60 * 1000;
+  const MARGIN = 22, DRIFT = 26, GAP = 4;
+  const REDUCED = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const FADE = () => (REDUCED() ? 0 : 2000);
+  const stage = document.getElementById("stage");
+  const box = document.getElementById("box");
+  const BOOT = Math.random().toString(36).slice(2, 8);
+  const LOADED = performance.now();
+  let loads = 0;
+  try { loads = Number(localStorage.getItem("ks_loads") || 0) + 1; localStorage.setItem("ks_loads", String(loads)); } catch (e) {}
+
+  // ------------------------------------------------------------- fetch
+  function get(path, ms = 20000) {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), ms);
+    return fetch(path, { headers: { Authorization: `Bearer ${SECRET}` }, cache: "no-store", signal: ac.signal })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status} ${path.split("?")[0]}`); return r; })
+      .finally(() => clearTimeout(t));
+  }
+  const getJSON = (p) => get(p).then((r) => r.json());
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // ---------------------------------------------------- dates, helpers
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const startOfDay = (d = new Date()) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+  const pad = (n) => String(n).padStart(2, "0");
+  function isoLocal(d) {
+    const o = -d.getTimezoneOffset();
+    const s = o >= 0 ? "+" : "-";
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00${s}${pad(Math.floor(Math.abs(o) / 60))}:${pad(Math.abs(o) % 60)}`;
+  }
+  function fmtTime(d) {
+    let h = d.getHours();
+    const m = d.getMinutes();
+    const ap = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+    return m ? `${h}:${pad(m)} ${ap}` : `${h} ${ap}`;
+  }
+  const WEATHER_ICON = {
+    "clear-night": "🌙", cloudy: "☁️", exceptional: "⚠️", fog: "🌫️", hail: "🌨️", lightning: "🌩️", "lightning-rainy": "⛈️",
+    partlycloudy: "⛅", pouring: "🌧️", rainy: "🌦️", snowy: "❄️", "snowy-rainy": "🌨️", sunny: "☀️", windy: "💨", "windy-variant": "💨",
+  };
+  const WEATHER_TEXT = {
+    "clear-night": "Clear", cloudy: "Cloudy", fog: "Fog", hail: "Hail", lightning: "Lightning", "lightning-rainy": "Storms",
+    partlycloudy: "Partly cloudy", pouring: "Heavy rain", rainy: "Rain", snowy: "Snow", "snowy-rainy": "Sleet", sunny: "Sunny",
+    windy: "Windy", "windy-variant": "Windy",
+  };
+  // Dot colors for the kids' stars, as on the Kitchen dashboard (kitchen-cards.js FAMILY).
+  const STAR_COLOR = { kid1: "#4fb3f0", kid2: "#f07a5f" };
+
+  // ------------------------------------------------- holiday themes
+  // Same palettes, dates and windows as the Kitchen dashboard (kitchen-cards.js
+  // THEMES, holidayNow, themeExpired), so the screensaver matches the house theme.
+  function easter(y) {
+    const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const n = h + l - 7 * m + 114;
+    return new Date(y, Math.floor(n / 31) - 1, (n % 31) + 1);
+  }
+  const nthWeekday = (y, mo, wd, n) => {
+    const first = new Date(y, mo, 1);
+    return new Date(y, mo, 1 + ((wd - first.getDay() + 7) % 7) + 7 * (n - 1));
+  };
+  const DEFAULT_VARS = { accent: "#ff9f43", bg: "#111318", card: "#1c1f26", card2: "#252932", ok: "#4cd17a" };
+  const THEMES = {
+    newyear: { name: "New Year", emoji: "🎉", day: (y) => new Date(y, 0, 1), lead: 2, greet: "Happy New Year!",
+      vars: { accent: "#e9c46a", bg: "#0e0f1a", card: "#181a2b", card2: "#22253a" } },
+    valentines: { name: "Valentine's Day", emoji: "💕", day: (y) => new Date(y, 1, 14), lead: 7, greet: "Happy Valentine's Day!",
+      vars: { accent: "#ff5c8a", bg: "#170d12", card: "#24151d", card2: "#311d28" } },
+    stpatricks: { name: "St. Patrick's Day", emoji: "☘️", day: (y) => new Date(y, 2, 17), lead: 5, greet: "Happy St. Patrick's Day!",
+      vars: { accent: "#3ccf6e", bg: "#0c1510", card: "#15231a", card2: "#1d3024" } },
+    easter: { name: "Easter", emoji: "🐣", day: easter, lead: 7, greet: "Happy Easter!",
+      vars: { accent: "#b48cf2", bg: "#13121a", card: "#1e1c29", card2: "#292637" } },
+    july4: { name: "the 4th of July", emoji: "🎆", day: (y) => new Date(y, 6, 4), lead: 4, greet: "Happy 4th of July!",
+      vars: { accent: "#4f8cff", bg: "#0d1220", card: "#161d30", card2: "#1f283f" } },
+    halloween: { name: "Halloween", emoji: "🎃", day: (y) => new Date(y, 9, 31), lead: 14, greet: "Happy Halloween!",
+      vars: { accent: "#ff7a1a", bg: "#120d17", card: "#1d1626", card2: "#2a2035" } },
+    thanksgiving: { name: "Thanksgiving", emoji: "🦃", day: (y) => nthWeekday(y, 10, 4, 4), lead: 7, greet: "Happy Thanksgiving!",
+      vars: { accent: "#e08a3c", bg: "#15110d", card: "#221b14", card2: "#2e251b" } },
+    christmas: { name: "Christmas", emoji: "🎄", day: (y) => new Date(y, 11, 25), lead: 24, after: 1, greet: "Merry Christmas!",
+      vars: { accent: "#e5484d", ok: "#3fbf6a", bg: "#0d1512", card: "#16211c", card2: "#1f2d26" } },
+  };
+  const MS_DAY = 86400000;
+  function holidayNow(now = new Date()) {
+    const t = startOfDay(now);
+    for (const [key, th] of Object.entries(THEMES)) {
+      for (const y of [t.getFullYear(), t.getFullYear() + 1]) {
+        const days = Math.round((th.day(y) - t) / MS_DAY);
+        if (days <= th.lead && days >= -(th.after || 0)) return { key, theme: th, days };
+      }
+    }
+    return null;
+  }
+  function themeExpired(key, now = new Date()) {
+    const th = THEMES[key];
+    if (!th) return false;
+    const t = startOfDay(now);
+    return [t.getFullYear() - 1, t.getFullYear()].some((y) => {
+      const end = addDays(th.day(y), th.after || 0);
+      return t > end && t - end <= 7 * MS_DAY;
+    });
+  }
+  let themeKey = "default";
+  function applyTheme(key) {
+    // The dashboard switches an expired theme back for the house; this read-only page just stops showing it.
+    const k = THEMES[key] && !themeExpired(key) ? key : "default";
+    if (k === themeKey) return;
+    themeKey = k;
+    const vars = { ...DEFAULT_VARS, ...(THEMES[k]?.vars || {}) };
+    for (const [n, v] of Object.entries(vars)) document.documentElement.style.setProperty(`--${n}`, v);
+  }
+
+  // ---------------------------------------------------------- the box
+  let info = null, infoDay = "", lastHTML = "";
+  function when(x) {
+    if (x && x.dateTime) return { d: new Date(x.dateTime), allDay: false };
+    if (x && x.date) { const [y, m, d] = x.date.split("-").map(Number); return { d: new Date(y, m - 1, d), allDay: true }; }
+    return null;
+  }
+  // Today's events that aren't over: all-day ones that cover today (an
+  // all-day end date is exclusive), timed ones that haven't ended.
+  function todays(list, now) {
+    const t0 = startOfDay(now), t1 = addDays(t0, 1);
+    const out = [];
+    for (const ev of list || []) {
+      const s = when(ev.start);
+      if (!s) continue;
+      const e = when(ev.end) || { d: s.allDay ? addDays(s.d, 1) : s.d };
+      if (s.allDay) { if (s.d < t1 && e.d > t0) out.push({ title: ev.title, allDay: true, start: s.d, end: e.d }); }
+      else if (e.d > now && s.d < t1) out.push({ title: ev.title, allDay: false, start: s.d, end: e.d });
+    }
+    return out.sort((a, b) => (b.allDay - a.allDay) || (a.start - b.start) || String(a.title).localeCompare(b.title));
+  }
+  function render() {
+    const now = new Date();
+    let h = now.getHours();
+    const ap = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+    const date = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+    const w = info && info.weather;
+    let wx = "";
+    if (w && w.temp != null) {
+      const hl = w.high != null && w.low != null ? ` · H ${w.high}° L ${w.low}°` : w.high != null ? ` · H ${w.high}°` : "";
+      wx = `<div class="wx"><div class="t">${WEATHER_ICON[w.condition] || ""} ${w.temp}°</div>
+        <div class="d">${esc(WEATHER_TEXT[w.condition] || "")}${hl}</div></div>`;
+    }
+    let hol = "";
+    const hn = holidayNow(now);
+    if (hn && hn.days === 0) hol = `<div class="hol">${hn.theme.emoji} ${esc(hn.theme.greet)}</div>`;
+    else if (hn && hn.days > 0 && hn.key === themeKey)
+      hol = `<div class="hol">${hn.theme.emoji} ${esc(hn.theme.name)} in ${hn.days} day${hn.days === 1 ? "" : "s"}</div>`;
+    let evs = "";
+    if (info && info.events) {
+      const left = todays(info.events, now);
+      const max = 5;
+      const shown = left.length > max ? max - 1 : max;
+      const rows = left.slice(0, shown).map((e) => {
+        const live = !e.allDay && e.start <= now;
+        const t = e.allDay ? "All day" : live ? "Now" : fmtTime(e.start);
+        return `<div class="ev${live ? " now" : ""}"><span class="t">${t}</span><span class="n">${esc(e.title)}</span></div>`;
+      }).join("");
+      const more = left.length > shown ? `<div class="more">+${left.length - shown} more today</div>` : "";
+      evs = `<div class="evs">${rows || `<div class="none">Nothing else today</div>`}${more}</div>`;
+    }
+    const foot = [];
+    if (info && now.getHours() < 21) {
+      const din = todays(info.dinner, now).map((e) => e.title).filter(Boolean);
+      if (din.length) foot.push(`<div class="dinner">🍽️ <span>Dinner</span> ${esc(din.join(" · "))}</div>`);
+    }
+    if (info && info.stars && info.stars.length) {
+      foot.push(`<div class="stars">${info.stars.map((s) =>
+        `<span class="st"><i style="background:${STAR_COLOR[s.key] || "var(--accent)"}"></i>${esc(s.name)} <b>⭐ ${Number(s.count) || 0}</b></span>`).join("")}</div>`);
+    }
+    const html = `<div class="top"><div><div class="time">${h}:${pad(now.getMinutes())}<small>${ap}</small></div>
+      <div class="date">${esc(date)}</div></div>${wx}</div>${hol}${evs}${foot.length ? `<div class="foot">${foot.join("")}</div>` : ""}`;
+    if (html !== lastHTML) { box.innerHTML = html; lastHTML = html; }
+  }
+  async function loadInfo() {
+    const s = startOfDay();
+    const day = s.toDateString();
+    try {
+      info = await getJSON(`/api/info?start=${encodeURIComponent(isoLocal(s))}&end=${encodeURIComponent(isoLocal(addDays(s, 1)))}`);
+      infoDay = day;
+      applyTheme(info.theme);
+    } catch (e) {
+      if (infoDay !== day) info = info && { ...info, events: null, dinner: [] }; // yesterday's events are wrong today
+    }
+    render();
+  }
+
+  // Where the box goes: bottom left unless that covers the photo's main face
+  // (then the opposite corner), weighing the other faces too.
+  let corner = "bl";
+  function overlap(a, b) {
+    const w = Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1), h = Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1);
+    return w > 0 && h > 0 ? w * h : 0;
+  }
+  function pickCorner(faces) {
+    const W = innerWidth, H = innerHeight, bw = box.offsetWidth, bh = box.offsetHeight;
+    const at = {
+      bl: [MARGIN, H - MARGIN - bh], tr: [W - MARGIN - bw, MARGIN], br: [W - MARGIN - bw, H - MARGIN - bh], tl: [MARGIN, MARGIN],
+    };
+    let best = "bl", bestScore = Infinity;
+    for (const c of ["bl", "tr", "br", "tl"]) {
+      const [x, y] = at[c];
+      const r = { x1: x - DRIFT, y1: y - DRIFT, x2: x + bw + DRIFT, y2: y + bh + DRIFT };
+      let score = 0;
+      faces.forEach((f, i) => { score += (overlap(r, f) / Math.max(1, (f.x2 - f.x1) * (f.y2 - f.y1))) * (i === 0 ? 4 : 1); });
+      if (score < bestScore - 1e-6) { best = c; bestScore = score; }
+      if (score === 0) break;
+    }
+    return best;
+  }
+  function moveBox(c) {
+    if (c === corner) return;
+    corner = c;
+    if (FADE() === 0) { box.className = c; drift(true); return; }
+    box.classList.add("hide");
+    setTimeout(() => { box.className = `${c} hide`; drift(true); requestAnimationFrame(() => box.classList.remove("hide")); }, 700);
+  }
+  // A few pixels into the screen from its corner, somewhere new every few minutes.
+  let driftT = 0;
+  function drift(jump) {
+    clearTimeout(driftT);
+    const sx = corner[1] === "l" ? 1 : -1, sy = corner[0] === "b" ? -1 : 1;
+    const x = sx * Math.round(Math.random() * DRIFT), y = sy * Math.round(Math.random() * DRIFT);
+    if (jump) box.style.transition = "opacity .7s ease";
+    box.style.transform = `translate(${x}px, ${y}px)`;
+    if (jump) requestAnimationFrame(() => requestAnimationFrame(() => (box.style.transition = "")));
+    driftT = setTimeout(() => drift(REDUCED()), REDUCED() ? 5 * 60000 : 3 * 60000);
+  }
+
+  // ------------------------------------------------------------ photos
+  let photos = [], deck = [], lastIds = [];
+  const isLand = (p) => p.w > p.h * 1.05;
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+  async function loadPhotos() {
+    try {
+      const r = await getJSON("/api/photos");
+      photos = r.photos || [];
+      const ids = new Set(photos.map((p) => p.id));
+      const inDeck = new Set(deck.map((p) => p.id));
+      // Keep the running order; drop removed photos, shuffle new ones in.
+      deck = deck.filter((p) => ids.has(p.id)).map((p) => photos.find((x) => x.id === p.id));
+      for (const p of photos) if (!inDeck.has(p.id) && deck.length) deck.splice(Math.floor(Math.random() * (deck.length + 1)), 0, p);
+    } catch (e) { /* keep the old list */ }
+    stage.classList.toggle("empty", !photos.length);
+  }
+  function plan() {
+    if (!photos.length) return null;
+    if (!deck.length) {
+      deck = shuffle(photos.slice());
+      // Don't start the new round with what's on screen.
+      if (deck.length > 2 && lastIds.includes(deck[0].id)) deck.push(deck.shift());
+    }
+    const p = deck.shift();
+    if (!isLand(p)) return { kind: "single", photos: [p] };
+    const i = deck.findIndex(isLand);
+    if (i >= 0) return { kind: "pair", photos: [p, deck.splice(i, 1)[0]] };
+    const others = photos.filter((x) => isLand(x) && x.id !== p.id && !lastIds.includes(x.id));
+    if (others.length) return { kind: "pair", photos: [p, others[Math.floor(Math.random() * others.length)]] };
+    return { kind: "blur", photos: [p] };
+  }
+  // object-position for a cover crop that keeps the faces in view: centre the
+  // window on all faces when they fit, else on their area-weighted middle.
+  function focus(p, bw, bh, nw, nh) {
+    const s = Math.max(bw / nw, bh / nh);
+    const vw = bw / s / nw, vh = bh / s / nh; // visible fraction of the photo
+    const f = (p.faces || []).map(([x1, y1, x2, y2]) => {
+      // Room for hair and chin around the detector's tight box.
+      const w = x2 - x1, h = y2 - y1;
+      return [x1 - w * 0.25, y1 - h * 0.45, x2 + w * 0.25, y2 + h * 0.3];
+    });
+    const axis = (vis, lo, hi, def) => {
+      if (vis >= 0.999) return { pos: 50, off: 0 };
+      let c = def;
+      if (f.length) {
+        const a = Math.min(...f.map(lo)), b = Math.max(...f.map(hi));
+        if (b - a <= vis) c = (a + b) / 2;
+        else {
+          let sw = 0, sum = 0;
+          for (const x of f) { const wgt = (x[2] - x[0]) * (x[3] - x[1]); sw += wgt; sum += wgt * (lo(x) + hi(x)) / 2; }
+          c = sum / sw;
+        }
+      }
+      const start = Math.min(1 - vis, Math.max(0, c - vis / 2));
+      return { pos: (start / (1 - vis)) * 100, off: start };
+    };
+    const x = axis(vw, (b) => b[0], (b) => b[2], 0.5);
+    const y = axis(vh, (b) => b[1], (b) => b[3], 0.45);
+    // Faces in box pixels (for placing the overlay box).
+    const faces = (p.faces || []).map(([x1, y1, x2, y2]) => ({
+      x1: (x1 - x.off) * nw * s, y1: (y1 - y.off) * nh * s, x2: (x2 - x.off) * nw * s, y2: (y2 - y.off) * nh * s,
+    }));
+    return { pos: `${x.pos.toFixed(1)}% ${y.pos.toFixed(1)}%`, faces };
+  }
+  async function image(p, urls) {
+    const r = await get(`/img/${p.id}?size=preview`, 45000);
+    const u = URL.createObjectURL(await r.blob());
+    urls.push(u);
+    const img = new Image();
+    img.decoding = "async";
+    img.src = u;
+    await img.decode();
+    return img;
+  }
+  // Builds a slide off-screen: fetched, decoded and laid out before it's shown.
+  async function build(pl) {
+    const el = document.createElement("div");
+    el.className = `slide ${pl.kind}`;
+    const urls = [];
+    const W = innerWidth, H = innerHeight;
+    let faces = [];
+    try {
+      if (pl.kind === "single") {
+        const img = await image(pl.photos[0], urls);
+        const f = focus(pl.photos[0], W, H, img.naturalWidth, img.naturalHeight);
+        img.style.objectPosition = f.pos;
+        faces = f.faces;
+        el.append(img);
+      } else if (pl.kind === "pair") {
+        const hh = H / 2 - GAP / 2;
+        const imgs = await Promise.all(pl.photos.map((p) => image(p, urls)));
+        imgs.forEach((img, i) => {
+          const f = focus(pl.photos[i], W, hh, img.naturalWidth, img.naturalHeight);
+          img.className = i ? "b" : "a";
+          img.style.objectPosition = f.pos;
+          const dy = i ? H - hh : 0;
+          faces.push(...f.faces.map((r) => ({ x1: r.x1, x2: r.x2, y1: r.y1 + dy, y2: r.y2 + dy })));
+        });
+        el.append(...imgs);
+      } else {
+        const img = await image(pl.photos[0], urls);
+        // The blurred fill: the photo drawn tiny into a canvas, blurred once and stretched.
+        const cv = document.createElement("canvas");
+        cv.width = 90; cv.height = Math.round((90 * H) / W);
+        const cx = cv.getContext("2d");
+        const s = Math.max(cv.width / img.naturalWidth, cv.height / img.naturalHeight);
+        cx.filter = "blur(3px)";
+        cx.drawImage(img, (cv.width - img.naturalWidth * s) / 2, (cv.height - img.naturalHeight * s) / 2, img.naturalWidth * s, img.naturalHeight * s);
+        cx.filter = "none";
+        cx.fillStyle = "rgba(0,0,0,.28)";
+        cx.fillRect(0, 0, cv.width, cv.height);
+        const s2 = Math.min(W / img.naturalWidth, H / img.naturalHeight);
+        const top = (H - img.naturalHeight * s2) / 2, left = (W - img.naturalWidth * s2) / 2;
+        faces = (pl.photos[0].faces || []).map(([x1, y1, x2, y2]) => ({
+          x1: left + x1 * img.naturalWidth * s2, x2: left + x2 * img.naturalWidth * s2,
+          y1: top + y1 * img.naturalHeight * s2, y2: top + y2 * img.naturalHeight * s2,
+        }));
+        el.append(cv, img);
+      }
+    } catch (e) {
+      urls.forEach((u) => URL.revokeObjectURL(u));
+      throw e;
+    }
+    el._urls = urls;
+    el._faces = faces;
+    el._ids = pl.photos.map((p) => p.id);
+    return el;
+  }
+  function dispose(el) {
+    for (const img of el.querySelectorAll("img")) img.removeAttribute("src");
+    for (const u of el._urls || []) URL.revokeObjectURL(u);
+    el.remove();
+  }
+  async function prepare() {
+    for (let i = 0; i < 4; i++) {
+      const pl = plan();
+      if (!pl) return null;
+      try { return await build(pl); } catch (e) {
+        console.warn("slide failed:", e && e.message);
+        if (/HTTP 404/.test(e.message)) await loadPhotos(); // removed from the album since the list was read
+        await wait(2000);
+      }
+    }
+    return null;
+  }
+  let next = null, shown = 0, current = null;
+  async function show() {
+    const t0 = performance.now();
+    if (!photos.length) await loadPhotos();
+    const el = next || (await prepare());
+    next = null;
+    if (el) {
+      stage.append(el);
+      lastIds = el._ids;
+      moveBox(pickCorner(el._faces));
+      void el.offsetWidth;
+      el.classList.add("in");
+      shown++;
+      await wait(FADE() + 150);
+      for (const old of Array.from(stage.querySelectorAll(".slide"))) if (old !== el) dispose(old);
+      current = el;
+    }
+    // Get the next one ready while this one is up.
+    next = await prepare().catch(() => null);
+    if (reloadDue && navigator.onLine !== false) return safetyReload();
+    setTimeout(show, Math.max(1000, (el ? INTERVAL : 30000) - (performance.now() - t0)));
+  }
+
+  // A fresh page every few hours, in case anything in the WebView grows over
+  // days. location.reload() isn't a navigation to a new URL, so the app's
+  // WebViewClient doesn't send it to the browser (checked on the display).
+  let reloadDue = false;
+  setTimeout(() => (reloadDue = true), RELOAD_MS);
+  async function safetyReload() {
+    try {
+      const r = await fetch("/healthz", { cache: "no-store" });
+      if (r.ok) { try { localStorage.setItem("ks_reload", new Date().toISOString()); } catch (e) {} location.reload(); return; }
+    } catch (e) {}
+    reloadDue = false;
+    setTimeout(() => (reloadDue = true), 10 * 60000);
+    setTimeout(show, INTERVAL);
+  }
+
+  function ping() {
+    const m = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : "";
+    const q = new URLSearchParams({ boot: BOOT, loads, up: Math.round((performance.now() - LOADED) / 1000), mem: m, slides: shown, w: innerWidth, h: innerHeight });
+    get(`/api/ping?${q}`).catch(() => {});
+  }
+
+  // ------------------------------------------------------------- start
+  setInterval(render, 1000);
+  setInterval(() => { if (startOfDay().toDateString() !== infoDay) loadInfo(); }, 30000);
+  setInterval(loadInfo, INFO_MS);
+  setInterval(loadPhotos, PHOTOS_MS);
+  setInterval(ping, 10 * 60000);
+  render();
+  drift(true);
+  Promise.all([loadInfo(), loadPhotos()]).then(() => { ping(); show(); });
+})();
+</script>
+</body>
+</html>

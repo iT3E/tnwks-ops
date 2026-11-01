@@ -1,0 +1,29 @@
+---
+# Kitchen screensaver: the page the kitchen display's Android screensaver
+# shows (photos from Immich's "Kitchen screensaver" album, with the time,
+# weather, today's events, dinner and stars from Home Assistant), and the small
+# API behind it (docs/apps/kitchen-screensaver.md). WSL-only like Immich, wired
+# from kubernetes/clusters/wsl/apps/kustomization.yaml.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: kitchen-screensaver
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: immich
+  path: ./kubernetes/apps/selfhosted/kitchen-screensaver/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  # The auth secret, the Home Assistant token and the Immich API key ship as
+  # a SOPS-encrypted Secret.
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  wait: false # no flux ks dependents
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

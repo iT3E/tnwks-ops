@@ -1,0 +1,126 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app kitchen-screensaver
+spec:
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  interval: 30m
+  maxHistory: 2
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  values:
+    defaultPodOptions:
+      securityContext:
+        runAsUser: 65534
+        runAsGroup: 65534
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+    controllers:
+      kitchen-screensaver:
+        annotations:
+          # Restart on a code, page or secret change.
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            # Same pinned image as the immich-sync CronJob; the code comes
+            # from the kitchen-screensaver-src ConfigMap.
+            image:
+              repository: docker.io/library/python
+              tag: 3.14.10-alpine@sha256:eb2c62658b8d51bff0acc408504b76521d02030de56a8a3c1e830083e89b89d2
+            command: ["python3", "/app/server.py"]
+            env:
+              PYTHONDONTWRITEBYTECODE: "1"
+              PYTHONUNBUFFERED: "1"
+              PORT: &port 8080
+              # Read-only user "Kitchen screensaver" (group system-read-only).
+              HASS_URL: "http://home-assistant.home-automation.svc.cluster.local:8123"
+              IMMICH_URL: "http://immich-server.selfhosted.svc.cluster.local:2283"
+              # The combined album the immich-sync CronJob fills.
+              IMMICH_ALBUM_NAME: "Kitchen screensaver"
+            envFrom:
+              # AUTH_SECRET, HASS_TOKEN, IMMICH_API_KEY
+              - secretRef:
+                  name: kitchen-screensaver-secret
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            probes:
+              liveness: &probe
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /healthz
+                    port: *port
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+              readiness: *probe
+            resources:
+              requests:
+                cpu: 10m
+                memory: 48Mi
+              limits:
+                # Python plus up to 64 MiB of cached photos (IMAGE_CACHE_MB).
+                memory: 256Mi
+
+    service:
+      app:
+        controller: kitchen-screensaver
+        ports:
+          http:
+            port: *port
+
+    ingress:
+      app:
+        # LAN and admin VPN only, like ImmichFrame. No oauth2-proxy: the
+        # display's screensaver WebView can't log in through Cognito, so the
+        # auth secret in the page URL is what keeps the page and API closed.
+        className: nginx-internal
+        hosts:
+          - host: &host "kitchen-screensaver.${INTERNAL_DOMAIN}"
+            paths:
+              - path: /
+                pathType: Prefix
+                service:
+                  identifier: app
+                  port: http
+        # The controller's default cert (*.internal.tnwks.us) covers the
+        # host; listing it makes nginx redirect plain http to https.
+        tls:
+          - hosts:
+              - *host
+
+    persistence:
+      src:
+        type: configMap
+        name: kitchen-screensaver-src
+        advancedMounts:
+          kitchen-screensaver:
+            app:
+              - path: /app
+                readOnly: true
+      tmp:
+        type: emptyDir
+        advancedMounts:
+          kitchen-screensaver:
+            app:
+              - path: /tmp

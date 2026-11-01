@@ -8,6 +8,11 @@ set as the tablet's Android screensaver (a "dream"), so it starts when the
 display has been idle for 5 minutes and a tap goes back to the Home Assistant
 dashboard.
 
+**Now the fallback:** since 2026-10-31 the display's screensaver shows the
+[kitchen screensaver page](kitchen-screensaver.md) instead (same app, a
+different Server URL). This server stays up so switching back is one app
+setting; the tablet setup below still applies to both.
+
 Manifests: `kubernetes/apps/selfhosted/immichframe/`. WSL-only like Immich
 (wired from `kubernetes/clusters/wsl/apps/kustomization.yaml`), image
 `ghcr.io/immichframe/immichframe` in `app/helmrelease.yaml`. Upstream:
@@ -131,6 +136,8 @@ Apolosign, Android 16, 2160x3840 portrait; driving it over ADB is in Ori's
   server is set; otherwise swipe down or press up): Server URL
   `https://immichframe.internal.tnwks.us`, Authorization Secret = the
   `AUTH_SECRET`, "Use WebView?" on. The app adds `?authsecret=` itself.
+  (Today the Server URL and secret are the kitchen screensaver page's, see
+  [`kitchen-screensaver.md`](kitchen-screensaver.md#the-kitchen-display).)
 - **Screensaver:**
   ```bash
   adb shell settings put secure screensaver_components com.immichframe.immichframe/.ScreenSaverService
