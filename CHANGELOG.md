@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.59.2 - 2026-11-01
+
+### Fixed
+
+* home-assistant: an overdue robovac part shows as a red "due" tile (a gauge from 0 drew it empty); shorter reset names.
+
 ## v1.59.1 - 2026-11-01
 
 ### Fixed
