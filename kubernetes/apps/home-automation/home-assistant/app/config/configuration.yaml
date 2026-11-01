@@ -122,6 +122,14 @@ lovelace:
       title: Wall display
       icon: mdi:tablet-dashboard
 
+# Sonos has no manual-host config flow, and discovery doesn't reach the pod.
+# Its two speakers by address (DHCP leases on frontend 910).
+sonos:
+  media_player:
+    hosts:
+      - 10.10.91.125
+      - 10.10.91.144
+
 # Automations, scripts and scenes are split by owner: the ones under
 # packages/ are git-owned (read-only in the UI), and these three files on
 # the PVC are what the UI editors write to.

@@ -107,18 +107,35 @@ still pick their own default under Profile.
 
 ### Robot vacuum
 
-A Xiaomi (Mi Home app) vacuum at the DHCP lease `robovac1`. HA reaches it on
-UDP 54321 from the pod. Two UI-owned integrations, both signed in with the
-Xiaomi account (the Mi Home login, and its server region):
+A Roborock S5 (`roborock.vacuum.s5`) on the Mi Home app, at the DHCP lease
+`robovac1`. HA reaches it on UDP 54321 from the pod. Two UI-owned
+integrations:
 
-1. **Xiaomi Miio** (core): the `vacuum.*` entity, start/stop/dock, and room
-   cleaning (`vacuum.send_command` `app_segment_clean`). Its cloud login
-   fetches the device token.
-2. **Xiaomi Cloud Map Extractor** (custom, v3 config flow; installed by
-   prepare-config.sh): the map as a camera/image entity with room ids.
+1. **Xiaomi Cloud Map Extractor** (custom, v3 config flow; installed by
+   prepare-config.sh), signed in with the Xiaomi account. It gives
+   `image.robovac_live_map` with the rooms and calibration as attributes,
+   and stores the device token in its config entry.
+2. **Xiaomi Miio** (core), added with **host + token** (the "manual" step),
+   the token copied from the Map Extractor's entry. Its cloud login fails:
+   Xiaomi asks for an extra verification the Miio flow can't show (the Map
+   Extractor logs it as "Additional authentication required" with a URL).
+   It gives `vacuum.roborock_vacuum_s5` (start/stop/dock, fan speed, room
+   cleaning through `app_segment_clean`) and consumable sensors.
 
-The map card is `custom:xiaomi-vacuum-map-card` (resource in
-configuration.yaml); it goes on Home once both exist.
+The card on Home is `custom:xiaomi-vacuum-map-card` (resource in
+configuration.yaml): tap rooms on the map, then start. Room ids and outlines
+come from the image's `rooms` attribute; the labels are the room names.
+
+### Other devices
+
+Local integrations added by host (UI-owned; discovery doesn't reach the pod):
+LIFX (four pool-area Minis), Google Cast (kitchen speaker, kitchen display,
+living room TV), Denon AVR-S750H, Tesla Wall Connector. Sonos has no
+manual-host flow, so its speakers are under `sonos:` in configuration.yaml.
+All of them are by DHCP address, so a lease that moves needs a new host (a
+static lease in the MikroTik Terraform avoids that). The LG TV wasn't
+answering on its webOS ports (3000/3001) when this was set up; add it with
+the TV on (webOS TV, accept the pairing prompt on screen).
 
 ## Making a change
 
