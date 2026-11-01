@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.43.0 - 2026-11-01
+
+### Added
+
+* Cognito app client `immich` so Immich can log people in with tnwks-auth through its built-in OAuth.
+
 ## v1.42.1 - 2026-10-31
 
 ### Fixed
