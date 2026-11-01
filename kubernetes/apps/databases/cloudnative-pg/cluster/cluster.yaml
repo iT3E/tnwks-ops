@@ -19,6 +19,16 @@ spec:
     storageClass: ${STORAGE_CLASS_DATABASE}
   superuserSecret:
     name: postgres-superuser
+  # Per-app login roles with their own password (unlike `app`, which most
+  # apps share through the reflected postgres-app Secret). Changing this list
+  # doesn't restart the instances.
+  managed:
+    roles:
+      - name: grafana
+        ensure: present
+        login: true
+        passwordSecret:
+          name: postgres-grafana
   monitoring:
     enablePodMonitor: ${SERVICE_MONITOR_ENABLED}
   # Annotations on the generated `postgres-app` Secret tell stakater/reflector

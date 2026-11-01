@@ -1,0 +1,3 @@
+kind: Added
+body: 'cloudnative-pg: grafana database and its own managed role, for moving Grafana off SQLite.'
+time: 2026-11-01T15:00:00-08:00
