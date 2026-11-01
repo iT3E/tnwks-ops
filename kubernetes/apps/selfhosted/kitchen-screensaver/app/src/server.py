@@ -64,7 +64,7 @@ class Config:
         # and the album are re-read.
         self.info_ttl = float(env.get("INFO_TTL", "60"))
         self.forecast_ttl = float(env.get("FORECAST_TTL", "900"))
-        self.album_ttl = float(env.get("ALBUM_TTL", "900"))
+        self.album_ttl = float(env.get("ALBUM_TTL", "300"))
         self.image_cache_mb = int(env.get("IMAGE_CACHE_MB", "64"))
 
     def missing(self):
