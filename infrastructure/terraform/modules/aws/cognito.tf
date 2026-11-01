@@ -242,6 +242,46 @@ resource "aws_cognito_user_in_group" "viewer_in_viewers" {
   username     = aws_cognito_user.viewer.username
 }
 
+# Kiosk: a shared identity for devices anyone in the house can walk up to
+# (the kitchen wall display). In `viewers`, so apps give it their read-only /
+# non-admin role (Grafana Viewer, HA user, Mealie user). No invitation email:
+# the address isn't a mailbox. Its first sign-in on the device uses the temp
+# password (output cognito_kiosk_temp_password) and enrolls its own MFA.
+resource "random_password" "kiosk_temp" {
+  length           = 24
+  special          = true
+  override_special = "!@#$%^&*()-_=+"
+
+  keepers = {
+    username = var.kiosk_email
+  }
+}
+
+resource "aws_cognito_user" "kiosk" {
+  user_pool_id       = aws_cognito_user_pool.tnwks_auth.id
+  username           = var.kiosk_email
+  temporary_password = random_password.kiosk_temp.result
+  message_action     = "SUPPRESS"
+
+  attributes = {
+    email          = var.kiosk_email
+    email_verified = true
+  }
+
+  lifecycle {
+    ignore_changes = [temporary_password]
+    replace_triggered_by = [
+      random_password.kiosk_temp,
+    ]
+  }
+}
+
+resource "aws_cognito_user_in_group" "kiosk_in_viewers" {
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+  group_name   = aws_cognito_user_group.viewers.name
+  username     = aws_cognito_user.kiosk.username
+}
+
 resource "aws_cognito_resource_server" "tnwks_api" {
   identifier   = "tnwks-api"
   name         = "tnwks-api"

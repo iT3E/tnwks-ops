@@ -37,6 +37,11 @@ pool that backs authentication for `*.internal.tnwks.us` services
 - **Password policy:** 12+ chars, mixed case, numbers, symbols
 - **Token lifetimes:** access 24h, id 24h, refresh 30d
 - **Sign-up:** disabled (admin-create only)
+- **Kiosk user** (`kiosk_email` in SOPS): a shared identity for the kitchen
+  wall display, in `viewers` (Grafana Viewer, HA user, Mealie user). Created
+  without an invitation email; its first sign-in on the device uses
+  `terraform output -raw cognito_kiosk_temp_password`, then picks its own
+  password and TOTP (kept in Ori's credentials store).
 - **Deletion protection:** on
 
 ## Outputs

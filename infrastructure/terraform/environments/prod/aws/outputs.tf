@@ -115,3 +115,9 @@ output "rolesanywhere_sops_role_arn" {
   description = "Role that Roles Anywhere SOPS sessions assume."
   value       = module.aws.rolesanywhere_sops_role_arn
 }
+
+output "cognito_kiosk_temp_password" {
+  description = "First-sign-in password for the kiosk user (Cognito makes it choose a new one and enroll MFA then)."
+  value       = module.aws.cognito_kiosk_temp_password
+  sensitive   = true
+}

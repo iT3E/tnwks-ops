@@ -13,6 +13,7 @@ module "aws" {
 
   admin_email  = data.sops_file.secrets.data["admin_email"]
   viewer_email = data.sops_file.secrets.data["viewer_email"]
+  kiosk_email  = data.sops_file.secrets.data["kiosk_email"]
   ses_domain   = data.sops_file.secrets.data["ses_domain"]
 
   # IAM Roles Anywhere for SOPS: CA cert and issuing script in ./rolesanywhere.

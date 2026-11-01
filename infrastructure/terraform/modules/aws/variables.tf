@@ -17,6 +17,12 @@ variable "viewer_email" {
   sensitive   = true
 }
 
+variable "kiosk_email" {
+  description = "Email address (username) for the shared kiosk identity: the kitchen wall display, signed in as a read-only viewer"
+  type        = string
+  sensitive   = true
+}
+
 variable "ses_domain" {
   description = "Domain to verify as an SES sending identity"
   type        = string

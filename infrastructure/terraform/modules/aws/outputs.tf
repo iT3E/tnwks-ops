@@ -121,3 +121,9 @@ output "rolesanywhere_sops_role_arn" {
   description = "Role Roles Anywhere sessions assume (aws_signing_helper --role-arn)."
   value       = one(aws_iam_role.rolesanywhere_sops[*].arn)
 }
+
+output "cognito_kiosk_temp_password" {
+  description = "First-sign-in password for the kiosk user (Cognito makes it choose a new one and enroll MFA then)."
+  value       = random_password.kiosk_temp.result
+  sensitive   = true
+}
