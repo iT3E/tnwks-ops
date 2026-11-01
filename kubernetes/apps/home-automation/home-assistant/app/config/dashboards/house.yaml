@@ -186,17 +186,50 @@ views:
           # Hours left (the sensors display in hours via the entity registry).
           # Gauges run from the part's full life (Roborock S5: filter 150 h,
           # main brush 300 h, side brush 200 h, sensors 30 h); the arc is green,
-          # yellow under ~15% and red when it's due. (unit " ": the state
-          # already reads "68h 2m".) Reset after replacing or cleaning; each
-          # reset asks first.
-          - &gauge { type: gauge, entity: sensor.roborock_vacuum_s5_filter_remaining, name: Filter, unit: " ", min: 0, max: 150, severity: { green: 25, yellow: 5, red: -10000 }, grid_options: { columns: 6, rows: 2 } }
-          - { <<: *gauge, entity: sensor.roborock_vacuum_s5_main_brush_remaining, name: Main brush, max: 300, severity: { green: 45, yellow: 10, red: -10000 } }
-          - &reset { type: tile, entity: button.roborock_vacuum_s5_reset_filter, name: Filter replaced, icon: mdi:air-filter, hide_state: true, tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.roborock_vacuum_s5_reset_filter }, confirmation: { text: "Reset the filter timer? Do this after putting in a new filter." } }, grid_options: { columns: 6 } }
-          - { <<: *reset, entity: button.roborock_vacuum_s5_reset_main_brush, name: Main brush replaced, icon: mdi:brush, tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.roborock_vacuum_s5_reset_main_brush }, confirmation: { text: "Reset the main brush timer? Do this after putting in a new main brush." } } }
-          - { <<: *gauge, entity: sensor.roborock_vacuum_s5_side_brush_remaining, name: Side brush, max: 200, severity: { green: 30, yellow: 7, red: -10000 } }
-          - { <<: *gauge, entity: sensor.roborock_vacuum_s5_sensor_dirty_remaining, name: Sensors, max: 30, severity: { green: 5, yellow: 1, red: -10000 } }
-          - { <<: *reset, entity: button.roborock_vacuum_s5_reset_side_brush, name: Side brush replaced, icon: mdi:brush-variant, tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.roborock_vacuum_s5_reset_side_brush }, confirmation: { text: "Reset the side brush timer? Do this after putting in a new side brush." } } }
-          - { <<: *reset, entity: button.roborock_vacuum_s5_reset_sensor_dirty, name: Sensors wiped, icon: mdi:eye-outline, tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.roborock_vacuum_s5_reset_sensor_dirty }, confirmation: { text: "Reset the sensor timer? Do this after wiping the sensors with a dry cloth." } } }
+          # yellow under ~15%, and an overdue part (time left at or below 0,
+          # which a gauge from 0 can't show) is a red tile instead. (unit " ":
+          # the state already reads "68h 2m".) Reset after replacing or
+          # cleaning; each reset asks first.
+          # Filter: a gauge while time is left, a red "due" tile once it runs out.
+          - type: conditional
+            conditions: [{ condition: numeric_state, entity: sensor.roborock_vacuum_s5_filter_remaining, above: 0 }]
+            card: { type: gauge, entity: sensor.roborock_vacuum_s5_filter_remaining, name: Filter, unit: " ", min: 0, max: 150, severity: { green: 25, yellow: 5, red: 0 } }
+            grid_options: { columns: 6, rows: 2 }
+          - type: conditional
+            conditions: [{ condition: numeric_state, entity: sensor.roborock_vacuum_s5_filter_remaining, below: 0.01 }]
+            card: { type: tile, entity: sensor.roborock_vacuum_s5_filter_remaining, name: "Filter: due", icon: mdi:air-filter, color: red, vertical: true }
+            grid_options: { columns: 6, rows: 2 }
+          # Main brush: a gauge while time is left, a red "due" tile once it runs out.
+          - type: conditional
+            conditions: [{ condition: numeric_state, entity: sensor.roborock_vacuum_s5_main_brush_remaining, above: 0 }]
+            card: { type: gauge, entity: sensor.roborock_vacuum_s5_main_brush_remaining, name: Main brush, unit: " ", min: 0, max: 300, severity: { green: 45, yellow: 10, red: 0 } }
+            grid_options: { columns: 6, rows: 2 }
+          - type: conditional
+            conditions: [{ condition: numeric_state, entity: sensor.roborock_vacuum_s5_main_brush_remaining, below: 0.01 }]
+            card: { type: tile, entity: sensor.roborock_vacuum_s5_main_brush_remaining, name: "Main brush: due", icon: mdi:brush, color: red, vertical: true }
+            grid_options: { columns: 6, rows: 2 }
+          - { type: tile, entity: button.roborock_vacuum_s5_reset_filter, name: New filter, icon: mdi:air-filter, hide_state: true, tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.roborock_vacuum_s5_reset_filter }, confirmation: { text: "Reset the filter timer? Do this after putting in a new filter." } }, grid_options: { columns: 6 } }
+          - { type: tile, entity: button.roborock_vacuum_s5_reset_main_brush, name: New main brush, icon: mdi:brush, hide_state: true, tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.roborock_vacuum_s5_reset_main_brush }, confirmation: { text: "Reset the main brush timer? Do this after putting in a new main brush." } }, grid_options: { columns: 6 } }
+          # Side brush: a gauge while time is left, a red "due" tile once it runs out.
+          - type: conditional
+            conditions: [{ condition: numeric_state, entity: sensor.roborock_vacuum_s5_side_brush_remaining, above: 0 }]
+            card: { type: gauge, entity: sensor.roborock_vacuum_s5_side_brush_remaining, name: Side brush, unit: " ", min: 0, max: 200, severity: { green: 30, yellow: 7, red: 0 } }
+            grid_options: { columns: 6, rows: 2 }
+          - type: conditional
+            conditions: [{ condition: numeric_state, entity: sensor.roborock_vacuum_s5_side_brush_remaining, below: 0.01 }]
+            card: { type: tile, entity: sensor.roborock_vacuum_s5_side_brush_remaining, name: "Side brush: due", icon: mdi:brush-variant, color: red, vertical: true }
+            grid_options: { columns: 6, rows: 2 }
+          # Sensors: a gauge while time is left, a red "due" tile once it runs out.
+          - type: conditional
+            conditions: [{ condition: numeric_state, entity: sensor.roborock_vacuum_s5_sensor_dirty_remaining, above: 0 }]
+            card: { type: gauge, entity: sensor.roborock_vacuum_s5_sensor_dirty_remaining, name: Sensors, unit: " ", min: 0, max: 30, severity: { green: 5, yellow: 1, red: 0 } }
+            grid_options: { columns: 6, rows: 2 }
+          - type: conditional
+            conditions: [{ condition: numeric_state, entity: sensor.roborock_vacuum_s5_sensor_dirty_remaining, below: 0.01 }]
+            card: { type: tile, entity: sensor.roborock_vacuum_s5_sensor_dirty_remaining, name: "Sensors: due", icon: mdi:eye-outline, color: red, vertical: true }
+            grid_options: { columns: 6, rows: 2 }
+          - { type: tile, entity: button.roborock_vacuum_s5_reset_side_brush, name: New side brush, icon: mdi:brush-variant, hide_state: true, tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.roborock_vacuum_s5_reset_side_brush }, confirmation: { text: "Reset the side brush timer? Do this after putting in a new side brush." } }, grid_options: { columns: 6 } }
+          - { type: tile, entity: button.roborock_vacuum_s5_reset_sensor_dirty, name: Sensors wiped, icon: mdi:eye-outline, hide_state: true, tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.roborock_vacuum_s5_reset_sensor_dirty }, confirmation: { text: "Reset the sensor timer? Do this after wiping the sensors with a dry cloth." } }, grid_options: { columns: 6 } }
 
   - title: Energy
     path: energy
