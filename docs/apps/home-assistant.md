@@ -255,6 +255,14 @@ Chrome instead of staying in the app. An HA app that has shown the dashboard in 
 another HA page. Phones and browsers without `?kiosk` get neither the button
 nor the pill.
 
+Theme and mode are per device. The wall display (the HA app that has shown
+the dashboard in kiosk mode, localStorage `tnwks-kitchen-kiosk`) sets the house
+choice in `input_select.kitchen_theme` / `input_select.kitchen_mode`, which its
+screensaver follows. Any other phone or browser follows that until someone
+picks a theme or mode on it; that choice stays on that device (localStorage
+`tnwks-kitchen-theme` / `tnwks-kitchen-mode`), and **Same as kitchen display**
+in the 🎨 sheet drops it. Only the wall display shows the holiday offer.
+
 Dark or light: `input_select.kitchen_mode` (`auto`, `dark` or `light`, in
 `packages/kitchen_display.yaml`, set from the 🎨 sheet) applies to every
 screen. `auto` is dark while `sun.sun` is below the horizon. Dark is the

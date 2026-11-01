@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.4.1";
+const VERSION = "1.5.0";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -353,9 +353,11 @@ const FX = {
 // Holiday themes: a palette, falling/rising/drifting emoji, a garland over
 // the header, and a greeting on the day. The dashboard offers each one in its
 // window (lead days before, through `after` days past the holiday) and the
-// choice is input_select.kitchen_theme (packages/kitchen_display.yaml), so
-// every screen in the house shows the same one. A holiday theme switches
-// itself off in the week after its holiday.
+// wall display's choice is input_select.kitchen_theme
+// (packages/kitchen_display.yaml), which its screensaver follows too. Every
+// other screen (phones, browsers) follows that until someone picks a theme or
+// mode on it; that choice stays on that device (localStorage, see Local). A
+// holiday theme switches itself off in the week after its holiday.
 function easter(y) {
   const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
   const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
@@ -419,6 +421,29 @@ function themeExpired(key, now = new Date()) {
 }
 const THEME_ENTITY = "input_select.kitchen_theme";
 const THEME_ANSWERED = "input_text.kitchen_theme_answered";
+/** Theme and mode picked on this device (not the wall display): override the house setting here only. */
+const Local = {
+  THEME: "tnwks-kitchen-theme",
+  MODE: "tnwks-kitchen-mode",
+  get(k) {
+    try {
+      return localStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  },
+  set(k, v) {
+    try {
+      if (v == null) localStorage.removeItem(k);
+      else localStorage.setItem(k, v);
+    } catch {}
+  },
+  any() {
+    return !!(this.get(this.THEME) || this.get(this.MODE));
+  },
+};
+/** The wall display owns the house setting; any other device keeps its own. */
+const isWall = () => !!KM.home();
 const Theme = {
   key: "default",
   mode: "dark",
@@ -429,7 +454,12 @@ const Theme = {
     if (hass) this._hass = hass;
     const s = hass?.states?.[THEME_ENTITY];
     let key = s && THEMES[s.state] ? s.state : "default";
-    if (key !== "default" && themeExpired(key)) {
+    const own = isWall() ? null : Local.get(Local.THEME);
+    if (own && (own === "default" || THEMES[own])) {
+      if (own !== "default" && themeExpired(own)) Local.set(Local.THEME, null);
+      else key = own;
+    }
+    if (key !== "default" && themeExpired(key) && key === s?.state) {
       // One screen switches it back for the house; the rest follow its state.
       if (!this._expiring) {
         this._expiring = true;
@@ -499,7 +529,8 @@ const MODES = [
   { key: "auto", label: "Auto", icon: "🌗" },
 ];
 function resolveMode(hass) {
-  const m = hass?.states?.[MODE_ENTITY]?.state;
+  const own = isWall() ? null : Local.get(Local.MODE);
+  const m = ["dark", "light", "auto"].includes(own) ? own : hass?.states?.[MODE_ENTITY]?.state;
   if (m === "dark" || m === "light") return m;
   if (m !== "auto") return "dark";
   return hass.states["sun.sun"]?.state === "above_horizon" ? "light" : "dark";
@@ -946,9 +977,11 @@ function routineEditor(hass, { member: who, routine }) {
 /** The theme picker (🎨 next to the tabs): theme, dark/light mode, and the way into HA's menu on the wall display. */
 function themePicker(hass) {
   const latest = () => Theme._hass || hass;
+  const wall = isWall();
   const pick = (entity, option) => {
     const h = latest();
-    h.callService("input_select", "select_option", { entity_id: entity, option });
+    if (wall) h.callService("input_select", "select_option", { entity_id: entity, option });
+    else Local.set(entity === THEME_ENTITY ? Local.THEME : Local.MODE, option);
     // Repaint now even if HA is slow to answer.
     if (entity === THEME_ENTITY) Theme.key = null;
     else Theme.mode = null;
@@ -959,7 +992,8 @@ function themePicker(hass) {
       const cur = Theme.key;
       const opts = [["default", DEFAULT_THEME], ...Object.entries(THEMES)];
       const h = latest();
-      const ms = h.states[MODE_ENTITY]?.state;
+      const ownMode = wall ? null : Local.get(Local.MODE);
+      const ms = ownMode || h.states[MODE_ENTITY]?.state;
       const mode = MODES.map((m) => `<button class="${ms === m.key ? "on" : ""}" data-action="mode" data-key="${m.key}">${m.icon} ${m.label}</button>`).join("");
       const menu = KM.active() ? `<button class="menu" data-action="ha-menu">☰ Home Assistant menu</button>` : "";
       return `<div class="tt">🎨 Display theme</div><div class="grid">${opts
@@ -967,12 +1001,18 @@ function themePicker(hass) {
         .join("")}</div><div class="hint" style="margin-top:12px">Holiday themes also offer themselves on the Home tab when one is coming up, and switch off a few days after.</div>
         ${h.states[MODE_ENTITY] ? `<div class="lb">Dark or light</div><div class="seg3">${mode}</div>
         <div class="hint">${ms === "auto" ? `Auto is dark from sunset to sunrise (${Theme.mode} now).` : "Auto follows the sun: dark from sunset to sunrise."}</div>` : ""}
-        <div class="acts">${menu}<button class="go" data-action="cancel">Done</button></div>`;
+        <div class="hint">${wall ? "This sets the kitchen display and its screensaver." : "These only change this device."}</div>
+        <div class="acts">${menu}${!wall && Local.any() ? `<button class="menu" data-action="follow">Same as kitchen display</button>` : ""}<button class="go" data-action="cancel">Done</button></div>`;
     },
     onAction(a, d, s) {
       if (a === "pick") pick(THEME_ENTITY, d.key);
       else if (a === "mode") pick(MODE_ENTITY, d.key);
-      else if (a === "ha-menu") return KM.go(KM.menuUrl());
+      else if (a === "follow") {
+        Local.set(Local.THEME, null);
+        Local.set(Local.MODE, null);
+        Theme.key = null;
+        Theme.apply(latest());
+      } else if (a === "ha-menu") return KM.go(KM.menuUrl());
       else return;
       s.update();
     },
@@ -2606,6 +2646,7 @@ const answeredTokens = (v) => String(v || "").split(",").filter((x) => /^[a-z0-9
 /** The holiday offer to show now, or null: in a holiday's window, its theme off, not answered yet. */
 function holidayOffer(hass) {
   const h = holidayNow();
+  if (!isWall()) return null; // the offer sets the house theme, so only the wall display asks
   const s = hass.states[THEME_ENTITY];
   const ans = hass.states[THEME_ANSWERED];
   if (!h || !s || !ans || s.state === h.key) return null;
