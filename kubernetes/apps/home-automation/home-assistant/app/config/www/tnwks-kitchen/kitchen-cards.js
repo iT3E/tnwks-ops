@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.4.0";
+const VERSION = "1.4.1";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -699,7 +699,11 @@ const KM = {
     this._going = true;
     setTimeout(() => (this._going = false), 10000);
     console.info(`tnwks kitchen cards: kiosk ${url}`);
-    location.replace(url);
+    // In the Android HA app a plain reload can leave the app: on the display
+    // it opened Chrome instead. The app's own homeassistant://navigate link
+    // reloads the page inside the app, query string included.
+    if (this._inApp() && /Android/i.test(navigator.userAgent)) location.href = `homeassistant://navigate${url}`;
+    else location.replace(url);
   },
 };
 window.addEventListener("pointerdown", () => (KM.touched = Date.now()), { capture: true, passive: true });
