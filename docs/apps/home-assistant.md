@@ -247,7 +247,9 @@ menu on the wall display, open 🎨 next to the tabs and tap **Home Assistant
 menu**: it reloads the dashboard with `?disable_km` (kiosk-mode's off switch
 for one page load; nothing may set `ignore_disable_km`), so the header and
 sidebar come back. A **Back to kitchen** pill at the bottom reloads it without
-that. An HA app that has shown the dashboard in kiosk mode remembers it
+that. Inside the Android HA app both reload through the app's own
+`homeassistant://navigate/...` link, because a plain page reload there opened
+Chrome instead of staying in the app. An HA app that has shown the dashboard in kiosk mode remembers it
 (localStorage `tnwks-kitchen-kiosk`, cleared by `?clear_km_cache`), and after
 5 minutes untouched it goes back to the kiosk dashboard by itself, also from
 another HA page. Phones and browsers without `?kiosk` get neither the button
