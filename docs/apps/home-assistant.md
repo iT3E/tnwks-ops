@@ -240,9 +240,35 @@ When the display has been idle for 5 minutes, Android starts its screensaver,
 ImmichFrame (photos, a clock and today's events; [`immichframe.md`](immichframe.md)).
 A tap ends it and shows the dashboard again.
 
-kiosk-mode hides HA's header and sidebar on a device once the dashboard has
-been opened there with `?kiosk` (it remembers). Open it with `?clear_km_cache`
-to undo that.
+kiosk-mode hides HA's header and sidebar on a page opened with `?kiosk` (the
+tabs keep it in the URL; with `&cache` kiosk-mode also remembers it in that
+browser). Open it with `?clear_km_cache` to clear that cache. To reach HA's
+menu on the wall display, open 🎨 next to the tabs and tap **Home Assistant
+menu**: it reloads the dashboard with `?disable_km` (kiosk-mode's off switch
+for one page load; nothing may set `ignore_disable_km`), so the header and
+sidebar come back. A **Back to kitchen** pill at the bottom reloads it without
+that. An HA app that has shown the dashboard in kiosk mode remembers it
+(localStorage `tnwks-kitchen-kiosk`, cleared by `?clear_km_cache`), and after
+5 minutes untouched it goes back to the kiosk dashboard by itself, also from
+another HA page. Phones and browsers without `?kiosk` get neither the button
+nor the pill.
+
+Dark or light: `input_select.kitchen_mode` (`auto`, `dark` or `light`, in
+`packages/kitchen_display.yaml`, set from the 🎨 sheet) applies to every
+screen. `auto` is dark while `sun.sun` is below the horizon. Dark is the
+original look. Light keeps each theme's accent and derives the rest from it
+(near-white cards on a faintly tinted page; the everyday theme stays neutral
+gray), and darkens the accent and the "done" green where they're text until
+they pass WCAG AA (4.5:1). The HA Companion app colors Android's status bar
+from `--app-header-background-color` and the navigation bar from
+`--primary-background-color` on `<html>`, read again whenever the frontend
+sends `theme-update` on the external bus. HA's own theme is the default light
+one, so those bars were white. While the Kitchen dashboard is on screen, the
+cards set both variables to the dashboard's page color (a stylesheet with
+`!important`, so HA re-applying its theme can't undo it) and send
+`theme-update` through `hass.auth.external`. They take the variables back
+when the dashboard goes away and while HA's menu is open, so the rest of HA
+looks normal.
 
 The dashboard is a single HA view. `kitchen-pages-card` draws the header, the
 tabs and every tab's cards as pages that stay mounted, so a tab switch only

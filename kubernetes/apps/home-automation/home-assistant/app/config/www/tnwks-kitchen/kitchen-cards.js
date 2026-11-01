@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.3.1";
+const VERSION = "1.4.0";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -391,7 +391,7 @@ const THEMES = {
     vars: { accent: "#e08a3c", bg: "#15110d", card: "#221b14", card2: "#2e251b", line: "#3d3125" },
     particles: ["🍂", "🍁", "🍂", "🌰"], motion: "fall", garland: "🍂 🦃 🥧 🌽 🍁" },
   christmas: { name: "Christmas", emoji: "🎄", day: (y) => new Date(y, 11, 25), lead: 24, after: 1, greet: "Merry Christmas!",
-    vars: { accent: "#e5484d", ok: "#3fbf6a", bg: "#0d1512", card: "#16211c", card2: "#1f2d26", line: "#2b3d33" },
+    tint: "#3fbf6a", vars: { accent: "#e5484d", ok: "#3fbf6a", bg: "#0d1512", card: "#16211c", card2: "#1f2d26", line: "#2b3d33" },
     particles: ["❄️", "❄️", "✨", "❄️"], motion: "fall", garland: "🎄 ❄️ 🎁 ⛄ ✨" },
 };
 const MS_DAY = 86400000;
@@ -421,10 +421,12 @@ const THEME_ENTITY = "input_select.kitchen_theme";
 const THEME_ANSWERED = "input_text.kitchen_theme_answered";
 const Theme = {
   key: "default",
+  mode: "dark",
   current() {
     return THEMES[this.key] || DEFAULT_THEME;
   },
   apply(hass) {
+    if (hass) this._hass = hass;
     const s = hass?.states?.[THEME_ENTITY];
     let key = s && THEMES[s.state] ? s.state : "default";
     if (key !== "default" && themeExpired(key)) {
@@ -435,16 +437,25 @@ const Theme = {
       }
       key = "default";
     }
-    if (key === this.key) return;
+    const mode = resolveMode(hass);
+    if (key === this.key && mode === this.mode) return;
+    const keyChanged = key !== this.key;
     this.key = key;
+    this.mode = mode;
     const th = this.current();
+    this.palette = mode === "light" ? lightPalette(th) : darkPalette(th);
     const root = document.documentElement.style;
-    for (const v of ["accent", "ink", "bg", "card", "card2", "line", "ok"]) {
-      if (th.vars[v]) root.setProperty(`--k-${v}`, th.vars[v]);
+    for (const v of PALETTE_VARS) {
+      if (this.palette[v]) root.setProperty(`--k-${v}`, this.palette[v]);
       else root.removeProperty(`--k-${v}`);
     }
-    this._particles(th);
+    if (keyChanged) this._particles(th);
+    Bars.update();
     window.dispatchEvent(new CustomEvent("kitchen-theme", { detail: key }));
+  },
+  /** The page background of the active theme and mode (what the system bars get). */
+  bg() {
+    return this.palette?.bg || DARK_BG;
   },
   // A dozen slow emoji over the page. Only transform and opacity animate, so
   // the tablet's GPU does the work and the cards never re-layout.
@@ -472,6 +483,234 @@ const Theme = {
     this._host = host;
   },
 };
+
+// ------------------------------------------------------ dark/light mode
+
+// input_select.kitchen_mode (packages/kitchen_display.yaml): dark, light or
+// auto (dark while sun.sun is below the horizon). Dark is the look the themes
+// were made in. Light keeps each theme's accent and derives the rest from it:
+// near-white cards on a faintly tinted page, dark text, and the accent (and
+// the "done" green) darkened where they're used as text until they pass WCAG
+// AA (4.5:1) on the cards. Before the helper exists, the display stays dark.
+const MODE_ENTITY = "input_select.kitchen_mode";
+const MODES = [
+  { key: "dark", label: "Dark", icon: "🌙" },
+  { key: "light", label: "Light", icon: "☀️" },
+  { key: "auto", label: "Auto", icon: "🌗" },
+];
+function resolveMode(hass) {
+  const m = hass?.states?.[MODE_ENTITY]?.state;
+  if (m === "dark" || m === "light") return m;
+  if (m !== "auto") return "dark";
+  return hass.states["sun.sun"]?.state === "above_horizon" ? "light" : "dark";
+}
+const DARK_BG = "#111318";
+const DEFAULT_ACCENT = "#ff9f43";
+const DEFAULT_OK = "#4cd17a";
+const PALETTE_VARS = ["accent", "ink", "bg", "card", "card2", "line", "ok", "txt", "sub", "acct", "okt", "danger",
+  "slot0", "slot1", "slot2", "slot3", "scrim", "shadow"];
+const rgbOf = (hex) => {
+  const h = hex.replace("#", "");
+  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+};
+const hexOf = (rgb) => "#" + rgb.map((x) => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, "0")).join("");
+/** `t` of color a over color b (0 = b, 1 = a). */
+const mix = (a, b, t) => {
+  const x = rgbOf(a), y = rgbOf(b);
+  return hexOf(x.map((v, i) => v * t + y[i] * (1 - t)));
+};
+const luminance = (hex) => {
+  const [r, g, b] = rgbOf(hex).map((v) => {
+    v /= 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrast = (a, b) => {
+  const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+};
+/** `fg` darkened (on a light `bg`) or lightened (on a dark one) until it reaches `ratio` on `bg`. */
+function readable(fg, bg, ratio = 4.5) {
+  const toward = luminance(bg) > 0.18 ? "#000000" : "#ffffff";
+  let c = fg;
+  for (let t = 0.96; contrast(c, bg) < ratio && t > 0; t -= 0.04) c = mix(fg, toward, t);
+  return c;
+}
+/** Readable on every one of `bgs`. */
+const readableOn = (fg, ...bgs) => bgs.reduce((c, bg) => readable(c, bg), fg);
+function lightPalette(th) {
+  const accent = th.vars.accent || DEFAULT_ACCENT;
+  const ok = th.vars.ok || DEFAULT_OK;
+  // The everyday theme stays neutral gray; holidays tint the page with their accent.
+  // `tint` overrides the accent for that (Christmas: green pages, red accents).
+  const tint = th === DEFAULT_THEME ? 0 : 1;
+  const tc = th.tint || accent;
+  const p = {
+    accent,
+    ok,
+    bg: mix(tc, "#e9ecf0", 0.1 * tint),
+    card: mix(tc, "#ffffff", 0.03 * tint),
+    card2: mix(tc, "#eef0f3", 0.08 * tint),
+    line: mix(tc, "#d3d8df", 0.14 * tint),
+    txt: mix(tc, "#1b1e24", 0.06 * tint),
+    danger: "#c62828",
+    slot0: "#f6eccd", slot1: "#d8eaf5", slot2: "#f4dbe9", slot3: "#e3def5",
+    scrim: "rgba(20,24,32,.38)",
+    shadow: "0 1px 2px rgba(20,24,32,.07)",
+  };
+  if (th.vars.ink) p.ink = th.vars.ink;
+  p.sub = readableOn(mix(tc, "#5d636e", 0.08 * tint), p.card2, p.bg);
+  p.acct = readableOn(accent, p.card2, p.bg);
+  p.okt = readableOn(ok, p.card2, p.bg);
+  return p;
+}
+/** Dark mode is each theme's own palette; only an accent too dark to read as text gets a lighter text shade. */
+function darkPalette(th) {
+  const p = { ...th.vars };
+  const card2 = th.vars.card2 || "#252932";
+  const acct = readable(th.vars.accent || DEFAULT_ACCENT, card2);
+  if (acct !== (th.vars.accent || DEFAULT_ACCENT)) p.acct = acct;
+  return p;
+}
+
+// The HA Companion app paints Android's status bar from the page's
+// --app-header-background-color and the navigation bar (and the window behind
+// the page) from --primary-background-color, read off <html> when the frontend
+// sends `theme-update` on the external bus and when it connects (android
+// WebViewActivity.getAndSetStatusBarNavigationBarColors). HA's own theme is the
+// default light one, so the bars came out white over the dark cards. While the
+// Kitchen dashboard is on screen, both are set to the dashboard's page color
+// (in a stylesheet with !important, so HA re-applying its theme on a reconnect
+// can't undo it; HA sends its own theme-update afterwards and the app reads ours)
+// and the app is told to look again. Other dashboards get HA's colors back.
+const Bars = {
+  owners: new Set(),
+  _color: null,
+  attach(card) {
+    this.owners.add(card);
+    this.update();
+  },
+  detach(card) {
+    this.owners.delete(card);
+    this.update();
+  },
+  update() {
+    const want = this.owners.size && !KM.escaped() ? Theme.bg() : null;
+    if (want === this._color) return;
+    this._color = want;
+    if (want) {
+      if (!this._el) {
+        this._el = document.createElement("style");
+        this._el.id = "tnwks-kitchen-bars";
+      }
+      this._el.textContent = `html { --app-header-background-color:${want} !important; --primary-background-color:${want} !important; }`;
+      if (!this._el.isConnected) document.head.appendChild(this._el);
+    } else this._el?.remove();
+    // HA keeps <html>'s own background in step with --primary-background-color.
+    document.documentElement.style.backgroundColor = getComputedStyle(document.documentElement).getPropertyValue("--primary-background-color").trim();
+    this.notify();
+  },
+  /** Ask the Companion app to re-read the colors. Browsers have no bridge, so this does nothing there. */
+  notify() {
+    const ext = Theme._hass?.auth?.external;
+    try {
+      if (typeof ext?.fireMessage === "function") return ext.fireMessage({ type: "theme-update" });
+      const msg = { type: "theme-update", id: Date.now() };
+      if (window.externalAppV2?.postMessage) window.externalAppV2.postMessage(JSON.stringify({ type: "externalBus", payload: msg }));
+      else if (window.externalApp?.externalBus) window.externalApp.externalBus(JSON.stringify(msg));
+    } catch (err) {
+      console.warn("tnwks kitchen cards: theme-update failed", err);
+    }
+  },
+};
+document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && Bars._color && Bars.notify());
+
+// ------------------------------------------------------- kiosk escape
+
+// kiosk-mode hides HA's header and sidebar on the wall display, which also
+// hides the way to HA's menu. "Home Assistant menu" in the 🎨 sheet reloads
+// the dashboard with ?disable_km (kiosk-mode's own off switch for one page
+// load), and a "Back to kitchen" pill reloads it without that. A device that
+// has shown the dashboard in kiosk mode remembers it (localStorage), so after
+// `idle_home` minutes untouched it goes back to the kiosk dashboard by itself,
+// also from another HA page. Only the HA app counts as a device (a desktop
+// browser tried with ?kiosk shouldn't start jumping back), and ?clear_km_cache
+// forgets it, like kiosk-mode.
+const KM = {
+  KEY: "tnwks-kitchen-kiosk",
+  touched: Date.now(),
+  _tokens() {
+    return location.search.slice(1).split("&").filter(Boolean);
+  },
+  _has(...names) {
+    return this._tokens().some((t) => names.includes(decodeURIComponent(t.split("=")[0])));
+  },
+  _store(k, v) {
+    try {
+      if (v === undefined) return localStorage.getItem(k);
+      if (v === null) localStorage.removeItem(k);
+      else localStorage.setItem(k, v);
+    } catch {
+      return null;
+    }
+  },
+  /** kiosk-mode was told to hide things: by the URL, or by its own cache (?...&cache). */
+  _asked() {
+    return this._has("kiosk", "hide_header", "hide_sidebar") || ["kmKiosk", "kmHideHeader", "kmHideSidebar"].some((k) => this._store(k) === "true");
+  },
+  active() {
+    return !this._has("disable_km") && this._asked();
+  },
+  /** The kitchen URL this device shows in kiosk mode, or null. */
+  home() {
+    return this._store(this.KEY);
+  },
+  /** This is the wall display, showing HA's menu instead of the kiosk. */
+  escaped() {
+    return !!this.home() && !this.active();
+  },
+  _inApp() {
+    return !!(window.externalAppV2 || window.externalApp || window.webkit?.messageHandlers?.externalBus);
+  },
+  /** Called while the Kitchen dashboard is on screen. */
+  remember() {
+    if (this._has("clear_km_cache")) return this._store(this.KEY, null);
+    if (this.active() && this._inApp()) this._store(this.KEY, location.pathname);
+  },
+  _url(path, tokens, hash) {
+    return `${path}${tokens.length ? `?${tokens.join("&")}` : ""}${hash || ""}`;
+  },
+  /** This page again with kiosk-mode off. */
+  menuUrl() {
+    const t = this._tokens().filter((x) => x.split("=")[0] !== "disable_km");
+    return this._url(location.pathname, [...t, "disable_km"], location.hash);
+  },
+  /** The kiosk dashboard: this page without ?disable_km (adding ?kiosk if nothing else turns kiosk-mode on). */
+  kitchenUrl(hash) {
+    const path = this.home() || location.pathname;
+    let t = path === location.pathname ? this._tokens().filter((x) => x.split("=")[0] !== "disable_km") : [];
+    const asked = t.some((x) => ["kiosk", "hide_header", "hide_sidebar"].includes(x.split("=")[0])) || ["kmKiosk", "kmHideHeader", "kmHideSidebar"].some((k) => this._store(k) === "true");
+    if (!asked) t = [...t, "kiosk"];
+    return this._url(path, t, hash ?? (path === location.pathname ? location.hash : ""));
+  },
+  go(url) {
+    if (this._going) return;
+    this._going = true;
+    setTimeout(() => (this._going = false), 10000);
+    console.info(`tnwks kitchen cards: kiosk ${url}`);
+    location.replace(url);
+  },
+};
+window.addEventListener("pointerdown", () => (KM.touched = Date.now()), { capture: true, passive: true });
+window.addEventListener("keydown", () => (KM.touched = Date.now()), { capture: true, passive: true });
+// From anywhere in HA (another dashboard, Settings), back to the kiosk after the idle time.
+setInterval(() => {
+  const home = KM.home();
+  if (!home || Date.now() - KM.touched < KM.idleMs) return;
+  if (location.pathname !== home ? !Bars.owners.size : KM.escaped()) KM.go(KM.kitchenUrl(""));
+}, 30000);
+KM.idleMs = 5 * 60000;
 
 // -------------------------------------------------------------- routines
 
@@ -555,9 +794,9 @@ const Routines = {
 // sheet)` handles taps on [data-action]; sheet.update() redraws (morphed, so
 // inputs keep their text); sheet.close() animates it away.
 const SHEET_CSS = `
-  .bd { position:fixed; inset:0; background:rgba(0,0,0,.55); animation:kfade .2s ease-out both; }
+  .bd { position:fixed; inset:0; background:var(--scrim); animation:kfade .2s ease-out both; }
   .sh { position:fixed; left:50%; top:7vh; width:min(660px,94vw); max-height:84vh; overflow:auto; transform:translateX(-50%);
-    background:var(--card); border-radius:24px; padding:20px; box-shadow:0 18px 50px rgba(0,0,0,.6); animation:shin .26s cubic-bezier(.2,.9,.3,1.1) both; }
+    background:var(--card); border-radius:24px; padding:20px; box-shadow:0 18px 50px rgba(0,0,0,.45); animation:shin .26s cubic-bezier(.2,.9,.3,1.1) both; }
   @keyframes shin { from { opacity:0; transform:translate(-50%,24px) scale(.97); } to { opacity:1; transform:translate(-50%,0); } }
   .closing .bd { animation:kfade .18s reverse both; }
   .closing .sh { animation:shin .18s reverse both; }
@@ -580,12 +819,16 @@ const SHEET_CSS = `
   .acts button { padding:14px 20px; border-radius:14px; background:var(--card2); font-size:16px; font-weight:500; }
   .acts .go { background:var(--accent); color:var(--ink); margin-left:auto; }
   .acts .go[disabled] { opacity:.4; }
-  .acts .del { color:#ff8a80; }
+  .acts .del { color:var(--danger); }
   .acts .del.arm { background:#c62828; color:#fff; }
   .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
   .grid button { background:var(--card2); border-radius:16px; padding:16px 10px; text-align:center; font-size:15px; }
   .grid button span { display:block; font-size:34px; margin-bottom:6px; }
   .grid button.on { outline:3px solid var(--accent); }
+  .seg3 { display:flex; gap:6px; background:var(--card2); border-radius:16px; padding:5px; }
+  .seg3 button { flex:1; text-align:center; padding:11px 6px; border-radius:12px; font-size:16px; color:var(--sub); }
+  .seg3 button.on { background:var(--accent); color:var(--ink); font-weight:500; }
+  .acts .menu { color:var(--sub); font-size:15px; display:flex; align-items:center; gap:8px; }
 `;
 function openSheet({ render, onAction, onInput }) {
   const host = document.createElement("div");
@@ -696,22 +939,37 @@ function routineEditor(hass, { member: who, routine }) {
   if (!routine) setTimeout(() => sheet.root.querySelector("input.tx")?.focus(), 250);
   return sheet;
 }
-/** The theme picker (🎨 next to the tabs). */
+/** The theme picker (🎨 next to the tabs): theme, dark/light mode, and the way into HA's menu on the wall display. */
 function themePicker(hass) {
+  const latest = () => Theme._hass || hass;
+  const pick = (entity, option) => {
+    const h = latest();
+    h.callService("input_select", "select_option", { entity_id: entity, option });
+    // Repaint now even if HA is slow to answer.
+    if (entity === THEME_ENTITY) Theme.key = null;
+    else Theme.mode = null;
+    Theme.apply({ ...h, states: { ...h.states, [entity]: { ...h.states[entity], state: option } } });
+  };
   const sheet = openSheet({
     render() {
       const cur = Theme.key;
       const opts = [["default", DEFAULT_THEME], ...Object.entries(THEMES)];
+      const h = latest();
+      const ms = h.states[MODE_ENTITY]?.state;
+      const mode = MODES.map((m) => `<button class="${ms === m.key ? "on" : ""}" data-action="mode" data-key="${m.key}">${m.icon} ${m.label}</button>`).join("");
+      const menu = KM.active() ? `<button class="menu" data-action="ha-menu">☰ Home Assistant menu</button>` : "";
       return `<div class="tt">🎨 Display theme</div><div class="grid">${opts
         .map(([k, t]) => `<button class="${cur === k ? "on" : ""}" data-action="pick" data-key="${k}"><span>${t.emoji}</span>${esc(t.name)}</button>`)
         .join("")}</div><div class="hint" style="margin-top:12px">Holiday themes also offer themselves on the Home tab when one is coming up, and switch off a few days after.</div>
-        <div class="acts"><button class="go" data-action="cancel">Done</button></div>`;
+        ${h.states[MODE_ENTITY] ? `<div class="lb">Dark or light</div><div class="seg3">${mode}</div>
+        <div class="hint">${ms === "auto" ? `Auto is dark from sunset to sunrise (${Theme.mode} now).` : "Auto follows the sun: dark from sunset to sunrise."}</div>` : ""}
+        <div class="acts">${menu}<button class="go" data-action="cancel">Done</button></div>`;
     },
     onAction(a, d, s) {
-      if (a !== "pick") return;
-      hass.callService("input_select", "select_option", { entity_id: THEME_ENTITY, option: d.key });
-      Theme.key = null; // repaint even if HA is slow to answer
-      Theme.apply({ ...hass, states: { ...hass.states, [THEME_ENTITY]: { state: d.key } } });
+      if (a === "pick") pick(THEME_ENTITY, d.key);
+      else if (a === "mode") pick(MODE_ENTITY, d.key);
+      else if (a === "ha-menu") return KM.go(KM.menuUrl());
+      else return;
       s.update();
     },
   });
@@ -723,9 +981,12 @@ function themePicker(hass) {
 const BASE_CSS = `
   :host { display:block; --bg:var(--k-bg,#111318); --card:var(--k-card,#1c1f26); --card2:var(--k-card2,#252932); --line:var(--k-line,#2e333d);
     --txt:var(--k-txt,#e8eaed); --sub:var(--k-sub,#9aa0aa); --accent:var(--k-accent,#ff9f43); --ink:var(--k-ink,#1b1206); --ok:var(--k-ok,#4cd17a);
+    --acct:var(--k-acct,var(--accent)); --okt:var(--k-okt,var(--ok)); --danger:var(--k-danger,#ff8a80);
+    --slot0:var(--k-slot0,#3b3522); --slot1:var(--k-slot1,#1e3542); --slot2:var(--k-slot2,#40263a); --slot3:var(--k-slot3,#2f2944);
+    --scrim:var(--k-scrim,rgba(0,0,0,.55)); --shadow:var(--k-shadow,none);
     color:var(--txt); font-family:Roboto,"Noto Sans",sans-serif; }
   * { box-sizing:border-box; }
-  .card { background:var(--card); border-radius:18px; padding:14px; height:100%; transition:background-color .4s; }
+  .card { background:var(--card); border-radius:18px; padding:14px; height:100%; transition:background-color .4s; box-shadow:var(--shadow); }
   .h { font-size:13px; font-weight:500; color:var(--sub); letter-spacing:.06em; text-transform:uppercase;
     margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; }
   .h b { color:var(--txt); font-weight:500; text-transform:none; letter-spacing:0; }
@@ -1080,7 +1341,7 @@ const CAL_CSS = `
   .up { display:grid; grid-template-columns:86px 1fr auto; gap:7px 10px; font-size:14.5px; align-items:center; }
   .up .d { color:var(--sub); font-size:13px; }
   .dots { display:flex; gap:3px; } .dots span { width:10px; height:10px; border-radius:50%; }
-  .day { font-size:15px; font-weight:500; margin:14px 0 6px; color:var(--accent); }
+  .day { font-size:15px; font-weight:500; margin:14px 0 6px; color:var(--acct); }
   .day:first-child { margin-top:0; }
   .row { display:flex; gap:12px; align-items:center; background:var(--card2); border-radius:12px; padding:10px 12px; margin-bottom:6px; }
   .row .bar { width:5px; align-self:stretch; border-radius:3px; }
@@ -1432,7 +1693,7 @@ const KID_CSS = `
   .stars small { display:block; font-size:11px; color:var(--sub); font-weight:400; }
   .next { margin-top:12px; display:flex; align-items:center; gap:10px; background:var(--card2); border-radius:14px; padding:12px; font-size:15px; width:100%; min-height:56px; }
   .next .chk { margin-left:auto; width:30px; height:30px; border-radius:50%; border:2px solid var(--sub); flex:none; }
-  .next.alldone { color:var(--ok); justify-content:center; }
+  .next.alldone { color:var(--okt); justify-content:center; }
   .next .chk { transition:background-color .25s, border-color .25s; display:grid; place-items:center; }
   .next.checking .chk { background:var(--ok); border-color:var(--ok); animation:kpop .4s ease-out; }
   .next.checking .chk::after { content:"✓"; color:#111; font-weight:700; }
@@ -1511,7 +1772,7 @@ class KidCard extends KitchenCard {
 
 class RoutineCard extends KitchenCard {
   css = `${KID_CSS}
-    .rk { background:var(--card); border-radius:22px; padding:16px; display:flex; flex-direction:column; gap:8px; min-height:100%; }
+    .rk { background:var(--card); box-shadow:var(--shadow); border-radius:22px; padding:16px; display:flex; flex-direction:column; gap:8px; min-height:100%; }
     .hd { display:flex; align-items:center; gap:10px; }
     .hd .nm { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .hd .av { width:52px; height:52px; font-size:22px; }
@@ -1523,12 +1784,12 @@ class RoutineCard extends KitchenCard {
     .seg { display:flex; gap:6px; }
     .seg button { flex:1; text-align:center; padding:9px 0; border-radius:12px; background:var(--card2); font-size:13px; color:var(--sub); white-space:nowrap; }
     .seg button.on { color:#111; font-weight:500; }
-    .seg button.done:not(.on) { color:var(--ok); }
+    .seg button.done:not(.on) { color:var(--okt); }
     .sec { font-size:13px; color:var(--sub); text-transform:uppercase; letter-spacing:.06em; margin-top:4px; }
     .ch { display:flex; align-items:center; gap:12px; background:var(--card2); border-radius:16px; padding:10px 12px; font-size:18px; min-height:60px; width:100%; }
     .ch .ic { font-size:26px; width:34px; text-align:center; flex:none; }
     .ch .tt { flex:1; }
-    .ch .p { font-size:13px; color:var(--accent); font-weight:500; white-space:nowrap; }
+    .ch .p { font-size:13px; color:var(--acct); font-weight:500; white-space:nowrap; }
     .ch .tick { width:36px; height:36px; border-radius:50%; border:2.5px solid var(--sub); flex:none; display:grid; place-items:center; font-size:20px; }
     .donegrid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
     .ch.done { opacity:.45; min-height:44px; padding:6px 8px; gap:6px; font-size:13px; border-radius:12px; }
@@ -1661,7 +1922,7 @@ class RoutineCard extends KitchenCard {
 
 class AdultCard extends KitchenCard {
   css = `
-    .ad { background:var(--card); border-radius:18px; padding:12px 14px; }
+    .ad { background:var(--card); box-shadow:var(--shadow); border-radius:18px; padding:12px 14px; }
     .top { display:flex; align-items:center; gap:10px; font-size:15px; }
     .top .av { width:30px; height:30px; font-size:13px; }
     .top .x { margin-left:auto; color:var(--sub); font-size:14px; }
@@ -2018,7 +2279,8 @@ class MealsCard extends KitchenCard {
  * column per meal slot, each slot a meal plan calendar (Mealie makes one per
  * meal type). Back/forward a week; returns to this week after 10 minutes.
  */
-const SLOT_TINT = ["#3b3522", "#1e3542", "#40263a", "#2f2944"];
+// Column tints, one per meal; dark and light values are --slot0..3 (BASE_CSS, lightPalette).
+const SLOT_TINT = [0, 1, 2, 3].map((i) => `var(--slot${i})`);
 class MealWeekCard extends KitchenCard {
   tickMs = 300000;
   css = `
@@ -2030,7 +2292,7 @@ class MealWeekCard extends KitchenCard {
     .sh { font-size:13px; text-align:center; padding:6px 0; border-radius:10px; font-weight:500; }
     .d { display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:12px; color:var(--sub); }
     .d b { font-size:18px; color:var(--txt); font-weight:500; }
-    .d.td b { color:var(--accent); }
+    .d.td b { color:var(--acct); }
     .c { border-radius:12px; padding:8px; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:4px;
       text-align:center; font-size:13px; line-height:1.25; overflow:hidden; }
     .c .e { font-size:22px; }
@@ -2097,9 +2359,9 @@ class MealWeekCard extends KitchenCard {
 class ChipsCard extends KitchenCard {
   css = `
     .house { display:flex; gap:8px; }
-    .chip { flex:1; background:var(--card); border-radius:14px; padding:10px; font-size:13px; color:var(--sub); min-width:0; }
+    .chip { flex:1; background:var(--card); box-shadow:var(--shadow); border-radius:14px; padding:10px; font-size:13px; color:var(--sub); min-width:0; }
     .chip b { display:block; color:var(--txt); font-size:15px; font-weight:500; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .chip.on b { color:var(--accent); }
+    .chip.on b { color:var(--acct); }
   `;
   render() {
     const out = (this.config.chips || []).map((c) => {
@@ -2179,7 +2441,35 @@ class PagesCard extends HTMLElement {
   }
   setConfig(config) {
     this.config = config;
+    KM.idleMs = (config.idle_home ?? 5) * 60000;
     this._build();
+  }
+  connectedCallback() {
+    KM.remember();
+    Bars.attach(this);
+    this._backPill();
+  }
+  disconnectedCallback() {
+    Bars.detach(this);
+    this._back?.remove();
+    this._back = null;
+  }
+  // On the wall display with HA's menu showing (?disable_km): a pill back to the kiosk.
+  _backPill() {
+    if (!KM.escaped()) return;
+    if (this._back?.isConnected) return;
+    const host = document.createElement("div");
+    host.className = "tnwks-kitchen-back";
+    host.style.cssText = "position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:9400";
+    const root = host.attachShadow({ mode: "open" });
+    root.innerHTML = `<style>${BASE_CSS}${MOTION_CSS}
+      .back { display:flex; align-items:center; gap:8px; padding:12px 20px; border-radius:26px; background:var(--accent); color:var(--ink);
+        font-size:16px; font-weight:500; box-shadow:0 6px 20px rgba(0,0,0,.35); animation:kin .3s ease-out both; }</style>
+      <button class="back">🏠 Back to kitchen</button>`;
+    root.querySelector("button").addEventListener("click", () => KM.go(KM.kitchenUrl()));
+    root.addEventListener("pointerdown", ripple);
+    document.body.appendChild(host);
+    this._back = host;
   }
   css = `
     :host { display:block; }
@@ -2291,6 +2581,11 @@ class PagesCard extends HTMLElement {
   }
   set hass(h) {
     this._hass = h;
+    if (!this._readyHook && h?.connection?.addEventListener) {
+      // After a reconnect the app may have re-read HA's own colors; send ours again.
+      this._readyHook = true;
+      h.connection.addEventListener("ready", () => Bars._color && Bars.notify());
+    }
     Theme.apply(h);
     if (this._header) this._header.hass = h;
     for (const el of Object.values(this._built)) el.hass = h;

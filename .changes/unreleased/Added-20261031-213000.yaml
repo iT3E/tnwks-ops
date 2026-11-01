@@ -1,0 +1,3 @@
+kind: Added
+body: 'Kitchen display: dark, light or auto (by the sun) mode from the 🎨 sheet (input_select.kitchen_mode), with a light palette for every theme and the Android status and navigation bars following it on the wall display; a "Home Assistant menu" button there that opens HA''s menu with ?disable_km, and a "Back to kitchen" pill (or 5 idle minutes) to return to the kiosk.'
+time: 2026-10-31T21:30:00-07:00
