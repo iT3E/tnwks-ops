@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'kitchen-screensaver: the safety reload works through the ingress: the page has the ImmichFrame app reload it with an image that fails to connect (/api/drop came back as a 502 through nginx, which the app ignores).'
-time: 2026-10-31T22:05:00-07:00

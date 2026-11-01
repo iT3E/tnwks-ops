@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.48.2 - 2026-11-01
+
+### Fixed
+
+* kitchen-screensaver: the safety reload works through the ingress: the page has the ImmichFrame app reload it with an image that fails to connect (/api/drop came back as a 502 through nginx, which the app ignores).
+
 ## v1.48.1 - 2026-11-01
 
 ### Fixed
