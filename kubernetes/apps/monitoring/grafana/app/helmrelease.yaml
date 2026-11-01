@@ -239,7 +239,12 @@ spec:
         signout_redirect_url: https://auth.tnwks.us/logout?client_id=${OAUTH2_PROXY_CLIENT_ID}&logout_uri=https%3A%2F%2Foauth2.${INTERNAL_DOMAIN}%2Foauth2%2Fsign_out
       users:
         auto_assign_org: true
-        auto_assign_org_role: Admin
+        # Everyone signing in through oauth2-proxy (Cognito) starts as a
+        # Viewer: read-only, including the shared kiosk identity on the
+        # kitchen wall display. Admins are promoted in Grafana (Server Admin /
+        # org Admin); the role only applies at first sign-in, so existing
+        # admins keep theirs.
+        auto_assign_org_role: Viewer
 
     imageRenderer:
       enabled: true
