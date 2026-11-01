@@ -88,9 +88,12 @@ reads with `!env_var`.
 
 The sidebar, top to bottom:
 
-- **Home** (`/home-hub`, `dashboards/house.yaml`): the default dashboard. Who's
-  home, weather, power (Sense, solar per inverter by day), appliances, the
-  wall display's theme, cameras (a tap opens Security).
+- **Home** (`/home-hub`, `dashboards/house.yaml`): the default dashboard, in
+  order of use. **Home**: robovac room buttons and controls, who's home,
+  weather, lights (with the `light.pool_lights` group) and media, appliances,
+  a power summary, cameras (a tap opens Security). **Robovac**: the map,
+  full controls, consumables. **Energy**: live power and the biggest loads,
+  two weeks of use vs solar per inverter, the EV charger.
 - **Security** (`/home-security`): cameras and Frigate reviews.
 - **Energy**: the built-in one (sources in `.storage/energy`, UI-owned).
 - **Monitoring** (`/home-monitoring`, admins): Grafana in a frame, at its home

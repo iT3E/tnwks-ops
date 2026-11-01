@@ -1,0 +1,13 @@
+---
+# Light groups (the bulbs are LIFX, UI-owned config entries).
+# light.pool_lights: the four LIFX Minis around the pool, so Home can switch
+# and dim them together.
+light:
+  - platform: group
+    name: Pool lights
+    unique_id: pool_lights
+    entities:
+      - light.pool1_lifx_mini_318ee9_pump_room
+      - light.pool1_lifx_mini_31589a_middle_left
+      - light.pool1_lifx_mini_318e9a_middle_right
+      - light.pool1_lifx_mini_3189f4_far_right
