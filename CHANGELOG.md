@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.64.1 - 2026-11-01
+
+### Fixed
+
+* grafana: Windows Exporter dashboard vendored with queries for windows_exporter 0.31 (memory, processors, RAM and other panels no longer N/A); home memory panel fixed; windows_exporter time collector enabled for the NTP panel.
+
 ## v1.64.0 - 2026-11-01
 
 ### Changed

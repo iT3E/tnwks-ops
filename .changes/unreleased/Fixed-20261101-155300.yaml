@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'grafana: Windows Exporter dashboard vendored with queries for windows_exporter 0.31 (memory, processors, RAM and other panels no longer N/A); home memory panel fixed; windows_exporter time collector enabled for the NTP panel.'
-time: 2026-11-01T15:53:00-08:00
