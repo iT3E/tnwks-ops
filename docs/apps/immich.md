@@ -3,7 +3,8 @@
 Self-hosted photo library at `https://immich.internal.tnwks.us` (LAN and
 admin VPN only, `nginx-internal`). Its first job is holding the photos the
 kitchen screensaver shows: an hourly job mirrors the Google Photos shared
-albums listed in Home Assistant into Immich, and Home Assistant's slideshow
+albums listed in Home Assistant into Immich, and
+[ImmichFrame](immichframe.md), the kitchen display's Android screensaver,
 reads them back through a read-only API key.
 
 Manifests: `kubernetes/apps/selfhosted/immich/`. WSL-only (wired from
@@ -68,23 +69,27 @@ API keys that a proxy session would block.
 
 ## Accounts and keys
 
-| Account or key                               | Kind                              | Used by                           | Where                                                                                        |
-| -------------------------------------------- | --------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------- |
-| break-glass admin                            | Immich password, admin            | people, when OAuth is down        | workstation `~/.openclaw/credentials/immich-admin.env`                                       |
-| screensaver                                  | Immich password, not admin        | owns every synced photo and album | workstation `~/.openclaw/credentials/immich.env`                                             |
-| `gphotos-sync (cluster CronJob)`             | API key on screensaver            | the sync job                      | `immich.env` (`IMMICH_SYNC_API_KEY`), `sync/secrets.sops.yaml`                               |
-| `home-assistant album_slideshow (read-only)` | API key on screensaver            | Home Assistant's slideshow        | `immich.env` (`IMMICH_HA_API_KEY`)                                                           |
-| HA token `immich-screensaver-sync`           | long-lived token on HA's Ori user | the sync job                      | `~/.openclaw/credentials/hass.env` (`HASS_SCREENSAVER_SYNC_TOKEN`), `sync/secrets.sops.yaml` |
+| Account or key                                | Kind                              | Used by                           | Where                                                                                        |
+| --------------------------------------------- | --------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------- |
+| break-glass admin                             | Immich password, admin            | people, when OAuth is down        | workstation `~/.openclaw/credentials/immich-admin.env`                                       |
+| screensaver                                   | Immich password, not admin        | owns every synced photo and album | workstation `~/.openclaw/credentials/immich.env`                                             |
+| `gphotos-sync (cluster CronJob)`              | API key on screensaver            | the sync job                      | `immich.env` (`IMMICH_SYNC_API_KEY`), `sync/secrets.sops.yaml`                               |
+| `home-assistant album_slideshow (read-only)`  | API key on screensaver            | Home Assistant's slideshow        | `immich.env` (`IMMICH_HA_API_KEY`)                                                           |
+| `immichframe kitchen screensaver (read-only)` | API key on screensaver            | ImmichFrame                       | `immich.env` (`IMMICH_FRAME_API_KEY`), `immichframe/app/secrets.sops.yaml`                   |
+| HA token `immich-screensaver-sync`            | long-lived token on HA's Ori user | the sync job                      | `~/.openclaw/credentials/hass.env` (`HASS_SCREENSAVER_SYNC_TOKEN`), `sync/secrets.sops.yaml` |
 
 The screensaver account owns the synced photos so the sync job can't reach
-anything else in Immich, and so the read-only key Home Assistant uses sees
-only those photos. Key permissions:
+anything else in Immich, and so the read-only keys Home Assistant and
+ImmichFrame use see only those photos. Key permissions:
 
 - sync: `asset.read`, `asset.upload`, `asset.update`, `asset.delete`,
   `album.create`, `album.read`, `album.update`, `album.delete`,
   `albumAsset.create`, `albumAsset.delete`.
 - Home Assistant: `server.about`, `asset.read`, `asset.view`,
   `asset.download`, `album.read`, `person.read`, `face.read`.
+- ImmichFrame (upstream's list): `album.read`, `album.statistics`,
+  `asset.view`, `asset.read`, `asset.statistics`, `face.read`, `memory.read`,
+  `person.read`, `person.statistics`, `tag.read`.
 
 ## Screensaver sync
 
@@ -100,7 +105,7 @@ belong to anyone; the link is all it needs.
 
 - **Open item:** the album is mirrored into an Immich album named after the
   Google album, and into the combined album **Kitchen screensaver**, which is
-  the one Home Assistant shows.
+  the one ImmichFrame shows.
 - **Checked off (or deleted):** its Immich album is deleted, and photos no
   other listed album holds go to Immich's trash.
 - **Bare link as the summary:** the item is renamed to the album title and

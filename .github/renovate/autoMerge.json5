@@ -171,6 +171,17 @@
       addLabels: ["impact/high"],
     },
     {
+      // ImmichFrame bumps the third number for every release, breaking ones
+      // included (v1.0.39.0 needed Immich 3.2), and has deprecated the
+      // Settings.yml import our config relies on (docs/apps/immichframe.md).
+      description: "ImmichFrame: every update reviewed",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["ghcr.io/immichframe/immichframe"],
+      matchFileNames: ["!/^(talos/ms-01|kubernetes/clusters/ms-01|kubernetes/apps/(kube-system/cilium|monitoring/thanos|monitoring/vector/agent|production/uisp|storage/rook-ceph|tools/node-feature-discovery|databases/cloudnative-pg/cluster-backup))//"],
+      automerge: false,
+      addLabels: ["impact/high"],
+    },
+    {
       description: "0.x minors: always reviewed",
       matchUpdateTypes: ["minor"],
       matchCurrentVersion: "/^v?0\\./",

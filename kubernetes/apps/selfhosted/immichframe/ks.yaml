@@ -1,0 +1,28 @@
+---
+# ImmichFrame: the kitchen display's Android screensaver, a slideshow of
+# Immich's "Kitchen screensaver" album with a clock and today's events
+# (docs/apps/immichframe.md). WSL-only like Immich, wired from
+# kubernetes/clusters/wsl/apps/kustomization.yaml.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: immichframe
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: immich
+  path: ./kubernetes/apps/selfhosted/immichframe/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  # The Immich API key, the auth secret and the calendar's iCal address ship
+  # as a SOPS-encrypted Secret.
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  wait: false # no flux ks dependents
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

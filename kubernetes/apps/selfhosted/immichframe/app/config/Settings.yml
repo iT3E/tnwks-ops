@@ -1,0 +1,68 @@
+---
+# ImmichFrame settings (docs/apps/immichframe.md). ImmichFrame imports this
+# file into its settings database on first start only; the database lives in
+# an emptyDir, so every pod start is a first start and git stays the source of
+# truth. The admin UI (/admin) is shut: no admin password is set.
+#
+# The AUTH_SECRET and WEBCALENDAR_URL placeholders are filled from
+# immichframe-secret by the render-config init container (helmrelease.yaml).
+# It uses sed, so the values must not contain '|', '&', '\' or a double
+# quote. Reference:
+# https://immichframe.dev/docs/getting-started/configuration
+General:
+  # Every client sends this as a Bearer token (the Android app and browsers
+  # pass it as ?authsecret=...).
+  AuthenticationSecret: "__AUTH_SECRET__"
+  # The family Google calendar's secret iCal address, the same one Home
+  # Assistant's calendar.family reads. ImmichFrame shows today's events.
+  Webcalendars:
+    - "__WEBCALENDAR_URL__"
+  Language: en
+  # Seconds per photo, and the crossfade between photos.
+  Interval: 30
+  TransitionDuration: 2
+  # date-fns formats (https://date-fns.org/docs/format): "6:05 PM" and
+  # "Saturday, October 31". ClockFormat is also used for the event times.
+  ShowClock: true
+  ClockFormat: "h:mm a"
+  ClockDateFormat: "EEEE, MMMM d"
+  # Text over the photo: clock and calendar only.
+  ShowProgressBar: false
+  ShowPhotoDate: false
+  ShowImageDesc: false
+  ShowPeopleDesc: false
+  ShowTagsDesc: false
+  ShowAlbumName: false
+  ShowImageLocation: false
+  Style: none
+  PrimaryColor: "#ffffff"
+  BaseFontSize: 17px
+  # Photos fill the portrait screen (cropped, no bars) and slowly zoom.
+  ImageFill: true
+  ImageZoom: true
+  ImagePan: false
+  # splitview pairs two portrait photos side by side, which on a portrait
+  # screen gives two narrow strips. One photo at a time.
+  Layout: single
+  PlayAudio: false
+  DownloadImages: false
+  # Hours between re-reads of the album (the sync job adds photos hourly).
+  RefreshAlbumPeopleInterval: 1
+  # Weather: off (no OpenWeatherMap key yet). To turn it on, add the key to
+  # immichframe-secret, a __WEATHER_API_KEY__ placeholder here plus its sed
+  # line in helmrelease.yaml, and set WeatherLatLong / UnitSystem.
+  WeatherApiKey: ""
+  ShowWeatherDescription: false
+  UnitSystem: imperial
+Accounts:
+  # The screensaver account's read-only ImmichFrame key (docs/apps/immich.md,
+  # "Accounts and keys"), mounted from immichframe-secret.
+  - ImmichServerUrl: http://immich-server.selfhosted.svc.cluster.local:2283
+    ApiKeyFile: /secrets/immich-api-key
+    # "Kitchen screensaver", the combined album the sync job keeps filled.
+    Albums:
+      - c2f9c2bc-c996-4399-af86-9952acb35199
+    ShowMemories: false
+    ShowFavorites: false
+    ShowArchived: false
+    ShowVideos: false

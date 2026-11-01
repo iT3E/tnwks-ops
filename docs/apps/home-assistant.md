@@ -236,6 +236,10 @@ the `counter.stars_<key>` helpers through `!env_var`. The cards read a
 person's name from that counter and match calendar events on it, so a new
 person needs a key in `FAMILY` (kitchen-cards.js), a counter and an env var.
 
+When the display has been idle for 5 minutes, Android starts its screensaver,
+ImmichFrame (photos, a clock and today's events; [`immichframe.md`](immichframe.md)).
+A tap ends it and shows the dashboard again.
+
 kiosk-mode hides HA's header and sidebar on a device once the dashboard has
 been opened there with `?kiosk` (it remembers). Open it with `?clear_km_cache`
 to undo that.

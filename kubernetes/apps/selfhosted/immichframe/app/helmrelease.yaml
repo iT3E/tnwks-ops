@@ -1,0 +1,180 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app immichframe
+spec:
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  interval: 30m
+  maxHistory: 2
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  values:
+    defaultPodOptions:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+    controllers:
+      immichframe:
+        annotations:
+          # Restart on a settings, CSS or secret change. The settings database
+          # is an emptyDir, so the restart re-imports config/Settings.yml.
+          reloader.stakater.com/auto: "true"
+        initContainers:
+          # Fills the secret placeholders in config/Settings.yml from
+          # immichframe-secret, so the auth secret and the calendar address
+          # stay out of the ConfigMap.
+          render-config:
+            image: &image
+              repository: ghcr.io/immichframe/immichframe
+              tag: v1.0.39.0@sha256:b4bd2ac6ec75c0117a24bd627dc0b449d485ac87ec3a410c73d5db05a4bbfcaf
+            command:
+              - /bin/sh
+              - -c
+              - >-
+                sed -e "s|__AUTH_SECRET__|$AUTH_SECRET|g"
+                -e "s|__WEBCALENDAR_URL__|$WEBCALENDAR_URL|g"
+                /config-template/Settings.yml > /app/Config/Settings.yml
+            env:
+              AUTH_SECRET:
+                valueFrom:
+                  secretKeyRef:
+                    name: immichframe-secret
+                    key: AUTH_SECRET
+              WEBCALENDAR_URL:
+                valueFrom:
+                  secretKeyRef:
+                    name: immichframe-secret
+                    key: WEBCALENDAR_URL
+            securityContext: &securityContext
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+        containers:
+          app:
+            image: *image
+            env:
+              # The calendar's "today" and the clock's server side.
+              TZ: "${TIMEZONE}"
+              IMMICHFRAME_CONFIG_PATH: /app/Config
+            securityContext: *securityContext
+            probes:
+              liveness: &probe
+                enabled: true
+                custom: true
+                spec:
+                  # Display settings; anonymous (the slideshow API needs
+                  # the auth secret).
+                  httpGet:
+                    path: /api/Config
+                    port: &port 8080
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+              readiness: *probe
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/Config
+                    port: *port
+                  periodSeconds: 5
+                  timeoutSeconds: 5
+                  failureThreshold: 30
+            resources:
+              requests:
+                cpu: 10m
+                memory: 128Mi
+              limits:
+                memory: 512Mi
+
+    service:
+      app:
+        controller: immichframe
+        ports:
+          http:
+            port: *port
+
+    ingress:
+      app:
+        # LAN and admin VPN only, like Immich. No oauth2-proxy: the Android
+        # app's WebView can't log in through Cognito, so ImmichFrame's
+        # AuthenticationSecret is what keeps the slideshow API closed.
+        className: nginx-internal
+        hosts:
+          - host: &host "immichframe.${INTERNAL_DOMAIN}"
+            paths:
+              - path: /
+                pathType: Prefix
+                service:
+                  identifier: app
+                  port: http
+        # The controller's default cert (*.internal.tnwks.us) covers the
+        # host; listing it makes nginx redirect plain http to https.
+        tls:
+          - hosts:
+              - *host
+
+    persistence:
+      # Settings.yml (rendered by render-config) and the settings database
+      # ImmichFrame imports it into. Throwaway on purpose: git is the source
+      # of truth, the admin UI's database is not.
+      config:
+        type: emptyDir
+        advancedMounts:
+          immichframe:
+            render-config:
+              - path: /app/Config
+            app:
+              - path: /app/Config
+      config-template:
+        type: configMap
+        name: immichframe-config
+        advancedMounts:
+          immichframe:
+            render-config:
+              - path: /config-template/Settings.yml
+                subPath: Settings.yml
+                readOnly: true
+            app:
+              - path: /app/wwwroot/static/custom.css
+                subPath: custom.css
+                readOnly: true
+      api-key:
+        type: secret
+        name: immichframe-secret
+        items:
+          - key: IMMICH_API_KEY
+            path: immich-api-key
+        advancedMounts:
+          immichframe:
+            app:
+              - path: /secrets
+                readOnly: true
+      tmp:
+        type: emptyDir
+        advancedMounts:
+          immichframe:
+            app:
+              - path: /tmp
