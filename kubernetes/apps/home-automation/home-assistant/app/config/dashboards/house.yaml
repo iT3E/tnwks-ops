@@ -1,23 +1,30 @@
 ---
 # Home dashboard (YAML mode, git-owned; URL /home-hub, HA's default dashboard
-# via frontend system data `default_panel` = home-hub, which is UI-owned). The everyday
-# view of the house on phones: who's home, weather, power, appliances,
-# cameras. The built-in Overview (areas) is hidden from the sidebar but still
-# at /home; the tablet has its own dashboard (Wall display).
+# via frontend system data `default_panel` = home-hub, which is UI-owned).
+#
+# Ordered by how often things get used, not by room (each room has only a
+# device or two, so room pages would be mostly empty):
+#   Home     everyday controls first: the robovac's room buttons, then who's
+#            home and the weather, lights and media, appliances, cameras.
+#   Robovac  the map (tap rooms, zones, go-to), full controls, consumables.
+#   Energy   live power, the biggest loads, two weeks of use vs solar, the
+#            EV charger.
+# The wall display's theme and dark/light live on the wall display (🎨).
 #
 # Entities: Sense (power, detected devices), SolarEdge (external statistics,
 # hourly and delayed, so solar is a daily bar chart rather than a live tile),
-# Frigate (cameras), the kitchen display helpers (packages/kitchen_display.yaml).
-# person.adult1 / person.adult2 are the two adults' persons, renamed in the
-# entity registry (UI-owned) so no names live here; HA shows their names.
+# Frigate (cameras). person.adult1 / person.adult2 are the two adults'
+# persons, renamed in the entity registry (UI-owned) so no names live here;
+# HA shows their names.
 # Robovac: Xiaomi Miio (vacuum.roborock_vacuum_s5, added with host + token)
 # and Xiaomi Cloud Map Extractor (image.robovac_live_map, with the rooms and
 # calibration as attributes); both UI-owned. The rooms are the app's
 # (segment ids from the map's `rooms` attribute, outlines from its
 # x0/y0/x1/y1 boxes): 17 Playroom, 18 Kitchen, 16 Living room, the same ids
 # as the scripts in packages/robovac.yaml.
-# Lights (LIFX), media (Google Cast, Denon, Sonos) and the Tesla Wall
-# Connector are local integrations, UI-owned except Sonos (configuration.yaml).
+# Lights (LIFX; light.pool_lights is the group in packages/lights.yaml),
+# media (Google Cast, Denon, Sonos) and the Tesla Wall Connector are local
+# integrations, UI-owned except Sonos (configuration.yaml).
 title: Home
 views:
   - title: Home
@@ -26,6 +33,28 @@ views:
     type: sections
     max_columns: 3
     sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Robovac
+            icon: mdi:robot-vacuum
+            tap_action: { action: navigate, navigation_path: /home-hub/robovac }
+            badges:
+              - { type: entity, entity: sensor.roborock_vacuum_s5_battery, show_name: false }
+              - { type: entity, entity: vacuum.roborock_vacuum_s5, show_name: false, show_state: true, show_icon: false }
+          # One tap cleans that room (packages/robovac.yaml).
+          - &room { type: tile, entity: script.robovac_clean_kitchen, name: Kitchen, icon: mdi:countertop, vertical: true, hide_state: true, tap_action: { action: perform-action, perform_action: script.turn_on, target: { entity_id: script.robovac_clean_kitchen } }, grid_options: { columns: 4, rows: 2 } }
+          - { <<: *room, entity: script.robovac_clean_living_room, name: Living room, icon: mdi:sofa, tap_action: { action: perform-action, perform_action: script.turn_on, target: { entity_id: script.robovac_clean_living_room } } }
+          - { <<: *room, entity: script.robovac_clean_playroom, name: Playroom, icon: mdi:toy-brick, tap_action: { action: perform-action, perform_action: script.turn_on, target: { entity_id: script.robovac_clean_playroom } } }
+          - type: tile
+            entity: vacuum.roborock_vacuum_s5
+            name: Robovac
+            tap_action: { action: navigate, navigation_path: /home-hub/robovac }
+            features:
+              - type: vacuum-commands
+                commands: [start_pause, stop, return_home, locate]
+            grid_options: { columns: full }
+
       - type: grid
         cards:
           - type: heading
@@ -41,104 +70,73 @@ views:
       - type: grid
         cards:
           - type: heading
-            heading: Power
-            icon: mdi:flash
-            badges:
-              - type: entity
-                entity: sensor.sense_264601_daily_energy
-                name: Today
-                show_name: true
-          - type: tile
-            entity: sensor.sense_264601_energy
-            name: House now
-            icon: mdi:home-lightning-bolt
-            grid_options: { columns: full }
-            features:
-              - type: trend-graph
-                hours_to_show: 6
-          - { type: tile, entity: sensor.electric_vehicle_power, name: EV charging, icon: mdi:car-electric }
-          - { type: tile, entity: sensor.always_on_power, name: Always on, icon: mdi:power-plug }
-          - { type: tile, entity: sensor.water_heater_power, name: Water heater, icon: mdi:water-boiler }
-          - { type: tile, entity: sensor.ac_2_power, name: AC 2, icon: mdi:air-conditioner }
-          - type: statistics-graph
-            title: Last two weeks (kWh)
-            chart_type: bar
-            period: day
-            days_to_show: 14
-            stat_types: [change]
-            entities:
-              - entity: sensor.sense_264601_daily_energy
-                name: House
-              - entity: solaredge:2242194_74068c8e_94
-                name: Solar, inverter 1
-              - entity: solaredge:2242194_7500e34f_a7
-                name: Solar, inverter 2
-            grid_options: { columns: full }
-          - type: button
-            name: Energy dashboard
-            icon: mdi:chart-bar
-            tap_action: { action: navigate, navigation_path: /energy }
-            grid_options: { columns: full, rows: 1 }
+            heading: Lights
+            icon: mdi:lightbulb-group
+          - { type: tile, entity: light.pool_lights, name: All pool lights, features: [{ type: light-brightness }], grid_options: { columns: full } }
+          - &light { type: tile, entity: light.pool1_lifx_mini_318ee9_pump_room, tap_action: { action: toggle }, grid_options: { columns: 6 } }
+          - { <<: *light, entity: light.pool1_lifx_mini_31589a_middle_left, name: Middle left }
+          - { <<: *light, entity: light.pool1_lifx_mini_318e9a_middle_right, name: Middle right }
+          - { <<: *light, entity: light.pool1_lifx_mini_3189f4_far_right, name: Far right }
+          - type: heading
+            heading: Media
+            icon: mdi:speaker-multiple
+          - &media { type: tile, entity: media_player.living_room_tv_2, name: Living room TV, grid_options: { columns: 6 } }
+          - { <<: *media, entity: media_player.denon_avr_s750h, name: Receiver }
+          - { <<: *media, entity: media_player.kitchen_sonos_kitchen_sonos, name: Kitchen Sonos }
+          - { <<: *media, entity: media_player.patio_sonos_patio_sonos, name: Patio Sonos }
+          - { <<: *media, entity: media_player.kitchen_speaker, name: Kitchen speaker }
+          - { <<: *media, entity: media_player.kitchen_display, name: Kitchen display }
 
       - type: grid
         cards:
           - type: heading
             heading: Appliances
             icon: mdi:washing-machine
-          - { type: tile, entity: binary_sensor.dishwasher_power, name: Dishwasher, icon: mdi:dishwasher }
-          - { type: tile, entity: binary_sensor.washer_power, name: Washer, icon: mdi:washing-machine }
-          - { type: tile, entity: binary_sensor.dryer_power, name: Dryer, icon: mdi:tumble-dryer }
+          - &appl { type: tile, entity: binary_sensor.dishwasher_power, name: Dishwasher, icon: mdi:dishwasher, vertical: true, grid_options: { columns: 4, rows: 2 } }
+          - { <<: *appl, entity: binary_sensor.washer_power, name: Washer, icon: mdi:washing-machine }
+          - { <<: *appl, entity: binary_sensor.dryer_power, name: Dryer, icon: mdi:tumble-dryer }
           - type: heading
-            heading: Wall display
-            icon: mdi:tablet-dashboard
+            heading: Power
+            icon: mdi:flash
+            tap_action: { action: navigate, navigation_path: /home-hub/energy }
             badges:
-              - type: entity
-                entity: sensor.apolosign_calendar_screen_brightness
-                name: Brightness
-                show_name: true
-          - { type: tile, entity: input_select.kitchen_theme, name: Theme, features: [{ type: select-options }], grid_options: { columns: full } }
-          - { type: tile, entity: input_select.kitchen_mode, name: Dark or light, features: [{ type: select-options }], grid_options: { columns: full } }
+              - { type: entity, entity: sensor.sense_264601_daily_energy, name: Today, show_name: true }
+          - type: tile
+            entity: sensor.sense_264601_energy
+            name: House now
+            icon: mdi:home-lightning-bolt
+            tap_action: { action: navigate, navigation_path: /home-hub/energy }
+            grid_options: { columns: 6 }
+          - { type: tile, entity: sensor.tesla_wall_connector_status, name: EV charger, icon: mdi:ev-station, tap_action: { action: navigate, navigation_path: /home-hub/energy }, grid_options: { columns: 6 } }
 
       - type: grid
+        column_span: 3
         cards:
           - type: heading
-            heading: Lights
-            icon: mdi:lightbulb-group
-          - &light { type: tile, entity: light.pool1_lifx_mini_318ee9_pump_room, features: [{ type: light-brightness }], grid_options: { columns: full } }
-          - { <<: *light, entity: light.pool1_lifx_mini_31589a_middle_left }
-          - { <<: *light, entity: light.pool1_lifx_mini_318e9a_middle_right }
-          - { <<: *light, entity: light.pool1_lifx_mini_3189f4_far_right }
-          - type: heading
-            heading: EV charger
-            icon: mdi:ev-station
-          - { type: tile, entity: sensor.tesla_wall_connector_status, name: Status }
-          - { type: tile, entity: sensor.tesla_wall_connector_total_power, name: Power }
-          - { type: tile, entity: sensor.tesla_wall_connector_session_energy, name: This session }
-          - { type: tile, entity: sensor.tesla_wall_connector_energy, name: Lifetime }
+            heading: Cameras
+            icon: mdi:cctv
+            tap_action: { action: navigate, navigation_path: /home-security }
+          # Snapshots refresh every few seconds; a tap opens the Security dashboard.
+          - &cam { type: picture-entity, entity: camera.frigate_loryta_fdoor, name: Front door, show_state: false, camera_view: auto, tap_action: { action: navigate, navigation_path: /home-security }, grid_options: { columns: 3, rows: 2 } }
+          - { <<: *cam, entity: camera.frigate_reolink_south, name: South }
+          - { <<: *cam, entity: camera.frigate_sv3c_east, name: East }
+          - { <<: *cam, entity: camera.frigate_sv3c_west, name: West }
+          - { <<: *cam, entity: camera.frigate_loryta_pool, name: Pool }
+          - { <<: *cam, entity: camera.frigate_amcrest_balc, name: Balcony }
+          - { <<: *cam, entity: camera.frigate_amcrest_kitchen, name: Kitchen }
 
-      - type: grid
-        cards:
-          - type: heading
-            heading: Media
-            icon: mdi:speaker-multiple
-          - &media { type: tile, entity: media_player.denon_avr_s750h, name: Receiver, features: [{ type: media-player-volume-slider }], grid_options: { columns: full } }
-          - { <<: *media, entity: media_player.living_room_tv_2, name: Living room TV }
-          - { <<: *media, entity: media_player.kitchen_speaker, name: Kitchen speaker }
-          - { <<: *media, entity: media_player.kitchen_display, name: Kitchen display }
-          - { <<: *media, entity: media_player.kitchen_sonos_kitchen_sonos, name: Kitchen Sonos }
-          - { <<: *media, entity: media_player.patio_sonos_patio_sonos, name: Patio Sonos }
-
+  - title: Robovac
+    path: robovac
+    icon: mdi:robot-vacuum
+    type: sections
+    max_columns: 3
+    sections:
       - type: grid
         column_span: 2
         cards:
           - type: heading
-            heading: Robovac
-            icon: mdi:robot-vacuum
-            badges:
-              - type: entity
-                entity: sensor.roborock_vacuum_s5_battery
-                name: Battery
-                show_name: false
+            heading: Map
+            icon: mdi:map
           - type: custom:xiaomi-vacuum-map-card
             entity: vacuum.roborock_vacuum_s5
             vacuum_platform: default
@@ -156,35 +154,91 @@ views:
               - template: vacuum_clean_zone
               - template: vacuum_goto
             grid_options: { columns: full }
-          # The app's rooms (packages/robovac.yaml): one tap cleans that room.
-          - &room { type: tile, entity: script.robovac_clean_playroom, name: Clean playroom, icon: mdi:toy-brick, tap_action: { action: perform-action, perform_action: script.turn_on, target: { entity_id: script.robovac_clean_playroom } }, grid_options: { columns: 4 } }
-          - { <<: *room, entity: script.robovac_clean_kitchen, name: Clean kitchen, icon: mdi:countertop, tap_action: { action: perform-action, perform_action: script.turn_on, target: { entity_id: script.robovac_clean_kitchen } } }
-          - { <<: *room, entity: script.robovac_clean_living_room, name: Clean living room, icon: mdi:sofa, tap_action: { action: perform-action, perform_action: script.turn_on, target: { entity_id: script.robovac_clean_living_room } } }
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Robovac
+            icon: mdi:robot-vacuum
           - type: tile
             entity: vacuum.roborock_vacuum_s5
             name: Robovac
             features:
               - type: vacuum-commands
-                commands: [start_pause, stop, return_home, locate]
+                commands: [start_pause, stop, clean_spot, return_home, locate]
+            grid_options: { columns: full }
+          - { <<: *room, grid_options: { columns: 4, rows: 2 } }
+          - { <<: *room, entity: script.robovac_clean_living_room, name: Living room, icon: mdi:sofa, tap_action: { action: perform-action, perform_action: script.turn_on, target: { entity_id: script.robovac_clean_living_room } } }
+          - { <<: *room, entity: script.robovac_clean_playroom, name: Playroom, icon: mdi:toy-brick, tap_action: { action: perform-action, perform_action: script.turn_on, target: { entity_id: script.robovac_clean_playroom } } }
+          - { type: tile, entity: sensor.roborock_vacuum_s5_battery, name: Battery, grid_options: { columns: 6 } }
+          - { type: tile, entity: sensor.roborock_vacuum_s5_last_clean_end, name: Last clean, grid_options: { columns: 6 } }
+          - type: heading
+            heading: Consumables
+            heading_style: subtitle
+          # Hours left; hold a tile to see its reset button in the device page.
+          - &cons { type: tile, entity: sensor.roborock_vacuum_s5_filter_remaining, name: Filter, icon: mdi:air-filter, grid_options: { columns: 6 } }
+          - { <<: *cons, entity: sensor.roborock_vacuum_s5_main_brush_remaining, name: Main brush, icon: mdi:brush }
+          - { <<: *cons, entity: sensor.roborock_vacuum_s5_side_brush_remaining, name: Side brush, icon: mdi:brush-variant }
+          - { <<: *cons, entity: sensor.roborock_vacuum_s5_sensor_dirty_remaining, name: Sensors, icon: mdi:eye-outline }
+
+  - title: Energy
+    path: energy
+    icon: mdi:flash
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Now
+            icon: mdi:flash
+            badges:
+              - { type: entity, entity: sensor.sense_264601_daily_energy, name: Today, show_name: true }
+          - type: tile
+            entity: sensor.sense_264601_energy
+            name: House now
+            icon: mdi:home-lightning-bolt
+            grid_options: { columns: full }
+            features:
+              - type: trend-graph
+                hours_to_show: 6
+          - { type: tile, entity: sensor.electric_vehicle_power, name: EV charging, icon: mdi:car-electric }
+          - { type: tile, entity: sensor.always_on_power, name: Always on, icon: mdi:power-plug }
+          - { type: tile, entity: sensor.water_heater_power, name: Water heater, icon: mdi:water-boiler }
+          - { type: tile, entity: sensor.ac_2_power, name: AC 2, icon: mdi:air-conditioner }
+          - type: button
+            name: Energy dashboard
+            icon: mdi:chart-bar
+            tap_action: { action: navigate, navigation_path: /energy }
+            grid_options: { columns: full, rows: 1 }
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Two weeks
+            icon: mdi:chart-bar
+          - type: statistics-graph
+            title: Use vs solar (kWh)
+            chart_type: bar
+            period: day
+            days_to_show: 14
+            stat_types: [change]
+            entities:
+              - entity: sensor.sense_264601_daily_energy
+                name: House
+              - entity: solaredge:2242194_74068c8e_94
+                name: Solar, inverter 1
+              - entity: solaredge:2242194_7500e34f_a7
+                name: Solar, inverter 2
             grid_options: { columns: full }
 
       - type: grid
-        column_span: 3
         cards:
           - type: heading
-            heading: Cameras
-            icon: mdi:cctv
-            badges:
-              - type: entity
-                entity: camera.frigate_loryta_fdoor
-                show_state: false
-                show_icon: true
-                tap_action: { action: navigate, navigation_path: /home-security }
-          # Snapshots refresh every few seconds; a tap opens the Security dashboard.
-          - &cam { type: picture-entity, entity: camera.frigate_loryta_fdoor, name: Front door, show_state: false, camera_view: auto, tap_action: { action: navigate, navigation_path: /home-security }, grid_options: { columns: 6, rows: 3 } }
-          - { <<: *cam, entity: camera.frigate_reolink_south, name: South }
-          - { <<: *cam, entity: camera.frigate_sv3c_east, name: East }
-          - { <<: *cam, entity: camera.frigate_sv3c_west, name: West }
-          - { <<: *cam, entity: camera.frigate_loryta_pool, name: Pool }
-          - { <<: *cam, entity: camera.frigate_amcrest_balc, name: Balcony }
-          - { <<: *cam, entity: camera.frigate_amcrest_kitchen, name: Kitchen }
+            heading: EV charger
+            icon: mdi:ev-station
+          - { type: tile, entity: sensor.tesla_wall_connector_status, name: Status, grid_options: { columns: full } }
+          - { type: tile, entity: sensor.tesla_wall_connector_total_power, name: Power }
+          - { type: tile, entity: sensor.tesla_wall_connector_session_energy, name: This session }
+          - { type: tile, entity: sensor.tesla_wall_connector_energy, name: Lifetime }
+          - { type: tile, entity: sensor.tesla_wall_connector_handle_temperature, name: Handle temp }
