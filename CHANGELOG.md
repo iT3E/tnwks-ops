@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.57.0 - 2026-11-01
+
+### Changed
+
+* mealie: sessions last 30 days (TOKEN_TIME 720) so the wall display's Mealie sign-in survives quiet weeks.
+
 ## v1.56.1 - 2026-11-01
 
 ### Fixed
