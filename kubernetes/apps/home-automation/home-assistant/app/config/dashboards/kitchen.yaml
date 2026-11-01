@@ -55,7 +55,7 @@ views:
         padding: 16
         idle_home: 5
         # Where "Home Assistant" in the tab bar goes.
-        ha_path: /lovelace
+        ha_path: /home-hub
         pages:
           - path: home
             title: Home
