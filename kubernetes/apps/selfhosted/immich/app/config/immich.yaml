@@ -52,6 +52,14 @@ ffmpeg:
   # No videos get synced; don't spend CPU transcoding anything uploaded by hand
   # unless the browser can't play it.
   transcode: required
+image:
+  # The kitchen screensaver (and ImmichFrame) show the preview, so it's sized
+  # for the display: 2160 px on the short side (default 1440) is the width of
+  # its portrait panel. A portrait photo comes out 2160x2880, a landscape one
+  # 2880x2160. After changing this, regenerate the previews (Administration >
+  # Job Queues > Generate Thumbnails > All, or docs/apps/kitchen-screensaver.md).
+  preview:
+    size: 2160
 newVersionCheck:
   # Renovate tracks the version.
   enabled: false

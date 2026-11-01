@@ -48,6 +48,7 @@ Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md)
 | --- | --- |
 | [`apps/home-assistant.md`](apps/home-assistant.md) | Home Assistant |
 | [`apps/immich.md`](apps/immich.md) | Immich: photo library for the kitchen screensaver, its storage, login and break-glass |
+| [`apps/kitchen-screensaver.md`](apps/kitchen-screensaver.md) | Kitchen screensaver: the page the kitchen display's screensaver shows (photos, time, weather, events, dinner, stars), its API, accounts and how to switch back |
 | [`apps/immichframe.md`](apps/immichframe.md) | ImmichFrame: the kitchen display's screensaver (photos, clock, today's events), its settings and the tablet setup |
 | [`apps/peloton-to-garmin.md`](apps/peloton-to-garmin.md) | peloton-to-garmin: the dead-auth v3.6.1 pin and why Renovate can't see it |
 

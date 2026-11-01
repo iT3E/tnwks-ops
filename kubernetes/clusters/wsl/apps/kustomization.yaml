@@ -43,6 +43,9 @@ resources:
   # ImmichFrame (the kitchen display's screensaver), next to Immich. See
   # docs/apps/immichframe.md.
   - ../../../apps/selfhosted/immichframe/ks.yaml
+  # Kitchen screensaver page (what the display's screensaver shows now;
+  # ImmichFrame stays as the fallback). See docs/apps/kitchen-screensaver.md.
+  - ../../../apps/selfhosted/kitchen-screensaver/ks.yaml
   - ../../../apps/system-upgrade
   - ../../../apps/tools
   # Sites platform — WSL-only. The NFS server gives nginx + the GHA runner a
