@@ -1,0 +1,3 @@
+kind: Added
+body: 'home-assistant: Home dashboard (/house, the new default), Monitoring dashboard (Grafana in a frame), and the Xiaomi Cloud Map Extractor + vacuum map card installed for the robot vacuum.'
+time: 2026-11-01T11:05:00-08:00

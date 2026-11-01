@@ -20,7 +20,9 @@ configMapGenerator:
       - config/packages/kitchen_routines.yaml
   - name: home-assistant-dashboards
     files:
+      - config/dashboards/house.yaml
       - config/dashboards/kitchen.yaml
+      - config/dashboards/monitoring.yaml
       - config/dashboards/security.yaml
   - name: home-assistant-www-kitchen
     files:

@@ -10,6 +10,8 @@
 #   FRIGATE_INTEGRATION_VERSION   blakeblackshear/frigate-hass-integration
 #   ADVANCED_CAMERA_CARD_VERSION  dermotduffy/advanced-camera-card
 #   KIOSK_MODE_VERSION            NemesisRE/kiosk-mode
+#   XIAOMI_MAP_EXTRACTOR_VERSION  PiotrMachowski/Home-Assistant-custom-components-Xiaomi-Cloud-Map-Extractor
+#   XIAOMI_VACUUM_MAP_CARD_VERSION PiotrMachowski/lovelace-xiaomi-vacuum-map-card
 #
 # Each install records its version in a .tnwks-version file and is skipped
 # when that already matches, so a plain restart needs no network.
@@ -75,4 +77,14 @@ install advanced-camera-card "${ADVANCED_CAMERA_CARD_VERSION}" \
 install kiosk-mode "${KIOSK_MODE_VERSION}" \
     "${config}/www/kiosk-mode" \
     "https://github.com/NemesisRE/kiosk-mode/releases/download/${KIOSK_MODE_VERSION}/kiosk-mode.js" \
+    .
+
+install xiaomi_cloud_map_extractor "${XIAOMI_MAP_EXTRACTOR_VERSION}" \
+    "${config}/custom_components/xiaomi_cloud_map_extractor" \
+    "https://github.com/PiotrMachowski/Home-Assistant-custom-components-Xiaomi-Cloud-Map-Extractor/releases/download/${XIAOMI_MAP_EXTRACTOR_VERSION}/xiaomi_cloud_map_extractor.zip" \
+    .
+
+install xiaomi-vacuum-map-card "${XIAOMI_VACUUM_MAP_CARD_VERSION}" \
+    "${config}/www/xiaomi-vacuum-map-card" \
+    "https://github.com/PiotrMachowski/lovelace-xiaomi-vacuum-map-card/releases/download/${XIAOMI_VACUUM_MAP_CARD_VERSION}/xiaomi-vacuum-map-card.js" \
     .

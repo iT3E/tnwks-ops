@@ -84,6 +84,42 @@ Flux variable substitution is off for these ConfigMaps, so Jinja is never
 mangled. Per-cluster values reach HA as container env vars, which the config
 reads with `!env_var`.
 
+## Dashboards
+
+The sidebar, top to bottom:
+
+- **Home** (`/home-hub`, `dashboards/house.yaml`): the default dashboard. Who's
+  home, weather, power (Sense, solar per inverter by day), appliances, the
+  wall display's theme, cameras (a tap opens Security).
+- **Security** (`/home-security`): cameras and Frigate reviews.
+- **Energy**: the built-in one (sources in `.storage/energy`, UI-owned).
+- **Monitoring** (`/home-monitoring`, admins): Grafana in a frame, at its home
+  page with its own navigation, so every Grafana dashboard is reachable
+  without listing it here. The URL is `HASS_GRAFANA_URL`.
+- **Wall display** (`/kitchen-display`): the tablet's kiosk.
+
+UI-owned and set over the websocket API (not in git): `default_panel` in the
+frontend system data (`frontend/set_system_data`, key `core`) is `home-hub`; the
+built-in Overview (`/home`, the areas view), Map, Logbook and History are
+hidden from the sidebar (`frontend/update_panel` `show_in_sidebar: false`,
+and `lovelace/dashboards/update` for Map). They still work by URL. A user can
+still pick their own default under Profile.
+
+### Robot vacuum
+
+A Xiaomi (Mi Home app) vacuum at the DHCP lease `robovac1`. HA reaches it on
+UDP 54321 from the pod. Two UI-owned integrations, both signed in with the
+Xiaomi account (the Mi Home login, and its server region):
+
+1. **Xiaomi Miio** (core): the `vacuum.*` entity, start/stop/dock, and room
+   cleaning (`vacuum.send_command` `app_segment_clean`). Its cloud login
+   fetches the device token.
+2. **Xiaomi Cloud Map Extractor** (custom, v3 config flow; installed by
+   prepare-config.sh): the map as a camera/image entity with room ids.
+
+The map card is `custom:xiaomi-vacuum-map-card` (resource in
+configuration.yaml); it goes on Home once both exist.
+
 ## Making a change
 
 1. Edit or add a file under `config/`. A **new** file must also be listed under

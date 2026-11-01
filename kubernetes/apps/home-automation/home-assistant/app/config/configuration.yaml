@@ -95,12 +95,27 @@ lovelace:
       type: module
     - url: /local/kiosk-mode/kiosk-mode.js?v=15.0.0
       type: module
+    # The robot vacuum's map card (rooms, zones, go-to); installed by
+    # prepare-config.sh, so bump ?v= with XIAOMI_VACUUM_MAP_CARD_VERSION.
+    - url: /local/xiaomi-vacuum-map-card/xiaomi-vacuum-map-card.js?v=2.4.1
+      type: module
   dashboards:
     home-security:
       mode: yaml
       filename: dashboards/security.yaml
       title: Security
       icon: mdi:cctv
+    home-hub:
+      mode: yaml
+      filename: dashboards/house.yaml
+      title: Home
+      icon: mdi:home
+    home-monitoring:
+      mode: yaml
+      filename: dashboards/monitoring.yaml
+      title: Monitoring
+      icon: mdi:chart-timeline-variant
+      require_admin: true
     kitchen-display:
       mode: yaml
       filename: dashboards/kitchen.yaml

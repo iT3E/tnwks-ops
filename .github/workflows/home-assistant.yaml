@@ -54,6 +54,7 @@ jobs:
           cp -r "$APP/config/." "$RUNNER_TEMP/config/"
           docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
             -e HASS_OIDC_AUTH_VERSION -e FRIGATE_INTEGRATION_VERSION -e ADVANCED_CAMERA_CARD_VERSION -e KIOSK_MODE_VERSION \
+            -e XIAOMI_MAP_EXTRACTOR_VERSION -e XIAOMI_VACUUM_MAP_CARD_VERSION \
             -v "$RUNNER_TEMP/config:/config" \
             -v "$PWD/$APP/scripts/prepare-config.sh:/scripts/prepare-config.sh:ro" \
             --entrypoint /bin/bash "$IMAGE" /scripts/prepare-config.sh /config
@@ -68,6 +69,7 @@ jobs:
             -e TZ=America/Los_Angeles \
             -e HASS_EXTERNAL_URL=https://hass.example.test \
             -e HASS_INTERNAL_URL=https://hass.internal.example.test \
+            -e HASS_GRAFANA_URL=https://grafana.internal.example.test/ \
             -e HASS_OIDC_CLIENT_ID=ci \
             -e HASS_OIDC_DISCOVERY_URL=https://idp.example.test/.well-known/openid-configuration \
             -e FRIGATE_UI_URL=https://frigate.example.test \

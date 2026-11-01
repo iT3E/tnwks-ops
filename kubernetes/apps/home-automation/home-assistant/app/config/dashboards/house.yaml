@@ -1,0 +1,115 @@
+---
+# Home dashboard (YAML mode, git-owned; URL /home-hub, HA's default dashboard
+# via frontend system data `default_panel` = home-hub, which is UI-owned). The everyday
+# view of the house on phones: who's home, weather, power, appliances,
+# cameras. The built-in Overview (areas) is hidden from the sidebar but still
+# at /home; the tablet has its own dashboard (Wall display).
+#
+# Entities: Sense (power, detected devices), SolarEdge (external statistics,
+# hourly and delayed, so solar is a daily bar chart rather than a live tile),
+# Frigate (cameras), the kitchen display helpers (packages/kitchen_display.yaml).
+# person.adult1 / person.adult2 are the two adults' persons, renamed in the
+# entity registry (UI-owned) so no names live here; HA shows their names.
+# The robot vacuum card goes here once the Xiaomi Miio integration exists
+# (UI-owned; docs/apps/home-assistant.md).
+title: Home
+views:
+  - title: Home
+    path: home
+    icon: mdi:home
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Family
+            icon: mdi:account-group
+          - { type: tile, entity: person.adult1 }
+          - { type: tile, entity: person.adult2 }
+          - type: weather-forecast
+            entity: weather.forecast_home
+            forecast_type: daily
+            grid_options: { columns: full }
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Power
+            icon: mdi:flash
+            badges:
+              - type: entity
+                entity: sensor.sense_264601_daily_energy
+                name: Today
+                show_name: true
+          - type: tile
+            entity: sensor.sense_264601_energy
+            name: House now
+            icon: mdi:home-lightning-bolt
+            grid_options: { columns: full }
+            features:
+              - type: trend-graph
+                hours_to_show: 6
+          - { type: tile, entity: sensor.electric_vehicle_power, name: EV charging, icon: mdi:car-electric }
+          - { type: tile, entity: sensor.always_on_power, name: Always on, icon: mdi:power-plug }
+          - { type: tile, entity: sensor.water_heater_power, name: Water heater, icon: mdi:water-boiler }
+          - { type: tile, entity: sensor.ac_2_power, name: AC 2, icon: mdi:air-conditioner }
+          - type: statistics-graph
+            title: Last two weeks (kWh)
+            chart_type: bar
+            period: day
+            days_to_show: 14
+            stat_types: [change]
+            entities:
+              - entity: sensor.sense_264601_daily_energy
+                name: House
+              - entity: solaredge:2242194_74068c8e_94
+                name: Solar, inverter 1
+              - entity: solaredge:2242194_7500e34f_a7
+                name: Solar, inverter 2
+            grid_options: { columns: full }
+          - type: button
+            name: Energy dashboard
+            icon: mdi:chart-bar
+            tap_action: { action: navigate, navigation_path: /energy }
+            grid_options: { columns: full, rows: 1 }
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Appliances
+            icon: mdi:washing-machine
+          - { type: tile, entity: binary_sensor.dishwasher_power, name: Dishwasher, icon: mdi:dishwasher }
+          - { type: tile, entity: binary_sensor.washer_power, name: Washer, icon: mdi:washing-machine }
+          - { type: tile, entity: binary_sensor.dryer_power, name: Dryer, icon: mdi:tumble-dryer }
+          - type: heading
+            heading: Wall display
+            icon: mdi:tablet-dashboard
+            badges:
+              - type: entity
+                entity: sensor.apolosign_calendar_screen_brightness
+                name: Brightness
+                show_name: true
+          - { type: tile, entity: input_select.kitchen_theme, name: Theme, features: [{ type: select-options }], grid_options: { columns: full } }
+          - { type: tile, entity: input_select.kitchen_mode, name: Dark or light, features: [{ type: select-options }], grid_options: { columns: full } }
+
+      - type: grid
+        column_span: 3
+        cards:
+          - type: heading
+            heading: Cameras
+            icon: mdi:cctv
+            badges:
+              - type: entity
+                entity: camera.frigate_loryta_fdoor
+                show_state: false
+                show_icon: true
+                tap_action: { action: navigate, navigation_path: /home-security }
+          # Snapshots refresh every few seconds; a tap opens the Security dashboard.
+          - &cam { type: picture-entity, entity: camera.frigate_loryta_fdoor, name: Front door, show_state: false, camera_view: auto, tap_action: { action: navigate, navigation_path: /home-security }, grid_options: { columns: 6, rows: 3 } }
+          - { <<: *cam, entity: camera.frigate_reolink_south, name: South }
+          - { <<: *cam, entity: camera.frigate_sv3c_east, name: East }
+          - { <<: *cam, entity: camera.frigate_sv3c_west, name: West }
+          - { <<: *cam, entity: camera.frigate_loryta_pool, name: Pool }
+          - { <<: *cam, entity: camera.frigate_amcrest_balc, name: Balcony }
+          - { <<: *cam, entity: camera.frigate_amcrest_kitchen, name: Kitchen }

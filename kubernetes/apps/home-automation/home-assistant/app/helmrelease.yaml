@@ -68,6 +68,12 @@ spec:
               ADVANCED_CAMERA_CARD_VERSION: v8.1.0
               # renovate: datasource=github-releases depName=NemesisRE/kiosk-mode
               KIOSK_MODE_VERSION: v15.0.0
+              # The Map Extractor's maintained line is v3 (config flow; v2 is
+              # YAML-only and last released 2025-07), still tagged alpha.
+              # renovate: datasource=github-releases depName=PiotrMachowski/Home-Assistant-custom-components-Xiaomi-Cloud-Map-Extractor
+              XIAOMI_MAP_EXTRACTOR_VERSION: v3.0.0-alpha-24
+              # renovate: datasource=github-releases depName=PiotrMachowski/lovelace-xiaomi-vacuum-map-card
+              XIAOMI_VACUUM_MAP_CARD_VERSION: v2.4.1
             securityContext: &securityContext
               allowPrivilegeEscalation: false
               capabilities: { drop: ["ALL"] }
@@ -86,6 +92,9 @@ spec:
                 value: "https://hass.${SECRET_DOMAIN}"
               - name: HASS_INTERNAL_URL
                 value: "https://hass.${INTERNAL_DOMAIN}"
+              # The Monitoring dashboard's frame (dashboards/monitoring.yaml).
+              - name: HASS_GRAFANA_URL
+                value: "https://grafana.${INTERNAL_DOMAIN}/"
               # Public app-client ID (cognito_home_assistant_client_id output
               # of the AWS workspace), like the onboard client's.
               - name: HASS_OIDC_CLIENT_ID
