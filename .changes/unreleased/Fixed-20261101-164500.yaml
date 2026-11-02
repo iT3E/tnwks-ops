@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'home-assistant: the rewards scripts return their refusals as a response, so the wall display shows "Not enough stars yet" or "Only a parent can ..." instead of nothing.'
+time: 2026-11-01T16:45:00-08:00

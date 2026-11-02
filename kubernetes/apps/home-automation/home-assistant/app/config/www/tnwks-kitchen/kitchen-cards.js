@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.10.0";
+const VERSION = "1.10.1";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -3176,12 +3176,22 @@ function toast(text, ms = 3200) {
   document.body.appendChild(host);
   setTimeout(() => host.remove(), ms);
 }
-/** Runs one of the rewards scripts; a refusal ("Only a parent can ...") shows as a toast. */
+/**
+ * Runs one of the rewards scripts. A refusal ("Only a parent can ...") comes
+ * back as the response {ok: false, error}, shows as a toast and rejects.
+ */
 function rewardScript(hass, name, data) {
-  return hass.callService("script", name, data).catch((err) => {
-    toast(err?.message || String(err));
-    throw err;
-  });
+  return hass
+    .callService("script", name, data, undefined, true, true)
+    .then((res) => {
+      const r = res?.response;
+      if (r && r.ok === false) throw new Error(r.error || "That didn't work.");
+      return r;
+    })
+    .catch((err) => {
+      toast(err?.message || String(err));
+      throw err;
+    });
 }
 
 const REWARD_EMOJI = ["🎁", "🍦", "🍭", "🍫", "🍩", "🧁", "🍿", "🍕", "🍔", "🌮", "🥤", "🎬", "📺", "🎮", "📱", "🎧", "🧸", "🎨", "📚", "🧩",
