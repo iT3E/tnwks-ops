@@ -28,8 +28,11 @@ under each table say where each value came from.
 | AP | Model | Switch port | Mgmt address (old) | 2.4 GHz | 5 GHz |
 | --- | --- | --- | --- | --- | --- |
 | Kitchen | UAP-AC-Pro-Gen2 | SW03 `GE0/0/0` | `10.10.90.100` | ch 1, 20 MHz | ch 40, 40 MHz |
-| Living Room | UAP-AC-Pro-Gen2 | SW03 `GE0/0/1` | `10.10.90.102` | ch 1, 20 MHz | ch 44 |
-| Master | UAP-HD | SW03 `GE0/0/12` | `10.10.90.101` | ch 6, 20 MHz | ch 149 |
+| Master | UAP-AC-Pro-Gen2 | SW03 `GE0/0/1` | `10.10.90.102` | ch 1, 20 MHz | ch 44 |
+| Living Room | UAP-HD | SW03 `GE0/0/12` | `10.10.90.101` | ch 6, 20 MHz | ch 149 |
+
+The rooms were swapped in the pre-2026 notes: the AC-Pro on `GE0/0/1` is in the master bedroom and the UAP-HD
+on `GE0/0/12` in the living room, confirmed on site during the rollout.
 
 - **Model and firmware:** LLDP on SW03 (`show lldp neighbor interface ... detail`).
   All three run **6.6.77** (August 2024), the last release for these models, so
@@ -61,7 +64,7 @@ ADB) and its connection details:
 - **Security:** WPA2-PSK, AES/CCMP only. No WPA3, no PMF, no 802.11r (no FT
   AKM advertised).
 - **VLAN:** clients land on 910 (`unifi-frontend-910`, `10.10.91.0/24`).
-- **Clients:** 23 on 2026-11-01 (7 on Kitchen, 9 on Living Room, 7 on Master by
+- **Clients:** 23 on 2026-11-01 (7 on Kitchen, 9 on Master, 7 on Living Room by
   the SW03 MAC table). They include old IoT radios (LIFX Minis, ESP32s, a Sense
   energy monitor, Sonos), which is why the WLAN stays on WPA2 with PMF off.
 - **Not recoverable from outside:** the passphrase (everyone in the house
@@ -73,10 +76,10 @@ ADB) and its connection details:
 
 Terraform reproduces the above, with three deliberate changes:
 
-1. **Static addresses move out of the DHCP pool:** Kitchen `.11`, Living Room
-   `.12`, Master `.13`. The router's pool on 900 is `.100-.200`, so the old
+1. **Static addresses move out of the DHCP pool:** Kitchen `.11`, Master
+   `.12`, Living Room `.13`. The router's pool on 900 is `.100-.200`, so the old
    addresses could collide with the DHCP lease a freshly reset AP gets.
-2. **Living Room's 2.4 GHz moves from channel 1 to 11.** It shared channel 1
+2. **Master's 2.4 GHz moves from channel 1 to 11.** It shared channel 1
    with Kitchen.
 3. **DNS and gateway are the router** (`10.10.90.1`), so `unifi` resolves.
 
@@ -168,6 +171,11 @@ and 6-9.
    (or a plain `task unifi:apply` once all three are pending). Adoption takes
    about a minute, then the AP provisions: static address, channels, the SSID.
    Clients rejoin on their own because the SSID and passphrase are unchanged.
+9a. **Living Room (UAP-HD) is not adopted yet:** its reset button broke on
+    2026-11-01. It keeps serving the same SSID standalone with the old
+    controller's config, and `managed = false` in `main.tf` keeps it out of
+    Terraform so plans stay clean. Once it is reset (or reachable over SSH),
+    flip it to `true` and apply.
 10. **Check:** every AP Connected at `.11`/`.12`/`.13` with clients, and
     unpoller's log shows `UAP: 3`.
 11. **Hand over to CI:** once `task unifi:plan` shows no changes,
