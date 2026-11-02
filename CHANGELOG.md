@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.79.0 - 2026-11-02
+
+### Added
+
+* monitoring: RouterDNSCacheNearFull warns when the router DNS cache, which holds the adlists, stays above 80% for an hour, before list imports start failing.
+
 ## v1.78.0 - 2026-11-02
 
 ### Added
