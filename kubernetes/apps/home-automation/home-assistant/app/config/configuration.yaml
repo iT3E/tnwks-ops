@@ -50,6 +50,17 @@ recorder:
     entities:
       - sensor.kitchen_routines
 
+# Entity states as Prometheus metrics at /api/prometheus, scraped by
+# kube-prometheus-stack (the ServiceMonitor in helmrelease.yaml). One-way:
+# HA is the source for automations and the Energy dashboard; Prometheus is
+# for Grafana and alerts. The endpoint needs a token, since HA is
+# internet-facing; the scrape uses the read-only, local-only HA user
+# `Prometheus` (see docs/apps/home-assistant.md, "Prometheus metrics").
+prometheus:
+  filter:
+    exclude_entities:
+      - sensor.kitchen_routines
+
 # SSO against the tnwks-auth Cognito pool (hass-oidc-auth; app client in
 # infrastructure/terraform/modules/aws/cognito.tf). Public client + PKCE.
 # Cognito has no `groups` scope and puts membership in `cognito:groups`.

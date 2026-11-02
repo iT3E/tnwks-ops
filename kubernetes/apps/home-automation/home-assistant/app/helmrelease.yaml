@@ -153,6 +153,24 @@ spec:
         ports:
           http:
             port: *port
+    # /api/prometheus (the prometheus: block in configuration.yaml). HA wants
+    # a token there, so the scrape authenticates as the read-only HA user
+    # `Prometheus` (home-assistant-prometheus, prometheus.sops.yaml).
+    serviceMonitor:
+      app:
+        enabled: ${SERVICE_MONITOR_ENABLED}
+        serviceName: home-assistant
+        endpoints:
+          - port: http
+            scheme: http
+            path: /api/prometheus
+            interval: 1m
+            scrapeTimeout: 30s
+            authorization:
+              type: Bearer
+              credentials:
+                name: home-assistant-prometheus
+                key: token
     # Public + LAN, like jellyfin. No oauth2-proxy gate on either: HA does
     # its own OIDC (auth_oidc), and the Companion app's native API, websocket
     # and webhook calls can't carry an oauth2-proxy session.

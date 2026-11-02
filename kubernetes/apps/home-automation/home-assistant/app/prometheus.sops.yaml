@@ -1,0 +1,53 @@
+# Bearer token Prometheus scrapes /api/prometheus with: a long-lived token
+# of the read-only, local-only HA user `Prometheus` (docs/apps/home-assistant.md).
+apiVersion: v1
+kind: Secret
+metadata:
+    name: home-assistant-prometheus
+    namespace: home-automation
+type: Opaque
+stringData:
+    token: ENC[AES256_GCM,data:jzEKCFeec37L2wF0eJeWqbnH9eOz/YFmh5vD1YWsmw2eXNnYExP2JEtYULJgrQM1nAl+UV3xq3UYlQzogLVm6e1M02RSEawF0kgfVLzx0OgWwKj1wQQyNYx+mlj2j/vrO3KXbSmy7gjM7GKwv3SjDI3Fc7+pC7xK4wkxLtV1Jol46D3rarq1T0FwSp/9XCG16pri0xVqiW6o40l0yuIhT7gz89blEvturnEGZq6Z2sGia+NcKM2b,iv:ABTQHQWLJhRyMF3+qp7G6olm7Q8COFAA6NXlVNq14mg=,tag:LR1Q+NESwb1aiMt+inY24w==,type:str]
+sops:
+    kms:
+        - arn: arn:aws:kms:us-west-2:654654220436:key/mrk-74c4597ebffd41d38a852228e13d76cc
+          role: arn:aws:iam::654654220436:role/iam-role-sops
+          created_at: "2026-11-02T17:51:26Z"
+          enc: AQICAHhNDAK0Is+rGNAlNYnav2FEvs37O7WQwrCmqkcTMDWNIQE7cS//05DVn9gCcgefY57eAAAAfjB8BgkqhkiG9w0BBwagbzBtAgEAMGgGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQMcCrEhz4vqVp4e2qVAgEQgDviyIutlzT9Q3vgT01U5RvquzBH5FAAfjnYF+B6lwmtNOShCWzchqWkd2Mz/4MRcuUNBi0YAkcmOMZaSQ==
+          aws_profile: ""
+    gcp_kms: []
+    azure_kv: []
+    hc_vault: []
+    age:
+        - recipient: age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSAxUjVyckRpT1RQYVY4QmNJ
+            cmRXc1BvTUwwWXlkZUtUNmIvRlZWUjFHbHhNCnRZR1F3eHg4NkUzWXhYemVmRDJs
+            U0FEVzRXOTVtUmlWWk94Q29GQ3E5bkEKLS0tIC9qYTNoaW9Rb3E4QU9QcHV2aUJ2
+            b0h1M2Y2VUJibzRMU2oxWTRjRDdkMTgKDfCqj8/GS2Fc3w/60kNSCJD7TncDDOzB
+            t/rXCijwrb8u1QvhPRR7dXm5PXtdMPmd3qyFo5QdwOnW3P4vQJ7BiQ==
+            -----END AGE ENCRYPTED FILE-----
+        - recipient: age12uckcdwv9p2s75ae3h20wgn70taatdzzl44n9x6vr8h9qurzkaqqkhphz7
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBVNVdiZUNUd0Y1V3JyWG9n
+            Ylh6M0VEQkpHUjFSZkFNL2ticE9OQ1ZCYkZjCjl1eDlmWnpDWGw1T3Byenk0bThO
+            eThEcEx2d2NaWERVamwyKzJQc01lZ00KLS0tIFQ5M2N4U2NrNTUwRENBV3dDc2Nl
+            WFdYOVFGNS9ScVV6YWh5MFFtZXdVK0kKf9DEUeia3Tn2HnOmLAD3kDspJMVOAqUM
+            o3Zo+9CA+Y7FRRqQfPH5SnulxGp0DPv7KX02Kc9pSpNdyNEjDiLXpw==
+            -----END AGE ENCRYPTED FILE-----
+        - recipient: age1hmmuna95ktwl9sf9j56wjjukyf22ukdyjd8c47nlf5fjgyeyk5rsmhtyjx
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBWc3JiUTNjcnc3cE1Zc2xI
+            S1lac09yOGdsTi81bzlnUG52NE4zWm5BbVIwClYxOXpJWDFHVkRndjZnaVJ2Vjdv
+            aWRWa0hiNUVPSUR0UDBKb0VLQ0lCUVkKLS0tIHJ0bWpoVHRVanArbTFYYlpXeTBT
+            ZC9lY1AybW9aTmJCYlc1ejY1d0t1Y3MKAAnnBC2tQ/5uliqu5/Ql1O0tcT4snOik
+            T1iOYjhV2LYLHPQ9z3xjHK+Unk9hTm7i5xZMb89cskg1iSP0q+OYTA==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-11-02T17:51:28Z"
+    mac: ENC[AES256_GCM,data:Peq5Iw2Njm49QsR+BvTlmynP5kMnOKrLCFPyH1I5HrM8Y82kMxoBG6kzlZZczLoYMOza0+49t5t+ZLfteTdz7P4JoJS5yGqk1Z5QiNOmme4ySI88V+3cg4ICp1HPFNggR8lb5vehHhFcUKLwFSwy35GHbdQnD2WT/X7fxrEagDA=,iv:W+Mi+TeVgxPNKVCv+bxv1KkiZ5hhPc8EEg8wOu3gsp0=,tag:9DAkb9u5POmRAOQvOHhfIQ==,type:str]
+    pgp: []
+    encrypted_regex: ^(data|stringData)$
+    version: 3.7.3
