@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.77.2 - 2026-11-02
+
+### Fixed
+
+* mikrotik: drop the RPiList Malware and Phishing adlists; they are in adblock syntax, which RouterOS imports (915k names of DNS cache) but never matches.
+
 ## v1.77.1 - 2026-11-02
 
 ### Fixed

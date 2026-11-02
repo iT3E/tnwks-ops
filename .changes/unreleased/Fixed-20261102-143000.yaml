@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'mikrotik: drop the RPiList Malware and Phishing adlists; they are in adblock syntax, which RouterOS imports (915k names of DNS cache) but never matches.'
-time: 2026-11-02T14:30:00-08:00
