@@ -1,0 +1,3 @@
+kind: Added
+body: 'wsl-host: tnwks-unifi-backup timer copies the UniFi controller auto-backup to the Google Drive sync folder daily at 02:30 (task wsl-host:unifi-backup).'
+time: 2026-11-01T20:28:00-08:00

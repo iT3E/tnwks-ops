@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily UniFi backup copy, after the controller's 02:00 auto-backup
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
