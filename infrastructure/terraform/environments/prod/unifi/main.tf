@@ -21,32 +21,60 @@ locals {
   # (10.10.90.100-200) so a freshly reset AP on a lease can't collide with one.
   # The old controller had them on .100-.102, inside the pool.
   #
-  # Radios as observed on air, except Living Room's 2.4 GHz, which moves from
-  # channel 1 to 11: it shared channel 1 with Kitchen next door. 5 GHz widths:
-  # Kitchen measured at 40 MHz, the other two assumed to match.
-  access_points = {
+  # Radios as observed on air, except Master's 2.4 GHz, which moved from
+  # channel 1 to 11: it shared channel 1 with Kitchen. 5 GHz widths: Kitchen
+  # measured at 40 MHz, the other two assumed to match.
+  #
+  # Rooms: the pre-2026 notes had Living Room and Master swapped. The UAP-HD on
+  # SW03 GE0/0/12 is in the living room; the AC-Pro on GE0/0/1 is in the master
+  # bedroom (confirmed on site 2026-11-01).
+  #
+  # managed = false keeps an AP out of Terraform until it is adopted, so plans
+  # stay clean (CI applies on merge). Living Room: its reset button broke, so
+  # it still runs standalone on the old controller's config (same SSID and
+  # passphrase, channels 6/149) until it can be reset.
+  all_access_points = {
     kitchen = {
-      name = "AP Kitchen" # SW03 GE0/0/0, UAP-AC-Pro-Gen2
-      mac  = local.secrets["ap_kitchen_mac"]
-      ip   = "10.10.90.11"
-      ng   = { channel = "1", ht = 20 }
-      na   = { channel = "40", ht = 40 }
-    }
-    living_room = {
-      name = "AP Living Room" # SW03 GE0/0/1, UAP-AC-Pro-Gen2
-      mac  = local.secrets["ap_living_room_mac"]
-      ip   = "10.10.90.12"
-      ng   = { channel = "11", ht = 20 }
-      na   = { channel = "44", ht = 40 }
+      name    = "AP Kitchen" # SW03 GE0/0/0, UAP-AC-Pro-Gen2
+      mac     = local.secrets["ap_kitchen_mac"]
+      ip      = "10.10.90.11"
+      ng      = { channel = "1", ht = 20 }
+      na      = { channel = "40", ht = 40 }
+      managed = true
     }
     master = {
-      name = "AP Master" # SW03 GE0/0/12, UAP-HD
-      mac  = local.secrets["ap_master_mac"]
-      ip   = "10.10.90.13"
-      ng   = { channel = "6", ht = 20 }
-      na   = { channel = "149", ht = 40 }
+      name    = "AP Master" # SW03 GE0/0/1, UAP-AC-Pro-Gen2
+      mac     = local.secrets["ap_master_mac"]
+      ip      = "10.10.90.12"
+      ng      = { channel = "11", ht = 20 }
+      na      = { channel = "44", ht = 40 }
+      managed = true
+    }
+    living_room = {
+      name    = "AP Living Room" # SW03 GE0/0/12, UAP-HD
+      mac     = local.secrets["ap_living_room_mac"]
+      ip      = "10.10.90.13"
+      ng      = { channel = "6", ht = 20 }
+      na      = { channel = "149", ht = 40 }
+      managed = false
     }
   }
+
+  access_points = {
+    for k, ap in local.all_access_points : k => {
+      name = ap.name
+      mac  = ap.mac
+      ip   = ap.ip
+      ng   = ap.ng
+      na   = ap.na
+    } if ap.managed
+  }
+}
+
+# The AP adopted first as "living_room" is the master-bedroom AP.
+moved {
+  from = module.unifi.unifi_device.ap["living_room"]
+  to   = module.unifi.unifi_device.ap["master"]
 }
 
 module "unifi" {
