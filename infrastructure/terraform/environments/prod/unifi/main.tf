@@ -73,8 +73,12 @@ locals {
 module "unifi" {
   source = "../../../modules/unifi"
 
-  # 6.6.77 is the last firmware for the UAP-AC-Pro-Gen2 and UAP-HD.
-  auto_upgrade = false
+  # The controller upgrades AP firmware on its own at 03:00 (site-wide, no
+  # per-AP option). They came in on 6.6.77; 6.8.2 (Feb 2026) was offered at
+  # adoption. If an upgrade misbehaves on one AP, pin it by hand from the UI
+  # (custom upgrade) and note it here.
+  auto_upgrade      = true
+  auto_upgrade_hour = 3
 
   device_ssh = {
     username = local.secrets["device_ssh_username"]
