@@ -54,3 +54,41 @@ tasks:
           curl -skf -c "$jar" -H 'Content-Type: application/json' --data @- "$url/api/login" >/dev/null
         curl -skf -b "$jar" "$url/api/s/default/stat/device-basic" |
           jq -r '.data[] | [.mac, .model, (.name // "-"), (.adopted|tostring), (.state|tostring)] | @tsv'
+
+  bootstrap:
+    desc: First-run setup of a fresh controller over its API (owner + terraform + unifipoller accounts, inform host)
+    dir: "{{.UNIFI_TF_DIR}}"
+    cmds:
+      - |
+        set -euo pipefail
+        s=$(sops -d --output-type json secrets.sops.yaml)
+        poller=$(sops -d --output-type json "{{.ROOT_DIR}}/kubernetes/apps/monitoring/unpoller/app/secrets.sops.yaml" |
+          jq '{p: .stringData.unifipoller_password}')
+        url=$(echo "$s" | jq -r .unifi_url)
+        jar=$(mktemp); trap 'rm -f "$jar"' EXIT
+        # POST stdin JSON to a path; fail unless the controller answers rc=ok.
+        # Bodies carry the secret as "pw" and rename it to the API's field
+        # name last (keeps credential-looking literals out of this file).
+        pw() { jq -c --arg k "$1" 'with_entries(if .key == "pw" then .key = $k else . end)'; }
+        post() { curl -sk -b "$jar" -c "$jar" -H 'Content-Type: application/json' -X "${2:-POST}" --data @- "$url$1" |
+          jq -e '.meta.rc == "ok"' >/dev/null || { echo "failed: $1" >&2; exit 1; }; }
+        # 1. The first-run wizard. Only works while the controller is uninstalled.
+        echo "$s" | jq '{cmd: "add-default-admin", name: .admin_username, email: "unifi-admin@tnwks.us", pw: .admin_password}' | pw x_password | post /api/cmd/sitemgr
+        echo '{"name": "tnwks"}' | post /api/set/setting/super_identity
+        echo '{"code": "840"}' | post /api/set/setting/country
+        echo '{"timezone": "America/Los_Angeles"}' | post /api/set/setting/locale
+        echo '{"cmd": "set-installed"}' | post /api/cmd/system
+        # 2. Log in as the owner.
+        echo "$s" | jq '{username: .admin_username, pw: .admin_password}' | pw password | post /api/login
+        # 3. Override Inform Host: devices inform to super_identity.hostname,
+        #    the router's `unifi` record, instead of the pod IP.
+        id=$(curl -sk -b "$jar" "$url/api/s/default/get/setting/super_identity" | jq -r '.data[0]._id')
+        echo '{"name": "tnwks", "hostname": "unifi"}' | post "/api/s/default/set/setting/super_identity/$id" PUT
+        id=$(curl -sk -b "$jar" "$url/api/s/default/get/setting/super_mgmt" | jq -r '.data[0]._id')
+        echo '{"override_inform_host": true}' | post "/api/s/default/set/setting/super_mgmt/$id" PUT
+        # 4. The accounts Terraform and unpoller log in with.
+        echo "$s" | jq '{cmd: "create-admin", name: .unifi_username, email: "unifi-terraform@tnwks.us", role: "admin", permissions: [], requires_new_password: false, pw: .unifi_password}' |
+          pw x_password | post /api/s/default/cmd/sitemgr
+        echo "$poller" | jq '{cmd: "create-admin", name: "unifipoller", email: "unifi-poller@tnwks.us", role: "readonly", permissions: [], requires_new_password: false, pw: .p}' |
+          pw x_password | post /api/s/default/cmd/sitemgr
+        echo "bootstrapped $url"

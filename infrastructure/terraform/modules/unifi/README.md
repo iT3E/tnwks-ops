@@ -27,6 +27,9 @@ the maintained successor of `paultyng/unifi`.
   set; everything else, including transmit power, stays with the controller.
 - **Channel AI** (the nightly optimizer) would override pinned channels. It is
   off on a new self-hosted controller and this module does not turn it on.
-- **Things Terraform can't do** (done once by hand, see the runbook): the
+- **Things Terraform can't do** (`task unifi:bootstrap` does them over the API): the
   first-run wizard, the admin accounts (including the one Terraform logs in
   with), and Override Inform Host.
+- **WLAN first create** (provider 0.65): the apply reports "Provider produced
+  inconsistent result after apply" although the WLAN is created as
+  configured. `terraform untaint` it; the next plan is clean.
