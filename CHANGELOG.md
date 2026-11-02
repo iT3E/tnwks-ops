@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.66.2 - 2026-11-02
+
+### Fixed
+
+* home-assistant: the wall display tab bar fits on one row again with the Rewards tab (the Home Assistant button is its logo), the Rewards stars fit on phones, and the parent controls stay hidden on the tablet by user agent too.
+
 ## v1.66.1 - 2026-11-02
 
 ### Fixed
