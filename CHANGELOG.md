@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.76.0 - 2026-11-02
+
+### Added
+
+* home-assistant: entity states exported to Prometheus (/api/prometheus, ServiceMonitor with a read-only HA user token); docs for presence (GPS + UniFi Wi-Fi trackers) and the metrics.
+
 ## v1.75.0 - 2026-11-02
 
 ### Added
