@@ -29,10 +29,9 @@ locals {
   # SW03 GE0/0/12 is in the living room; the AC-Pro on GE0/0/1 is in the master
   # bedroom (confirmed on site 2026-11-01).
   #
-  # managed = false keeps an AP out of Terraform until it is adopted, so plans
-  # stay clean (CI applies on merge). Living Room: its reset button broke, so
-  # it still runs standalone on the old controller's config (same SSID and
-  # passphrase, channels 6/149) until it can be reset.
+  # managed = false keeps an AP out of Terraform until it is pending or adopted,
+  # so plans stay clean (CI applies on merge). Living Room's reset button broke
+  # on 2026-11-01; it was reset by shorting the switch with the case open.
   all_access_points = {
     kitchen = {
       name    = "AP Kitchen" # SW03 GE0/0/0, UAP-AC-Pro-Gen2
@@ -56,7 +55,7 @@ locals {
       ip      = "10.10.90.13"
       ng      = { channel = "6", ht = 20 }
       na      = { channel = "149", ht = 40 }
-      managed = false
+      managed = true
     }
   }
 
