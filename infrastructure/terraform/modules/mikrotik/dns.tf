@@ -70,7 +70,10 @@ resource "routeros_ip_dns_record" "static" {
 #
 # Lists must be hosts format or one domain per line. RouterOS imports
 # adblock syntax (||example.com^) and counts every line in name-count, but
-# those entries never match a query.
+# those entries never match a query. Matching is exact: an entry for
+# example.com does not block www.example.com, and *.example.com wildcards are
+# imported but never match. Prefer lists that spell out every subdomain
+# (HaGeZi publishes these in dns-blocklists-legacy).
 resource "routeros_ip_dns_adlist" "blocklists" {
   for_each = toset(var.dns.adlists)
 
