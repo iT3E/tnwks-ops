@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.74.0 - 2026-11-02
+
+### Changed
+
+* docs: first backup restore drill (Postgres recovery, kopiur PVC restore) logged; restore notes for the worker-1-only storage class and first-install placeholder credentials.
+
 ## v1.73.3 - 2026-11-02
 
 ### Fixed

@@ -1,3 +1,0 @@
-kind: Changed
-body: 'docs: first backup restore drill (Postgres recovery, kopiur PVC restore) logged; restore notes for the worker-1-only storage class and first-install placeholder credentials.'
-time: 2026-11-01T22:55:00-08:00
