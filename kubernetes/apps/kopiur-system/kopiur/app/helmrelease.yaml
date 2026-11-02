@@ -18,6 +18,13 @@ spec:
     remediation:
       retries: 3
   values:
+    # Lets the operator copy the repository's credential Secret
+    # (aws-backup-sts) into each app namespace before a mover run
+    # (credentialProjection on the policies). Grants it secrets
+    # create/patch/delete.
+    features:
+      credentialProjection:
+        enabled: true
     monitoring:
       prometheusRule:
         enabled: true
