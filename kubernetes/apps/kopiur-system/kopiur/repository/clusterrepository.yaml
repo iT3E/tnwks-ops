@@ -27,6 +27,8 @@ spec:
       key: KOPIA_PASSWORD
   allowedNamespaces:
     list:
+      # kopiur-system: the repository's own Maintenance runs here.
+      - kopiur-system
       - home-automation
       - networking
       - production
