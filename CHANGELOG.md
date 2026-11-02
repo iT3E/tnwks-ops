@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.73.2 - 2026-11-02
+
+### Fixed
+
+* kopiur: enable credential projection in the chart and allow kopiur-system (Maintenance) on the ClusterRepository; the first snapshots were blocked on both.
+
 ## v1.73.1 - 2026-11-02
 
 ### Fixed

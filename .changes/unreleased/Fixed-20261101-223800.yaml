@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'kopiur: enable credential projection in the chart and allow kopiur-system (Maintenance) on the ClusterRepository; the first snapshots were blocked on both.'
-time: 2026-11-01T22:38:00-08:00
