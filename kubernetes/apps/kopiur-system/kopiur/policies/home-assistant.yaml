@@ -17,9 +17,10 @@ spec:
   credentialProjection:
     enabled: true
   mover:
+    # Home Assistant runs as 568, and .storage holds 0600 files (auth, tokens).
     securityContext:
-      runAsUser: 1000
-      runAsGroup: 1000
+      runAsUser: 568
+      runAsGroup: 568
   retention:
     keepLatest: 3
     keepDaily: 7
