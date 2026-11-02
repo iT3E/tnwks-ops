@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.71.0 - 2026-11-02
+
+### Added
+
+* wsl-host: tnwks-unifi-backup timer copies the UniFi controller auto-backup to the Google Drive sync folder daily at 02:30 (task wsl-host:unifi-backup).
+
 ## v1.70.0 - 2026-11-02
 
 ### Changed
