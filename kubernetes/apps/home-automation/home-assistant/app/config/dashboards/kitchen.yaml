@@ -11,7 +11,7 @@
 # kiosk-mode hides HA's header and sidebar on this dashboard only, and only in
 # the tablet's browser (kiosk_mode below matches its user agent; WALL_UA in
 # kitchen-cards.js must match too). Phones and browsers get the header, so the
-# dashboard stays editable. On the tablet, "Home Assistant" in the tab bar
+# dashboard stays editable. On the tablet, the Home Assistant logo in the tab bar
 # goes to the rest of HA (Overview, with the sidebar), and "Wall display" in
 # the sidebar or 5 idle minutes bring the kiosk back. ?kiosk still works for
 # trying it elsewhere; ?disable_km turns it off for one load, so nothing here
@@ -57,7 +57,7 @@ views:
       - type: custom:kitchen-pages-card
         padding: 16
         idle_home: 5
-        # Where "Home Assistant" in the tab bar goes.
+        # Where the Home Assistant logo in the tab bar goes.
         ha_path: /home-hub
         pages:
           - path: home

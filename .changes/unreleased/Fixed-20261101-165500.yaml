@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'home-assistant: the wall display tab bar fits on one row again with the Rewards tab (the Home Assistant button is its logo), the Rewards stars fit on phones, and the parent controls stay hidden on the tablet by user agent too.'
+time: 2026-11-01T16:55:00-08:00
