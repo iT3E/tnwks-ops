@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.78.0 - 2026-11-02
+
+### Added
+
+* mikrotik: HaGeZi Threat Intelligence Feeds adlist in subdomain format (~1.94M malware and phishing names), with the DNS cache raised to 320 MiB to hold it.
+
 ## v1.77.2 - 2026-11-02
 
 ### Fixed
