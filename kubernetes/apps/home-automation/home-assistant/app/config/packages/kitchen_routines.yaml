@@ -17,7 +17,7 @@
 # The 37 routines that used to be input_booleans here were moved into that
 # list on 2026-10-31.
 #
-# This file keeps the rest: the stars counters, the reward goals,
+# This file keeps the rest: the stars counters,
 # sensor.kitchen_routines (the list's items as an attribute, for templates),
 # the done/total sensors behind the week grid, script.kitchen_routine_set
 # (check or uncheck one and move its stars), and the midnight reset.
@@ -27,6 +27,8 @@
 # state, so fix a balance with counter.set_value, not by editing this file.
 # Unchecking a routine on the display takes its stars back; the midnight
 # reset doesn't (it reopens the items without going through the script).
+# The kids spend stars on rewards (packages/kitchen_rewards.yaml), which
+# replaced the per-kid reward goal helpers on 2026-11-01.
 counter:
   stars_kid1:
     name: !env_var KITCHEN_KID1_NAME
@@ -56,31 +58,6 @@ counter:
     restore: true
     minimum: 0
     step: 1
-input_text:
-  routines_goal_kid1:
-    name: Kid1 reward goal
-    max: 60
-    icon: mdi:gift
-  routines_goal_kid2:
-    name: Kid2 reward goal
-    max: 60
-    icon: mdi:gift
-input_number:
-  routines_goal_stars_kid1:
-    name: Kid1 reward goal stars
-    min: 0
-    max: 1000
-    step: 1
-    mode: box
-    icon: mdi:star-circle
-  routines_goal_stars_kid2:
-    name: Kid2 reward goal stars
-    min: 0
-    max: 1000
-    step: 1
-    mode: box
-    icon: mdi:star-circle
-
 script:
   kitchen_routine_set:
     alias: 'Kitchen routines: check or uncheck'

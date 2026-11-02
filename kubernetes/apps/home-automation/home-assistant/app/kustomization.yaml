@@ -17,6 +17,7 @@ configMapGenerator:
       - config/packages/frigate_night_alerts.yaml
       - config/packages/kitchen_calendar.yaml
       - config/packages/kitchen_display.yaml
+      - config/packages/kitchen_rewards.yaml
       - config/packages/kitchen_routines.yaml
       - config/packages/lights.yaml
       - config/packages/robovac.yaml

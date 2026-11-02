@@ -1,0 +1,336 @@
+---
+# Kitchen display rewards: the kids spend their stars (counter.stars_<key>,
+# packages/kitchen_routines.yaml) on rewards the parents set up. Drawn by
+# kitchen-rewards-card (config/www/tnwks-kitchen/kitchen-cards.js) on the
+# wall display's Rewards tab.
+#
+# Like the routines, the data is UI-owned, in two Local To-do lists:
+#   todo.kitchen_rewards ("Kitchen rewards"), one item per reward:
+#     summary       the reward's name
+#     description   JSON: {"emoji": "🍦", "cost": stars,
+#                   optional "members": ["kid1"] (default: every kid)}
+#   todo.kitchen_stars_log ("Kitchen stars log"), one item per change made
+#   here (not routine check-offs), newest first:
+#     summary       what it was for (the reward, or the parent's reason)
+#     due           when
+#     status        completed = undone (the stars went back)
+#     description   JSON: {"member", "delta" (negative = spent or removed),
+#                   "kind": reward|adjust, "emoji", "by" (HA user id)}
+#
+# Who may do what. Anyone, including the tablet's kiosk user, may redeem a
+# reward (script.kitchen_reward_redeem), if the kid has the stars. Only the
+# managers may define rewards (script.kitchen_reward_save), add or remove
+# stars by hand (script.kitchen_stars_adjust) or undo a log entry
+# (script.kitchen_stars_undo). Managers are the HA users of person.adult1,
+# person.adult2 and person.ori (Ori acts for the adults from chat), read off
+# the person entities' user_id. The card shows the parent controls only to
+# those users and never on the wall display; the scripts check
+# context.user_id again, so the tablet can't do it even through a stale card.
+#
+# A redemption notifies both adults' phones. Log entries older than 60 days
+# are removed at night.
+script:
+  kitchen_reward_redeem:
+    alias: 'Kitchen rewards: redeem'
+    description: A kid spends stars on a reward. Called from the wall display's Rewards tab.
+    icon: mdi:gift-open
+    mode: queued
+    max: 10
+    fields:
+      member:
+        description: The kid's member key (kid1, kid2).
+        required: true
+        example: kid1
+        selector:
+          text:
+      reward:
+        description: The reward's to-do item uid in todo.kitchen_rewards.
+        required: true
+        selector:
+          text:
+    sequence:
+    - action: todo.get_items
+      target:
+        entity_id: todo.kitchen_rewards
+      response_variable: r
+    - variables:
+        item: "{{ r['todo.kitchen_rewards']['items'] | selectattr('uid', 'eq', reward) | first | default(none) }}"
+        meta: "{{ ((item.description if item else none) or '{}') | from_json(default={}) }}"
+        cost: "{{ (meta.cost | default(0)) | int(0) if meta is mapping else 0 }}"
+        members: "{{ meta.members | default(['kid1', 'kid2']) if meta is mapping else [] }}"
+        counter_entity: "counter.stars_{{ member }}"
+        balance: "{{ states(counter_entity) | int(-1) }}"
+    - if:
+      - condition: template
+        value_template: "{{ item is none or cost | int <= 0 }}"
+      then:
+      - stop: That reward isn't there any more.
+        error: true
+    - if:
+      - condition: template
+        value_template: "{{ member not in members or balance | int < 0 }}"
+      then:
+      - stop: That reward isn't for them.
+        error: true
+    - if:
+      - condition: template
+        value_template: "{{ balance | int < cost | int }}"
+      then:
+      - stop: Not enough stars yet.
+        error: true
+    - action: counter.set_value
+      target:
+        entity_id: "{{ counter_entity }}"
+      data:
+        value: "{{ balance | int - cost | int }}"
+    - action: todo.add_item
+      target:
+        entity_id: todo.kitchen_stars_log
+      data:
+        item: "{{ item.summary }}"
+        due_datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+        description: "{{ {'member': member, 'delta': 0 - cost | int, 'kind': 'reward', 'emoji': meta.emoji | default('🎁'), 'by': context.user_id} | to_json }}"
+    - variables:
+        message: >-
+          {{ state_attr(counter_entity, 'friendly_name') }} picked {{ meta.emoji | default('🎁') }} {{ item.summary }}
+          for ⭐ {{ cost }} ({{ balance | int - cost | int }} left).
+    - action: notify.mobile_app_pixel_8_pro
+      continue_on_error: true
+      data: &reward_notice
+        title: Reward picked
+        message: "{{ message }}"
+        data:
+          tag: kitchen-reward
+          group: kitchen-rewards
+          clickAction: /kitchen-display/home#rewards
+    - action: notify.mobile_app_pixel_9a
+      continue_on_error: true
+      data: *reward_notice
+
+  kitchen_stars_adjust:
+    alias: 'Kitchen rewards: add or remove stars'
+    description: A parent adds or takes away stars by hand, with a reason. Managers only.
+    icon: mdi:star-minus
+    mode: queued
+    max: 10
+    fields:
+      member:
+        description: The member key (kid1, kid2, adult1, adult2).
+        required: true
+        example: kid1
+        selector:
+          text:
+      delta:
+        description: Stars to add, negative to take away.
+        required: true
+        example: "-5"
+        selector:
+          number:
+            min: -100
+            max: 100
+            mode: box
+      reason:
+        description: Why, shown in the log.
+        example: Not listening
+        selector:
+          text:
+    variables: &managers
+      managers: "{{ expand('person.adult1', 'person.adult2', 'person.ori') | map(attribute='attributes.user_id') | select('string') | list }}"
+    sequence:
+    - if:
+      - condition: template
+        value_template: "{{ context.user_id not in managers }}"
+      then:
+      - stop: Only a parent can change stars.
+        error: true
+    - variables:
+        counter_entity: "counter.stars_{{ member }}"
+        cur: "{{ states(counter_entity) | int(-1) }}"
+        new: "{{ [cur | int + delta | int, 0] | max }}"
+    - if:
+      - condition: template
+        value_template: "{{ cur | int < 0 or delta | int == 0 or delta | int | abs > 100 }}"
+      then:
+      - stop: Nothing to change.
+        error: true
+    - condition: template
+      value_template: "{{ new | int != cur | int }}"
+    - action: counter.set_value
+      target:
+        entity_id: "{{ counter_entity }}"
+      data:
+        value: "{{ new }}"
+    - action: todo.add_item
+      target:
+        entity_id: todo.kitchen_stars_log
+      data:
+        item: "{{ (reason | default('') | trim) or ('Bonus stars' if delta | int > 0 else 'Stars taken away') }}"
+        due_datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+        description: "{{ {'member': member, 'delta': new | int - cur | int, 'kind': 'adjust', 'emoji': '⭐' if delta | int > 0 else '🔻', 'by': context.user_id} | to_json }}"
+
+  kitchen_stars_undo:
+    alias: 'Kitchen rewards: undo'
+    description: Gives back (or takes back) the stars of one log entry and marks it undone. Managers only.
+    icon: mdi:undo
+    mode: queued
+    max: 10
+    fields:
+      entry:
+        description: The entry's to-do item uid in todo.kitchen_stars_log.
+        required: true
+        selector:
+          text:
+    variables: *managers
+    sequence:
+    - if:
+      - condition: template
+        value_template: "{{ context.user_id not in managers }}"
+      then:
+      - stop: Only a parent can undo.
+        error: true
+    - action: todo.get_items
+      target:
+        entity_id: todo.kitchen_stars_log
+      data:
+        status: needs_action
+      response_variable: r
+    - variables:
+        item: "{{ r['todo.kitchen_stars_log']['items'] | selectattr('uid', 'eq', entry) | first | default(none) }}"
+        meta: "{{ ((item.description if item else none) or '{}') | from_json(default={}) }}"
+        counter_entity: "counter.stars_{{ meta.member | default('none') if meta is mapping else 'none' }}"
+        cur: "{{ states(counter_entity) | int(-1) }}"
+    # Nothing to do for an entry that's gone or already undone (a double tap).
+    - condition: template
+      value_template: "{{ item is not none and cur | int >= 0 }}"
+    - action: counter.set_value
+      target:
+        entity_id: "{{ counter_entity }}"
+      data:
+        value: "{{ [cur | int - (meta.delta | default(0) | int), 0] | max }}"
+    - action: todo.update_item
+      target:
+        entity_id: todo.kitchen_stars_log
+      data:
+        item: "{{ entry }}"
+        status: completed
+
+  kitchen_reward_save:
+    alias: 'Kitchen rewards: add, change or delete a reward'
+    description: Saves a reward in todo.kitchen_rewards. Managers only.
+    icon: mdi:gift-outline
+    mode: queued
+    max: 10
+    fields:
+      reward:
+        description: The reward's uid to change or delete; leave out to add one.
+        selector:
+          text:
+      name:
+        description: The reward's name.
+        example: Ice cream
+        selector:
+          text:
+      emoji:
+        description: Its icon.
+        example: "🍦"
+        selector:
+          text:
+      cost:
+        description: Stars it costs.
+        example: "20"
+        selector:
+          number:
+            min: 1
+            max: 1000
+            mode: box
+      members:
+        description: Who it's for (default every kid).
+        example: '["kid1"]'
+        selector:
+          object:
+      delete:
+        description: True to delete the reward.
+        selector:
+          boolean:
+    variables: *managers
+    sequence:
+    - if:
+      - condition: template
+        value_template: "{{ context.user_id not in managers }}"
+      then:
+      - stop: Only a parent can change rewards.
+        error: true
+    - variables:
+        uid: "{{ reward | default('') }}"
+    - choose:
+      - conditions:
+        - condition: template
+          value_template: "{{ uid != '' and delete | default(false) | bool }}"
+        sequence:
+        - action: todo.remove_item
+          target:
+            entity_id: todo.kitchen_rewards
+          data:
+            item: "{{ uid }}"
+      - conditions:
+        - condition: template
+          value_template: "{{ (name | default('') | trim) == '' }}"
+        sequence:
+        - stop: A reward needs a name.
+          error: true
+      - conditions:
+        - condition: template
+          value_template: "{{ uid != '' }}"
+        sequence:
+        - action: todo.update_item
+          target:
+            entity_id: todo.kitchen_rewards
+          data:
+            item: "{{ uid }}"
+            rename: "{{ name | trim }}"
+            description: &reward_description >-
+              {% set m = {'emoji': emoji | default('🎁'), 'cost': [cost | default(1) | int(1), 1] | max} %}
+              {% set who = members | default([]) %}
+              {% if who is list and who | count == 1 %}{% set m = dict(m, members=who) %}{% endif %}
+              {{ m | to_json }}
+      default:
+      - action: todo.add_item
+        target:
+          entity_id: todo.kitchen_rewards
+        data:
+          item: "{{ name | trim }}"
+          description: *reward_description
+
+automation:
+- id: kitchen_stars_log_trim
+  alias: 'Kitchen rewards: trim the stars log'
+  description: Removes stars log entries older than 60 days.
+  triggers:
+  - trigger: time
+    at: 03:10:00
+  conditions:
+  - condition: template
+    value_template: "{{ states('todo.kitchen_stars_log') not in ['unknown', 'unavailable'] }}"
+  actions:
+  - action: todo.get_items
+    target:
+      entity_id: todo.kitchen_stars_log
+    data:
+      status: [needs_action, completed]
+    response_variable: r
+  - variables:
+      old: >-
+        {% set cut = now() - timedelta(days=60) %}
+        {% set ns = namespace(out=[]) %}
+        {% for i in r['todo.kitchen_stars_log']['items'] %}
+        {% set d = as_datetime(i.due | default(''), none) %}
+        {% if d is not none and as_local(d) < cut %}{% set ns.out = ns.out + [i.uid] %}{% endif %}
+        {% endfor %}
+        {{ ns.out }}
+  - condition: template
+    value_template: "{{ old | count > 0 }}"
+  - action: todo.remove_item
+    target:
+      entity_id: todo.kitchen_stars_log
+    data:
+      item: "{{ old }}"

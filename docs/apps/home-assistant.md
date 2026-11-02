@@ -303,10 +303,30 @@ keeps the machinery: `script.kitchen_routine_set` checks or unchecks one and
 adds or takes back its stars on `counter.stars_<member>`, the midnight reset
 reopens everything (stars stay), `sensor.kitchen_routines` copies the list
 into an attribute for templates, and the done/total and AM/PM sensors behind
-the week grid are built from it. A reward goal per kid is two helpers
-(`input_text` + `input_number`) you can set from the UI; the Routines tab
-shows progress toward it. Until 2026-10-31 the routines were `input_boolean`s
-in that package; they were moved into the list with their state.
+the week grid are built from it. Until 2026-10-31 the routines were
+`input_boolean`s in that package; they were moved into the list with their
+state.
+
+**Rewards** (the Rewards tab, `config/packages/kitchen_rewards.yaml`): the
+kids spend their stars on rewards the parents set up. A kid taps their name,
+then a reward they have the stars for, and confirms; the stars come off
+`counter.stars_<kid>` and both adults' phones get a notification. Rewards
+are the items of the Local To-do list `todo.kitchen_rewards` (name = the
+reward, description JSON `{"emoji", "cost"}` plus `"members": ["kid1"]` for
+a reward only one kid can pick), and every redemption or hand-made change is
+an item of `todo.kitchen_stars_log` (due = when, completed = undone). Both
+lists are UI-owned. Only the parents can define rewards, add or take away
+stars ("± stars" on a kid) and undo an entry in Recent, and only from their
+own devices: the card shows those controls to the HA users of
+`person.adult1`, `person.adult2` and `person.ori` and never on the wall
+display, and the package's scripts (`script.kitchen_reward_save`,
+`kitchen_stars_adjust`, `kitchen_stars_undo`) refuse anyone else by
+`context.user_id`. `script.kitchen_reward_redeem` is open to everyone,
+including the tablet's kiosk user. The Routines tab shows each kid the
+reward they can get now or the next one to save for, and "this week" on
+the Home tab doesn't drop when stars are spent. Log entries older than 60
+days are removed at night. The rewards replaced the per-kid reward goal
+helpers (`input_text`/`input_number.routines_goal_*`) on 2026-11-01.
 
 Members have neutral keys (`adult1`, `adult2`, `kid1`, `kid2`) in every
 entity ID and attribute, because the repo is public. Display names live in
