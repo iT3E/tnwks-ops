@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'mikrotik: adlists stopped importing at the 10 MiB DNS cache, so about 4% of blocked names loaded; cache_size is now 192 MiB, three dead lists are dropped, and t.co is allowlisted with a FWD record.'
+time: 2026-11-02T14:12:00-08:00

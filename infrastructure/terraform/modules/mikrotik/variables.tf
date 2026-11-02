@@ -327,7 +327,8 @@ variable "dns" {
 
     upstream_servers  - forwarders used when no static record matches
     allow_remote      - serve LAN clients (required for the forced-DNS dstnat)
-    static_records    - split-horizon overrides ported from blocky customDNS
+    static_records    - split-horizon overrides ported from blocky customDNS,
+                        plus FWD records that allowlist names the adlists block
     adlists           - blocklist URLs ported from blocky blackLists
   EOT
   type = object({
@@ -341,6 +342,7 @@ variable "dns" {
       name            = string
       address         = optional(string)
       cname           = optional(string)
+      forward_to      = optional(string)
       type            = optional(string, "A")
       match_subdomain = optional(bool, false)
       ttl             = optional(string, "1h")
