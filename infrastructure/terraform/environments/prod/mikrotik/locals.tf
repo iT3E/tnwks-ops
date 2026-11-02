@@ -25,7 +25,7 @@
 ##   Static routes        1
 ##   WireGuard listeners  3
 ##   DNS static records   5
-##   DNS adlists          40
+##   DNS adlists          41
 ## ---------------------------------------------------------------------------------------------------------------------
 
 locals {
@@ -697,9 +697,10 @@ locals {
   dns = {
     upstream_servers = ["1.1.1.1", "1.0.0.1"]
     allow_remote     = true
-    # KiB. The adlists hold ~2.35M names at ~44 bytes each; at the old 10 MiB
-    # most lists hit "max cache size reached" and stopped importing.
-    cache_size    = 196608
+    # KiB. Adlist names live in the DNS cache at ~62 bytes each. The lists
+    # use ~205 MiB (85 MiB before HaGeZi TIF); at the old 10 MiB most lists
+    # hit "max cache size reached" and stopped importing.
+    cache_size    = 327680
     cache_max_ttl = "1d"
     static_records = {
       drop_zip = {
@@ -785,6 +786,10 @@ locals {
       "https://raw.githubusercontent.com/AssoEchap/stalkerware-indicators/master/generated/hosts",
       "https://malware-filter.gitlab.io/malware-filter/phishing-filter-hosts.txt",
       "https://v.firebog.net/hosts/Prigent-Malware.txt",
+      # HaGeZi Threat Intelligence Feeds, subdomain format (~1.94M names,
+      # ~120 MiB of cache). Replaces the RPiList malware/phishing lists, which
+      # only ship in adblock syntax.
+      "https://raw.githubusercontent.com/hagezi/dns-blocklists-legacy/main/domains/tif.txt",
     ]
     use_doh_server  = "https://cloudflare-dns.com/dns-query"
     verify_doh_cert = true
