@@ -35,8 +35,10 @@ The rooms were swapped in the pre-2026 notes: the AC-Pro on `GE0/0/1` is in the 
 on `GE0/0/12` in the living room, confirmed on site during the rollout.
 
 - **Model and firmware:** LLDP on SW03 (`show lldp neighbor interface ... detail`).
-  All three run **6.6.77** (August 2024), the last release for these models, so
-  a controller still managed them until at least then. Each AP draws PoE from
+  All three ran **6.6.77** (August 2024) at adoption, so
+  a controller still managed them until at least then. (Not the last release:
+  the controller offered 6.8.2 from February 2026; auto-upgrade is on, see
+  below.) Each AP draws PoE from
   SW03 (the UAP-HD about 7 W, the AC-Pros about 4 W).
 - **Addressing:** **static**, not DHCP. The router has no leases on VLAN 900,
   only ARP entries. The APs still point at the VyOS-era services, which no longer

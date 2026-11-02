@@ -1,0 +1,3 @@
+kind: Changed
+body: 'unifi: AP firmware auto-upgrade on at 03:00 (6.8.2 is available; 6.6.77 was not the last release), and 802.11v BSS transition on for the WLAN.'
+time: 2026-11-01T20:10:00-08:00

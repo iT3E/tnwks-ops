@@ -25,7 +25,9 @@ resource "unifi_wlan" "main" {
     support    = false
     transition = false
   }
-  pmf_mode             = "disabled"
+  pmf_mode       = "disabled"
+  bss_transition = var.wlan.bss_transition
+  # 802.11r stays off: several old IoT clients fail to join FT-enabled SSIDs.
   fast_roaming_enabled = false
   hide_ssid            = false
 }

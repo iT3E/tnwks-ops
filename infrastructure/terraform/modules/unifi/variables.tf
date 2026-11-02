@@ -14,6 +14,12 @@ variable "auto_upgrade" {
   default     = false
 }
 
+variable "auto_upgrade_hour" {
+  description = "Hour of day (0-23, controller time zone) for automatic firmware upgrades."
+  type        = number
+  default     = 3
+}
+
 variable "device_ssh" {
   description = "SSH credentials the controller pushes to every adopted device, plus authorized public keys (type + base64 body, no comment)."
   type = object({
@@ -43,6 +49,9 @@ variable "wlan" {
     ssid       = string
     passphrase = string
     bands      = optional(list(string), ["2g", "5g"])
+    # 802.11v BSS transition: lets the AP point a client at a better AP.
+    # Clients that don't support it ignore it, unlike 802.11r.
+    bss_transition = optional(bool, true)
   })
   sensitive = true
 

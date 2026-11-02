@@ -10,6 +10,7 @@ resource "unifi_setting" "site" {
   mgmt = {
     auto_upgrade = {
       enabled = var.auto_upgrade
+      hour    = var.auto_upgrade_hour
     }
 
     # With these credentials an orphaned device can be re-pointed over SSH
