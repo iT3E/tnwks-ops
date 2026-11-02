@@ -2,7 +2,8 @@
 #
 # Keeps Windows netsh portproxy rules in sync with the current WSL VM IP so
 # that LAN devices can reach the homelab-wsl cluster's internal services
-# (Ingress 80/443, k8s-gateway DNS 53/UDP, mosquitto 1883) through this
+# (Ingress 80/443, k8s-gateway DNS 53/UDP, mosquitto 1883, UniFi inform
+# 8080) through this
 # Windows host. UDP services (NetFlow 2055, syslog 6001) use
 # Start-TnwksUdpRelay.ps1 instead.
 #
@@ -18,6 +19,13 @@ param(
     # different forwarder, e.g. PortProxy with WinDivert or running k8s-gateway
     # DNS on a different LAN entry path).
     [int[]]$TcpPorts  = @(80, 443, 1883),
+    # Ports whose WSL side listens on a different port, as
+    # @{ <windows port> = @{ WslPort = <port>; RemoteAddress = <scope> } }.
+    # 8080: UniFi inform from the APs (VLAN 900 only). Docker on WSL already
+    # holds 0.0.0.0:8080 (Scriberr), so socat listens on 18080 instead.
+    [hashtable]$MappedTcpPorts = @{
+        8080 = @{ WslPort = 18080; RemoteAddress = '10.10.90.0/24' }
+    },
     # Ports this script used to forward. Their portproxy entry and firewall
     # rule are removed on every run. 6001: syslog moved to UDP.
     [int[]]$RetiredTcpPorts = @(6001),
@@ -51,8 +59,10 @@ function Sync-PortProxy {
     param(
         [string]$ListenAddress,
         [int]   $Port,
-        [string]$WslIp
+        [string]$WslIp,
+        [int]   $ConnectPort = 0
     )
+    if ($ConnectPort -eq 0) { $ConnectPort = $Port }
     $existing = netsh interface portproxy show v4tov4 |
         Select-String -Pattern "^\s*$([regex]::Escape($ListenAddress))\s+$Port\s+"
     if ($existing) {
@@ -61,19 +71,25 @@ function Sync-PortProxy {
     }
     & netsh interface portproxy add v4tov4 `
         listenaddress=$ListenAddress listenport=$Port `
-        connectaddress=$WslIp connectport=$Port | Out-Null
-    Write-Host "portproxy ${ListenAddress}:${Port} -> ${WslIp}:${Port}"
+        connectaddress=$WslIp connectport=$ConnectPort | Out-Null
+    Write-Host "portproxy ${ListenAddress}:${Port} -> ${WslIp}:${ConnectPort}"
 }
 
 function Sync-FirewallRule {
-    param([int]$Port)
+    param([int]$Port, [string]$RemoteAddress = 'Any')
     $name = "tnwks-lan-bridge-$Port"
     $rule = Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue
     if (-not $rule) {
         New-NetFirewallRule -DisplayName $name -Direction Inbound `
             -Action Allow -Protocol TCP -LocalPort $Port `
-            -Profile Any | Out-Null
-        Write-Host "firewall: created inbound allow tcp/$Port"
+            -RemoteAddress $RemoteAddress -Profile Any | Out-Null
+        Write-Host "firewall: created inbound allow tcp/$Port from $RemoteAddress"
+    } else {
+        $current = ($rule | Get-NetFirewallAddressFilter).RemoteAddress -join ','
+        if ($current -ne $RemoteAddress) {
+            $rule | Set-NetFirewallRule -RemoteAddress $RemoteAddress
+            Write-Host "firewall: tcp/$Port scope $current -> $RemoteAddress"
+        }
     }
 }
 
@@ -100,6 +116,11 @@ Write-Host "WSL ($WslDistro) IPv4: $wslIp"
 foreach ($port in $TcpPorts) {
     Sync-PortProxy -ListenAddress $ListenAddress -Port $port -WslIp $wslIp
     Sync-FirewallRule -Port $port
+}
+foreach ($port in $MappedTcpPorts.Keys) {
+    $m = $MappedTcpPorts[$port]
+    Sync-PortProxy -ListenAddress $ListenAddress -Port $port -WslIp $wslIp -ConnectPort $m.WslPort
+    Sync-FirewallRule -Port $port -RemoteAddress $m.RemoteAddress
 }
 foreach ($port in $RetiredTcpPorts) {
     Remove-RetiredPort -ListenAddress $ListenAddress -Port $port

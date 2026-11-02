@@ -137,6 +137,8 @@ flowchart LR
 
 ## Not running
 
-UISP and the UniFi controller ran as containers on VyOS and have no host yet.
-The APs and radios keep working without them; adoption and firmware changes
-wait until the controllers are hosted again.
+UISP ran as a container on VyOS and has no host yet. The radios keep working
+without it; adoption and firmware changes wait until it is hosted again.
+
+The UniFi controller moved to the WSL cluster (`networking/unifi`), with its
+configuration in Terraform; see [`unifi.md`](unifi.md).

@@ -10,6 +10,7 @@ workflow, conventions) is [`../AGENTS.md`](../AGENTS.md).
 | [`network/architecture.md`](network/architecture.md) | Topology, VLANs and zones, router services, observability flows |
 | [`network/access.md`](network/access.md) | Who reaches what (admin VPN only), and break-glass |
 | [`network/ci.md`](network/ci.md) | MikroTik and EdgeOS changes via the self-hosted runner |
+| [`network/unifi.md`](network/unifi.md) | UniFi APs: inventory, the controller on WSL, adoption, Terraform |
 | [`network/migration/`](network/migration/) | The finished RB5009 cutover: [checklist](network/migration/cutover-checklist.md), [VyOS port](network/migration/vyos-port.md), [EdgeRouter discovery](network/migration/edgerouter-discovery.md) |
 
 Device config lives with its tooling: `infrastructure/terraform/modules/mikrotik`

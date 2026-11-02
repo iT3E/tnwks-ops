@@ -1,0 +1,183 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.devbu.io/helmrelease_v2.json
+#
+# UniFi Network Application (the controller for the three UniFi APs on VLAN
+# 900). See docs/network/unifi.md for how the APs reach it, adoption, and the
+# Terraform root that holds its configuration.
+#
+# One pod, two containers: the LinuxServer image (which no longer bundles a
+# database) and MongoDB on the pod's localhost. A single-replica statefulset
+# keeps both PVCs with the pod.
+#
+# Ports the APs use, through the Windows host (10.10.91.142, the router's
+# `unifi` record) -> netsh portproxy -> socat on WSL -> the `unifi-inform` VIP:
+#   tcp/8080  inform (device <-> controller). The only port adoption needs.
+#   udp/3478  STUN. On the VIP, but not relayed from the LAN: the Windows UDP
+#             relay is one-way and STUN needs replies (docs/network/unifi.md).
+# The UI and API (tcp/8443) are served through the internal ingress.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: unifi
+  namespace: networking
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  maxHistory: 3
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  values:
+    controllers:
+      unifi:
+        type: statefulset
+        annotations:
+          reloader.stakater.com/auto: "true"
+        statefulset:
+          volumeClaimTemplates:
+            - name: config
+              accessMode: ReadWriteOnce
+              size: 5Gi
+              storageClass: "${STORAGE_CLASS_DEFAULT}"
+              advancedMounts:
+                app:
+                  - path: /config
+            - name: mongo
+              accessMode: ReadWriteOnce
+              size: 5Gi
+              storageClass: "${STORAGE_CLASS_DEFAULT}"
+              advancedMounts:
+                mongo:
+                  - path: /data/db
+        containers:
+          app:
+            image:
+              repository: ghcr.io/linuxserver/unifi-network-application
+              tag: 10.6.109
+            env:
+              TZ: ${TIMEZONE}
+              PUID: 1000
+              PGID: 1000
+              # Java heap in MB. Three APs need far less than the default
+              # sizing guidance; raise it if the UI gets sluggish.
+              MEM_LIMIT: 1024
+              MEM_STARTUP: 1024
+              MONGO_HOST: localhost
+              MONGO_PORT: 27017
+              MONGO_DBNAME: unifi
+              # The root account lives in `admin`; the app also creates
+              # unifi_stat and unifi_audit next to MONGO_DBNAME.
+              MONGO_AUTHSOURCE: admin
+            envFrom:
+              - secretRef:
+                  name: unifi-secrets
+            probes:
+              liveness: &probe
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: 8443
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 5
+              readiness: *probe
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: 8443
+                  # First boot creates the database and can take a few minutes.
+                  periodSeconds: 10
+                  failureThreshold: 60
+            resources:
+              requests:
+                cpu: 100m
+                memory: 1Gi
+              limits:
+                memory: 2Gi
+          mongo:
+            image:
+              repository: docker.io/library/mongo
+              tag: 8.0.34
+            args:
+              - --bind_ip
+              - 127.0.0.1
+              # The default cache is half the node's RAM; this database is tiny.
+              - --wiredTigerCacheSizeGB
+              - "0.25"
+            envFrom:
+              - secretRef:
+                  name: unifi-secrets
+            probes:
+              liveness: &mongoprobe
+                enabled: true
+                custom: true
+                spec:
+                  exec:
+                    command: ["mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+                  periodSeconds: 30
+                  timeoutSeconds: 10
+                  failureThreshold: 5
+              readiness: *mongoprobe
+            resources:
+              requests:
+                cpu: 50m
+                memory: 256Mi
+              limits:
+                memory: 1Gi
+    service:
+      app:
+        controller: unifi
+        primary: true
+        ports:
+          http:
+            port: 8443
+            protocol: HTTPS
+      inform:
+        controller: unifi
+        type: LoadBalancer
+        loadBalancerIP: "${UNIFI_LB_ADDR}"
+        ports:
+          inform:
+            port: 8080
+            protocol: TCP
+          stun:
+            port: 3478
+            protocol: UDP
+    ingress:
+      app:
+        className: nginx-internal
+        annotations:
+          hajimari.io/appName: UniFi
+          hajimari.io/group: Network
+          hajimari.io/icon: mdi:wifi
+          nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+        hosts:
+          - host: &host "unifi.${INTERNAL_DOMAIN}"
+            paths:
+              - path: /
+                pathType: Prefix
+                service:
+                  identifier: app
+                  port: http
+        # The controller's default cert (*.internal.tnwks.us) covers the
+        # host; listing it makes nginx redirect plain http to https.
+        tls:
+          - hosts:
+              - *host

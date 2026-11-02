@@ -48,6 +48,7 @@ there. The UDP relays re-resolve it every 60 seconds.
 | `mosquitto` | 10.5.0.203 | 1883/TCP | portproxy | `mqtt` |
 | `flow-collector-netflow` | 10.5.0.204 | 2055/UDP | `tnwks-udp-relay`, from the LAN | `netflow` |
 | `vector-aggregator` | 10.5.0.205 | 6001/UDP | `tnwks-udp-relay-syslog`, from the router only | `syslog` |
+| `unifi-inform` | 10.5.0.206 | 8080/TCP | portproxy LAN 8080 -> WSL 18080, firewall scoped to `10.10.90.0/24` | `unifi-inform` (listens on 18080: Docker holds 8080) |
 | `k8s-gateway` | 10.5.0.201 | 53/UDP | not exposed: the router answers DNS | (`dns`, unused) |
 | `ingress-nginx-controller` (public) | 10.5.0.202 | 80, 443 | never exposed: fronted by cloudflared | — |
 
@@ -96,14 +97,15 @@ re-run it after editing the sync script.
 
 Adding a service: give it a fixed VIP in `cluster-settings.yaml`, add a
 `case` arm to `tnwks-lan-bridge.sh` and an instance to the role defaults,
-then the port to `Sync-TnwksLanBridge.ps1` (TCP) or `Register-TnwksUdpRelays.ps1`
-(UDP), and re-run the matching task.
+then the port to `Sync-TnwksLanBridge.ps1` (TCP; `MappedTcpPorts` when the WSL
+side must listen on a different port, with an optional source scope) or
+`Register-TnwksUdpRelays.ps1` (UDP), and re-run the matching task.
 
 ## Checking it
 
 ```bash
 systemctl status 'tnwks-lan-bridge@*'
-ss -tlnu | grep -E ':(80|443|1883|2055|6001)\b'
+ss -tlnu | grep -E ':(80|443|1883|2055|6001|18080)\b'
 ```
 
 ```powershell

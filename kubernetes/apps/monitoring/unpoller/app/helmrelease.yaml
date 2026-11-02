@@ -25,7 +25,8 @@ spec:
               tag: v5.9.1@sha256:3bbe07a7acf9328356e1b33c54a346c1b45aa593ee63548435903de5ffac0937
             env:
               UP_UNIFI_DEFAULT_ROLE: tnwks-ops
-              UP_UNIFI_DEFAULT_URL: https://unifi:8443
+              # In-cluster: the controller runs in networking/unifi (WSL).
+              UP_UNIFI_DEFAULT_URL: https://unifi.networking.svc.cluster.local:8443
               UP_UNIFI_DEFAULT_VERIFY_SSL: false
               UP_UNIFI_DEFAULT_USER: unifipoller
               UP_UNIFI_DEFAULT_PASS:

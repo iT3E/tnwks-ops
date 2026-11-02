@@ -48,3 +48,17 @@ resource "tfe_workspace_settings" "tnwks-mikrotik-prod_workspace_settings" {
   workspace_id   = tfe_workspace.tnwks-mikrotik-prod.id
   execution_mode = "local"
 }
+
+# The UniFi controller (networking/unifi on homelab-wsl) is reachable only from
+# the LAN, so this runs locally like the MikroTik workspace.
+resource "tfe_workspace" "tnwks-unifi-prod" {
+  name              = "tnwks-unifi-prod"
+  organization      = var.tfc_organization
+  project_id        = tfe_project.tfe_project_aws.id
+  working_directory = "environments/prod/unifi"
+}
+
+resource "tfe_workspace_settings" "tnwks-unifi-prod_workspace_settings" {
+  workspace_id   = tfe_workspace.tnwks-unifi-prod.id
+  execution_mode = "local"
+}
