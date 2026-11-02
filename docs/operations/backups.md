@@ -139,6 +139,12 @@ cert CN homelab-wsl-backups  (Secret kopiur-system/aws-backup-certificate, SOPS)
   kubectl -n kopiur-system create job --from=cronjob/aws-backup-credentials sts-now
   ```
 
+  If kopiur already tried with the placeholders, the ClusterRepository sits in
+  `Failed` with "The AWS Access Key Id you provided does not exist". Delete its
+  failed discovery Job (`kubectl -n kopiur-system delete job s3-discovery`) and
+  it re-bootstraps; then delete any `Pending` Snapshots and create new ones.
+  Barman retries WAL on its own.
+
 ## Checking backups
 
 ```bash
@@ -198,7 +204,12 @@ one. On the same cluster, after losing the database:
 
 For a test restore, create a second Cluster (`postgres-restore`) with the same
 `bootstrap.recovery` + `externalClusters` and no `plugins` section, check the
-data with `psql`, then delete it.
+data with `psql`, then delete it. Pin it to `homelab-wsl-worker-1`
+(`spec.affinity.nodeSelector`): `local-path-ext4` exists only on that node,
+and a pod scheduled to worker-2 leaves the PVC unprovisionable. The same
+applies to a recovery of the real Cluster on a rebuilt cluster if its PVC is
+gone. The 2026-11-02 drill recovered all nine databases to the latest WAL in
+80 seconds.
 
 ### A PVC (kopiur)
 
@@ -228,7 +239,8 @@ spec:
 ```
 
 `kubectl get snapshots -n <ns>` lists what exists; `source.snapshotRef.name`
-picks a specific one. Scale the app back up when the Restore is `Succeeded`.
+picks a specific one. Scale the app back up when the Restore's phase is
+`Completed` (`Ready=True`, reason `RestoreSucceeded`).
 On a rebuilt cluster, the PVCs are new and empty: do the same once the app has
 created its PVC.
 

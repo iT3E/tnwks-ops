@@ -192,3 +192,5 @@ Drill log:
 
 | Date | What | Result |
 | --- | --- | --- |
+| 2026-11-02 | First drill, right after setup. Postgres: recovery Cluster from S3 | All 9 databases back to the latest WAL in 80 s; Mealie recipe count and database sizes match |
+| 2026-11-02 | kopiur: newest Mealie snapshot into a scratch PVC | 171 files, checksums identical to the live volume |
