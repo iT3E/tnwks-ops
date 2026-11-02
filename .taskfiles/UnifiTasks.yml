@@ -86,6 +86,10 @@ tasks:
         echo '{"name": "tnwks", "hostname": "unifi"}' | post "/api/s/default/set/setting/super_identity/$id" PUT
         id=$(curl -sk -b "$jar" "$url/api/s/default/get/setting/super_mgmt" | jq -r '.data[0]._id')
         echo '{"override_inform_host": true}' | post "/api/s/default/set/setting/super_mgmt/$id" PUT
+        # Daily local auto-backup at 02:00 (before the 03:00 firmware window),
+        # 14 kept. A .unf restore keeps the APs' keys, so no re-adoption.
+        echo '{"autobackup_enabled": true, "autobackup_cron_expr": "0 2 * * *", "autobackup_timezone": "America/Los_Angeles", "autobackup_max_files": 14}' |
+          post "/api/s/default/set/setting/super_mgmt/$id" PUT
         # 4. The accounts Terraform and unpoller log in with.
         echo "$s" | jq '{cmd: "create-admin", name: .unifi_username, email: "unifi-terraform@tnwks.us", role: "admin", permissions: [], requires_new_password: false, pw: .unifi_password}' |
           pw x_password | post /api/s/default/cmd/sitemgr
