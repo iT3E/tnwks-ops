@@ -114,7 +114,7 @@ spec:
           mongo:
             image:
               repository: docker.io/library/mongo
-              tag: 8.0.34
+              tag: 8.3.13
             args:
               - --bind_ip
               - 127.0.0.1
