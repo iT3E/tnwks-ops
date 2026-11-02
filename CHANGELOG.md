@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.66.0 - 2026-11-02
+
+### Added
+
+* home-assistant: Rewards tab on the wall display. Kids spend stars on rewards; parents define rewards, add or take away stars and undo from their phones only (scripts check the caller). Replaces the reward goal helpers.
+
 ## v1.65.0 - 2026-11-02
 
 ### Added
