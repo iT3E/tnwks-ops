@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.69.0 - 2026-11-02
+
+### Changed
+
+* unifi: AP firmware auto-upgrade on at 03:00 (6.8.2 is available; 6.6.77 was not the last release), and 802.11v BSS transition on for the WLAN.
+
 ## v1.68.2 - 2026-11-02
 
 ### Fixed
