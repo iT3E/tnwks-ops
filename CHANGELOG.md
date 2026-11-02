@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.73.1 - 2026-11-02
+
+### Fixed
+
+* backups: the STS refresher could not read its certificate (root-owned 0400 Secret mount); fsGroup + 0440.
+
 ## v1.73.0 - 2026-11-02
 
 ### Added
