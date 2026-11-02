@@ -67,6 +67,10 @@ resource "routeros_ip_dns_record" "static" {
 # logs "adlist read: max cache size reached", stops the import, and the list
 # stays stuck at a handful of names even after the cache grows; only deleting
 # and re-adding the entry (terraform apply -replace) re-imports it.
+#
+# Lists must be hosts format or one domain per line. RouterOS imports
+# adblock syntax (||example.com^) and counts every line in name-count, but
+# those entries never match a query.
 resource "routeros_ip_dns_adlist" "blocklists" {
   for_each = toset(var.dns.adlists)
 
