@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.68.2 - 2026-11-02
+
+### Fixed
+
+* unifi: adopt the Living Room UAP-HD now that it is reset (managed = true).
+
 ## v1.68.1 - 2026-11-02
 
 ### Fixed
