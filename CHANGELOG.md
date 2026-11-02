@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.77.1 - 2026-11-02
+
+### Fixed
+
+* mikrotik: adlists stopped importing at the 10 MiB DNS cache, so about 4% of blocked names loaded; cache_size is now 192 MiB, three dead lists are dropped, and t.co is allowlisted with a FWD record.
+
 ## v1.77.0 - 2026-11-02
 
 ### Added
