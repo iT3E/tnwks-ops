@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: home-automation
 resources:
   - ./secrets.sops.yaml
+  - ./prometheus.sops.yaml
   - ./helmrelease.yaml
 # Home Assistant's own configuration, one ConfigMap per directory it mounts
 # into (ConfigMaps are flat). New files under config/packages/ or

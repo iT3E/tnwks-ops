@@ -163,6 +163,54 @@ static lease in the MikroTik Terraform avoids that). The LG TV wasn't
 answering on its webOS ports (3000/3001) when this was set up; add it with
 the TV on (webOS TV, accept the pairing prompt on screen).
 
+## Presence
+
+Each adult's `person` has two trackers (UI-owned, Settings > People):
+
+- **GPS:** the Companion app's `device_tracker.<phone>`. It's the only source
+  that can say *away*, and it keeps a person home while they're in the yard,
+  out of Wi-Fi range.
+- **Wi-Fi:** `device_tracker.<phone>_wifi` from the UniFi Network integration.
+  `person` treats a router tracker's `home` as authoritative and ignores its
+  `not_home`, so Wi-Fi only speeds up arrival (the controller pushes the
+  connect event over its websocket).
+
+The UniFi integration logs in to `unifi.networking.svc.cluster.local:8443` as
+the controller's read-only local account `homeassistant`
+(`homeassistant_password` in the UniFi SOPS file; `task unifi:bootstrap`
+creates it on a rebuilt controller). Its options track **only the phones**:
+client and device tracking off, wired clients off, DPI switches off, and the
+phones' MACs under *Advanced > Client source*. The options form only offers
+clients the controller currently sees, so a phone has to be on Wi-Fi to be
+added. Detection time is 180 s. Phones keep a stable per-network MAC
+(Android's default); an iPhone needs Private Wi-Fi Address set to *Fixed*,
+since *Rotating* breaks tracking. UniFi creates client trackers disabled;
+enable the phone's and give it the `_wifi` name.
+
+Don't add the wall tablet's tracker to a person, and don't build anything
+security-relevant (locks) on presence alone.
+
+## Prometheus metrics
+
+`prometheus:` in configuration.yaml exposes entity states at
+`/api/prometheus` (metric prefix `homeassistant_`), and the ServiceMonitor in
+`helmrelease.yaml` scrapes it every minute. The direction is one-way on
+purpose: automations, presence and the Energy dashboard read their sources
+directly in HA, and Prometheus is for Grafana and alerts. Nothing in HA should
+depend on the monitoring stack.
+
+HA is internet-facing, so the endpoint keeps its token requirement. The scrape
+uses a long-lived token (`home-assistant-prometheus`, `prometheus.sops.yaml`)
+of the HA user **Prometheus**: group *Read only*, local network only, a
+password nobody kept. To replace the token: reset that user's password
+(Settings > People > Users), log in as `prometheus` from the LAN and create a
+long-lived token on its profile, put it in the secret with `bin/sops --set`,
+then delete the old token.
+
+Prometheus on `homelab-wsl` keeps 2 days of data on an emptyDir, so this is
+not long-term history yet. HA's recorder (14 days) and its long-term
+statistics are still where energy history lives.
+
 ## Making a change
 
 1. Edit or add a file under `config/`. A **new** file must also be listed under
