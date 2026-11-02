@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.66.1 - 2026-11-02
+
+### Fixed
+
+* home-assistant: the rewards scripts return their refusals as a response, so the wall display shows "Not enough stars yet" or "Only a parent can ..." instead of nothing.
+
 ## v1.66.0 - 2026-11-02
 
 ### Added
