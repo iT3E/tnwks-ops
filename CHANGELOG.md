@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.70.0 - 2026-11-02
+
+### Changed
+
+* unifi: daily controller auto-backup (02:00, 14 kept) in task unifi:bootstrap; docs on recovering APs without a reset.
+
 ## v1.69.0 - 2026-11-02
 
 ### Changed
