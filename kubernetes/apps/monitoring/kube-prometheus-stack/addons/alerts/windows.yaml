@@ -34,6 +34,66 @@ spec:
             summary: "Windows host memory above 95%"
             description: "DESKTOP-HKE05KI memory at {{ $value | humanizePercentage }} — risk of OOM"
 
+        # Commit charge vs commit limit (RAM + page file). This, not RAM %, is
+        # what makes Windows fail allocations: at the limit it grows the
+        # system-managed C:\pagefile.sys (stalls) and then refuses new commit,
+        # so apps crash or hang. Baseline 2026-10-30..11-01: median 89.6%,
+        # max 94.8%, mostly vmmemWSL (~39 GB commit). Same alertname for both
+        # severities so the critical inhibits the warning.
+        - alert: WindowsHostCommitHigh
+          expr: windows_memory_committed_bytes{instance="DESKTOP-HKE05KI"} / windows_memory_commit_limit{instance="DESKTOP-HKE05KI"} > 0.95
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Windows host commit charge above 95% of the commit limit"
+            description: >-
+              DESKTOP-HKE05KI has committed
+              {{ with query "round(windows_memory_committed_bytes{instance='DESKTOP-HKE05KI'} / 2^30, 0.1)" }}{{ . | first | value }}{{ end }} GiB
+              of its {{ with query "round(windows_memory_commit_limit{instance='DESKTOP-HKE05KI'} / 2^30, 0.1)" }}{{ . | first | value }}{{ end }} GiB
+              commit limit (RAM + page file) for 15m. Near the limit Windows grows
+              the page file, then new allocations fail and apps crash or hang.
+              Usual cause is vmmemWSL (the WSL VM that runs the cluster); cap it in
+              .wslconfig, close apps, or raise the page file size.
+
+        - alert: WindowsHostCommitHigh
+          expr: windows_memory_committed_bytes{instance="DESKTOP-HKE05KI"} / windows_memory_commit_limit{instance="DESKTOP-HKE05KI"} > 0.98
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Windows host commit charge above 98% of the commit limit"
+            description: >-
+              DESKTOP-HKE05KI has committed
+              {{ with query "round(windows_memory_committed_bytes{instance='DESKTOP-HKE05KI'} / 2^30, 0.1)" }}{{ . | first | value }}{{ end }} GiB
+              of its {{ with query "round(windows_memory_commit_limit{instance='DESKTOP-HKE05KI'} / 2^30, 0.1)" }}{{ . | first | value }}{{ end }} GiB
+              commit limit (RAM + page file) for 5m. Allocations are about to fail;
+              apps and the WSL VM (the whole cluster) can crash. Free memory now:
+              close apps or restart the heaviest one (usually vmmemWSL).
+
+        # Real swapping: sustained page-outs to the page file while available
+        # memory (free + standby) is low. Pages written alone happen in the
+        # background with plenty of RAM (2-day max 90/s, p99 29/s), and page
+        # reads include normal file-mapped reads (max ~6k/s), so neither is
+        # used on its own.
+        - alert: WindowsHostPaging
+          expr: >-
+            rate(windows_memory_swap_pages_written_total{instance="DESKTOP-HKE05KI"}[5m]) > 500
+            and on (instance)
+            windows_memory_available_bytes{instance="DESKTOP-HKE05KI"} < 0.1 * windows_memory_physical_total_bytes{instance="DESKTOP-HKE05KI"}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Windows host is swapping to the page file"
+            description: >-
+              DESKTOP-HKE05KI has written {{ $value | humanize }} pages/s to the page
+              file for 10m with only
+              {{ with query "round(windows_memory_available_bytes{instance='DESKTOP-HKE05KI'} / 2^30, 0.1)" }}{{ . | first | value }}{{ end }} GiB
+              of RAM available. Everything on the host, the WSL VM included, slows
+              down. Usual cause is vmmemWSL growing; close apps or cap WSL memory in
+              .wslconfig.
+
         - alert: WindowsDiskCritical
           expr: 1 - (windows_logical_disk_free_bytes{instance="DESKTOP-HKE05KI"} / windows_logical_disk_size_bytes{instance="DESKTOP-HKE05KI"}) > 0.9
           for: 10m
