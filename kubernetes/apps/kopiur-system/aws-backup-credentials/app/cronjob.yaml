@@ -29,6 +29,9 @@ spec:
             runAsUser: 65534
             runAsGroup: 65534
             runAsNonRoot: true
+            # The certificate Secret is mounted root-owned; fsGroup plus 0440
+            # makes it readable by this non-root user.
+            fsGroup: 65534
             seccompProfile:
               type: RuntimeDefault
           containers:
@@ -91,7 +94,7 @@ spec:
             - name: certificate
               secret:
                 secretName: aws-backup-certificate
-                defaultMode: 0400
+                defaultMode: 0440
             - name: tmp
               emptyDir:
                 sizeLimit: 64Mi
