@@ -17,6 +17,7 @@ K8S_GATEWAY_IP="${K8S_GATEWAY_IP:-10.5.0.201}"
 MQTT_IP="${MQTT_IP:-10.5.0.203}"
 FLOW_COLLECTOR_IP="${FLOW_COLLECTOR_IP:-10.5.0.204}"
 VECTOR_IP="${VECTOR_IP:-10.5.0.205}"
+UNIFI_IP="${UNIFI_IP:-10.5.0.206}"
 
 # socat must exist on the WSL host. Apt-get on Ubuntu is fine.
 command -v socat >/dev/null || { echo "socat missing — sudo apt-get install -y socat"; exit 1; }
@@ -43,8 +44,11 @@ case "${1:-}" in
   # Router remote logging (UDP syslog; Windows side is a second
   # Start-TnwksUdpRelay.ps1 instance), target is monitoring/vector-aggregator.
   syslog) run 6001 "${VECTOR_IP}:6001"           UDP ;;
+  # UniFi inform from the APs. Listens on 18080 because Docker on this host
+  # already holds 8080; Windows portproxy maps LAN 8080 -> WSL 18080.
+  unifi-inform) run 18080 "${UNIFI_IP}:8080"     TCP ;;
   *)
-    echo "usage: $0 {http|https|mqtt|dns|netflow|syslog}" >&2
+    echo "usage: $0 {http|https|mqtt|dns|netflow|syslog|unifi-inform}" >&2
     exit 2
     ;;
 esac

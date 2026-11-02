@@ -98,4 +98,4 @@ nmap -Pn -p 22,80,443,8291 <wan-ip> # must not be open
 | 5.1 | Agent (approve) | Remove the ERL fallback route (`UPSTREAM_GATEWAY = None`) and disable the transit VLAN 10 (`OUTSIDE_ZONE_VLAN_ENABLED = False`), regenerate, PR, apply. Done |
 | 5.2 | Agent | Point `routeros_url` in SOPS at `https://10.10.30.1` (wg01) |
 | 5.3 | Agent | PRs: `sce-rtr01` DNS records; UniFi controller on k8s with its relays; mktxp with DHCP lease names; Vector on WSL with a tcp/6001 relay |
-| 5.4 | You | Factory-reset the ERL and VyOS before shelving them (they hold old credentials and the reused WireGuard key). Power off the old blade servers on VLAN 550 |
+| 5.4 | You | Before the reset, copy any UniFi autobackups off VyOS (`/config/containers/unifi/data/backup/`, see [`../unifi.md`](../unifi.md) rollout step 1). Factory-reset the ERL and VyOS before shelving them (they hold old credentials and the reused WireGuard key). Power off the old blade servers on VLAN 550 |

@@ -3,7 +3,9 @@
 # tnwks-lan-bridge.sh: http→ingress 80, https→ingress 443, mqtt→1883,
 # netflow→flow-collector udp/2055 (Windows side: Start-TnwksUdpRelay.ps1),
 # syslog→vector-aggregator udp/6001 (the router's remote logging; Windows
-# side: a second Start-TnwksUdpRelay.ps1 instance).
+# side: a second Start-TnwksUdpRelay.ps1 instance), unifi-inform→the UniFi
+# controller's tcp/8080 (socat listens on 18080; Sync-TnwksLanBridge.ps1 maps
+# LAN 8080 to it).
 # 'dns' is intentionally omitted by default — netsh portproxy is TCP-only,
 # so the LAN-side DNS path goes via VyOS, not via this bridge.
 wsl_lan_bridge_instances:
@@ -12,3 +14,4 @@ wsl_lan_bridge_instances:
   - mqtt
   - netflow
   - syslog
+  - unifi-inform

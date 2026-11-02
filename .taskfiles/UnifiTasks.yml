@@ -1,0 +1,54 @@
+---
+version: "3"
+
+## ---------------------------------------------------------------------------------------------------------------------
+## UniFi controller tasks (networking/unifi on homelab-wsl).
+##
+## The controller is only reachable from inside the LAN, so these run locally,
+## like the MikroTik tasks. See docs/network/unifi.md.
+## ---------------------------------------------------------------------------------------------------------------------
+
+vars:
+  UNIFI_TF_DIR: "{{.TERRAFORM_DIR}}/environments/prod/unifi"
+
+tasks:
+
+  init:
+    desc: Initialize the UniFi Terraform root module
+    dir: "{{.UNIFI_TF_DIR}}"
+    cmds:
+      - terraform init {{.CLI_ARGS}}
+
+  validate:
+    desc: Validate the UniFi Terraform root module without a backend
+    dir: "{{.UNIFI_TF_DIR}}"
+    cmds:
+      - terraform init -backend=false
+      - terraform validate
+
+  plan:
+    desc: Show the changes Terraform will make to the UniFi controller
+    dir: "{{.UNIFI_TF_DIR}}"
+    cmds:
+      - terraform plan {{.CLI_ARGS}}
+
+  apply:
+    desc: Apply the UniFi configuration (adopts pending APs on first run)
+    dir: "{{.UNIFI_TF_DIR}}"
+    cmds:
+      - terraform apply {{.CLI_ARGS}}
+
+  pending:
+    desc: List devices the controller sees, adopted or not (state 1 = connected, 0 = pending/disconnected)
+    dir: "{{.UNIFI_TF_DIR}}"
+    cmds:
+      - |
+        set -euo pipefail
+        s=$(sops -d --output-type json secrets.sops.yaml)
+        url=$(echo "$s" | jq -r .unifi_url)
+        jar=$(mktemp); trap 'rm -f "$jar"' EXIT
+        # Login body: unifi_username/unifi_password renamed to the API's keys.
+        echo "$s" | jq 'with_entries(select(.key | test("^unifi_(user|pass)")) | .key |= sub("^unifi_"; ""))' |
+          curl -skf -c "$jar" -H 'Content-Type: application/json' --data @- "$url/api/login" >/dev/null
+        curl -skf -b "$jar" "$url/api/s/default/stat/device-basic" |
+          jq -r '.data[] | [.mac, .model, (.name // "-"), (.adopted|tostring), (.state|tostring)] | @tsv'

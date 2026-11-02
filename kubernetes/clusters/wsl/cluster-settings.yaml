@@ -58,6 +58,7 @@ data:
   MQTT_LB_ADDR: "10.5.0.203"
   FLOW_COLLECTOR_LB_ADDR: "10.5.0.204"
   VECTOR_LB_ADDR: "10.5.0.205"
+  UNIFI_LB_ADDR: "10.5.0.206"
   KUBE_VIP_ADDR: "127.0.0.1"
 
   # Cluster networking

@@ -23,3 +23,7 @@ resources:
   - ../../../../apps/networking/ingress-nginx/ks.yaml
   - ../../../../apps/networking/ingress-nginx-internal/ks.yaml
   - ../../../../apps/networking/k8s-gateway/ks.yaml
+  # UniFi controller: WSL-only. The router's `unifi` record and the AP firewall
+  # rules point at this desktop (10.10.91.142), and a second controller on
+  # MS-01 would split the APs. See docs/network/unifi.md.
+  - ../../../../apps/networking/unifi/ks.yaml
