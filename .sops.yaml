@@ -5,12 +5,22 @@
 #   * homelab-wsl age — per-cluster key for WSL (sops-age secret in flux-system)
 #   * homelab-ms-01 age — per-cluster key for MS-01 (added when MS-01 is bootstrapped)
 #   * network-devices CI age — the self-hosted runner's key (docs/network/ci.md).
-#     Only on the device secrets below, so a leaked CI key exposes those and
-#     nothing else in the repo.
+#     Only on the device secrets below (MikroTik, EdgeOS, UniFi), so a leaked
+#     CI key exposes those and nothing else in the repo.
 creation_rules:
   # EdgeOS devices (infrastructure/edgeos): same recipients as the MikroTik
   # secrets, including the CI age key, so the same runner can manage them.
   - path_regex: infrastructure/edgeos/.*\.sops\.ya?ml
+    age: >-
+      age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2,
+      age12uckcdwv9p2s75ae3h20wgn70taatdzzl44n9x6vr8h9qurzkaqqkhphz7,
+      age1hmmuna95ktwl9sf9j56wjjukyf22ukdyjd8c47nlf5fjgyeyk5rsmhtyjx,
+      age10s9j786hfegtvdv45thwh0u7czj75pep48f6x96uk6t496vd4quqtumfy6
+    kms: 'arn:aws:kms:us-west-2:654654220436:key/mrk-74c4597ebffd41d38a852228e13d76cc+arn:aws:iam::654654220436:role/iam-role-sops'
+  # UniFi controller (environments/prod/unifi): the CI age key too, so the
+  # same runner can plan and apply it (docs/network/ci.md). Before the general
+  # terraform/ rules, which would match this path as well.
+  - path_regex: infrastructure/terraform/environments/prod/unifi/.*\.sops\.ya?ml
     age: >-
       age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2,
       age12uckcdwv9p2s75ae3h20wgn70taatdzzl44n9x6vr8h9qurzkaqqkhphz7,

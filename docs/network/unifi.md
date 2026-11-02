@@ -9,7 +9,7 @@ and its configuration (site settings, the WLAN, each AP) is Terraform in
 | --- | --- |
 | Controller UI and API | `https://unifi.internal.tnwks.us` (internal ingress) |
 | Inform URL the APs use | `http://unifi:8080/inform` (router record `unifi` -> `10.10.91.142`) |
-| Configuration | `environments/prod/unifi` (TFC workspace `tnwks-unifi-prod`, local execution), `task unifi:{plan,apply}` |
+| Configuration | `environments/prod/unifi` + `modules/unifi`: planned on the PR and applied on merge by `unifi-{plan,apply}.yaml` on the self-hosted runner ([`ci.md`](ci.md)). State in TFC workspace `tnwks-unifi-prod`. `task unifi:*` for bootstrap and break-glass |
 | Secrets | `environments/prod/unifi/secrets.sops.yaml`: controller logins, device SSH, SSID, passphrase, AP MACs |
 | Metrics | `monitoring/unpoller` (local controller user `unifipoller`) |
 
@@ -154,7 +154,7 @@ Steps marked **owner** need hands on site, a UAC prompt or a password only the o
 5. **Wi-Fi password (owner):** `sops infrastructure/terraform/environments/prod/unifi/secrets.sops.yaml`,
    set `wlan_passphrase` to the current password. Terraform refuses to apply
    while it is `CHANGEME`, because a different value disconnects every client.
-6. **Workspace:** `tnwks-unifi-prod` (execution mode local) is in
+6. **Workspace (owner):** `tnwks-unifi-prod` (execution mode local) is in
    `modules/tfc/workspaces.tf`; apply `environments/bootstrap/aws-init`, or
    create it through the TFC API and add import blocks the way
    `tnwks-mikrotik-prod` was (`aws-init/imports.tf`).
@@ -170,7 +170,8 @@ Steps marked **owner** need hands on site, a UAC prompt or a password only the o
    ```bash
    task unifi:pending   # mac, model, name, adopted, state
    ```
-9. **Adopt and configure:** `task unifi:apply`. `allow_adoption` adopts each
+9. **Adopt and configure:** `task unifi:apply` (locally: adoption depends
+   on the resets above, which CI can't wait for). `allow_adoption` adopts each
    pending AP, then Terraform names it, gives it its static address and pins
    its channels. The AP reboots its radios once; clients reconnect on their own
    because the SSID and passphrase are unchanged.
@@ -178,12 +179,17 @@ Steps marked **owner** need hands on site, a UAC prompt or a password only the o
     address, the SW03 MAC table has clients on 910 behind all three ports, and
     unpoller logs no errors:
     `kubectl -n monitoring logs deploy/unpoller --tail=5`.
+11. **Hand over to CI:** `task unifi:plan` shows no changes, then set the
+    repository variable `UNIFI_TERRAFORM_ENABLED` to `true`
+    (`gh variable set UNIFI_TERRAFORM_ENABLED --body true`). Until then the
+    UniFi workflows skip, so this PR and the bootstrap can't trip them.
 
 ## Day to day
 
-- Change Wi-Fi settings in Terraform, then `task unifi:plan` / `task unifi:apply`
-  over the LAN or `wg01`. A change made in the UI shows up as drift on the next
-  plan.
+- Change Wi-Fi settings in Terraform through a PR: `unifi-plan.yaml` posts
+  the plan summary, merging applies it. A change made in the UI shows up as
+  drift on the next plan. `task unifi:plan` / `task unifi:apply` from the
+  desktop do the same by hand, against the same state, when CI is down.
 - **An AP stops checking in:** SSH to it with `device_ssh_username` /
   `device_ssh_password` from SOPS (or the desktop's key) and run
   `set-inform http://unifi:8080/inform`. No reset needed, as long as the

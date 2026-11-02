@@ -4,8 +4,10 @@ version: "3"
 ## ---------------------------------------------------------------------------------------------------------------------
 ## UniFi controller tasks (networking/unifi on homelab-wsl).
 ##
-## The controller is only reachable from inside the LAN, so these run locally,
-## like the MikroTik tasks. See docs/network/unifi.md.
+## Day to day, CI plans and applies (unifi-{plan,apply}.yaml on the self-hosted
+## runner). These are the same runs by hand from the desktop: the one-time
+## bootstrap and adoption, and break-glass when CI is down. Same TFC state, so
+## the workspace lock keeps them from overlapping. See docs/network/unifi.md.
 ## ---------------------------------------------------------------------------------------------------------------------
 
 vars:

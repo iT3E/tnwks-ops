@@ -1,0 +1,50 @@
+---
+name: "UniFi Apply"
+
+# Applies the UniFi root module on merge to main, from the self-hosted
+# tnwks-ops-runner (docs/network/ci.md). Plan and apply run in one job, so
+# what is applied is exactly the plan computed here.
+#
+# Off until the controller is bootstrapped: repository variable
+# UNIFI_TERRAFORM_ENABLED=true turns it on (docs/network/unifi.md).
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "infrastructure/terraform/environments/prod/unifi/**"
+      - "infrastructure/terraform/modules/unifi/**"
+      - ".github/actions/unifi-terraform/**"
+      - ".github/workflows/unifi-*.yaml"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: unifi-terraform
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: vars.UNIFI_TERRAFORM_ENABLED == 'true'
+    name: "UniFi Apply"
+    runs-on: tnwks-ops-runner
+    timeout-minutes: 30
+    # No reviewer gate: merging to main is the approval. The prod environment
+    # only accepts deployments from protected branches.
+    environment:
+      name: prod
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Plan and apply
+        uses: ./.github/actions/unifi-terraform
+        with:
+          mode: apply
+          tf-api-token: ${{ secrets.TF_API_TOKEN }}

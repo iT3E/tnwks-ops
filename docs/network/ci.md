@@ -25,10 +25,11 @@ PR / merge to main
 | Listener `wg03`, zone `vpn-ci` | generator `EXTRA_WIREGUARD` | `10.10.32.1/24`, one peer (`10.10.32.10`). Its own zone, not a `wg01` peer: `vpn -> *` defaults to accept, which a CI identity must not inherit. `vpn-ci` has no zone pairs (the terminal forward drop covers it) and one input accept, REST 443. WireGuard 51822 is accepted from the LAN only, never the WAN |
 | Runner scale set `tnwks-ops-runner` | `kubernetes/apps/tools/actions-runner-controller/ops-runner/` | `minRunners: 0`, `maxRunners: 1`. Same GitHub App as `sites-builder`, installed on both repos |
 | wireproxy sidecar | same pod | Userspace WireGuard (no `NET_ADMIN`, TUN or kernel module). Exposes the router's REST API as `https://127.0.0.1:8443` inside the pod; the runner waits for its `/readyz`, which pings the router through the tunnel |
-| CI-only age key | `.sops.yaml` (first rule), `secret.sops.yaml` | Decrypts `environments/prod/mikrotik/*.sops.yaml` and nothing else in the repo. The runner gets it as `SOPS_AGE_KEY` |
+| CI-only age key | `.sops.yaml` (first rules), `secret.sops.yaml` | Decrypts the MikroTik, EdgeOS and UniFi secrets (`environments/prod/{mikrotik,unifi}`, `infrastructure/edgeos`) and nothing else in the repo. The runner gets it as `SOPS_AGE_KEY` |
 | Endpoint override | `variables.tf` (`routeros_url`) | CI sets `TF_VAR_routeros_url=https://127.0.0.1:8443`; unset locally, where the SOPS value (`wg01`) applies |
 | TFC token | repo secret `TF_API_TOKEN` | The one the AWS workflows already use. HCP Terraform's free plan has no custom teams, so no workspace-scoped token exists |
 | Workflows | `mikrotik-{plan,apply}.yaml`, `.github/actions/mikrotik-terraform` | Shared plan/apply logic. One concurrency group, so runs never overlap |
+| UniFi controller | `unifi-{plan,apply}.yaml`, `.github/actions/unifi-terraform`, `environments/prod/unifi` | Same runner, same flow. No tunnel: the runner and the controller share the WSL cluster, so CI sets `TF_VAR_unifi_url` to the in-cluster Service. State in TFC workspace `tnwks-unifi-prod`. Gated on the repository variable `UNIFI_TERRAFORM_ENABLED=true`, set once the controller is bootstrapped ([`unifi.md`](unifi.md)) |
 | EdgeOS devices | `edgeos-{plan,apply}.yaml`, `.github/actions/edgeos-sync`, `infrastructure/edgeos` | Same runner. wireproxy also forwards `127.0.0.1:8022` to the EP-R6's SSH, the one forward `vpn-ci` has (`CI_ZONE_RULES`); CI logs in with its own SSH key against a pinned host key |
 
 ## Security model
@@ -41,9 +42,11 @@ tells it to inside the LAN. The controls:
    any workflow at all (repo setting: all external contributors).
 2. **Apply runs only from `main`.** The `prod` environment accepts deployments
    from protected branches only, and `main` takes changes through PRs.
-3. **The runner can reach the router's REST API and nothing else.** No
-   forwarding from `vpn-ci`, and the tunnel's `AllowedIPs` is the router's
-   `wg03` address.
+3. **The runner can reach the router's REST API and nothing else on the
+   LAN.** No forwarding from `vpn-ci`, and the tunnel's `AllowedIPs` is the
+   router's `wg03` address. Inside the WSL cluster it is an ordinary pod
+   (Flannel enforces no NetworkPolicy), which is how it reaches the UniFi
+   controller's Service.
 4. **Narrow secrets.** The CI age key decrypts only the MikroTik secrets.
    `permissions: {}` by default, `persist-credentials: false`.
 5. **Public logs show no plan body.** The composite action prints only the
@@ -52,6 +55,7 @@ tells it to inside the LAN. The controls:
 
 ## Local runs
 
-Unchanged: `task mikrotik:plan` / `task mikrotik:apply` over `wg01`, for
+Unchanged: `task mikrotik:plan` / `task mikrotik:apply` over `wg01`, and
+`task unifi:plan` / `task unifi:apply` from the desktop, for bootstrap,
 break-glass or when CI is down. Both use the same TFC state, and the
 workspace lock keeps them from overlapping with CI.

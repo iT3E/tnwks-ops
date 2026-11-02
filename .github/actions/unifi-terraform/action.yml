@@ -1,0 +1,86 @@
+---
+name: UniFi Terraform
+description: >-
+  Plan (and optionally apply) infrastructure/terraform/environments/prod/unifi
+  on the tnwks-ops-runner scale set, which runs in the same cluster as the
+  controller and reaches it through its Service (no tunnel needed). This repo
+  is public, so job logs are too:
+  the plan body is never printed, only counts and the addresses that change,
+  and on failure only Terraform's error blocks.
+inputs:
+  mode:
+    description: "plan or apply"
+    required: true
+  tf-api-token:
+    description: Terraform Cloud token (state for tnwks-unifi-prod)
+    required: true
+outputs:
+  summary:
+    description: Markdown summary of the plan
+    value: ${{ steps.plan.outputs.summary }}
+runs:
+  using: composite
+  steps:
+    - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+      with:
+        terraform_version: v1.17.0
+        terraform_wrapper: false
+
+    - name: Init
+      shell: bash
+      working-directory: infrastructure/terraform/environments/prod/unifi
+      env:
+        TF_TOKEN_app_terraform_io: ${{ inputs.tf-api-token }}
+      run: |
+        terraform init -input=false -no-color > "$RUNNER_TEMP/init.log" 2>&1 || {
+          grep -E '^(│|Error)' "$RUNNER_TEMP/init.log" || tail -5 "$RUNNER_TEMP/init.log"; exit 1; }
+
+    - name: Plan
+      id: plan
+      shell: bash
+      working-directory: infrastructure/terraform/environments/prod/unifi
+      env:
+        TF_TOKEN_app_terraform_io: ${{ inputs.tf-api-token }}
+        # In-cluster: the runner shares the WSL cluster with the controller.
+        TF_VAR_unifi_url: https://unifi.networking.svc.cluster.local:8443
+        TF_IN_AUTOMATION: "true"
+      run: |
+        set +e
+        terraform plan -input=false -no-color -lock-timeout=5m -detailed-exitcode \
+          -out="$RUNNER_TEMP/tfplan" > "$RUNNER_TEMP/plan.log" 2>&1
+        rc=$?
+        set -e
+        if [ "$rc" -eq 1 ]; then
+          grep -E '^(│|Error)' "$RUNNER_TEMP/plan.log" || tail -5 "$RUNNER_TEMP/plan.log"
+          exit 1
+        fi
+        terraform show -json "$RUNNER_TEMP/tfplan" | jq -r '
+          [.resource_changes[]? | select(.change.actions != ["no-op"])] as $c
+          | "**Plan:** \($c | map(select(.change.actions | index("create"))) | length) to add, "
+            + "\($c | map(select(.change.actions == ["update"])) | length) to change, "
+            + "\($c | map(select(.change.actions | index("delete"))) | length) to destroy",
+            "",
+            ($c[] | "- `\(.change.actions | join("/"))` \(.address)")
+        ' > "$RUNNER_TEMP/summary.md"
+        echo "changes=$([ "$rc" -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        {
+          echo 'summary<<EOF_SUMMARY'
+          cat "$RUNNER_TEMP/summary.md"
+          echo 'EOF_SUMMARY'
+        } >> "$GITHUB_OUTPUT"
+        cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
+        cat "$RUNNER_TEMP/summary.md"
+
+    - name: Apply
+      if: inputs.mode == 'apply' && steps.plan.outputs.changes == 'true'
+      shell: bash
+      working-directory: infrastructure/terraform/environments/prod/unifi
+      env:
+        TF_TOKEN_app_terraform_io: ${{ inputs.tf-api-token }}
+        TF_VAR_unifi_url: https://unifi.networking.svc.cluster.local:8443
+        TF_IN_AUTOMATION: "true"
+      run: |
+        terraform apply -input=false -no-color -lock-timeout=5m "$RUNNER_TEMP/tfplan" \
+          > "$RUNNER_TEMP/apply.log" 2>&1 || {
+          grep -E '^(│|Error)' "$RUNNER_TEMP/apply.log" || tail -5 "$RUNNER_TEMP/apply.log"; exit 1; }
+        grep -E '^Apply complete' "$RUNNER_TEMP/apply.log" | tee -a "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,69 @@
+---
+name: "UniFi Plan"
+
+# Plans the UniFi root module on the self-hosted tnwks-ops-runner (it runs in
+# the same cluster as the controller; see docs/network/ci.md) and posts the
+# change summary on the PR.
+#
+# Off until the controller is bootstrapped (docs/network/unifi.md, rollout):
+# set the repository variable UNIFI_TERRAFORM_ENABLED=true to turn it on.
+
+on:
+  pull_request:
+    paths:
+      - "infrastructure/terraform/environments/prod/unifi/**"
+      - "infrastructure/terraform/modules/unifi/**"
+      - ".github/actions/unifi-terraform/**"
+      - ".github/workflows/unifi-*.yaml"
+
+permissions: {}
+
+# One controller: plans and applies never overlap.
+concurrency:
+  group: unifi-terraform
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    # Never run fork or third-party code on the self-hosted runner. Fork PRs
+    # also need approval for any workflow at all (repo setting).
+    if: >-
+      vars.UNIFI_TERRAFORM_ENABLED == 'true' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == 'iT3E'
+    name: "UniFi Plan"
+    runs-on: tnwks-ops-runner
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Plan
+        id: tf
+        uses: ./.github/actions/unifi-terraform
+        with:
+          mode: plan
+          tf-api-token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          SUMMARY: ${{ steps.tf.outputs.summary }}
+        with:
+          script: |
+            const marker = '<!-- unifi-plan -->';
+            const body = `${marker}\n#### UniFi Plan\n${process.env.SUMMARY}\n\n[Run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo, issue_number: context.issue.number });
+            const prev = comments.find(c => c.body.startsWith(marker));
+            if (prev) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: prev.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }
