@@ -171,11 +171,10 @@ and 6-9.
    (or a plain `task unifi:apply` once all three are pending). Adoption takes
    about a minute, then the AP provisions: static address, channels, the SSID.
    Clients rejoin on their own because the SSID and passphrase are unchanged.
-9a. **Living Room (UAP-HD) is not adopted yet:** its reset button broke on
-    2026-11-01. It keeps serving the same SSID standalone with the old
-    controller's config, and `managed = false` in `main.tf` keeps it out of
-    Terraform so plans stay clean. Once it is reset (or reachable over SSH),
-    flip it to `true` and apply.
+9a. **Living Room (UAP-HD):** its reset button broke on 2026-11-01 (a common
+    UAP-HD failure). The case is glued; it was pried open along the seam and
+    the switch pressed directly on the board while powered. Until then it ran
+    standalone on the old config, held out of Terraform with `managed = false`.
 10. **Check:** every AP Connected at `.11`/`.12`/`.13` with clients, and
     unpoller's log shows `UAP: 3`.
 11. **Hand over to CI:** once `task unifi:plan` shows no changes,
