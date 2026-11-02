@@ -40,3 +40,20 @@ tasks:
       - sudo systemctl daemon-reload
       - sudo systemctl enable --now tnwks-unifi-backup.timer
       - systemctl list-timers tnwks-unifi-backup.timer --no-pager
+
+  aruba-backup:
+    desc: Install the daily Aruba SW03 running-config backup to Google Drive (systemd timer, 02:45)
+    cmds:
+      - sudo install -d -m 0755 /etc/tnwks
+      - |
+        sops -d --output-type json "{{.ROOT_DIR}}/infrastructure/aruba/secrets.sops.yaml" |
+          jq -r '"ARUBA_HOST=\(.aruba_host)\nARUBA_USER=\(.aruba_user)\nARUBA_PASSWORD=\(.aruba_password | @sh)"' |
+          sudo install -m 0600 -o "$(id -un)" /dev/stdin /etc/tnwks/aruba.env
+      - sudo install -m 0755 "{{.WSL_HOST_DIR}}/tnwks-aruba-backup.sh" /usr/local/bin/tnwks-aruba-backup
+      - sudo install -m 0644 "{{.WSL_HOST_DIR}}/tnwks-aruba-backup.service" "{{.WSL_HOST_DIR}}/tnwks-aruba-backup.timer" /etc/systemd/system/
+      - sudo systemctl daemon-reload
+      - sudo systemctl enable --now tnwks-aruba-backup.timer
+      - systemctl list-timers tnwks-aruba-backup.timer --no-pager
+    preconditions:
+      - sh: command -v sshpass
+        msg: "sshpass is required (sudo apt-get install -y sshpass)"

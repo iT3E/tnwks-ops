@@ -1,0 +1,34 @@
+---
+# Where the barman-cloud plugin sends WAL and base backups: the AWS S3 bucket
+# from infrastructure/terraform/modules/aws/s3_backups.tf, prefix cnpg/, one
+# folder per cluster (serverName = CLUSTER_NAME, set on the Cluster). Auth is
+# the short-lived STS session in Secret aws-backup-sts, refreshed every 30
+# minutes from the Roles Anywhere certificate (kopiur-system/aws-backup-credentials).
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: s3
+  namespace: databases
+spec:
+  retentionPolicy: "30d"
+  configuration:
+    destinationPath: "s3://${BACKUP_S3_BUCKET}/cnpg"
+    s3Credentials:
+      accessKeyId:
+        name: aws-backup-sts
+        key: AWS_ACCESS_KEY_ID
+      secretAccessKey:
+        name: aws-backup-sts
+        key: AWS_SECRET_ACCESS_KEY
+      sessionToken:
+        name: aws-backup-sts
+        key: AWS_SESSION_TOKEN
+      region:
+        name: aws-backup-sts
+        key: AWS_REGION
+    wal:
+      compression: zstd
+      maxParallel: 2
+    data:
+      compression: gzip
+      jobs: 2

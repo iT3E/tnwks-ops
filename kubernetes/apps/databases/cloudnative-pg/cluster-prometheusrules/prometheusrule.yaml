@@ -56,6 +56,34 @@ spec:
           for: 1m
           labels:
             severity: warning
+        # Backups (docs/operations/backups.md): the daily 01:00 base backup
+        # to S3 should never be more than a day and a bit old.
+        - alert: PostgresBackupStale
+          annotations:
+            description: >-
+              The newest base backup of {{ $labels.namespace }}/postgres is
+              older than 30 hours (or none exists). Check the ScheduledBackup
+              postgres-daily, the barman-cloud plugin and the STS credentials
+              CronJob kopiur-system/aws-backup-credentials.
+            summary: Postgres base backup is stale
+          expr: |-
+            (time() - max by (namespace) (cnpg_collector_last_available_backup_timestamp)) > 30 * 3600
+          for: 1h
+          labels:
+            severity: warning
+        - alert: PostgresWALArchivingStalled
+          annotations:
+            description: >-
+              {{ $labels.pod }} has not archived a WAL segment to S3 in over an
+              hour while archiving is configured. Point-in-time recovery is
+              falling behind.
+            summary: Postgres WAL archiving stalled
+          expr: |-
+            (time() - cnpg_pg_stat_archiver_last_archived_time) > 3600
+            and on (pod) cnpg_pg_stat_archiver_archived_count > 0
+          for: 15m
+          labels:
+            severity: warning
         - alert: DatabaseDeadlockConflicts
           annotations:
             description: There are over 10 deadlock conflicts in {{ $labels.pod }}

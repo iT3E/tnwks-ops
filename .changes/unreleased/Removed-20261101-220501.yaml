@@ -1,0 +1,3 @@
+kind: Removed
+body: 'databases: the MS-01-only Rook RGW cluster-backup path; both clusters use the shared barman-cloud config.'
+time: 2026-11-01T22:05:01-08:00

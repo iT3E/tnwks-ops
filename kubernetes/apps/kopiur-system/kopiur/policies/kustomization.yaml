@@ -1,0 +1,10 @@
+---
+# What kopiur backs up, and why: one file per PVC. The reasoning for what is
+# in and out is in docs/operations/backups.md ("What is backed up").
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./home-assistant.yaml
+  - ./mealie.yaml
+  - ./unifi.yaml
+  - ./changedetection.yaml

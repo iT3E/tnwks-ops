@@ -19,10 +19,35 @@ spec:
   retryInterval: 1m
   timeout: 3m
 ---
+# Barman Cloud plugin (WAL archive + base backups to S3). The Cluster
+# references it, so the Cluster waits for it.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cloudnative-pg-plugin-barman-cloud
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: cloudnative-pg-app
+    - name: cert-manager
+  path: ./kubernetes/apps/databases/cloudnative-pg/plugin-barman-cloud
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  healthChecks:
+    - apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      name: plugin-barman-cloud
+      namespace: databases
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+---
 # Defines the actual postgres Cluster resource (1 instance on WSL,
-# 3 on MS-01 via cluster-settings parameterization). Fresh-init only,
-# no recovery. S3 backup + ScheduledBackup are MS-01-only and live
-# under the cluster-backup/ subpath, included in the MS-01 overlay.
+# 3 on MS-01 via cluster-settings parameterization). Fresh-init only.
+# Backups: barman-cloud plugin to the AWS S3 bucket, both clusters
+# (cluster/objectstore.yaml, cluster/scheduled-backup.yaml).
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -31,6 +56,8 @@ metadata:
 spec:
   dependsOn:
     - name: cloudnative-pg-app
+    - name: cloudnative-pg-plugin-barman-cloud
+    - name: aws-backup-credentials
   path: ./kubernetes/apps/databases/cloudnative-pg/cluster
   prune: true
   sourceRef:
