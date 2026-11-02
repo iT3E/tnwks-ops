@@ -1,0 +1,3 @@
+kind: Added
+body: 'mikrotik: static DHCP leases on 910 for the devices Home Assistant reaches by address (LIFX, Sonos, Denon, Tesla Wall Connector, Cast, LG TV) and the desktop that hosts homelab-wsl, each at its current address.'
+time: 2026-11-02T10:18:00-08:00
