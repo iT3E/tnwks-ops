@@ -56,7 +56,7 @@ tasks:
           jq -r '.data[] | [.mac, .model, (.name // "-"), (.adopted|tostring), (.state|tostring)] | @tsv'
 
   bootstrap:
-    desc: First-run setup of a fresh controller over its API (owner + terraform + unifipoller accounts, inform host)
+    desc: First-run setup of a fresh controller over its API (owner + terraform + unifipoller + homeassistant accounts, inform host)
     dir: "{{.UNIFI_TF_DIR}}"
     cmds:
       - |
@@ -90,9 +90,11 @@ tasks:
         # 14 kept. A .unf restore keeps the APs' keys, so no re-adoption.
         echo '{"autobackup_enabled": true, "autobackup_cron_expr": "0 2 * * *", "autobackup_timezone": "America/Los_Angeles", "autobackup_max_files": 14}' |
           post "/api/s/default/set/setting/super_mgmt/$id" PUT
-        # 4. The accounts Terraform and unpoller log in with.
+        # 4. The accounts Terraform, unpoller and Home Assistant log in with.
         echo "$s" | jq '{cmd: "create-admin", name: .unifi_username, email: "unifi-terraform@tnwks.us", role: "admin", permissions: [], requires_new_password: false, pw: .unifi_password}' |
           pw x_password | post /api/s/default/cmd/sitemgr
         echo "$poller" | jq '{cmd: "create-admin", name: "unifipoller", email: "unifi-poller@tnwks.us", role: "readonly", permissions: [], requires_new_password: false, pw: .p}' |
+          pw x_password | post /api/s/default/cmd/sitemgr
+        echo "$s" | jq '{cmd: "create-admin", name: "homeassistant", email: "unifi-homeassistant@tnwks.us", role: "readonly", permissions: [], requires_new_password: false, pw: .homeassistant_password}' |
           pw x_password | post /api/s/default/cmd/sitemgr
         echo "bootstrapped $url"

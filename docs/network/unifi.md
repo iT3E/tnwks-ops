@@ -13,6 +13,7 @@ and its configuration (site settings, the WLAN, each AP) is Terraform in
 | Configuration | `environments/prod/unifi` + `modules/unifi`: planned on the PR and applied on merge by `unifi-{plan,apply}.yaml` on the self-hosted runner ([`ci.md`](ci.md)). State in TFC workspace `tnwks-unifi-prod`. `task unifi:*` for bootstrap and break-glass |
 | Secrets | `environments/prod/unifi/secrets.sops.yaml`: controller logins, device SSH, SSID, passphrase, AP MACs |
 | Metrics | `monitoring/unpoller` (local controller user `unifipoller`) |
+| Home Assistant | UniFi Network integration, read-only local user `homeassistant`, phones only (presence; [`apps/home-assistant.md`](../apps/home-assistant.md#presence)) |
 
 The SSID and the AP MAC addresses are kept in SOPS, never in this public repo:
 UniFi derives each BSSID from the AP's MAC, and an SSID or BSSID is enough to
@@ -154,8 +155,8 @@ and 6-9.
    first-run wizard over the API (owner account `admin_username`, country,
    time zone), sets Override Inform Host (`super_mgmt.override_inform_host`
    with `super_identity.hostname = unifi`), and creates the local accounts
-   `terraform` (admin) and `unifipoller` (read-only, password from the
-   unpoller Secret). It only works on an uninstalled controller.
+   `terraform` (admin), `unifipoller` (read-only, password from the
+   unpoller Secret) and `homeassistant` (read-only). It only works on an uninstalled controller.
 7. **Everything except the APs:**
    ```bash
    task unifi:init
