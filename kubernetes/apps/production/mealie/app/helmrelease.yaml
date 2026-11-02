@@ -31,7 +31,7 @@ spec:
           app:
             image:
               repository: ghcr.io/mealie-recipes/mealie
-              tag: v3.29.0
+              tag: v3.30.0
             envFrom:
               # OIDC_CONFIGURATION_URL, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET
               - secretRef:
