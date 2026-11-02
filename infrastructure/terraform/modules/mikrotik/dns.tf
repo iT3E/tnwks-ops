@@ -45,6 +45,21 @@ resource "routeros_ip_dns" "this" {
   verify_doh_cert       = var.dns.verify_doh_cert
 }
 
+# Named upstreams for FWD static records. RouterOS adlists have no allowlist,
+# but a static record wins over an adlist match, so a FWD record pointing here
+# unblocks a name while keeping it on DoH.
+resource "routeros_ip_dns_forwarders" "this" {
+  for_each = var.dns.forwarders
+
+  name            = each.key
+  dns_servers     = each.value.dns_servers
+  doh_servers     = each.value.doh_servers
+  verify_doh_cert = each.value.verify_doh_cert
+  comment         = "${each.key} (terraform)"
+
+  depends_on = [routeros_ip_dns.this]
+}
+
 resource "routeros_ip_dns_record" "static" {
   for_each = var.dns.static_records
 
@@ -52,11 +67,12 @@ resource "routeros_ip_dns_record" "static" {
   type            = each.value.type
   address         = each.value.address
   cname           = each.value.cname
+  forward_to      = each.value.forward_to
   match_subdomain = each.value.match_subdomain
   ttl             = each.value.ttl
   comment         = coalesce(each.value.comment, each.key)
 
-  depends_on = [routeros_ip_dns.this]
+  depends_on = [routeros_ip_dns.this, routeros_ip_dns_forwarders.this]
 }
 
 resource "routeros_ip_dns_adlist" "blocklists" {

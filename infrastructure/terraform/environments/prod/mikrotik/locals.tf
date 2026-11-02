@@ -732,6 +732,21 @@ locals {
         address = "10.10.91.1"
         comment = "generator"
       }
+      # Allowlist. The pgl.yoyo.org list blocks t.co, which breaks every
+      # link shared from X/Twitter. blocky's anudeep whitelists used to cover
+      # this; RouterOS has no allowlist, so a FWD record overrides the adlist.
+      allow_t_co = {
+        name            = "t.co"
+        type            = "FWD"
+        forward_to      = "cloudflare-doh"
+        match_subdomain = true
+        comment         = "allowlist: X/Twitter link shortener"
+      }
+    }
+    forwarders = {
+      cloudflare-doh = {
+        doh_servers = ["https://cloudflare-dns.com/dns-query"]
+      }
     }
     adlists = [
       "https://raw.githubusercontent.com/PolishFiltersTeam/KADhosts/master/KADhosts.txt",
