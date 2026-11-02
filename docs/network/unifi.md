@@ -197,9 +197,18 @@ and 6-9.
   `task unifi:apply` rebuilds the configuration. The APs then need either a
   `.unf` restore or the SSH route above (`set-default` over SSH resets an AP
   without touching it), not a ladder.
-- Local auto-backups land on the `config` PVC
+- **Never resetting an AP again:** every AP has the device SSH credentials
+  from SOPS (password and the desktop's key, checked on all three on
+  2026-11-01) and informs to the hostname `unifi`. So:
+  - Controller moves: change the router's `unifi` record; nothing on the APs.
+  - Controller database lost: restore a `.unf` (keeps the APs' keys, nothing
+    to re-adopt), or SSH in and `set-default` to factory-reset an AP
+    remotely, then let Terraform adopt it.
+- Auto-backups: daily at 02:00, 14 kept (`super_mgmt`, set by
+  `task unifi:bootstrap`), on the `config` PVC
   (`/config/data/backup/autobackup`), which is local-path on the desktop's
-  disk. They are not copied anywhere else yet.
+  disk. They are not copied off the desktop yet. A `.unf` holds the Wi-Fi
+  passphrase and the device keys, so treat copies as secrets.
 
 ## History
 

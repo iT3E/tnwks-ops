@@ -1,0 +1,3 @@
+kind: Changed
+body: 'unifi: daily controller auto-backup (02:00, 14 kept) in task unifi:bootstrap; docs on recovering APs without a reset.'
+time: 2026-11-01T20:25:00-08:00
