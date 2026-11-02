@@ -158,8 +158,9 @@ kitchen-cards.js) paints them with `lifx.paint_theme`. Its theme list is read
 at runtime from that action's selector, i.e. the aiolifx-themes library that
 tracks the LIFX app's themes, so new LIFX themes arrive with HA updates and
 none are listed in git. The card only sorts them into groups and picks
-"In season" ones by month. A name it doesn't know lands in Moods. All of them are by DHCP address, so a lease that moves needs a new host (a
-static lease in the MikroTik Terraform avoids that). The LG TV wasn't
+"In season" ones by month. A name it doesn't know lands in Moods. All of them are by DHCP address, and each has a static lease at that
+address (`EXTRA_DHCP_LEASES` in `infrastructure/mikrotik/tools/vyos-to-locals.py`,
+then `task mikrotik:generate`). Pin any new device added by host the same way. The LG TV wasn't
 answering on its webOS ports (3000/3001) when this was set up; add it with
 the TV on (webOS TV, accept the pairing prompt on screen).
 

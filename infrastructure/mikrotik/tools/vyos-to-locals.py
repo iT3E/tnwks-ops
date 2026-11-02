@@ -214,6 +214,43 @@ EXTRA_DNS_RECORDS = {
     "sce-rtr01.tnwks.local": "10.10.91.1",
 }
 
+# Static DHCP leases with no VyOS source, per DHCP zone. Each pins a device at
+# the address it already had, so nothing moves. Mostly devices Home Assistant
+# reaches by address because discovery doesn't reach its pod
+# (docs/apps/home-assistant.md, "Other devices"), plus the desktop that
+# everything on WSL is published through (WSL_HOST). Phones aren't here:
+# HA's UniFi presence tracks them by MAC.
+EXTRA_DHCP_LEASES = {
+    "unifi-frontend-910": {
+        "desktop": {"address": WSL_HOST, "mac_address": "74:56:3C:B6:F8:7D",
+                    "comment": "desktop (WSL host, homelab-wsl services)"},
+        "denon-avr": {"address": "10.10.91.124", "mac_address": "00:06:78:4C:C2:26",
+                      "comment": "Denon AVR-S750H (HA denonavr)"},
+        "sonos-1": {"address": "10.10.91.125", "mac_address": "B8:E9:37:2F:5C:64",
+                    "comment": "Sonos (HA sonos: hosts)"},
+        "sonos-2": {"address": "10.10.91.144", "mac_address": "00:0E:58:8C:32:AC",
+                    "comment": "Sonos (HA sonos: hosts)"},
+        "lifx-pump-room": {"address": "10.10.91.126", "mac_address": "D0:73:D5:31:8E:E9",
+                           "comment": "LIFX Mini pump room (HA lifx)"},
+        "lifx-middle-left": {"address": "10.10.91.131", "mac_address": "D0:73:D5:31:58:9A",
+                             "comment": "LIFX Mini middle left (HA lifx)"},
+        "lifx-middle-right": {"address": "10.10.91.134", "mac_address": "D0:73:D5:31:8E:9A",
+                              "comment": "LIFX Mini middle right (HA lifx)"},
+        "lifx-far-right": {"address": "10.10.91.170", "mac_address": "D0:73:D5:31:89:F4",
+                           "comment": "LIFX Mini far right (HA lifx)"},
+        "tesla-wall-connector": {"address": "10.10.91.133", "mac_address": "54:F8:F0:17:18:87",
+                                 "comment": "Tesla Wall Connector (HA tesla_wall_connector)"},
+        "cast-kitchen-speaker": {"address": "10.10.91.117", "mac_address": "F8:0F:F9:8E:B7:7D",
+                                 "comment": "Nest Mini, kitchen speaker (HA cast known_hosts)"},
+        "cast-kitchen-display": {"address": "10.10.91.132", "mac_address": "38:86:F7:10:09:51",
+                                 "comment": "Kitchen display (HA cast known_hosts)"},
+        "cast-living-room-tv": {"address": "10.10.91.165", "mac_address": "F2:48:55:9A:45:79",
+                                "comment": "Living room TV, Google TV (HA cast known_hosts)"},
+        "lg-tv": {"address": "10.10.91.192", "mac_address": "40:2F:86:3B:4E:C6",
+                  "comment": "LG webOS TV (for HA webostv)"},
+    },
+}
+
 IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 
 VLAN_ID_RE = re.compile(r"^set interfaces ethernet (\S+) vif (\d+) (\S+) '([^']*)'")
@@ -1237,6 +1274,13 @@ def main() -> int:
     dns, dns_notes = parse_dns(args.vyos_config)
 
     # Attach DHCP config onto the matching VLAN entry.
+    for zone, extra in EXTRA_DHCP_LEASES.items():
+        leases = dhcp[zone]["leases"]
+        taken = {v.get("address") for v in leases.values()} | {v.get("mac_address") for v in leases.values()}
+        for name, lease in extra.items():
+            if name in leases or lease["address"] in taken or lease["mac_address"] in taken:
+                sys.exit(f"EXTRA_DHCP_LEASES {zone}/{name} collides with a VyOS static mapping")
+            leases[name] = lease
     for zone, net in dhcp.items():
         if zone not in vlans:
             continue
