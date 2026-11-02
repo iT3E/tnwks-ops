@@ -31,3 +31,12 @@ tasks:
     cmds:
       # The script exits 2 when something differs.
       - "{{.WSL_HOST_DIR}}/invoke-elevated.sh {{.WSL_HOST_DIR}}/Install-TnwksWindowsMonitoring.ps1 -Check || [ $? -eq 2 ]"
+
+  unifi-backup:
+    desc: Install the daily copy of the UniFi controller backup to Google Drive (systemd timer, 02:30)
+    cmds:
+      - sudo install -m 0755 "{{.WSL_HOST_DIR}}/tnwks-unifi-backup.sh" /usr/local/bin/tnwks-unifi-backup
+      - sudo install -m 0644 "{{.WSL_HOST_DIR}}/tnwks-unifi-backup.service" "{{.WSL_HOST_DIR}}/tnwks-unifi-backup.timer" /etc/systemd/system/
+      - sudo systemctl daemon-reload
+      - sudo systemctl enable --now tnwks-unifi-backup.timer
+      - systemctl list-timers tnwks-unifi-backup.timer --no-pager

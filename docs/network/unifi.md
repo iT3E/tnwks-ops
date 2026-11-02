@@ -207,8 +207,11 @@ and 6-9.
 - Auto-backups: daily at 02:00, 14 kept (`super_mgmt`, set by
   `task unifi:bootstrap`), on the `config` PVC
   (`/config/data/backup/autobackup`), which is local-path on the desktop's
-  disk. They are not copied off the desktop yet. A `.unf` holds the Wi-Fi
-  passphrase and the device keys, so treat copies as secrets.
+  disk. `tnwks-unifi-backup.timer` (`task wsl-host:unifi-backup`) copies the
+  newest one at 02:30 to the Google Drive sync folder (`G:\My Drive\Backup\unifi`,
+  30 kept), so a dead desktop disk doesn't take the backups with it. A `.unf`
+  holds the Wi-Fi passphrase and the device keys (its encryption uses a
+  well-known fixed key), so treat copies as secrets.
 
 ## History
 

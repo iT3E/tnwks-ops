@@ -1,0 +1,11 @@
+[Unit]
+Description=Copy the newest UniFi controller backup to Google Drive (G:)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=it3e
+Environment=HOME=/home/it3e
+# kubectl comes from Homebrew on this host.
+Environment=PATH=/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/local/bin/tnwks-unifi-backup
