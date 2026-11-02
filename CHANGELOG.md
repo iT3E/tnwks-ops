@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.72.0 - 2026-11-02
+
+### Added
+
+* aws: S3 bucket for homelab backups (versioned, 30-day undo window) and a Roles Anywhere role and profile scoped to it (CN homelab-wsl-backups), for CloudNativePG (barman-cloud) and kopiur. No IAM user.
+
 ## v1.71.0 - 2026-11-02
 
 ### Added
