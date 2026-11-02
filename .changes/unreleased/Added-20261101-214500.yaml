@@ -1,0 +1,3 @@
+kind: Added
+body: 'aws: S3 bucket for homelab backups (versioned, 30-day undo window) and a Roles Anywhere role and profile scoped to it (CN homelab-wsl-backups), for CloudNativePG (barman-cloud) and kopiur. No IAM user.'
+time: 2026-11-01T21:45:00-08:00

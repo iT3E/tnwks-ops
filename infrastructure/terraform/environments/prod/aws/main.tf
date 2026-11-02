@@ -20,5 +20,7 @@ module "aws" {
   # The CNs are the workstations allowed a session; see rolesanywhere/README.md.
   rolesanywhere_ca_pem            = file("${path.module}/rolesanywhere/ca.pem")
   rolesanywhere_sops_common_names = ["it3e-wsl"]
-  sops_role_arn                   = "arn:aws:iam::654654220436:role/iam-role-sops"
+  # The homelab-wsl backup credential refresher (docs/operations/backups.md).
+  rolesanywhere_backups_common_names = ["homelab-wsl-backups"]
+  sops_role_arn                      = "arn:aws:iam::654654220436:role/iam-role-sops"
 }

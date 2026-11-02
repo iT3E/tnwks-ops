@@ -121,3 +121,18 @@ output "cognito_kiosk_temp_password" {
   value       = module.aws.cognito_kiosk_temp_password
   sensitive   = true
 }
+
+output "homelab_backups_bucket" {
+  description = "S3 bucket for homelab-wsl backups (cnpg/, kopiur/)."
+  value       = module.aws.homelab_backups_bucket
+}
+
+output "rolesanywhere_backups_profile_arn" {
+  description = "Roles Anywhere profile for the homelab-wsl backup credential refresher."
+  value       = module.aws.rolesanywhere_backups_profile_arn
+}
+
+output "rolesanywhere_backups_role_arn" {
+  description = "Role the homelab-wsl backup tools assume through Roles Anywhere."
+  value       = module.aws.rolesanywhere_backups_role_arn
+}

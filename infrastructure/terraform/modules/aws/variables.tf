@@ -45,3 +45,9 @@ variable "sops_role_arn" {
   type        = string
   default     = null
 }
+
+variable "rolesanywhere_backups_common_names" {
+  description = "Certificate CNs allowed a Roles Anywhere session as the homelab backup role (S3 read/write on the backup bucket)."
+  type        = list(string)
+  default     = []
+}
