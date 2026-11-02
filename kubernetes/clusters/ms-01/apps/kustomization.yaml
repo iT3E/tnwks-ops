@@ -18,12 +18,9 @@ resources:
   # pod scheduling (Coral TPU, Aeotec Z-Stick). Its worker DaemonSet
   # probes hang on Talos-in-Docker WSL2 sysfs.
   - ../../../apps/tools/node-feature-discovery/ks.yaml
-  # cnpg backup machinery (ObjectBucketClaim + ScheduledBackup +
-  # BackupOnetime) — needs Rook S3. The cluster.yaml spec on MS-01
-  # also needs a kustomize patch to add the `backup.barmanObjectStore`
-  # block back; TODO when MS-01 is racked and backups are needed.
-  - ../../../apps/databases/cloudnative-pg/ks-cluster-backup.yaml
-  # ObjectBucketClaim for thanos (cnpg's bucket is created via the
-  # ks-cluster-backup path above; loki no longer needs an S3 bucket).
+  # cnpg backups are shared now (barman-cloud plugin to AWS S3, see
+  # docs/operations/backups.md); the old Rook-RGW cluster-backup path is gone.
+  # Its STS credentials come from kopiur-system (shared apps).
+  # ObjectBucketClaim for thanos (loki no longer needs an S3 bucket).
   - ../../../apps/monitoring/thanos/app/s3-thanos-bucket.yaml
   - ./tuppr-talos-ks.yaml

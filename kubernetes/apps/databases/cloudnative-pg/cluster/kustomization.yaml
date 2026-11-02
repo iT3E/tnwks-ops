@@ -12,12 +12,13 @@ resources:
   - ./database-home-assistant.yaml
   - ./secret-grafana-role.sops.yaml
   - ./database-grafana.yaml
+  - ./objectstore.yaml
+  - ./scheduled-backup.yaml
 # PrometheusRule lives in cluster-prometheusrules/ behind its own
 # Kustomization that depends on kube-prometheus-stack so the CRD
 # exists before apply.
-# Backup machinery (ScheduledBackup, BackupOnetime, ObjectBucketClaim)
-# lives in cluster-backup/ and is wired in only on MS-01 where Rook S3
-# is available.
+# Backups: objectstore.yaml + scheduled-backup.yaml (barman-cloud plugin to
+# AWS S3, both clusters). See docs/operations/backups.md.
 labels:
   - pairs:
       app.kubernetes.io/name: cloudnative-pg-cluster

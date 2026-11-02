@@ -1,0 +1,3 @@
+kind: Changed
+body: 'docs: backup architecture and decisions (operations/backups.md); disaster-recovery.md rewritten as a BCP with priorities, keys, off-site kit, scenarios and drills.'
+time: 2026-11-01T22:05:02-08:00

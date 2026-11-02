@@ -1,0 +1,3 @@
+kind: Added
+body: 'backups: CloudNativePG barman-cloud plugin (continuous WAL + daily base backup to S3, 30-day PITR), kopiur nightly snapshots of the Home Assistant, Mealie, UniFi and changedetection PVCs to S3, and a Roles Anywhere to STS credentials CronJob for both. Daily Aruba SW03 config backup to Google Drive.'
+time: 2026-11-01T22:05:00-08:00

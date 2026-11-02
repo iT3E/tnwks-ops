@@ -1,0 +1,17 @@
+---
+# Daily base backup at 01:00 (six-field cron, seconds first). With continuous
+# WAL archiving this gives point-in-time recovery over the 30-day retention.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: postgres-daily
+  namespace: databases
+spec:
+  schedule: "0 0 1 * * *"
+  immediate: true
+  backupOwnerReference: self
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+  cluster:
+    name: postgres

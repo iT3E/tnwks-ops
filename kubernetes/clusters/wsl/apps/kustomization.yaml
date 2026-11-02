@@ -30,6 +30,9 @@ resources:
   - ../../../apps/cert-manager
   - ../../../apps/databases
   - ../../../apps/default
+  # Backup tooling: the Roles Anywhere -> STS refresher for barman-cloud and
+  # kopiur (docs/operations/backups.md).
+  - ../../../apps/kopiur-system
   - ../../../apps/flux-system
   - ../../../apps/kube-system
   - ../../../apps/kube-system/flannel/ks.yaml

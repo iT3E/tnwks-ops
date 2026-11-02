@@ -89,3 +89,11 @@ data:
 
   # Misc
   TIMEZONE: "America/Los_Angeles"
+
+  # Backups (docs/operations/backups.md): AWS S3 bucket and the Roles Anywhere
+  # identity the aws-backup-credentials CronJob uses. Outputs of
+  # infrastructure/terraform/environments/prod/aws.
+  BACKUP_S3_BUCKET: "tnwks-homelab-backups-654654262098"
+  RA_TRUST_ANCHOR_ARN: "arn:aws:rolesanywhere:us-west-2:654654262098:trust-anchor/6488e8e2-90be-467b-af60-eb66e745039d"
+  RA_BACKUPS_PROFILE_ARN: "arn:aws:rolesanywhere:us-west-2:654654262098:profile/4b7db537-7005-4ba3-9af7-a392a9a62230"
+  RA_BACKUPS_ROLE_ARN: "arn:aws:iam::654654262098:role/tnwks-rolesanywhere-backups"

@@ -15,6 +15,7 @@ resources:
   - ./default
   - ./flux-system
   - ./home-automation
+  - ./kopiur-system
   - ./kube-system
   - ./media
   - ./monitoring

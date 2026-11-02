@@ -31,6 +31,20 @@ spec:
           name: postgres-grafana
   monitoring:
     enablePodMonitor: ${SERVICE_MONITOR_ENABLED}
+  postgresql:
+    parameters:
+      # Compress full-page images in WAL. Home Assistant's recorder writes
+      # ~1.5 GB of WAL a day, and every byte of it is archived over the home
+      # uplink (docs/operations/backups.md).
+      wal_compression: zstd
+  # Continuous WAL archiving and base backups through the barman-cloud plugin
+  # (objectstore.yaml, scheduled-backup.yaml).
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: s3
+        serverName: ${CLUSTER_NAME}
   # Annotations on the generated `postgres-app` Secret tell stakater/reflector
   # to mirror it into namespaces that need the credentials (e.g. mealie in
   # production/, litellm in ai/, plausible in selfhosted/, home-assistant in

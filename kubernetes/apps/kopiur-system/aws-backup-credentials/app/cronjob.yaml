@@ -1,0 +1,97 @@
+---
+# Every 30 minutes: certificate -> 4-hour STS session -> Secret aws-backup-sts
+# in databases/ and kopiur-system/. A failed run raises KubeJobFailed; the
+# sessions it already wrote stay valid for up to 4 hours.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: aws-backup-credentials
+  namespace: kopiur-system
+spec:
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 7200
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: aws-backup-credentials
+        spec:
+          serviceAccountName: aws-backup-credentials
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 65534
+            runAsGroup: 65534
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: refresh
+              # Debian (glibc): aws_signing_helper is a dynamically linked
+              # glibc binary and won't run on Alpine.
+              image: docker.io/library/python:3.15.2-slim-trixie@sha256:8c13a3f37a6a5b71498228e902c4b9f51c1f7900d49fabf71f9a650c6120e0d0
+              command: ["python3", "/app/refresh.py"]
+              env:
+                - name: PYTHONUNBUFFERED
+                  value: "1"
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+                # renovate: datasource=github-releases depName=aws/rolesanywhere-credential-helper
+                - name: HELPER_VERSION
+                  value: "1.8.5"
+                - name: HELPER_URL
+                  value: "https://rolesanywhere.amazonaws.com/releases/1.8.5/X86_64/Linux/Amzn2023/aws_signing_helper"
+                - name: HELPER_SHA256
+                  value: "beec9ed1c492d93db809890f16713e3556353294b823c2184ad4e891f1b2b54d"
+                # From environments/prod/aws outputs (rolesanywhere_*).
+                - name: TRUST_ANCHOR_ARN
+                  value: "${RA_TRUST_ANCHOR_ARN}"
+                - name: PROFILE_ARN
+                  value: "${RA_BACKUPS_PROFILE_ARN}"
+                - name: ROLE_ARN
+                  value: "${RA_BACKUPS_ROLE_ARN}"
+                - name: SESSION_SECONDS
+                  value: "14400"
+                - name: AWS_REGION
+                  value: us-west-2
+                - name: SECRET_NAME
+                  value: aws-backup-sts
+                - name: TARGET_NAMESPACES
+                  value: "databases,kopiur-system"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /app
+                  readOnly: true
+                - name: certificate
+                  mountPath: /certs
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: scripts
+              configMap:
+                name: aws-backup-credentials-scripts
+            - name: certificate
+              secret:
+                secretName: aws-backup-certificate
+                defaultMode: 0400
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi

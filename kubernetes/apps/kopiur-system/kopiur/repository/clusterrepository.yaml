@@ -1,0 +1,52 @@
+---
+# One Kopia repository for every opted-in PVC, in the AWS S3 backup bucket under
+# kopiur/. Kopia encrypts client-side with KOPIA_PASSWORD (kopiur-repository,
+# SOPS; a copy belongs with the off-site keys, see docs/operations/bcp.md).
+# S3 auth is the STS session in aws-backup-sts, refreshed every 30 minutes
+# from the Roles Anywhere certificate; projection copies it into each app
+# namespace before every mover run, so a rotated session is always picked up.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: ClusterRepository
+metadata:
+  name: s3
+spec:
+  backend:
+    s3:
+      bucket: "${BACKUP_S3_BUCKET}"
+      prefix: kopiur/
+      endpoint: s3.us-west-2.amazonaws.com
+      region: us-west-2
+      auth:
+        secretRef:
+          name: aws-backup-sts
+          namespace: kopiur-system
+  encryption:
+    passwordSecretRef:
+      name: kopiur-repository
+      namespace: kopiur-system
+      key: KOPIA_PASSWORD
+  allowedNamespaces:
+    list:
+      - home-automation
+      - networking
+      - production
+  credentialProjection:
+    allowed: true
+  identityDefaults:
+    hostnameExpr: "namespace"
+    usernameExpr: "namespace + '-' + policyName"
+  maintenance:
+    namespace: kopiur-system
+    schedule:
+      quick:
+        cron: "0 */6 * * *"
+        jitter: 10m
+      full:
+        cron: "30 4 * * *"
+        jitter: 30m
+  moverDefaults:
+    cache:
+      contentCacheSizeMb: 256
+      metadataCacheSizeMb: 256
+  scheduleDefaults:
+    timezone: "${TIMEZONE}"
