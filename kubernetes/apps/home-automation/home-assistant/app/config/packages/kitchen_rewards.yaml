@@ -27,6 +27,9 @@
 # those users and never on the wall display; the scripts check
 # context.user_id again, so the tablet can't do it even through a stale card.
 #
+# A refusal ends the script with the response {"ok": false, "error": ...}
+# (call it with return_response): `stop` with `error: true` would only be
+# logged, since HA doesn't pass a top-level script's error to the caller.
 # A redemption notifies both adults' phones. Log entries older than 60 days
 # are removed at night.
 script:
@@ -64,20 +67,26 @@ script:
       - condition: template
         value_template: "{{ item is none or cost | int <= 0 }}"
       then:
+      - variables:
+          result: {ok: false, error: "That reward isn't there any more."}
       - stop: That reward isn't there any more.
-        error: true
+        response_variable: result
     - if:
       - condition: template
         value_template: "{{ member not in members or balance | int < 0 }}"
       then:
+      - variables:
+          result: {ok: false, error: "That reward isn't for them."}
       - stop: That reward isn't for them.
-        error: true
+        response_variable: result
     - if:
       - condition: template
         value_template: "{{ balance | int < cost | int }}"
       then:
+      - variables:
+          result: {ok: false, error: "Not enough stars yet."}
       - stop: Not enough stars yet.
-        error: true
+        response_variable: result
     - action: counter.set_value
       target:
         entity_id: "{{ counter_entity }}"
@@ -141,8 +150,10 @@ script:
       - condition: template
         value_template: "{{ context.user_id not in managers }}"
       then:
+      - variables:
+          result: {ok: false, error: "Only a parent can change stars."}
       - stop: Only a parent can change stars.
-        error: true
+        response_variable: result
     - variables:
         counter_entity: "counter.stars_{{ member }}"
         cur: "{{ states(counter_entity) | int(-1) }}"
@@ -151,8 +162,10 @@ script:
       - condition: template
         value_template: "{{ cur | int < 0 or delta | int == 0 or delta | int | abs > 100 }}"
       then:
+      - variables:
+          result: {ok: false, error: "Nothing to change."}
       - stop: Nothing to change.
-        error: true
+        response_variable: result
     - condition: template
       value_template: "{{ new | int != cur | int }}"
     - action: counter.set_value
@@ -186,8 +199,10 @@ script:
       - condition: template
         value_template: "{{ context.user_id not in managers }}"
       then:
+      - variables:
+          result: {ok: false, error: "Only a parent can undo."}
       - stop: Only a parent can undo.
-        error: true
+        response_variable: result
     - action: todo.get_items
       target:
         entity_id: todo.kitchen_stars_log
@@ -258,8 +273,10 @@ script:
       - condition: template
         value_template: "{{ context.user_id not in managers }}"
       then:
+      - variables:
+          result: {ok: false, error: "Only a parent can change rewards."}
       - stop: Only a parent can change rewards.
-        error: true
+        response_variable: result
     - variables:
         uid: "{{ reward | default('') }}"
     - choose:
@@ -276,8 +293,10 @@ script:
         - condition: template
           value_template: "{{ (name | default('') | trim) == '' }}"
         sequence:
+        - variables:
+            result: {ok: false, error: "A reward needs a name."}
         - stop: A reward needs a name.
-          error: true
+          response_variable: result
       - conditions:
         - condition: template
           value_template: "{{ uid != '' }}"
