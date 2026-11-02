@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.73.3 - 2026-11-02
+
+### Fixed
+
+* kopiur: back up Home Assistant as its own user (568); its .storage has 0600 files.
+
 ## v1.73.2 - 2026-11-02
 
 ### Fixed
