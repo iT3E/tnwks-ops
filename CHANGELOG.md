@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.75.0 - 2026-11-02
+
+### Added
+
+* unifi: read-only controller account homeassistant for the Home Assistant UniFi integration (Wi-Fi presence); task unifi:bootstrap creates it.
+
 ## v1.74.1 - 2026-11-02
 
 ### Fixed
