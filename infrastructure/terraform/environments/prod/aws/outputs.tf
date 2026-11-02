@@ -127,11 +127,12 @@ output "homelab_backups_bucket" {
   value       = module.aws.homelab_backups_bucket
 }
 
-output "homelab_backups_access_key_id" {
-  value = module.aws.homelab_backups_access_key_id
+output "rolesanywhere_backups_profile_arn" {
+  description = "Roles Anywhere profile for the homelab-wsl backup credential refresher."
+  value       = module.aws.rolesanywhere_backups_profile_arn
 }
 
-output "homelab_backups_secret_access_key" {
-  value     = module.aws.homelab_backups_secret_access_key
-  sensitive = true
+output "rolesanywhere_backups_role_arn" {
+  description = "Role the homelab-wsl backup tools assume through Roles Anywhere."
+  value       = module.aws.rolesanywhere_backups_role_arn
 }

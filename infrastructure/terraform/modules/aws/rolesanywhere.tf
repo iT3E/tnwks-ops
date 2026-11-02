@@ -89,3 +89,67 @@ resource "aws_rolesanywhere_profile" "sops" {
   role_arns        = [aws_iam_role.rolesanywhere_sops[0].arn]
   duration_seconds = 3600
 }
+
+## ---------------------------------------------------------------------------------------------------------------------
+## IAM ROLES ANYWHERE: HOMELAB BACKUPS
+## Same trust anchor and CA, separate role and profile: a certificate whose CN is
+## in rolesanywhere_backups_common_names gets a short session that can read and
+## write the homelab backup bucket (s3_backups.tf) and nothing else. On the
+## cluster, a CronJob turns the certificate into STS credentials for barman-cloud
+## and kopiur (docs/operations/backups.md). No IAM user, no long-lived key.
+## ---------------------------------------------------------------------------------------------------------------------
+
+locals {
+  rolesanywhere_backups_enabled = local.rolesanywhere_enabled && length(var.rolesanywhere_backups_common_names) > 0
+}
+
+data "aws_iam_policy_document" "rolesanywhere_backups_trust" {
+  count = local.rolesanywhere_backups_enabled ? 1 : 0
+
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole", "sts:TagSession", "sts:SetSourceIdentity"]
+    principals {
+      type        = "Service"
+      identifiers = ["rolesanywhere.amazonaws.com"]
+    }
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values   = [aws_rolesanywhere_trust_anchor.tnwks[0].arn]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:PrincipalTag/x509Subject/CN"
+      values   = var.rolesanywhere_backups_common_names
+    }
+  }
+}
+
+resource "aws_iam_role" "rolesanywhere_backups" {
+  count = local.rolesanywhere_backups_enabled ? 1 : 0
+
+  name                 = "tnwks-rolesanywhere-backups"
+  description          = "Roles Anywhere role for homelab backups: read/write on the backup bucket only"
+  assume_role_policy   = data.aws_iam_policy_document.rolesanywhere_backups_trust[0].json
+  max_session_duration = 14400
+}
+
+resource "aws_iam_role_policy" "rolesanywhere_backups" {
+  count = local.rolesanywhere_backups_enabled ? 1 : 0
+
+  name   = "homelab-backups-bucket"
+  role   = aws_iam_role.rolesanywhere_backups[0].id
+  policy = data.aws_iam_policy_document.homelab_backups.json
+}
+
+# 4-hour sessions, refreshed every 30 minutes on the cluster, so a refresher
+# outage of a few hours doesn't interrupt WAL archiving.
+resource "aws_rolesanywhere_profile" "backups" {
+  count = local.rolesanywhere_backups_enabled ? 1 : 0
+
+  name             = "tnwks-ops-backups"
+  enabled          = true
+  role_arns        = [aws_iam_role.rolesanywhere_backups[0].arn]
+  duration_seconds = 14400
+}

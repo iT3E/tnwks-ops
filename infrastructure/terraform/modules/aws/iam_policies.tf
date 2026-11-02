@@ -16,9 +16,10 @@ resource "aws_iam_policy" "ses_sender" {
   policy      = data.aws_iam_policy_document.ses_sender.json
 }
 
-# Read/write on the homelab backup bucket only: the backup tools on the
-# homelab-wsl cluster (barman-cloud, kopiur). No bucket-level admin, so the key
-# can't change versioning or the lifecycle rules that protect history.
+# Read/write on the homelab backup bucket only, for the backup tools on the
+# homelab-wsl cluster (barman-cloud, kopiur) through Roles Anywhere
+# (rolesanywhere.tf). No bucket-level admin, so a leaked session can't change
+# versioning or the lifecycle rules that protect history.
 data "aws_iam_policy_document" "homelab_backups" {
   statement {
     sid       = "ListBucket"
@@ -36,10 +37,4 @@ data "aws_iam_policy_document" "homelab_backups" {
     ]
     resources = ["${aws_s3_bucket.homelab_backups.arn}/*"]
   }
-}
-
-resource "aws_iam_policy" "homelab_backups" {
-  name        = "homelab_backups"
-  description = "Read/write objects in the homelab backup bucket"
-  policy      = data.aws_iam_policy_document.homelab_backups.json
 }

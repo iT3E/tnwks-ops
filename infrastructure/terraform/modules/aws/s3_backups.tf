@@ -4,7 +4,8 @@
 ##   cnpg/    CloudNativePG base backups + WAL, written by the barman-cloud plugin
 ##   kopiur/  Kopia repository for PVC snapshots, written by kopiur
 ## Both tools encrypt or compress client-side and manage their own retention.
-## The bucket adds versioning so a leaked or misused key can't destroy history:
+## Writers authenticate through Roles Anywhere (rolesanywhere.tf), with no IAM
+## user. The bucket adds versioning so a leaked or misused session can't destroy history:
 ## deleted or overwritten objects stay recoverable for 30 days.
 ## ---------------------------------------------------------------------------------------------------------------------
 
