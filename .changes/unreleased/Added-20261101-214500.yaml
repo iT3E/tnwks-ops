@@ -1,0 +1,3 @@
+kind: Added
+body: 'aws: S3 bucket for homelab backups (versioned, 30-day undo window) and a backup IAM user scoped to it, for CloudNativePG (barman-cloud) and kopiur.'
+time: 2026-11-01T21:45:00-08:00

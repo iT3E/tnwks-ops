@@ -121,3 +121,17 @@ output "cognito_kiosk_temp_password" {
   value       = module.aws.cognito_kiosk_temp_password
   sensitive   = true
 }
+
+output "homelab_backups_bucket" {
+  description = "S3 bucket for homelab-wsl backups (cnpg/, kopiur/)."
+  value       = module.aws.homelab_backups_bucket
+}
+
+output "homelab_backups_access_key_id" {
+  value = module.aws.homelab_backups_access_key_id
+}
+
+output "homelab_backups_secret_access_key" {
+  value     = module.aws.homelab_backups_secret_access_key
+  sensitive = true
+}

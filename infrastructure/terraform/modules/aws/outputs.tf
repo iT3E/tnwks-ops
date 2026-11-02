@@ -127,3 +127,17 @@ output "cognito_kiosk_temp_password" {
   value       = random_password.kiosk_temp.result
   sensitive   = true
 }
+
+output "homelab_backups_bucket" {
+  description = "S3 bucket for homelab-wsl backups (cnpg/, kopiur/)."
+  value       = aws_s3_bucket.homelab_backups.bucket
+}
+
+output "homelab_backups_access_key_id" {
+  value = aws_iam_access_key.homelab_backups.id
+}
+
+output "homelab_backups_secret_access_key" {
+  value     = aws_iam_access_key.homelab_backups.secret
+  sensitive = true
+}
