@@ -18,3 +18,15 @@ import {
   to = module.tfc.tfe_workspace_settings.tnwks-mikrotik-prod_workspace_settings
   id = "ws-uhGTMyqHbqxZBfo7"
 }
+
+# tnwks-unifi-prod: created through the TFC API on 2026-11-01 the same way,
+# matching modules/tfc/workspaces.tf. Safe to delete after the next apply.
+import {
+  to = module.tfc.tfe_workspace.tnwks-unifi-prod
+  id = "ws-aJ2gq7hV2FTTVH1N"
+}
+
+import {
+  to = module.tfc.tfe_workspace_settings.tnwks-unifi-prod_workspace_settings
+  id = "ws-aJ2gq7hV2FTTVH1N"
+}

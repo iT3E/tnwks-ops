@@ -151,13 +151,13 @@ Steps marked **owner** need hands on site, a UAC prompt or a password only the o
       Admin) and local `unifipoller` (View Only), whose password is
       `unifipoller_password` in
       `kubernetes/apps/monitoring/unpoller/app/secrets.sops.yaml`.
-5. **Wi-Fi password (owner):** `sops infrastructure/terraform/environments/prod/unifi/secrets.sops.yaml`,
-   set `wlan_passphrase` to the current password. Terraform refuses to apply
-   while it is `CHANGEME`, because a different value disconnects every client.
-6. **Workspace (owner):** `tnwks-unifi-prod` (execution mode local) is in
-   `modules/tfc/workspaces.tf`; apply `environments/bootstrap/aws-init`, or
-   create it through the TFC API and add import blocks the way
-   `tnwks-mikrotik-prod` was (`aws-init/imports.tf`).
+5. **Wi-Fi password:** `wlan_passphrase` in SOPS must be the current
+   password (Terraform refuses `CHANGEME`, because a different value
+   disconnects every client). On 2026-11-01 it was read from the desktop's
+   saved Windows Wi-Fi profile for the SSID (DPAPI, decrypted as SYSTEM).
+6. **Workspace:** `tnwks-unifi-prod` (execution mode local) was created
+   through the TFC API on 2026-11-01, matching `modules/tfc/workspaces.tf`;
+   `aws-init/imports.tf` adopts it on the next `aws-init` apply.
 7. **Apply everything except the APs:**
    ```bash
    task unifi:init
