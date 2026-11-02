@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.67.0 - 2026-11-02
+
+### Added
+
+* unifi: UniFi Network controller on homelab-wsl (networking/unifi, with MongoDB), the LAN path for AP informs (tcp/8080 via the Windows host), a Terraform root for the site, WLAN and the three APs (environments/prod/unifi, modules/unifi), and docs/network/unifi.md with the inferred AP inventory and the adoption runbook.
+
 ## v1.66.2 - 2026-11-02
 
 ### Fixed

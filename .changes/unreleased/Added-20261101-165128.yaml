@@ -1,3 +1,0 @@
-kind: Added
-body: 'unifi: UniFi Network controller on homelab-wsl (networking/unifi, with MongoDB), the LAN path for AP informs (tcp/8080 via the Windows host), a Terraform root for the site, WLAN and the three APs (environments/prod/unifi, modules/unifi), and docs/network/unifi.md with the inferred AP inventory and the adoption runbook.'
-time: 2026-11-01T16:51:28-08:00
