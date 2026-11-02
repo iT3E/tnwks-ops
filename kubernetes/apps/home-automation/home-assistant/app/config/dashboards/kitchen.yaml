@@ -6,7 +6,7 @@
 #
 # Cards are the custom ones in config/www/tnwks-kitchen/kitchen-cards.js
 # (resource in configuration.yaml); chores and stars come from
-# packages/kitchen_routines.yaml.
+# packages/kitchen_routines.yaml, rewards from packages/kitchen_rewards.yaml.
 #
 # kiosk-mode hides HA's header and sidebar on this dashboard only, and only in
 # the tablet's browser (kiosk_mode below matches its user agent; WALL_UA in
@@ -35,6 +35,9 @@
 #   todo.kitchen_routines
 #                         the routines (Local To-do list, UI-owned; one item
 #                         per routine, edited from the Routines tab)
+#   todo.kitchen_rewards, todo.kitchen_stars_log
+#                         the rewards and the log of stars spent, taken away
+#                         or given by hand (Local To-do lists, UI-owned)
 #   todo.things_to_do, todo.someday, todo.notes
 #                         extra Local To-do lists (UI-owned); todo.shopping_list
 #                         (Groceries) is the Shopping List integration
@@ -143,6 +146,17 @@ views:
                 cards:
                   - { type: custom:kitchen-adult-card, member: adult2 }
                   - { type: custom:kitchen-adult-card, member: adult1 }
+
+          - path: rewards
+            title: Rewards
+            cards:
+              # Kids tap their name, then a reward, to spend stars on it.
+              # Parents (on their own phones, never on the wall display) also
+              # get ＋ / ✎ for the rewards, "± stars" on each kid and Undo in
+              # Recent. The data and the scripts that check who's asking are
+              # in packages/kitchen_rewards.yaml.
+              - type: custom:kitchen-rewards-card
+                log: 5
 
           - path: meals
             title: Meals

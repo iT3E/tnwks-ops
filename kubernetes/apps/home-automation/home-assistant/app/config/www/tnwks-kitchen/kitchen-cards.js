@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.9.1";
+const VERSION = "1.10.0";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -952,6 +952,11 @@ const SHEET_CSS = `
   .wd i { font-style:normal; font-size:12px; color:var(--acct); text-align:right; }
   .wd .bar { position:relative; height:6px; border-radius:3px; background:var(--line); }
   .wd .bar div { position:absolute; top:0; bottom:0; border-radius:3px; background:linear-gradient(90deg, #6bb7ff, var(--accent)); }
+  .rw { display:flex; flex-direction:column; align-items:center; gap:4px; margin:4px 0 6px; }
+  .rw span { font-size:72px; line-height:1.1; }
+  .rw b { font-size:26px; font-weight:500; text-align:center; }
+  .rw i { font-style:normal; font-size:18px; font-weight:700; color:var(--acct); }
+  .amt { font-size:40px; font-weight:700; margin:2px 0 10px; }
 `;
 function openSheet({ render, onAction, onInput }) {
   const host = document.createElement("div");
@@ -2026,7 +2031,9 @@ class KidCard extends KitchenCard {
     const done = due.filter((c) => c.done).length;
     const pct = due.length ? Math.round((100 * done) / due.length) : 0;
     const st = stars(this._hass, m.key);
-    const wk = this._week?.startStars != null ? st - this._week.startStars : null;
+    // Spending stars on a reward doesn't take them off "this week".
+    StarsLog.sync(this._hass);
+    const wk = this._week?.startStars != null ? st - this._week.startStars + StarsLog.spentSince(m.key, startOfWeek()) : null;
     const n = nextChore(list);
     const next = n
       ? `<button class="next enter" data-k="${esc(n.id)}" data-chore="${esc(n.id)}" data-on="0" data-pts="${n.points}">${n.emoji} ${esc(n.title)}<div class="chk"></div></button>`
@@ -2092,7 +2099,7 @@ class RoutineCard extends KitchenCard {
     .wk .c { height:26px; border-radius:7px; background:var(--card); display:grid; place-items:center; font-size:14px; }
     .wk .c.y { background:rgba(255,200,60,.18); }
     .wk .c.td { outline:1px solid var(--sub); }
-    .goal { background:var(--card2); border-radius:16px; padding:12px; font-size:14px; color:var(--sub); }
+    .goal { display:block; width:100%; background:var(--card2); border-radius:16px; padding:12px; font-size:14px; color:var(--sub); }
     .goal b { color:var(--txt); font-weight:500; }
     .none { color:var(--sub); font-size:15px; padding:8px 2px; }
   `;
@@ -2176,13 +2183,15 @@ class RoutineCard extends KitchenCard {
         ["am", "pm"].map((h) => this._week.grid[h].map((y, i) => `<div class="c ${y ? "y" : ""} ${i === di ? "td" : ""}">${y ? "⭐" : ""}</div>`).join("")).join("");
       week = `<div class="wk"><div class="t">This week · AM / PM</div><div class="g">${cells}</div></div>`;
     }
+    // The reward this kid can get now (the priciest one), or the next one to save for.
     let goal = "";
-    const gt = this._hass.states[`input_text.routines_goal_${m.key}`]?.state;
-    const gs = Number(this._hass.states[`input_number.routines_goal_stars_${m.key}`]?.state || 0);
-    if (gt && gt !== "unknown" && gs > 0) {
-      goal = st >= gs
-        ? `<div class="goal">🎉 <b>Goal reached!</b> ${esc(gt)}</div>`
-        : `<div class="goal">🎯 <b>${gs - st} more stars</b> to ${esc(gt)}</div>`;
+    if (m.kid && Rewards.active(this._hass)) {
+      Rewards.sync(this._hass);
+      const rw = Rewards.forMember(m.key);
+      const can = rw.filter((r) => r.cost <= st).pop();
+      const next = rw.find((r) => r.cost > st);
+      if (can) goal = `<button class="goal" data-action="page" data-page="rewards">🎁 <b>Enough stars for ${can.emoji} ${esc(can.title)}!</b> Tap to pick a reward</button>`;
+      else if (next) goal = `<button class="goal" data-action="page" data-page="rewards">🎁 <b>${next.cost - st} more stars</b> to ${next.emoji} ${esc(next.title)}</button>`;
     }
     return `<div class="rk">
       <div class="hd"><div class="av" style="background:${m.color}">${m.name[0]}</div><div class="nm">${m.name}</div>${tools}<div class="pts"><span class="${this._bumpAt === st ? "bump" : ""}" data-k="s${st}">⭐ ${st}</span><small>${todayPts ? `+${todayPts} today` : "stars"}</small></div></div>
@@ -2797,6 +2806,9 @@ class PagesCard extends HTMLElement {
     window.addEventListener("kitchen-theme", () => this._garland());
     this._garland();
     this.show(this._fromHash(), true);
+    // The pill is measured off the tab's box, which moves when the web font arrives or the bar wraps.
+    document.fonts?.ready.then(() => this._pill(true));
+    new ResizeObserver(() => this._pill(true)).observe(root.querySelector(".tabs"));
     // Build the other pages once the first one is up, so the first visit to a tab is as quick as the rest.
     setTimeout(() => (c.pages || []).forEach((p) => this._page(p.path)), 1200);
     clearInterval(this._idle);
@@ -3063,6 +3075,404 @@ class LifxThemesCard extends HTMLElement {
   }
 }
 
+// --------------------------------------------------------------- rewards
+
+// The kids spend stars on rewards the parents set up (packages/
+// kitchen_rewards.yaml). Rewards are the items of todo.kitchen_rewards
+// (summary = name, description = JSON {"emoji", "cost", optional
+// "members"}); every redemption, hand-made change and undo is an item of
+// todo.kitchen_stars_log (description JSON {"member", "delta", "kind",
+// "emoji", "by"}, due = when, completed = undone). All changes go through
+// the package's scripts, which check who's asking: anyone may redeem, only
+// the managers (the users of MANAGERS' person entities) may define rewards,
+// add or remove stars, or undo. The parent controls show only for those
+// users and never on the wall display, so the kids' screen can't reach them.
+const REWARDS = "todo.kitchen_rewards";
+const STARS_LOG = "todo.kitchen_stars_log";
+const MANAGERS = ["person.adult1", "person.adult2", "person.ori"];
+const kids = () => FAMILY.filter((m) => m.kid);
+
+/** A parent on their own device: a manager's HA user, and not the wall display. */
+function isManager(hass) {
+  const id = hass?.user?.id;
+  if (!id || isWall()) return false;
+  return MANAGERS.some((p) => hass.states[p]?.attributes?.user_id === id);
+}
+/** A manager's first name for "by ..." in the log. */
+function managerName(hass, id) {
+  const p = MANAGERS.map((e) => hass.states[e]).find((s) => s && s.attributes.user_id === id);
+  return p ? String(p.attributes.friendly_name || "").split(" ")[0] : "";
+}
+
+/** A live copy of one to-do list (todo/item/subscribe); changes re-render every card like the routines do. */
+function todoStore(entity, parse) {
+  return {
+    items: null,
+    _sub: null,
+    active(hass) {
+      return !!hass?.states?.[entity];
+    },
+    sync(hass) {
+      if (this._sub || !this.active(hass)) return;
+      this._sub = hass.connection
+        .subscribeMessage((msg) => {
+          this.items = (msg.items || []).map(parse).filter(Boolean);
+          window.dispatchEvent(new Event("kitchen-routines"));
+        }, { type: "todo/item/subscribe", entity_id: entity })
+        .catch(() => {
+          this._sub = null;
+          return null;
+        });
+    },
+  };
+}
+const jsonDesc = (i) => {
+  try {
+    const m = JSON.parse(i.description || "{}");
+    return m && typeof m === "object" ? m : {};
+  } catch (_) {
+    return {};
+  }
+};
+const Rewards = todoStore(REWARDS, (i, index) => {
+  const m = jsonDesc(i);
+  const cost = Math.round(Number(m.cost) || 0);
+  if (cost <= 0) return null;
+  return { uid: i.uid, index, title: i.summary, emoji: m.emoji || "🎁", cost, members: Array.isArray(m.members) && m.members.length ? m.members : null };
+});
+Rewards.forMember = function (key) {
+  return (this.items || []).filter((r) => !key || !r.members || r.members.includes(key)).sort((a, b) => a.cost - b.cost || a.index - b.index);
+};
+const StarsLog = todoStore(STARS_LOG, (i) => {
+  const m = jsonDesc(i);
+  if (!m.member || !Number(m.delta)) return null;
+  const at = new Date(i.due || 0);
+  return { uid: i.uid, title: i.summary, at: isNaN(at) ? new Date(0) : at, undone: i.status === "completed", member: m.member,
+    delta: Math.round(Number(m.delta)), kind: m.kind || "adjust", emoji: m.emoji || (m.delta > 0 ? "⭐" : "🔻"), by: m.by || null };
+});
+StarsLog.recent = function (n) {
+  return [...(this.items || [])].sort((a, b) => b.at - a.at).slice(0, n);
+};
+/** Stars a kid spent on rewards since `since` (still counted, not undone). */
+StarsLog.spentSince = function (key, since) {
+  return (this.items || []).filter((e) => e.member === key && e.kind === "reward" && !e.undone && e.at >= since).reduce((n, e) => n - e.delta, 0);
+};
+
+function fmtWhen(d, now = new Date()) {
+  if (sameDay(d, now)) return fmtTime(d);
+  if (sameDay(d, addDays(now, -1))) return "Yesterday";
+  if (now - d < 6 * MS_DAY) return fmtDay(d);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** A short message over the bottom of the screen (errors from the scripts, a reward picked). */
+function toast(text, ms = 3200) {
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:9600;pointer-events:none";
+  const root = host.attachShadow({ mode: "open" });
+  root.innerHTML = `<style>${BASE_CSS}${MOTION_CSS}
+    .t { background:var(--txt); color:var(--bg); padding:13px 20px; border-radius:22px; font-size:16px; font-weight:500; box-shadow:0 8px 24px rgba(0,0,0,.4);
+      animation:kin .25s ease-out both; max-width:86vw; text-align:center; }</style><div class="t">${esc(text)}</div>`;
+  document.body.appendChild(host);
+  setTimeout(() => host.remove(), ms);
+}
+/** Runs one of the rewards scripts; a refusal ("Only a parent can ...") shows as a toast. */
+function rewardScript(hass, name, data) {
+  return hass.callService("script", name, data).catch((err) => {
+    toast(err?.message || String(err));
+    throw err;
+  });
+}
+
+const REWARD_EMOJI = ["🎁", "🍦", "🍭", "🍫", "🍩", "🧁", "🍿", "🍕", "🍔", "🌮", "🥤", "🎬", "📺", "🎮", "📱", "🎧", "🧸", "🎨", "📚", "🧩",
+  "🎲", "🛝", "🏊", "🚲", "⚽", "🎳", "🎡", "🎟️", "🏞️", "⛺", "🛍️", "💵", "🪙", "🌙", "🛏️", "🎤", "🐶", "🚗", "👑", "⭐"];
+
+/** Pick a reward: who's getting it, what it costs them, then spend the stars. */
+function redeemSheet(card, reward, who, tile) {
+  const latest = () => card._hass;
+  const elig = kids().filter((m) => !reward.members || reward.members.includes(m.key));
+  let pick = elig.find((m) => m.key === who)?.key || (elig.length === 1 ? elig[0].key : null);
+  let busy = false;
+  const sheet = openSheet({
+    render() {
+      const h = latest();
+      const st = pick ? stars(h, pick) : 0;
+      const can = pick && st >= reward.cost;
+      const people = elig.map((m) => {
+        const s = stars(h, m.key);
+        return `<button class="${pick === m.key ? "on" : ""}" data-action="who" data-key="${m.key}"><div class="av" style="background:${m.color}">${esc(m.name[0])}</div>${esc(m.name)} · ⭐ ${s}${s < reward.cost ? ` <i style="font-style:normal;opacity:.75">(${reward.cost - s} more)</i>` : ""}</button>`;
+      }).join("");
+      const note = !pick ? "Tap your name." : can ? `${esc(MEMBER[pick].name)} will have ⭐ ${st - reward.cost} left.` : `${esc(MEMBER[pick].name)} needs ${reward.cost - st} more stars. Keep going!`;
+      return `<div class="rw"><span>${reward.emoji}</span><b>${esc(reward.title)}</b><i>⭐ ${reward.cost}</i></div>
+        <div class="lb">Who's getting it?</div><div class="chips">${people}</div>
+        <div class="hint" style="font-size:15px;margin-top:12px">${note}</div>
+        <div class="acts"><button data-action="cancel">Not now</button><button class="go" data-action="go" ${can && !busy ? "" : "disabled"}>Get it! −${reward.cost} ⭐</button></div>`;
+    },
+    onAction(a, d, s) {
+      if (a === "who") pick = d.key;
+      else if (a === "go" && !busy) {
+        busy = true;
+        s.update();
+        const name = MEMBER[pick].name;
+        rewardScript(latest(), "kitchen_reward_redeem", { member: pick, reward: reward.uid })
+          .then(() => {
+            s.close();
+            const [x, y] = tile?.isConnected ? FX.at(tile) : [innerWidth / 2, innerHeight / 2];
+            FX.float(x, y, `−${reward.cost} ⭐`);
+            FX.confetti(card.getBoundingClientRect());
+            toast(`🎉 ${name} got ${reward.emoji} ${reward.title}!`);
+          })
+          .catch(() => {
+            busy = false;
+            s.update();
+          });
+        return;
+      }
+      s.update();
+    },
+  });
+  return sheet;
+}
+
+/** Parents only: add, change or delete a reward. */
+function rewardEditor(hass, reward) {
+  const st = reward
+    ? { title: reward.title, emoji: reward.emoji, cost: reward.cost, members: reward.members ? [...reward.members] : [] }
+    : { title: "", emoji: "🎁", cost: 20, members: [] };
+  let armed = false;
+  const sheet = openSheet({
+    render() {
+      const all = `<button class="${st.members.length ? "" : "on"}" data-action="for" data-key="">Everyone</button>`;
+      const people = kids().map((m) => `<button class="${st.members.includes(m.key) ? "on" : ""}" data-action="for" data-key="${m.key}"><div class="av" style="background:${m.color}">${esc(m.name[0])}</div>${esc(m.name)}</button>`).join("");
+      const emo = REWARD_EMOJI.map((e) => `<button class="${st.emoji === e ? "on" : ""}" data-action="emoji" data-key="${e}">${e}</button>`).join("");
+      const step = [-10, -1, 1, 10].map((n) => `<button data-action="cost" data-key="${n}" style="${Math.abs(n) > 1 ? "width:58px;font-size:17px" : ""}">${n > 0 ? "+" : "−"}${Math.abs(n) > 1 ? Math.abs(n) : ""}</button>`);
+      return `<div class="tt">${st.emoji} ${reward ? "Edit reward" : "New reward"}</div>
+        <input class="tx" name="title" placeholder="What do they get? (e.g. Pick the movie)" value="${esc(st.title)}" autocomplete="off" autocapitalize="sentences" enterkeyhint="done">
+        <div class="lb">Costs</div><div class="step">${step[0]}${step[1]}<b>⭐ ${st.cost}</b>${step[2]}${step[3]}</div>
+        <div class="lb">For</div><div class="chips">${all}${people}</div>
+        <div class="lb">Icon</div><div class="emo">${emo}</div>
+        <div class="acts">${reward ? `<button class="del ${armed ? "arm" : ""}" data-action="delete">${armed ? "Tap again to delete" : "Delete"}</button>` : ""}
+          <button data-action="cancel">Cancel</button><button class="go" data-action="save" ${st.title.trim() ? "" : "disabled"}>${reward ? "Save" : "Add reward"}</button></div>`;
+    },
+    onInput(t, s) {
+      if (t.name === "title") {
+        st.title = t.value;
+        s.update();
+      }
+    },
+    onAction(a, d, s) {
+      if (a !== "delete") armed = false;
+      if (a === "for") st.members = d.key ? [d.key] : [];
+      else if (a === "emoji") st.emoji = d.key;
+      else if (a === "cost") st.cost = Math.max(1, Math.min(1000, st.cost + Number(d.key)));
+      else if (a === "delete") {
+        if (!armed) armed = true;
+        else {
+          rewardScript(hass, "kitchen_reward_save", { reward: reward.uid, delete: true }).catch(() => {});
+          return s.close();
+        }
+      } else if (a === "save") {
+        if (!st.title.trim()) return;
+        const data = { name: st.title.trim(), emoji: st.emoji, cost: st.cost, members: st.members };
+        if (reward) data.reward = reward.uid;
+        rewardScript(hass, "kitchen_reward_save", data).catch(() => {});
+        return s.close();
+      }
+      s.update();
+    },
+  });
+  if (!reward) setTimeout(() => sheet.root.querySelector("input.tx")?.focus(), 250);
+  return sheet;
+}
+
+const TAKE_REASONS = ["Not listening", "Being unkind", "Not sharing", "Talking back"];
+const GIVE_REASONS = ["Bonus", "Helped out", "Being kind", "Great listening"];
+/** Parents only: take stars away (or give some) by hand, with a reason for the log. */
+function starsSheet(card, who) {
+  const latest = () => card._hass;
+  const st = { member: who || kids()[0].key, delta: -1, reason: "" };
+  const sheet = openSheet({
+    render() {
+      const h = latest();
+      const cur = stars(h, st.member);
+      const next = Math.max(0, cur + st.delta);
+      const people = kids().map((m) => `<button class="${st.member === m.key ? "on" : ""}" data-action="who" data-key="${m.key}"><div class="av" style="background:${m.color}">${esc(m.name[0])}</div>${esc(m.name)} · ⭐ ${stars(h, m.key)}</button>`).join("");
+      const take = st.delta < 0;
+      const n = Math.abs(st.delta);
+      const quick = [-10, -5, -1, 1, 5, 10].map((x) => `<button data-action="amt" data-key="${x}">${x > 0 ? "+" : "−"}${Math.abs(x)}</button>`).join("");
+      const reasons = (take ? TAKE_REASONS : GIVE_REASONS).map((r) => `<button class="${st.reason === r ? "on" : ""}" data-action="reason" data-key="${esc(r)}">${esc(r)}</button>`).join("");
+      return `<div class="tt">${take ? "🔻 Take away stars" : "⭐ Give stars"}</div>
+        <div class="lb">Who</div><div class="chips">${people}</div>
+        <div class="lb">How many</div><div class="amt" style="color:${take ? "var(--danger)" : "var(--okt)"}">${take ? "−" : "+"}${n} ⭐</div>
+        <div class="chips">${quick}</div>
+        <div class="hint" style="font-size:15px">⭐ ${cur} → ⭐ ${next}${take && cur + st.delta < 0 ? " (stars don't go below 0)" : ""}</div>
+        <div class="lb">Why</div><div class="chips">${reasons}</div>
+        <input class="tx" name="reason" style="margin-top:10px" placeholder="Or type a reason" value="${esc(st.reason)}" autocomplete="off" autocapitalize="sentences" enterkeyhint="done">
+        <div class="acts"><button data-action="cancel">Cancel</button><button class="go" data-action="go" ${next !== cur ? "" : "disabled"}>${take ? `Take away ${n}` : `Give ${n}`}</button></div>`;
+    },
+    onInput(t, s) {
+      if (t.name === "reason") {
+        st.reason = t.value;
+        s.update();
+      }
+    },
+    onAction(a, d, s) {
+      if (a === "who") st.member = d.key;
+      else if (a === "amt") {
+        let v = st.delta + Number(d.key);
+        // Crossing zero flips the direction instead of landing on nothing.
+        if (v === 0) v = Number(d.key) > 0 ? 1 : -1;
+        if (Math.sign(v) !== Math.sign(st.delta)) st.reason = "";
+        st.delta = Math.max(-100, Math.min(100, v));
+      } else if (a === "reason") st.reason = st.reason === d.key ? "" : d.key;
+      else if (a === "go") {
+        const { member: m, delta, reason } = st;
+        rewardScript(latest(), "kitchen_stars_adjust", { member: m, delta, reason: reason.trim() })
+          .then(() => toast(`${delta < 0 ? "−" : "+"}${Math.abs(delta)} ⭐ ${MEMBER[m].name}`))
+          .catch(() => {});
+        return s.close();
+      }
+      s.update();
+    },
+  });
+  return sheet;
+}
+
+const REWARDS_CSS = `
+  .rc { background:var(--card); box-shadow:var(--shadow); border-radius:22px; padding:16px; display:flex; flex-direction:column; gap:14px; }
+  .top { display:flex; align-items:center; gap:10px; }
+  .top .t { font-size:24px; font-weight:500; }
+  .top .q { color:var(--sub); font-size:15px; }
+  .tools { margin-left:auto; display:flex; gap:8px; }
+  .tools button { height:38px; padding:0 14px; border-radius:19px; background:var(--card2); color:var(--txt); font-size:15px; font-weight:500; display:flex; align-items:center; gap:6px; }
+  .tools button.on { background:var(--accent); color:var(--ink); }
+  .wals { display:flex; gap:12px; }
+  .wal { flex:1; display:flex; align-items:center; gap:12px; background:var(--card2); border-radius:18px; padding:12px 14px; border:3px solid transparent; transition:border-color .2s, background-color .2s; position:relative; }
+  .wal .av { width:50px; height:50px; font-size:22px; }
+  .wal .nm { font-size:20px; font-weight:500; }
+  .wal .sub { font-size:13px; color:var(--sub); }
+  .wal .st { margin-left:auto; font-size:26px; font-weight:700; white-space:nowrap; display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  .wal .adj { height:30px; padding:0 12px; border-radius:15px; background:var(--card); font-size:13px; font-weight:500; color:var(--txt); display:grid; place-items:center; }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .tile { background:var(--card2); border-radius:18px; padding:14px 10px 12px; display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center; min-height:150px; position:relative;
+    transition:opacity .2s, transform .15s, box-shadow .2s; }
+  .tile .e { font-size:46px; line-height:1.1; }
+  .tile .n { font-size:16px; font-weight:500; line-height:1.2; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .tile .c { margin-top:auto; font-size:14px; font-weight:700; padding:4px 10px; border-radius:12px; background:var(--card); color:var(--acct); }
+  .tile.can { box-shadow:inset 0 0 0 3px var(--accent); }
+  .tile.can .c { background:var(--accent); color:var(--ink); }
+  .tile.cant { opacity:.6; }
+  .tile .pb { width:80%; height:6px; border-radius:3px; background:var(--card); overflow:hidden; }
+  .tile .pb div { height:100%; border-radius:3px; }
+  .tile .more { font-size:12px; color:var(--sub); }
+  .tile .for { position:absolute; top:8px; left:8px; width:22px; height:22px; font-size:11px; }
+  .tile .pen { position:absolute; top:8px; right:10px; color:var(--sub); font-size:16px; }
+  .tile.add { border:2px dashed var(--line); background:transparent; justify-content:center; color:var(--sub); font-size:15px; }
+  .tile.add .e { font-size:40px; font-weight:300; line-height:1; }
+  .sec { font-size:13px; color:var(--sub); text-transform:uppercase; letter-spacing:.06em; }
+  .log { display:flex; flex-direction:column; gap:6px; }
+  .le { display:flex; align-items:center; gap:10px; background:var(--card2); border-radius:14px; padding:8px 12px; font-size:15px; min-height:48px; }
+  .le .ic { font-size:22px; width:28px; text-align:center; flex:none; }
+  .le .av { width:26px; height:26px; font-size:12px; }
+  .le .tt { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .le .tt i { font-style:normal; color:var(--sub); font-size:12px; margin-left:6px; }
+  .le .d { font-weight:700; white-space:nowrap; }
+  .le .d.neg { color:var(--danger); }
+  .le .d.pos { color:var(--okt); }
+  .le.undone { opacity:.45; }
+  .le.undone .tt, .le.undone .d { text-decoration:line-through; }
+  .le .un { height:30px; padding:0 12px; border-radius:15px; background:var(--card); font-size:13px; color:var(--sub); display:grid; place-items:center; flex:none; }
+  .le .un.arm { background:#c62828; color:#fff; }
+  .none { color:var(--sub); font-size:15px; padding:6px 2px; }
+`;
+class RewardsCard extends KitchenCard {
+  css = REWARDS_CSS;
+  action(a, d, e, el) {
+    const h = this._hass;
+    if (a === "who") {
+      this._who = this._who === d.key ? null : d.key;
+      this._whoAt = Date.now();
+    } else if (a === "reward") {
+      const r = (Rewards.items || []).find((x) => x.uid === d.uid);
+      if (!r) return;
+      if (this._edit) return rewardEditor(h, r);
+      return redeemSheet(this, r, this._who, el);
+    } else if (a === "add") return rewardEditor(h, null);
+    else if (a === "edit") this._edit = !this._edit;
+    else if (a === "adjust") {
+      e.stopPropagation();
+      return starsSheet(this, d.key);
+    } else if (a === "undo") {
+      if (this._armUndo !== d.uid || Date.now() - this._armAt > 5000) {
+        this._armUndo = d.uid;
+        this._armAt = Date.now();
+      }
+      else {
+        this._armUndo = null;
+        rewardScript(h, "kitchen_stars_undo", { entry: d.uid }).catch(() => {});
+      }
+    }
+    this._queue(true);
+  }
+  render() {
+    const h = this._hass;
+    if (!Rewards.active(h)) {
+      return `<div class="rc"><div class="top"><div class="t">🎁 Rewards</div></div><div class="none">Rewards aren't set up yet. They need the Local To-do lists "Kitchen rewards" and "Kitchen stars log" in Home Assistant.</div></div>`;
+    }
+    Rewards.sync(h);
+    StarsLog.sync(h);
+    const mgr = isManager(h);
+    if (!mgr) this._edit = false;
+    if (this._armUndo && Date.now() - this._armAt > 5000) this._armUndo = null;
+    // The kid who's picking is forgotten after 2 minutes, so the next one starts fresh.
+    if (this._who && Date.now() - (this._whoAt || 0) > 2 * 60 * 1000) this._who = null;
+    const who = this._who ? MEMBER[this._who] : null;
+    const wals = kids().map((m) => {
+      const s = stars(h, m.key);
+      const on = this._who === m.key;
+      return `<button class="wal" data-action="who" data-key="${m.key}" style="${on ? `border-color:${m.color};background:color-mix(in srgb, ${m.color} 18%, var(--card2))` : ""}">
+        <div class="av" style="background:${m.color}">${esc(m.name[0])}</div><div><div class="nm">${esc(m.name)}</div><div class="sub">${on ? "Picking now" : "Tap to pick"}</div></div>
+        <div class="st">⭐ ${s}${mgr ? `<span class="adj" data-action="adjust" data-key="${m.key}">± stars</span>` : ""}</div></button>`;
+    }).join("");
+    const list = Rewards.forMember(who?.key);
+    const st = who ? stars(h, who.key) : 0;
+    const tiles = list.map((r) => {
+      const can = who && st >= r.cost;
+      const pct = who ? Math.min(100, Math.round((100 * st) / r.cost)) : 0;
+      const forOne = r.members?.length === 1 && !who ? MEMBER[r.members[0]] : null;
+      return `<button class="tile ${who ? (can ? "can" : "cant") : ""}" data-k="r${esc(r.uid)}" data-action="reward" data-uid="${esc(r.uid)}">
+        ${forOne ? `<div class="av for" style="background:${forOne.color}">${esc(forOne.name[0])}</div>` : ""}${this._edit ? `<span class="pen">✎</span>` : ""}
+        <span class="e">${r.emoji}</span><span class="n">${esc(r.title)}</span>
+        ${who && !can ? `<div class="pb"><div style="width:${pct}%;background:${who.color}"></div></div><span class="more">${r.cost - st} more</span>` : ""}
+        <span class="c">⭐ ${r.cost}</span></button>`;
+    });
+    if (mgr) tiles.push(`<button class="tile add" data-k="add" data-action="add"><span class="e">+</span>Add a reward</button>`);
+    const grid = tiles.length
+      ? `<div class="grid">${tiles.join("")}</div>`
+      : `<div class="none">No rewards yet. Mom or Dad can add them from their phone.</div>`;
+    const tools = mgr && (Rewards.items || []).length
+      ? `<div class="tools"><button class="${this._edit ? "on" : ""}" data-action="edit">${this._edit ? "Done" : "✎ Edit"}</button></div>`
+      : "";
+    const recent = StarsLog.recent(this.config.log ?? 5);
+    const log = recent.map((x) => {
+      const m = MEMBER[x.member];
+      const by = x.kind === "adjust" && x.by ? managerName(h, x.by) : "";
+      return `<div class="le ${x.undone ? "undone" : ""}" data-k="l${esc(x.uid)}"><span class="ic">${x.emoji}</span>
+        ${m ? `<div class="av" style="background:${m.color}">${esc(m.name[0])}</div>` : ""}
+        <span class="tt">${esc(x.title)}<i>${fmtWhen(x.at)}${by ? ` · ${esc(by)}` : ""}${x.undone ? " · undone" : ""}</i></span>
+        <span class="d ${x.delta < 0 ? "neg" : "pos"}">${x.delta < 0 ? "−" : "+"}${Math.abs(x.delta)} ⭐</span>
+        ${mgr && !x.undone ? `<button class="un ${this._armUndo === x.uid ? "arm" : ""}" data-action="undo" data-uid="${esc(x.uid)}">${this._armUndo === x.uid ? "Sure?" : "Undo"}</button>` : ""}</div>`;
+    }).join("");
+    const q = who ? `${esc(who.name)} has ⭐ ${st}` : "Who's picking?";
+    return `<div class="rc">
+      <div class="top"><div class="t">🎁 Rewards</div><div class="q">${this._edit ? "Tap a reward to change it" : q}</div>${tools}</div>
+      <div class="wals">${wals}</div>
+      ${grid}
+      ${recent.length ? `<div class="sec">Recent</div><div class="log">${log}</div>` : ""}
+    </div>`;
+  }
+}
+
 // ------------------------------------------------------------ register
 
 const CARDS = {
@@ -3073,6 +3483,7 @@ const CARDS = {
   "kitchen-agenda-card": [AgendaCard, "Kitchen agenda", "Upcoming events"],
   "kitchen-kid-card": [KidCard, "Kitchen kid summary", "Progress, stars and the next chore"],
   "kitchen-routine-card": [RoutineCard, "Kitchen routines", "A person's chores for today"],
+  "kitchen-rewards-card": [RewardsCard, "Kitchen rewards", "Kids spend their stars on rewards; parents set them up from their phones"],
   "kitchen-adult-card": [AdultCard, "Kitchen adult routines", "Compact routines for a grown-up"],
   "kitchen-todo-card": [TodoCard, "Kitchen list", "A to-do list with tap to check off"],
   "kitchen-meals-card": [MealsCard, "Kitchen meals", "The next few dinners from a meal plan calendar"],

@@ -1,0 +1,3 @@
+kind: Added
+body: 'home-assistant: Rewards tab on the wall display. Kids spend stars on rewards; parents define rewards, add or take away stars and undo from their phones only (scripts check the caller). Replaces the reward goal helpers.'
+time: 2026-11-01T16:35:00-08:00
