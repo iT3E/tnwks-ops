@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.10.1";
+const VERSION = "1.10.2";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -2773,7 +2773,8 @@ class PagesCard extends HTMLElement {
     .tab.on { color:var(--ink); background:transparent; }
     .tools { margin-left:auto; flex:none; display:flex; gap:8px; }
     .tool { display:flex; align-items:center; gap:6px; padding:9px 13px; }
-    .tool svg { width:18px; height:18px; fill:currentColor; }
+    .tool svg { width:20px; height:20px; fill:currentColor; }
+    .tool.ha { padding:9px 12px; }
     .page[hidden] { display:none; }
     .page.enter { animation:kin .24s ease-out both; }
   `;
@@ -2785,7 +2786,7 @@ class PagesCard extends HTMLElement {
       <div class="wrap" style="padding:${pad}px"><div class="hdr"></div>
       <div class="bar"><div class="tabs"><div class="pill"></div>${(c.pages || [])
         .map((p) => `<button class="tab" data-page="${esc(p.path)}">${esc(p.title)}</button>`)
-        .join("")}</div><div class="garland"></div><div class="tools">${c.theme_button === false ? "" : `<button class="tab tool" data-theme aria-label="Display settings">🎨</button>`}${KM.active() ? `<button class="tab tool ha" data-ha aria-label="Home Assistant">${HA_LOGO} Home Assistant</button>` : ""}</div></div>
+        .join("")}</div><div class="garland"></div><div class="tools">${c.theme_button === false ? "" : `<button class="tab tool" data-theme aria-label="Display settings">🎨</button>`}${KM.active() ? `<button class="tab tool ha" data-ha aria-label="Home Assistant" title="Home Assistant">${HA_LOGO}</button>` : ""}</div></div>
       <div class="pages">${(c.pages || []).map((p) => `<div class="page" data-page="${esc(p.path)}" hidden></div>`).join("")}</div></div>`;
     const root = this.shadowRoot;
     root.addEventListener("pointerdown", (e) => {
@@ -3095,7 +3096,8 @@ const kids = () => FAMILY.filter((m) => m.kid);
 /** A parent on their own device: a manager's HA user, and not the wall display. */
 function isManager(hass) {
   const id = hass?.user?.id;
-  if (!id || isWall()) return false;
+  // The wall display is the remembered kiosk or, before it has remembered one, its user agent.
+  if (!id || isWall() || WALL_UA.test(navigator.userAgent)) return false;
   return MANAGERS.some((p) => hass.states[p]?.attributes?.user_id === id);
 }
 /** A manager's first name for "by ..." in the log. */
@@ -3394,6 +3396,18 @@ const REWARDS_CSS = `
   .le .un { height:30px; padding:0 12px; border-radius:15px; background:var(--card); font-size:13px; color:var(--sub); display:grid; place-items:center; flex:none; }
   .le .un.arm { background:#c62828; color:#fff; }
   .none { color:var(--sub); font-size:15px; padding:6px 2px; }
+  /* Phones: the stars go under the name. */
+  @media (max-width: 560px) {
+    .wals { gap:8px; }
+    .wal { flex-wrap:wrap; gap:8px 10px; padding:10px; }
+    .wal .av { width:40px; height:40px; font-size:18px; }
+    .wal .nm { font-size:18px; }
+    .wal .st { margin-left:0; width:100%; flex-direction:row; justify-content:space-between; align-items:center; font-size:22px; }
+    .grid { gap:8px; }
+    .tile .e { font-size:38px; }
+    .tile .n { font-size:14px; }
+    .top .q { display:none; }
+  }
 `;
 class RewardsCard extends KitchenCard {
   css = REWARDS_CSS;
