@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.68.0 - 2026-11-02
+
+### Changed
+
+* unifi: the controller UI at unifi.internal.tnwks.us sits behind the Cognito login (oauth2-proxy); local Terraform reaches the API on the unifi-inform VIP instead. New task unifi:bootstrap does the controller first-run setup over the API, a targeted apply of one AP no longer fails on the module output, and docs/network/unifi.md records the rollout as done.
+
 ## v1.67.0 - 2026-11-02
 
 ### Added
