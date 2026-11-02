@@ -71,6 +71,30 @@ spec:
             summary: "Router memory above 85%"
             description: "sce-rtr01 memory at {{ $value | humanizePercentage }}. The DNS adlists live in RAM."
 
+        # Adlist names are stored in the DNS cache. When an import hits
+        # cache-size, RouterOS logs "adlist read: max cache size reached",
+        # stops that list, and the list stays stuck even after the cache grows
+        # (fix: raise cache_size, then terraform apply -replace the adlists).
+        # Healthy is ~63% (205 of 320 MiB); the broken 10 MiB cache sat at
+        # 99%, dipping to ~80% only right after a refresh.
+        - alert: RouterDNSCacheNearFull
+          expr: |
+            max(mktxp_dns_info{routerboard_name="sce-rtr01",property="cache_used"})
+            / max(mktxp_dns_info{routerboard_name="sce-rtr01",property="cache_size"}) > 0.8
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Router DNS cache above 80%: adlist imports at risk"
+            description: >-
+              sce-rtr01 DNS cache is {{ $value | humanizePercentage }} full
+              ({{ with query "round(max(mktxp_dns_info{routerboard_name=\"sce-rtr01\",property=\"cache_used\"}) / 1048576)" }}{{ . | first | value }}{{ end }}
+              of {{ with query "round(max(mktxp_dns_info{routerboard_name=\"sce-rtr01\",property=\"cache_size\"}) / 1048576)" }}{{ . | first | value }}{{ end }} MiB).
+              The adlists live in this cache; once it fills, list imports stop and
+              those lists stay stuck. Raise dns.cache_size in the mikrotik
+              Terraform, then check /ip dns adlist print for lists stuck at a
+              few names and terraform apply -replace them.
+
         - alert: RouterStorageLow
           expr: |
             max(mktxp_system_free_hdd_space{routerboard_name="sce-rtr01"})

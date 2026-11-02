@@ -1,0 +1,3 @@
+kind: Added
+body: "monitoring: RouterDNSCacheNearFull warns when the router DNS cache, which holds the adlists, stays above 80% for an hour, before list imports start failing."
+time: 2026-11-02T14:50:00-08:00
