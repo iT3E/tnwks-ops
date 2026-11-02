@@ -70,12 +70,6 @@ locals {
   }
 }
 
-# The AP adopted first as "living_room" is the master-bedroom AP.
-moved {
-  from = module.unifi.unifi_device.ap["living_room"]
-  to   = module.unifi.unifi_device.ap["master"]
-}
-
 module "unifi" {
   source = "../../../modules/unifi"
 
