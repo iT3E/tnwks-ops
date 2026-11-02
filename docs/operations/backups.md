@@ -72,7 +72,11 @@ covered automatically.
 | UniFi | `networking/config-unifi-0` | Includes the controller's `.unf` auto-backups. The MongoDB PVC is skipped: a `.unf` restore is the supported path |
 | changedetection | `production/config-changedetection-0` | Watch list and history |
 
-To add one: copy a policy file, change the name, namespace and PVC, add the
+The mover must run as the app's user (`mover.securityContext`): kopia fails
+the snapshot on any file it can't read. Home Assistant is 568 (its `.storage`
+has 0600 files), the others 1000.
+
+To add one: copy a policy file, change the name, namespace, PVC and user, add the
 namespace to `allowedNamespaces` in `repository/clusterrepository.yaml` if it is
 new, and list the file in `policies/kustomization.yaml`.
 
