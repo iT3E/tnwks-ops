@@ -45,21 +45,9 @@ resource "routeros_ip_dns" "this" {
   verify_doh_cert       = var.dns.verify_doh_cert
 }
 
-# Named upstreams for FWD static records. RouterOS adlists have no allowlist,
-# but a static record wins over an adlist match, so a FWD record pointing here
-# unblocks a name while keeping it on DoH.
-resource "routeros_ip_dns_forwarders" "this" {
-  for_each = var.dns.forwarders
-
-  name            = each.key
-  dns_servers     = each.value.dns_servers
-  doh_servers     = each.value.doh_servers
-  verify_doh_cert = each.value.verify_doh_cert
-  comment         = "${each.key} (terraform)"
-
-  depends_on = [routeros_ip_dns.this]
-}
-
+# Adlist allowlisting: RouterOS adlists have no allowlist, but a static record
+# wins over an adlist match. A FWD record with no forward_to sends the name to
+# the normal upstream (DoH included), which unblocks it.
 resource "routeros_ip_dns_record" "static" {
   for_each = var.dns.static_records
 
@@ -72,9 +60,13 @@ resource "routeros_ip_dns_record" "static" {
   ttl             = each.value.ttl
   comment         = coalesce(each.value.comment, each.key)
 
-  depends_on = [routeros_ip_dns.this, routeros_ip_dns_forwarders.this]
+  depends_on = [routeros_ip_dns.this]
 }
 
+# Adlist names live in the DNS cache. When cache_size is too small RouterOS
+# logs "adlist read: max cache size reached", stops the import, and the list
+# stays stuck at a handful of names even after the cache grows; only deleting
+# and re-adding the entry (terraform apply -replace) re-imports it.
 resource "routeros_ip_dns_adlist" "blocklists" {
   for_each = toset(var.dns.adlists)
 

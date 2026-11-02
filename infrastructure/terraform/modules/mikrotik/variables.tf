@@ -329,7 +329,6 @@ variable "dns" {
     allow_remote      - serve LAN clients (required for the forced-DNS dstnat)
     static_records    - split-horizon overrides ported from blocky customDNS,
                         plus FWD records that allowlist names the adlists block
-    forwarders        - named upstreams a FWD static record can point at
     adlists           - blocklist URLs ported from blocky blackLists
   EOT
   type = object({
@@ -348,11 +347,6 @@ variable "dns" {
       match_subdomain = optional(bool, false)
       ttl             = optional(string, "1h")
       comment         = optional(string)
-    })), {})
-    forwarders = optional(map(object({
-      dns_servers     = optional(list(string))
-      doh_servers     = optional(list(string))
-      verify_doh_cert = optional(bool, true)
     })), {})
     adlists = optional(list(string), [])
   })
