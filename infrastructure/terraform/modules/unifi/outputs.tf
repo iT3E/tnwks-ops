@@ -5,10 +5,12 @@
 output "access_points" {
   description = "Controller ID, name and management address of each AP."
   value = {
-    for k, ap in var.access_points : k => {
-      id   = unifi_device.ap[k].id
-      name = ap.name
-      ip   = ap.ip
+    # Over the resources, not var.access_points, so a targeted apply of one AP
+    # (adoption, one reset at a time) still evaluates.
+    for k, d in unifi_device.ap : k => {
+      id   = d.id
+      name = d.name
+      ip   = var.access_points[k].ip
     }
   }
 }

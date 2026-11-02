@@ -7,7 +7,8 @@ and its configuration (site settings, the WLAN, each AP) is Terraform in
 
 | What | Where |
 | --- | --- |
-| Controller UI and API | `https://unifi.internal.tnwks.us` (internal ingress) |
+| Controller UI | `https://unifi.internal.tnwks.us`: Cognito login (oauth2-proxy), then the controller's local login (`admin_username` in SOPS) |
+| Controller API | `https://10.5.0.206:8443` (VIP, desktop only) for local Terraform; `unifi.networking.svc.cluster.local:8443` for CI and unpoller |
 | Inform URL the APs use | `http://unifi:8080/inform` (router record `unifi` -> `10.10.91.142`) |
 | Configuration | `environments/prod/unifi` + `modules/unifi`: planned on the PR and applied on merge by `unifi-{plan,apply}.yaml` on the self-hosted runner ([`ci.md`](ci.md)). State in TFC workspace `tnwks-unifi-prod`. `task unifi:*` for bootstrap and break-glass |
 | Secrets | `environments/prod/unifi/secrets.sops.yaml`: controller logins, device SSH, SSID, passphrase, AP MACs |
@@ -110,79 +111,68 @@ AP (VLAN 900)
   next inform (about every 10 seconds) instead of immediately. Adoption,
   provisioning and statistics all work over 8080.
 - **The UI** goes through the internal ingress like any `*.internal.tnwks.us`
-  app. Nothing on the LAN needs tcp/8443.
+  app, behind oauth2-proxy (forward auth, any `tnwks-auth` user). The UniFi
+  Network Application has no OIDC or SAML login of its own (its only SSO is a
+  ui.com cloud account), so its local login follows the Cognito one. The API
+  is also on the `unifi-inform` VIP, which only the desktop can reach: local
+  Terraform and `task unifi:*` use that, since they can't pass a browser login.
+  Nothing on the LAN needs tcp/8443.
 - **When the desktop is off,** the APs keep serving Wi-Fi with their last
   configuration. Only changes, statistics and adoption wait for the controller.
 
-## Rollout (one time)
+## Rollout (done 2026-11-01)
 
-Steps marked **owner** need hands on site, a UAC prompt or a password only the owner has.
+What was done, in order. To rebuild after losing the controller, repeat 2, 3
+and 6-9.
 
-1. **Look for an old backup first (owner).** The only place the old
-   configuration can still exist is the VyOS box's disk:
-   `/config/containers/unifi/data/backup/autobackup/*.unf` (and
-   `/config/containers/unifi/data/backup/`). Do this **before** cutover step
-   5.4 factory-resets VyOS. Boot it with its LAN cables unplugged (it would
-   otherwise fight the RB5009 for the gateway addresses) and copy anything
-   there to a USB stick. A `.unf` from the controller that adopted the APs
-   restores into the new one (Settings -> System -> Backups -> Restore, newer
-   versions read older backups) and brings the APs back without a reset,
-   because the backup holds their device keys. If none is found, carry on.
-2. **Merge the PR.** Flux deploys `networking/unifi`. First start creates the
-   database and takes a few minutes:
-   `kubectl -n networking get pods -l app.kubernetes.io/name=unifi -w`.
-3. **LAN bridge (owner, UAC prompt):**
-   ```bash
-   task wsl-host:lan-bridge
-   infrastructure/wsl-host/invoke-elevated.sh infrastructure/wsl-host/Register-TnwksLanBridgeTask.ps1
-   ```
-   The second line refreshes the copy of `Sync-TnwksLanBridge.ps1` that the
-   scheduled task runs. Check: `curl -s -o /dev/null -w '%{http_code}\n' http://10.10.91.142:8080/inform`
-   from WSL prints an HTTP status (the controller answering), not `000` (a
-   timeout or refused connection).
-4. **Bootstrap the controller (owner, about 5 minutes).** Open
-   `https://unifi.internal.tnwks.us`. Logins are in
-   `environments/prod/unifi/secrets.sops.yaml` (`sops -d` it).
-   1. First-run wizard: any site name, skip the ui.com sign-in (advanced setup
-      -> local account), owner account `admin_username` / `admin_password`.
-      Leave local auto-backup on.
-   2. Settings -> System -> Advanced: **Inform Host override** on, `unifi`.
-   3. Admins: add local `terraform` (`unifi_username`/`unifi_password`, Super
-      Admin) and local `unifipoller` (View Only), whose password is
-      `unifipoller_password` in
-      `kubernetes/apps/monitoring/unpoller/app/secrets.sops.yaml`.
-5. **Wi-Fi password:** `wlan_passphrase` in SOPS must be the current
-   password (Terraform refuses `CHANGEME`, because a different value
-   disconnects every client). On 2026-11-01 it was read from the desktop's
-   saved Windows Wi-Fi profile for the SSID (DPAPI, decrypted as SYSTEM).
-6. **Workspace:** `tnwks-unifi-prod` (execution mode local) was created
-   through the TFC API on 2026-11-01, matching `modules/tfc/workspaces.tf`;
+1. **Old backup:** not looked for. The only place one could exist is the VyOS
+   disk (`/config/containers/unifi/data/backup/`); copy it off before cutover
+   step 5.4 if it's ever wanted. A `.unf` holds the device keys, so restoring
+   one would re-adopt the APs without a reset.
+2. **Deploy:** Flux deploys `networking/unifi`; the first start creates the
+   database in about a minute.
+3. **LAN bridge:** `task wsl-host:lan-bridge`, then
+   `infrastructure/wsl-host/invoke-elevated.sh infrastructure/wsl-host/Register-TnwksLanBridgeTask.ps1`
+   to refresh the copy of `Sync-TnwksLanBridge.ps1` the scheduled task runs.
+   Check from the AP subnet, through the real path, on the router:
+   `/tool fetch url="http://unifi:8080/inform" src-address=10.10.90.1` fails
+   with `Status 400`. That is the controller rejecting an empty inform; a
+   timeout means the bridge is broken.
+4. **Wi-Fi password:** `wlan_passphrase` in SOPS must be the current password
+   (the module refuses `CHANGEME`, because a different value disconnects every
+   client). It was read from the desktop's saved Windows Wi-Fi profile for the
+   SSID (DPAPI, decrypted as SYSTEM).
+5. **Workspace:** `tnwks-unifi-prod` (execution mode local) was created
+   through the TFC API, matching `modules/tfc/workspaces.tf`;
    `aws-init/imports.tf` adopts it on the next `aws-init` apply.
-7. **Apply everything except the APs:**
+6. **Bootstrap the controller:** `task unifi:bootstrap`. It does the
+   first-run wizard over the API (owner account `admin_username`, country,
+   time zone), sets Override Inform Host (`super_mgmt.override_inform_host`
+   with `super_identity.hostname = unifi`), and creates the local accounts
+   `terraform` (admin) and `unifipoller` (read-only, password from the
+   unpoller Secret). It only works on an uninstalled controller.
+7. **Everything except the APs:**
    ```bash
    task unifi:init
-   task unifi:apply -- -target=unifi_setting.site -target=unifi_wlan.main
+   task unifi:apply -- -target=module.unifi.unifi_setting.site -target=module.unifi.unifi_wlan.main
    ```
-8. **Factory-reset the APs (owner, on site).** One at a time keeps two of three
-   up. Hold the reset button about 10 seconds until the LED changes, release,
-   and give it a couple of minutes to boot. It comes up on DHCP in the
-   `.100-.200` pool, resolves `unifi` and shows up as pending:
-   ```bash
-   task unifi:pending   # mac, model, name, adopted, state
-   ```
-9. **Adopt and configure:** `task unifi:apply` (locally: adoption depends
-   on the resets above, which CI can't wait for). `allow_adoption` adopts each
-   pending AP, then Terraform names it, gives it its static address and pins
-   its channels. The AP reboots its radios once; clients reconnect on their own
-   because the SSID and passphrase are unchanged.
-10. **Check:** each AP shows Connected in the UI at its `.11`/`.12`/`.13`
-    address, the SW03 MAC table has clients on 910 behind all three ports, and
-    unpoller logs no errors:
-    `kubectl -n monitoring logs deploy/unpoller --tail=5`.
-11. **Hand over to CI:** `task unifi:plan` shows no changes, then set the
-    repository variable `UNIFI_TERRAFORM_ENABLED` to `true`
-    (`gh variable set UNIFI_TERRAFORM_ENABLED --body true`). Until then the
-    UniFi workflows skip, so this PR and the bootstrap can't trip them.
+   The WLAN's first create reports "Provider produced inconsistent result
+   after apply" although the WLAN is created correctly (provider 0.65).
+   `terraform untaint module.unifi.unifi_wlan.main`, and the next plan shows
+   no changes.
+8. **Factory-reset each AP (on site):** hold reset about 10 seconds while
+   powered, until the LED changes. It takes a DHCP lease, resolves `unifi` and
+   shows up as pending (`task unifi:pending`).
+9. **Adopt:** per AP, as each one appears,
+   `task unifi:apply -- -target='module.unifi.unifi_device.ap["kitchen"]'`
+   (or a plain `task unifi:apply` once all three are pending). Adoption takes
+   about a minute, then the AP provisions: static address, channels, the SSID.
+   Clients rejoin on their own because the SSID and passphrase are unchanged.
+10. **Check:** every AP Connected at `.11`/`.12`/`.13` with clients, and
+    unpoller's log shows `UAP: 3`.
+11. **Hand over to CI:** once `task unifi:plan` shows no changes,
+    `gh variable set UNIFI_TERRAFORM_ENABLED --body true`. Until then the
+    UniFi workflows skip.
 
 ## Day to day
 
@@ -194,7 +184,7 @@ Steps marked **owner** need hands on site, a UAC prompt or a password only the o
   `device_ssh_password` from SOPS (or the desktop's key) and run
   `set-inform http://unifi:8080/inform`. No reset needed, as long as the
   controller database survives.
-- **The controller database is lost:** redeploy, repeat bootstrap step 4, and
+- **The controller database is lost:** redeploy, `task unifi:bootstrap`, and
   `task unifi:apply` rebuilds the configuration. The APs then need either a
   `.unf` restore or the SSH route above (`set-default` over SSH resets an AP
   without touching it), not a ladder.

@@ -3,7 +3,7 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 
 variable "unifi_url" {
-  description = "Controller URL, without /api. Overrides unifi_url in secrets.sops.yaml (e.g. the MetalLB VIP while the ingress is down)."
+  description = "Controller URL, without /api. Overrides unifi_url in secrets.sops.yaml. CI sets the in-cluster Service."
   type        = string
   default     = null
 }

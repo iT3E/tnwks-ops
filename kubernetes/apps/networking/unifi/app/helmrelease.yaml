@@ -14,7 +14,10 @@
 #   tcp/8080  inform (device <-> controller). The only port adoption needs.
 #   udp/3478  STUN. On the VIP, but not relayed from the LAN: the Windows UDP
 #             relay is one-way and STUN needs replies (docs/network/unifi.md).
-# The UI and API (tcp/8443) are served through the internal ingress.
+# The UI is served through the internal ingress, behind the Cognito login
+# (oauth2-proxy). UniFi has no OIDC of its own, so its local login follows.
+# The API also listens on the VIP (tcp/8443), which only this WSL host can
+# reach: local Terraform uses it, CI and unpoller use the ClusterIP Service.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -160,6 +163,11 @@ spec:
           stun:
             port: 3478
             protocol: UDP
+          # Not bridged to the LAN: for Terraform and `task unifi:*` on the
+          # desktop, which can't pass the ingress's Cognito login.
+          api:
+            port: 8443
+            protocol: HTTPS
     ingress:
       app:
         className: nginx-internal
@@ -168,6 +176,14 @@ spec:
           hajimari.io/group: Network
           hajimari.io/icon: mdi:wifi
           nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+          # Cognito login first (any tnwks-auth user; the pool is invite-only),
+          # then UniFi's own login.
+          nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local:80/oauth2/auth"
+          nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${INTERNAL_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
+          # Cognito-backed sessions are split across multiple cookies; the
+          # subrequest header chunk overflows nginx's default 4k buffer.
+          nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+          nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
         hosts:
           - host: &host "unifi.${INTERNAL_DOMAIN}"
             paths:
