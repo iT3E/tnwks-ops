@@ -57,7 +57,10 @@ spec:
           labels:
             severity: warning
         # Backups (docs/operations/backups.md): the daily 01:00 base backup
-        # to S3 should never be more than a day and a bit old.
+        # to S3 should never be more than a day and a bit old. Backups go
+        # through the barman-cloud plugin, which reports its own metric; the
+        # cnpg_collector_* backup metrics stay 0 (they are for the in-tree
+        # barmanObjectStore).
         - alert: PostgresBackupStale
           annotations:
             description: >-
@@ -67,7 +70,7 @@ spec:
               CronJob kopiur-system/aws-backup-credentials.
             summary: Postgres base backup is stale
           expr: |-
-            (time() - max by (namespace) (cnpg_collector_last_available_backup_timestamp)) > 30 * 3600
+            (time() - max by (namespace) (barman_cloud_cloudnative_pg_io_last_available_backup_timestamp)) > 30 * 3600
           for: 1h
           labels:
             severity: warning
