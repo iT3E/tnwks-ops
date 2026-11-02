@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.77.0 - 2026-11-02
+
+### Added
+
+* mikrotik: static DHCP leases on 910 for the devices Home Assistant reaches by address (LIFX, Sonos, Denon, Tesla Wall Connector, Cast, LG TV) and the desktop that hosts homelab-wsl, each at its current address.
+
 ## v1.76.0 - 2026-11-02
 
 ### Added
