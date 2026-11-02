@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.68.1 - 2026-11-02
+
+### Fixed
+
+* unifi: Living Room and Master APs were swapped (the UAP-HD is in the living room); names and MACs follow the rooms, and the not-yet-adopted Living Room AP is held out of Terraform (managed = false) so plans stay clean.
+
 ## v1.68.0 - 2026-11-02
 
 ### Changed

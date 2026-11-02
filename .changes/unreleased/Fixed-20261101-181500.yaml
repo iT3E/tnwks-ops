@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'unifi: Living Room and Master APs were swapped (the UAP-HD is in the living room); names and MACs follow the rooms, and the not-yet-adopted Living Room AP is held out of Terraform (managed = false) so plans stay clean.'
-time: 2026-11-01T18:15:00-08:00
