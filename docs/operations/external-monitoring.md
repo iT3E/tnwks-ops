@@ -10,7 +10,7 @@ healthchecks.io messages Telegram through its own bot when the pings stop.
 
 | Check         | Pinged by                                                  | Every | Notifies after silence of | Down means                                                              |
 | ------------- | ---------------------------------------------------------- | ----- | ------------------------- | ----------------------------------------------------------------------- |
-| `homelab-wsl` | Alertmanager, the always-firing `Watchdog` alert (webhook) | 1-2m  | 3m + 4m grace             | Prometheus, Alertmanager, the cluster, the desktop or the house is down |
+| `homelab-wsl` | Alertmanager, the always-firing `Watchdog` alert (webhook) | 2m    | 3m + 4m grace             | Prometheus, Alertmanager, the cluster, the desktop or the house is down |
 | `sce-rtr01`   | RB5009 scheduler `heartbeat` (`/tool fetch`)               | 1m    | 2m + 3m grace             | Power or internet at home is out                                        |
 
 Read them together:

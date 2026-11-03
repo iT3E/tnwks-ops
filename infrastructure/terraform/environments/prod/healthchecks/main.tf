@@ -22,11 +22,11 @@
 locals {
   checks = {
     # Alertmanager sends the always-firing Watchdog alert here as a webhook
-    # every 1-2 minutes (kubernetes/apps/monitoring/alertmanager). Silence
+    # every 2 minutes (kubernetes/apps/monitoring/alertmanager). Silence
     # means Prometheus, Alertmanager, the cluster, the desktop or the WAN is
     # down.
     homelab-wsl = {
-      desc    = "Watchdog heartbeat from homelab-wsl Alertmanager (every 1-2m). Down: Prometheus, Alertmanager, the cluster, the desktop or the house is offline. Check sce-rtr01 to tell which."
+      desc    = "Watchdog heartbeat from homelab-wsl Alertmanager (every 2m). Down: Prometheus, Alertmanager, the cluster, the desktop or the house is offline. Check sce-rtr01 to tell which."
       tags    = ["homelab-wsl", "alertmanager"]
       timeout = 3 * 60
       grace   = 4 * 60

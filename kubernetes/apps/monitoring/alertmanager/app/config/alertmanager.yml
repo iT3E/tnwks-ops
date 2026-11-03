@@ -35,8 +35,9 @@ route:
   repeat_interval: 6h
   receiver: "telegram"
   routes:
-    # Every 1-2 minutes: a repeat is sent on the first group_interval tick
-    # after repeat_interval. The check alerts after 3m + 4m grace of silence.
+    # Every 2 minutes: a repeat goes out on the first group_interval tick
+    # after repeat_interval, and with both at 1m that is every other tick
+    # (measured on v0.34.2). The check alerts after 3m + 4m grace of silence.
     - receiver: "healthchecks"
       matchers:
         - alertname = "Watchdog"
