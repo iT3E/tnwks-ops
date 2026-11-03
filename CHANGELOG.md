@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.106.1 - 2026-11-03
+
+### Fixed
+
+* Home Assistant: away and weekday person alerts no longer stay silent in the night window while the night alerts are switched off
+
 ## v1.106.0 - 2026-11-03
 
 ### Added
