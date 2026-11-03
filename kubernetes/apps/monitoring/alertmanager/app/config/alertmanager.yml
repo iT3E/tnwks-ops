@@ -26,6 +26,13 @@ route:
     - receiver: "null"
       matchers:
         - alertname =~ "InfoInhibitor|Watchdog"
+    # Pushed by the finance-sync CronJob; a broken bank connection stays
+    # firing while it is broken (often for weeks), so remind once a day
+    # instead of every 6h. Silence one connection by its `connection` label.
+    - receiver: "telegram"
+      matchers:
+        - alertname = "FinanceBankConnectionBroken"
+      repeat_interval: 24h
     - receiver: "telegram"
       matchers:
         - severity = critical
