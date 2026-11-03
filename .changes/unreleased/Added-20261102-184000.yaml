@@ -1,0 +1,3 @@
+kind: Added
+body: 'firefly: sign in with tnwks-auth (Cognito) through oauth2-proxy, admins group only; the API keeps token auth on its own ingress.'
+time: 2026-11-02T18:40:00-08:00

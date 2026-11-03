@@ -131,6 +131,27 @@ spec:
               # API. Nobody else should be able to create a login.
               - name: ALLOW_REGISTRATION
                 value: "false"
+              # Login is tnwks-auth (Cognito) through oauth2-proxy, the house
+              # pattern for apps without OIDC (Grafana does the same with
+              # auth.proxy). Firefly has no OIDC client of its own; its
+              # remote_user_guard trusts the email header that ingress-nginx
+              # sets from oauth2-proxy's auth response. The header must match
+              # the Firefly user's email: an unknown email is auto-created as
+              # a new, empty user. The ingress only lets the `admins` group in.
+              #
+              # The API is unaffected: /api uses Passport tokens (the `api`
+              # guard), and its own ingress below skips oauth2-proxy and clears
+              # the header. Break-glass: set this back to `web` for password
+              # login.
+              - name: AUTHENTICATION_GUARD
+                value: "remote_user_guard"
+              - name: AUTHENTICATION_GUARD_HEADER
+                value: "HTTP_X_AUTH_REQUEST_EMAIL"
+              # With the proxy owning the session, Firefly's own logout would
+              # just log straight back in. End the Cognito session, which then
+              # clears the oauth2-proxy cookie (same as Grafana).
+              - name: CUSTOM_LOGOUT_URL
+                value: "https://auth.${SECRET_DOMAIN}/logout?client_id=${OAUTH2_PROXY_CLIENT_ID}&logout_uri=https%3A%2F%2Foauth2.${INTERNAL_DOMAIN}%2Foauth2%2Fsign_out"
               - name: MAIL_MAILER
                 value: "log"
             probes:
@@ -267,15 +288,50 @@ spec:
 
     ingress:
       app:
+        # Keep the original Ingress name (nameOverride equal to the release name
+        # leaves it bare). With a second ingress the chart would
+        # rename this one to firefly-app, and Helm creates before it deletes, so
+        # ingress-nginx's webhook rejects the duplicate host+path and the
+        # upgrade fails.
+        nameOverride: firefly
         className: nginx-internal
         annotations:
           hajimari.io/appName: Firefly III
           hajimari.io/group: Home
           hajimari.io/icon: mdi:cash-multiple
+          # tnwks-auth login via oauth2-proxy, admins only.
+          nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local:80/oauth2/auth?allowed_groups=admins"
+          nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${INTERNAL_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
+          nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-Email"
+          nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+          nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
         hosts:
           - host: &host "firefly.internal.${SECRET_DOMAIN}"
             paths:
               - path: /
+                pathType: Prefix
+                service:
+                  identifier: app
+                  port: http
+        tls:
+          - hosts:
+              - *host
+      # /api skips oauth2-proxy: scripts and the finance agent authenticate
+      # with Passport personal access tokens and can't do a browser login, and
+      # Firefly's own web UI calls /api with its session's laravel_token
+      # cookie. The API guard ignores the email header, but clear it anyway so
+      # nothing on this path can ever present one.
+      api:
+        className: nginx-internal
+        annotations:
+          nginx.ingress.kubernetes.io/configuration-snippet: |
+            proxy_set_header X-Auth-Request-Email "";
+            proxy_set_header X-Auth-Request-User "";
+            proxy_set_header X-Auth-Request-Groups "";
+        hosts:
+          - host: *host
+            paths:
+              - path: /api
                 pathType: Prefix
                 service:
                   identifier: app
