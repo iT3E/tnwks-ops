@@ -1,0 +1,3 @@
+kind: Added
+body: 'LiteLLM: claude-sonnet on Bedrock, with credentials from the existing Roles Anywhere certificate through an aws_signing_helper sidecar (no new AWS resources), virtual keys kept in step with a SOPS list by an ensure-keys sidecar (the transcriber''s, limited to claude-sonnet), and an alert 30 days before the certificate expires.'
+time: 2026-11-03T01:45:13.0070886-08:00

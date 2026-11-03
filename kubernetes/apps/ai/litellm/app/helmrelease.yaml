@@ -29,6 +29,33 @@ spec:
       litellm:
         annotations:
           reloader.stakater.com/auto: "true"
+        initContainers:
+          # The Roles Anywhere signing helper isn't in a public image: fetch
+          # the pinned release and check it, as aws-backup-credentials does
+          # (kubernetes/apps/kopiur-system/aws-backup-credentials).
+          fetch-signing-helper:
+            image: &python
+              repository: docker.io/library/python
+              tag: 3.15.2-slim-trixie@sha256:8c13a3f37a6a5b71498228e902c4b9f51c1f7900d49fabf71f9a650c6120e0d0
+            command:
+              - python3
+              - -c
+              - |
+                import hashlib, os, urllib.request
+                data = urllib.request.urlopen(os.environ["HELPER_URL"], timeout=120).read()
+                got = hashlib.sha256(data).hexdigest()
+                if got != os.environ["HELPER_SHA256"]:
+                    raise SystemExit("aws_signing_helper checksum mismatch: " + got)
+                path = "/helper/aws_signing_helper"
+                with open(path, "wb") as f:
+                    f.write(data)
+                os.chmod(path, 0o755)
+                print("aws_signing_helper", os.environ["HELPER_VERSION"], "ok")
+            env:
+              # renovate: datasource=github-releases depName=aws/rolesanywhere-credential-helper
+              HELPER_VERSION: "1.8.5"
+              HELPER_URL: "https://rolesanywhere.amazonaws.com/releases/1.8.5/X86_64/Linux/Amzn2023/aws_signing_helper"
+              HELPER_SHA256: "beec9ed1c492d93db809890f16713e3556353294b823c2184ad4e891f1b2b54d"
         containers:
           app:
             image:
@@ -61,6 +88,14 @@ spec:
                   secretKeyRef:
                     name: litellm-secret
                     key: LITELLM_MASTER_KEY
+              # Bedrock credentials: boto3 reads them from the aws-credentials
+              # sidecar, which serves the EC2 metadata API on localhost.
+              - name: AWS_EC2_METADATA_SERVICE_ENDPOINT
+                value: http://127.0.0.1:9911/
+              - name: AWS_REGION
+                value: us-east-1
+              - name: AWS_DEFAULT_REGION
+                value: us-east-1
             probes:
               liveness: &probes
                 enabled: true
@@ -91,6 +126,60 @@ spec:
                 memory: 512Mi
               limits:
                 memory: 2Gi
+          # Roles Anywhere: the client certificate (litellm-roles-anywhere) to
+          # short-lived STS credentials, refreshed by the helper, served as an
+          # EC2 metadata endpoint on 127.0.0.1:9911 inside the pod only.
+          aws-credentials:
+            image: *python
+            command:
+              - /helper/aws_signing_helper
+            args:
+              - serve
+              - --port
+              - "9911"
+              - --certificate
+              - /roles-anywhere/client-cert.pem
+              - --private-key
+              - /roles-anywhere/client-key.pem
+              - --trust-anchor-arn
+              - $(TRUST_ANCHOR_ARN)
+              - --profile-arn
+              - $(PROFILE_ARN)
+              - --role-arn
+              - $(ROLE_ARN)
+            envFrom:
+              - secretRef:
+                  name: litellm-roles-anywhere
+            resources:
+              requests:
+                cpu: 5m
+                memory: 16Mi
+              limits:
+                memory: 64Mi
+          # Makes LiteLLM's virtual keys match litellm-keys (create or update
+          # by key value; see scripts/ensure_keys.py), then re-checks every 6 h.
+          # Reloader restarts the pod when that Secret changes.
+          ensure-keys:
+            image:
+              repository: ghcr.io/berriai/litellm
+              tag: v1.106.6@sha256:37e2dafb088a7723beb998590682957386dfc83ffea1848486f8e0e5cfac0b06
+            command:
+              - python3
+              - /scripts/ensure_keys.py
+            env:
+              - name: LITELLM_MASTER_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: litellm-secret
+                    key: LITELLM_MASTER_KEY
+              - name: KEYS_FILE
+                value: /keys/keys.json
+            resources:
+              requests:
+                cpu: 5m
+                memory: 32Mi
+              limits:
+                memory: 128Mi
     service:
       app:
         controller: litellm
@@ -98,6 +187,41 @@ spec:
           http:
             port: 4000
     persistence:
+      signing-helper:
+        type: emptyDir
+        advancedMounts:
+          litellm:
+            fetch-signing-helper:
+              - path: /helper
+            aws-credentials:
+              - path: /helper
+                readOnly: true
+      roles-anywhere:
+        type: secret
+        name: litellm-roles-anywhere
+        defaultMode: 0400
+        advancedMounts:
+          litellm:
+            aws-credentials:
+              - path: /roles-anywhere
+                readOnly: true
+      keys:
+        type: secret
+        name: litellm-keys
+        defaultMode: 0400
+        advancedMounts:
+          litellm:
+            ensure-keys:
+              - path: /keys
+                readOnly: true
+      ensure-keys-script:
+        type: configMap
+        name: litellm-ensure-keys
+        advancedMounts:
+          litellm:
+            ensure-keys:
+              - path: /scripts
+                readOnly: true
       config:
         type: configMap
         name: litellm-config

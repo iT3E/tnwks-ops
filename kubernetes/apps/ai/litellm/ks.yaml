@@ -16,6 +16,8 @@ spec:
   # litellm needs both at startup.
   dependsOn:
     - name: cloudnative-pg-cluster
+    # The PrometheusRule (Bedrock certificate expiry) needs its CRD.
+    - name: kube-prometheus-stack
   decryption:
     provider: sops
     secretRef:
