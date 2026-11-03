@@ -165,6 +165,8 @@ views:
             entity: input_datetime.weekday_person_alerts_end
           - type: tile
             entity: automation.security_person_while_away_or_weekday
+            # The full alias gets cut off at this width.
+            name: Away/weekday alerts on
           - type: markdown
             # Names come from the person entities, not from git.
             content: >-
