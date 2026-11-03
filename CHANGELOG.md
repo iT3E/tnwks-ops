@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.89.1 - 2026-11-03
+
+### Security
+
+* cloudnative-pg: the shared app role owns nothing and can no longer log in; postgres-app is no longer reflected into app namespaces and the cluster-wide POSTGRES_* variables are gone. The one-time ownership Jobs are removed.
+
 ## v1.89.0 - 2026-11-03
 
 ### Changed
