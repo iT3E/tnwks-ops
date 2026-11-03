@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.102.0 - 2026-11-03
+
+### Changed
+
+* Renovate: our own images (ghcr.io/it3e/*) automerge behind Build Success at every update type, any time of day, and never get an impact label. packing-api and the storefront API are pinned to their releases (<version>@sha256) instead of the floating :main tag, so Renovate can follow them.
+
 ## v1.101.0 - 2026-11-03
 
 ### Added
