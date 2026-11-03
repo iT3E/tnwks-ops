@@ -176,7 +176,7 @@ spec:
           app:
             image:
               repository: ghcr.io/it3e/tnwks-transcriber-web
-              tag: 0.1.0@sha256:55545c97193bb09bc4e37e3e33759cd00fc671c2219f522c7d0f65c85a8cd0b8
+              tag: 0.2.0@sha256:100874c50222485441abc56d0092e1bd1986bac76ac385195d7cf641a92da2db
             securityContext: *securityContext
             probes:
               liveness: &frontendProbe
