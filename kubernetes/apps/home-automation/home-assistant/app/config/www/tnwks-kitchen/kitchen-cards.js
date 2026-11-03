@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.10.2";
+const VERSION = "1.11.0";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -358,7 +358,27 @@ const FX_CSS = `
   @keyframes pdrift { 0% { transform:translate3d(-12vw,var(--y),0) rotate(-8deg); } 50% { transform:translate3d(50vw,calc(var(--y) + var(--sway)),0) rotate(8deg); }
     100% { transform:translate3d(112vw,var(--y),0) rotate(-8deg); } }
   @keyframes ptwinkle { 0%,100% { opacity:0; transform:translate3d(var(--x),var(--y),0) scale(.6); } 50% { opacity:var(--o); transform:translate3d(var(--x),var(--y),0) scale(1.1); } }
-  @media (prefers-reduced-motion: reduce) { .f, .p { display:none; } }
+  .spark.big { width:6px; height:6px; animation-duration:1.15s; animation-timing-function:cubic-bezier(.1,.7,.3,1); }
+  .pop { font-size:22px; animation:fxpop .95s cubic-bezier(.2,.7,.3,1) forwards; }
+  @keyframes fxpop { 0% { opacity:0; transform:translate(-50%,-50%) scale(.3); } 20% { opacity:1; }
+    100% { opacity:0; transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(1.1) rotate(var(--rot)); } }
+  .conf.ce { width:auto; height:auto; background:none; font-size:20px; }
+  .cam { position:fixed; left:0; top:0; will-change:transform; }
+  .cam > i { display:block; font-style:normal; font-size:var(--s); line-height:1; transform-origin:50% 100%; }
+  .cam.fly { animation:cfly var(--t) linear forwards; }
+  .cam.fly > i { animation:cflap .32s ease-in-out infinite alternate; }
+  .cam.walk, .cam.hop { animation:cwalk var(--t) linear forwards; }
+  .cam.walk > i { animation:cwaddle .45s ease-in-out infinite alternate; }
+  .cam.hop > i { animation:chop .62s cubic-bezier(.3,0,.7,1) infinite; }
+  .cam.peek { animation:cpeek var(--t) ease-in-out forwards; }
+  .cam.peek > i { animation:cwaddle 1.3s ease-in-out infinite alternate; }
+  @keyframes cfly { from { transform:translate3d(-14vw,var(--y),0); } to { transform:translate3d(112vw,calc(var(--y) + var(--dy)),0); } }
+  @keyframes cflap { from { transform:translateY(-7px) scaleY(1); } to { transform:translateY(7px) scaleY(.72); } }
+  @keyframes cwalk { from { transform:translate3d(108vw,calc(100vh - var(--s) - 4px),0); } to { transform:translate3d(-14vw,calc(100vh - var(--s) - 4px),0); } }
+  @keyframes cwaddle { from { transform:rotate(-7deg); } to { transform:rotate(7deg) translateY(-2px); } }
+  @keyframes chop { 0%,100% { transform:translateY(0) scaleY(.88); } 45% { transform:translateY(-40px) scaleY(1.06); } }
+  @keyframes cpeek { 0% { transform:translate3d(var(--x),100vh,0); } 20%,76% { transform:translate3d(var(--x),calc(100vh - var(--s) * .85),0); } 100% { transform:translate3d(var(--x),100vh,0); } }
+  @media (prefers-reduced-motion: reduce) { .f, .p, .cam { display:none; } }
 `;
 /** Tap feedback that outlives a re-render: drawn on one fixed layer over the whole page. */
 const FX = {
@@ -384,20 +404,35 @@ const FX = {
   float(x, y, text) {
     this._add("float", `left:${x}px;top:${y}px`, text, 1200);
   },
+  // In a holiday theme a tap also pops a few of its emoji, and confetti is its colors with some of its emoji mixed in.
   burst(x, y, color = "#4cd17a", n = 10) {
+    const th = Theme.current();
+    const second = th.confetti ? th.confetti[0] : "#ffd54a";
     for (let i = 0; i < n; i++)
-      this._add("spark", `left:${x}px;top:${y}px;background:${i % 3 ? color : "#ffd54a"};--r:${(360 / n) * i + Math.random() * 20}deg;--d:${34 + Math.random() * 26}px`, "", 700);
+      this._add("spark", `left:${x}px;top:${y}px;background:${i % 3 ? color : second};--r:${(360 / n) * i + Math.random() * 20}deg;--d:${34 + Math.random() * 26}px`, "", 700);
+    for (let i = 0; th.particles && i < 3; i++) {
+      const a = -Math.PI / 2 + (i - 1) * 0.9 + (Math.random() - 0.5) * 0.5, d = 46 + Math.random() * 26;
+      this._add("pop", `left:${x}px;top:${y}px;--dx:${Math.cos(a) * d}px;--dy:${Math.sin(a) * d}px;--rot:${(Math.random() - 0.5) * 60}deg`, th.particles[Math.floor(Math.random() * th.particles.length)], 1000);
+    }
   },
   confetti(rect, colors) {
-    const cs = colors || ["#ff9f43", "#4cd17a", "#4fb3f0", "#f07a5f", "#ffd54a", "#a98bf0"];
+    const cs = colors || Theme.confetti();
+    const emoji = Theme.current().particles;
     const cx = rect.left + rect.width / 2;
     for (let i = 0; i < 46; i++) {
       const x0 = cx + (Math.random() - 0.5) * 40;
       const y0 = rect.top + rect.height * 0.35;
       const x1 = x0 + (Math.random() - 0.5) * rect.width * 1.3;
       const y1 = y0 + 120 + Math.random() * rect.height * 0.9;
-      this._add("conf", `background:${cs[i % cs.length]};--x0:${x0}px;--y0:${y0}px;--x1:${x1}px;--y1:${y1}px;--rot:${(Math.random() - 0.5) * 900}deg;--t:${1.1 + Math.random() * 0.9}s`, "", 2200);
+      const e = emoji && i % 6 === 0 ? emoji[(i / 6) % emoji.length] : "";
+      this._add(e ? "conf ce" : "conf", `${e ? "" : `background:${cs[i % cs.length]};`}--x0:${x0}px;--y0:${y0}px;--x1:${x1}px;--y1:${y1}px;--rot:${(Math.random() - 0.5) * (e ? 240 : 900)}deg;--t:${1.1 + Math.random() * 0.9}s`, e, 2200);
     }
+  },
+  /** A firework bursting at x, y (the New Year and 4th of July cameos). */
+  firework(x, y, colors = Theme.confetti()) {
+    const n = 22, c = colors[Math.floor(Math.random() * colors.length)];
+    for (let i = 0; i < n; i++)
+      this._add("spark big", `left:${x}px;top:${y}px;background:${i % 4 ? c : "#ffffff"};--r:${(360 / n) * i + Math.random() * 8}deg;--d:${70 + Math.random() * 50}px`, "", 1250);
   },
   /** Center of an element, for anchoring an effect to what was tapped. */
   at(el) {
@@ -408,14 +443,16 @@ const FX = {
 
 // ---------------------------------------------------------------- themes
 
-// Holiday themes: a palette, falling/rising/drifting emoji, a garland over
-// the header, and a greeting on the day. The dashboard offers each one in its
-// window (lead days before, through `after` days past the holiday) and the
-// wall display's choice is input_select.kitchen_theme
-// (packages/kitchen_display.yaml), which its screensaver follows too. Every
-// other screen (phones, browsers) follows that until someone picks a theme or
-// mode on it; that choice stays on that device (localStorage, see Local). A
-// holiday theme switches itself off in the week after its holiday.
+// Holiday themes: a palette, dressed-up cards (SKINS), falling/rising/drifting
+// emoji, a garland over the header, themed taps and confetti, a character that
+// crosses the screen now and then, and a greeting on the day. The wall
+// display offers each one in its window (lead days before, through `after`
+// days past the holiday). Theme and mode belong to whoever picked them: the
+// wall display's are input_select.kitchen_theme / kitchen_mode
+// (packages/kitchen_display.yaml), which its screensaver reads too; everyone
+// else's are kept with their HA user (Prefs), so they follow that person
+// from device to device and nobody else's screen changes. A holiday theme
+// switches itself off in the week after its holiday.
 function easter(y) {
   const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
   const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
@@ -428,31 +465,44 @@ const nthWeekday = (y, mo, wd, n) => {
   return new Date(y, mo, 1 + ((wd - first.getDay() + 7) % 7) + 7 * (n - 1));
 };
 const DEFAULT_THEME = { name: "Everyday", emoji: "🏠", vars: {} };
+// `garland` is emoji, or { lights } / { bunting } colors; `confetti` colors the
+// celebrations and the sparks of a tap; `cameo` lists who may cross the screen
+// (Theme._cameo: fly across the top, walk or hop along the bottom, peek up
+// from the bottom edge, or fireworks).
 const THEMES = {
   newyear: { name: "New Year", emoji: "🎉", day: (y) => new Date(y, 0, 1), lead: 2, greet: "Happy New Year!",
     vars: { accent: "#e9c46a", bg: "#0e0f1a", card: "#181a2b", card2: "#22253a", line: "#30344d" },
-    particles: ["✨", "🎉", "🎊", "⭐"], motion: "twinkle", garland: "🎉 ✨ 🎊 🥂 ✨" },
+    particles: ["✨", "🎉", "🎊", "⭐"], motion: "twinkle", garland: "🎉 ✨ 🎊 🥂 ✨",
+    confetti: ["#e9c46a", "#fff3c4", "#c9ced9", "#f4a3c0", "#4f8cff"], cameo: [{ kind: "fireworks" }, { kind: "fly", e: "🍾", s: 40 }] },
   valentines: { name: "Valentine's", emoji: "💕", day: (y) => new Date(y, 1, 14), lead: 7, greet: "Happy Valentine's Day!",
     vars: { accent: "#ff5c8a", bg: "#170d12", card: "#24151d", card2: "#311d28", line: "#432837" },
-    particles: ["💕", "💗", "❤️", "💘"], motion: "rise", garland: "💕 💌 💗 🌹 💘" },
+    particles: ["💕", "💗", "❤️", "💘"], motion: "rise", garland: "💕 💌 💗 🌹 💘",
+    confetti: ["#ff5c8a", "#ff9ab8", "#ffffff", "#e5484d", "#ffd1dc"], cameo: [{ kind: "fly", e: "💘", t: 6 }, { kind: "peek", e: "💝" }] },
   stpatricks: { name: "St. Patrick's", emoji: "☘️", day: (y) => new Date(y, 2, 17), lead: 5, greet: "Happy St. Patrick's Day!",
     vars: { accent: "#3ccf6e", bg: "#0c1510", card: "#15231a", card2: "#1d3024", line: "#284232" },
-    particles: ["☘️", "🍀", "🌈", "🪙"], motion: "fall", garland: "☘️ 🍀 🌈 🪙 ☘️" },
+    particles: ["☘️", "🍀", "🌈", "🪙"], motion: "fall", garland: "☘️ 🍀 🌈 🪙 ☘️",
+    confetti: ["#3ccf6e", "#9be15d", "#e9c46a", "#ffffff", "#1f9e4f"], cameo: [{ kind: "peek", e: "🌈", s: 64 }, { kind: "hop", e: "🐸" }] },
   easter: { name: "Easter", emoji: "🐣", day: easter, lead: 7, greet: "Happy Easter!",
     vars: { accent: "#b48cf2", bg: "#13121a", card: "#1e1c29", card2: "#292637", line: "#37334a" },
-    particles: ["🌷", "🐣", "🥚", "🐰", "🌼"], motion: "rise", garland: "🐣 🌷 🥚 🐰 🌼" },
+    particles: ["🌷", "🐣", "🥚", "🐰", "🌼"], motion: "rise", garland: "🐣 🌷 🥚 🐰 🌼",
+    confetti: ["#f7a8c4", "#ffe08a", "#a8e6c1", "#a8d2f7", "#cdb4f6"], cameo: [{ kind: "hop", e: "🐇" }, { kind: "peek", e: "🐣" }] },
   july4: { name: "4th of July", emoji: "🎆", day: (y) => new Date(y, 6, 4), lead: 4, greet: "Happy 4th of July!",
     vars: { accent: "#4f8cff", bg: "#0d1220", card: "#161d30", card2: "#1f283f", line: "#2c3753" },
-    particles: ["⭐", "🎆", "🎇", "✨"], motion: "twinkle", garland: "🎆 ⭐ 🇺🇸 ⭐ 🎇" },
+    particles: ["⭐", "🎆", "🎇", "✨"], motion: "twinkle", garland: { bunting: ["#e5484d", "#f4f4f4", "#4f8cff"] },
+    confetti: ["#e5484d", "#ffffff", "#4f8cff", "#ffd54a"], cameo: [{ kind: "fireworks" }] },
   halloween: { name: "Halloween", emoji: "🎃", day: (y) => new Date(y, 9, 31), lead: 14, greet: "Happy Halloween!",
     vars: { accent: "#ff7a1a", bg: "#120d17", card: "#1d1626", card2: "#2a2035", line: "#3a2d48" },
-    particles: ["🦇", "👻", "🎃", "🕸️", "🦇"], motion: "drift", garland: "🎃 🦇 🕸️ 👻 🍬" },
+    particles: ["🦇", "👻", "🎃", "🕸️", "🦇"], motion: "drift", garland: { lights: ["#ff7a1a", "#a86cf0", "#7ee06a"] },
+    confetti: ["#ff7a1a", "#a86cf0", "#7ee06a", "#ffd54a", "#2a2035"],
+    cameo: [{ kind: "fly", e: "🦇", s: 38 }, { kind: "peek", e: "👻" }, { kind: "walk", e: "🕷️", s: 30 }] },
   thanksgiving: { name: "Thanksgiving", emoji: "🦃", day: (y) => nthWeekday(y, 10, 4, 4), lead: 7, greet: "Happy Thanksgiving!",
     vars: { accent: "#e08a3c", bg: "#15110d", card: "#221b14", card2: "#2e251b", line: "#3d3125" },
-    particles: ["🍂", "🍁", "🍂", "🌰"], motion: "fall", garland: "🍂 🦃 🥧 🌽 🍁" },
+    particles: ["🍂", "🍁", "🍂", "🌰"], motion: "fall", garland: "🍂 🦃 🥧 🌽 🍁",
+    confetti: ["#e08a3c", "#c0392b", "#e9c46a", "#8d5524", "#f3d9a4"], cameo: [{ kind: "walk", e: "🦃" }] },
   christmas: { name: "Christmas", emoji: "🎄", day: (y) => new Date(y, 11, 25), lead: 24, after: 1, greet: "Merry Christmas!",
     tint: "#3fbf6a", vars: { accent: "#e5484d", ok: "#3fbf6a", bg: "#0d1512", card: "#16211c", card2: "#1f2d26", line: "#2b3d33" },
-    particles: ["❄️", "❄️", "✨", "❄️"], motion: "fall", garland: "🎄 ❄️ 🎁 ⛄ ✨" },
+    particles: ["❄️", "❄️", "✨", "❄️"], motion: "fall", garland: { lights: ["#e5484d", "#ffd54a", "#3fbf6a", "#4fb3f0"] },
+    confetti: ["#e5484d", "#3fbf6a", "#ffffff", "#ffd54a"], cameo: [{ kind: "peek", e: "🎅" }, { kind: "peek", e: "⛄" }, { kind: "fly", e: "🦌", s: 40 }] },
 };
 const MS_DAY = 86400000;
 /** The holiday whose window today falls in: { key, theme, date, days } (days until it, 0 = today). */
@@ -479,8 +529,9 @@ function themeExpired(key, now = new Date()) {
 }
 const THEME_ENTITY = "input_select.kitchen_theme";
 const THEME_ANSWERED = "input_text.kitchen_theme_answered";
-/** Theme and mode picked on this device (not the wall display): override the house setting here only. */
+/** localStorage that can't throw (it does in some private windows). */
 const Local = {
+  // Where devices kept their own theme and mode before Prefs; moved to the user once (Prefs._got).
   THEME: "tnwks-kitchen-theme",
   MODE: "tnwks-kitchen-mode",
   get(k) {
@@ -496,12 +547,70 @@ const Local = {
       else localStorage.setItem(k, v);
     } catch {}
   },
-  any() {
-    return !!(this.get(this.THEME) || this.get(this.MODE));
+};
+/** The wall display keeps its theme in the input_selects (the screensaver reads them); everyone else's is their own. */
+const isWall = () => !!KM.home();
+
+// Everyone but the wall display keeps their theme and mode with their HA user,
+// in HA's frontend user data (frontend/set_user_data, the per-user store HA's
+// own frontend uses), so a pick follows that person to every device they sign
+// in on and changes nobody else's screen. Never picked means Everyday, auto,
+// whatever the wall display wears. A copy per user in localStorage paints the
+// last choice right away on load; the subscription then confirms or
+// corrects it, and pushes picks made on the person's other devices.
+const PREFS_KEY = "tnwks-kitchen-display";
+const Prefs = {
+  value: undefined, // undefined: not known yet; null: never picked
+  _cacheKey(hass) {
+    return `tnwks-kitchen-prefs:${hass?.user?.id || ""}`;
+  },
+  watch(hass) {
+    const conn = hass?.connection;
+    if (this._sub || !hass?.user || !conn?.subscribeMessage) return;
+    if (this.value === undefined) {
+      try {
+        this.value = JSON.parse(Local.get(this._cacheKey(hass)) || "null");
+      } catch {
+        this.value = null;
+      }
+    }
+    // home-assistant-js-websocket subscribes again by itself after a reconnect.
+    this._sub = conn.subscribeMessage((m) => this._got(hass, m?.value ?? null), { type: "frontend/subscribe_user_data", key: PREFS_KEY }).catch((err) => {
+      console.warn("tnwks kitchen cards: user theme", err);
+      this._sub = null;
+    });
+  },
+  _got(hass, v) {
+    const old = { theme: Local.get(Local.THEME), mode: Local.get(Local.MODE) };
+    if (old.theme || old.mode) {
+      // This device's pick from before themes were per person becomes the person's, unless they already have one.
+      Local.set(Local.THEME, null);
+      Local.set(Local.MODE, null);
+      if (!v) {
+        v = Object.fromEntries(Object.entries(old).filter(([, x]) => x));
+        this._send(hass, v);
+      }
+    }
+    if (JSON.stringify(v) === JSON.stringify(this.value)) return;
+    this.value = v;
+    this._cache(hass);
+    Theme.apply(Theme._hass || hass);
+  },
+  /** Save part of this person's choice ({ theme } or { mode }); the caller repaints. */
+  update(hass, patch) {
+    this.value = { ...(this.value || {}), ...patch };
+    this._cache(hass);
+    return this._send(hass, this.value);
+  },
+  _send(hass, value) {
+    return hass.connection
+      .sendMessagePromise({ type: "frontend/set_user_data", key: PREFS_KEY, value })
+      .catch((err) => console.warn("tnwks kitchen cards: saving user theme", err));
+  },
+  _cache(hass) {
+    Local.set(this._cacheKey(hass), this.value ? JSON.stringify(this.value) : null);
   },
 };
-/** The wall display owns the house setting; any other device keeps its own. */
-const isWall = () => !!KM.home();
 const Theme = {
   key: "default",
   mode: "dark",
@@ -510,18 +619,21 @@ const Theme = {
   },
   apply(hass) {
     if (hass) this._hass = hass;
-    const s = hass?.states?.[THEME_ENTITY];
-    let key = s && THEMES[s.state] ? s.state : "default";
-    const own = isWall() ? null : Local.get(Local.THEME);
-    if (own && (own === "default" || THEMES[own])) {
-      if (own !== "default" && themeExpired(own)) Local.set(Local.THEME, null);
-      else key = own;
+    const wall = isWall();
+    let key;
+    if (wall) {
+      const s = hass?.states?.[THEME_ENTITY];
+      key = s && THEMES[s.state] ? s.state : "default";
+    } else {
+      Prefs.watch(hass);
+      key = THEMES[Prefs.value?.theme] ? Prefs.value.theme : "default";
     }
-    if (key !== "default" && themeExpired(key) && key === s?.state) {
-      // One screen switches it back for the house; the rest follow its state.
+    if (key !== "default" && themeExpired(key)) {
       if (!this._expiring) {
         this._expiring = true;
-        hass.callService("input_select", "select_option", { entity_id: THEME_ENTITY, option: "default" }).finally(() => (this._expiring = false));
+        const done = () => (this._expiring = false);
+        if (wall) hass.callService("input_select", "select_option", { entity_id: THEME_ENTITY, option: "default" }).finally(done);
+        else Prefs.update(hass, { theme: "default" }).finally(done);
       }
       key = "default";
     }
@@ -537,9 +649,48 @@ const Theme = {
       if (this.palette[v]) root.setProperty(`--k-${v}`, this.palette[v]);
       else root.removeProperty(`--k-${v}`);
     }
-    if (keyChanged) this._particles(th);
+    Skin.set(skinCss(key, this.palette, mode === "light"));
+    if (keyChanged) {
+      this._particles(th);
+      this._cameos(th);
+    }
     Bars.update();
     window.dispatchEvent(new CustomEvent("kitchen-theme", { detail: key }));
+  },
+  /** Colors for confetti and tap sparks in the active theme. */
+  confetti() {
+    return this.current().confetti || ["#ff9f43", "#4cd17a", "#4fb3f0", "#f07a5f", "#ffd54a", "#a98bf0"];
+  },
+  // Now and then (every two to three minutes, only while the screen is on)
+  // one of the theme's characters crosses the page: on the particle layer,
+  // transform-only, never in the way of a tap.
+  _cameos(th) {
+    clearTimeout(this._camT);
+    if (!th.cameo || REDUCED()) return;
+    const next = (ms) =>
+      (this._camT = setTimeout(() => {
+        this._cameo(th);
+        next(100000 + Math.random() * 80000);
+      }, ms));
+    next(20000 + Math.random() * 25000);
+  },
+  _cameo(th, pick) {
+    const root = this._host?.shadowRoot;
+    if (!root || document.visibilityState !== "visible") return;
+    const c = pick || th.cameo[Math.floor(Math.random() * th.cameo.length)];
+    if (c.kind === "fireworks") {
+      for (let i = 0; i < 4; i++)
+        setTimeout(() => FX.firework(innerWidth * (0.12 + Math.random() * 0.76), innerHeight * (0.1 + Math.random() * 0.3), th.confetti), i * 650 + Math.random() * 300);
+      return;
+    }
+    const t = c.t || { fly: 9, walk: 16, hop: 13, peek: 6.5 }[c.kind] || 9;
+    const el = document.createElement("div");
+    el.className = `cam ${c.kind}`;
+    el.style.cssText = [`--t:${t}s`, `--s:${c.s || 46}px`, `--y:${Math.round(8 + Math.random() * 28)}vh`,
+      `--dy:${Math.round((Math.random() - 0.5) * 24)}vh`, `--x:${Math.round(6 + Math.random() * 78)}vw`].join(";");
+    el.innerHTML = `<i>${c.e}</i>`;
+    root.appendChild(el);
+    setTimeout(() => el.remove(), t * 1000 + 300);
   },
   /** The page background of the active theme and mode (what the system bars get). */
   bg() {
@@ -574,24 +725,26 @@ const Theme = {
 
 // ------------------------------------------------------ dark/light mode
 
-// input_select.kitchen_mode (packages/kitchen_display.yaml): dark, light or
-// auto (dark while sun.sun is below the horizon). Dark is the look the themes
+// Dark, light or auto (dark while sun.sun is below the horizon): the wall
+// display's is input_select.kitchen_mode (packages/kitchen_display.yaml),
+// everyone else's is their own (Prefs), auto until they pick. Dark is the look the themes
 // were made in. Light keeps each theme's accent and derives the rest from it:
 // near-white cards on a faintly tinted page, dark text, and the accent (and
 // the "done" green) darkened where they're used as text until they pass WCAG
-// AA (4.5:1) on the cards. Before the helper exists, the display stays dark.
+// AA (4.5:1) on the cards. Before the helper exists, the wall display stays dark.
 const MODE_ENTITY = "input_select.kitchen_mode";
 const MODES = [
   { key: "dark", label: "Dark", icon: "🌙" },
   { key: "light", label: "Light", icon: "☀️" },
   { key: "auto", label: "Auto", icon: "🌗" },
 ];
+/** The mode setting: the wall display's input_select (dark until it exists), or this person's own (auto until they pick). */
+const pickedMode = (hass) => (isWall() ? hass?.states?.[MODE_ENTITY]?.state || "dark" : Prefs.value?.mode || "auto");
 function resolveMode(hass) {
-  const own = isWall() ? null : Local.get(Local.MODE);
-  const m = ["dark", "light", "auto"].includes(own) ? own : hass?.states?.[MODE_ENTITY]?.state;
+  const m = pickedMode(hass);
   if (m === "dark" || m === "light") return m;
   if (m !== "auto") return "dark";
-  return hass.states["sun.sun"]?.state === "above_horizon" ? "light" : "dark";
+  return hass?.states?.["sun.sun"]?.state === "above_horizon" ? "light" : "dark";
 }
 const DARK_BG = "#111318";
 const DEFAULT_ACCENT = "#ff9f43";
@@ -662,6 +815,206 @@ function darkPalette(th) {
   if (acct !== (th.vars.accent || DEFAULT_ACCENT)) p.acct = acct;
   return p;
 }
+
+// ----------------------------------------------------------------- skins
+
+// A holiday dresses the cards, not just the page: a faint pattern on every
+// card, an edge along its top (snow, lace, drips, a rainbow), an ornament in
+// a corner (holly, a cobweb, leaves, eggs), a frame in the theme's color, a
+// glow at the top of the page, and for Christmas candy-striped progress bars
+// and tab pill. It's all one stylesheet (Skin.sheet) that every card's shadow
+// root adopts, rebuilt from the palette when the theme or mode changes, so
+// light mode gets its own shades. Everything is background layers behind the
+// content: static (nothing to animate or re-lay out on the tablet), and faint
+// enough that text keeps its contrast. The drawings are inline SVG, so no
+// fonts or files to load.
+const alpha = (hex, a) => `rgba(${rgbOf(hex).join(",")},${a})`;
+const svgUrl = (w, h, body) =>
+  `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${body}</svg>`)}")`;
+const tf = (x, y, rot = 0, s = 1) => `transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${rot.toFixed(0)}) scale(${s.toFixed(2)})"`;
+const starPoints = (R, r) =>
+  Array.from({ length: 10 }, (_, i) => {
+    const a = (Math.PI / 5) * i - Math.PI / 2, d = i % 2 ? r : R;
+    return `${(Math.cos(a) * d).toFixed(2)},${(Math.sin(a) * d).toFixed(2)}`;
+  }).join(" ");
+// About 14px across at scale 1, centered on 0,0. The heart's tip is at 0,7.
+const HEART = "M0 -2.5C-1.8 -6 -7 -5.2 -7 -1.4C-7 2 -3 4.4 0 7C3 4.4 7 2 7 -1.4C7 -5.2 1.8 -6 0 -2.5Z";
+const SHAPE = {
+  heart: (x, y, c, rot, s) => `<path ${tf(x, y, rot, s)} fill="${c}" d="${HEART}"/>`,
+  star: (x, y, c, rot, s) => `<polygon ${tf(x, y, rot, s)} fill="${c}" points="${starPoints(7, 3)}"/>`,
+  flake: (x, y, c, rot, s) =>
+    `<g ${tf(x, y, rot, s)} stroke="${c}" stroke-width="1.4" stroke-linecap="round" fill="none">${[0, 60, 120]
+      .map((a) => `<path transform="rotate(${a})" d="M0 -7V7M-2.5 -5.5L0 -3.5L2.5 -5.5M-2.5 5.5L0 3.5L2.5 5.5"/>`).join("")}</g>`,
+  shamrock: (x, y, c, rot, s) =>
+    `<g ${tf(x, y, rot, s)} fill="${c}">${[0, 120, 240].map((a) => `<path transform="rotate(${a}) translate(0 -3.85) scale(.55)" d="${HEART}"/>`).join("")}<path d="M0 1Q1.5 5 4.5 8" stroke="${c}" stroke-width="1.5" fill="none"/></g>`,
+  leaf: (x, y, c, rot, s) => `<g ${tf(x, y, rot, s)}><path fill="${c}" d="M0 -9C6 -4 6 3 0 8C-6 3 -6 -4 0 -9Z"/><path d="M0 -6V11" stroke="${c}" stroke-width="1.2"/></g>`,
+  egg: (x, y, c, rot, s) =>
+    `<g ${tf(x, y, rot, s)}><ellipse rx="5" ry="6.5" fill="${c}"/><path d="M-4.8 -.5L-2.4 -2.2L0 -.5L2.4 -2.2L4.8 -.5" stroke="#ffffff" stroke-opacity=".75" stroke-width="1.2" fill="none"/></g>`,
+  bat: (x, y, c, rot, s) =>
+    `<path ${tf(x, y, rot, s)} fill="${c}" d="M0 -1C-1.5 -3 -4 -3 -5 -5C-5.2 -2.5 -7.5 -1.5 -10 -2C-8 0 -6.5 2 -3 1.5L0 3.5L3 1.5C6.5 2 8 0 10 -2C7.5 -1.5 5.2 -2.5 5 -5C4 -3 1.5 -3 0 -1Z"/>`,
+  bit: (x, y, c, rot, s) => `<rect ${tf(x, y, rot, s)} x="-1.6" y="-3.6" width="3.2" height="7.2" rx="1" fill="${c}"/>`,
+  dot: (x, y, c, rot, s) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(2.6 * s).toFixed(2)}" fill="${c}"/>`,
+};
+/** A square tile of `n` shapes scattered on a jittered grid (seeded, so it looks the same on every render), at opacity `op`. */
+function tile(size, n, op, seed, draw) {
+  let s = seed;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const k = Math.ceil(Math.sqrt(n)), cell = size / k;
+  let body = "";
+  for (let i = 0; i < n; i++) body += draw(((i % k) + 0.25 + rnd() * 0.5) * cell, (Math.floor(i / k) + 0.25 + rnd() * 0.5) * cell, i, rnd);
+  return svgUrl(size, size, `<g opacity="${op}">${body}</g>`);
+}
+// Edges, repeated along the top of a card.
+const EDGE = {
+  snow: (fill, stroke) =>
+    svgUrl(60, 14, `<path fill="${fill}"${stroke ? ` stroke="${stroke}" stroke-width="1"` : ""} d="M0 0H60V7C56 7 55 12 49 12S42 7 37 8S29 13 23 11S15 6 9 9S3 10 0 8Z"/>`),
+  lace: (c, op) => svgUrl(20, 11, `<g fill="${c}" opacity="${op}"><path d="M0 0H20V2A10 9 0 0 1 0 2Z"/><circle cx="10" cy="5" r="1.6" fill="#000" fill-opacity=".25"/></g>`),
+  drip: (c, op) =>
+    svgUrl(70, 18, `<path fill="${c}" opacity="${op}" d="M0 0H70V4C64 4 63 5 62 9C61 14 57 14 56 9C55 5 52 4 46 4C40 4 40 6 39 12C38 17 34 17 33 12C32 6 30 4 22 4C16 4 15 5 14 7C13 10 10 10 9 7C8 5 6 4 0 4Z"/>`),
+};
+// Corner ornaments.
+const ORN = {
+  holly: (leaf, berry) => {
+    const l = "M-16 0C-12 -3 -11 -7 -8 -5C-5 -8 -2 -9 0 -6C2 -9 5 -8 8 -5C11 -7 12 -3 16 0C12 3 11 7 8 5C5 8 2 9 0 6C-2 9 -5 8 -8 5C-11 7 -12 3 -16 0Z";
+    return svgUrl(60, 42, `<path fill="${leaf}" transform="translate(19 17) rotate(-28)" d="${l}"/><path fill="${leaf}" transform="translate(41 17) rotate(28)" d="${l}"/>
+      <g fill="${berry}"><circle cx="30" cy="26" r="4.5"/><circle cx="24.5" cy="30" r="4.2"/><circle cx="35.5" cy="30" r="4.2"/></g>
+      <g fill="#ffffff" fill-opacity=".55"><circle cx="28.6" cy="24.6" r="1.2"/><circle cx="23.2" cy="28.6" r="1.1"/><circle cx="34.2" cy="28.6" r="1.1"/></g>`);
+  },
+  // A web strung across the top-right corner, with its spider.
+  web: (c, op) => {
+    const W = 100, pt = (r, a) => [W - Math.cos(a) * r, Math.sin(a) * r];
+    const angs = Array.from({ length: 6 }, (_, i) => (i / 5) * (Math.PI / 2));
+    const f = (v) => v.toFixed(1);
+    let d = angs.map((a) => `M${W} 0L${pt(W, a).map(f).join(" ")}`).join("");
+    for (const r of [17, 34, 54, 76]) {
+      angs.forEach((a, i) => {
+        const [x, y] = pt(r, a);
+        if (!i) d += `M${f(x)} ${f(y)}`;
+        else d += `Q${pt(r * 0.8, (a + angs[i - 1]) / 2).map(f).join(" ")} ${f(x)} ${f(y)}`;
+      });
+    }
+    return svgUrl(W, W, `<g opacity="${op}" stroke="${c}" fill="none" stroke-width="1"><path d="${d}"/><path d="M58 0V60"/>
+      <path d="M52 58L55 62L52 67M64 58L61 62L64 67M51 62H65M53 70L56 66M63 70L60 66" stroke-width="1.3"/><ellipse cx="58" cy="64" rx="3.4" ry="4.4" fill="${c}"/></g>`);
+  },
+  leaves: (cs, op) =>
+    svgUrl(76, 56, `<g opacity="${op}">${SHAPE.leaf(54, 30, cs[0], -35, 1.9)}${SHAPE.leaf(34, 38, cs[1], 50, 1.6)}${SHAPE.leaf(60, 44, cs[2], 100, 1.4)}<circle cx="44" cy="46" r="3.5" fill="${cs[3]}"/></g>`),
+  nest: (op) =>
+    svgUrl(80, 46, `<g opacity="${op}">${SHAPE.egg(30, 30, "#f7a8c4", -14, 1.7)}${SHAPE.egg(50, 28, "#a8d2f7", 10, 1.9)}${SHAPE.egg(66, 33, "#ffe08a", 22, 1.5)}
+      <path fill="#7cc576" d="M0 46L6 32L10 42L16 28L20 41L26 31L30 43L36 30L40 42L46 29L50 41L56 31L60 42L66 30L70 41L76 32L80 46Z"/></g>`),
+};
+// A background layer: [image, position, size, repeat].
+const layer = {
+  edge: (colors, h) => [`linear-gradient(90deg, ${colors.join(", ")})`, "0 0", `100% ${h}px`, "no-repeat"],
+  strip: (img, w, h) => [img, "0 0", `${w}px ${h}px`, "repeat-x"],
+  pattern: (img, size) => [img, "0 0", `${size}px ${size}px`, "repeat"],
+  corner: (img, pos, size) => [img, pos, size, "no-repeat"],
+  css: (img) => [img, "0 0", "auto", "repeat"],
+};
+const PASTEL = ["#f7a8c4", "#ffe08a", "#a8e6c1", "#a8d2f7", "#cdb4f6"];
+// Per theme: (palette, light) => { layers (first on top), frame, glow, css }.
+const SKINS = {
+  newyear: (p, light) => ({
+    layers: [
+      layer.edge(["#b8913a", "#fff3c4", "#e9c46a", "#fff3c4", "#b8913a"], 3),
+      layer.pattern(tile(132, 16, light ? 0.45 : 0.24, 11, (x, y, i, r) =>
+        (i % 4 === 3 ? SHAPE.star : i % 2 ? SHAPE.dot : SHAPE.bit)(x, y, ["#e9c46a", "#c9ced9", "#f4a3c0", "#e9c46a"][i % 4], r() * 180, i % 4 === 3 ? 0.6 : 0.9)), 132),
+    ],
+    frame: alpha("#e9c46a", light ? 0.55 : 0.4),
+  }),
+  valentines: (p, light) => ({
+    layers: [
+      layer.strip(EDGE.lace(light ? "#f3a7bf" : "#ff9ab8", light ? 0.6 : 0.3), 20, 11),
+      layer.pattern(tile(120, 9, light ? 0.16 : 0.12, 5, (x, y, i, r) => SHAPE.heart(x, y, i % 2 ? p.accent : "#ff9ab8", (r() - 0.5) * 50, 0.6 + r() * 0.45)), 120),
+    ],
+  }),
+  stpatricks: (p, light) => ({
+    layers: [
+      layer.edge(["#e5484d", "#ff9f43", "#ffd54a", "#3ccf6e", "#4f8cff", "#a98bf0"], 4),
+      layer.pattern(tile(128, 9, light ? 0.18 : 0.12, 3, (x, y, i, r) =>
+        i % 4 === 3 ? SHAPE.dot(x, y, "#e9c46a", 0, 1.5) : SHAPE.shamrock(x, y, p.accent, (r() - 0.5) * 70, 0.8 + r() * 0.4)), 128),
+    ],
+  }),
+  easter: (p, light) => ({
+    layers: [
+      layer.corner(ORN.nest(light ? 0.85 : 0.5), "right 6px bottom 2px", "56px 32px"),
+      layer.edge(PASTEL, 4),
+      layer.pattern(tile(120, 9, light ? 0.32 : 0.14, 9, (x, y, i, r) => SHAPE.egg(x, y, PASTEL[i % 5], (r() - 0.5) * 40, 0.75 + r() * 0.3)), 120),
+    ],
+    frame: alpha("#cdb4f6", light ? 0.6 : 0.3),
+  }),
+  july4: (p, light) => ({
+    layers: [
+      layer.edge(["#e5484d 0 33%", "#f4f4f4 0 66%", "#4f8cff 0"], 4),
+      layer.pattern(tile(120, 9, light ? 0.2 : 0.13, 2, (x, y, i, r) =>
+        SHAPE.star(x, y, light ? (i % 2 ? "#e5484d" : "#4f8cff") : i % 3 ? "#ffffff" : "#e5484d", r() * 72, 0.55 + r() * 0.5)), 120),
+    ],
+  }),
+  halloween: (p, light) => ({
+    layers: [
+      layer.strip(EDGE.drip("#8e4fc4", light ? 0.45 : 0.75), 47, 12),
+      layer.corner(ORN.web(light ? "#3a2d48" : "#ffffff", light ? 0.3 : 0.2), "right 0 top 0", "100px 100px"),
+      layer.pattern(tile(150, 6, light ? 0.12 : 0.16, 13, (x, y, i, r) => SHAPE.bat(x, y, light ? "#3a2d48" : "#a86cf0", (r() - 0.5) * 30, 0.9 + r() * 0.5)), 150),
+    ],
+    frame: alpha("#8e4fc4", light ? 0.5 : 0.5),
+    glow: "#8e4fc4",
+  }),
+  thanksgiving: (p, light) => {
+    const a = alpha(p.accent, light ? 0.07 : 0.06), g = alpha("#e9c46a", light ? 0.12 : 0.07);
+    return {
+      layers: [
+        layer.corner(ORN.leaves(["#e08a3c", "#c0392b", "#e9c46a", "#8d5524"], light ? 0.75 : 0.45), "right 4px bottom 2px", "54px 40px"),
+        layer.css(`repeating-linear-gradient(0deg, transparent 0 22px, ${g} 22px 23px, transparent 23px 36px)`),
+        layer.css(`repeating-linear-gradient(90deg, transparent 0 22px, ${g} 22px 23px, transparent 23px 36px)`),
+        layer.css(`repeating-linear-gradient(0deg, ${a} 0 11px, transparent 11px 36px)`),
+        layer.css(`repeating-linear-gradient(90deg, ${a} 0 11px, transparent 11px 36px)`),
+      ],
+    };
+  },
+  christmas: (p, light) => ({
+    layers: [
+      layer.corner(ORN.holly(light ? "#2f9e57" : alpha("#2f9e57", 0.75), light ? "#e5484d" : alpha("#e5484d", 0.85)), "right 8px bottom 4px", "40px 28px"),
+      layer.strip(EDGE.snow(light ? "#ffffff" : "#f4f8fb", light ? "#cfd9e2" : null), 60, 12),
+      layer.pattern(tile(130, 9, light ? 0.22 : 0.09, 4, (x, y, i, r) => SHAPE.flake(x, y, light ? "#8fb3c9" : "#ffffff", r() * 60, 0.7 + r() * 0.5)), 130),
+    ],
+    frame: alpha("#3fbf6a", 0.35),
+    glow: "#3fbf6a",
+    css: `
+      .rk .bar div, .wd .bar div { background-image:repeating-linear-gradient(-45deg, rgba(255,255,255,.5) 0 6px, transparent 6px 12px) !important; }
+      .pill { background-image:repeating-linear-gradient(-45deg, rgba(255,255,255,.22) 0 9px, transparent 9px 18px); }`,
+  }),
+};
+/** The skin stylesheet for a theme, or "" for the everyday look. */
+function skinCss(key, p, light) {
+  const make = SKINS[key];
+  if (!make) return "";
+  const s = make(p, light);
+  const L = s.layers || [];
+  const col = (i) => L.map((l) => l[i]).join(", ");
+  const surf = L.length ? `background-image:${col(0)}; background-position:${col(1)}; background-size:${col(2)}; background-repeat:${col(3)};` : "";
+  return `
+    .card, .rk, .rc, .ad, .wrap > .sh { ${surf} box-shadow:var(--shadow), inset 0 0 0 1.5px ${s.frame || alpha(p.accent, light ? 0.45 : 0.3)}; }
+    :host(kitchen-pages-card) > .wrap { background-image:radial-gradient(130% 55% at 50% -14%, ${alpha(s.glow || p.accent, light ? 0.16 : 0.2)}, transparent 72%); background-repeat:no-repeat; }
+    .h { color:var(--acct); }
+    ${s.css || ""}`;
+}
+/** One stylesheet every card's shadow root adopts, swapped in place when the theme changes. */
+const Skin = {
+  sheet: (() => {
+    try {
+      return new CSSStyleSheet();
+    } catch {
+      return null; // no constructable stylesheets: the cards just stay plain
+    }
+  })(),
+  adopt(root) {
+    if (this.sheet && root && !root.adoptedStyleSheets.includes(this.sheet)) root.adoptedStyleSheets = [...root.adoptedStyleSheets, this.sheet];
+  },
+  set(css) {
+    if (!this.sheet || css === this._css) return;
+    this._css = css;
+    this.sheet.replaceSync(css);
+  },
+};
 
 // The HA Companion app paints Android's status bar from the page's
 // --app-header-background-color and the navigation bar (and the window behind
@@ -925,7 +1278,7 @@ const SHEET_CSS = `
   .acts .del { color:var(--danger); }
   .acts .del.arm { background:#c62828; color:#fff; }
   .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
-  .grid button { background:var(--card2); border-radius:16px; padding:16px 10px; text-align:center; font-size:15px; }
+  .grid button { background:var(--card2); border-radius:16px; padding:16px 10px; text-align:center; font-size:15px; box-shadow:inset 0 -4px 0 var(--sw, transparent); }
   .grid button span { display:block; font-size:34px; margin-bottom:6px; }
   .grid button.on { outline:3px solid var(--accent); }
   .seg3 { display:flex; gap:6px; background:var(--card2); border-radius:16px; padding:5px; }
@@ -962,6 +1315,7 @@ function openSheet({ render, onAction, onInput }) {
   const host = document.createElement("div");
   host.style.cssText = "position:fixed;inset:0;z-index:9500";
   const root = host.attachShadow({ mode: "open" });
+  Skin.adopt(root);
   root.innerHTML = `<style>${BASE_CSS}${MOTION_CSS}${SHEET_CSS}</style><div class="wrap"><div class="bd" data-action="cancel"></div><div class="sh"></div></div>`;
   const sh = root.querySelector(".sh");
   const sheet = {
@@ -1071,12 +1425,17 @@ function routineEditor(hass, { member: who, routine }) {
 function themePicker(hass) {
   const latest = () => Theme._hass || hass;
   const wall = isWall();
-  const pick = (entity, option) => {
+  // The wall display sets the input_selects; anyone else sets their own (Prefs).
+  const pick = (kind, option) => {
     const h = latest();
-    if (wall) h.callService("input_select", "select_option", { entity_id: entity, option });
-    else Local.set(entity === THEME_ENTITY ? Local.THEME : Local.MODE, option);
+    if (!wall) {
+      Prefs.update(h, { [kind]: option });
+      return Theme.apply(h);
+    }
+    const entity = kind === "theme" ? THEME_ENTITY : MODE_ENTITY;
+    h.callService("input_select", "select_option", { entity_id: entity, option });
     // Repaint now even if HA is slow to answer.
-    if (entity === THEME_ENTITY) Theme.key = null;
+    if (kind === "theme") Theme.key = null;
     else Theme.mode = null;
     Theme.apply({ ...h, states: { ...h.states, [entity]: { ...h.states[entity], state: option } } });
   };
@@ -1085,27 +1444,21 @@ function themePicker(hass) {
       const cur = Theme.key;
       const opts = [["default", DEFAULT_THEME], ...Object.entries(THEMES)];
       const h = latest();
-      const ownMode = wall ? null : Local.get(Local.MODE);
-      const ms = ownMode || h.states[MODE_ENTITY]?.state;
+      const ms = pickedMode(h);
       const mode = MODES.map((m) => `<button class="${ms === m.key ? "on" : ""}" data-action="mode" data-key="${m.key}">${m.icon} ${m.label}</button>`).join("");
-      const menu = "";
+      const who = h.user?.name ? esc(h.user.name) : "you";
       return `<div class="tt">🎨 Display theme</div><div class="grid">${opts
-        .map(([k, t]) => `<button class="${cur === k ? "on" : ""}" data-action="pick" data-key="${k}"><span>${t.emoji}</span>${esc(t.name)}</button>`)
-        .join("")}</div><div class="hint" style="margin-top:12px">Holiday themes also offer themselves on the Home tab when one is coming up, and switch off a few days after.</div>
-        ${h.states[MODE_ENTITY] ? `<div class="lb">Dark or light</div><div class="seg3">${mode}</div>
-        <div class="hint">${ms === "auto" ? `Auto is dark from sunset to sunrise (${Theme.mode} now).` : "Auto follows the sun: dark from sunset to sunrise."}</div>` : ""}
-        <div class="hint">${wall ? "This sets the kitchen display and its screensaver." : "These only change this device."}</div>
-        <div class="acts">${menu}${!wall && Local.any() ? `<button class="menu" data-action="follow">Same as kitchen display</button>` : ""}<button class="go" data-action="cancel">Done</button></div>`;
+        .map(([k, t]) => `<button class="${cur === k ? "on" : ""}" data-action="pick" data-key="${k}" style="--sw:${t.vars.accent || DEFAULT_ACCENT}"><span>${t.emoji}</span>${esc(t.name)}</button>`)
+        .join("")}</div><div class="hint" style="margin-top:12px">${wall ? "Holiday themes also offer themselves on the Home tab when one is coming up, and" : "Holiday themes"} switch back to Everyday a few days after the holiday.</div>
+        ${wall && !h.states[MODE_ENTITY] ? "" : `<div class="lb">Dark or light</div><div class="seg3">${mode}</div>
+        <div class="hint">${ms === "auto" ? `Auto is dark from sunset to sunrise (${Theme.mode} now).` : "Auto follows the sun: dark from sunset to sunrise."}</div>`}
+        <div class="hint">${wall ? "This is the kitchen display's look, and its screensaver's. Everyone else's screens keep their own." : `Saved for ${who}, on every device you sign in on. Nobody else's screen changes, the kitchen display included.`}</div>
+        <div class="acts"><button class="go" data-action="cancel">Done</button></div>`;
     },
     onAction(a, d, s) {
-      if (a === "pick") pick(THEME_ENTITY, d.key);
-      else if (a === "mode") pick(MODE_ENTITY, d.key);
-      else if (a === "follow") {
-        Local.set(Local.THEME, null);
-        Local.set(Local.MODE, null);
-        Theme.key = null;
-        Theme.apply(latest());
-      } else if (a === "ha-menu") return KM.go(KM.menuUrl());
+      if (a === "pick") pick("theme", d.key);
+      else if (a === "mode") pick("mode", d.key);
+      else if (a === "ha-menu") return KM.go(KM.menuUrl());
       else return;
       s.update();
     },
@@ -1241,6 +1594,7 @@ class KitchenCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    Skin.adopt(this.shadowRoot);
     this._raf = null;
     this.shadowRoot.addEventListener("click", (e) => this._click(e));
     this.shadowRoot.addEventListener("pointerdown", (e) => {
@@ -2724,6 +3078,7 @@ class PagesCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    Skin.adopt(this.shadowRoot);
     this._built = {};
     this._touched = Date.now();
   }
@@ -2766,6 +3121,16 @@ class PagesCard extends HTMLElement {
     .garland span { animation:gsw 3.2s ease-in-out infinite alternate; transform-origin:50% 0; }
     .garland span:nth-child(odd) { animation-delay:-1.6s; }
     @keyframes gsw { from { transform:rotate(-9deg); } to { transform:rotate(9deg); } }
+    .garland.lights, .garland.bunting { align-self:stretch; align-items:flex-start; opacity:1; background:linear-gradient(var(--sub), var(--sub)) 0 7px / 100% 1px no-repeat; }
+    .garland.lights i { position:relative; width:9px; height:13px; margin-top:10px; border-radius:50% 50% 46% 46% / 40% 40% 60% 60%;
+      background:var(--c); box-shadow:0 0 10px 2px var(--c); animation:glow 2.6s ease-in-out var(--d) infinite alternate; }
+    .garland.lights i:nth-child(even) { margin-top:13px; }
+    .garland.lights i::before { content:""; position:absolute; left:2px; top:-4px; width:5px; height:5px; border-radius:1px; background:var(--sub); }
+    @keyframes glow { from { opacity:1; } to { opacity:.35; } }
+    .garland.bunting { justify-content:space-between; }
+    .garland.bunting i { width:20px; height:22px; margin-top:7px; background:var(--c); clip-path:polygon(0 0,100% 0,50% 100%);
+      transform-origin:50% 0; animation:gsw 3.2s ease-in-out infinite alternate; }
+    .garland.bunting i:nth-child(odd) { animation-delay:-1.6s; }
     .bar { display:flex; gap:8px; align-items:center; position:relative; padding:0 2px; }
     .tabs { display:flex; gap:8px; position:relative; flex-wrap:wrap; }
     .pill { position:absolute; left:0; top:0; height:38px; border-radius:20px; background:var(--accent); transition:transform .28s cubic-bezier(.3,.9,.3,1.1), width .28s, background-color .4s; }
@@ -2809,7 +3174,12 @@ class PagesCard extends HTMLElement {
     this.show(this._fromHash(), true);
     // The pill is measured off the tab's box, which moves when the web font arrives or the bar wraps.
     document.fonts?.ready.then(() => this._pill(true));
-    new ResizeObserver(() => this._pill(true)).observe(root.querySelector(".tabs"));
+    const ro = new ResizeObserver(() => {
+      this._pill(true);
+      this._garland();
+    });
+    ro.observe(root.querySelector(".tabs"));
+    ro.observe(root.querySelector(".garland"));
     // Build the other pages once the first one is up, so the first visit to a tab is as quick as the rest.
     setTimeout(() => (c.pages || []).forEach((p) => this._page(p.path)), 1200);
     clearInterval(this._idle);
@@ -2868,11 +3238,22 @@ class PagesCard extends HTMLElement {
     pill.style.transform = `translate(${b.offsetLeft}px, ${b.offsetTop}px)`;
     if (instant) requestAnimationFrame(() => (pill.style.transition = ""));
   }
+  // Emoji swinging on the bar, or a string of lights or bunting as many as fit (redone when the bar's width changes).
   _garland() {
     const g = this.shadowRoot.querySelector(".garland");
     if (!g) return;
-    const t = Theme.current();
-    g.innerHTML = t.garland && !REDUCED() ? t.garland.split(" ").map((x) => `<span>${x}</span>`).join("") : "";
+    const t = Theme.current().garland;
+    const kind = !t || REDUCED() ? "" : typeof t === "string" ? "emoji" : t.lights ? "lights" : "bunting";
+    const n = kind === "lights" ? Math.max(3, Math.floor((g.clientWidth || 400) / 30)) : kind === "bunting" ? Math.max(3, Math.floor((g.clientWidth || 400) / 34)) : 0;
+    const sig = `${Theme.key}|${kind}|${n}`;
+    if (sig === this._gSig) return;
+    this._gSig = sig;
+    g.className = `garland${kind === "emoji" || !kind ? "" : ` ${kind}`}`;
+    if (kind === "emoji") g.innerHTML = t.split(" ").map((x) => `<span>${x}</span>`).join("");
+    else if (kind) {
+      const cs = t.lights || t.bunting;
+      g.innerHTML = Array.from({ length: n }, (_, i) => `<i style="--c:${cs[i % cs.length]};--d:${(-((i * 0.83) % 2.6)).toFixed(2)}s"></i>`).join("");
+    } else g.innerHTML = "";
   }
   set hass(h) {
     this._hass = h;
@@ -2897,7 +3278,7 @@ const answeredTokens = (v) => String(v || "").split(",").filter((x) => /^[a-z0-9
 /** The holiday offer to show now, or null: in a holiday's window, its theme off, not answered yet. */
 function holidayOffer(hass) {
   const h = holidayNow();
-  if (!isWall()) return null; // the offer sets the house theme, so only the wall display asks
+  if (!isWall()) return null; // the offer sets the wall display's theme, so only it asks
   const s = hass.states[THEME_ENTITY];
   const ans = hass.states[THEME_ANSWERED];
   if (!h || !s || !ans || s.state === h.key) return null;

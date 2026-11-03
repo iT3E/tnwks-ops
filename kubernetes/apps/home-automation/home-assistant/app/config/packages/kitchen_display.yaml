@@ -1,13 +1,14 @@
 ---
-# Kitchen display settings the whole house shares (every screen showing the
-# Kitchen dashboard follows these). See config/www/tnwks-kitchen/kitchen-cards.js
-# ("themes").
+# The wall display's own settings: only the kitchen tablet and its screensaver
+# follow these. Everyone else's theme and mode are kept with their HA user
+# (frontend user data), so the wall display's pick never changes their
+# screens. See config/www/tnwks-kitchen/kitchen-cards.js ("themes").
 #
-# kitchen_theme: the display's look. "default" is the everyday dark theme;
-# the rest are holidays. The Home tab offers each holiday's theme in the days
-# before it, the 🎨 button next to the tabs picks one any time, and a holiday
-# theme switches itself back to default in the week after its holiday.
-# No `initial`, so the choice survives restarts.
+# kitchen_theme: the wall display's look. "default" is the everyday dark
+# theme; the rest are holidays. Its Home tab offers each holiday's theme in
+# the days before it, the 🎨 button next to the tabs picks one any time, and
+# a holiday theme switches itself back to default in the week after its
+# holiday. No `initial`, so the choice survives restarts.
 #
 # kitchen_mode: dark, light or auto (dark from sunset to sunrise, by sun.sun).
 # Light keeps each theme's accent on light cards. The Android status and

@@ -53,7 +53,8 @@ This page does those things and keeps both credentials server-side.
   - the kids' stars, `counter.stars_kid1` and `counter.stars_kid2`, labelled
     with each counter's friendly name (the names live in Home Assistant, not
     here).
-- **Theme:** `input_select.kitchen_theme` picks the palette, the same
+- **Theme:** `input_select.kitchen_theme` (the wall display's own pick;
+  other people's are per user and don't reach it) picks the palette, the same
   palettes, holiday dates and windows as the Kitchen dashboard
   (`kitchen-cards.js` in the Home Assistant config; keep the two in step
   when a theme is added). A theme past its holiday shows as the everyday one;

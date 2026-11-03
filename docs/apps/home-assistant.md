@@ -421,13 +421,18 @@ shortcuts, so Chrome offers no PWA install there, and Chrome would take the
 screen from the kiosk). Elsewhere links leave HA, so an installed Mealie PWA
 on a phone catches them.
 
-Theme and mode are per device. The wall display (the HA app that has shown
-the dashboard in kiosk mode, localStorage `tnwks-kitchen-kiosk`) sets the house
-choice in `input_select.kitchen_theme` / `input_select.kitchen_mode`, which its
-screensaver follows. Any other phone or browser follows that until someone
-picks a theme or mode on it; that choice stays on that device (localStorage
-`tnwks-kitchen-theme` / `tnwks-kitchen-mode`), and **Same as kitchen display**
-in the 🎨 sheet drops it. Only the wall display shows the holiday offer.
+Theme and mode belong to whoever picks them, and nobody else's screen
+changes. The wall display (the HA app that has shown the dashboard in kiosk
+mode, localStorage `tnwks-kitchen-kiosk`) keeps its own in
+`input_select.kitchen_theme` / `input_select.kitchen_mode`, which its
+screensaver reads too. Everyone else's are kept with their HA user, in HA's
+frontend user data (key `tnwks-kitchen-display`, the per-user store
+`frontend/set_user_data` writes), so a pick on a phone follows that person to
+every device they sign in on. Someone who never picked gets Everyday in auto
+mode, whatever the wall display wears. Picks a device made before 1.11.0 (localStorage
+`tnwks-kitchen-theme` / `tnwks-kitchen-mode`) move to that person's user
+data the first time the dashboard loads there, unless they already have one.
+Only the wall display shows the holiday offer.
 
 Weather (top right of the header): `weather.forecast_home` (met.no) only
 refreshes about hourly, so the temperature shown is interpolated from the
@@ -436,9 +441,9 @@ from the daily entry dated today. Tap it for details: humidity, wind, UV,
 clouds, dew point, pressure, sunrise and sunset, the next 12 hours and the
 next days.
 
-Dark or light: `input_select.kitchen_mode` (`auto`, `dark` or `light`, in
-`packages/kitchen_display.yaml`, set from the 🎨 sheet) applies to every
-screen. `auto` is dark while `sun.sun` is below the horizon. Dark is the
+Dark or light: `auto`, `dark` or `light`, set from the 🎨 sheet (the wall
+display's in `input_select.kitchen_mode`, in `packages/kitchen_display.yaml`;
+everyone else's with their user, as above). `auto` is dark while `sun.sun` is below the horizon. Dark is the
 original look. Light keeps each theme's accent and derives the rest from it
 (near-white cards on a faintly tinted page; the everyday theme stays neutral
 gray), and darkens the accent and the "done" green where they're text until
@@ -464,14 +469,24 @@ minutes untouched. Tabs: Home, Calendar (Family, Week, Month and List, with
 paging and a person filter), Routines, Meals (a week grid, one column per
 Mealie meal calendar) and Lists (several to-do lists plus sticky notes).
 
-Themes: `input_select.kitchen_theme` (`packages/kitchen_display.yaml`) picks
-the look for every screen at once: `default` or a holiday (New Year,
-Valentine's, St. Patrick's, Easter, 4th of July, Halloween, Thanksgiving,
-Christmas), each with its own colors, a garland next to the tabs and slow
-falling or drifting emoji. While a holiday is coming up, Home's greeting line
-offers its theme, once per holiday and year (answers are kept in
-`input_text.kitchen_theme_answered`). 🎨 next to the tabs picks a theme any
-time. A holiday theme switches back to `default` in the week after its
+Themes: `default` or a holiday (New Year, Valentine's, St. Patrick's, Easter,
+4th of July, Halloween, Thanksgiving, Christmas). A holiday has its own
+colors and dresses the cards too: a faint pattern on every card (snowflakes,
+bats, hearts, shamrocks, eggs, stars, confetti, plaid), an edge along the top
+(snow, purple drips, lace, a rainbow or flag stripe), a corner ornament on
+some (holly, a cobweb with its spider, leaves, eggs in grass), a frame and a
+glow at the top of the page, and for Christmas candy-striped progress bars
+and tab pill. That's one stylesheet every card adopts (`SKINS` in
+kitchen-cards.js), all static background layers drawn as inline SVG, so
+nothing loads and nothing animates on the cards. Around them: a garland next
+to the tabs (string lights for Christmas and Halloween, bunting for the 4th),
+slow falling or drifting emoji, taps that pop the holiday's emoji, confetti
+in its colors, and every two or three minutes a character crossing the
+screen (bats, a ghost or Santa peeking up, a turkey or a spider walking, a
+bunny hopping, fireworks). While a holiday is coming up, the wall display's
+greeting line offers its theme, once per holiday and year (answers are kept
+in `input_text.kitchen_theme_answered`). 🎨 next to the tabs picks a theme
+any time. A holiday theme switches back to `default` in the week after its
 holiday. Animations respect the device's reduced-motion setting.
 
 Calendars, the meal plan and extra to-do lists are integrations, so they're
