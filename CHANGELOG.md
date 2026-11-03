@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.81.0 - 2026-11-03
+
+### Added
+
+* firefly: Firefly III on the WSL cluster (internal ingress only, pinned 6.5.9, Postgres over TLS on its own role), Passport keypair and app secrets in SOPS, daily cron as a CronJob, attachments in kopiur, docs/apps/firefly.md.
+
 ## v1.80.0 - 2026-11-03
 
 ### Added
