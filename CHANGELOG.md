@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.108.0 - 2026-11-03
+
+### Added
+
+* Home Assistant: schedule card on the Security Alerts view (on/off, day-of-week buttons, time pickers); the weekday person alerts take their days from it
+
 ## v1.107.2 - 2026-11-03
 
 ### Fixed
