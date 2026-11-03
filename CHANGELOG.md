@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.94.1 - 2026-11-03
+
+### Fixed
+
+* firefly: the daily cron runs at 03:00 Pacific (Firefly's own time zone) instead of 03:00 UTC, the evening before.
+
 ## v1.94.0 - 2026-11-03
 
 ### Changed
