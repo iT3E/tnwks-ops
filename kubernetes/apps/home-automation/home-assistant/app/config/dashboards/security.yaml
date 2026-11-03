@@ -149,7 +149,7 @@ views:
             entity: input_datetime.night_person_alerts_end
           - type: markdown
             content: >-
-              Every phone, critical. Settings here survive restarts and
+              Both phones, critical. Settings here survive restarts and
               config updates.
       - type: grid
         cards:
