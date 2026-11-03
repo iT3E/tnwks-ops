@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.83.0 - 2026-11-03
+
+### Changed
+
+* oauth2-proxy: read groups from `cognito:groups`, so ingresses can require a Cognito group with `allowed_groups`.
+
 ## v1.82.1 - 2026-11-03
 
 ### Fixed
