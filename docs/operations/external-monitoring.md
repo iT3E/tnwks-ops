@@ -53,13 +53,15 @@ Integrations and API keys can't be created through the API.
    - `environments/prod/mikrotik/secrets.sops.yaml`: `healthchecks_ping_key`
    - `kubernetes/apps/monitoring/alertmanager/app/secrets.sops.yaml`:
      `healthchecks_watchdog_url: https://hc-ping.com/<ping key>/homelab-wsl`
-4. Create the `tnwks-healthchecks-prod` workspace (execution mode local) to
-   match `modules/tfc/workspaces.tf`, then `task healthchecks:init` and
+4. The `tnwks-healthchecks-prod` workspace (execution mode local) was
+   created through the TFC API on 2026-11-03, matching
+   `modules/tfc/workspaces.tf`; `aws-init/imports.tf` adopts it on the next
+   `aws-init` apply. Then `task healthchecks:init` and
    `task healthchecks:apply`.
 5. Merge. Flux rolls out the Alertmanager change (Reloader restarts it on the
-   ConfigMap and Secret), and `task mikrotik:apply` (or the MikroTik CI apply)
-   adds the router scheduler. Both checks leave the "new" state on their first
-   ping.
+   ConfigMap and Secret), and `mikrotik-apply.yaml` adds the router scheduler
+   (`task mikrotik:apply` by hand if CI is down). Both checks leave the "new"
+   state on their first ping.
 
 ## Testing
 
