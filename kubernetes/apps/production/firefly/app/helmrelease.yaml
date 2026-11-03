@@ -31,6 +31,9 @@ spec:
         # Secret files group-readable by it at defaultMode 0440.
         fsGroup: 33
         fsGroupChangePolicy: OnRootMismatch
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
     controllers:
       firefly:
         containers:
@@ -44,6 +47,10 @@ spec:
               # ended up unmanaged in a container writable layer.
               # Bump this only as its own PR, never alongside a platform change.
               tag: version-6.5.9
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
             env:
               - name: TZ
                 value: "${TIMEZONE}"
@@ -167,6 +174,11 @@ spec:
             image:
               repository: curlimages/curl
               tag: 8.11.1
+            securityContext:
+              readOnlyRootFilesystem: true
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
             # --fail so a non-2xx is a failed Job instead of a silent success.
             #
             # $(STATIC_CRON_TOKEN) is Kubernetes env expansion, done by the
