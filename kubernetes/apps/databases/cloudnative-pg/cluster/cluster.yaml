@@ -35,8 +35,9 @@ spec:
         login: true
         passwordSecret:
           name: postgres-app
-        inRoles:
-          - plausible
+        # Members only of roles whose app is mid-migration. Empty: plausible
+        # connects as its own role (removing it here revoked app's access).
+        inRoles: []
       - name: plausible
         ensure: present
         login: true

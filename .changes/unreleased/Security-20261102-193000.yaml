@@ -1,0 +1,3 @@
+kind: Security
+body: 'cloudnative-pg: the shared app role loses access to the plausible database now that Plausible uses its own role.'
+time: 2026-11-02T19:30:00-08:00
