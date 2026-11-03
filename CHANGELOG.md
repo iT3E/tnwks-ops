@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.96.0 - 2026-11-03
+
+### Added
+
+* finance-sync 0.1.3: FinanceBankConnectionBroken (one per broken bank connection, reminded daily) and FinanceRefreshTimeout alerts, pushed by the sync to Alertmanager in place of the weekly log grep.
+
 ## v1.95.0 - 2026-11-03
 
 ### Added
