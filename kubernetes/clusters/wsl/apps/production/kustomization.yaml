@@ -32,6 +32,11 @@ resources:
   # its own SOPS secret. WSL-only, same as sites. Its name is a privacy
   # exception (.github/privacy-allow).
   - ../../../../apps/production/raines-things-api/ks.yaml # privacy:allow
+  # firefly: Firefly III, the household ledger, migrated off the bare Docker
+  # stack on this same WSL host 2026-11-02. WSL-only: the finance agent's cron
+  # scripts run on this host and talk to it over the internal ingress.
+  # Internal-only exposure (nginx-internal), no public hostname.
+  - ../../../../apps/production/firefly/ks.yaml
   # frigate: WSL-specific Flux Kustomization with a patch to replace the
   # NFD coral nodeSelector with a hostname pin to homelab-wsl-worker-2.
   - ./frigate-ks.yaml

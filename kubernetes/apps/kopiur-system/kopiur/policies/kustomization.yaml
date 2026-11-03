@@ -8,3 +8,4 @@ resources:
   - ./mealie.yaml
   - ./unifi.yaml
   - ./changedetection.yaml
+  - ./firefly.yaml

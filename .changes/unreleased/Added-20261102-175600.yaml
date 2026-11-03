@@ -1,0 +1,3 @@
+kind: Added
+body: 'firefly: Firefly III on the WSL cluster (internal ingress only, pinned 6.5.9, Postgres over TLS on its own role), Passport keypair and app secrets in SOPS, daily cron as a CronJob, attachments in kopiur, docs/apps/firefly.md.'
+time: 2026-11-02T17:56:00-08:00

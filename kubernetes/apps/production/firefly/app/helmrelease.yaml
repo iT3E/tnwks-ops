@@ -1,0 +1,268 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app firefly
+spec:
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  interval: 30m
+  maxHistory: 2
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  values:
+    defaultPodOptions:
+      securityContext:
+        # The image runs as www-data (33). fsGroup makes the Passport key
+        # Secret files group-readable by it at defaultMode 0440.
+        fsGroup: 33
+        fsGroupChangePolicy: OnRootMismatch
+    controllers:
+      firefly:
+        containers:
+          app:
+            image:
+              repository: fireflyiii/core
+              # PINNED, deliberately not `latest`. Firefly runs schema
+              # migrations on boot, so an image bump is a database migration.
+              # The Docker stack this replaced ran `latest` and had not been
+              # recreated since 2026-04-05, which is how its Passport keypair
+              # ended up unmanaged in a container writable layer.
+              # Bump this only as its own PR, never alongside a platform change.
+              tag: version-6.5.9
+            env:
+              - name: TZ
+                value: "${TIMEZONE}"
+              # Matches the Docker stack this replaces (APP_ENV=local). Moving
+              # to `production` is Firefly's documented value, but it is a
+              # behaviour change and does not belong in the platform move.
+              - name: APP_ENV
+                value: "local"
+              - name: APP_DEBUG
+                value: "false"
+              - name: APP_LOG_LEVEL
+                value: "notice"
+              # Firefly builds redirects and cookie scope from APP_URL. With a
+              # stale value behind an ingress it emits broken redirects and the
+              # UI login-loops. The old stack had http://localhost:8083.
+              - name: APP_URL
+                value: "https://firefly.internal.${SECRET_DOMAIN}"
+              - name: TRUSTED_PROXIES
+                value: "**"
+              - name: COOKIE_SECURE
+                value: "true"
+              - name: COOKIE_SAMESITE
+                value: "lax"
+              - name: DB_CONNECTION
+                value: "pgsql"
+              - name: DB_HOST
+                value: "postgres-rw.databases.svc.cluster.local"
+              - name: DB_PORT
+                value: "5432"
+              - name: DB_DATABASE
+                value: "firefly"
+              # TLS to Postgres, as the cnpg skill requires for app cutovers.
+              # Firefly's default is `prefer`, which silently falls back to
+              # plaintext.
+              - name: PGSQL_SSL_MODE
+                value: "require"
+              # Dedicated `firefly` role, not the shared `app` credential.
+              # The role's own Secret (postgres-firefly) lives in `databases`
+              # and a secretKeyRef cannot cross namespaces, so the same
+              # credential is repeated in this app's secrets.sops.yaml. Same
+              # pattern as grafana (monitoring/grafana/app/secret-database.sops.yaml).
+              - name: DB_USERNAME
+                valueFrom:
+                  secretKeyRef:
+                    name: firefly-secret
+                    key: DB_USERNAME
+              - name: DB_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: firefly-secret
+                    key: DB_PASSWORD
+              # APP_KEY and STATIC_CRON_TOKEN come from the out-of-band
+              # firefly-secret (06-firefly-secrets.yml), never from this repo.
+              - name: APP_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: firefly-secret
+                    key: APP_KEY
+              - name: STATIC_CRON_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: firefly-secret
+                    key: STATIC_CRON_TOKEN
+              - name: DEFAULT_LANGUAGE
+                value: "en_US"
+              - name: DEFAULT_LOCALE
+                value: "equal"
+              - name: SEND_TELEMETRY
+                value: "false"
+              - name: SEND_REGISTRATION_MAIL
+                value: "false"
+              # The only account is user 1 and the finance agent drives it by
+              # API. Nobody else should be able to create a login.
+              - name: ALLOW_REGISTRATION
+                value: "false"
+              - name: MAIL_MAILER
+                value: "log"
+            probes:
+              # /health is Firefly's own healthcheck route and skips the web
+              # middleware, so probes don't open a session on every hit.
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health
+                    port: 8080
+                  initialDelaySeconds: 60
+                  periodSeconds: 30
+                  failureThreshold: 6
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health
+                    port: 8080
+                  initialDelaySeconds: 30
+                  periodSeconds: 15
+                  failureThreshold: 6
+            resources:
+              requests:
+                cpu: 50m
+                memory: 256Mi
+              limits:
+                memory: 1Gi
+
+      # Replaces the `alpine` + crond sidecar from the compose stack, which
+      # held the cron token in its shell command line.
+      firefly-cron:
+        type: cronjob
+        cronjob:
+          # 03:00 UTC, i.e. 19:00/20:00 Pacific. Deliberately identical to the
+          # old crond, which ran in UTC (no TZ set in that container).
+          schedule: "0 3 * * *"
+          concurrencyPolicy: Forbid
+          successfulJobsHistory: 1
+          failedJobsHistory: 3
+        containers:
+          cron:
+            image:
+              repository: curlimages/curl
+              tag: 8.11.1
+            # --fail so a non-2xx is a failed Job instead of a silent success.
+            #
+            # $(STATIC_CRON_TOKEN) is Kubernetes env expansion, done by the
+            # kubelet at container start. Do NOT use the dollar-brace form: Flux
+            # postBuild substitution runs over this file and would replace an
+            # unknown dollar-brace variable with an empty string, turning the URL
+            # into /api/v1/cron/ and failing every night.
+            command:
+              - curl
+            args:
+              - --fail
+              - --silent
+              - --show-error
+              - --max-time
+              - "300"
+              - http://firefly.production.svc.cluster.local:8080/api/v1/cron/$(STATIC_CRON_TOKEN)
+            env:
+              - name: STATIC_CRON_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: firefly-secret
+                    key: STATIC_CRON_TOKEN
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 128Mi
+
+    service:
+      app:
+        controller: firefly
+        ports:
+          http:
+            port: 8080
+
+    persistence:
+      # Attachment uploads. Was the only Docker volume on the old stack
+      # (firefly_firefly_iii_upload), and it held 4K, so effectively empty.
+      upload:
+        enabled: true
+        accessMode: ReadWriteOnce
+        size: 5Gi
+        storageClass: ${STORAGE_CLASS_DEFAULT}
+        advancedMounts:
+          firefly:
+            app:
+              - path: /var/www/html/storage/upload
+
+      # The Passport RSA keypair that signs Firefly's API tokens.
+      #
+      # This is the whole reason the migration needed care. On the old stack
+      # these two files existed ONLY in the container's writable layer, so any
+      # container recreate regenerated them and silently 401'd every existing
+      # API token against a perfectly good database. Mounted here so the
+      # finance agent's token survives the move and pod restarts.
+      #
+      # subPath mounts, so they land as files without masking the rest of
+      # storage/, which Firefly writes to.
+      passport-keys:
+        type: secret
+        name: firefly-secret
+        # Read-only and group-readable by www-data via fsGroup. The image's
+        # entrypoint runs `chmod 600` on these paths; on a read-only mount
+        # that prints an error and carries on (the entrypoint has no errexit).
+        defaultMode: 0440
+        items:
+          - key: oauth-private.key
+            path: oauth-private.key
+          - key: oauth-public.key
+            path: oauth-public.key
+        advancedMounts:
+          firefly:
+            app:
+              - path: /var/www/html/storage/oauth-private.key
+                subPath: oauth-private.key
+                readOnly: true
+              - path: /var/www/html/storage/oauth-public.key
+                subPath: oauth-public.key
+                readOnly: true
+
+    ingress:
+      app:
+        className: nginx-internal
+        annotations:
+          hajimari.io/appName: Firefly III
+          hajimari.io/group: Home
+          hajimari.io/icon: mdi:cash-multiple
+        hosts:
+          - host: &host "firefly.internal.${SECRET_DOMAIN}"
+            paths:
+              - path: /
+                pathType: Prefix
+                service:
+                  identifier: app
+                  port: http
+        tls:
+          - hosts:
+              - *host
