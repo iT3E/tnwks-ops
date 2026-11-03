@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.11.0";
+const VERSION = "1.11.1";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -451,8 +451,9 @@ const FX = {
 // wall display's are input_select.kitchen_theme / kitchen_mode
 // (packages/kitchen_display.yaml), which its screensaver reads too; everyone
 // else's are kept with their HA user (Prefs), so they follow that person
-// from device to device and nobody else's screen changes. A holiday theme
-// switches itself off in the week after its holiday.
+// from device to device and nobody else's screen changes. Any theme can be
+// picked any time; one left on through its holiday switches itself off in the
+// week after (themeExpired).
 function easter(y) {
   const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
   const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
@@ -517,14 +518,19 @@ function holidayNow(now = new Date()) {
   }
   return null;
 }
-/** True for a holiday theme in the month after its holiday (time to switch it off). */
-function themeExpired(key, now = new Date()) {
+/**
+ * True when a holiday theme should come down by itself: it's the week after
+ * its holiday and it was picked before the holiday was over (left on from the
+ * holiday). Picked after, it's a choice and stays, any time of year.
+ * `pickedAt` is when it was picked (ms); unknown counts as before.
+ */
+function themeExpired(key, pickedAt, now = new Date()) {
   const th = THEMES[key];
   if (!th) return false;
   const t = startOfDay(now);
   return [t.getFullYear() - 1, t.getFullYear()].some((y) => {
     const end = addDays(th.day(y), th.after || 0);
-    return t > end && t - end <= 7 * MS_DAY;
+    return t > end && t - end <= 7 * MS_DAY && !(pickedAt >= addDays(end, 1).getTime());
   });
 }
 const THEME_ENTITY = "input_select.kitchen_theme";
@@ -620,15 +626,20 @@ const Theme = {
   apply(hass) {
     if (hass) this._hass = hass;
     const wall = isWall();
-    let key;
+    // When the theme was picked: the select's last change on the wall display
+    // (an HA restart resets that, which only ever keeps a theme up), the time
+    // saved with the pick for everyone else.
+    let key, pickedAt;
     if (wall) {
       const s = hass?.states?.[THEME_ENTITY];
       key = s && THEMES[s.state] ? s.state : "default";
+      pickedAt = Date.parse(s?.last_changed);
     } else {
       Prefs.watch(hass);
       key = THEMES[Prefs.value?.theme] ? Prefs.value.theme : "default";
+      pickedAt = Prefs.value?.at;
     }
-    if (key !== "default" && themeExpired(key)) {
+    if (key !== "default" && themeExpired(key, pickedAt)) {
       if (!this._expiring) {
         this._expiring = true;
         const done = () => (this._expiring = false);
@@ -1429,7 +1440,7 @@ function themePicker(hass) {
   const pick = (kind, option) => {
     const h = latest();
     if (!wall) {
-      Prefs.update(h, { [kind]: option });
+      Prefs.update(h, kind === "theme" ? { theme: option, at: Date.now() } : { mode: option });
       return Theme.apply(h);
     }
     const entity = kind === "theme" ? THEME_ENTITY : MODE_ENTITY;
@@ -1437,7 +1448,8 @@ function themePicker(hass) {
     // Repaint now even if HA is slow to answer.
     if (kind === "theme") Theme.key = null;
     else Theme.mode = null;
-    Theme.apply({ ...h, states: { ...h.states, [entity]: { ...h.states[entity], state: option } } });
+    const s = h.states[entity];
+    Theme.apply({ ...h, states: { ...h.states, [entity]: { ...s, state: option, last_changed: s?.state === option ? s.last_changed : new Date().toISOString() } } });
   };
   const sheet = openSheet({
     render() {
@@ -1449,7 +1461,7 @@ function themePicker(hass) {
       const who = h.user?.name ? esc(h.user.name) : "you";
       return `<div class="tt">🎨 Display theme</div><div class="grid">${opts
         .map(([k, t]) => `<button class="${cur === k ? "on" : ""}" data-action="pick" data-key="${k}" style="--sw:${t.vars.accent || DEFAULT_ACCENT}"><span>${t.emoji}</span>${esc(t.name)}</button>`)
-        .join("")}</div><div class="hint" style="margin-top:12px">${wall ? "Holiday themes also offer themselves on the Home tab when one is coming up, and" : "Holiday themes"} switch back to Everyday a few days after the holiday.</div>
+        .join("")}</div><div class="hint" style="margin-top:12px">Any theme, any time.${wall ? " Holiday themes also offer themselves on the Home tab when one is coming up." : ""} One left on through its holiday switches back to Everyday a few days after.</div>
         ${wall && !h.states[MODE_ENTITY] ? "" : `<div class="lb">Dark or light</div><div class="seg3">${mode}</div>
         <div class="hint">${ms === "auto" ? `Auto is dark from sunset to sunrise (${Theme.mode} now).` : "Auto follows the sun: dark from sunset to sunrise."}</div>`}
         <div class="hint">${wall ? "This is the kitchen display's look, and its screensaver's. Everyone else's screens keep their own." : `Saved for ${who}, on every device you sign in on. Nobody else's screen changes, the kitchen display included.`}</div>

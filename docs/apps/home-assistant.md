@@ -485,9 +485,13 @@ in its colors, and every two or three minutes a character crossing the
 screen (bats, a ghost or Santa peeking up, a turkey or a spider walking, a
 bunny hopping, fireworks). While a holiday is coming up, the wall display's
 greeting line offers its theme, once per holiday and year (answers are kept
-in `input_text.kitchen_theme_answered`). 🎨 next to the tabs picks a theme
-any time. A holiday theme switches back to `default` in the week after its
-holiday. Animations respect the device's reduced-motion setting.
+in `input_text.kitchen_theme_answered`). 🎨 next to the tabs picks any theme
+any time of year. A holiday theme that was on through its holiday switches
+back to `default` in the week after it; one picked after the holiday stays
+(the pick time is `last_changed` of the select on the wall display, which an
+HA restart resets, so a restart in that week can leave one up; for everyone
+else it's saved with the pick). The screensaver just follows the select.
+Animations respect the device's reduced-motion setting.
 
 Calendars, the meal plan and extra to-do lists are integrations, so they're
 UI-owned. The dashboard expects `calendar.family` (the family Google

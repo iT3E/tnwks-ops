@@ -6,9 +6,10 @@
 #
 # kitchen_theme: the wall display's look. "default" is the everyday dark
 # theme; the rest are holidays. Its Home tab offers each holiday's theme in
-# the days before it, the 🎨 button next to the tabs picks one any time, and
-# a holiday theme switches itself back to default in the week after its
-# holiday. No `initial`, so the choice survives restarts.
+# the days before it, the 🎨 button next to the tabs picks any theme any
+# time, and a holiday theme left on through its holiday switches itself back
+# to default in the week after (one picked after the holiday stays). No
+# `initial`, so the choice survives restarts.
 #
 # kitchen_mode: dark, light or auto (dark from sunset to sunrise, by sun.sun).
 # Light keeps each theme's accent on light cards. The Android status and

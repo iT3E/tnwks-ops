@@ -161,7 +161,7 @@
 
   // ------------------------------------------------- holiday themes
   // Same palettes, dates and windows as the Kitchen dashboard (kitchen-cards.js
-  // THEMES, holidayNow, themeExpired), so the screensaver matches the house theme.
+  // THEMES, holidayNow), so the screensaver matches the wall display's theme.
   function easter(y) {
     const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
     const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
@@ -203,19 +203,12 @@
     }
     return null;
   }
-  function themeExpired(key, now = new Date()) {
-    const th = THEMES[key];
-    if (!th) return false;
-    const t = startOfDay(now);
-    return [t.getFullYear() - 1, t.getFullYear()].some((y) => {
-      const end = addDays(th.day(y), th.after || 0);
-      return t > end && t - end <= 7 * MS_DAY;
-    });
-  }
   let themeKey = "default";
   function applyTheme(key) {
-    // The dashboard switches an expired theme back for the house; this read-only page just stops showing it.
-    const k = THEMES[key] && !themeExpired(key) ? key : "default";
+    // Whatever the wall display wears, any time of year: it's the dashboard's
+    // job to switch a holiday theme back after its holiday (and only one that
+    // was on through it); this read-only page just follows the select.
+    const k = THEMES[key] ? key : "default";
     if (k === themeKey) return;
     themeKey = k;
     const vars = { ...DEFAULT_VARS, ...(THEMES[k]?.vars || {}) };
