@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.109.0 - 2026-11-03
+
+### Removed
+
+* alertmanager: FinanceReconciliationDrift goes to the null receiver instead of Telegram. It mostly fired on timing (a balance moving before its transactions arrive) after the sync had already corrected it, so it gave nothing to act on.
+
 ## v1.108.1 - 2026-11-03
 
 ### Fixed
