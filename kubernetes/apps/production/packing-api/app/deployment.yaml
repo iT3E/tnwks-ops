@@ -30,7 +30,7 @@ spec:
       containers:
         - name: packing-api
           # A release, by digest: what runs only changes through git.
-          image: ghcr.io/it3e/tnwks-packing-api:0.2.0@sha256:0ecee9f4faabe617ba30b04d69f03e901196a0be039f2dfa9b6c7eaab787d550
+          image: ghcr.io/it3e/tnwks-packing-api:0.2.1@sha256:4980fac4c6ab7eb8fad38b488662fb2fd28ca79741a777954d3db709d7503876
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
