@@ -133,40 +133,45 @@ views:
     type: sections
     max_columns: 2
     sections:
+      # The schedule cards (switch, day buttons, time pickers) are ours:
+      # www/tnwks-security/alert-schedule-card.js.
       - type: grid
         cards:
           - type: heading
             heading: Night person alerts
-          - type: tile
-            entity: input_boolean.night_person_alerts
+          - type: custom:tnwks-alert-schedule-card
+            title: Night alerts
+            switch: input_boolean.night_person_alerts
+            start: input_datetime.night_person_alerts_start
+            end: input_datetime.night_person_alerts_end
+            every_day: Every night
           - type: tile
             entity: input_boolean.night_person_alerts_critical
+            name: Critical
           - type: tile
             entity: automation.security_person_at_night
-          - type: tile
-            entity: input_datetime.night_person_alerts_start
-          - type: tile
-            entity: input_datetime.night_person_alerts_end
+            name: Automation
           - type: markdown
             content: >-
-              Both phones, critical. Settings here survive restarts and
-              config updates.
+              Both phones. **Critical** rings through Do Not Disturb and
+              silent mode. Settings here survive restarts and config updates.
       - type: grid
         cards:
           - type: heading
             heading: Away and weekday alerts
           - type: tile
             entity: input_boolean.away_person_alerts
-          - type: tile
-            entity: input_boolean.weekday_person_alerts
-          - type: tile
-            entity: input_datetime.weekday_person_alerts_start
-          - type: tile
-            entity: input_datetime.weekday_person_alerts_end
+            name: Away alerts
           - type: tile
             entity: automation.security_person_while_away_or_weekday
             # The full alias gets cut off at this width.
             name: Automation
+          - type: custom:tnwks-alert-schedule-card
+            title: Weekday alerts
+            switch: input_boolean.weekday_person_alerts
+            days: input_text.weekday_person_alerts_days
+            start: input_datetime.weekday_person_alerts_start
+            end: input_datetime.weekday_person_alerts_end
           - type: markdown
             # Names come from the person entities, not from git.
             content: >-
@@ -174,8 +179,8 @@ views:
               {% set a2 = state_attr('person.adult2', 'friendly_name') %}
               Normal pushes outside the night window. **Away:** {{ a1 }}'s
               phone while {{ a1 }} is out, and {{ a2 }}'s too when you're
-              both out. **Weekday:** {{ a1 }}'s phone Mon-Wed between the
-              times above, home or not.
+              both out. **Weekday:** {{ a1 }}'s phone on the days and times
+              picked above, home or not.
       - type: grid
         cards:
           - type: heading

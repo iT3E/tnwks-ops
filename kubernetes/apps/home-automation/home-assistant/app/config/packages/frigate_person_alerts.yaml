@@ -14,8 +14,11 @@
 #   - Away ("Away person alerts" on, any time of day): a normal push to
 #     adult1's phone while adult1 is away from home, and to adult2's phone as
 #     well when both adults are away. adult2 away alone sends nothing.
-#   - Weekday ("Weekday person alerts" on, weekday_days between the weekday
-#     start and end times): a normal push to adult1's phone, home or not.
+#   - Weekday ("Weekday person alerts" on, on the days picked in
+#     input_text.weekday_person_alerts_days, between the weekday start and end
+#     times): a normal push to adult1's phone, home or not. A window that ends
+#     earlier than it starts runs overnight, and its after-midnight part
+#     belongs to the day it started on.
 #   A review that matches both away and weekday still sends one push per
 #   phone. Every push goes to named phones (the phones variable), so a new
 #   or renamed phone needs updating there. Other Companion app devices, like
@@ -91,6 +94,17 @@ input_datetime:
     name: Weekday alerts end
     has_date: false
     has_time: true
+
+# The weekday window's days: a comma list of three-letter days, Monday first
+# ("mon,tue,wed"), set by the day buttons of the Security dashboard's
+# schedule card (www/tnwks-security/alert-schedule-card.js). Restored across
+# restarts like the other helpers; nothing to restore means no days.
+input_text:
+  weekday_person_alerts_days:
+    name: Weekday alerts days
+    icon: mdi:calendar-week
+    max: 27
+    pattern: "^((mon|tue|wed|thu|fri|sat|sun)(,|$))*$"
 
 automation:
   - id: frigate_night_person_alert
@@ -286,8 +300,6 @@ automation:
         topic: frigate/reviews
     variables: &normal_variables
       <<: *alert_variables
-      # ISO weekdays (Mon = 1) for the weekday window: Mon-Wed.
-      weekday_days: [1, 2, 3]
       # The notify services to send to; empty means nobody should get it.
       # A person reading unknown/unavailable (just after a restart) doesn't
       # count as away.
@@ -299,9 +311,20 @@ automation:
         {% set t = now().strftime('%H:%M:%S') %}
         {% set start = states('input_datetime.weekday_person_alerts_start') %}
         {% set end = states('input_datetime.weekday_person_alerts_end') %}
+        {% set names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] %}
+        {% set days = states('input_text.weekday_person_alerts_days')
+                      | lower | replace(' ', '') %}
+        {% set days = days.split(',') %}
+        {% set today = names[now().weekday()] %}
+        {% set yesterday = names[(now().weekday() - 1) % 7] %}
+        {% if start <= end %}
+          {% set in_window = today in days and start <= t < end %}
+        {% else %}
+          {% set in_window = (today in days and t >= start)
+                             or (yesterday in days and t < end) %}
+        {% endif %}
         {% set weekday = is_state('input_boolean.weekday_person_alerts', 'on')
-           and now().isoweekday() in weekday_days
-           and start <= t < end %}
+           and in_window %}
         {% set r = [] %}
         {% if (away and a1_away) or weekday %}
           {% set r = r + [phones['person.adult1']] %}

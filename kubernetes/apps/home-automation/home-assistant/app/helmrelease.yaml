@@ -249,6 +249,15 @@ spec:
             app:
               - path: /config/www/tnwks-kitchen
                 readOnly: true
+      # The Security dashboard's own cards, /local/tnwks-security/.
+      www-security:
+        type: configMap
+        name: home-assistant-www-security
+        advancedMounts:
+          home-assistant:
+            app:
+              - path: /config/www/tnwks-security
+                readOnly: true
       scripts:
         type: configMap
         name: home-assistant-scripts

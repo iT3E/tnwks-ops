@@ -1,0 +1,3 @@
+kind: Added
+body: 'Home Assistant: schedule card on the Security Alerts view (on/off, day-of-week buttons, time pickers); the weekday person alerts take their days from it'
+time: 2026-11-03T02:40:00.000000-08:00
