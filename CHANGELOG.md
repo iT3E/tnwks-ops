@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.82.1 - 2026-11-03
+
+### Fixed
+
+* firefly: set a numeric runAsUser so runAsNonRoot can verify the image user; the pod was stuck in CreateContainerConfigError.
+
 ## v1.82.0 - 2026-11-03
 
 ### Changed
