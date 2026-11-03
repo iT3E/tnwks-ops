@@ -6,16 +6,19 @@
 #   simplifi: daily bank sync (Simplifi -> Firefly), then balance reconciliation.
 #   amazon:   weekly Amazon order enrichment of the matching Firefly transactions.
 #
-# Both run `selfcheck` first as an init container, so a missing state file,
+# Both run `selfcheck` first as an init container, so missing state,
 # missing credential or unreachable Firefly fails fast with a clear message.
 #
-# State lives on the finance-sync-state PVC, NOT in the image or git: the
-# Simplifi refresh token (rotated and rewritten on every run, so exactly one
-# copy may be in use), sync_state.json (what was already posted; losing it
-# re-posts transactions as duplicates), account_map.json and
-# category_map.json (contain people's account names), amazon_orders.db,
-# amazon_rules.json (built from household purchases) and the amazon-orders
-# session dir. The PVC is backed up by kopiur.
+# State lives in Postgres (database finance_sync, role finance_sync, login
+# in finance-sync-secret DATABASE_URL), NOT in the image or git: the
+# Simplifi refresh token (rotated on every run, committed right after each
+# refresh), what was already posted (losing it re-posts transactions as
+# duplicates), the account/category maps (contain people's account names),
+# the Amazon order history, the Amazon rules (built from household
+# purchases) and the amazon-orders session. Covered by the cluster's WAL
+# archiving, so restores are point-in-time. Until 2026-11-02 this was files
+# on the finance-sync-state PVC, which is kept unmounted as the rollback
+# copy (see docs/apps/finance-sync.md).
 #
 # Alerts: a failed Job fires the cluster's KubeJobFailed; prometheusrule.yaml
 # adds staleness; reconciliation drift is pushed by the sync to Alertmanager.
@@ -31,7 +34,6 @@
 #   cluster was down at the scheduled time.
 # - FIREFLY_URL is the in-cluster Service: no ingress or TLS hop, and /api is
 #   token auth anyway.
-# - persistence.state.retain: the PVC survives an uninstall.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -85,14 +87,13 @@ spec:
           selfcheck:
             image:
               repository: ghcr.io/it3e/tnwks-finance-sync
-              tag: 0.1.3@sha256:c16c7572df36ba764c2f114af2650e1c19a449249dfaf13c7bd5f99c43a20ced
+              tag: 0.2.0@sha256:663dfbbd0a474c22172adf8888971940ddaf4ef1f2a33d2429f1f41f39bf953e
             args:
             - selfcheck
             envFrom:
             - secretRef:
                 name: finance-sync-secret
             env:
-              STATE_DIR: /state
               FIREFLY_URL: http://firefly.production.svc.cluster.local:8080
               TZ: America/Los_Angeles
               ALERTMANAGER_URL: http://alertmanager.monitoring.svc.cluster.local:9093
@@ -110,14 +111,13 @@ spec:
           app:
             image:
               repository: ghcr.io/it3e/tnwks-finance-sync
-              tag: 0.1.3@sha256:c16c7572df36ba764c2f114af2650e1c19a449249dfaf13c7bd5f99c43a20ced
+              tag: 0.2.0@sha256:663dfbbd0a474c22172adf8888971940ddaf4ef1f2a33d2429f1f41f39bf953e
             args:
             - sync
             envFrom:
             - secretRef:
                 name: finance-sync-secret
             env:
-              STATE_DIR: /state
               FIREFLY_URL: http://firefly.production.svc.cluster.local:8080
               TZ: America/Los_Angeles
               ALERTMANAGER_URL: http://alertmanager.monitoring.svc.cluster.local:9093
@@ -153,14 +153,13 @@ spec:
           selfcheck:
             image:
               repository: ghcr.io/it3e/tnwks-finance-sync
-              tag: 0.1.3@sha256:c16c7572df36ba764c2f114af2650e1c19a449249dfaf13c7bd5f99c43a20ced
+              tag: 0.2.0@sha256:663dfbbd0a474c22172adf8888971940ddaf4ef1f2a33d2429f1f41f39bf953e
             args:
             - selfcheck
             envFrom:
             - secretRef:
                 name: finance-sync-secret
             env:
-              STATE_DIR: /state
               FIREFLY_URL: http://firefly.production.svc.cluster.local:8080
               TZ: America/Los_Angeles
               ALERTMANAGER_URL: http://alertmanager.monitoring.svc.cluster.local:9093
@@ -178,14 +177,13 @@ spec:
           app:
             image:
               repository: ghcr.io/it3e/tnwks-finance-sync
-              tag: 0.1.3@sha256:c16c7572df36ba764c2f114af2650e1c19a449249dfaf13c7bd5f99c43a20ced
+              tag: 0.2.0@sha256:663dfbbd0a474c22172adf8888971940ddaf4ef1f2a33d2429f1f41f39bf953e
             args:
             - amazon-enrich
             envFrom:
             - secretRef:
                 name: finance-sync-secret
             env:
-              STATE_DIR: /state
               FIREFLY_URL: http://firefly.production.svc.cluster.local:8080
               TZ: America/Los_Angeles
               ALERTMANAGER_URL: http://alertmanager.monitoring.svc.cluster.local:9093
@@ -206,15 +204,6 @@ spec:
               limits:
                 memory: 1Gi
     persistence:
-      state:
-        enabled: true
-        type: persistentVolumeClaim
-        accessMode: ReadWriteOnce
-        size: 1Gi
-        storageClass: ${STORAGE_CLASS_DEFAULT}
-        retain: true
-        globalMounts:
-        - path: /state
       tmp:
         type: emptyDir
         globalMounts:

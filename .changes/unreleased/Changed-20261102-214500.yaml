@@ -1,0 +1,3 @@
+kind: Changed
+body: "finance-sync 0.2.0: state moved from the PVC into its own Postgres database (transactional writes, point-in-time restore); the PVC is kept unmounted as the rollback copy."
+time: 2026-11-02T21:45:00-08:00
