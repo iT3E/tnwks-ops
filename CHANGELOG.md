@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.105.0 - 2026-11-03
+
+### Added
+
+* Home Assistant: away and weekday person alerts (normal push to named phones), and the Security dashboard alert settings now survive restarts and deploys
+
 ## v1.104.0 - 2026-11-03
 
 ### Changed
