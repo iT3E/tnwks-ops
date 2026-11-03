@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.86.0 - 2026-11-03
+
+### Changed
+
+* cloudnative-pg: plausible gets its own managed role and owns its database; a one-time Job moves its objects off the shared app role.
+
 ## v1.85.0 - 2026-11-03
 
 ### Changed
