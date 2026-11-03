@@ -18,6 +18,7 @@ includes:
   bootstrap: .taskfiles/BootstrapTasks.yml
   cluster: .taskfiles/ClusterTasks.yml
   edgeos: .taskfiles/EdgeosTasks.yml
+  healthchecks: .taskfiles/HealthchecksTasks.yml
   mikrotik: .taskfiles/MikrotikTasks.yml
   precommit: .taskfiles/PrecommitTasks.yml
   privacy: .taskfiles/PrivacyTasks.yml

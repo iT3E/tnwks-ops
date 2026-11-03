@@ -62,3 +62,17 @@ resource "tfe_workspace_settings" "tnwks-unifi-prod_workspace_settings" {
   workspace_id   = tfe_workspace.tnwks-unifi-prod.id
   execution_mode = "local"
 }
+
+# healthchecks.io is a public API, but the key is read from SOPS on the
+# desktop, so runs are local like the Cloudflare root.
+resource "tfe_workspace" "tnwks-healthchecks-prod" {
+  name              = "tnwks-healthchecks-prod"
+  organization      = var.tfc_organization
+  project_id        = tfe_project.tfe_project_aws.id
+  working_directory = "environments/prod/healthchecks"
+}
+
+resource "tfe_workspace_settings" "tnwks-healthchecks-prod_workspace_settings" {
+  workspace_id   = tfe_workspace.tnwks-healthchecks-prod.id
+  execution_mode = "local"
+}

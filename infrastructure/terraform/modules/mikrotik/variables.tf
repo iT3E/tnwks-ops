@@ -485,6 +485,29 @@ variable "ddns_credential" {
   sensitive   = true
 }
 
+variable "heartbeat" {
+  description = <<-EOT
+    Off-site heartbeat: a scheduler that fetches heartbeat_url every interval,
+    so healthchecks.io can alert when the router (power or WAN) goes quiet.
+    Null disables it. See heartbeat.tf.
+  EOT
+  type = object({
+    interval = optional(string, "1m")
+  })
+  default = null
+}
+
+variable "heartbeat_url" {
+  description = <<-EOT
+    The healthchecks.io ping URL, https://hc-ping.com/<ping key>/<slug>. The
+    ping key comes from SOPS, never a literal. Stored in the scheduler body on
+    the router.
+  EOT
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
 variable "disabled_ip_services" {
   description = <<-EOT
     RouterOS services to disable, mapped to their default port. VyOS exposed

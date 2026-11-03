@@ -1,0 +1,49 @@
+---
+version: "3"
+
+## ---------------------------------------------------------------------------------------------------------------------
+## healthchecks.io off-site heartbeats (environments/prod/healthchecks).
+##
+## Not wired into CI: plans and applies run from the desktop, state in
+## Terraform Cloud (tnwks-healthchecks-prod, execution mode local).
+## See docs/operations/external-monitoring.md.
+## ---------------------------------------------------------------------------------------------------------------------
+
+vars:
+  HEALTHCHECKS_TF_DIR: "{{.TERRAFORM_DIR}}/environments/prod/healthchecks"
+
+tasks:
+  init:
+    desc: Initialize the healthchecks.io Terraform root module
+    dir: "{{.HEALTHCHECKS_TF_DIR}}"
+    cmds:
+      - terraform init {{.CLI_ARGS}}
+
+  validate:
+    desc: Validate the healthchecks.io Terraform root module without a backend
+    dir: "{{.HEALTHCHECKS_TF_DIR}}"
+    cmds:
+      - terraform init -backend=false
+      - terraform validate
+
+  plan:
+    desc: Show the changes Terraform will make to the healthchecks.io checks
+    dir: "{{.HEALTHCHECKS_TF_DIR}}"
+    cmds:
+      - terraform plan {{.CLI_ARGS}}
+
+  apply:
+    desc: Apply the healthchecks.io checks
+    dir: "{{.HEALTHCHECKS_TF_DIR}}"
+    cmds:
+      - terraform apply {{.CLI_ARGS}}
+
+  status:
+    desc: Show each check's status and last ping (read-only API)
+    dir: "{{.HEALTHCHECKS_TF_DIR}}"
+    cmds:
+      - |
+        set -euo pipefail
+        key=$(sops -d --extract '["api_key"]' secrets.sops.yaml)
+        curl -sf -H "X-Api-Key: $key" https://healthchecks.io/api/v3/checks/ |
+          jq -r '.checks[] | [.slug, .status, (.last_ping // "never")] | @tsv'
