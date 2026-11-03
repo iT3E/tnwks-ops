@@ -14,7 +14,7 @@ metadata:
   labels:
     app.kubernetes.io/name: packing-api
   annotations:
-    # Roll the pod when the reflected postgres-app secret rotates.
+    # Roll the pod when packing-api-secret (its Postgres login) rotates.
     reloader.stakater.com/auto: "true"
 spec:
   replicas: 1
@@ -38,19 +38,18 @@ spec:
               containerPort: 8080
               protocol: TCP
           env:
-            # DB connection. Username/password come from the CNPG-generated
-            # `postgres-app` secret, reflected into the production namespace
-            # (see the cnpg Cluster's inheritedMetadata). Same keys mealie uses.
+            # DB connection as its own cnpg role (`packing_api`), login in
+            # packing-api-secret (SOPS).
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgres-app
-                  key: username
+                  name: packing-api-secret
+                  key: POSTGRES_USER
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-app
-                  key: password
+                  name: packing-api-secret
+                  key: POSTGRES_PASSWORD
             - name: POSTGRES_SERVER
               value: "postgres-rw.databases.svc.cluster.local"
             - name: POSTGRES_PORT
