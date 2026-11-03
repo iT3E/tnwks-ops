@@ -66,7 +66,7 @@ spec:
           selfcheck:
             image: &image
               repository: ghcr.io/it3e/tnwks-transcriber
-              tag: 0.1.0@sha256:364d97b0406821c003b42312b8eeb39346fe156a45fc9473ce438f47aa9fdc2b
+              tag: 0.2.0@sha256:05841bd94a0e3075506ed84e674a59a013c69d6f50c88829614d600a580b62e1
             args:
               - selfcheck
             envFrom: &envFrom
