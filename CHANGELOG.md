@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.94.0 - 2026-11-03
+
+### Changed
+
+* finance-sync: enabled (cutover from the host crontab), image 0.1.2 which pushes reconciliation drift to Alertmanager.
+
 ## v1.93.0 - 2026-11-03
 
 ### Added
