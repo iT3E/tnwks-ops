@@ -15,7 +15,6 @@ resources:
   - ./secret-vaultwarden-role.sops.yaml
   - ./secret-mealie-role.sops.yaml
   - ./database-vaultwarden.yaml
-  - ./database-mealie.yaml
   - ./database-vantrip.yaml
   - ./database-things-api.yaml
   - ./database-home-assistant.yaml
