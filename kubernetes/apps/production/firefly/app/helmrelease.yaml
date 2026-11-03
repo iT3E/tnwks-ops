@@ -203,7 +203,7 @@ spec:
           cron:
             image:
               repository: curlimages/curl
-              tag: 8.11.1
+              tag: 8.23.0
             securityContext:
               readOnlyRootFilesystem: true
               allowPrivilegeEscalation: false
