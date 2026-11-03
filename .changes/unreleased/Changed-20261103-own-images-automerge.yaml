@@ -1,0 +1,4 @@
+kind: Changed
+body: |-
+  Renovate: our own images (ghcr.io/it3e/*) automerge behind Build Success at every update type, any time of day, and never get an impact label. packing-api and the storefront API are pinned to their releases (<version>@sha256) instead of the floating :main tag, so Renovate can follow them.
+time: 2026-11-03T07:50:00.000000000Z

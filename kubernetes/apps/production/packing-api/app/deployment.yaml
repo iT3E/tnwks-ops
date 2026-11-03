@@ -4,8 +4,9 @@
 # NFS); this is the one stateful piece, so it gets its own tiny service +
 # Postgres-backed store.
 #
-# Source + image build: github.com/iT3E/tnwks-packing-api (pushes
-# ghcr.io/it3e/tnwks-packing-api:main on every merge).
+# Source + image build: github.com/iT3E/tnwks-packing-api. Pinned to a release
+# (<version>@sha256); every release becomes a Renovate PR here that
+# automerges behind Build Success (docs/operations/renovate.md).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,11 +29,9 @@ spec:
     spec:
       containers:
         - name: packing-api
-          # :main is the rolling tag CI pushes from the repo's main branch.
-          # imagePullPolicy Always so a re-pushed :main is actually picked up
-          # on pod restart (the tag is mutable).
-          image: ghcr.io/it3e/tnwks-packing-api:main
-          imagePullPolicy: Always
+          # A release, by digest: what runs only changes through git.
+          image: ghcr.io/it3e/tnwks-packing-api:0.2.0@sha256:0ecee9f4faabe617ba30b04d69f03e901196a0be039f2dfa9b6c7eaab787d550
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8080

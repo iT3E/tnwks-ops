@@ -4,8 +4,9 @@
 # (nginx off NFS); this is the stateful piece: products + images (Postgres),
 # orders, Stripe Checkout, and buyer email.
 #
-# Source + image build: github.com/iT3E/tnwks-raines-things-api (pushes
-# ghcr.io/it3e/tnwks-raines-things-api:main on every merge).
+# Source + image build: github.com/iT3E/tnwks-raines-things-api. Pinned to a release
+# (<version>@sha256); every release becomes a Renovate PR here that
+# automerges behind Build Success (docs/operations/renovate.md).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -29,10 +30,9 @@ spec:
     spec:
       containers:
         - name: raines-things-api
-          # :main is the rolling tag CI pushes from the repo's main branch.
-          # imagePullPolicy Always so a re-pushed :main is picked up on restart.
-          image: ghcr.io/it3e/tnwks-raines-things-api:main
-          imagePullPolicy: Always
+          # A release, by digest: what runs only changes through git.
+          image: ghcr.io/it3e/tnwks-raines-things-api:0.1.0@sha256:cf94fa7aa49e83f2dcbf1daccde7e415e1318efe07523c73d1618b634eed04cf
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8080

@@ -3,7 +3,8 @@
 Every Renovate PR lands in one of three tiers, decided by
 [`.github/renovate/autoMerge.json5`](../../.github/renovate/autoMerge.json5):
 
-- **Automerge.** Leaf app bumps. Renovate merges them itself once every
+- **Automerge.** Leaf app bumps, and every update of our own images
+  (`ghcr.io/it3e/*`, see below). Renovate merges them itself once every
   status check is green, including the required **Build Success**
   ([`kubernetes.yaml`](../../.github/workflows/kubernetes.yaml): flate render
   plus "every new image exists"). If a merged bump then fails to reconcile,
@@ -42,6 +43,27 @@ backup bits, `talos/ms-01`, `kubernetes/clusters/ms-01`) automerge behind
 Build Success at any update type, and never get an `impact/*` label. The
 path regex lives in the last rule of `autoMerge.json5` and is negated in
 every review rule. When MS-01 goes live, delete that rule and the negations.
+
+**Our own images automerge at every update type.** `ghcr.io/it3e/*` are
+the images of our app repos (docs/development/app-repos.md), and each one
+is deployed as a release, `<version>@sha256:<digest>`. The app repo's CI
+already gated that release (tests, the image test, the privacy gate), so
+here Build Success is the only gate: patch, 0.x minors, majors and digest
+updates all automerge, at any time of day (the base schedule is "before
+7am"). addLabels accumulate and a later rule can't remove a label, so the
+last rule in `autoMerge.json5` isn't enough on its own: every review rule
+that could match these images negates them in `matchPackageNames`
+(`"!/^ghcr\\.io\\/it3e\\//"`). Matchers AND together, so in a rule that
+also lists packages the negation only removes ours, and the rules that
+matched by path alone (platform/everything else, Flux itself) got the
+negation as their package matcher. Terraform, ImmichFrame and the Flux CLI
+rules can't match an `it3e` image, so they are left as they are. A third
+party's 0.x minor or major still gets `impact/high`.
+
+The whole chain behind these PRs runs without a hand merge: a Renovate
+dependency merge in an app repo releases a patch by itself, the release
+builds `:<version>`, and the PR here automerges. Template and CI-only
+changes in the app repos release nothing, so they never reach this repo.
 
 The agent pushes and merges as the owner's GitHub account, so `owner/approved` is a
 rule the workflow and the agent follow, not something GitHub enforces.
