@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.106.0 - 2026-11-03
+
+### Added
+
+* LiteLLM: claude-sonnet on Bedrock, with credentials from the existing Roles Anywhere certificate through an aws_signing_helper sidecar (no new AWS resources), virtual keys kept in step with a SOPS list by an ensure-keys sidecar (the transcriber's, limited to claude-sonnet), and an alert 30 days before the certificate expires.
+
 ## v1.105.0 - 2026-11-03
 
 ### Added
