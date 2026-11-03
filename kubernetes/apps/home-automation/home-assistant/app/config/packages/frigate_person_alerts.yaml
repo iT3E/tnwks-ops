@@ -303,11 +303,18 @@ automation:
         {% endif %}
         {{ r }}
     conditions:
+      # Quiet only while the night alerts apply (switch on AND in the
+      # window). A `not` condition passes when none of its conditions are
+      # true, so the pair needs wrapping in an `and`; listing both directly
+      # under `not` would also silence these whenever the window is open
+      # with the night alerts switched off.
       - &not_night
         condition: not
         conditions:
-          - *alerts_on
-          - *in_window
+          - condition: and
+            conditions:
+              - *alerts_on
+              - *in_window
       - *watched
       - *first_person_alert
       - &has_recipients
