@@ -57,8 +57,9 @@ This page does those things and keeps both credentials server-side.
   other people's are per user and don't reach it) picks the palette, the same
   palettes, holiday dates and windows as the Kitchen dashboard
   (`kitchen-cards.js` in the Home Assistant config; keep the two in step
-  when a theme is added). A theme past its holiday shows as the everyday one;
-  switching the select back is the dashboard's job, this page only reads.
+  when a theme is added). It shows whatever the select says, any time of
+  year; switching a holiday theme back after its holiday is the dashboard's
+  job, this page only reads.
 - **Burn-in and faces:** the box moves a few pixels every 3 minutes. When it
   would cover the photo's main face, it moves to the opposite corner (top
   right), or whichever corner covers the fewest faces. With reduced motion
