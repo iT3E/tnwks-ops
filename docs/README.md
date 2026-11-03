@@ -48,7 +48,7 @@ Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md)
 
 | | |
 | --- | --- |
-| [`development/app-repos.md`](development/app-repos.md) | The app repos deployed from here, and a pointer to iT3E/app-template, which holds their standard setup (reusable workflows, Copier template, Renovate presets) |
+| [`development/app-repos.md`](development/app-repos.md) | The app repos deployed from here, and pointers to their standard setup: iT3E/app-repo-template (the Copier template) and iT3E/github-workflows (reusable workflows, Renovate presets) |
 
 ## Apps
 
