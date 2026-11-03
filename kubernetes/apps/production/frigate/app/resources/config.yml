@@ -190,15 +190,15 @@ cameras:
       output_args:
         record: preset-record-generic
       inputs:
-        # Audio detection reads its own ffmpeg, separate from the record
-        # process above, so the -an record preset doesn't affect it.
+        # No audio role: the camera's SDP advertises PCMA on both streams,
+        # but it sends no audio packets (go2rtc counted none on either track,
+        # 2026-11). That is also the likely cause of the aac OOM above: the
+        # muxer waits for audio frames that never come.
         - path: rtsp://localhost:8554/frigate_sv3c_west_lq
-          roles: ["detect", "audio"]
+          roles: ["detect"]
         - path: rtsp://localhost:8554/frigate_sv3c_west_hq
           roles: ["record"]
 
-    audio:
-      enabled: true
     detect:
       width: 640
       height: 360
