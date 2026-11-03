@@ -1,3 +1,0 @@
-kind: Added
-body: Frigate audio detection (speech) on the front door, south and west cameras, whose streams carry audio. Its speech ON/OFF topic is the trigger for the coming transcription service. Kitchen, balcony and pool have no microphone.
-time: 2026-11-02T20:42:16.594446556-08:00

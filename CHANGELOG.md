@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.100.0 - 2026-11-03
+
+### Added
+
+* Frigate audio detection (speech) on the front door, south and west cameras, whose streams carry audio. Its speech ON/OFF topic is the trigger for the coming transcription service. Kitchen, balcony and pool have no microphone.
+
 ## v1.99.0 - 2026-11-03
 
 ### Changed
