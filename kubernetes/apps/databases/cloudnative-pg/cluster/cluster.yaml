@@ -19,31 +19,23 @@ spec:
     storageClass: ${STORAGE_CLASS_DATABASE}
   superuserSecret:
     name: postgres-superuser
-  # Per-app login roles with their own password (unlike `app`, which most
-  # apps share through the reflected postgres-app Secret). Changing this list
-  # doesn't restart the instances.
+  # One login role per app, each owning its own database. The standard for
+  # every app: add its role here, its password in secret-<role>-role.sops.yaml,
+  # and a copy of the login in a Secret in the app's own namespace. Changing
+  # this list doesn't restart the instances.
   managed:
     roles:
-      # `app` is the bootstrap owner most apps still share. It is adopted here
-      # only so it can be given temporary membership in each app's new role
-      # (inRoles) while ownership moves off it (reassign-owner/). Its
-      # attributes match what initdb created, and its password Secret is
-      # cnpg's own postgres-app, so nothing changes for apps connecting as it.
-      # Each app's entry leaves inRoles once that app connects as its own role.
+      # `app` is cnpg's bootstrap owner. Every app used to share it; since
+      # 2026-11 each app has its own role and `app` owns nothing (the `app`
+      # database belongs to `mealie`). It is kept, with login off, rather than
+      # dropped: cnpg created it and expects it. Its old memberships were the
+      # temporary bridge while ownership moved (reassign-owner/).
       - name: app
         ensure: present
-        login: true
+        login: false
         passwordSecret:
           name: postgres-app
-        # Members only of roles whose app is mid-migration (plausible is done).
-        # Each name leaves this list once its app connects as its own role.
-        inRoles:
-          - home_assistant
-          - litellm
-          - things_api
-          - packing_api
-          - vaultwarden
-          - mealie
+        inRoles: []
       - name: home_assistant
         ensure: present
         login: true
@@ -109,16 +101,15 @@ spec:
       parameters:
         barmanObjectName: s3
         serverName: ${CLUSTER_NAME}
-  # Annotations on the generated `postgres-app` Secret tell stakater/reflector
-  # to mirror it into namespaces that need the credentials (e.g. mealie in
-  # production/, litellm in ai/, plausible in selfhosted/, home-assistant in
-  # home-automation/). The reflected Secret keeps the same name + keys.
+  # Reflection of the shared `postgres-app` Secret into app namespaces is
+  # switched OFF: apps now carry their own login in their own namespace.
+  # Explicit "false" rather than removing the annotations, so the change
+  # reaches the Secret whether or not cnpg removes inherited annotations,
+  # and reflector deletes the copies it made.
   inheritedMetadata:
     annotations:
-      reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
-      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "production,ai,selfhosted,home-automation"
-      reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
-      reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: "production,ai,selfhosted,home-automation"
+      reflector.v1.k8s.emberstack.com/reflection-allowed: "false"
+      reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "false"
   bootstrap:
     initdb:
       database: app

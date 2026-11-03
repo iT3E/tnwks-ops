@@ -1,0 +1,3 @@
+kind: Security
+body: 'cloudnative-pg: the shared app role owns nothing and can no longer log in; postgres-app is no longer reflected into app namespaces and the cluster-wide POSTGRES_* variables are gone. The one-time ownership Jobs are removed.'
+time: 2026-11-02T20:15:00-08:00
