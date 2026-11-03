@@ -46,17 +46,16 @@ spec:
               - --port
               - "4000"
             env:
-              # CNPG app password, sourced from the reflected `postgres-app`
-              # secret (reflector mirrors it into the `ai` namespace). Used to
-              # compose DATABASE_URL below via k8s env-var expansion, so the
+              # LiteLLM's own cnpg role (`litellm`), password in litellm-secret.
+              # Composed into DATABASE_URL via k8s env-var expansion, so the
               # password itself never lands in git.
               - name: DATABASE_PASSWORD
                 valueFrom:
                   secretKeyRef:
-                    name: postgres-app
-                    key: password
+                    name: litellm-secret
+                    key: DATABASE_PASSWORD
               - name: DATABASE_URL
-                value: "postgresql://app:$(DATABASE_PASSWORD)@postgres-rw.databases.svc.cluster.local:5432/litellm"
+                value: "postgresql://litellm:$(DATABASE_PASSWORD)@postgres-rw.databases.svc.cluster.local:5432/litellm"
               - name: LITELLM_MASTER_KEY
                 valueFrom:
                   secretKeyRef:

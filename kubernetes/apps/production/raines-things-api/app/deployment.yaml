@@ -14,8 +14,8 @@ metadata:
   labels:
     app.kubernetes.io/name: raines-things-api
   annotations:
-    # Roll the pod when the reflected postgres-app secret (or our own
-    # raines-things-secret) rotates.
+    # Roll the pod when raines-things-secret (Stripe keys and the
+    # Postgres login) rotates.
     reloader.stakater.com/auto: "true"
 spec:
   replicas: 1
@@ -38,17 +38,17 @@ spec:
               containerPort: 8080
               protocol: TCP
           env:
-            # --- Postgres (reflected CNPG postgres-app secret, `raines` db) ---
+            # --- Postgres (own cnpg role `things_api`, `raines` db) ---
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgres-app
-                  key: username
+                  name: raines-things-secret
+                  key: POSTGRES_USER
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-app
-                  key: password
+                  name: raines-things-secret
+                  key: POSTGRES_PASSWORD
             - name: POSTGRES_SERVER
               value: "postgres-rw.databases.svc.cluster.local"
             - name: POSTGRES_PORT

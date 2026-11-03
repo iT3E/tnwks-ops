@@ -102,15 +102,16 @@ spec:
                 value: "${COGNITO_OIDC_ISSUER_URL}/.well-known/openid-configuration"
               - name: FRIGATE_UI_URL
                 value: "https://frigate.${CLUSTER_DOMAIN}"
-              # CNPG app password from the reflected `postgres-app` secret;
-              # composed into the recorder URL so it never lands in git.
+              # The recorder's own cnpg role (`home_assistant`), password in
+              # home-assistant-secret; composed into the URL so it never lands
+              # in git.
               - name: POSTGRES_PASSWORD
                 valueFrom:
                   secretKeyRef:
-                    name: postgres-app
-                    key: password
+                    name: home-assistant-secret
+                    key: RECORDER_DB_PASSWORD
               - name: HASS_RECORDER_DB_URL
-                value: "postgresql://app:$(POSTGRES_PASSWORD)@postgres-rw.databases.svc.cluster.local:5432/home_assistant"
+                value: "postgresql://home_assistant:$(POSTGRES_PASSWORD)@postgres-rw.databases.svc.cluster.local:5432/home_assistant"
             # HASS_LATITUDE / HASS_LONGITUDE / HASS_ELEVATION
             envFrom:
               - secretRef:
