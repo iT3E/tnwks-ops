@@ -1,0 +1,17 @@
+---
+# Mealie's own database, owned by its own `mealie` role. Until 2026-11 Mealie
+# used `app`, the cluster's first-boot database; that one is kept (unmanaged)
+# as the rollback copy, see the `app` role comment in cluster.yaml.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: mealie
+  namespace: databases
+spec:
+  cluster:
+    name: postgres
+  name: mealie
+  owner: mealie
+  ensure: present
+  # Never let a manifest deletion drop recipe data.
+  databaseReclaimPolicy: retain
