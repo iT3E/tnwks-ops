@@ -1,0 +1,48 @@
+---
+# Staleness for the finance jobs. A failed Job already fires the cluster-wide
+# KubeJobFailed; these catch the job that silently stops running (suspended by
+# mistake, schedule broken, the image can't be pulled before a pod exists).
+# Reconciliation drift is pushed to Alertmanager by the sync itself
+# (FinanceReconciliationDrift), since pod logs aren't shipped to Loki here.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: finance-sync
+  namespace: production
+spec:
+  groups:
+    - name: finance-sync
+      rules:
+        - alert: FinanceSyncStale
+          # Daily at 06:00; 26h leaves room for a slow bank refresh.
+          expr: |
+            (time() - kube_cronjob_status_last_successful_time{namespace="production", cronjob="finance-sync-simplifi"}) > 26 * 3600
+            and on (namespace, cronjob) kube_cronjob_spec_suspend{namespace="production", cronjob="finance-sync-simplifi"} == 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The Simplifi to Firefly sync hasn't succeeded in over 26 hours."
+            description: "Check the last finance-sync-simplifi Jobs in production; Firefly balances are going stale."
+        - alert: FinanceAmazonEnrichStale
+          # Weekly on Mondays; 8 days allows one late run.
+          expr: |
+            (time() - kube_cronjob_status_last_successful_time{namespace="production", cronjob="finance-sync-amazon"}) > 8 * 86400
+            and on (namespace, cronjob) kube_cronjob_spec_suspend{namespace="production", cronjob="finance-sync-amazon"} == 0
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "The weekly Amazon enrichment hasn't succeeded in over 8 days."
+            description: "Check the last finance-sync-amazon Jobs in production."
+        - alert: FinanceSyncNeverSucceeded
+          # A CronJob that is enabled but has no successful run at all (the
+          # metric above is absent until the first success).
+          expr: |
+            kube_cronjob_spec_suspend{namespace="production", cronjob=~"finance-sync-.*"} == 0
+            unless on (namespace, cronjob) kube_cronjob_status_last_successful_time{namespace="production", cronjob=~"finance-sync-.*"}
+          for: 26h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.cronjob }} is enabled but has never completed successfully."

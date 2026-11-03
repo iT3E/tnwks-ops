@@ -73,10 +73,11 @@ covered automatically.
 | UniFi | `networking/config-unifi-0` | Includes the controller's `.unf` auto-backups. The MongoDB PVC is skipped: a `.unf` restore is the supported path |
 | changedetection | `production/config-changedetection-0` | Watch list and history |
 | Firefly III | `production/firefly-upload` | Transaction attachments (none yet). The ledger is in Postgres; the Passport keypair and `APP_KEY` are in git (SOPS) |
+| finance-sync | `production/finance-sync-state` | The jobs feeding Firefly: rotating Simplifi token, `sync_state.json` (losing it re-posts transactions), account and category maps, Amazon order database and rules. None of it is in git or the image |
 
 The mover must run as the app's user (`mover.securityContext`): kopia fails
 the snapshot on any file it can't read. Home Assistant is 568 (its `.storage`
-has 0600 files), Firefly 33 (www-data), the others 1000.
+has 0600 files), Firefly 33 (www-data), the others (including finance-sync) 1000.
 
 To add one: copy a policy file, change the name, namespace, PVC and user, add the
 namespace to `allowedNamespaces` in `repository/clusterrepository.yaml` if it is

@@ -9,3 +9,4 @@ resources:
   - ./unifi.yaml
   - ./changedetection.yaml
   - ./firefly.yaml
+  - ./finance-sync.yaml
