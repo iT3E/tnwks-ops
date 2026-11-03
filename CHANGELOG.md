@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.87.0 - 2026-11-03
+
+### Changed
+
+* plausible: connect to Postgres as its own plausible role instead of the shared app role.
+
 ## v1.86.0 - 2026-11-03
 
 ### Changed
