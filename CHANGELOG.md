@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.109.1 - 2026-11-03
+
+### Fixed
+
+* Frigate: the front door camera hears speech now. Its own audio noise reduction was sending constant silence (switched off on the camera), and speech detection there now runs from RMS 50 instead of 500 (ambient about 27).
+
 ## v1.109.0 - 2026-11-03
 
 ### Removed
