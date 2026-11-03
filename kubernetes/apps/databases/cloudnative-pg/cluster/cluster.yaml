@@ -71,6 +71,11 @@ spec:
         login: true
         passwordSecret:
           name: postgres-mealie
+      - name: finance_sync
+        ensure: present
+        login: true
+        passwordSecret:
+          name: postgres-finance-sync
       - name: plausible
         ensure: present
         login: true
