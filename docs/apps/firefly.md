@@ -21,7 +21,7 @@ Moved here from a Docker Compose stack on the WSL host on 2026-11-02.
 | App | Deployment `firefly`, port 8080, probes on `/health` |
 | Database | `firefly` on the shared cnpg cluster, owned by its own `firefly` role (`databases/cloudnative-pg/cluster/database-firefly.yaml`, `managed.roles` in `cluster.yaml`), `PGSQL_SSL_MODE=require` |
 | Secrets | `app/secrets.sops.yaml` (`firefly-secret`): `APP_KEY`, `STATIC_CRON_TOKEN`, `DB_USERNAME`/`DB_PASSWORD`, `oauth-private.key`, `oauth-public.key` |
-| Daily jobs | CronJob `firefly-firefly-cron`, 03:00 UTC, calls `/api/v1/cron/<token>` (recurring transactions, auto-budgets, bill warnings) |
+| Daily jobs | CronJob `firefly-firefly-cron`, 03:00 Pacific (`timeZone` set; it was 03:00 UTC until 2026-11-02), calls `/api/v1/cron/<token>` (recurring transactions, auto-budgets, bill warnings) |
 | Attachments | PVC `firefly-upload`, backed up by kopiur |
 
 ## Login

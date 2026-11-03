@@ -189,9 +189,13 @@ spec:
       firefly-cron:
         type: cronjob
         cronjob:
-          # 03:00 UTC, i.e. 19:00/20:00 Pacific. Deliberately identical to the
-          # old crond, which ran in UTC (no TZ set in that container).
+          # 03:00 Pacific, overnight in Firefly's own TZ (America/Los_Angeles),
+          # so each day's recurring transactions are created that morning. The
+          # old crond ran this at 03:00 UTC (19:00/20:00 Pacific, the evening
+          # before) because that container had no TZ; kept 1:1 at the
+          # migration, moved 2026-11-02.
           schedule: "0 3 * * *"
+          timeZone: America/Los_Angeles
           concurrencyPolicy: Forbid
           successfulJobsHistory: 1
           failedJobsHistory: 3
