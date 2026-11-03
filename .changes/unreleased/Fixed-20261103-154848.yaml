@@ -1,0 +1,3 @@
+kind: Fixed
+body: "Prometheus now scrapes Alertmanager (ServiceMonitor, job relabeled to the one the stock rules select, container renamed to alertmanager). The nine stock Alertmanager* rules, AlertmanagerFailedToSendAlerts included, matched no series before and could never fire."
+time: 2026-11-03T15:48:48.557616129-08:00

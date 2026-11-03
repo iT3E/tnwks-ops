@@ -1,0 +1,3 @@
+kind: Added
+body: "Off-site check alert-delivery on healthchecks.io: AlertDeliveryHeartbeat fires while Alertmanager can deliver to Telegram and pings it every 2 minutes, so a revoked or hijacked War Room bot, or the Telegram API being down, reaches a DM through healthchecks.io's own bot."
+time: 2026-11-03T15:48:47.553860025-08:00

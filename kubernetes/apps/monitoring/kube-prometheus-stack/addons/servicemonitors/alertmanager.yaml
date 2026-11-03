@@ -1,0 +1,29 @@
+---
+# Scrapes the app-template Alertmanager (monitoring/alertmanager). It lives
+# here rather than in that HelmRelease because kube-prometheus-stack, which
+# installs the ServiceMonitor CRD, depends on alertmanager: a chart-rendered
+# ServiceMonitor would deadlock a fresh bootstrap.
+#
+# The stock alertmanager.rules from kube-prometheus-stack select
+# job="kube-prometheus-stack-alertmanager", container="alertmanager". The chart's
+# own Alertmanager is disabled, so the job is relabeled to that name and the
+# container is named `alertmanager` in the HelmRelease. Without both, all nine
+# Alertmanager* rules (AlertmanagerFailedToSendAlerts included) match nothing
+# and can never fire.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: alertmanager
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: alertmanager
+      app.kubernetes.io/service: alertmanager
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      relabelings:
+        - action: replace
+          targetLabel: job
+          replacement: kube-prometheus-stack-alertmanager
