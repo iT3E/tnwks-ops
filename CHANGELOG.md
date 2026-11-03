@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.91.0 - 2026-11-03
+
+### Added
+
+* cloudnative-pg: an empty `mealie` database owned by the mealie role, for Mealie to move into from `app`.
+
 ## v1.90.0 - 2026-11-03
 
 ### Changed

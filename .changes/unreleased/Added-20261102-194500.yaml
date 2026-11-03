@@ -1,3 +1,0 @@
-kind: Added
-body: "cloudnative-pg: an empty `mealie` database owned by the mealie role, for Mealie to move into from `app`."
-time: 2026-11-02T19:45:00-08:00
