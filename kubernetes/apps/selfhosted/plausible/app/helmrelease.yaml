@@ -53,17 +53,18 @@ spec:
                   secretKeyRef:
                     name: plausible-secret
                     key: SECRET_KEY_BASE
-              # CNPG app password, sourced from the reflected `postgres-app`
-              # secret (reflector mirrors it into the `selfhosted` namespace).
+              # Plausible's own cnpg role (`plausible`, managed.roles in the
+              # cnpg cluster), not the shared `app`. Same password as
+              # databases/cloudnative-pg/cluster/secret-plausible-role.sops.yaml.
               # Composed into DATABASE_URL via k8s env-var expansion so the
               # password itself never lands in git.
               - name: DATABASE_PASSWORD
                 valueFrom:
                   secretKeyRef:
-                    name: postgres-app
-                    key: password
+                    name: plausible-secret
+                    key: DATABASE_PASSWORD
               - name: DATABASE_URL
-                value: "postgres://app:$(DATABASE_PASSWORD)@postgres-rw.databases.svc.cluster.local:5432/plausible"
+                value: "postgres://plausible:$(DATABASE_PASSWORD)@postgres-rw.databases.svc.cluster.local:5432/plausible"
               - name: CLICKHOUSE_DATABASE_URL
                 value: "http://localhost:8123/plausible_events_db"
               - name: DISABLE_REGISTRATION
