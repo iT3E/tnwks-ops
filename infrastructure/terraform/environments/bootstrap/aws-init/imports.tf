@@ -30,3 +30,15 @@ import {
   to = module.tfc.tfe_workspace_settings.tnwks-unifi-prod_workspace_settings
   id = "ws-aJ2gq7hV2FTTVH1N"
 }
+
+# tnwks-healthchecks-prod: created through the TFC API on 2026-11-03 the same
+# way, matching modules/tfc/workspaces.tf. Safe to delete after the next apply.
+import {
+  to = module.tfc.tfe_workspace.tnwks-healthchecks-prod
+  id = "ws-kNagTK7Zuv2X9wZ7"
+}
+
+import {
+  to = module.tfc.tfe_workspace_settings.tnwks-healthchecks-prod_workspace_settings
+  id = "ws-kNagTK7Zuv2X9wZ7"
+}

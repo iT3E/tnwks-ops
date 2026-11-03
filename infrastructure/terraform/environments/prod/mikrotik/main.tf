@@ -54,6 +54,11 @@ module "mikrotik" {
   ddns_domain     = data.sops_file.secrets.data["ddns_domain"]
   ddns_credential = data.sops_file.secrets.data["ddns_credential"]
 
+  # Off-site heartbeat to healthchecks.io (check `sce-rtr01` in
+  # environments/prod/healthchecks). The slug is public, the ping key is not.
+  heartbeat     = {}
+  heartbeat_url = "https://hc-ping.com/${data.sops_file.secrets.data["healthchecks_ping_key"]}/sce-rtr01"
+
   dstnat_rules             = local.dstnat_rules
   masquerade_out_interface = local.masquerade_out_interface
 

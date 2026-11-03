@@ -40,6 +40,7 @@ Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md)
 | --- | --- |
 | [`operations/disaster-recovery.md`](operations/disaster-recovery.md) | BCP: priorities, single points of failure, keys and the off-site kit, recovery scenarios, drills |
 | [`operations/backups.md`](operations/backups.md) | Backups: what, where, why (S3 via barman-cloud and kopiur, Drive for UniFi and the switch), credentials, restores |
+| [`operations/external-monitoring.md`](operations/external-monitoring.md) | Off-site heartbeats (healthchecks.io): power, WAN and "cluster didn't come back" alerts |
 | [`operations/sops.md`](operations/sops.md) | Secrets: recipients, editing, re-keying |
 | [`operations/renew-kubeconfig-cert.md`](operations/renew-kubeconfig-cert.md) | Renewing the kubeconfig client certificate |
 | [`operations/renovate.md`](operations/renovate.md) | Renovate tiers, and how impact/high PRs reach Ori's reviewer agent |

@@ -15,6 +15,18 @@ receivers:
         # Template: telegram.tmpl (same ConfigMap). Shows per-alert labels
         # and runbook/graph links so grouped alerts are distinguishable.
         message: '{{ template "telegram.message" . }}'
+  # Off-site dead man's switch. Watchdog always fires while Prometheus and
+  # Alertmanager work; healthchecks.io messages Telegram when these pings stop
+  # (power cut, WAN down, desktop or cluster not back up). The check is
+  # `homelab-wsl` in infrastructure/terraform/environments/prod/healthchecks;
+  # see docs/operations/external-monitoring.md.
+  - name: "healthchecks"
+    webhook_configs:
+      # https://hc-ping.com/<ping key>/homelab-wsl, from secrets.sops.yaml
+      # (key: healthchecks_watchdog_url). The ping key is secret.
+      - url_file: /etc/secrets/healthchecks_watchdog_url
+        send_resolved: false
+        timeout: 10s
 
 route:
   group_by: ["alertname", "job"]
@@ -23,9 +35,18 @@ route:
   repeat_interval: 6h
   receiver: "telegram"
   routes:
+    # Every 2 minutes: a repeat goes out on the first group_interval tick
+    # after repeat_interval, and with both at 1m that is every other tick
+    # (measured on v0.34.2). The check alerts after 3m + 4m grace of silence.
+    - receiver: "healthchecks"
+      matchers:
+        - alertname = "Watchdog"
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 1m
     - receiver: "null"
       matchers:
-        - alertname =~ "InfoInhibitor|Watchdog"
+        - alertname = "InfoInhibitor"
     # Pushed by the finance-sync CronJob after it has already corrected the
     # balance. It fires on timing (a bank balance moves before its
     # transactions reach Simplifi, then the correction reverses next run) and
