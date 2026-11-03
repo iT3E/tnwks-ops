@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.107.0 - 2026-11-03
+
+### Added
+
+* transcriber: daily summaries. The UI's Summarize button sends the day's transcript to claude-sonnet on Bedrock through LiteLLM, with the transcriber's own key (claude-sonnet only); the ingress waits up to 180 s for it.
+
 ## v1.106.1 - 2026-11-03
 
 ### Fixed
