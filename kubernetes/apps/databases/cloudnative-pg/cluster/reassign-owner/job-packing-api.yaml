@@ -1,17 +1,14 @@
 ---
-# One-time move of plausible's tables, sequences, functions and types from the
-# shared `app` role to its own `plausible` role. Runs AS `app`, not superuser:
-# an owner may hand objects to a role it is a member of, and cnpg makes `app` a
-# member of `plausible` (managed.roles inRoles). Waits for that membership,
-# then runs reassign-owner.sql. Idempotent: a rerun moves nothing. The
-# database itself is handed over by the Database CR (owner: plausible).
-#
-# Plausible keeps connecting as `app` through the membership until its own
-# PR switches it to `plausible`; then `plausible` leaves app's inRoles.
+# One-time move of database `vantrip`'s objects from the shared `app` role to
+# its own `packing_api` role. Runs as `app`, not superuser: an owner may hand objects to a role it
+# belongs to, and cnpg makes `app` a member (managed.roles inRoles). Waits for
+# that membership, then runs reassign-owner.sql; exits 0 at once if nothing is
+# left owned by `app`. The database itself moves via the Database CR owner.
+# The Plausible pilot proved this (#1615); its Job was removed once done.
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: reassign-owner-plausible
+  name: reassign-owner-packing-api
   namespace: databases
   labels:
     kustomize.toolkit.fluxcd.io/substitute: disabled
@@ -38,15 +35,19 @@ spec:
             - bash
             - -ec
             - |
-              until [ "$(psql -tAc "select pg_has_role('app','plausible','SET')")" = "t" ]; do
-                echo "waiting for cnpg to make app a member of plausible"; sleep 10
+              # Done already (or rerun after a spec change, e.g. an image bump):
+              # nothing left for `app` here, and its membership may be gone.
+              owned=$(psql -tAc "select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where c.relowner = 'app'::regrole and n.nspname not in ('pg_catalog','information_schema') and n.nspname not like 'pg_toast%'")
+              if [ "$owned" = "0" ]; then echo "nothing in $PGDATABASE is owned by app: already migrated"; exit 0; fi
+              until [ "$(psql -tAc "select pg_has_role('app','packing_api','SET')")" = "t" ]; do
+                echo "waiting for cnpg to make app a member of packing_api"; sleep 10
               done
-              psql -v ON_ERROR_STOP=1 -v old_role=app -v new_role=plausible -f /sql/reassign-owner.sql
+              psql -v ON_ERROR_STOP=1 -v old_role=app -v new_role=packing_api -f /sql/reassign-owner.sql
           env:
             - name: PGHOST
               value: postgres-rw.databases.svc.cluster.local
             - name: PGDATABASE
-              value: plausible
+              value: vantrip
             - name: PGSSLMODE
               value: require
             - name: PGUSER
