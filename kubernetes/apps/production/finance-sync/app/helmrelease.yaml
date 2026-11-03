@@ -21,8 +21,8 @@
 # adds staleness; reconciliation drift is pushed by the sync to Alertmanager.
 # Notes on the values below (YAML comments don't survive the generator, so
 # they're collected here):
-# - suspend: true on both CronJobs until the cutover from the host crontab.
-#   The Simplifi refresh token rotates, so host and cluster must never both run.
+# - The host crontab entries were removed at the cutover (2026-11-02). The
+#   Simplifi refresh token rotates, so host and cluster must never both run.
 # - concurrencyPolicy Forbid: never two at once.
 # - backoffLimit 0: no automatic retry. The sync saves its progress only when
 #   it finishes, so a retried run could post transactions twice.
@@ -74,7 +74,7 @@ spec:
         cronjob:
           schedule: 0 6 * * *
           timeZone: America/Los_Angeles
-          suspend: true
+          suspend: false
           concurrencyPolicy: Forbid
           backoffLimit: 0
           activeDeadlineSeconds: 3600
@@ -85,7 +85,7 @@ spec:
           selfcheck:
             image:
               repository: ghcr.io/it3e/tnwks-finance-sync
-              tag: 0.1.1@sha256:8ab3c3ec9d2b181cd7f4fb1b68305d3c5ca87f6d6eccdffd225f063059a88fde
+              tag: 0.1.2@sha256:8c8c4ee3e880a1a25ddcaaba919f9a657e524da8720de1d6aba363749a023b40
             args:
             - selfcheck
             envFrom:
@@ -110,7 +110,7 @@ spec:
           app:
             image:
               repository: ghcr.io/it3e/tnwks-finance-sync
-              tag: 0.1.1@sha256:8ab3c3ec9d2b181cd7f4fb1b68305d3c5ca87f6d6eccdffd225f063059a88fde
+              tag: 0.1.2@sha256:8c8c4ee3e880a1a25ddcaaba919f9a657e524da8720de1d6aba363749a023b40
             args:
             - sync
             envFrom:
@@ -142,7 +142,7 @@ spec:
         cronjob:
           schedule: 0 7 * * 1
           timeZone: America/Los_Angeles
-          suspend: true
+          suspend: false
           concurrencyPolicy: Forbid
           backoffLimit: 0
           activeDeadlineSeconds: 3600
@@ -153,7 +153,7 @@ spec:
           selfcheck:
             image:
               repository: ghcr.io/it3e/tnwks-finance-sync
-              tag: 0.1.1@sha256:8ab3c3ec9d2b181cd7f4fb1b68305d3c5ca87f6d6eccdffd225f063059a88fde
+              tag: 0.1.2@sha256:8c8c4ee3e880a1a25ddcaaba919f9a657e524da8720de1d6aba363749a023b40
             args:
             - selfcheck
             envFrom:
@@ -178,7 +178,7 @@ spec:
           app:
             image:
               repository: ghcr.io/it3e/tnwks-finance-sync
-              tag: 0.1.1@sha256:8ab3c3ec9d2b181cd7f4fb1b68305d3c5ca87f6d6eccdffd225f063059a88fde
+              tag: 0.1.2@sha256:8c8c4ee3e880a1a25ddcaaba919f9a657e524da8720de1d6aba363749a023b40
             args:
             - amazon-enrich
             envFrom:

@@ -59,4 +59,4 @@ Credentials (Simplifi client, Firefly token, Amazon login and TOTP) are in
 kubectl -n production create job --from=cronjob/finance-sync-simplifi sync-manual-$(date +%s)
 ```
 
-Only while the CronJob itself isn't running (see Singleton).
+Only while the CronJob itself isn't running (see Singleton). The host crontab entries were commented out at the cutover on 2026-11-02; to roll back, suspend both CronJobs, copy `simplifi_token.json`, `sync_state.json`, the two maps and `amazon_orders.db` from the PVC back to the host, and uncomment them.
