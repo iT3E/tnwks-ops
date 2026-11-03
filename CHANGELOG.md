@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.104.0 - 2026-11-03
+
+### Changed
+
+* transcriber: the web UI. The transcriber 0.2.0 API runs as a second container in its pod, the tnwks-transcriber-web 0.1.0 frontend as its own Deployment, on transcriber.internal behind oauth2-proxy for the Cognito group transcriber only.
+
 ## v1.103.0 - 2026-11-03
 
 ### Added
