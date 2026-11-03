@@ -52,9 +52,9 @@ spec:
                 value: "https://recipes.${SECRET_DOMAIN}"
               - name: DB_ENGINE
                 value: "postgres"
-              # Own cnpg role (`mealie`), login in mealie-secret. The database
-              # is still named `app` (cnpg's first-boot database); it's owned
-              # by `mealie`.
+              # Own cnpg role (`mealie`) and own database (`mealie`), login in
+              # mealie-secret. Until 2026-11 it used `app`, the cluster's
+              # first-boot database, which is kept as the rollback copy.
               - name: POSTGRES_USER
                 valueFrom:
                   secretKeyRef:
@@ -70,7 +70,7 @@ spec:
               - name: POSTGRES_PORT
                 value: "5432"
               - name: POSTGRES_DB
-                value: "app"
+                value: "mealie"
               # Log in with tnwks-auth (Cognito) through Mealie's own OIDC
               # support (app client `mealie`, infrastructure/terraform/modules/aws/cognito.tf).
               # Not oauth2-proxy: the HA Mealie integration and the apps use
