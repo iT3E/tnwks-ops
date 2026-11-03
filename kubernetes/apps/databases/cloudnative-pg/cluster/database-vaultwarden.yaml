@@ -1,0 +1,16 @@
+---
+# Vaultwarden's database `bitwarden`, created at first boot by `postInitApplicationSQL`
+# in cluster.yaml and adopted here so its owner is declarative. Owned by its
+# own `vaultwarden` role since 2026-11 (was the shared `app`).
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: vaultwarden
+  namespace: databases
+spec:
+  cluster:
+    name: postgres
+  name: bitwarden
+  owner: vaultwarden
+  ensure: present
+  databaseReclaimPolicy: retain

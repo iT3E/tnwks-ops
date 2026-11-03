@@ -35,9 +35,45 @@ spec:
         login: true
         passwordSecret:
           name: postgres-app
-        # Members only of roles whose app is mid-migration. Empty: plausible
-        # connects as its own role (removing it here revoked app's access).
-        inRoles: []
+        # Members only of roles whose app is mid-migration (plausible is done).
+        # Each name leaves this list once its app connects as its own role.
+        inRoles:
+          - home_assistant
+          - litellm
+          - things_api
+          - packing_api
+          - vaultwarden
+          - mealie
+      - name: home_assistant
+        ensure: present
+        login: true
+        passwordSecret:
+          name: postgres-home-assistant
+      - name: litellm
+        ensure: present
+        login: true
+        passwordSecret:
+          name: postgres-litellm
+      - name: things_api
+        ensure: present
+        login: true
+        passwordSecret:
+          name: postgres-things-api
+      - name: packing_api
+        ensure: present
+        login: true
+        passwordSecret:
+          name: postgres-packing-api
+      - name: vaultwarden
+        ensure: present
+        login: true
+        passwordSecret:
+          name: postgres-vaultwarden
+      - name: mealie
+        ensure: present
+        login: true
+        passwordSecret:
+          name: postgres-mealie
       - name: plausible
         ensure: present
         login: true

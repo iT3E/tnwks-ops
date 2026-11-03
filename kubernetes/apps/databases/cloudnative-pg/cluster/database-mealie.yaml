@@ -1,0 +1,16 @@
+---
+# Mealie's database `app`, created at first boot by `postInitApplicationSQL`
+# in cluster.yaml and adopted here so its owner is declarative. Owned by its
+# own `mealie` role since 2026-11 (was the shared `app`).
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: mealie
+  namespace: databases
+spec:
+  cluster:
+    name: postgres
+  name: app
+  owner: mealie
+  ensure: present
+  databaseReclaimPolicy: retain
