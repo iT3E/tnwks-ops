@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.84.0 - 2026-11-03
+
+### Added
+
+* firefly: sign in with tnwks-auth (Cognito) through oauth2-proxy, admins group only; the API keeps token auth on its own ingress.
+
 ## v1.83.0 - 2026-11-03
 
 ### Changed
