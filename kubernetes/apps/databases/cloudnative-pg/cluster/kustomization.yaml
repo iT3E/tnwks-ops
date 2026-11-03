@@ -8,7 +8,6 @@ resources:
   - ./database.yaml
   - ./secret-plausible-role.sops.yaml
   - ./database-plausible.yaml
-  - ./reassign-owner/job-plausible.yaml
   - ./database-vantrip.yaml
   - ./database-things-api.yaml
   - ./database-home-assistant.yaml

@@ -1,0 +1,3 @@
+kind: Fixed
+body: Drop the finished reassign-owner-plausible Job, which re-ran on the postgres image bump (#1617) and waits forever since app left plausible's membership (#1618), blocking cloudnative-pg-cluster and its dependents.
+time: 2026-11-02T19:25:00-08:00
