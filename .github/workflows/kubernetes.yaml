@@ -28,8 +28,9 @@ jobs:
     name: "Render"
     runs-on: ubuntu-latest
     # A render takes well under a minute. Without a limit, a hung flate holds
-    # the job (and the required check) for GitHub's 6-hour default.
-    timeout-minutes: 10
+    # the job (and the required check) for GitHub's 6-hour default. 15 leaves
+    # room for one hang plus its retry in bin/images-added (4 minutes).
+    timeout-minutes: 15
     permissions:
       contents: read
     outputs:
