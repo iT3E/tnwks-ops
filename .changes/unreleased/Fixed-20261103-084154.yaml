@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Frigate: the front door camera hears speech now. Its own audio noise reduction was sending constant silence (switched off on the camera), and speech detection there now runs from RMS 50 instead of 500 (ambient about 27).'
+time: 2026-11-03T08:41:54.18115937-08:00

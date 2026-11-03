@@ -25,7 +25,7 @@ instead of reading Frigate's recordings.
 
 | Camera | Audio | Stream used |
 | --- | --- | --- |
-| front door (`frigate_loryta_fdoor`) | PCMA, main stream only | `frigate_loryta_fdoor_hq` |
+| front door (`frigate_loryta_fdoor`) | PCMA, main stream only; the camera's audio noise reduction must stay off | `frigate_loryta_fdoor_hq` |
 | south (`frigate_reolink_south`) | AAC | `frigate_reolink_south_lq` |
 | west (`frigate_sv3c_west`) | none: advertises PCMA, sends no audio packets | none |
 | kitchen, balcony, pool | none: no microphone | none |
@@ -42,6 +42,13 @@ returns `result=0`) and rejects `AudioEnable`, and their RTSP offers H264 only
 Check first that the stream has an audio track (go2rtc's `/api/streams`
 lists e.g. `PCMA` in the producer SDP): an audio role on a video-only stream
 makes Frigate's audio ffmpeg restart every 10s.
+
+Frigate only runs speech detection above `audio.min_volume` (RMS), 500 by
+default, which both cameras' mics are well below: south is set to 300
+(ambient about 230) and the front door to 50 (ambient about 27). The front
+door camera's own **audio noise reduction must stay off**: with it on, the
+camera sends constant silence and nothing is ever detected. That setting is
+on the camera, not in git, so a factory reset brings the problem back.
 
 Tune `audio.min_volume` per camera from Frigate's Debug view, Audio tab, if
 speech is missed or background noise triggers it.
