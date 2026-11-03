@@ -84,12 +84,16 @@ jobs:
             exit 1
           fi
 
-      # Diffed per cluster. With -p kubernetes, changed-only mode picked the
-      # MS-01 frigate Kustomization, which gets no postBuild substitution, so
-      # ${SERVICE_MONITOR_ENABLED} reached the chart as a string and every
-      # frigate PR failed here (#1451). MS-01 isn't live and has known render
-      # failures, so its diff only warns. Add a cluster to BLOCKING_CLUSTERS
-      # once it runs workloads.
+      # Per cluster, HEAD's rendered images minus BASE's (bin/images-added).
+      # `flate diff images` returned nothing for an image changed inside an
+      # existing HelmRelease, so Renovate tag bumps (#1648) and new
+      # controllers (#1650) skipped "Image exists". Comparing full
+      # `flate get images` lists catches them. Per cluster because -p
+      # kubernetes renders the MS-01 frigate Kustomization without postBuild
+      # substitution (#1451). MS-01 isn't live and has known render failures,
+      # so it is compared on what does render, with a warning; a cluster in
+      # BLOCKING_CLUSTERS must render fully. Plain manifest image: lines are
+      # added too (#1448).
       - name: Images added by this PR
         id: images
         if: github.event_name == 'pull_request'
@@ -98,33 +102,7 @@ jobs:
           BLOCKING_CLUSTERS: wsl
         run: |
           set -euo pipefail
-          images='[]'
-          for dir in kubernetes/clusters/*/; do
-            cluster="$(basename "${dir}")"
-            if out="$(flate diff images --no-progress --base "origin/${BASE_REF}" -p "${dir%/}" -o json)"; then
-              images="$(jq -c --argjson add "${out}" '. + $add | unique' <<<"${images}")"
-            elif [[ " ${BLOCKING_CLUSTERS} " == *" ${cluster} "* ]]; then
-              echo "::error::flate diff images failed for cluster ${cluster}"
-              exit 1
-            else
-              echo "::warning::flate diff images failed for cluster ${cluster} (not live, not blocking); its images are unchecked"
-            fi
-          done
-          # flate reports the images of HelmReleases only, so a plain
-          # manifest's image (packing-api's Deployment, say) went unchecked
-          # (#1448 skipped this job). Add every image: line this PR adds
-          # under kubernetes/ that is a plain reference with a tag or digest
-          # (no ${VAR}, no YAML anchor or map).
-          ref_re='^[a-z0-9][a-z0-9._/-]*(:[A-Za-z0-9._-]+)?(@sha256:[0-9a-f]{64})?$'
-          plain='[]'
-          while IFS= read -r ref; do
-            if [[ "${ref}" =~ ${ref_re} ]] && [[ "${ref}" == *[:@]* ]]; then
-              plain="$(jq -c --arg r "${ref}" '. + [$r]' <<<"${plain}")"
-            fi
-          done < <(git diff -U0 "origin/${BASE_REF}...HEAD" -- 'kubernetes/**/*.yaml' 'kubernetes/**/*.yml' \
-            | sed -nE 's/^\+[[:space:]]*(- )?image:[[:space:]]*"?([^"#[:space:]]+)"?.*$/\2/p')
-          echo "plain manifest images: ${plain}"
-          images="$(jq -c --argjson add "${plain}" '. + $add | unique' <<<"${images}")"
+          images="$(bin/images-added "origin/${BASE_REF}")"
           echo "${images}"
           {
             echo "images<<EOF"

@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# The container images a change adds, as a JSON array on stdout (for
+# kubernetes.yaml's "Image exists" check). Diagnostics go to stderr.
+#
+#   bin/images-added BASE_REV        e.g. origin/main
+#
+# Two sources, unioned:
+#   1. Per cluster (kubernetes/clusters/*): every image flate renders for
+#      HEAD's tree (`flate get images`) that it doesn't render for BASE's.
+#      This sees images inside HelmReleases, including a changed tag or a new
+#      controller in an existing release, which `flate diff images` missed.
+#      When some releases fail to render, flate still lists the images of the
+#      rest. On HEAD that is an error for a cluster in BLOCKING_CLUSTERS
+#      (default: wsl); for any other cluster the partial lists are compared
+#      with a warning (MS-01 has known render failures). If BASE gives no
+#      list at all, every HEAD image counts as added: more checks, not fewer.
+#   2. Plain `image:` lines this change adds under kubernetes/ (a reference
+#      with a tag or digest, no ${VAR}), for manifests flate doesn't render.
+#
+# Needs flate, git and jq. BASE is checked out into a temporary worktree.
+set -euo pipefail
+
+base="${1:?usage: images-added BASE_REV}"
+blocking=" ${BLOCKING_CLUSTERS:-wsl} "
+root="$(git rev-parse --show-toplevel)"
+cd "${root}"
+
+tmp="$(mktemp -d)"
+cleanup() {
+  git worktree remove --force "${tmp}/base" >/dev/null 2>&1 || true
+  rm -rf "${tmp}"
+}
+trap cleanup EXIT
+git worktree add --quiet --detach "${tmp}/base" "${base}"
+
+# DIR [WORKTREE]: the images flate renders for that cluster, as a JSON array
+# on stdout. Returns 1 if some releases failed (the list is then partial) and
+# 2 if there is no list at all.
+render() {
+  local out rc=0
+  out="$(cd "${2:-${root}}" && flate get images --no-progress -p "$1" -o json)" || rc=$?
+  if ! jq -e 'type == "array"' >/dev/null 2>&1 <<<"${out}"; then
+    return 2
+  fi
+  printf '%s\n' "${out}"
+  [[ "${rc}" -eq 0 ]] || return 1
+}
+
+images='[]'
+for dir in kubernetes/clusters/*/; do
+  dir="${dir%/}"
+  cluster="$(basename "${dir}")"
+  rc=0
+  head_imgs="$(render "${dir}")" || rc=$?
+  if [[ "${rc}" -ne 0 ]]; then
+    if [[ "${blocking}" == *" ${cluster} "* ]]; then
+      echo "::error::flate get images failed for cluster ${cluster}" >&2
+      exit 1
+    fi
+    if [[ "${rc}" -eq 2 ]]; then
+      echo "::warning::flate get images gave no list for cluster ${cluster} (not live, not blocking); its images are unchecked" >&2
+      continue
+    fi
+    echo "::warning::some releases of cluster ${cluster} don't render (not live, not blocking); only the rest are checked" >&2
+  fi
+  base_imgs='[]'
+  if [[ -d "${tmp}/base/${dir}" ]]; then
+    rc=0
+    base_imgs="$(render "${dir}" "${tmp}/base")" || rc=$?
+    if [[ "${rc}" -eq 2 ]]; then
+      echo "::warning::flate get images gave no list on ${base} for cluster ${cluster}; checking all of its images" >&2
+      base_imgs='[]'
+    fi
+  fi
+  added="$(jq -cn --argjson h "${head_imgs}" --argjson b "${base_imgs}" '$h - $b | unique')"
+  echo "cluster ${cluster}: $(jq length <<<"${head_imgs}") images, added: ${added}" >&2
+  images="$(jq -c --argjson add "${added}" '. + $add | unique' <<<"${images}")"
+done
+
+# Plain manifests: image: lines this change adds that are a full reference
+# (a tag or digest; no ${VAR}, no YAML anchor or map).
+ref_re='^[a-z0-9][a-z0-9._/-]*(:[A-Za-z0-9._-]+)?(@sha256:[0-9a-f]{64})?$'
+plain='[]'
+while IFS= read -r ref; do
+  if [[ "${ref}" =~ ${ref_re} ]] && [[ "${ref}" == *[:@]* ]]; then
+    plain="$(jq -c --arg r "${ref}" '. + [$r]' <<<"${plain}")"
+  fi
+done < <(git diff -U0 "${base}...HEAD" -- 'kubernetes/**/*.yaml' 'kubernetes/**/*.yml' \
+  | sed -nE 's/^\+[[:space:]]*(- )?image:[[:space:]]*"?([^"#[:space:]]+)"?.*$/\2/p')
+echo "plain manifest images: ${plain}" >&2
+
+jq -c --argjson add "${plain}" '. + $add | unique' <<<"${images}"
