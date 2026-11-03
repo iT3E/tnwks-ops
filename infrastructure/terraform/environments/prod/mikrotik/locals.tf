@@ -272,11 +272,6 @@ locals {
     unifi_controller = {
       "10_10_91_142" = "10.10.91.142"
     }
-    # TEMPORARY (2026-11): the front door camera, whose microphone sends
-    # silence. Remove with the web API rule in 140 once its audio is fixed.
-    cameras_audio_setup = {
-      "10_10_60_100" = "10.10.60.100"
-    }
   }
 
   # RouterOS has no port-group object; these render into dst_port strings.
@@ -427,16 +422,6 @@ locals {
           dst_address_list = "security_cameras"
           protocol         = "udp"
           dst_port         = "554"
-        },
-        # TEMPORARY (2026-11): HTTP from the desktop to the front door
-        # camera's web API, to fix its microphone input. Remove in a follow-up
-        # PR once its stream carries real audio.
-        {
-          comment          = "TEMP: desktop to camera web API (audio setup)"
-          src_address_list = "frigate"
-          dst_address_list = "cameras_audio_setup"
-          protocol         = "tcp"
-          dst_port         = "80"
         },
       ]
     }
