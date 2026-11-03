@@ -6,8 +6,8 @@ metadata:
   namespace: flux-system
 spec:
   # Gate on:
-  #   * cloudnative-pg-cluster — owns the `plausible` Database CRD and the
-  #     `postgres-app` Secret that reflector mirrors into selfhosted/.
+  #   * cloudnative-pg-cluster: owns the `plausible` Database CR and the
+  #     `plausible` role this app logs in as.
   #   * oauth2-proxy — the dashboard ingress uses it for auth-subrequest.
   dependsOn:
     - name: cloudnative-pg-cluster
