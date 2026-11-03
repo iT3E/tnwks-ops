@@ -48,7 +48,7 @@ Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md)
 
 | | |
 | --- | --- |
-| [`development/app-repos.md`](development/app-repos.md) | The repo setup every app repo gets (CI, Renovate, hooks, Changie releases, labels, secret and privacy scanning), with this repo as the reference |
+| [`development/app-repos.md`](development/app-repos.md) | The app repos deployed from here, and a pointer to iT3E/app-template, which holds their standard setup (reusable workflows, Copier template, Renovate presets) |
 
 ## Apps
 
