@@ -1,0 +1,16 @@
+---
+# finance-sync's state (the Simplifi token, what has been posted, account and
+# category maps, the Amazon order history and rules), moved off its PVC
+# in 2026-11 so writes are transactional and restores are point-in-time.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: finance-sync
+  namespace: databases
+spec:
+  cluster:
+    name: postgres
+  name: finance_sync
+  owner: finance_sync
+  ensure: present
+  databaseReclaimPolicy: retain
