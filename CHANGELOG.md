@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.100.1 - 2026-11-03
+
+### Fixed
+
+* Frigate: no audio detection on the west camera. Its stream advertises PCMA but sends no audio packets, so the audio process only idled.
+
 ## v1.100.0 - 2026-11-03
 
 ### Added

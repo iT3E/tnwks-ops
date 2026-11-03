@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Frigate: no audio detection on the west camera. Its stream advertises PCMA but sends no audio packets, so the audio process only idled.'
-time: 2026-11-02T22:42:32.197741748-08:00
