@@ -24,6 +24,29 @@ Moved here from a Docker Compose stack on the WSL host on 2026-11-02.
 | Daily jobs | CronJob `firefly-firefly-cron`, 03:00 UTC, calls `/api/v1/cron/<token>` (recurring transactions, auto-budgets, bill warnings) |
 | Attachments | PVC `firefly-upload`, backed up by kopiur |
 
+## Login
+
+Web login is tnwks-auth (Cognito) through oauth2-proxy, members of `admins`
+only, the same pattern as Grafana. Firefly has no OIDC client; its
+`remote_user_guard` trusts the `X-Auth-Request-Email` header that
+ingress-nginx sets from oauth2-proxy, and matches it to the Firefly user's
+email. An email it doesn't know is created as a new, empty user, which is why
+the ingress filters on the group. The owner account's email is the Cognito
+login's email.
+
+- `/api` is a separate Ingress (`firefly-api`) without oauth2-proxy, because
+  API clients use personal access tokens. It clears the `X-Auth-Request-*`
+  headers, and the API guard ignores them anyway.
+- Logout goes to Cognito's `/logout`, which ends the SSO session and clears
+  the oauth2-proxy cookie.
+- A 403 right after a change to oauth2-proxy's groups claim means the session
+  predates it: sign out at `https://oauth2.internal.tnwks.us/oauth2/sign_out`
+  and in again.
+- Break-glass: set `AUTHENTICATION_GUARD` back to `web` for password login.
+- Residual risk, shared with Grafana's auth proxy: a pod that talks to the
+  Firefly Service directly can send the header itself. Flannel does not
+  enforce NetworkPolicy, so nothing in the cluster blocks that today.
+
 ## The Passport keypair: read this before touching the secret
 
 Firefly's API tokens (personal access tokens) are RS256 JWTs signed by
