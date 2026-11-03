@@ -44,6 +44,12 @@ Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md)
 | [`operations/renew-kubeconfig-cert.md`](operations/renew-kubeconfig-cert.md) | Renewing the kubeconfig client certificate |
 | [`operations/renovate.md`](operations/renovate.md) | Renovate tiers, and how impact/high PRs reach Ori's reviewer agent |
 
+## Development
+
+| | |
+| --- | --- |
+| [`development/app-repos.md`](development/app-repos.md) | The repo setup every app repo gets (CI, Renovate, hooks, Changie releases, labels, secret and privacy scanning), with this repo as the reference |
+
 ## Apps
 
 | | |
