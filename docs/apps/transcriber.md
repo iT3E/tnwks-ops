@@ -110,6 +110,22 @@ speaker per voice in a clip; the UI shows each match's score. The CLI
 (`kubectl -n production exec deploy/transcriber -c app -- python3 -m
 transcriber ...`) still has every command; the image README lists them.
 
+## Summaries
+
+On a day's page, **Summarize this day** sends that day's transcript, with
+the display names, to Claude Sonnet on AWS Bedrock (through LiteLLM,
+`docs/apps/litellm.md`), and shows the result: an overview, each
+conversation briefly, and plans and to-dos quoting the line and time they
+came from. **Summarize again** regenerates it. Every run is stored in the
+`summaries` table; the newest is shown.
+
+- The transcript leaves the house for this: Bedrock, in its own AWS account.
+  Nothing is sent until the button is pressed.
+- The transcriber's LiteLLM key (`LITELLM_API_KEY` in `app/secrets.sops.yaml`)
+  can only use `claude-sonnet`.
+- The prompt is in the transcriber's `transcriber/summary.py`; a summary is
+  usually ready in under 15 seconds.
+
 ## Privacy
 
 This records and stores what people say at home. California requires every

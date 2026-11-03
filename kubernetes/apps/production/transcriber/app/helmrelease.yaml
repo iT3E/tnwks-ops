@@ -13,6 +13,9 @@
 #                release never restarts capture.
 # The ingress serves both on one host: /api -> web, the rest -> frontend,
 # behind oauth2-proxy limited to the Cognito group `transcriber`.
+# Daily summaries: web calls claude-sonnet through LiteLLM with its own key
+# (LITELLM_API_KEY in transcriber-secret, the `transcriber` entry in
+# ai/litellm's secret-keys); docs/apps/litellm.md.
 #
 # Notes on the values below:
 # - CAMERAS maps each Frigate camera (its MQTT topic name) to the go2rtc
@@ -231,6 +234,9 @@ spec:
           # subrequest header chunk overflows nginx's default 4k buffer.
           nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
           nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+          # POST /api/days/<day>/summary waits on the LLM (seconds, up to the
+          # transcriber's SUMMARY_TIMEOUT_S of 150); nginx's default is 60s.
+          nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
         hosts:
           - host: &host "{{ .Release.Name }}.${CLUSTER_DOMAIN}"
             paths:

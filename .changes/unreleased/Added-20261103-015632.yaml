@@ -1,0 +1,3 @@
+kind: Added
+body: 'transcriber: daily summaries. The UI''s Summarize button sends the day''s transcript to claude-sonnet on Bedrock through LiteLLM, with the transcriber''s own key (claude-sonnet only); the ingress waits up to 180 s for it.'
+time: 2026-11-03T01:56:32.484852838-08:00
