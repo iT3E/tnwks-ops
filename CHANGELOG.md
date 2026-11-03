@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.85.0 - 2026-11-03
+
+### Changed
+
+* docs: Firefly III login (tnwks-auth through oauth2-proxy) in docs/apps/firefly.md.
+
 ## v1.84.0 - 2026-11-03
 
 ### Added
