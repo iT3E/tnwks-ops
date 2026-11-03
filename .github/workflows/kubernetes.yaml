@@ -104,6 +104,21 @@ jobs:
               echo "::warning::flate diff images failed for cluster ${cluster} (not live, not blocking); its images are unchecked"
             fi
           done
+          # flate reports the images of HelmReleases only, so a plain
+          # manifest's image (packing-api's Deployment, say) went unchecked
+          # (#1448 skipped this job). Add every image: line this PR adds
+          # under kubernetes/ that is a plain reference with a tag or digest
+          # (no ${VAR}, no YAML anchor or map).
+          ref_re='^[a-z0-9][a-z0-9._/-]*(:[A-Za-z0-9._-]+)?(@sha256:[0-9a-f]{64})?$'
+          plain='[]'
+          while IFS= read -r ref; do
+            if [[ "${ref}" =~ ${ref_re} ]] && [[ "${ref}" == *[:@]* ]]; then
+              plain="$(jq -c --arg r "${ref}" '. + [$r]' <<<"${plain}")"
+            fi
+          done < <(git diff -U0 "origin/${BASE_REF}...HEAD" -- 'kubernetes/**/*.yaml' 'kubernetes/**/*.yml' \
+            | sed -nE 's/^\+[[:space:]]*(- )?image:[[:space:]]*"?([^"#[:space:]]+)"?.*$/\2/p')
+          echo "plain manifest images: ${plain}"
+          images="$(jq -c --argjson add "${plain}" '. + $add | unique' <<<"${images}")"
           echo "${images}"
           {
             echo "images<<EOF"
