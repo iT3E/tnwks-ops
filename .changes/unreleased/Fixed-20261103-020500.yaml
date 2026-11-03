@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Home Assistant: Security alerts view, the away/weekday automation tile name no longer gets cut off'
+time: 2026-11-03T02:05:00.000000-08:00
