@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.98.0 - 2026-11-03
+
+### Changed
+
+* kitchen display: each holiday theme is now an illustrated scene behind the page (a sky behind the clock and a lit, layered landscape along the bottom: a harvest moon over autumn hills and a barn, an aurora over snowy pines and a cabin, a haunted house under a full moon, heart trees and balloons, a rainbow over a cottage and sheep, a skyline under fireworks or bokeh), with the cards floating over it lit and shadowed instead of patterned, a lit tab pill, and a countdown to the holiday in the greeting.
+
 ## v1.97.1 - 2026-11-03
 
 ### Fixed
