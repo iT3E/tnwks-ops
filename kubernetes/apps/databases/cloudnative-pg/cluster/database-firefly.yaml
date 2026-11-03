@@ -1,0 +1,26 @@
+---
+# Firefly III's database (the household ledger: accounts, transactions,
+# budgets, categories, plus the Passport oauth_* tables that back the API
+# tokens the finance agent uses).
+#
+# Owned by its own `firefly` role (managed.roles in cluster.yaml) rather than
+# the shared `app` credential. Same pattern as grafana. The reason to isolate
+# here is blast radius: `app` owns bitwarden, litellm, plausible, vantrip and
+# things-api, and a leaked `app` password should not also reach financial
+# data.
+#
+# Migrated from bare Docker (postgres:16-alpine, container firefly_iii_db) on
+# 2026-11-02. See docs/apps/firefly.md.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: firefly
+  namespace: databases
+spec:
+  cluster:
+    name: postgres
+  name: firefly
+  owner: firefly
+  ensure: present
+  # Never let a manifest deletion drop the ledger.
+  databaseReclaimPolicy: retain
