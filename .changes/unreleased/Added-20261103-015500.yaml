@@ -1,0 +1,3 @@
+kind: Added
+body: 'Home Assistant: away and weekday person alerts (normal push to named phones), and the Security dashboard alert settings now survive restarts and deploys'
+time: 2026-11-03T01:55:00.000000-08:00
