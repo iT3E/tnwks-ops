@@ -24,6 +24,24 @@ spec:
   # doesn't restart the instances.
   managed:
     roles:
+      # `app` is the bootstrap owner most apps still share. It is adopted here
+      # only so it can be given temporary membership in each app's new role
+      # (inRoles) while ownership moves off it (reassign-owner/). Its
+      # attributes match what initdb created, and its password Secret is
+      # cnpg's own postgres-app, so nothing changes for apps connecting as it.
+      # Each app's entry leaves inRoles once that app connects as its own role.
+      - name: app
+        ensure: present
+        login: true
+        passwordSecret:
+          name: postgres-app
+        inRoles:
+          - plausible
+      - name: plausible
+        ensure: present
+        login: true
+        passwordSecret:
+          name: postgres-plausible
       - name: grafana
         ensure: present
         login: true

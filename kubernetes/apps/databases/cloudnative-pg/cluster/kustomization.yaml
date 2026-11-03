@@ -6,7 +6,9 @@ namespace: databases
 resources:
   - ./cluster.yaml
   - ./database.yaml
+  - ./secret-plausible-role.sops.yaml
   - ./database-plausible.yaml
+  - ./reassign-owner/job-plausible.yaml
   - ./database-vantrip.yaml
   - ./database-things-api.yaml
   - ./database-home-assistant.yaml
@@ -21,6 +23,15 @@ resources:
 # exists before apply.
 # Backups: objectstore.yaml + scheduled-backup.yaml (barman-cloud plugin to
 # AWS S3, both clusters). See docs/operations/backups.md.
+# The ownership-move script, shared by the reassign-owner Jobs. Substitution
+# is disabled: Flux must not touch the SQL's $-quoting.
+configMapGenerator:
+  - name: reassign-owner-sql
+    files:
+      - ./reassign-owner/reassign-owner.sql
+    options:
+      labels:
+        kustomize.toolkit.fluxcd.io/substitute: disabled
 labels:
   - pairs:
       app.kubernetes.io/name: cloudnative-pg-cluster

@@ -1,0 +1,3 @@
+kind: Changed
+body: 'cloudnative-pg: plausible gets its own managed role and owns its database; a one-time Job moves its objects off the shared app role.'
+time: 2026-11-02T19:10:00-08:00
