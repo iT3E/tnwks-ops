@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.87.1 - 2026-11-03
+
+### Security
+
+* cloudnative-pg: the shared app role loses access to the plausible database now that Plausible uses its own role.
+
 ## v1.87.0 - 2026-11-03
 
 ### Changed
