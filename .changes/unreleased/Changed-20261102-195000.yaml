@@ -1,0 +1,3 @@
+kind: Changed
+body: "mealie: use its own `mealie` database instead of `app`, the cluster's first-boot database (kept as the rollback copy)."
+time: 2026-11-02T19:50:00-08:00
