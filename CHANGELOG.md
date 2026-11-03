@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.103.0 - 2026-11-03
+
+### Added
+
+* Cognito: a transcriber group with only the admin in it, for the transcripts' ingress (oauth2-proxy allowed_groups).
+
 ## v1.102.1 - 2026-11-03
 
 ### Fixed

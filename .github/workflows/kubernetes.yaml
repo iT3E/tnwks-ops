@@ -27,6 +27,9 @@ jobs:
   flate:
     name: "Render"
     runs-on: ubuntu-latest
+    # A render takes well under a minute. Without a limit, a hung flate holds
+    # the job (and the required check) for GitHub's 6-hour default.
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
@@ -54,11 +57,14 @@ jobs:
       # cluster also gets its own run below. flate aliases the flux-system
       # GitRepository to this checkout because its URL matches the origin
       # remote, so a cluster entrypoint renders this PR's tree.
+      # Each render is capped at 5 minutes. On a hang, SIGQUIT makes the Go
+      # runtime print every goroutine's stack to the log before exiting, so
+      # the failure shows where flate was stuck instead of just a timeout.
       - name: Render all Kustomizations and HelmReleases
-        run: flate test all --no-progress -p kubernetes
+        run: timeout --signal=QUIT --kill-after=30s 5m flate test all --no-progress -p kubernetes
 
       - name: Render the live cluster (wsl) from its entrypoint
-        run: flate test all --no-progress -p kubernetes/clusters/wsl
+        run: timeout --signal=QUIT --kill-after=30s 5m flate test all --no-progress -p kubernetes/clusters/wsl
 
       # A Flux Alert event source only matches one namespace, so every
       # namespace with a HelmRelease needs its own entry, or its failures

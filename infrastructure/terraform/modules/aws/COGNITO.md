@@ -8,7 +8,7 @@ pool that backs authentication for `*.internal.tnwks.us` services
 
 - **User pool** `tnwks-auth` (Essentials tier — passkeys, managed login,
   10k free MAU)
-- **Groups:** `admins`, `viewers`, `agents`
+- **Groups:** `admins`, `viewers`, `agents`, and `transcriber` (only the admin: the speech transcripts, gated by oauth2-proxy `allowed_groups=transcriber`)
 - **Resource server** `tnwks-api` with scopes `read` / `write` / `admin`
 - **App clients:**
   - `oauth2-proxy` — authorization_code, callback to
