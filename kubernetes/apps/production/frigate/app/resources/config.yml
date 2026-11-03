@@ -290,6 +290,12 @@ cameras:
 
     audio:
       enabled: true
+      # A quiet mic: ambient RMS 26 to 28 (2026-11), so the default 500
+      # never ran the detector. Needs the camera's own audio noise reduction
+      # OFF (Setup > Camera > Audio): with it on, the camera sent constant
+      # silence (-72.2 dB) and nothing was ever heard. That setting lives on
+      # the camera, not here; a factory reset turns it back on.
+      min_volume: 50
     detect:
       width: 704
       height: 480
