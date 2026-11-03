@@ -1,3 +1,3 @@
 kind: Changed
-body: 'cloudnative-pg: stop managing the app database with a Database CR (kept as Mealie'"'"'s rollback copy), freeing the mealie name for its own database.'
+body: "cloudnative-pg: stop managing the app database with a Database CR (kept as Mealie's rollback copy), freeing the mealie name for its own database."
 time: 2026-11-02T19:35:00-08:00
