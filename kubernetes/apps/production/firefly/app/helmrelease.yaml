@@ -29,6 +29,11 @@ spec:
       securityContext:
         # The image runs as www-data (33). fsGroup makes the Passport key
         # Secret files group-readable by it at defaultMode 0440.
+        # Numeric, because the image's USER is the name `www-data` and
+        # runAsNonRoot cannot verify a non-numeric user (the pod fails with
+        # CreateContainerConfigError). The curl cron container inherits 33 too.
+        runAsUser: 33
+        runAsGroup: 33
         fsGroup: 33
         fsGroupChangePolicy: OnRootMismatch
         runAsNonRoot: true
