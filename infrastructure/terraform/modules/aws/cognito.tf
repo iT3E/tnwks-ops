@@ -155,6 +155,16 @@ resource "aws_cognito_user_group" "agents" {
   precedence   = 20
 }
 
+# The speech transcripts (kubernetes/apps/production/transcriber): the ingress
+# lets in only this group (oauth2-proxy allowed_groups). Its own group rather
+# than admins, so a future admin doesn't get household conversations too.
+resource "aws_cognito_user_group" "transcriber" {
+  name         = "transcriber"
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+  description  = "The speech transcripts and their audio"
+  precedence   = 30
+}
+
 resource "random_password" "admin_temp" {
   length           = 24
   special          = true
@@ -201,6 +211,12 @@ resource "aws_cognito_user" "admin" {
 resource "aws_cognito_user_in_group" "admin_in_admins" {
   user_pool_id = aws_cognito_user_pool.tnwks_auth.id
   group_name   = aws_cognito_user_group.admins.name
+  username     = aws_cognito_user.admin.username
+}
+
+resource "aws_cognito_user_in_group" "admin_in_transcriber" {
+  user_pool_id = aws_cognito_user_pool.tnwks_auth.id
+  group_name   = aws_cognito_user_group.transcriber.name
   username     = aws_cognito_user.admin.username
 }
 
