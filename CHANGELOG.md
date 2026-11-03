@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.88.0 - 2026-11-03
+
+### Changed
+
+* cloudnative-pg: own managed roles for Home Assistant, LiteLLM, the storefront API, the packing API, Vaultwarden and Mealie; each owns its database and a one-time Job moves its objects off the shared app role.
+
 ## v1.87.1 - 2026-11-03
 
 ### Security
