@@ -1,13 +1,14 @@
 ---
-# Person alerts from Frigate: night alerts to every phone, plus normal pushes
-# to the adults' phones while they're away and in a weekday window.
+# Person alerts from Frigate: night alerts to both adults' phones, plus
+# normal pushes to them while they're away and in a weekday window.
 #
 # Frigate groups activity into review items and publishes every change to one
 # on frigate/reviews (type new / update / end). A review is an "alert" when it
 # contains a label from review.alerts.labels — person, with the default
 # Frigate config. This pushes one notification per review, the first time it
 # becomes a person alert, on a watched camera, to whoever should get it:
-#   - Night (night window, "Night person alerts" on): every phone, as below.
+#   - Night (night window, "Night person alerts" on): both adults' phones,
+#     as below.
 #     Night wins: while it applies, the normal alerts stay quiet, so nobody
 #     gets the same review twice.
 #   - Away ("Away person alerts" on, any time of day): a normal push to
@@ -16,18 +17,17 @@
 #   - Weekday ("Weekday person alerts" on, weekday_days between the weekday
 #     start and end times): a normal push to adult1's phone, home or not.
 #   A review that matches both away and weekday still sends one push per
-#   phone. Away and weekday pushes go to named phones (the phones variable),
-#   so a new or renamed phone needs updating there.
+#   phone. Every push goes to named phones (the phones variable), so a new
+#   or renamed phone needs updating there. Other Companion app devices, like
+#   the kitchen wall tablet, never get alerts.
 #
 # Delivery is the Companion app's native push. mobile_app's legacy notify
-# platform registers one service per phone (notify.mobile_app_<device>) plus a
-# base service, named notify.notify because the platform has no name; called
-# with no target, the base service sends to every phone that has the app
-# installed and logged in. The night alerts use it; the away and weekday
-# alerts call one phone's service each. (If another unnamed legacy notify
-# platform is ever added, it would compete for notify.notify — give it a
-# name.) Until the first phone registers, the notify step fails and the run
-# stops after the in-app notification. The night alerts have two tiers (the
+# platform registers one service per device (notify.mobile_app_<device>);
+# each alert calls the service of each phone it goes to. Don't use the base
+# notify.notify: it sends to every device with the app, which includes the
+# kitchen wall tablet, so it rang the tablet's alarm stream at night until
+# 2026-11-03. A phone with a stale registration fails only its own call. The
+# night alerts have two tiers (the
 # away and weekday alerts are always the normal one, with no in-app
 # notification):
 #   - normal: time-sensitive (iOS; gets through Focus, not Do Not Disturb or
@@ -125,6 +125,11 @@ automation:
       # For now every watched camera is critical. To tier them, replace this
       # with an explicit list; the rest then send normal pushes.
       critical_cameras: "{{ watched_cameras }}"
+      # Legacy mobile_app notify service per adult (notify.<value>). The
+      # night alerts go to all of them.
+      phones:
+        person.adult1: mobile_app_pixel_8_pro
+        person.adult2: mobile_app_pixel_9a
       # Browser-facing Frigate UI, for the notification's button.
       frigate_ui: !env_var FRIGATE_UI_URL
       review: "{{ trigger.payload_json }}"
@@ -190,29 +195,32 @@ automation:
             {{ started }} —
             [play clip]({{ clip_path }}) ·
             [open in Frigate]({{ frigate_ui }}/review?id={{ review.after.id }})
-      # A phone with a stale registration shouldn't fail the run.
-      - continue_on_error: true
-        action: notify.notify
-        data:
-          title: "Person at {{ camera_name }}"
-          message: "{{ started }}"
-          data:
-            image: "/api/frigate/notifications/{{ event_id }}/snapshot.jpg"
-            # Tap (iOS: url, Android: clickAction).
-            url: "{{ clip_path }}"
-            clickAction: "{{ clip_path }}"
-            tag: "{{ tag }}"
-            group: frigate-person
-            actions: "{{ buttons }}"
-            # iOS
-            push: >-
-              {{ {'sound': {'name': 'default', 'critical': 1, 'volume': 1.0}}
-                 if critical else {'interruption-level': 'time-sensitive'} }}
-            # Android: deliver immediately even to an idle phone; critical ones
-            # ring on the alarm stream.
-            ttl: 0
-            priority: high
-            channel: "{{ 'alarm_stream' if critical else 'Security alerts' }}"
+      - repeat:
+          for_each: "{{ phones.values() | list }}"
+          sequence:
+            # A phone with a stale registration shouldn't fail the run.
+            - continue_on_error: true
+              action: "notify.{{ repeat.item }}"
+              data:
+                title: "Person at {{ camera_name }}"
+                message: "{{ started }}"
+                data:
+                  image: "/api/frigate/notifications/{{ event_id }}/snapshot.jpg"
+                  # Tap (iOS: url, Android: clickAction).
+                  url: "{{ clip_path }}"
+                  clickAction: "{{ clip_path }}"
+                  tag: "{{ tag }}"
+                  group: frigate-person
+                  actions: "{{ buttons }}"
+                  # iOS
+                  push: >-
+                    {{ {'sound': {'name': 'default', 'critical': 1, 'volume': 1.0}}
+                       if critical else {'interruption-level': 'time-sensitive'} }}
+                  # Android: deliver immediately even to an idle phone;
+                  # critical ones ring on the alarm stream.
+                  ttl: 0
+                  priority: high
+                  channel: "{{ 'alarm_stream' if critical else 'Security alerts' }}"
 
   - id: frigate_night_person_alert_preview
     alias: "Security: person at night (preview)"
@@ -237,27 +245,31 @@ automation:
              and review.after.severity == 'alert'
              and 'person' in review.after.data.objects }}
     actions:
-      - continue_on_error: true
-        action: notify.notify
-        data:
-          title: "Person at {{ camera_name }}"
-          message: "{{ started }}"
-          data:
-            image: "/api/frigate/notifications/{{ review.after.id }}/review_preview.gif"
-            url: "{{ clip_path }}"
-            clickAction: "{{ clip_path }}"
-            # Same tag: replaces the alert instead of adding a second one.
-            tag: "{{ tag }}"
-            group: frigate-person
-            actions: "{{ buttons }}"
-            # Never ring for the update. iOS: passive. Android: alert_once for
-            # the in-place replace, plus a low-importance channel so a repost
-            # (if the alert was already dismissed) stays silent too.
-            push: &preview_push
-              interruption-level: passive
-            alert_once: true
-            channel: Security previews
-            importance: low
+      - repeat:
+          for_each: "{{ phones.values() | list }}"
+          sequence:
+            - continue_on_error: true
+              action: "notify.{{ repeat.item }}"
+              data:
+                title: "Person at {{ camera_name }}"
+                message: "{{ started }}"
+                data:
+                  image: "/api/frigate/notifications/{{ review.after.id }}/review_preview.gif"
+                  url: "{{ clip_path }}"
+                  clickAction: "{{ clip_path }}"
+                  # Same tag: replaces the alert instead of adding a second one.
+                  tag: "{{ tag }}"
+                  group: frigate-person
+                  actions: "{{ buttons }}"
+                  # Never ring for the update. iOS: passive. Android:
+                  # alert_once for the in-place replace, plus a low-importance
+                  # channel so a repost (if the alert was already dismissed)
+                  # stays silent too.
+                  push: &preview_push
+                    interruption-level: passive
+                  alert_once: true
+                  channel: Security previews
+                  importance: low
 
   - id: frigate_person_alert_normal
     alias: "Security: person while away or weekday"
@@ -274,10 +286,6 @@ automation:
         topic: frigate/reviews
     variables: &normal_variables
       <<: *alert_variables
-      # Legacy mobile_app notify service per adult (notify.<value>).
-      phones:
-        person.adult1: mobile_app_pixel_8_pro
-        person.adult2: mobile_app_pixel_9a
       # ISO weekdays (Mon = 1) for the weekday window: Mon-Wed.
       weekday_days: [1, 2, 3]
       # The notify services to send to; empty means nobody should get it.

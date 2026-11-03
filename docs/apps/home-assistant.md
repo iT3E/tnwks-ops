@@ -282,9 +282,9 @@ WSL forwards localhost, so a Windows browser can use `http://localhost:8123`.
    - Install the Home Assistant Companion app and connect it to
      `https://hass.tnwks.us`. With SSO the app shows a code to enter in the
      phone's browser. This is hass-oidc-auth's device-code login. Registering
-     the app is all the night alerts need, since they send to every registered
-     phone. The away and weekday alerts go to named phones, so a new adult's
-     phone also goes in the package's `phones` (see Person alerts).
+     the app isn't enough for alerts: every alert goes to the named phones in the
+     package's `phones`, so add a new adult's phone there (see Person alerts).
+     Other app devices, like the kitchen wall tablet, get no alerts.
    - **LAN URL:** in the app, Settings > Companion app > (server) set *Internal
      URL* to `https://hass.internal.tnwks.us` and add the home Wi-Fi network(s).
      The app needs location permission to read the network name. On those
@@ -304,7 +304,7 @@ to areas so the Overview dashboard fills in.
 ## Person alerts
 
 `config/packages/frigate_person_alerts.yaml` holds all of Frigate's person
-alerts: the night alerts to every phone, and normal pushes while the adults
+alerts: the night alerts to both adults' phones, and normal pushes while the adults
 are away or in a weekday window.
 
 ### Night person alerts
@@ -351,7 +351,9 @@ no Do Not Disturb override, no in-app notification) to named phones:
 A review that matches both still sends one push per phone, and the end of the
 review swaps in the animated preview silently, as at night. The phones are the
 `phones` variable in the package (legacy `notify.mobile_app_<device>`
-services), so a new or renamed phone needs updating there.
+services), shared with the night alerts, so a new or renamed phone needs
+updating there. Nothing calls the base `notify.notify`, which would also reach
+the kitchen wall tablet.
 
 ### Settings survive restarts
 
