@@ -37,6 +37,7 @@ any time of day (the last rule in `.github/renovate/autoMerge.json5`,
 | the storefront API | Go | `ghcr.io/it3e/<repo>` | `:<version>@sha256` (`kubernetes/apps/production/*-things-api`) |
 | `iT3E/tnwks-finance-sync` | Python | `ghcr.io/it3e/tnwks-finance-sync` | `:<version>@sha256` (`kubernetes/apps/production/finance-sync`) |
 | `iT3E/tnwks-transcriber` | Python | `ghcr.io/it3e/tnwks-transcriber` | `:<version>@sha256` (`kubernetes/apps/production/transcriber`) |
+| `iT3E/tnwks-transcriber-web` | Node (Angular) | `ghcr.io/it3e/tnwks-transcriber-web` | `:<version>@sha256` (`kubernetes/apps/production/transcriber`) |
 
 The image tags these pins rely on are part of the standard's contract
 (github-workflows' `image.yaml`): `:main` and `:sha-<short>` from `main`

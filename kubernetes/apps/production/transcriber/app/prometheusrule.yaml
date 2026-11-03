@@ -11,7 +11,7 @@ spec:
     - name: transcriber
       rules:
         - alert: TranscriberDown
-          expr: absent(up{namespace="production", service="transcriber"} == 1)
+          expr: absent(up{namespace="production", service="transcriber-app"} == 1)
           for: 15m
           labels:
             severity: warning

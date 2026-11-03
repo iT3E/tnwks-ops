@@ -1,8 +1,18 @@
 ---
 # Speech on the cameras, transcribed and diarized, into Postgres. Fully
-# local, on CPU. Code and image: iT3E/tnwks-transcriber (private repo, public
-# image with no data in it). docs/apps/transcriber.md has the flow, the
-# enrollment steps and the storage.
+# local, on CPU. Code and images: iT3E/tnwks-transcriber and
+# iT3E/tnwks-transcriber-web (private repos, public images with no data in
+# them). docs/apps/transcriber.md has the flow, the UI and the storage.
+#
+# Two controllers:
+#   transcriber  the capture and transcription service (container app) and
+#                the JSON API the UI calls (container web). One pod: web
+#                needs the same audio volume, and a ReadWriteOnce PVC can't
+#                be shared across pods on another node.
+#   frontend     the Angular UI (nginx, static files). Its own pod, so a UI
+#                release never restarts capture.
+# The ingress serves both on one host: /api -> web, the rest -> frontend,
+# behind oauth2-proxy limited to the Cognito group `transcriber`.
 #
 # Notes on the values below:
 # - CAMERAS maps each Frigate camera (its MQTT topic name) to the go2rtc
@@ -21,6 +31,8 @@
 # - THREADS / OMP_NUM_THREADS 4 and the 4-core limit: transcription bursts
 #   while a clip is processed and is idle otherwise. All three WSL nodes
 #   share one 12-thread host with Frigate.
+# - Volumes use advancedMounts, not globalMounts: globalMounts would mount
+#   the transcriber's PVCs into the frontend pod as well.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -48,7 +60,6 @@ spec:
   values:
     defaultPodOptions:
       automountServiceAccountToken: false
-      terminationGracePeriodSeconds: 60
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -62,11 +73,13 @@ spec:
         strategy: Recreate
         annotations:
           reloader.stakater.com/auto: "true"
+        pod:
+          terminationGracePeriodSeconds: 60
         initContainers:
           selfcheck:
             image: &image
               repository: ghcr.io/it3e/tnwks-transcriber
-              tag: 0.1.0@sha256:364d97b0406821c003b42312b8eeb39346fe156a45fc9473ce438f47aa9fdc2b
+              tag: 0.2.0@sha256:05841bd94a0e3075506ed84e674a59a013c69d6f50c88829614d600a580b62e1
             args:
               - selfcheck
             envFrom: &envFrom
@@ -106,7 +119,7 @@ spec:
                 spec:
                   httpGet:
                     path: /healthz
-                    port: &port 8080
+                    port: &metricsPort 8080
                   initialDelaySeconds: 30
                   periodSeconds: 30
                   timeoutSeconds: 5
@@ -122,22 +135,120 @@ spec:
               limits:
                 cpu: "4"
                 memory: 6Gi
+          # The JSON API for the UI (no models loaded). It shares the pod for
+          # the audio volume; it reads clips and caches per-voice cuts in /tmp.
+          web:
+            image: *image
+            args:
+              - web
+            envFrom: *envFrom
+            env:
+              TZ: ${TIMEZONE}
+              WEB_PORT: "8081"
+            securityContext: *securityContext
+            probes:
+              liveness: &webProbe
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/healthz
+                    port: 8081
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+              readiness: *webProbe
+              startup:
+                enabled: false
+            resources:
+              requests:
+                cpu: 20m
+                memory: 128Mi
+              limits:
+                memory: 512Mi
+      frontend:
+        replicas: 1
+        strategy: RollingUpdate
+        containers:
+          app:
+            image:
+              repository: ghcr.io/it3e/tnwks-transcriber-web
+              tag: 0.1.0@sha256:55545c97193bb09bc4e37e3e33759cd00fc671c2219f522c7d0f65c85a8cd0b8
+            securityContext: *securityContext
+            probes:
+              liveness: &frontendProbe
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /healthz
+                    port: &frontendPort 8080
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+              readiness: *frontendProbe
+              startup:
+                enabled: false
+            resources:
+              requests:
+                cpu: 5m
+                memory: 16Mi
+              limits:
+                memory: 64Mi
     service:
       app:
         controller: transcriber
         ports:
           http:
-            port: *port
+            port: *metricsPort
+          web:
+            port: 8081
+      frontend:
+        controller: frontend
+        ports:
+          http:
+            port: *frontendPort
     serviceMonitor:
       app:
         enabled: ${SERVICE_MONITOR_ENABLED}
-        serviceName: transcriber
+        serviceName: transcriber-app
         endpoints:
           - port: http
             scheme: http
             path: /metrics
             interval: 60s
             scrapeTimeout: 10s
+    # Internal only (nginx-internal), behind oauth2-proxy with the shared
+    # .tnwks.us SSO session, and only for the Cognito group `transcriber`:
+    # these are household conversations and their audio.
+    ingress:
+      app:
+        className: nginx-internal
+        annotations:
+          nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local:80/oauth2/auth?allowed_groups=transcriber"
+          nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${INTERNAL_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
+          # Cognito-backed sessions are split across multiple cookies; the
+          # subrequest header chunk overflows nginx's default 4k buffer.
+          nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+          nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+        hosts:
+          - host: &host "{{ .Release.Name }}.${CLUSTER_DOMAIN}"
+            paths:
+              - path: /api
+                pathType: Prefix
+                service:
+                  identifier: app
+                  port: web
+              - path: /
+                pathType: Prefix
+                service:
+                  identifier: frontend
+                  port: http
+        # The controller's default cert (*.internal.tnwks.us) covers the
+        # host; listing it makes nginx redirect plain http to https.
+        tls:
+          - hosts:
+              - *host
     persistence:
       audio:
         enabled: true
@@ -146,8 +257,15 @@ spec:
         size: 20Gi
         storageClass: local-path-bulk
         retain: true
-        globalMounts:
-          - path: /audio
+        advancedMounts:
+          transcriber:
+            selfcheck:
+              - path: /audio
+            app:
+              - path: /audio
+            web:
+              - path: /audio
+                readOnly: true
       models:
         enabled: true
         type: persistentVolumeClaim
@@ -155,15 +273,38 @@ spec:
         size: 5Gi
         storageClass: ${STORAGE_CLASS_DEFAULT}
         retain: true
-        globalMounts:
-          - path: /models
+        advancedMounts:
+          transcriber:
+            selfcheck:
+              - path: /models
+            app:
+              - path: /models
       buffer:
         type: emptyDir
         medium: Memory
         sizeLimit: 64Mi
-        globalMounts:
-          - path: /buffer
+        advancedMounts:
+          transcriber:
+            selfcheck:
+              - path: /buffer
+            app:
+              - path: /buffer
       tmp:
         type: emptyDir
-        globalMounts:
-          - path: /tmp
+        advancedMounts:
+          transcriber:
+            selfcheck:
+              - path: /tmp
+            app:
+              - path: /tmp
+            web:
+              - path: /tmp
+          frontend:
+            app:
+              - path: /tmp
+      nginx-cache:
+        type: emptyDir
+        advancedMounts:
+          frontend:
+            app:
+              - path: /var/cache/nginx

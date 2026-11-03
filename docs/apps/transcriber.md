@@ -2,8 +2,8 @@
 
 Speech on the cameras, transcribed and diarized, into Postgres. Fully local:
 WhisperX on CPU, no cloud API. Manifests:
-`kubernetes/apps/production/transcriber/`. Code and image: tnwks-transcriber
-(image `ghcr.io/it3e/tnwks-transcriber`, public and free of data). WSL-only,
+`kubernetes/apps/production/transcriber/`. Code and images: tnwks-transcriber
+and tnwks-transcriber-web (`ghcr.io/it3e/tnwks-transcriber[-web]`, public and free of data). WSL-only,
 like Frigate.
 
 ## Flow
@@ -69,25 +69,46 @@ SELECT started_at, camera, speaker, text FROM transcript
  WHERE to_tsvector('english', text) @@ plainto_tsquery('english', 'dinner');
 ```
 
+## The UI
+
+`https://transcriber.internal.tnwks.us` (internal only), behind oauth2-proxy
+and limited to the Cognito group `transcriber`, which only the admin is in
+(`infrastructure/terraform/modules/aws/cognito.tf`). A session from before
+the group existed has no groups yet: sign out of the SSO and in again.
+
+| Page | What |
+| --- | --- |
+| Days | days with clips, newest first |
+| A day | each clip: audio player, its voices, the transcript. Click a timestamp to play from there |
+| Speakers | the people: add, rename, delete |
+| Search | full text over all transcripts |
+
+Two pieces, in one HelmRelease (`app/helmrelease.yaml`):
+
+- `transcriber-frontend`: the Angular app,
+  [iT3E/tnwks-transcriber-web](https://github.com/iT3E/tnwks-transcriber-web)
+  (nginx, static files, its own pod).
+- the `web` container in the transcriber pod: the JSON API the app calls
+  under `/api` (same host; the ingress routes `/api` there). It shares the
+  pod for the audio volume and loads no models.
+
 ## Speakers
 
 Diarization labels (`SPEAKER_00`, ...) only mean something within one clip.
-Consistent labels come from enrolling: each enroll adds that cluster's voice
-embedding to a speaker's voiceprint, and every clip, past and future, is
-re-matched against the voiceprints.
+Consistent labels come from labeling a voice once in the UI: on a day's
+page, **Play voice** plays only what one voice said, and **Label** assigns
+it to a person (or creates one). That voice becomes a sample of the
+person's voiceprint, and every clip, past and future, is re-matched. A
+voice with too little speech can't be labeled (noisy embedding); pick a
+clip where they say more.
 
-```bash
-kubectl -n production exec -it deploy/transcriber -- python3 -m transcriber unknown
-kubectl -n production exec -it deploy/transcriber -- python3 -m transcriber show <recording>
-kubectl -n production exec -it deploy/transcriber -- python3 -m transcriber enroll <recording> SPEAKER_01 adult1
-```
-
-Speaker ids are neutral keys (`adult1`, `kid1`, `guest_a`); the CLI rejects
-anything else. Names never go in the database or this repo. Enroll a few
-samples per person from different cameras. Matching is cosine similarity to
-the voiceprint, at least `SPEAKER_MATCH_THRESHOLD` (0.5), one speaker per
-cluster in a clip; `show` prints each line's similarity for tuning. The
-image README lists every command.
+Speakers have a neutral id (`person1`, ...) and a display name you set in
+the UI. The names live only in the `transcriber` database (runtime data,
+like Home Assistant's UI registries): never in this repo. Matching is cosine
+similarity to the voiceprint, at least `SPEAKER_MATCH_THRESHOLD` (0.5), one
+speaker per voice in a clip; the UI shows each match's score. The CLI
+(`kubectl -n production exec deploy/transcriber -c app -- python3 -m
+transcriber ...`) still has every command; the image README lists them.
 
 ## Privacy
 
