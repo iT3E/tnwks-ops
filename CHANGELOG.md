@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.107.2 - 2026-11-03
+
+### Fixed
+
+* Home Assistant: night person alerts go only to the two adult phones, no longer to every Companion app device (the kitchen wall tablet rang on the alarm stream)
+
 ## v1.107.1 - 2026-11-03
 
 ### Fixed
