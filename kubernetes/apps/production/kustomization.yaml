@@ -12,5 +12,9 @@ resources:
   - ./uisp/ks.yaml
   - ./changedetection/ks.yaml
   - ./frigate/ks.yaml
+  # firefly: the household ledger. Migrated off bare Docker in WSL 2026-11-02.
+  # Its secrets are out-of-band (see its ks.yaml), so there is no
+  # secrets.sops.yaml under firefly/app.
+  - ./firefly/ks.yaml
   # - ./external-dns/ks.yaml
 

@@ -1,0 +1,46 @@
+---
+# Firefly III storage/upload: transaction attachments. The ledger itself is in
+# Postgres (database firefly). Empty at migration time (0 attachments), backed
+# up anyway so the first receipt someone attaches is not the one that is lost.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: firefly
+  namespace: production
+spec:
+  repository:
+    kind: ClusterRepository
+    name: s3
+  # local-path has no CSI snapshots: the mover reads the live PVC read-only,
+  # co-located on the app's node (crash-consistent). Fine for attachments.
+  copyMethod: Direct
+  compression:
+    compressor: zstd
+  credentialProjection:
+    enabled: true
+  mover:
+    # The image runs as www-data.
+    securityContext:
+      runAsUser: 33
+      runAsGroup: 33
+  retention:
+    keepLatest: 3
+    keepDaily: 7
+    keepWeekly: 4
+    keepMonthly: 6
+  sources:
+    - pvc:
+        name: firefly-upload
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: firefly
+  namespace: production
+spec:
+  policyRef:
+    name: firefly
+  schedule:
+    # Nightly, spread across 02:00-03:00 (H), after the 01:00 Postgres base backup.
+    cron: "H 2 * * *"
+    runOnCreate: true

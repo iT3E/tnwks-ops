@@ -57,7 +57,8 @@ S3 is `tnwks-homelab-backups-654654262098` in the prod AWS account,
 
 The single `databases/postgres` Cluster holds every app database: `app`
 (Mealie), `home_assistant` (recorder history), `bitwarden`, `litellm`,
-`plausible` (metadata), the storefront API, `vantrip`, `grafana`. All of it is covered by
+`plausible` (metadata), the storefront API, `vantrip`, `grafana`, `firefly`
+(the household ledger). All of it is covered by
 barman-cloud; there is nothing per-database to configure. New databases are
 covered automatically.
 
@@ -71,10 +72,11 @@ covered automatically.
 | Mealie | `production/mealie-config` | Recipe images and the app's secrets. Recipes are in Postgres |
 | UniFi | `networking/config-unifi-0` | Includes the controller's `.unf` auto-backups. The MongoDB PVC is skipped: a `.unf` restore is the supported path |
 | changedetection | `production/config-changedetection-0` | Watch list and history |
+| Firefly III | `production/firefly-upload` | Transaction attachments (none yet). The ledger is in Postgres; the Passport keypair and `APP_KEY` are in git (SOPS) |
 
 The mover must run as the app's user (`mover.securityContext`): kopia fails
 the snapshot on any file it can't read. Home Assistant is 568 (its `.storage`
-has 0600 files), the others 1000.
+has 0600 files), Firefly 33 (www-data), the others 1000.
 
 To add one: copy a policy file, change the name, namespace, PVC and user, add the
 namespace to `allowedNamespaces` in `repository/clusterrepository.yaml` if it is
