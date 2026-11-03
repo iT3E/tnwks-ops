@@ -1,0 +1,22 @@
+---
+# The Roles Anywhere client certificate in secret-roles-anywhere.sops.yaml
+# expires 2027-03-28; without it LiteLLM gets no Bedrock credentials and
+# claude-sonnet (the transcriber's summaries) fails. This fires 30 days before.
+# After renewing the certificate, move the date (epoch seconds) with it.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: litellm
+  namespace: ai
+spec:
+  groups:
+    - name: litellm
+      rules:
+        - alert: LiteLLMBedrockCertificateExpiring
+          # 1803600000 = 2027-02-26T00:00:00Z, 30 days before notAfter.
+          expr: vector(time()) > 1803600000
+          labels:
+            severity: warning
+          annotations:
+            summary: "The Bedrock Roles Anywhere certificate expires 2027-03-28."
+            description: "Renew it, update kubernetes/apps/ai/litellm/app/secret-roles-anywhere.sops.yaml, and move the date in this rule."

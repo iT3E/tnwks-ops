@@ -5,4 +5,14 @@ namespace: ai
 resources:
   - ./configmap.yaml
   - ./secret.sops.yaml
+  - ./secret-roles-anywhere.sops.yaml
+  - ./secret-keys.sops.yaml
   - ./helmrelease.yaml
+  - ./prometheusrule.yaml
+configMapGenerator:
+  # The ensure-keys sidecar's script (scripts/ensure_keys.py).
+  - name: litellm-ensure-keys
+    files:
+      - ensure_keys.py=./scripts/ensure_keys.py
+generatorOptions:
+  disableNameSuffixHash: true

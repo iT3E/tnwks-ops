@@ -59,6 +59,8 @@ Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md)
 | [`apps/kitchen-screensaver.md`](apps/kitchen-screensaver.md) | Kitchen screensaver: the page the kitchen display's screensaver shows (photos, time, weather, events, dinner, stars), its API, accounts and how to switch back |
 | [`apps/immichframe.md`](apps/immichframe.md) | ImmichFrame: the kitchen display's screensaver (photos, clock, today's events), its settings and the tablet setup |
 | [`apps/peloton-to-garmin.md`](apps/peloton-to-garmin.md) | peloton-to-garmin: the dead-auth v3.6.1 pin and why Renovate can't see it |
+| [`apps/litellm.md`](apps/litellm.md) | LiteLLM: local models and Claude on Bedrock, the Roles Anywhere credentials, per-app keys |
+| [`apps/transcriber.md`](apps/transcriber.md) | Transcriber: camera speech transcribed and diarized, the web UI, speakers, daily summaries |
 
 ## Other
 

@@ -1,7 +1,9 @@
 ---
 # LiteLLM proxy config. Mounted into the pod at /etc/litellm/config.yaml and
-# passed via `--config`. The three models proxy to Ollama running natively on
-# the WSL host (see OLLAMA_BASE_URL in cluster-settings — Flux substitutes it).
+# passed via `--config`. The three local models proxy to Ollama running
+# natively on the WSL host (see OLLAMA_BASE_URL in cluster-settings; Flux
+# substitutes it). claude-sonnet is Bedrock, through the Converse API, with
+# credentials from the aws-credentials sidecar (helmrelease.yaml).
 #
 # Secrets (master key, DB URL) are NOT in this ConfigMap; litellm resolves them
 # at runtime from env vars via the `os.environ/<VAR>` indirection, and those
@@ -26,6 +28,12 @@ data:
         litellm_params:
           model: ollama_chat/qwen3:8b
           api_base: ${OLLAMA_BASE_URL}
+      # Claude Sonnet on Bedrock (cross-region inference profile). The
+      # transcriber's daily summaries use it; its key is limited to it.
+      - model_name: claude-sonnet
+        litellm_params:
+          model: bedrock/converse/us.anthropic.claude-sonnet-5-5
+          aws_region_name: us-east-1
 
     general_settings:
       master_key: os.environ/LITELLM_MASTER_KEY
