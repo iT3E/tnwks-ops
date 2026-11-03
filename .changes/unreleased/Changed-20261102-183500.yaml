@@ -1,0 +1,3 @@
+kind: Changed
+body: 'oauth2-proxy: read groups from `cognito:groups`, so ingresses can require a Cognito group with `allowed_groups`.'
+time: 2026-11-02T18:35:00-08:00

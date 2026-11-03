@@ -44,6 +44,13 @@ spec:
         upstreams = ["static://200"]
         email_domains = ["*"]
         scope = "openid email profile"
+        # Cognito puts group membership in `cognito:groups`, not oauth2-proxy's
+        # default `groups`. With this, X-Auth-Request-Groups carries the groups
+        # and an ingress can require one with
+        # `auth-url: .../oauth2/auth?allowed_groups=<group>` (Firefly: admins).
+        # Sessions created before this change have no groups until the user
+        # signs in again (oauth2.<internal domain>/oauth2/sign_out).
+        oidc_groups_claim = "cognito:groups"
         # Keep the cookie under nginx's default 4kB buffer. Cognito's id_token
         # alone is ~1.5kB; storing access + id + refresh blows past the limit
         # and forces oauth2-proxy to split the cookie, which the auth-subrequest
