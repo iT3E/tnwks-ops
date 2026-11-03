@@ -1,3 +1,0 @@
-kind: Added
-body: "cloudnative-pg: finance_sync role and database for the finance-sync jobs' state, with its login in finance-sync-secret."
-time: 2026-11-02T20:10:00-08:00

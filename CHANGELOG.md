@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.95.0 - 2026-11-03
+
+### Added
+
+* cloudnative-pg: finance_sync role and database for the finance-sync jobs' state, with its login in finance-sync-secret.
+
 ## v1.94.1 - 2026-11-03
 
 ### Fixed
