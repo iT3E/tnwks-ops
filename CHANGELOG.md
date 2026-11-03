@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.110.0 - 2026-11-03
+
+### Added
+
+* Off-site heartbeats on healthchecks.io: Alertmanager pings the homelab-wsl check with its Watchdog alert, the RB5009 pings sce-rtr01, and healthchecks.io messages Telegram when either goes quiet, so a power cut, WAN outage or a cluster that does not come back gets reported (docs/operations/external-monitoring.md).
+
 ## v1.109.1 - 2026-11-03
 
 ### Fixed

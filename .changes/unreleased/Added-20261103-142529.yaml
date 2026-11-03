@@ -1,3 +1,0 @@
-kind: Added
-body: "Off-site heartbeats on healthchecks.io: Alertmanager pings the homelab-wsl check with its Watchdog alert, the RB5009 pings sce-rtr01, and healthchecks.io messages Telegram when either goes quiet, so a power cut, WAN outage or a cluster that does not come back gets reported (docs/operations/external-monitoring.md)."
-time: 2026-11-03T14:25:29.696003925-08:00
