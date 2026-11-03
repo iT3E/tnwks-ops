@@ -1,0 +1,4 @@
+kind: Fixed
+body: |-
+  CI: "Image exists" now also checks images added in plain manifests (Deployments such as packing-api and the storefront API), not only those flate reports from HelmReleases. Before, those PRs skipped the check, so an automerged image bump there was gated by the render alone.
+time: 2026-11-03T08:10:00.000000000Z
