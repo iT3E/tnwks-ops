@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.102.1 - 2026-11-03
+
+### Fixed
+
+* CI: "Image exists" now also checks images added in plain manifests (Deployments such as packing-api and the storefront API), not only those flate reports from HelmReleases. Before, those PRs skipped the check, so an automerged image bump there was gated by the render alone.
+
 ## v1.102.0 - 2026-11-03
 
 ### Changed
