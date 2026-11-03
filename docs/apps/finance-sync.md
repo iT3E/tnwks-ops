@@ -23,27 +23,40 @@ and the host crontab entries removed at the cutover. `backoffLimit: 0` for a
 related reason: the sync records what it posted only when it finishes, so an
 automatic retry of a failed run could post transactions twice.
 
-## State (PVC `finance-sync-state`, mounted at `/state`)
+## State (Postgres database `finance_sync`)
 
-Nothing here is in git or the image. kopiur backs it up nightly.
+Nothing here is in git or the image. Owner role `finance_sync`, login in
+`finance-sync-secret` (`DATABASE_URL`). The image creates and migrates its own
+schema (`schema_migrations`, advisory-locked) at the start of every run.
+Restores are point-in-time through the cluster's WAL archiving.
 
-| File | Written by | Why it matters |
-| --- | --- | --- |
-| `simplifi_token.json` | sync, every run | Rotating refresh token. A stale copy cannot log in |
-| `sync_state.json` | sync | What has been posted. Losing it re-posts transactions as duplicates |
-| `account_map.json`, `category_map.json` | sync | Simplifi to Firefly account and category mapping; contains people's account names |
-| `amazon_orders.db` | amazon | Order, item and match history. Losing it means re-scraping Amazon |
-| `amazon_rules.json` | by hand | Keyword to category rules built from household purchases |
-| `amazonorders/` | amazon | The amazon-orders library's session (cookies) |
+| Table | Why it matters |
+| --- | --- |
+| `public.simplifi_token` | Rotating refresh token, committed right after each refresh so a crash can't lose it |
+| `public.sync_state`, `public.sync_posted` | What has been posted. Losing it re-posts transactions as duplicates |
+| `public.account_map`, `public.category_map` | Simplifi to Firefly mapping; contains people's account names |
+| `amazon.*` (orders, items, transactions, matches, category_cache, sync_log, sequences) | Order, item and match history. Losing it means re-scraping Amazon |
+| `amazon.rules` | Keyword to category rules built from household purchases |
+| `amazon.session` | The amazon-orders library's cookies, written to `/tmp` for each run |
 
-Credentials (Simplifi client, Firefly token, Amazon login and TOTP) are in
-`app/secrets.sops.yaml`.
+Credentials (Simplifi client, Firefly token, Amazon login and TOTP, database
+login) are in `app/secrets.sops.yaml`.
+
+### History: the old PVC
+
+Until 2026-11-02 the state was files on the PVC `finance-sync-state`. It was
+imported with `import-state` (one transaction; every table's row count and
+content hash checked against the files) and the PVC is kept, unmounted and no
+longer in the HelmRelease (`helm.sh/resource-policy: keep`), as the rollback
+copy for a week. Rollback: suspend both CronJobs, run a Job with image 0.2.0
+and `export-state --replace` with the PVC mounted read-write (it writes the
+latest rotated token back), then revert to image 0.1.3 with the PVC mounted.
 
 ## Checks and alerts
 
-- Each Job runs `selfcheck` first (init container): env present, state files
-  there, `/state` writable, Firefly reachable with the token. It never calls
-  Simplifi or Amazon.
+- Each Job runs `selfcheck` first (init container): env present, state
+  there (in Postgres, schema current), Firefly reachable with the token. It
+  never calls Simplifi or Amazon.
 - A failed Job fires the cluster-wide `KubeJobFailed`. The image exits
   non-zero on real failures (the exit-code table is in its README).
 - `FinanceSyncStale` (no successful sync in 26 h), `FinanceAmazonEnrichStale`
@@ -72,4 +85,4 @@ Credentials (Simplifi client, Firefly token, Amazon login and TOTP) are in
 kubectl -n production create job --from=cronjob/finance-sync-simplifi sync-manual-$(date +%s)
 ```
 
-Only while the CronJob itself isn't running (see Singleton). The host crontab entries were commented out at the cutover on 2026-11-02; to roll back, suspend both CronJobs, copy `simplifi_token.json`, `sync_state.json`, the two maps and `amazon_orders.db` from the PVC back to the host, and uncomment them.
+Only while the CronJob itself isn't running (see Singleton). The host crontab entries were commented out at the cutover on 2026-11-02, and the host copies of the state are stale; don't go back to the host.
