@@ -27,6 +27,8 @@ resources:
   - ./scheduled-backup.yaml
   - ./secret-firefly-role.sops.yaml
   - ./database-firefly.yaml
+  - ./secret-transcriber-role.sops.yaml
+  - ./database-transcriber.yaml
 # PrometheusRule lives in cluster-prometheusrules/ behind its own
 # Kustomization that depends on kube-prometheus-stack so the CRD
 # exists before apply.

@@ -1,0 +1,21 @@
+---
+# tnwks-transcriber's transcripts, speaker voiceprints and clip queue
+# (kubernetes/apps/production/transcriber). `vector` (pgvector, in the cnpg
+# system image) holds the speaker embeddings; the extension needs a superuser,
+# so it's created here and not by the app.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: transcriber
+  namespace: databases
+spec:
+  cluster:
+    name: postgres
+  name: transcriber
+  owner: transcriber
+  ensure: present
+  extensions:
+    - name: vector
+      ensure: present
+  # Transcripts can't be regenerated once the clip audio is pruned.
+  databaseReclaimPolicy: retain

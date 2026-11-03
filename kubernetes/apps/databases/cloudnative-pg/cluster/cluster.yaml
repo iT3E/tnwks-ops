@@ -86,6 +86,11 @@ spec:
         login: true
         passwordSecret:
           name: postgres-grafana
+      - name: transcriber
+        ensure: present
+        login: true
+        passwordSecret:
+          name: postgres-transcriber
       # Firefly III owns the household ledger. Isolated from `app` on purpose:
       # `app` owns bitwarden, litellm, plausible, vantrip and things-api, and a
       # leaked `app` password should not also reach financial data.

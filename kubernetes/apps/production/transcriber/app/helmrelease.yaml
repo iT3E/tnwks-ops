@@ -1,0 +1,169 @@
+---
+# Speech on the cameras, transcribed and diarized, into Postgres. Fully
+# local, on CPU. Code and image: iT3E/tnwks-transcriber (private repo, public
+# image with no data in it). docs/apps/transcriber.md has the flow, the
+# enrollment steps and the storage.
+#
+# Notes on the values below:
+# - CAMERAS maps each Frigate camera (its MQTT topic name) to the go2rtc
+#   stream that carries its audio. Keep it to the cameras with an `audio`
+#   role in frigate/app/resources/config.yml; a stream with no audio track
+#   just restarts ffmpeg every few seconds.
+# - Singleton (Recreate, 1 replica): the queue claim is safe with more, but
+#   two copies would both capture and cut every clip twice.
+# - The buffer is RAM: ~3 KB/s per camera for BUFFER_SECONDS, kept off the
+#   shared WSL disk (the frigate tmp-cache note explains why that matters).
+# - Clip audio on local-path-bulk, ~7 MB per hour of speech, deleted after
+#   AUDIO_RETENTION_DAYS; transcripts stay in Postgres. Not backed up by
+#   kopiur: the transcripts are (with the database), the audio isn't.
+# - Models (~1 GB: whisper, wav2vec2, pyannote) download once into the
+#   models PVC on first start. Until then capture runs and clips queue.
+# - THREADS / OMP_NUM_THREADS 4 and the 4-core limit: transcription bursts
+#   while a clip is processed and is idle otherwise. All three WSL nodes
+#   share one 12-thread host with Frigate.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: transcriber
+spec:
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  interval: 30m
+  maxHistory: 2
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  values:
+    defaultPodOptions:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+    controllers:
+      transcriber:
+        strategy: Recreate
+        annotations:
+          reloader.stakater.com/auto: "true"
+        initContainers:
+          selfcheck:
+            image: &image
+              repository: ghcr.io/it3e/tnwks-transcriber
+              tag: 0.1.0@sha256:364d97b0406821c003b42312b8eeb39346fe156a45fc9473ce438f47aa9fdc2b
+            args:
+              - selfcheck
+            envFrom: &envFrom
+              - secretRef:
+                  name: transcriber-secret
+            env: &env
+              TZ: ${TIMEZONE}
+              CAMERAS: >-
+                frigate_loryta_fdoor=frigate_loryta_fdoor_hq,
+                frigate_reolink_south=frigate_reolink_south_lq
+              RTSP_BASE_URL: rtsp://frigate-app.production.svc.cluster.local:8554
+              MQTT_HOST: mosquitto.home-automation.svc.cluster.local
+              AUDIO_RETENTION_DAYS: "90"
+              WHISPER_MODEL: small.en
+              THREADS: "4"
+              OMP_NUM_THREADS: "4"
+            securityContext: &securityContext
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                  - ALL
+        containers:
+          app:
+            image: *image
+            args:
+              - run
+            envFrom: *envFrom
+            env: *env
+            securityContext: *securityContext
+            probes:
+              # /healthz is up before the models load and fails only when a
+              # capture or worker thread has died or the worker has stalled.
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /healthz
+                    port: &port 8080
+                  initialDelaySeconds: 30
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 4
+              readiness:
+                enabled: false
+              startup:
+                enabled: false
+            resources:
+              requests:
+                cpu: 500m
+                memory: 2Gi
+              limits:
+                cpu: "4"
+                memory: 6Gi
+    service:
+      app:
+        controller: transcriber
+        ports:
+          http:
+            port: *port
+    serviceMonitor:
+      app:
+        enabled: ${SERVICE_MONITOR_ENABLED}
+        serviceName: transcriber
+        endpoints:
+          - port: http
+            scheme: http
+            path: /metrics
+            interval: 60s
+            scrapeTimeout: 10s
+    persistence:
+      audio:
+        enabled: true
+        type: persistentVolumeClaim
+        accessMode: ReadWriteOnce
+        size: 20Gi
+        storageClass: local-path-bulk
+        retain: true
+        globalMounts:
+          - path: /audio
+      models:
+        enabled: true
+        type: persistentVolumeClaim
+        accessMode: ReadWriteOnce
+        size: 5Gi
+        storageClass: ${STORAGE_CLASS_DEFAULT}
+        retain: true
+        globalMounts:
+          - path: /models
+      buffer:
+        type: emptyDir
+        medium: Memory
+        sizeLimit: 64Mi
+        globalMounts:
+          - path: /buffer
+      tmp:
+        type: emptyDir
+        globalMounts:
+          - path: /tmp

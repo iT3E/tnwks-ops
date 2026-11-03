@@ -1,0 +1,55 @@
+---
+# Health of the speech transcription service. Labels carry camera names only;
+# speakers and text never reach Prometheus.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: transcriber
+  namespace: production
+spec:
+  groups:
+    - name: transcriber
+      rules:
+        - alert: TranscriberDown
+          expr: absent(up{namespace="production", service="transcriber"} == 1)
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The speech transcriber isn't running (or isn't scraped)."
+            description: "No speech is being captured. Check `kubectl -n production logs deploy/transcriber -c selfcheck` and `-c app`."
+        - alert: TranscriberCaptureDown
+          # The camera's audio ffmpeg keeps exiting: the go2rtc stream is down
+          # or has lost its audio track (e.g. audio switched off on the camera).
+          expr: max by (camera) (transcriber_capture_up) == 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "No audio from {{ $labels.camera }} for 30 minutes."
+            description: "transcriber can't read audio from the go2rtc stream for {{ $labels.camera }}. Check the stream offers audio and the pod log."
+        - alert: TranscriberMQTTDisconnected
+          expr: transcriber_mqtt_connected == 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The transcriber has lost MQTT."
+            description: "Without Frigate's speech ON/OFF topic no clips are cut. Check mosquitto and the transcriber MQTT login."
+        - alert: TranscriberBacklog
+          # Clips arrive faster than CPU transcription keeps up, or the worker
+          # never loaded its models (HF_TOKEN, gated model conditions).
+          expr: transcriber_queue_pending > 30
+          for: 2h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $value }} speech clips waiting to be transcribed for 2 hours."
+            description: "Check transcriber_models_loaded and the pod log. A bigger WHISPER_MODEL or busy hours can outrun 4 CPU threads."
+        - alert: TranscriberFailures
+          expr: increase(transcriber_recordings_processed_total{result="failed"}[1h]) > 5
+          labels:
+            severity: warning
+          annotations:
+            summary: "Speech clips are failing to transcribe."
+            description: "More than 5 clip failures in the last hour. `transcriber show <id>` prints the error; `transcriber reprocess --failed` retries."
