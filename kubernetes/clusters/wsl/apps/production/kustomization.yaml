@@ -37,6 +37,12 @@ resources:
   # scripts run on this host and talk to it over the internal ingress.
   # Internal-only exposure (nginx-internal), no public hostname.
   - ../../../../apps/production/firefly/ks.yaml
+  # finance-sync: the daily Simplifi sync and weekly Amazon enrichment that
+  # feed Firefly (moved off the host crontab 2026-11). WSL-only and must stay
+  # a singleton: the Simplifi refresh token rotates on every run, so a second
+  # copy anywhere (e.g. MS-01) would break both. Deliberately not in the
+  # shared apps/production list.
+  - ../../../../apps/production/finance-sync/ks.yaml
   # frigate: WSL-specific Flux Kustomization with a patch to replace the
   # NFD coral nodeSelector with a hostname pin to homelab-wsl-worker-2.
   - ./frigate-ks.yaml

@@ -1,0 +1,20 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: finance-sync
+  namespace: flux-system
+spec:
+  # The jobs write to Firefly, and the alert rule needs the PrometheusRule CRD.
+  dependsOn:
+    - name: firefly
+    - name: kube-prometheus-stack
+  path: ./kubernetes/apps/production/finance-sync/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false # no flux ks dependents
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

@@ -1,0 +1,47 @@
+---
+# finance-sync state: the rotating Simplifi token, the sync's record of what
+# it already posted, the account/category maps, the Amazon order database and
+# rules. None of it is in git or the image, and losing sync_state.json means
+# duplicate transactions, so this one matters.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: finance-sync
+  namespace: production
+spec:
+  repository:
+    kind: ClusterRepository
+    name: s3
+  # local-path has no CSI snapshots: the mover reads the live PVC read-only,
+  # co-located on the app's node (crash-consistent). Fine for small state files.
+  copyMethod: Direct
+  compression:
+    compressor: zstd
+  credentialProjection:
+    enabled: true
+  mover:
+    # The image runs as uid/gid 1000.
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+  retention:
+    keepLatest: 3
+    keepDaily: 7
+    keepWeekly: 4
+    keepMonthly: 6
+  sources:
+    - pvc:
+        name: finance-sync-state
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: finance-sync
+  namespace: production
+spec:
+  policyRef:
+    name: finance-sync
+  schedule:
+    # Nightly, spread across 02:00-03:00 (H), after the 01:00 Postgres base backup.
+    cron: "H 2 * * *"
+    runOnCreate: true

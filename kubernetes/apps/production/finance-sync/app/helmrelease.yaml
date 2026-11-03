@@ -1,0 +1,221 @@
+---
+# The household finance jobs that feed Firefly III, moved off the WSL host's
+# crontab in 2026-11. Code and image: github.com/iT3E/tnwks-finance-sync
+# (private repo, public image with no data in it).
+#
+#   simplifi: daily bank sync (Simplifi -> Firefly), then balance reconciliation.
+#   amazon:   weekly Amazon order enrichment of the matching Firefly transactions.
+#
+# Both run `selfcheck` first as an init container, so a missing state file,
+# missing credential or unreachable Firefly fails fast with a clear message.
+#
+# State lives on the finance-sync-state PVC, NOT in the image or git: the
+# Simplifi refresh token (rotated and rewritten on every run, so exactly one
+# copy may be in use), sync_state.json (what was already posted; losing it
+# re-posts transactions as duplicates), account_map.json and
+# category_map.json (contain people's account names), amazon_orders.db,
+# amazon_rules.json (built from household purchases) and the amazon-orders
+# session dir. The PVC is backed up by kopiur.
+#
+# Alerts: a failed Job fires the cluster's KubeJobFailed; prometheusrule.yaml
+# adds staleness; reconciliation drift is pushed by the sync to Alertmanager.
+# Notes on the values below (YAML comments don't survive the generator, so
+# they're collected here):
+# - suspend: true on both CronJobs until the cutover from the host crontab.
+#   The Simplifi refresh token rotates, so host and cluster must never both run.
+# - concurrencyPolicy Forbid: never two at once.
+# - backoffLimit 0: no automatic retry. The sync saves its progress only when
+#   it finishes, so a retried run could post transactions twice.
+# - activeDeadlineSeconds 3600: a bank refresh can take 10-25 minutes.
+# - startingDeadlineSeconds 7200: run late rather than not at all if the
+#   cluster was down at the scheduled time.
+# - FIREFLY_URL is the in-cluster Service: no ingress or TLS hop, and /api is
+#   token auth anyway.
+# - persistence.state.retain: the PVC survives an uninstall.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: finance-sync
+spec:
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  interval: 30m
+  maxHistory: 2
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  values:
+    defaultPodOptions:
+      # The jobs never talk to the Kubernetes API.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+    controllers:
+      simplifi:
+        type: cronjob
+        cronjob:
+          schedule: 0 6 * * *
+          timeZone: America/Los_Angeles
+          suspend: true
+          concurrencyPolicy: Forbid
+          backoffLimit: 0
+          activeDeadlineSeconds: 3600
+          startingDeadlineSeconds: 7200
+          successfulJobsHistory: 3
+          failedJobsHistory: 3
+        initContainers:
+          selfcheck:
+            image:
+              repository: ghcr.io/it3e/tnwks-finance-sync
+              tag: 0.1.1@sha256:8ab3c3ec9d2b181cd7f4fb1b68305d3c5ca87f6d6eccdffd225f063059a88fde
+            args:
+            - selfcheck
+            envFrom:
+            - secretRef:
+                name: finance-sync-secret
+            env:
+              STATE_DIR: /state
+              FIREFLY_URL: http://firefly.production.svc.cluster.local:8080
+              TZ: America/Los_Angeles
+              ALERTMANAGER_URL: http://alertmanager.monitoring.svc.cluster.local:9093
+              POD_NAMESPACE:
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.namespace
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+        containers:
+          app:
+            image:
+              repository: ghcr.io/it3e/tnwks-finance-sync
+              tag: 0.1.1@sha256:8ab3c3ec9d2b181cd7f4fb1b68305d3c5ca87f6d6eccdffd225f063059a88fde
+            args:
+            - sync
+            envFrom:
+            - secretRef:
+                name: finance-sync-secret
+            env:
+              STATE_DIR: /state
+              FIREFLY_URL: http://firefly.production.svc.cluster.local:8080
+              TZ: America/Los_Angeles
+              ALERTMANAGER_URL: http://alertmanager.monitoring.svc.cluster.local:9093
+              POD_NAMESPACE:
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.namespace
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+            resources:
+              requests:
+                cpu: 20m
+                memory: 128Mi
+              limits:
+                memory: 512Mi
+      amazon:
+        type: cronjob
+        cronjob:
+          schedule: 0 7 * * 1
+          timeZone: America/Los_Angeles
+          suspend: true
+          concurrencyPolicy: Forbid
+          backoffLimit: 0
+          activeDeadlineSeconds: 3600
+          startingDeadlineSeconds: 7200
+          successfulJobsHistory: 3
+          failedJobsHistory: 3
+        initContainers:
+          selfcheck:
+            image:
+              repository: ghcr.io/it3e/tnwks-finance-sync
+              tag: 0.1.1@sha256:8ab3c3ec9d2b181cd7f4fb1b68305d3c5ca87f6d6eccdffd225f063059a88fde
+            args:
+            - selfcheck
+            envFrom:
+            - secretRef:
+                name: finance-sync-secret
+            env:
+              STATE_DIR: /state
+              FIREFLY_URL: http://firefly.production.svc.cluster.local:8080
+              TZ: America/Los_Angeles
+              ALERTMANAGER_URL: http://alertmanager.monitoring.svc.cluster.local:9093
+              POD_NAMESPACE:
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.namespace
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+        containers:
+          app:
+            image:
+              repository: ghcr.io/it3e/tnwks-finance-sync
+              tag: 0.1.1@sha256:8ab3c3ec9d2b181cd7f4fb1b68305d3c5ca87f6d6eccdffd225f063059a88fde
+            args:
+            - amazon-enrich
+            envFrom:
+            - secretRef:
+                name: finance-sync-secret
+            env:
+              STATE_DIR: /state
+              FIREFLY_URL: http://firefly.production.svc.cluster.local:8080
+              TZ: America/Los_Angeles
+              ALERTMANAGER_URL: http://alertmanager.monitoring.svc.cluster.local:9093
+              POD_NAMESPACE:
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.namespace
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+            resources:
+              requests:
+                cpu: 20m
+                memory: 128Mi
+              limits:
+                memory: 1Gi
+    persistence:
+      state:
+        enabled: true
+        type: persistentVolumeClaim
+        accessMode: ReadWriteOnce
+        size: 1Gi
+        storageClass: ${STORAGE_CLASS_DEFAULT}
+        retain: true
+        globalMounts:
+        - path: /state
+      tmp:
+        type: emptyDir
+        globalMounts:
+        - path: /tmp
