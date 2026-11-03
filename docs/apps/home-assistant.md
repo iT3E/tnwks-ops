@@ -470,15 +470,26 @@ paging and a person filter), Routines, Meals (a week grid, one column per
 Mealie meal calendar) and Lists (several to-do lists plus sticky notes).
 
 Themes: `default` or a holiday (New Year, Valentine's, St. Patrick's, Easter,
-4th of July, Halloween, Thanksgiving, Christmas). A holiday has its own
-colors and dresses the cards too: a faint pattern on every card (snowflakes,
-bats, hearts, shamrocks, eggs, stars, confetti, plaid), an edge along the top
-(snow, purple drips, lace, a rainbow or flag stripe), a corner ornament on
-some (holly, a cobweb with its spider, leaves, eggs in grass), a frame and a
-glow at the top of the page, and for Christmas candy-striped progress bars
-and tab pill. That's one stylesheet every card adopts (`SKINS` in
-kitchen-cards.js), all static background layers drawn as inline SVG, so
-nothing loads and nothing animates on the cards. Around them: a garland next
+4th of July, Halloween, Thanksgiving, Christmas). A holiday turns the page
+into an illustrated scene (`SCENES` in kitchen-cards.js): a sky behind the
+clock and a landscape along the bottom, in three depths of hills with mist
+between them, lit from above, with a dark and a light palette. Thanksgiving
+is a harvest moon over autumn trees, a barn, a fence, hay and pumpkins;
+Christmas an aurora over snowy pines and a lit cabin; Halloween a full moon
+over a haunted house, crooked trees, tombstones and jack-o'-lanterns; Easter
+blossom trees, tulips and eggs; the 4th a town skyline under fireworks with a
+flag; Valentine's a crescent moon over heart-shaped trees and heart
+balloons; St. Patrick's a rainbow over a cottage, sheep and a pot of gold;
+New Year's a city skyline and a clock tower under gold bokeh. The scene is
+drawn procedurally as two inline SVGs at the page's width (seeded, so it's
+the same every time) and painted once. The cards float over it: a touch
+translucent, lit from the top, with a rim highlight, a soft shadow and a
+hairline in the theme's color, plus each holiday's signature (`SKINS`: snow
+caps and holly, purple drips and a cobweb, a gold, lace, rainbow, flag,
+pastel or harvest edge, candy-striped bars), and the active tab is a lit
+pill. That's one stylesheet every card adopts; nothing on the cards animates.
+The greeting counts down to the holiday ("🦃 24 days to Thanksgiving") for
+up to two months. Around them: a garland next
 to the tabs (string lights for Christmas and Halloween, bunting for the 4th),
 slow falling or drifting emoji, taps that pop the holiday's emoji, confetti
 in its colors, and every two or three minutes a character crossing the

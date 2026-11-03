@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.11.1";
+const VERSION = "1.12.0";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -506,6 +506,17 @@ const THEMES = {
     confetti: ["#e5484d", "#3fbf6a", "#ffffff", "#ffd54a"], cameo: [{ kind: "peek", e: "🎅" }, { kind: "peek", e: "⛄" }, { kind: "fly", e: "🦌", s: 40 }] },
 };
 const MS_DAY = 86400000;
+// How a holiday reads in a sentence ("3 days to the 4th of July").
+const HOLIDAY_TITLE = { newyear: "New Year's", valentines: "Valentine's Day", stpatricks: "St. Patrick's Day", july4: "the 4th of July" };
+/** Days from today to a theme's next holiday (0 on the day). */
+function daysUntil(th, now = new Date()) {
+  const t = startOfDay(now);
+  for (const y of [t.getFullYear(), t.getFullYear() + 1]) {
+    const days = Math.round((th.day(y) - t) / MS_DAY);
+    if (days >= 0) return days;
+  }
+  return null;
+}
 /** The holiday whose window today falls in: { key, theme, date, days } (days until it, 0 = today). */
 function holidayNow(now = new Date()) {
   const t = startOfDay(now);
@@ -829,43 +840,23 @@ function darkPalette(th) {
 
 // ----------------------------------------------------------------- skins
 
-// A holiday dresses the cards, not just the page: a faint pattern on every
-// card, an edge along its top (snow, lace, drips, a rainbow), an ornament in
-// a corner (holly, a cobweb, leaves, eggs), a frame in the theme's color, a
-// glow at the top of the page, and for Christmas candy-striped progress bars
-// and tab pill. It's all one stylesheet (Skin.sheet) that every card's shadow
-// root adopts, rebuilt from the palette when the theme or mode changes, so
-// light mode gets its own shades. Everything is background layers behind the
-// content: static (nothing to animate or re-lay out on the tablet), and faint
-// enough that text keeps its contrast. The drawings are inline SVG, so no
-// fonts or files to load.
+// A holiday dresses the whole display. The page becomes a scene (SCENES
+// below: a sky behind the header, a landscape along the bottom) and the cards
+// float over it: a touch translucent, lit from the top, with a rim highlight,
+// a soft shadow and a hairline in the theme's color. Each theme adds its own
+// signature on top (Christmas snow and holly, Halloween drips and a cobweb, a
+// gold, rainbow, flag, pastel, lace or harvest edge), and the active tab
+// becomes a lit pill in the theme's color. It's all one stylesheet
+// (Skin.sheet) that every card's shadow root adopts, rebuilt from the palette
+// when the theme or mode changes, so light mode gets its own shades. Static
+// throughout: nothing on the cards animates or re-lays out on the tablet.
 const alpha = (hex, a) => `rgba(${rgbOf(hex).join(",")},${a})`;
 const svgUrl = (w, h, body) =>
   `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${body}</svg>`)}")`;
 const tf = (x, y, rot = 0, s = 1) => `transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${rot.toFixed(0)}) scale(${s.toFixed(2)})"`;
-const starPoints = (R, r) =>
-  Array.from({ length: 10 }, (_, i) => {
-    const a = (Math.PI / 5) * i - Math.PI / 2, d = i % 2 ? r : R;
-    return `${(Math.cos(a) * d).toFixed(2)},${(Math.sin(a) * d).toFixed(2)}`;
-  }).join(" ");
 // About 14px across at scale 1, centered on 0,0. The heart's tip is at 0,7.
 const HEART = "M0 -2.5C-1.8 -6 -7 -5.2 -7 -1.4C-7 2 -3 4.4 0 7C3 4.4 7 2 7 -1.4C7 -5.2 1.8 -6 0 -2.5Z";
-const SHAPE = {
-  heart: (x, y, c, rot, s) => `<path ${tf(x, y, rot, s)} fill="${c}" d="${HEART}"/>`,
-  star: (x, y, c, rot, s) => `<polygon ${tf(x, y, rot, s)} fill="${c}" points="${starPoints(7, 3)}"/>`,
-  flake: (x, y, c, rot, s) =>
-    `<g ${tf(x, y, rot, s)} stroke="${c}" stroke-width="1.4" stroke-linecap="round" fill="none">${[0, 60, 120]
-      .map((a) => `<path transform="rotate(${a})" d="M0 -7V7M-2.5 -5.5L0 -3.5L2.5 -5.5M-2.5 5.5L0 3.5L2.5 5.5"/>`).join("")}</g>`,
-  shamrock: (x, y, c, rot, s) =>
-    `<g ${tf(x, y, rot, s)} fill="${c}">${[0, 120, 240].map((a) => `<path transform="rotate(${a}) translate(0 -3.85) scale(.55)" d="${HEART}"/>`).join("")}<path d="M0 1Q1.5 5 4.5 8" stroke="${c}" stroke-width="1.5" fill="none"/></g>`,
-  leaf: (x, y, c, rot, s) => `<g ${tf(x, y, rot, s)}><path fill="${c}" d="M0 -9C6 -4 6 3 0 8C-6 3 -6 -4 0 -9Z"/><path d="M0 -6V11" stroke="${c}" stroke-width="1.2"/></g>`,
-  egg: (x, y, c, rot, s) =>
-    `<g ${tf(x, y, rot, s)}><ellipse rx="5" ry="6.5" fill="${c}"/><path d="M-4.8 -.5L-2.4 -2.2L0 -.5L2.4 -2.2L4.8 -.5" stroke="#ffffff" stroke-opacity=".75" stroke-width="1.2" fill="none"/></g>`,
-  bat: (x, y, c, rot, s) =>
-    `<path ${tf(x, y, rot, s)} fill="${c}" d="M0 -1C-1.5 -3 -4 -3 -5 -5C-5.2 -2.5 -7.5 -1.5 -10 -2C-8 0 -6.5 2 -3 1.5L0 3.5L3 1.5C6.5 2 8 0 10 -2C7.5 -1.5 5.2 -2.5 5 -5C4 -3 1.5 -3 0 -1Z"/>`,
-  bit: (x, y, c, rot, s) => `<rect ${tf(x, y, rot, s)} x="-1.6" y="-3.6" width="3.2" height="7.2" rx="1" fill="${c}"/>`,
-  dot: (x, y, c, rot, s) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(2.6 * s).toFixed(2)}" fill="${c}"/>`,
-};
+const BAT = "M0 -1C-1.5 -3 -4 -3 -5 -5C-5.2 -2.5 -7.5 -1.5 -10 -2C-8 0 -6.5 2 -3 1.5L0 3.5L3 1.5C6.5 2 8 0 10 -2C7.5 -1.5 5.2 -2.5 5 -5C4 -3 1.5 -3 0 -1Z";
 /** A square tile of `n` shapes scattered on a jittered grid (seeded, so it looks the same on every render), at opacity `op`. */
 function tile(size, n, op, seed, draw) {
   let s = seed;
@@ -907,11 +898,6 @@ const ORN = {
     return svgUrl(W, W, `<g opacity="${op}" stroke="${c}" fill="none" stroke-width="1"><path d="${d}"/><path d="M58 0V60"/>
       <path d="M52 58L55 62L52 67M64 58L61 62L64 67M51 62H65M53 70L56 66M63 70L60 66" stroke-width="1.3"/><ellipse cx="58" cy="64" rx="3.4" ry="4.4" fill="${c}"/></g>`);
   },
-  leaves: (cs, op) =>
-    svgUrl(76, 56, `<g opacity="${op}">${SHAPE.leaf(54, 30, cs[0], -35, 1.9)}${SHAPE.leaf(34, 38, cs[1], 50, 1.6)}${SHAPE.leaf(60, 44, cs[2], 100, 1.4)}<circle cx="44" cy="46" r="3.5" fill="${cs[3]}"/></g>`),
-  nest: (op) =>
-    svgUrl(80, 46, `<g opacity="${op}">${SHAPE.egg(30, 30, "#f7a8c4", -14, 1.7)}${SHAPE.egg(50, 28, "#a8d2f7", 10, 1.9)}${SHAPE.egg(66, 33, "#ffe08a", 22, 1.5)}
-      <path fill="#7cc576" d="M0 46L6 32L10 42L16 28L20 41L26 31L30 43L36 30L40 42L46 29L50 41L56 31L60 42L66 30L70 41L76 32L80 46Z"/></g>`),
 };
 // A background layer: [image, position, size, repeat].
 const layer = {
@@ -919,92 +905,63 @@ const layer = {
   strip: (img, w, h) => [img, "0 0", `${w}px ${h}px`, "repeat-x"],
   pattern: (img, size) => [img, "0 0", `${size}px ${size}px`, "repeat"],
   corner: (img, pos, size) => [img, pos, size, "no-repeat"],
-  css: (img) => [img, "0 0", "auto", "repeat"],
 };
 const PASTEL = ["#f7a8c4", "#ffe08a", "#a8e6c1", "#a8d2f7", "#cdb4f6"];
-// Per theme: (palette, light) => { layers (first on top), frame, glow, css }.
+const RAINBOW = ["#e5484d", "#ff9f43", "#ffd54a", "#3ccf6e", "#4f8cff", "#a98bf0"];
+// Per theme: (palette, light) => { layers (signature, first on top), frame, css }.
 const SKINS = {
   newyear: (p, light) => ({
-    layers: [
-      layer.edge(["#b8913a", "#fff3c4", "#e9c46a", "#fff3c4", "#b8913a"], 3),
-      layer.pattern(tile(132, 16, light ? 0.45 : 0.24, 11, (x, y, i, r) =>
-        (i % 4 === 3 ? SHAPE.star : i % 2 ? SHAPE.dot : SHAPE.bit)(x, y, ["#e9c46a", "#c9ced9", "#f4a3c0", "#e9c46a"][i % 4], r() * 180, i % 4 === 3 ? 0.6 : 0.9)), 132),
-    ],
-    frame: alpha("#e9c46a", light ? 0.55 : 0.4),
+    layers: [layer.edge(["#b8913a", "#fff3c4", "#e9c46a", "#fff3c4", "#b8913a"], 3)],
+    frame: alpha("#e9c46a", light ? 0.5 : 0.3),
   }),
   valentines: (p, light) => ({
-    layers: [
-      layer.strip(EDGE.lace(light ? "#f3a7bf" : "#ff9ab8", light ? 0.6 : 0.3), 20, 11),
-      layer.pattern(tile(120, 9, light ? 0.16 : 0.12, 5, (x, y, i, r) => SHAPE.heart(x, y, i % 2 ? p.accent : "#ff9ab8", (r() - 0.5) * 50, 0.6 + r() * 0.45)), 120),
-    ],
+    layers: [layer.strip(EDGE.lace(light ? "#f3a7bf" : "#ff9ab8", light ? 0.6 : 0.32), 20, 11)],
   }),
-  stpatricks: (p, light) => ({
-    layers: [
-      layer.edge(["#e5484d", "#ff9f43", "#ffd54a", "#3ccf6e", "#4f8cff", "#a98bf0"], 4),
-      layer.pattern(tile(128, 9, light ? 0.18 : 0.12, 3, (x, y, i, r) =>
-        i % 4 === 3 ? SHAPE.dot(x, y, "#e9c46a", 0, 1.5) : SHAPE.shamrock(x, y, p.accent, (r() - 0.5) * 70, 0.8 + r() * 0.4)), 128),
-    ],
-  }),
-  easter: (p, light) => ({
-    layers: [
-      layer.corner(ORN.nest(light ? 0.85 : 0.5), "right 6px bottom 2px", "56px 32px"),
-      layer.edge(PASTEL, 4),
-      layer.pattern(tile(120, 9, light ? 0.32 : 0.14, 9, (x, y, i, r) => SHAPE.egg(x, y, PASTEL[i % 5], (r() - 0.5) * 40, 0.75 + r() * 0.3)), 120),
-    ],
-    frame: alpha("#cdb4f6", light ? 0.6 : 0.3),
-  }),
-  july4: (p, light) => ({
-    layers: [
-      layer.edge(["#e5484d 0 33%", "#f4f4f4 0 66%", "#4f8cff 0"], 4),
-      layer.pattern(tile(120, 9, light ? 0.2 : 0.13, 2, (x, y, i, r) =>
-        SHAPE.star(x, y, light ? (i % 2 ? "#e5484d" : "#4f8cff") : i % 3 ? "#ffffff" : "#e5484d", r() * 72, 0.55 + r() * 0.5)), 120),
-    ],
-  }),
+  stpatricks: () => ({ layers: [layer.edge(RAINBOW, 3)] }),
+  easter: (p, light) => ({ layers: [layer.edge(PASTEL, 3)], frame: alpha("#cdb4f6", light ? 0.55 : 0.28) }),
+  july4: () => ({ layers: [layer.edge(["#e5484d 0 33%", "#f4f4f4 0 66%", "#4f8cff 0"], 3)] }),
   halloween: (p, light) => ({
     layers: [
       layer.strip(EDGE.drip("#8e4fc4", light ? 0.45 : 0.75), 47, 12),
       layer.corner(ORN.web(light ? "#3a2d48" : "#ffffff", light ? 0.3 : 0.2), "right 0 top 0", "100px 100px"),
-      layer.pattern(tile(150, 6, light ? 0.12 : 0.16, 13, (x, y, i, r) => SHAPE.bat(x, y, light ? "#3a2d48" : "#a86cf0", (r() - 0.5) * 30, 0.9 + r() * 0.5)), 150),
+      layer.pattern(tile(170, 4, light ? 0.1 : 0.12, 13, (x, y, i, r) => `<path ${tf(x, y, (r() - 0.5) * 30, 0.9 + r() * 0.5)} fill="${light ? "#3a2d48" : "#a86cf0"}" d="${BAT}"/>`), 170),
     ],
-    frame: alpha("#8e4fc4", light ? 0.5 : 0.5),
-    glow: "#8e4fc4",
+    frame: alpha("#8e4fc4", 0.45),
   }),
-  thanksgiving: (p, light) => {
-    const a = alpha(p.accent, light ? 0.07 : 0.06), g = alpha("#e9c46a", light ? 0.12 : 0.07);
-    return {
-      layers: [
-        layer.corner(ORN.leaves(["#e08a3c", "#c0392b", "#e9c46a", "#8d5524"], light ? 0.75 : 0.45), "right 4px bottom 2px", "54px 40px"),
-        layer.css(`repeating-linear-gradient(0deg, transparent 0 22px, ${g} 22px 23px, transparent 23px 36px)`),
-        layer.css(`repeating-linear-gradient(90deg, transparent 0 22px, ${g} 22px 23px, transparent 23px 36px)`),
-        layer.css(`repeating-linear-gradient(0deg, ${a} 0 11px, transparent 11px 36px)`),
-        layer.css(`repeating-linear-gradient(90deg, ${a} 0 11px, transparent 11px 36px)`),
-      ],
-    };
-  },
+  thanksgiving: () => ({ layers: [layer.edge(["#a8452f", "#e08a3c", "#f3c76a", "#e08a3c", "#a8452f"], 3)] }),
   christmas: (p, light) => ({
     layers: [
-      layer.corner(ORN.holly(light ? "#2f9e57" : alpha("#2f9e57", 0.75), light ? "#e5484d" : alpha("#e5484d", 0.85)), "right 8px bottom 4px", "40px 28px"),
+      layer.corner(ORN.holly(light ? "#2f9e57" : alpha("#2f9e57", 0.8), light ? "#e5484d" : alpha("#e5484d", 0.9)), "50% 3px", "34px 24px"),
       layer.strip(EDGE.snow(light ? "#ffffff" : "#f4f8fb", light ? "#cfd9e2" : null), 60, 12),
-      layer.pattern(tile(130, 9, light ? 0.22 : 0.09, 4, (x, y, i, r) => SHAPE.flake(x, y, light ? "#8fb3c9" : "#ffffff", r() * 60, 0.7 + r() * 0.5)), 130),
     ],
-    frame: alpha("#3fbf6a", 0.35),
-    glow: "#3fbf6a",
+    frame: alpha("#3fbf6a", 0.32),
     css: `
       .rk .bar div, .wd .bar div { background-image:repeating-linear-gradient(-45deg, rgba(255,255,255,.5) 0 6px, transparent 6px 12px) !important; }
-      .pill { background-image:repeating-linear-gradient(-45deg, rgba(255,255,255,.22) 0 9px, transparent 9px 18px); }`,
+      .pill { background-image:repeating-linear-gradient(-45deg, rgba(255,255,255,.2) 0 9px, transparent 9px 18px), ${pillGradient(p.accent)}; }`,
   }),
 };
+const pillGradient = (a) => `linear-gradient(135deg, ${mix("#ffffff", a, 0.3)}, ${a} 55%, ${mix("#000000", a, 0.12)})`;
 /** The skin stylesheet for a theme, or "" for the everyday look. */
 function skinCss(key, p, light) {
   const make = SKINS[key];
   if (!make) return "";
   const s = make(p, light);
-  const L = s.layers || [];
-  const col = (i) => L.map((l) => l[i]).join(", ");
-  const surf = L.length ? `background-image:${col(0)}; background-position:${col(1)}; background-size:${col(2)}; background-repeat:${col(3)};` : "";
+  const a = p.accent;
+  // The signature layers, then the light falling on the card from the top.
+  // The small house tiles get the light only; the signature is for the big cards.
+  const glow = [`linear-gradient(180deg, ${alpha(a, light ? 0.07 : 0.1)}, transparent 42%)`, "0 0", "auto", "no-repeat"];
+  const bg = (L) => `background-image:${L.map((l) => l[0]).join(", ")}; background-position:${L.map((l) => l[1]).join(", ")}; background-size:${L.map((l) => l[2]).join(", ")}; background-repeat:${L.map((l) => l[3]).join(", ")};`;
+  const surf = bg([...(s.layers || []), glow]);
+  const frame = s.frame || alpha(a, light ? 0.4 : 0.24);
+  const lift = light ? "0 6px 22px rgba(40,30,20,.1), 0 1px 2px rgba(40,30,20,.06)" : "0 10px 30px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.25)";
+  const rim = `inset 0 1px 0 rgba(255,255,255,${light ? 0.75 : 0.07})`;
   return `
-    .card, .rk, .rc, .ad, .wrap > .sh { ${surf} box-shadow:var(--shadow), inset 0 0 0 1.5px ${s.frame || alpha(p.accent, light ? 0.45 : 0.3)}; }
-    :host(kitchen-pages-card) > .wrap { background-image:radial-gradient(130% 55% at 50% -14%, ${alpha(s.glow || p.accent, light ? 0.16 : 0.2)}, transparent 72%); background-repeat:no-repeat; }
+    .card, .rk, .rc, .ad, .house > .chip { background-color:color-mix(in srgb, var(--card) ${light ? 90 : 86}%, transparent); ${surf}
+      box-shadow:${lift}, ${rim}, inset 0 0 0 1px ${frame}; }
+    .house > .chip { ${bg([glow])} }
+    .wrap > .sh { ${surf} box-shadow:0 18px 50px rgba(0,0,0,.45), ${rim}, inset 0 0 0 1px ${frame}; }
+    .tab { background-color:color-mix(in srgb, var(--card) 82%, transparent); box-shadow:${rim}, inset 0 0 0 1px ${alpha(a, light ? 0.22 : 0.14)}; }
+    .pill { background-image:${pillGradient(a)}; box-shadow:0 4px 16px ${alpha(a, light ? 0.3 : 0.4)}, inset 0 1px 0 rgba(255,255,255,.35); }
     .h { color:var(--acct); }
     ${s.css || ""}`;
 }
@@ -1026,6 +983,487 @@ const Skin = {
     this.sheet.replaceSync(css);
   },
 };
+
+// ---------------------------------------------------------------- scenes
+
+// The page behind the cards, per holiday: a sky behind the clock (a moon, an
+// aurora, a rainbow, stars, bokeh, fireworks) and a landscape along the
+// bottom (hills in three depths, trees, a barn, a snowy cabin, a haunted
+// house, a skyline, pumpkins, tulips), in a dark and a light palette. Drawn
+// procedurally into two inline SVGs at the page's real width (seeded, so it
+// looks the same every time), so it stays crisp and costs one paint. The
+// walking and hopping cameos cross the bottom of it.
+const SKY_H = 380, LAND_H = 300;
+const f1 = (v) => (+v).toFixed(1);
+const seeded = (seed) => {
+  let s = seed;
+  return () => (s = (s * 16807) % 2147483647) / 2147483647;
+};
+/** Ridge points across the width: [x, y] every `step` px around `base`, up to `amp` above or below. */
+function ridge(r, W, base, amp, step) {
+  const pts = [];
+  for (let x = -60; x < W + 60 + step; x += step) pts.push([x, base + (r() - 0.5) * 2 * amp]);
+  return pts;
+}
+/** The ridge's height at x, eased between its points like the drawn curve. */
+function ridgeY(pts, x) {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
+    if (x <= x1) {
+      const t = Math.max(0, (x - x0) / (x1 - x0));
+      return y0 + (y1 - y0) * (3 * t * t - 2 * t * t * t);
+    }
+  }
+  return pts[pts.length - 1][1];
+}
+// The scene being drawn (light or dark) and a counter for its gradient ids.
+// Light comes from above: by day white, at night a warm moonlight.
+const SC = { light: false, n: 0 };
+const lit = (c, k) => mix(SC.light ? "#ffffff" : "#ffe6c4", c, k);
+const shade = (c, k) => mix("#000000", c, k);
+/** A vertical (or horizontal) gradient: [id, <linearGradient>]. Stops are [offset, color, opacity]. */
+function grad(stops, horizontal) {
+  const id = `sg${++SC.n}`;
+  return [id, `<linearGradient id="${id}" x1="0" y1="0" x2="${horizontal ? 1 : 0}" y2="${horizontal ? 0 : 1}">${stops
+    .map(([o, c, a = 1]) => `<stop offset="${o}" stop-color="${c}" stop-opacity="${a}"/>`).join("")}</linearGradient>`];
+}
+/** A hill: lit along its ridge, darkening toward its foot, with a thin bright rim where the light catches it. */
+function hill(pts, H, fill) {
+  let d = `M${f1(pts[0][0])} ${f1(pts[0][1])}`;
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], h = (x1 - x0) / 2;
+    d += `C${f1(x0 + h)} ${f1(y0)} ${f1(x1 - h)} ${f1(y1)} ${f1(x1)} ${f1(y1)}`;
+  }
+  const [id, def] = grad([[0, lit(fill, SC.light ? 0.2 : 0.1)], [0.3, fill], [1, shade(fill, SC.light ? 0.1 : 0.35)]]);
+  return `<defs>${def}</defs><path d="${d}V${H}H${f1(pts[0][0])}Z" fill="url(#${id})"/>
+    <path d="${d}" fill="none" stroke="${lit(fill, SC.light ? 0.55 : 0.22)}" stroke-width="1.2" opacity=".75"/>`;
+}
+/** A band of mist at y between two layers of hills, so the far ones sit back. */
+function fog(W, y, h, color, op) {
+  const [id, def] = grad([[0, color, 0], [0.55, color, op], [1, color, 0]]);
+  return `<defs>${def}</defs><rect x="-10" y="${f1(y - h / 2)}" width="${W + 20}" height="${f1(h)}" fill="url(#${id})"/>`;
+}
+/** Warm light spilling around a lit window or a jack-o'-lantern: a soft radial falloff, drawn behind it. */
+function glowAt(x, y, rx, ry, color, op) {
+  const id = `sg${++SC.n}`;
+  return `<defs><radialGradient id="${id}"><stop offset="0" stop-color="${color}" stop-opacity="${op}"/><stop offset=".45" stop-color="${color}" stop-opacity="${f1(op * 0.35)}"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient></defs>
+    <ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(rx)}" ry="${f1(ry)}" fill="url(#${id})"/>`;
+}
+/** Positions across the width at fractions `fs`, nudged by up to `j` px. */
+const spots = (r, W, fs, j = 24) => fs.map((f) => W * f + (r() - 0.5) * 2 * j);
+// Props, drawn standing on the ground at y.
+const ART = {
+  pine(x, y, h, c, snow) {
+    const w = h * 0.44;
+    let s = `<rect x="${f1(x - h * 0.04)}" y="${f1(y - h * 0.12)}" width="${f1(h * 0.08)}" height="${f1(h * 0.14)}" fill="${c}"/>`;
+    for (const [a, b, k] of [[0, 0.46, 0.5], [0.2, 0.72, 0.76], [0.42, 0.94, 1]]) {
+      const top = y - h + a * h, bot = y - h + b * h, hw = w * k;
+      s += `<path d="M${f1(x)} ${f1(top)}L${f1(x + hw)} ${f1(bot)}Q${f1(x)} ${f1(bot - h * 0.05)} ${f1(x - hw)} ${f1(bot)}Z" fill="${c}"/>
+        <path d="M${f1(x)} ${f1(top)}L${f1(x + hw)} ${f1(bot)}Q${f1(x + hw * 0.5)} ${f1(bot - h * 0.03)} ${f1(x)} ${f1(bot - h * 0.05)}Z" fill="${shade(c, 0.3)}"/>`;
+      if (snow) {
+        const sy = top + (bot - top) * 0.45, sx = hw * 0.45;
+        s += `<path d="M${f1(x)} ${f1(top)}L${f1(x + sx)} ${f1(sy)}Q${f1(x + sx * 0.4)} ${f1(sy - 3)} ${f1(x)} ${f1(sy + 1)}Q${f1(x - sx * 0.4)} ${f1(sy - 3)} ${f1(x - sx)} ${f1(sy)}Z" fill="${snow}"/>`;
+      }
+    }
+    return s;
+  },
+  tree(x, y, h, cs, trunk) {
+    // Crowns shaded underneath, then lit on top, so the tree reads round.
+    const crowns = [[0.02, -0.5, 0.2], [-0.21, -0.58, 0.2], [0.22, -0.6, 0.21], [0, -0.74, 0.26]];
+    const col = (i) => cs[i % cs.length];
+    return `<path d="M${f1(x - h * 0.035)} ${f1(y)}L${f1(x - h * 0.018)} ${f1(y - h * 0.58)}H${f1(x + h * 0.018)}L${f1(x + h * 0.035)} ${f1(y)}Z" fill="${trunk}"/>` +
+      crowns.map(([dx, dy, rr], i) => `<circle cx="${f1(x + dx * h)}" cy="${f1(y + dy * h)}" r="${f1(rr * h)}" fill="${shade(col(i), 0.22)}"/>`).join("") +
+      crowns.map(([dx, dy, rr], i) => `<circle cx="${f1(x + dx * h - rr * h * 0.12)}" cy="${f1(y + dy * h - rr * h * 0.14)}" r="${f1(rr * h * 0.86)}" fill="${col(i)}"/>`).join("") +
+      crowns.map(([dx, dy, rr], i) => `<circle cx="${f1(x + dx * h - rr * h * 0.32)}" cy="${f1(y + dy * h - rr * h * 0.36)}" r="${f1(rr * h * 0.42)}" fill="${lit(col(i), 0.3)}" opacity="${SC.light ? 0.4 : 0.7}"/>`).join("");
+  },
+  // Bare and crooked: every branch bends a little and splits in two, four times over.
+  gnarled(x, y, h, c, r) {
+    let d = "";
+    const branch = (x0, y0, len, ang, w, depth) => {
+      const x1 = x0 + Math.cos(ang) * len, y1 = y0 - Math.sin(ang) * len, bend = (r() - 0.5) * len * 0.5;
+      const cx = (x0 + x1) / 2 - Math.sin(ang) * bend, cy = (y0 + y1) / 2 - Math.cos(ang) * bend;
+      d += `<path d="M${f1(x0)} ${f1(y0)}Q${f1(cx)} ${f1(cy)} ${f1(x1)} ${f1(y1)}" stroke-width="${f1(w)}"/>`;
+      if (depth > 0) {
+        branch(x1, y1, len * (0.62 + r() * 0.16), ang + 0.32 + r() * 0.48, w * 0.62, depth - 1);
+        branch(x1, y1, len * (0.58 + r() * 0.16), ang - 0.32 - r() * 0.48, w * 0.62, depth - 1);
+      }
+    };
+    branch(x, y + 2, h * 0.4, Math.PI / 2 + (r() - 0.5) * 0.25, h * 0.08, 4);
+    return `<g stroke="${c}" stroke-linecap="round" fill="none">${d}</g>`;
+  },
+  barn(x, y, w, h, wall, roof, trim, win) {
+    const l = x - w / 2, rt = x + w / 2, eave = y - h * 0.6;
+    const outline = `M${f1(l)} ${f1(eave)}L${f1(l + w * 0.17)} ${f1(y - h * 0.88)}L${f1(x)} ${f1(y - h)}L${f1(rt - w * 0.17)} ${f1(y - h * 0.88)}L${f1(rt)} ${f1(eave)}`;
+    const dw = w * 0.3, dt = y - h * 0.44;
+    return `<path d="M${f1(l)} ${f1(y)}V${f1(eave)}${outline.replace(/^M[^L]+/, "")}V${f1(y)}Z" fill="${wall}"/>
+      <path d="${outline}" fill="none" stroke="${roof}" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="M${f1(x - dw / 2)} ${f1(dt)}H${f1(x + dw / 2)}V${f1(y)}H${f1(x - dw / 2)}ZM${f1(x - dw / 2)} ${f1(dt)}L${f1(x + dw / 2)} ${f1(y)}M${f1(x + dw / 2)} ${f1(dt)}L${f1(x - dw / 2)} ${f1(y)}" fill="none" stroke="${trim}" stroke-width="1.5"/>
+      <rect x="${f1(x - w * 0.07)}" y="${f1(y - h * 0.8)}" width="${f1(w * 0.14)}" height="${f1(h * 0.13)}" fill="${win}"/>`;
+  },
+  cabin(x, y, w, h, wall, roof, win, snow, smoke) {
+    const l = x - w / 2, rt = x + w / 2, eave = y - h * 0.55, cx = rt - w * 0.26;
+    const winR = (wx) => `<rect x="${f1(wx)}" y="${f1(y - h * 0.42)}" width="${f1(w * 0.16)}" height="${f1(h * 0.2)}" fill="${win}"/>`;
+    return `${SC.light ? "" : glowAt(x, y - h * 0.3, w * 1.3, h * 0.8, win, 0.22)}
+      ${smoke ? `<path d="M${f1(cx + w * 0.05)} ${f1(y - h * 1.1)}c-6 -8 6 -12 0 -20s6 -12 0 -20" fill="none" stroke="${smoke}" stroke-width="4" stroke-linecap="round" opacity=".35"/>` : ""}
+      <rect x="${f1(cx)}" y="${f1(y - h * 1.05)}" width="${f1(w * 0.1)}" height="${f1(h * 0.42)}" fill="${roof}"/>
+      <rect x="${f1(l)}" y="${f1(eave)}" width="${f1(w)}" height="${f1(y - eave)}" fill="${wall}"/>
+      <path d="M${f1(l - w * 0.1)} ${f1(eave + 1)}L${f1(x)} ${f1(y - h)}L${f1(rt + w * 0.1)} ${f1(eave + 1)}Z" fill="${roof}"/>
+      ${snow ? `<path d="M${f1(l - w * 0.1)} ${f1(eave + 1)}L${f1(x)} ${f1(y - h)}L${f1(rt + w * 0.1)} ${f1(eave + 1)}" fill="none" stroke="${snow}" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
+      ${winR(l + w * 0.12)}${winR(rt - w * 0.28)}<rect x="${f1(x - w * 0.07)}" y="${f1(y - h * 0.36)}" width="${f1(w * 0.14)}" height="${f1(h * 0.36)}" fill="${roof}"/>`;
+  },
+  haunted(x, y, w, h, c, win) {
+    const l = x - w / 2, mr = x + w * 0.12, tl = mr - 2, tr = x + w / 2, body = y - h * 0.5;
+    const win1 = (wx, wy, ww = w * 0.09, wh = h * 0.12) => `<rect x="${f1(wx)}" y="${f1(wy)}" width="${f1(ww)}" height="${f1(wh)}" fill="${win}"/>`;
+    return `<rect x="${f1(l)}" y="${f1(body)}" width="${f1(mr - l)}" height="${f1(y - body)}" fill="${c}"/>
+      <path d="M${f1(l - w * 0.06)} ${f1(body + 1)}L${f1((l + mr) / 2 - w * 0.04)} ${f1(y - h * 0.82)}L${f1(mr + w * 0.04)} ${f1(body + 1)}Z" fill="${c}"/>
+      <rect x="${f1(l + w * 0.1)}" y="${f1(y - h * 0.82)}" width="${f1(w * 0.06)}" height="${f1(h * 0.2)}" fill="${c}" transform="rotate(-6 ${f1(l + w * 0.13)} ${f1(y - h * 0.72)})"/>
+      <rect x="${f1(tl)}" y="${f1(y - h * 0.86)}" width="${f1(tr - tl)}" height="${f1(h * 0.86)}" fill="${c}"/>
+      <path d="M${f1(tl - w * 0.04)} ${f1(y - h * 0.85)}L${f1((tl + tr) / 2)} ${f1(y - h * 1.22)}L${f1(tr + w * 0.04)} ${f1(y - h * 0.85)}Z" fill="${c}"/>
+      <path d="M${f1((tl + tr) / 2)} ${f1(y - h * 1.22)}V${f1(y - h * 1.34)}" stroke="${c}" stroke-width="1.5"/>
+      <circle cx="${f1((tl + tr) / 2)}" cy="${f1(y - h * 0.68)}" r="${f1(w * 0.05)}" fill="${win}"/>
+      ${win1(l + w * 0.1, body + h * 0.12)}${win1(l + w * 0.32, body + h * 0.12)}${win1((tl + tr) / 2 - w * 0.045, y - h * 0.42)}
+      <rect x="${f1(l + w * 0.2)}" y="${f1(y - h * 0.2)}" width="${f1(w * 0.1)}" height="${f1(h * 0.2)}" fill="${win}" opacity=".55"/>`;
+  },
+  skyline(r, W, y, minH, maxH, c, win, lit) {
+    let s = "";
+    for (let x = -8; x < W + 8; ) {
+      const bw = 24 + r() * 44, bh = minH + r() * (maxH - minH);
+      s += `<rect x="${f1(x)}" y="${f1(y - bh)}" width="${f1(bw + 1)}" height="${f1(bh + 2)}" fill="${c}"/>`;
+      if (r() < 0.22) s += `<path d="M${f1(x + bw / 2)} ${f1(y - bh)}V${f1(y - bh - 14)}" stroke="${c}" stroke-width="2"/>`;
+      for (let wy = y - bh + 8; wy < y - 10; wy += 11) for (let wx = x + 5; wx < x + bw - 7; wx += 9) if (r() < lit) s += `<rect x="${f1(wx)}" y="${f1(wy)}" width="4" height="5" fill="${win}"/>`;
+      x += bw + 1 + r() * 5;
+    }
+    return s;
+  },
+  clockTower(x, y, h, c, face) {
+    const w = h * 0.2, cy = y - h * 0.68, cr = w * 0.36;
+    return `<rect x="${f1(x - w / 2)}" y="${f1(y - h * 0.82)}" width="${f1(w)}" height="${f1(h * 0.82)}" fill="${c}"/>
+      <rect x="${f1(x - w * 0.62)}" y="${f1(y - h * 0.84)}" width="${f1(w * 1.24)}" height="${f1(h * 0.04)}" fill="${c}"/>
+      <path d="M${f1(x - w * 0.5)} ${f1(y - h * 0.84)}L${f1(x)} ${f1(y - h)}L${f1(x + w * 0.5)} ${f1(y - h * 0.84)}Z" fill="${c}"/>
+      <circle cx="${f1(x)}" cy="${f1(cy)}" r="${f1(cr)}" fill="${face}"/>
+      <path d="M${f1(x)} ${f1(cy)}V${f1(cy - cr * 0.75)}M${f1(x)} ${f1(cy)}L${f1(x - cr * 0.12)} ${f1(cy - cr * 0.5)}" stroke="${c}" stroke-width="1.6" stroke-linecap="round"/>`;
+  },
+  pumpkin(x, y, s, body, stem, face) {
+    const e = (dx, rx) => `<ellipse cx="${f1(x + dx * s)}" cy="${f1(y - s * 0.7)}" rx="${f1(rx * s)}" ry="${f1(s * 0.7)}" fill="${body}" stroke="#000" stroke-opacity=".14"/>`;
+    let g = (face && !SC.light ? glowAt(x, y - s * 0.6, s * 3.2, s * 1.8, face, 0.3) : "") +
+      `<path d="M${f1(x)} ${f1(y - s * 1.3)}q${f1(s * 0.06)} ${f1(-s * 0.28)} ${f1(s * 0.26)} ${f1(-s * 0.34)}" stroke="${stem}" stroke-width="${f1(s * 0.16)}" stroke-linecap="round" fill="none"/>` + e(-0.42, 0.6) + e(0.42, 0.6) + e(0, 0.64);
+    if (face) {
+      const ey = y - s * 0.86, my = y - s * 0.46;
+      g += `<path d="M${f1(x - s * 0.42)} ${f1(ey + s * 0.16)}L${f1(x - s * 0.24)} ${f1(ey - s * 0.12)}L${f1(x - s * 0.08)} ${f1(ey + s * 0.16)}ZM${f1(x + s * 0.08)} ${f1(ey + s * 0.16)}L${f1(x + s * 0.24)} ${f1(ey - s * 0.12)}L${f1(x + s * 0.42)} ${f1(ey + s * 0.16)}Z
+        M${f1(x - s * 0.46)} ${f1(my - s * 0.08)}Q${f1(x)} ${f1(my + s * 0.34)} ${f1(x + s * 0.46)} ${f1(my - s * 0.08)}L${f1(x + s * 0.26)} ${f1(my + s * 0.04)}L${f1(x + s * 0.12)} ${f1(my - s * 0.06)}L${f1(x)} ${f1(my + s * 0.06)}L${f1(x - s * 0.12)} ${f1(my - s * 0.06)}L${f1(x - s * 0.26)} ${f1(my + s * 0.04)}Z" fill="${face}"/>`;
+    }
+    return g;
+  },
+  hay(x, y, w, h, c, line) {
+    return `<rect x="${f1(x - w / 2)}" y="${f1(y - h)}" width="${f1(w)}" height="${f1(h)}" rx="${f1(h * 0.22)}" fill="${c}"/>
+      <path d="M${f1(x - w / 2 + 3)} ${f1(y - h * 0.66)}H${f1(x + w / 2 - 3)}M${f1(x - w / 2 + 3)} ${f1(y - h * 0.33)}H${f1(x + w / 2 - 3)}" stroke="${line}" stroke-width="1.4" opacity=".6"/>`;
+  },
+  stone(x, y, s, c, cross) {
+    if (cross) return `<path d="M${f1(x - s * 0.14)} ${f1(y)}V${f1(y - s * 1.1)}H${f1(x - s * 0.5)}V${f1(y - s * 1.36)}H${f1(x - s * 0.14)}V${f1(y - s * 1.7)}H${f1(x + s * 0.14)}V${f1(y - s * 1.36)}H${f1(x + s * 0.5)}V${f1(y - s * 1.1)}H${f1(x + s * 0.14)}V${f1(y)}Z" fill="${c}"/>`;
+    return `<path d="M${f1(x - s * 0.5)} ${f1(y)}V${f1(y - s)}A${f1(s * 0.5)} ${f1(s * 0.5)} 0 0 1 ${f1(x + s * 0.5)} ${f1(y - s)}V${f1(y)}Z" fill="${c}" transform="rotate(${f1((x * 7) % 9 - 4)} ${f1(x)} ${f1(y)})"/>`;
+  },
+  tulip(x, y, h, c, stem) {
+    const t = y - h;
+    return `<path d="M${f1(x)} ${f1(y)}Q${f1(x + 2)} ${f1(y - h * 0.5)} ${f1(x)} ${f1(t)}" stroke="${stem}" stroke-width="1.6" fill="none"/>
+      <path d="M${f1(x)} ${f1(y - 2)}Q${f1(x - 9)} ${f1(y - h * 0.4)} ${f1(x - 2)} ${f1(y - h * 0.6)}Q${f1(x - 2)} ${f1(y - h * 0.3)} ${f1(x)} ${f1(y - 2)}Z" fill="${stem}"/>
+      <path d="M${f1(x - 5)} ${f1(t)}L${f1(x - 5.5)} ${f1(t - 8)}L${f1(x - 2.2)} ${f1(t - 4.5)}L${f1(x)} ${f1(t - 9)}L${f1(x + 2.2)} ${f1(t - 4.5)}L${f1(x + 5.5)} ${f1(t - 8)}L${f1(x + 5)} ${f1(t)}Q${f1(x)} ${f1(t + 5)} ${f1(x - 5)} ${f1(t)}Z" fill="${c}"/>`;
+  },
+  egg(x, y, s, c) {
+    return `<ellipse cx="${f1(x)}" cy="${f1(y - s * 0.62)}" rx="${f1(s * 0.48)}" ry="${f1(s * 0.62)}" fill="${c}"/>
+      <path d="M${f1(x - s * 0.46)} ${f1(y - s * 0.62)}l${f1(s * 0.23)} ${f1(-s * 0.16)}l${f1(s * 0.23)} ${f1(s * 0.16)}l${f1(s * 0.23)} ${f1(-s * 0.16)}l${f1(s * 0.23)} ${f1(s * 0.16)}" stroke="#fff" stroke-opacity=".7" stroke-width="1.3" fill="none"/>`;
+  },
+  potOfGold(x, y, s, gold) {
+    let coins = "";
+    for (const [dx, dy] of [[-0.42, 0], [-0.14, -0.1], [0.16, -0.06], [0.42, 0], [-0.28, -0.26], [0.02, -0.32], [0.3, -0.24]])
+      coins += `<circle cx="${f1(x + dx * s)}" cy="${f1(y - s * 0.95 + dy * s)}" r="${f1(s * 0.2)}" fill="${gold}" stroke="#b8913a" stroke-width="1"/>`;
+    return coins + `<path d="M${f1(x - s * 0.62)} ${f1(y - s * 0.95)}Q${f1(x - s * 0.8)} ${f1(y)} ${f1(x - s * 0.3)} ${f1(y)}H${f1(x + s * 0.3)}Q${f1(x + s * 0.8)} ${f1(y)} ${f1(x + s * 0.62)} ${f1(y - s * 0.95)}Z" fill="#141414"/>
+      <rect x="${f1(x - s * 0.7)}" y="${f1(y - s * 1.02)}" width="${f1(s * 1.4)}" height="${f1(s * 0.16)}" rx="${f1(s * 0.08)}" fill="#222"/>`;
+  },
+  flag(x, y, h) {
+    const fw = h * 0.5, fh = h * 0.3, top = y - h;
+    let s = `<path d="M${f1(x)} ${f1(y)}V${f1(top - 3)}" stroke="#9aa4b5" stroke-width="2"/>`;
+    for (let i = 0; i < 7; i++) s += `<rect x="${f1(x + 1)}" y="${f1(top + (fh / 7) * i)}" width="${f1(fw)}" height="${f1(fh / 7 + 0.3)}" fill="${i % 2 ? "#f4f4f4" : "#e5484d"}"/>`;
+    return s + `<rect x="${f1(x + 1)}" y="${f1(top)}" width="${f1(fw * 0.42)}" height="${f1((fh / 7) * 4)}" fill="#3c5bbf"/>`;
+  },
+  cloud(x, y, s, c, op) {
+    return `<g fill="${c}" opacity="${op}">${[[0, 0, 1], [-0.9, 0.25, 0.7], [0.95, 0.2, 0.75], [-0.4, -0.35, 0.7], [0.45, -0.3, 0.65]]
+      .map(([dx, dy, rr]) => `<circle cx="${f1(x + dx * s)}" cy="${f1(y + dy * s)}" r="${f1(rr * s)}"/>`).join("")}</g>`;
+  },
+  heart: (x, y, s, c, op, rot = 0) => `<path ${tf(x, y, rot, s)} d="${HEART}" fill="${c}" opacity="${op}"/>`,
+  // A tree whose crown is a heart, shaded and lit like the round ones.
+  heartTree(x, y, h, c, trunk) {
+    const s = h * 0.05, cy = y - h * 0.66;
+    return `<path d="M${f1(x - h * 0.03)} ${f1(y)}Q${f1(x - h * 0.01)} ${f1(y - h * 0.3)} ${f1(x - h * 0.012)} ${f1(cy)}H${f1(x + h * 0.012)}Q${f1(x + h * 0.02)} ${f1(y - h * 0.3)} ${f1(x + h * 0.03)} ${f1(y)}Z" fill="${trunk}"/>
+      <path ${tf(x + s * 0.6, cy + s * 0.5, 0, s)} d="${HEART}" fill="${shade(c, 0.25)}"/><path ${tf(x, cy, 0, s * 0.94)} d="${HEART}" fill="${c}"/>
+      <path ${tf(x - s * 2.4, cy - s * 1.6, -20, s * 0.32)} d="${HEART}" fill="${lit(c, 0.35)}" opacity=".6"/>`;
+  },
+  // A heart balloon on a string, tied to the ground at x, y.
+  balloon(x, y, s, c, string) {
+    const bx = x + s * 0.8, by = y - s * 9;
+    return `<path d="M${f1(x)} ${f1(y)}C${f1(x + s * 1.5)} ${f1(y - s * 3)} ${f1(bx - s * 1.2)} ${f1(by + s * 4)} ${f1(bx)} ${f1(by + s * 1.2)}" stroke="${string}" stroke-width="1" fill="none"/>
+      <path ${tf(bx, by - s * 0.2, 8, s * 0.36)} d="${HEART}" fill="${c}"/><path ${tf(bx - s * 0.9, by - s * 1, -10, s * 0.1)} d="${HEART}" fill="#ffffff" opacity=".55"/>`;
+  },
+  sheep(x, y, s, wool, face) {
+    return `<path d="M${f1(x - s * 0.5)} ${f1(y)}V${f1(y - s * 0.5)}M${f1(x + s * 0.4)} ${f1(y)}V${f1(y - s * 0.5)}" stroke="${face}" stroke-width="${f1(s * 0.16)}"/>` +
+      ART.cloud(x, y - s * 0.8, s * 0.42, wool, 1) + `<ellipse cx="${f1(x + s * 0.85)}" cy="${f1(y - s * 0.95)}" rx="${f1(s * 0.24)}" ry="${f1(s * 0.3)}" fill="${face}"/>`;
+  },
+  // Sky.
+  // A moon (or a soft sun by day): a lit disc with faint seas, in a wide halo.
+  // A crescent cuts a disc out of the moon only (a mask), so the halo still glows around it.
+  moon(x, y, r, c, glow, id, crescent) {
+    const mask = crescent ? `<mask id="${id}m"><rect x="${f1(x - r * 2)}" y="${f1(y - r * 2)}" width="${f1(r * 4)}" height="${f1(r * 4)}" fill="#fff"/><circle cx="${f1(x + r * 0.42)}" cy="${f1(y - r * 0.26)}" r="${f1(r * 0.9)}" fill="#000"/></mask>` : "";
+    return `<defs>${mask}<radialGradient id="${id}"><stop offset="0" stop-color="${glow}" stop-opacity=".55"/><stop offset=".22" stop-color="${glow}" stop-opacity=".22"/><stop offset=".5" stop-color="${glow}" stop-opacity=".07"/><stop offset="1" stop-color="${glow}" stop-opacity="0"/></radialGradient>
+      <radialGradient id="${id}d" cx=".38" cy=".34" r=".75"><stop offset="0" stop-color="${mix("#ffffff", c, 0.45)}"/><stop offset=".65" stop-color="${c}"/><stop offset="1" stop-color="${mix("#000000", c, 0.12)}"/></radialGradient></defs>
+      <circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r * 5)}" fill="url(#${id})"/>
+      <g${crescent ? ` mask="url(#${id}m)"` : ""}><circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}" fill="url(#${id}d)"/>
+      <g fill="${mix("#000000", c, 0.25)}" opacity="${SC.light || crescent ? 0 : 0.16}"><ellipse cx="${f1(x - r * 0.28)}" cy="${f1(y - r * 0.18)}" rx="${f1(r * 0.3)}" ry="${f1(r * 0.22)}"/><ellipse cx="${f1(x + r * 0.3)}" cy="${f1(y + r * 0.2)}" rx="${f1(r * 0.2)}" ry="${f1(r * 0.15)}"/><circle cx="${f1(x - r * 0.08)}" cy="${f1(y + r * 0.46)}" r="${f1(r * 0.1)}"/></g></g>`;
+  },
+  fence(pts, x0, x1, c) {
+    let s = "", rail = (dy) => {
+      let d = "";
+      for (let x = x0; x <= x1; x += 12) d += `${d ? "L" : "M"}${f1(x)} ${f1(ridgeY(pts, x) - dy)}`;
+      return `<path d="${d}" stroke="${c}" stroke-width="2.2" fill="none"/>`;
+    };
+    for (let x = x0; x <= x1; x += 26) s += `<rect x="${f1(x - 1.6)}" y="${f1(ridgeY(pts, x) - 21)}" width="3.2" height="23" rx="1" fill="${c}"/>`;
+    return s + rail(16) + rail(8);
+  },
+  stars(r, W, n, maxY, c, op) {
+    let s = "";
+    for (let i = 0; i < n; i++) s += `<circle cx="${f1(r() * W)}" cy="${f1(r() * maxY)}" r="${f1(0.5 + r() * 1.1)}" fill="${c}" opacity="${(op * (0.35 + r() * 0.65)).toFixed(2)}"/>`;
+    return s;
+  },
+  bokeh(r, W, n, maxY, cs, op, id) {
+    let defs = "", s = "";
+    cs.forEach((c, i) => (defs += `<radialGradient id="${id}${i}"><stop offset="0" stop-color="${c}" stop-opacity="1"/><stop offset=".6" stop-color="${c}" stop-opacity=".45"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient>`));
+    for (let i = 0; i < n; i++) s += `<circle cx="${f1(r() * W)}" cy="${f1(20 + r() * maxY)}" r="${f1(10 + r() * 34)}" fill="url(#${id}${i % cs.length})" opacity="${(op * (0.4 + r() * 0.6)).toFixed(2)}"/>`;
+    return `<defs>${defs}</defs>${s}`;
+  },
+  aurora(W, c1, c2, op, id) {
+    const band = (y0, a, k) => {
+      let d = `M-20 ${y0}`;
+      for (let x = -20; x <= W + 40; x += 60) d += `L${x} ${f1(y0 + Math.sin(x / (110 * k)) * a + Math.sin(x / 47) * a * 0.3)}`;
+      return `${d}V${y0 + 110}H-20Z`;
+    };
+    return `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c1}" stop-opacity="0"/><stop offset=".35" stop-color="${c1}" stop-opacity=".9"/><stop offset="1" stop-color="${c2}" stop-opacity="0"/></linearGradient></defs>
+      <path d="${band(40, 26, 1)}" fill="url(#${id})" opacity="${op}"/><path d="${band(92, 20, 1.6)}" fill="url(#${id})" opacity="${f1(op * 0.6)}"/>`;
+  },
+  rainbow(x, y, R, op) {
+    return `<g fill="none" stroke-width="9" opacity="${op}">${RAINBOW.map((c, i) => `<path d="M${f1(x - (R - i * 9))} ${f1(y)}A${f1(R - i * 9)} ${f1(R - i * 9)} 0 0 1 ${f1(x + R - i * 9)} ${f1(y)}" stroke="${c}"/>`).join("")}</g>`;
+  },
+  burst(x, y, R, c, op) {
+    let s = "";
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * Math.PI * 2, x1 = x + Math.cos(a) * R * 0.3, y1 = y + Math.sin(a) * R * 0.3, x2 = x + Math.cos(a) * R, y2 = y + Math.sin(a) * R;
+      s += `<path d="M${f1(x1)} ${f1(y1)}L${f1(x2)} ${f1(y2)}"/><circle cx="${f1(x2 + Math.cos(a) * 4)}" cy="${f1(y2 + Math.sin(a) * 4)}" r="1.8" fill="${c}" stroke="none"/>`;
+    }
+    return `<g stroke="${c}" stroke-width="1.6" stroke-linecap="round" opacity="${op}">${s}</g>`;
+  },
+};
+// Per theme: (light) => { sky: [top, middle] colors, glow (along the horizon), art (W, r), land (W, H, r) }.
+// Per theme: (light) => { sky: [top, middle, horizon] colors, glow (along the
+// horizon), art (W, r): what's in the sky, land (W, H, r): the landscape }.
+// Three depths of hills with mist between them; the far ones paler, the near
+// ones richer, everything lit from above.
+const SCENES = {
+  thanksgiving(light) {
+    const c = light
+      ? { sky: ["#f2d6b8", "#f7e6d2", "#f3d2ae"], glow: "rgba(240,150,70,.22)", moon: "#ffe2b0", halo: "#ffb86b", far: "#e9cfae", mid: "#dbb084", near: "#c99560",
+          crowns: ["#d9803f", "#e8a54e", "#c0582f", "#c79a3a"], trunk: "#7a4e2e", barn: "#b04a32", roof: "#6e2a1e", trim: "#f6efe6", win: "#ffd27a", pumpkin: "#e07a2c", stem: "#5e4024", hay: "#dcb766", fence: "#8a6440" }
+      : { sky: ["#170c1c", "#24131a", "#3a2016"], glow: "rgba(224,138,60,.22)", moon: "#f6c77e", halo: "#f0a050", far: "#2e2019", mid: "#3c281c", near: "#4e321e",
+          crowns: ["#8a4420", "#a86228", "#76361a", "#94722e"], trunk: "#21140c", barn: "#62281b", roof: "#36140e", trim: "#a87454", win: "#ffc46b", pumpkin: "#c4681f", stem: "#3a2614", hay: "#86703a", fence: "#2a1a10" };
+    return {
+      sky: c.sky, glow: c.glow,
+      art: (W, r) => ART.moon(W * 0.52, 92, 32, c.moon, c.halo, "sk-moon") + (light ? "" : ART.stars(r, W, 36, 250, "#ffe9c8", 0.55)),
+      land(W, H, r) {
+        const far = ridge(r, W, 112, 22, 170), mid = ridge(r, W, 172, 18, 150), near = ridge(r, W, 236, 10, 130);
+        let s = hill(far, H, c.far);
+        for (const x of spots(r, W, [0.55, 0.61, 0.9])) s += ART.tree(x, ridgeY(far, x) + 3, 30 + r() * 10, [c.crowns[1], c.crowns[3]], c.trunk);
+        const bx = W * 0.75;
+        s += ART.barn(bx, ridgeY(far, bx) + 4, 60, 48, c.barn, c.roof, c.trim, c.win);
+        s += fog(W, 160, 70, c.sky[2], light ? 0.55 : 0.5) + hill(mid, H, c.mid);
+        spots(r, W, [0.04, 0.15, 0.27, 0.4, 0.86, 0.97], 18).forEach((x, i) => (s += ART.tree(x, ridgeY(mid, x) + 4, 58 + r() * 36, [0, 1, 2, 3].map((k) => c.crowns[(i + k) % 4]), c.trunk)));
+        s += fog(W, 228, 50, c.sky[2], light ? 0.4 : 0.35) + hill(near, H, c.near);
+        s += ART.fence(near, W * 0.36, W * 0.56, c.fence);
+        const hx = W * 0.18;
+        s += ART.hay(hx, ridgeY(near, hx) + 6, 46, 28, c.hay, c.trunk) + ART.hay(hx + 40, ridgeY(near, hx + 40) + 7, 40, 24, c.hay, c.trunk);
+        for (const [f, sz] of [[0.62, 18], [0.67, 12], [0.84, 15], [0.88, 10]]) s += ART.pumpkin(W * f, ridgeY(near, W * f) + 6, sz, c.pumpkin, c.stem);
+        return s;
+      },
+    };
+  },
+  christmas(light) {
+    const c = light
+      ? { sky: ["#cfe0ea", "#e6eff4", "#eef4f7"], glow: "rgba(150,190,215,.2)", far: "#dde7ee", mid: "#edf2f6", near: "#ffffff", pine: "#2f6b4a", pineFar: "#7aa58e", snow: "#ffffff",
+          wall: "#9a4b34", roof: "#5b3a2e", win: "#ffcf7a", smoke: "#9fb3c0", aurora: null }
+      : { sky: ["#040d17", "#071a1d", "#0f2c2a"], glow: "rgba(120,200,170,.14)", far: "#22343c", mid: "#344b56", near: "#b9c9d3", pine: "#0c2519", pineFar: "#1a3a2c", snow: "#e6eef3",
+          wall: "#3d2a21", roof: "#251a15", win: "#ffcf7a", smoke: "#8fa0aa", aurora: ["#3fe0a0", "#4fb3f0"] };
+    return {
+      sky: c.sky, glow: c.glow,
+      art: (W, r) => c.aurora
+        ? ART.aurora(W, c.aurora[0], c.aurora[1], 0.26, "sk-au") + ART.stars(r, W, 80, 320, "#ffffff", 0.85)
+        : ART.cloud(W * 0.22, 74, 24, "#ffffff", 0.75) + ART.cloud(W * 0.78, 118, 19, "#ffffff", 0.65),
+      land(W, H, r) {
+        const far = ridge(r, W, 116, 22, 180), mid = ridge(r, W, 176, 16, 150), near = ridge(r, W, 240, 10, 140);
+        let s = hill(far, H, c.far);
+        for (const x of spots(r, W, [0.05, 0.1, 0.14, 0.52, 0.57, 0.92, 0.96], 10)) s += ART.pine(x, ridgeY(far, x) + 3, 26 + r() * 14, c.pineFar, c.snow);
+        s += fog(W, 166, 70, c.sky[2], light ? 0.6 : 0.5) + hill(mid, H, c.mid);
+        const cx = W * 0.7;
+        s += ART.cabin(cx, ridgeY(mid, cx) + 4, 68, 56, c.wall, c.roof, c.win, c.snow, c.smoke);
+        for (const x of spots(r, W, [0.03, 0.12, 0.21, 0.3, 0.38, 0.84, 0.92, 0.99], 12)) s += ART.pine(x, ridgeY(mid, x) + 4, 52 + r() * 36, c.pine, c.snow);
+        s += fog(W, 232, 46, c.sky[2], light ? 0.4 : 0.3) + hill(near, H, c.near);
+        for (const x of spots(r, W, [0.08, 0.5, 0.94], 10)) s += ART.pine(x, ridgeY(near, x) + 5, 30 + r() * 12, c.pine, c.snow);
+        return s;
+      },
+    };
+  },
+  halloween(light) {
+    const c = light
+      ? { sky: ["#ddd0ea", "#ece4f3", "#f4dccb"], glow: "rgba(255,140,60,.16)", moon: "#ffffff", halo: "#c9b6e0", far: "#c9badb", mid: "#ad9ac3", near: "#86709f", house: "#76618f", tree: "#5a4574", win: "#ff9a3a", stone: "#9e8fb4", pumpkin: "#ff8a30", face: "#ffd27a", stem: "#4a3a5a", cloud: "#ece4f3" }
+      : { sky: ["#07040e", "#140b20", "#2a1430"], glow: "rgba(255,122,26,.14)", moon: "#f3e7c6", halo: "#f3e7c6", far: "#1d1429", mid: "#241a33", near: "#0e0a15", house: "#150f20", tree: "#100b18", win: "#ffb347", stone: "#2d2542", pumpkin: "#e8691a", face: "#ffd27a", stem: "#2a1a10", cloud: "#3a2c4a" };
+    return {
+      sky: c.sky, glow: c.glow,
+      art: (W, r) => ART.moon(W * 0.5, 110, 54, c.moon, c.halo, "sk-moon") + ART.stars(r, W, light ? 0 : 50, 280, "#ffffff", 0.65) +
+        `<g fill="${c.cloud}" opacity="${light ? 0.85 : 0.45}"><path d="M${f1(W * 0.5 - 130)} 128c20-10 60-12 92-6s72 4 102-4 42 2 32 8-52 10-92 8-82 4-112 2-42-2-22-8Z"/><path d="M${f1(W * 0.5 - 40)} 156c30-8 72-6 102-2s42 6 22 10-62 4-92 2-52-4-32-10Z"/></g>`,
+      land(W, H, r) {
+        const far = ridge(r, W, 108, 26, 190), mid = ridge(r, W, 174, 18, 150), near = ridge(r, W, 240, 10, 130);
+        let s = hill(far, H, c.far);
+        const hx = W * 0.72;
+        s += ART.haunted(hx, ridgeY(far, hx) + 5, 96, 84, c.house, c.win);
+        s += fog(W, 160, 74, c.sky[2], light ? 0.55 : 0.55) + hill(mid, H, c.mid);
+        const tx = W * 0.16;
+        s += ART.gnarled(tx, ridgeY(mid, tx) + 4, 176, c.tree, r) + ART.gnarled(W * 0.93, ridgeY(mid, W * 0.93) + 4, 112, c.tree, r);
+        s += fog(W, 232, 50, c.sky[2], light ? 0.45 : 0.4) + hill(near, H, c.near);
+        spots(r, W, [0.34, 0.41, 0.47, 0.55], 8).forEach((x, i) => (s += ART.stone(x, ridgeY(near, x) + 5, 14 + r() * 7, c.stone, i === 1)));
+        for (const [f, sz] of [[0.07, 16], [0.66, 14], [0.72, 10], [0.86, 15]]) s += ART.pumpkin(W * f, ridgeY(near, W * f) + 6, sz, c.pumpkin, c.stem, c.face);
+        return s;
+      },
+    };
+  },
+  easter(light) {
+    const c = light
+      ? { sky: ["#d9e7ff", "#eef1ff", "#fbf3e2"], glow: "rgba(255,225,140,.28)", sun: "#fff3c4", halo: "#ffe08a", far: "#cfe8ca", mid: "#b6dfaf", near: "#98d092", stem: "#5fa45a" }
+      : { sky: ["#0f0e24", "#18162e", "#28203e"], glow: "rgba(180,140,242,.14)", sun: "#ece6ff", halo: "#b48cf2", far: "#222a3a", mid: "#243c33", near: "#2b4c37", stem: "#4f8f55" };
+    return {
+      sky: c.sky, glow: c.glow,
+      art: (W, r) => ART.moon(W * 0.5, 86, light ? 36 : 22, c.sun, c.halo, "sk-sun") +
+        (light ? ART.cloud(W * 0.2, 74, 22, "#ffffff", 0.9) + ART.cloud(W * 0.82, 124, 17, "#ffffff", 0.8) : ART.stars(r, W, 50, 300, "#ffffff", 0.6)),
+      land(W, H, r) {
+        const far = ridge(r, W, 124, 20, 180), mid = ridge(r, W, 182, 16, 150), near = ridge(r, W, 244, 8, 140);
+        // Blossom trees, pink by day and dusky rose at night.
+        const bloom = light ? ["#f7b6cc", "#fbd0de", "#f19bb8"] : ["#8a5a78", "#a06a8c", "#76506a"], bark = light ? "#8a6a5a" : "#1a1420";
+        let s = hill(far, H, c.far);
+        for (const x of spots(r, W, [0.36, 0.44, 0.86], 10)) s += ART.tree(x, ridgeY(far, x) + 3, 32 + r() * 8, bloom, bark);
+        s += fog(W, 170, 64, c.sky[2], light ? 0.5 : 0.45) + hill(mid, H, c.mid);
+        for (const x of spots(r, W, [0.3, 0.46, 0.82], 14)) s += ART.tree(x, ridgeY(mid, x) + 4, 62 + r() * 24, bloom, bark);
+        for (const x of spots(r, W, [0.06, 0.1, 0.14, 0.18, 0.6, 0.64, 0.69, 0.74, 0.9, 0.95], 8)) s += ART.tulip(x, ridgeY(mid, x) + 4, 24 + r() * 14, PASTEL[Math.floor(r() * 5)], c.stem);
+        s += fog(W, 236, 40, c.sky[2], light ? 0.35 : 0.3) + hill(near, H, c.near);
+        spots(r, W, [0.24, 0.285, 0.33, 0.8, 0.845], 5).forEach((x, i) => (s += ART.egg(x, ridgeY(near, x) + 5, 20 + r() * 7, PASTEL[(i * 2) % 5])));
+        return s;
+      },
+    };
+  },
+  july4(light) {
+    const c = light
+      ? { sky: ["#cfe0ff", "#e8efff", "#f4f1ea"], glow: "rgba(79,140,255,.14)", far: "#cadcc4", city: "#bcc4d4", win: "#e7ebf3", near: "#a2cf95", tree: "#5f9e50" }
+      : { sky: ["#03081a", "#0a1330", "#1a1838"], glow: "rgba(229,72,77,.14)", far: "#131b35", city: "#101733", win: "#ffd27a", near: "#090e1e", tree: "#070b18" };
+    return {
+      sky: c.sky, glow: c.glow,
+      art: (W, r) => light
+        ? ART.cloud(W * 0.25, 84, 22, "#ffffff", 0.9) + ART.cloud(W * 0.75, 124, 17, "#ffffff", 0.8)
+        : ART.stars(r, W, 100, 330, "#ffffff", 0.85) + ART.burst(W * 0.28, 116, 50, "#e5484d", 0.45) + ART.burst(W * 0.6, 74, 38, "#ffffff", 0.35) + ART.burst(W * 0.84, 156, 44, "#4f8cff", 0.45),
+      land(W, H, r) {
+        const far = ridge(r, W, 146, 16, 190), near = ridge(r, W, 236, 10, 150);
+        let s = hill(far, H, c.far) + ART.skyline(r, W, 214, 30, 96, c.city, c.win, light ? 0.06 : 0.14);
+        s += fog(W, 214, 50, c.sky[2], light ? 0.5 : 0.4) + hill(near, H, c.near);
+        for (const x of spots(r, W, [0.07, 0.15, 0.91])) s += ART.tree(x, ridgeY(near, x) + 5, 48 + r() * 22, [c.tree], c.tree);
+        const fx = W * 0.62;
+        s += ART.flag(fx, ridgeY(near, fx) + 3, 58);
+        return s;
+      },
+    };
+  },
+  valentines(light) {
+    const c = light
+      ? { sky: ["#ffd6e4", "#ffeaf1", "#ffe2d4"], glow: "rgba(255,92,138,.18)", hearts: ["#ff9ab8", "#ff5c8a"], moon: "#ffffff", halo: "#ffb3c8", far: "#f8cdda", mid: "#f0b3c6", near: "#e69ab1",
+          crowns: ["#ff5c8a", "#ff8fae", "#e5484d"], trunk: "#9a5a6a", string: "#b07a88" }
+      : { sky: ["#12050d", "#1f0b17", "#3a1426"], glow: "rgba(255,92,138,.18)", hearts: ["#ff5c8a", "#ff9ab8"], moon: "#ffe6ee", halo: "#ff9ab8", far: "#2b1322", mid: "#38192d", near: "#46223a",
+          crowns: ["#d9406e", "#ff6f96", "#b8323f"], trunk: "#1c0b14", string: "#8a5a6a" };
+    return {
+      sky: c.sky, glow: c.glow,
+      art: (W, r) => {
+        // A crescent: the moon with the sky laid over most of it.
+        let s = ART.bokeh(r, W, 16, 320, c.hearts, light ? 0.3 : 0.22, "sk-bk") + ART.moon(W * 0.5, 96, 30, c.moon, c.halo, "sk-moon", true);
+        if (!light) s += ART.stars(r, W, 40, 280, "#ffffff", 0.6);
+        return s;
+      },
+      land(W, H, r) {
+        const far = ridge(r, W, 122, 18, 170), mid = ridge(r, W, 180, 14, 150), near = ridge(r, W, 242, 8, 140);
+        let s = hill(far, H, c.far);
+        for (const x of spots(r, W, [0.58, 0.64, 0.9], 10)) s += ART.heartTree(x, ridgeY(far, x) + 3, 34 + r() * 8, c.crowns[1], c.trunk);
+        s += fog(W, 168, 64, c.sky[2], 0.5) + hill(mid, H, c.mid);
+        spots(r, W, [0.05, 0.16, 0.28, 0.84, 0.96], 14).forEach((x, i) => (s += ART.heartTree(x, ridgeY(mid, x) + 4, 62 + r() * 30, c.crowns[i % 3], c.trunk)));
+        s += fog(W, 234, 44, c.sky[2], 0.35) + hill(near, H, c.near);
+        spots(r, W, [0.5, 0.55, 0.6], 6).forEach((x, i) => (s += ART.balloon(x, ridgeY(near, x) + 2, 7 + r() * 2, c.crowns[i % 3], c.string)));
+        return s;
+      },
+    };
+  },
+  stpatricks(light) {
+    const c = light
+      ? { sky: ["#d8f0e2", "#ecf8f1", "#f4f6e4"], glow: "rgba(60,207,110,.14)", far: "#b3e0be", mid: "#8bd09e", near: "#66bf80", gold: "#f3c94a", rainbow: 0.55,
+          crowns: ["#4fa865", "#6cc07a", "#3f9255"], trunk: "#5a4630", wall: "#f4f1e8", thatch: "#a0814c", win: "#ffd27a", wool: "#ffffff", face: "#3a3a3a" }
+      : { sky: ["#040e09", "#0a1a12", "#16301e"], glow: "rgba(233,196,106,.12)", far: "#102e1e", mid: "#153e27", near: "#1b5033", gold: "#e9c46a", rainbow: 0.32,
+          crowns: ["#1f5a34", "#2a6e40", "#184a2b"], trunk: "#14100a", wall: "#c9c6bb", thatch: "#4a3b22", win: "#ffd27a", wool: "#d8dcd6", face: "#1a1a1a" };
+    return {
+      sky: c.sky, glow: c.glow,
+      art: (W, r) => ART.rainbow(W * 0.5, 340, Math.min(W * 0.46, 330), c.rainbow) + (light ? ART.cloud(W * 0.16, 330, 20, "#ffffff", 0.9) + ART.cloud(W * 0.84, 330, 20, "#ffffff", 0.9) : ART.stars(r, W, 50, 280, "#ffffff", 0.6)),
+      land(W, H, r) {
+        const far = ridge(r, W, 118, 24, 170), mid = ridge(r, W, 176, 18, 150), near = ridge(r, W, 240, 10, 140);
+        let s = hill(far, H, c.far);
+        for (const x of spots(r, W, [0.08, 0.13, 0.6], 10)) s += ART.tree(x, ridgeY(far, x) + 3, 30 + r() * 8, c.crowns, c.trunk);
+        s += fog(W, 164, 66, c.sky[2], 0.45) + hill(mid, H, c.mid);
+        const hx = W * 0.3;
+        s += ART.cabin(hx, ridgeY(mid, hx) + 4, 84, 54, c.wall, c.thatch, c.win, null, null);
+        for (const x of spots(r, W, [0.06, 0.48, 0.92], 12)) s += ART.tree(x, ridgeY(mid, x) + 4, 54 + r() * 24, c.crowns, c.trunk);
+        for (const x of spots(r, W, [0.62, 0.7, 0.76], 10)) s += ART.sheep(x, ridgeY(mid, x) + 3, 17, c.wool, c.face);
+        s += fog(W, 232, 44, c.sky[2], 0.3) + hill(near, H, c.near);
+        const px = W * 0.82;
+        s += ART.potOfGold(px, ridgeY(near, px) + 6, 34, c.gold);
+        return s;
+      },
+    };
+  },
+  newyear(light) {
+    const c = light
+      ? { sky: ["#efe7d2", "#f7f3e8", "#f3ead2"], glow: "rgba(233,196,106,.22)", far: "#dcd5c3", near: "#c3bba6", win: "#f7f1df", face: "#ffffff" }
+      : { sky: ["#04051a", "#0b0d26", "#1c1a34"], glow: "rgba(233,196,106,.16)", far: "#161935", near: "#0b0d1f", win: "#e9c46a", face: "#fff3c4" };
+    return {
+      sky: c.sky, glow: c.glow,
+      art: (W, r) => ART.bokeh(r, W, 20, 330, ["#e9c46a", "#fff3c4", "#f4a3c0"], light ? 0.45 : 0.5, "sk-bk") + (light ? "" : ART.stars(r, W, 70, 300, "#ffffff", 0.75)),
+      land(W, H, r) {
+        let s = ART.skyline(r, W, H, 96, 196, c.far, c.win, light ? 0.05 : 0.16) + fog(W, H - 70, 120, c.sky[2], light ? 0.45 : 0.35);
+        s += ART.skyline(r, W, H, 40, 124, c.near, c.win, light ? 0.04 : 0.1);
+        s += ART.clockTower(W * 0.5, H, 226, c.near, c.face);
+        return s;
+      },
+    };
+  },
+};
+/** The page scene for a theme: { bg (CSS background), html (the two SVGs) }, or null for the everyday look. */
+function sceneFor(key, light, W) {
+  const make = SCENES[key];
+  if (!make) return null;
+  SC.light = light;
+  SC.n = 0;
+  const s = make(light);
+  const r = seeded(97 + key.length * 131);
+  const svg = (cls, h, body) => `<svg class="${cls}" width="${W}" height="${h}" viewBox="0 0 ${W} ${h}" aria-hidden="true">${body}</svg>`;
+  return {
+    // The sky runs the whole page, from its top color down to the horizon behind the hills.
+    bg: `radial-gradient(90% ${LAND_H}px at 50% 100%, ${s.glow}, transparent), linear-gradient(180deg, ${s.sky[0]} 0, ${s.sky[1]} 38%, ${s.sky[2]} 100%)`,
+    html: svg("sky", SKY_H, s.art ? s.art(W, r) : "") + svg("land", LAND_H, s.land(W, LAND_H, r)),
+  };
+}
 
 // The HA Companion app paints Android's status bar from the page's
 // --app-header-background-color and the navigation bar (and the window behind
@@ -1863,6 +2301,12 @@ class HeaderCard extends KitchenCard {
       ? `${th.greet} ${th.emoji}`
       : `${h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"}!`;
     const parts = [];
+    // A holiday theme counts down to its day (up to two months out).
+    const until = th === DEFAULT_THEME ? null : daysUntil(th, now);
+    if (until != null && until > 0 && until <= 60) {
+      const t = HOLIDAY_TITLE[Theme.key] || th.name;
+      parts.push(`${th.emoji} ${until === 1 ? `${t} is tomorrow` : `${until} days to ${t}`}`);
+    }
     let due = 0;
     let left = 0;
     for (const m of FAMILY) {
@@ -3129,6 +3573,11 @@ class PagesCard extends HTMLElement {
   css = `
     :host { display:block; }
     .wrap { display:flex; flex-direction:column; gap:12px; min-height:100vh; background:var(--bg); transition:background-color .6s; position:relative; }
+    .scene { position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
+    .scene svg { position:absolute; left:0; display:block; }
+    .scene .sky { top:0; }
+    .scene .land { bottom:0; }
+    .hdr, .bar, .pages { position:relative; z-index:1; }
     .garland { flex:1; display:flex; justify-content:space-evenly; font-size:19px; opacity:.9; pointer-events:none; overflow:hidden; min-width:0; }
     .garland span { animation:gsw 3.2s ease-in-out infinite alternate; transform-origin:50% 0; }
     .garland span:nth-child(odd) { animation-delay:-1.6s; }
@@ -3160,7 +3609,7 @@ class PagesCard extends HTMLElement {
     this._helpers = this._helpers || (await window.loadCardHelpers());
     const pad = c.padding ?? 16;
     this.shadowRoot.innerHTML = `<style>${BASE_CSS}${MOTION_CSS}${this.css}</style>
-      <div class="wrap" style="padding:${pad}px"><div class="hdr"></div>
+      <div class="wrap" style="padding:${pad}px"><div class="scene" aria-hidden="true"></div><div class="hdr"></div>
       <div class="bar"><div class="tabs"><div class="pill"></div>${(c.pages || [])
         .map((p) => `<button class="tab" data-page="${esc(p.path)}">${esc(p.title)}</button>`)
         .join("")}</div><div class="garland"></div><div class="tools">${c.theme_button === false ? "" : `<button class="tab tool" data-theme aria-label="Display settings">🎨</button>`}${KM.active() ? `<button class="tab tool ha" data-ha aria-label="Home Assistant" title="Home Assistant">${HA_LOGO}</button>` : ""}</div></div>
@@ -3181,17 +3630,23 @@ class PagesCard extends HTMLElement {
     root.querySelector(".hdr").appendChild(this._header);
     if (this._hass) this._header.hass = this._hass;
     window.addEventListener("hashchange", () => this.show(this._fromHash(), true));
-    window.addEventListener("kitchen-theme", () => this._garland());
+    window.addEventListener("kitchen-theme", () => {
+      this._garland();
+      this._scene();
+    });
     this._garland();
+    this._scene();
     this.show(this._fromHash(), true);
     // The pill is measured off the tab's box, which moves when the web font arrives or the bar wraps.
     document.fonts?.ready.then(() => this._pill(true));
     const ro = new ResizeObserver(() => {
       this._pill(true);
       this._garland();
+      this._scene();
     });
     ro.observe(root.querySelector(".tabs"));
     ro.observe(root.querySelector(".garland"));
+    ro.observe(root.querySelector(".scene"));
     // Build the other pages once the first one is up, so the first visit to a tab is as quick as the rest.
     setTimeout(() => (c.pages || []).forEach((p) => this._page(p.path)), 1200);
     clearInterval(this._idle);
@@ -3249,6 +3704,19 @@ class PagesCard extends HTMLElement {
     pill.style.width = `${b.offsetWidth}px`;
     pill.style.transform = `translate(${b.offsetLeft}px, ${b.offsetTop}px)`;
     if (instant) requestAnimationFrame(() => (pill.style.transition = ""));
+  }
+  // The holiday's scene behind everything (sceneFor), drawn at the page's width; redrawn when the theme, mode or width changes.
+  _scene() {
+    const el = this.shadowRoot.querySelector(".scene");
+    if (!el) return;
+    const W = Math.round(el.clientWidth);
+    if (!W) return;
+    const sig = `${Theme.key}|${Theme.mode}|${W}`;
+    if (sig === this._sSig) return;
+    this._sSig = sig;
+    const s = sceneFor(Theme.key, Theme.mode === "light", W);
+    el.style.background = s ? s.bg : "";
+    el.innerHTML = s ? s.html : "";
   }
   // Emoji swinging on the bar, or a string of lights or bunting as many as fit (redone when the bar's width changes).
   _garland() {
