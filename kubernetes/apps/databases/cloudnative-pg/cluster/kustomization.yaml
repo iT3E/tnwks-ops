@@ -14,6 +14,7 @@ resources:
   - ./secret-packing-api-role.sops.yaml
   - ./secret-vaultwarden-role.sops.yaml
   - ./secret-mealie-role.sops.yaml
+  - ./database-mealie.yaml
   - ./database-vaultwarden.yaml
   - ./database-vantrip.yaml
   - ./database-things-api.yaml
