@@ -33,12 +33,27 @@ cleanup() {
 trap cleanup EXIT
 git worktree add --quiet --detach "${tmp}/base" "${base}"
 
+# flate occasionally hangs rendering a cluster in CI (#1650, #1670): no
+# output until killed, while a rerun takes seconds. Each call is capped at
+# RENDER_TIMEOUT; on a hang SIGQUIT prints flate's goroutine stacks to stderr
+# (the job log), and the call is retried once.
+render_timeout="${RENDER_TIMEOUT:-4m}"
+
 # DIR [WORKTREE]: the images flate renders for that cluster, as a JSON array
 # on stdout. Returns 1 if some releases failed (the list is then partial) and
 # 2 if there is no list at all.
 render() {
-  local out rc=0
-  out="$(cd "${2:-${root}}" && flate get images --no-progress -p "$1" -o json)" || rc=$?
+  local out rc attempt
+  for attempt in 1 2; do
+    rc=0
+    out="$(cd "${2:-${root}}" && timeout --signal=QUIT --kill-after=30s "${render_timeout}" \
+      flate get images --no-progress -p "$1" -o json)" || rc=$?
+    # timeout exits 124 when it had to signal flate (137 if it then had to kill it).
+    if [[ "${rc}" -ne 124 && "${rc}" -ne 137 ]]; then
+      break
+    fi
+    echo "::warning::flate get images for $1 hung for ${render_timeout} (attempt ${attempt}; goroutine stacks above)" >&2
+  done
   if ! jq -e 'type == "array"' >/dev/null 2>&1 <<<"${out}"; then
     return 2
   fi
