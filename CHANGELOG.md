@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.101.0 - 2026-11-03
+
+### Added
+
+* transcriber: speech on the front door and south cameras, transcribed (Whisper, local on CPU) and diarized, with consistent per-person labels from enrolled voiceprints, into a new cnpg transcriber database (pgvector). Clip audio kept 90 days on local-path-bulk. Its own MQTT login and database role.
+
 ## v1.100.1 - 2026-11-03
 
 ### Fixed

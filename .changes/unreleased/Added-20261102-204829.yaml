@@ -1,3 +1,0 @@
-kind: Added
-body: 'transcriber: speech on the front door and south cameras, transcribed (Whisper, local on CPU) and diarized, with consistent per-person labels from enrolled voiceprints, into a new cnpg transcriber database (pgvector). Clip audio kept 90 days on local-path-bulk. Its own MQTT login and database role.'
-time: 2026-11-02T20:48:29.470088865-08:00
