@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.108.1 - 2026-11-03
+
+### Fixed
+
+* Frigate: speech detection on the south camera runs from RMS 300 instead of the default 500. Ambient there is about 230, so most speech never reached the detector or the transcriber.
+
 ## v1.108.0 - 2026-11-03
 
 ### Added
