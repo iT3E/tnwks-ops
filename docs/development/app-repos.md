@@ -19,19 +19,31 @@ iT3E/github-workflows/.github/workflows/<x>.yaml@<sha> # vX.Y.Z`), and
 Copier manages the shared files (`.copier-answers.yml`). The template owns
 that pin: a github-workflows release becomes a template release, and a
 template release reaches every repo as a Renovate `copier update` PR,
-labeled `renovate/template`, which that repo's CI tests.
+labeled `renovate/template`, which that repo's CI tests and Renovate then
+merges.
+
+Releases flow here without a hand merge anywhere. A Renovate merge in an
+app repo that changes what goes into the image (Go or Python dependencies,
+the Dockerfile) releases a patch by itself (github-workflows'
+`release.yaml`, `auto-fragment`); a person's PR releases through its own
+Changie fragment. The release builds `:<version>`, and Renovate here opens
+a PR for it that automerges behind Build Success, at every update type and
+any time of day (the last rule in `.github/renovate/autoMerge.json5`,
+[docs/operations/renovate.md](../operations/renovate.md)).
 
 | Repo | Language | Image | Pinned here as |
 | --- | --- | --- | --- |
-| `iT3E/tnwks-packing-api` | Go | `ghcr.io/it3e/tnwks-packing-api` | `:main` (`kubernetes/apps/production/packing-api`) |
-| the storefront API | Go | `ghcr.io/it3e/<repo>` | `:main` (`kubernetes/apps/production/*-things-api`) |
+| `iT3E/tnwks-packing-api` | Go | `ghcr.io/it3e/tnwks-packing-api` | `:<version>@sha256` (`kubernetes/apps/production/packing-api`) |
+| the storefront API | Go | `ghcr.io/it3e/<repo>` | `:<version>@sha256` (`kubernetes/apps/production/*-things-api`) |
 | `iT3E/tnwks-finance-sync` | Python | `ghcr.io/it3e/tnwks-finance-sync` | `:<version>@sha256` (`kubernetes/apps/production/finance-sync`) |
 | `iT3E/tnwks-transcriber` | Python | `ghcr.io/it3e/tnwks-transcriber` | `:<version>@sha256` (`kubernetes/apps/production/transcriber`) |
 
 The image tags these pins rely on are part of the standard's contract
 (github-workflows' `image.yaml`): `:main` and `:sha-<short>` from `main`
 (repos answered `image_push_main: true`), `:<version>` and `:sha-<short>`
-from `v*` tags, never `:latest`. Don't change a pin's tag scheme here
+from `v*` tags, never `:latest`. Every deploy here pins a release,
+`:<version>@sha256:<index digest>`, so Renovate can follow it; `:main` is
+for trying a build, not for deploying. Don't change a pin's tag scheme here
 without the template.
 
 What stays here:
