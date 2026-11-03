@@ -217,6 +217,12 @@ cameras:
 
     audio:
       enabled: true
+      # Speech detection only runs above this RMS. Ambient here measured
+      # 216 to 270 (median 232, 2026-11), so the default 500 skipped speech
+      # that wasn't loud and close: nothing reached the transcriber. Just
+      # above ambient keeps the detector running on any voice; its speech
+      # threshold (0.8) still filters out noise.
+      min_volume: 300
     detect:
       width: 640
       height: 360

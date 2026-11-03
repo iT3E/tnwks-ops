@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Frigate: speech detection on the south camera runs from RMS 300 instead of the default 500. Ambient there is about 230, so most speech never reached the detector or the transcriber.'
+time: 2026-11-03T08:28:01.564743478-08:00
