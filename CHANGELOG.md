@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.92.0 - 2026-11-03
+
+### Changed
+
+* mealie: use its own `mealie` database instead of `app`, the cluster's first-boot database (kept as the rollback copy).
+
 ## v1.91.0 - 2026-11-03
 
 ### Added
