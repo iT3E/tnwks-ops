@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.82.0 - 2026-11-03
+
+### Changed
+
+* firefly: run both containers non-root with no privilege escalation, all capabilities dropped and the RuntimeDefault seccomp profile.
+
 ## v1.81.0 - 2026-11-03
 
 ### Added

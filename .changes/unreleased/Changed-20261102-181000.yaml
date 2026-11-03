@@ -1,3 +1,0 @@
-kind: Changed
-body: 'firefly: run both containers non-root with no privilege escalation, all capabilities dropped and the RuntimeDefault seccomp profile.'
-time: 2026-11-02T18:10:00-08:00
