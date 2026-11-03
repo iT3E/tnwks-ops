@@ -48,10 +48,23 @@ Credentials (Simplifi client, Firefly token, Amazon login and TOTP) are in
   non-zero on real failures (the exit-code table is in its README).
 - `FinanceSyncStale` (no successful sync in 26 h), `FinanceAmazonEnrichStale`
   (8 days) and `FinanceSyncNeverSucceeded` in `app/prometheusrule.yaml`.
-- Balance drift over $100 is pushed by the sync to Alertmanager as
-  `FinanceReconciliationDrift` (counts and amounts only; account names stay in
-  the Job log). Pod logs are not shipped to Loki on this cluster, so this is
-  pushed rather than scraped.
+- The sync pushes three alerts to Alertmanager itself (pod logs are not
+  shipped to Loki on this cluster, and the Jobs keep only the last 3 runs'
+  logs, so nothing can be grepped later). Labels and summaries carry no
+  account or institution names; those stay in the Job log.
+  - `FinanceReconciliationDrift`: a balance was off by $100 or more and was
+    corrected.
+  - `FinanceBankConnectionBroken`: one per broken bank connection in Simplifi
+    (a feed that died quietly), keyed by a stable `connection` label (a hash
+    of the Simplifi account id). It stays firing while broken and reminds once
+    a day (Alertmanager route). To mute a connection you already know about:
+    `amtool silence add alertname=FinanceBankConnectionBroken connection=<id>`
+    or the Alertmanager UI.
+  - `FinanceRefreshTimeout`: the wait for bank refreshes timed out. With
+    "already fresh" institutions in the same run it's the signature of an old
+    bug (waiting on institutions that were already fresh).
+- Logs: `kubectl -n production logs job/<job>` for the last 3 runs. Anything
+  that needs a longer history should be an alert, not a grep.
 
 ## Running one by hand
 
