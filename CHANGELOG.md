@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.99.0 - 2026-11-03
+
+### Changed
+
+* finance-sync 0.2.0: state moved from the PVC into its own Postgres database (transactional writes, point-in-time restore); the PVC is kept unmounted as the rollback copy.
+
 ## v1.98.0 - 2026-11-03
 
 ### Changed
