@@ -1,3 +1,0 @@
-kind: Changed
-body: 'home-assistant, litellm, the storefront API, packing-api, vaultwarden and mealie connect to Postgres as their own roles instead of the shared app role; vaultwarden no longer uses the cluster-wide POSTGRES_* variables.'
-time: 2026-11-02T20:00:00-08:00

@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.89.0 - 2026-11-03
+
+### Changed
+
+* home-assistant, litellm, the storefront API, packing-api, vaultwarden and mealie connect to Postgres as their own roles instead of the shared app role; vaultwarden no longer uses the cluster-wide POSTGRES_* variables.
+
 ## v1.88.0 - 2026-11-03
 
 ### Changed
