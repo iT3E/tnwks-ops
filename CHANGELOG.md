@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.93.0 - 2026-11-03
+
+### Added
+
+* finance-sync: the daily Simplifi sync and weekly Amazon enrichment as CronJobs (suspended until the cutover from the host crontab), with a backed-up state PVC, staleness alerts and docs/apps/finance-sync.md.
+
 ## v1.92.0 - 2026-11-03
 
 ### Changed
