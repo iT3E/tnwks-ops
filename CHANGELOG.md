@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.80.0 - 2026-11-03
+
+### Added
+
+* cloudnative-pg: `firefly` database owned by its own managed `firefly` role (password in SOPS), for Firefly III moving onto the cluster.
+
 ## v1.79.0 - 2026-11-02
 
 ### Added
