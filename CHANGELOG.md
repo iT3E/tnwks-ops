@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.97.1 - 2026-11-03
+
+### Fixed
+
+* kitchen display: any theme can be picked any time of year. A holiday theme only switches itself back to Everyday in the week after its holiday when it was left on through it; one picked after the holiday stays, on the wall display, phones and the screensaver.
+
 ## v1.97.0 - 2026-11-03
 
 ### Added
