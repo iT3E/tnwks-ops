@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.107.1 - 2026-11-03
+
+### Fixed
+
+* Home Assistant: Security alerts view, the away/weekday automation tile name no longer gets cut off
+
 ## v1.107.0 - 2026-11-03
 
 ### Added
