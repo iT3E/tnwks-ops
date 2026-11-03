@@ -66,7 +66,11 @@ latest rotated token back), then revert to image 0.1.3 with the PVC mounted.
   logs, so nothing can be grepped later). Labels and summaries carry no
   account or institution names; those stay in the Job log.
   - `FinanceReconciliationDrift`: a balance was off by $100 or more and was
-    corrected.
+    corrected. **Routed to the `null` receiver** (not sent to Telegram): it
+    mostly fires on timing, when a bank balance moves before its transactions
+    arrive and the next run reverses the correction, and a real missing
+    transaction looks identical. The per-account detail is still logged as
+    `ALERT drift` lines in the Job log.
   - `FinanceBankConnectionBroken`: one per broken bank connection in Simplifi
     (a feed that died quietly), keyed by a stable `connection` label (a hash
     of the Simplifi account id). It stays firing while broken and reminds once
