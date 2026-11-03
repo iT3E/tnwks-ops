@@ -282,7 +282,9 @@ WSL forwards localhost, so a Windows browser can use `http://localhost:8123`.
    - Install the Home Assistant Companion app and connect it to
      `https://hass.tnwks.us`. With SSO the app shows a code to enter in the
      phone's browser. This is hass-oidc-auth's device-code login. Registering
-     the app is all the alert needs, since it sends to every registered phone.
+     the app is all the night alerts need, since they send to every registered
+     phone. The away and weekday alerts go to named phones, so a new adult's
+     phone also goes in the package's `phones` (see Person alerts).
    - **LAN URL:** in the app, Settings > Companion app > (server) set *Internal
      URL* to `https://hass.internal.tnwks.us` and add the home Wi-Fi network(s).
      The app needs location permission to read the network name. On those
@@ -299,14 +301,21 @@ Optional: add Z-Wave JS with URL
 `ws://zwave-js-ui.home-automation.svc.cluster.local:3000`, then assign devices
 to areas so the Overview dashboard fills in.
 
-## Night person alerts
+## Person alerts
 
-`config/packages/frigate_night_alerts.yaml` sends one Companion app push per
+`config/packages/frigate_person_alerts.yaml` holds all of Frigate's person
+alerts: the night alerts to every phone, and normal pushes while the adults
+are away or in a weekday window.
+
+### Night person alerts
+
+The night alerts send one Companion app push per
 Frigate review, the first time the review becomes a person alert. The push has
 a snapshot and an *Open in Frigate* button, and tapping it opens the camera
 grid. It fires for the cameras in `watched_cameras`, which is all of them,
-since every camera is exterior. It only fires between 23:00 and 06:00, and
-only while *Night person alerts* is on. Each alert also leaves an HA
+since every camera is exterior. It only fires between *Night alerts start* and
+*end* (set on the Alerts view, 23:00-06:00 now), and only while *Night person
+alerts* is on. Each alert also leaves an HA
 notification, one per camera.
 
 There are two tiers. Right now every watched camera is critical
@@ -323,14 +332,37 @@ The push goes through HA's mobile push relay (Apple/Google). The phone loads
 the snapshot from HA itself, through whichever URL the app is using, and the
 Frigate integration's notification proxy serves it.
 
-You can change the switches and the times on the Security dashboard's Alerts
-view, but only until the next restart. The YAML `initial` values win, so make
-lasting changes in the package. Both switches default to on deliberately: a
-restart should never quietly leave alerting off.
-
 To test it, move the start and end times on the Alerts view so the window
-covers now, then walk past a camera. Restarting HA restores the real
-window.
+covers now, then walk past a camera. Put the times back afterwards: they stay
+where you leave them (see below).
+
+### Away and weekday alerts
+
+Outside the night alerts (night window with *Night person alerts* on), the same
+person alerts send a **normal** push (high priority, channel *Security alerts*,
+no Do Not Disturb override, no in-app notification) to named phones:
+
+- **Away person alerts:** adult1's phone while `person.adult1` is away, and
+  adult2's phone too when `person.adult2` is also away. adult2 away alone sends
+  nothing. `unknown`/`unavailable` doesn't count as away.
+- **Weekday person alerts:** adult1's phone on `weekday_days` (Mon-Wed)
+  between *Weekday alerts start* and *end*, home or not.
+
+A review that matches both still sends one push per phone, and the end of the
+review swaps in the animated preview silently, as at night. The phones are the
+`phones` variable in the package (legacy `notify.mobile_app_<device>`
+services), so a new or renamed phone needs updating there.
+
+### Settings survive restarts
+
+Every switch and time on the Alerts view is a helper without `initial`, so HA
+restores its last value from `.storage/core.restore_state` (written at shutdown
+and every 15 minutes) after a restart or a config deploy. Set them on the
+dashboard, not in git. A helper with nothing to restore (a new one, or a lost
+`/config` volume) starts at HA's default, off or 00:00, so set it once on the
+dashboard after adding it. Don't add `initial` back: it overrides the restored
+value on every start, which is how the night window used to reset on every
+deploy.
 
 ## Kitchen display
 

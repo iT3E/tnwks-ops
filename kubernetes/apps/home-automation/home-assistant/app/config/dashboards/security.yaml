@@ -149,13 +149,38 @@ views:
             entity: input_datetime.night_person_alerts_end
           - type: markdown
             content: >-
-              Changes here last until the next restart. To make one stick,
-              edit `config/packages/frigate_night_alerts.yaml`.
+              Every phone, critical. Settings here survive restarts and
+              config updates.
+      - type: grid
+        cards:
+          - type: heading
+            heading: Away and weekday alerts
+          - type: tile
+            entity: input_boolean.away_person_alerts
+          - type: tile
+            entity: input_boolean.weekday_person_alerts
+          - type: tile
+            entity: input_datetime.weekday_person_alerts_start
+          - type: tile
+            entity: input_datetime.weekday_person_alerts_end
+          - type: tile
+            entity: automation.security_person_while_away_or_weekday
+          - type: markdown
+            # Names come from the person entities, not from git.
+            content: >-
+              {% set a1 = state_attr('person.adult1', 'friendly_name') %}
+              {% set a2 = state_attr('person.adult2', 'friendly_name') %}
+              Normal pushes outside the night window. **Away:** {{ a1 }}'s
+              phone while {{ a1 }} is out, and {{ a2 }}'s too when you're
+              both out. **Weekday:** {{ a1 }}'s phone Mon-Wed between the
+              times above, home or not.
       - type: grid
         cards:
           - type: heading
             heading: Recent alerts
           - type: logbook
             target:
-              entity_id: automation.security_person_at_night
+              entity_id:
+                - automation.security_person_at_night
+                - automation.security_person_while_away_or_weekday
             hours_to_show: 72
