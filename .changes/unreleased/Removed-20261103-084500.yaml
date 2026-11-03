@@ -1,0 +1,3 @@
+kind: Removed
+body: "alertmanager: FinanceReconciliationDrift goes to the null receiver instead of Telegram. It mostly fired on timing (a balance moving before its transactions arrive) after the sync had already corrected it, so it gave nothing to act on."
+time: 2026-11-03T08:45:00-08:00

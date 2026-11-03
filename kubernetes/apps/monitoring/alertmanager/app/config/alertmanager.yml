@@ -26,6 +26,15 @@ route:
     - receiver: "null"
       matchers:
         - alertname =~ "InfoInhibitor|Watchdog"
+    # Pushed by the finance-sync CronJob after it has already corrected the
+    # balance. It fires on timing (a bank balance moves before its
+    # transactions reach Simplifi, then the correction reverses next run) and
+    # looks the same as real drift, so nobody can act on it. Dropped here;
+    # FinanceSyncStale, FinanceBankConnectionBroken, FinanceRefreshTimeout and
+    # KubeJobFailed cover the failures that need a person.
+    - receiver: "null"
+      matchers:
+        - alertname = "FinanceReconciliationDrift"
     # Pushed by the finance-sync CronJob; a broken bank connection stays
     # firing while it is broken (often for weeks), so remind once a day
     # instead of every 6h. Silence one connection by its `connection` label.
