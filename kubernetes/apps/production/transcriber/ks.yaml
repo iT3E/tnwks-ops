@@ -1,0 +1,23 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: transcriber
+  namespace: flux-system
+spec:
+  # The `transcriber` database and role, the MQTT login and Frigate's speech
+  # topics must exist first; the alert rules need the PrometheusRule CRD.
+  dependsOn:
+    - name: cloudnative-pg-cluster
+    - name: mosquitto
+    - name: frigate
+    - name: kube-prometheus-stack
+  path: ./kubernetes/apps/production/transcriber/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false # no flux ks dependents
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

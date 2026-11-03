@@ -46,3 +46,7 @@ resources:
   # frigate: WSL-specific Flux Kustomization with a patch to replace the
   # NFD coral nodeSelector with a hostname pin to homelab-wsl-worker-2.
   - ./frigate-ks.yaml
+  # transcriber: speech on the cameras, transcribed and diarized into the cnpg
+  # `transcriber` database (docs/apps/transcriber.md). WSL-only because
+  # Frigate is: it reads Frigate's go2rtc restream and speech MQTT topic.
+  - ../../../../apps/production/transcriber/ks.yaml
