@@ -76,7 +76,8 @@ app/
 │   ├── configuration.yaml     # → /config/configuration.yaml
 │   ├── packages/*.yaml        # → /config/packages/
 │   ├── dashboards/*.yaml      # → /config/dashboards/
-│   └── www/tnwks-kitchen/     # → /config/www/tnwks-kitchen/ (our own cards, /local/tnwks-kitchen/)
+│   ├── www/tnwks-kitchen/     # → /config/www/tnwks-kitchen/ (our own cards, /local/tnwks-kitchen/)
+│   └── www/tnwks-security/    # → /config/www/tnwks-security/ (the alert schedule card)
 └── scripts/prepare-config.sh  # init container: installs custom integrations + cards
 ```
 
@@ -345,8 +346,11 @@ no Do Not Disturb override, no in-app notification) to named phones:
 - **Away person alerts:** adult1's phone while `person.adult1` is away, and
   adult2's phone too when `person.adult2` is also away. adult2 away alone sends
   nothing. `unknown`/`unavailable` doesn't count as away.
-- **Weekday person alerts:** adult1's phone on `weekday_days` (Mon-Wed)
-  between *Weekday alerts start* and *end*, home or not.
+- **Weekday person alerts:** adult1's phone on the days picked
+  (`input_text.weekday_person_alerts_days`, a list like `mon,tue,wed`)
+  between *Weekday alerts start* and *end*, home or not. A window that ends
+  earlier than it starts runs overnight; the part after midnight belongs to
+  the day it started on.
 
 A review that matches both still sends one push per phone, and the end of the
 review swaps in the animated preview silently, as at night. The phones are the
@@ -354,6 +358,17 @@ review swaps in the animated preview silently, as at night. The phones are the
 services), shared with the night alerts, so a new or renamed phone needs
 updating there. Nothing calls the base `notify.notify`, which would also reach
 the kitchen wall tablet.
+
+### The Alerts view
+
+The night and weekday windows each get a schedule card,
+`custom:tnwks-alert-schedule-card` (`config/www/tnwks-security/alert-schedule-card.js`,
+plain custom element, no build step): an on/off switch, a row of day buttons
+(weekday only) and native From/To time pickers, plus a one-line summary such as
+"Mon-Wed · 9:00 AM - 3:00 PM" that warns when no day is picked or From equals
+To. Every tap calls the helper's own service, so there is nothing to save.
+Bump the `?v=` on its resource in `configuration.yaml` with every change to the
+file.
 
 ### Settings survive restarts
 
