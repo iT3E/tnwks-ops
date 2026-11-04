@@ -1,0 +1,3 @@
+kind: Fixed
+body: "Frigate detects objects with OpenVINO on the CPU instead of the USB Coral, so the WSL vhci_hcd seqnum overflow can no longer hang detection every few days."
+time: 2026-11-03T18:25:00.000000000-08:00
