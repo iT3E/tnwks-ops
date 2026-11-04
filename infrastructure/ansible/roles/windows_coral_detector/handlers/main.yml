@@ -1,0 +1,10 @@
+---
+- name: Restart coral detectors
+  ansible.windows.win_service:
+    name: "{{ item.service }}"
+    state: restarted
+  loop: "{{ coral_detector_instances }}"
+  loop_control:
+    label: "{{ item.service }}"
+  # A check run can't restart a service it only pretended to create.
+  when: not (ansible_check_mode and item.service in coral_detector_new_services | default([]))

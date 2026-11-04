@@ -221,6 +221,11 @@ HelmRelease values.
 > Coral traffic and hangs the detector until the module is reloaded. The
 > Coral and the mount below stay in place as a fallback; switching back is
 > the `detectors:` block alone.
+>
+> Since 2026-11-03 the Coral is also unbound from usbipd and owned by a
+> Windows WinUSB driver, served by the `tnwks-coral-detector-0` service to
+> Frigate's `zmq` detector: [coral-detector.md](coral-detector.md). Its
+> rollback section lists what to undo before the Coral can come back here.
 
 `kubernetes/apps/production/frigate/app/helmrelease.yaml`:
 

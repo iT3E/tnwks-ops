@@ -1,0 +1,10 @@
+# Python packages of the detector service (Python 3.9, Windows x64).
+# Regenerate requirements.txt after editing:
+#   uv pip compile --python-version 3.9 --python-platform x86_64-pc-windows-msvc \
+#     --generate-hashes --no-header -o requirements.txt requirements.in
+# numpy < 2: tflite_runtime 2.5 is built against the numpy 1.x ABI.
+numpy==1.26.4
+pyzmq==27.3.0
+prometheus-client==0.26.0
+# The last tflite_runtime with Edge TPU delegate support on Windows (cp39 only).
+tflite-runtime @ https://github.com/google-coral/pycoral/releases/download/v2.0.0/tflite_runtime-2.5.0.post1-cp39-cp39-win_amd64.whl#sha256=414f4a2e2d141d812507f0055591f50d65e714e0a4501ad1c43b02108419d025

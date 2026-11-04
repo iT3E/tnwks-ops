@@ -1,0 +1,26 @@
+---
+# The Windows host under the WSL cluster, managed over its built-in OpenSSH
+# server (docs/wsl/windows-ansible.md). sshd listens only on the vEthernet
+# (WSL) address and takes only the key below; bootstrap it once with
+# `task wsl-host:sshd`.
+#
+#   task wsl-host:windows-check   # ansible-playbook --check --diff
+#   task wsl-host:windows-apply
+
+all:
+  children:
+    windows:
+      hosts:
+        DESKTOP-HKE05KI:
+          # WINDOWS_HOST_IP in kubernetes/clusters/wsl/cluster-settings.yaml.
+          ansible_host: 172.26.80.1
+          # One tnwks-coral-detector-<id> service per Coral; a second Coral is
+          # one more line (ports 5556 / 9556). docs/wsl/coral-detector.md.
+          coral_detector_devices:
+            - { id: 0, device: "usb:0" }
+      vars:
+        ansible_connection: ssh
+        ansible_shell_type: powershell
+        ansible_user: mh
+        ansible_ssh_private_key_file: ~/.ssh/id_ed25519_winhost
+        ansible_become: false

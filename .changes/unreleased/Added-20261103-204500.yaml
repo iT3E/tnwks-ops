@@ -1,0 +1,3 @@
+kind: Added
+body: "The Windows host is managed with Ansible over a WSL-only, key-only OpenSSH server (task wsl-host:sshd, wsl-host:windows-check/-apply), and its first role runs each USB Coral as a Windows service (tnwks-coral-detector-<id>) that serves Frigate's zmq detector with Prometheus metrics."
+time: 2026-11-03T20:45:00.000000000-08:00

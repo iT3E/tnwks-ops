@@ -23,6 +23,8 @@ Device config lives with its tooling: `infrastructure/terraform/modules/mikrotik
 | [`wsl/bootstrap.md`](wsl/bootstrap.md) | Building the Talos-in-Docker cluster |
 | [`wsl/lan-exposure.md`](wsl/lan-exposure.md) | How the LAN reaches cluster services (and the Windows host's exporters) |
 | [`wsl/usb-passthrough.md`](wsl/usb-passthrough.md) | Coral TPU and Z-Wave stick into the cluster |
+| [`wsl/coral-detector.md`](wsl/coral-detector.md) | Corals served from Windows services to Frigate's zmq detector: design, apply, cutover and rollback |
+| [`wsl/windows-ansible.md`](wsl/windows-ansible.md) | Managing the Windows host with Ansible over its OpenSSH server: bootstrap, check mode, what's next |
 | [`wsl/move-disk-off-c.md`](wsl/move-disk-off-c.md) | Moving the WSL disk off `C:` |
 
 Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md).

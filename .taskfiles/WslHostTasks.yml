@@ -7,6 +7,12 @@ version: "3"
 
 vars:
   WSL_HOST_DIR: "{{.ROOT_DIR}}/infrastructure/wsl-host"
+  # Windows host over SSH (docs/wsl/windows-ansible.md): ansible-core from
+  # requirements-windows.txt through uv, with its own collections directory so
+  # the apt ansible running the other playbooks is left alone.
+  WINDOWS_ANSIBLE_COLLECTIONS: "{{.HOME}}/.ansible/collections-windows"
+  WINDOWS_SSH_KEY: "{{.HOME}}/.ssh/id_ed25519_winhost"
+  WINDOWS_UVX: uvx --from ansible-core --with-requirements {{.ANSIBLE_DIR}}/requirements-windows.txt
 
 tasks:
   lan-bridge:
@@ -20,6 +26,56 @@ tasks:
     desc: Register the Windows UDP relays for NetFlow (2055) and router syslog (6001) (UAC prompt)
     cmds:
       - "{{.WSL_HOST_DIR}}/invoke-elevated.sh {{.WSL_HOST_DIR}}/Register-TnwksUdpRelays.ps1"
+
+  sshd:
+    desc: Bootstrap the Windows OpenSSH server for Ansible (WSL-only listener, key-only, UAC prompt)
+    cmds:
+      - test -f "{{.WINDOWS_SSH_KEY}}" || ssh-keygen -q -t ed25519 -N '' -C 'ansible@wsl to DESKTOP-HKE05KI' -f "{{.WINDOWS_SSH_KEY}}"
+      - chmod 600 "{{.WINDOWS_SSH_KEY}}"
+      - '{{.WSL_HOST_DIR}}/invoke-elevated.sh {{.WSL_HOST_DIR}}/Install-TnwksWindowsSshd.ps1 -PublicKeyFile "$(wslpath -w "{{.WINDOWS_SSH_KEY}}.pub")"'
+      # Key login works (password logins are refused by sshd_config).
+      - ssh -o BatchMode=yes -i "{{.WINDOWS_SSH_KEY}}" "$(yq '.all.children.windows.vars.ansible_user' {{.ANSIBLE_DIR}}/inventory/windows.yml)@172.26.80.1" whoami
+
+  sshd-check:
+    desc: Report drift of the Windows OpenSSH server setup; changes nothing (UAC prompt)
+    cmds:
+      # The script exits 2 when something differs.
+      - '{{.WSL_HOST_DIR}}/invoke-elevated.sh {{.WSL_HOST_DIR}}/Install-TnwksWindowsSshd.ps1 -PublicKeyFile "$(wslpath -w "{{.WINDOWS_SSH_KEY}}.pub")" -Check || [ $? -eq 2 ]'
+
+  windows-init:
+    desc: Install the Ansible collections for the Windows host playbook (pinned ansible-core via uv)
+    dir: "{{.ANSIBLE_DIR}}"
+    cmds:
+      - "{{.WINDOWS_UVX}} ansible-galaxy collection install -r requirements.yml -p {{.WINDOWS_ANSIBLE_COLLECTIONS}}"
+    preconditions:
+      - sh: command -v uvx
+        msg: "uv is required (https://docs.astral.sh/uv/)"
+
+  windows-check:
+    desc: Show what the Windows host playbook would change (--check --diff); changes nothing on the host
+    dir: "{{.ANSIBLE_DIR}}"
+    env: &windows_env
+      ANSIBLE_COLLECTIONS_PATH: "{{.WINDOWS_ANSIBLE_COLLECTIONS}}"
+      # ansible.cfg's `yaml` callback is gone from community.general 12+.
+      ANSIBLE_STDOUT_CALLBACK: default
+      ANSIBLE_CALLBACK_RESULT_FORMAT: yaml
+    cmds:
+      - "{{.WINDOWS_UVX}} ansible-playbook -i inventory/windows.yml playbooks/windows-host.yml --check --diff {{.CLI_ARGS}}"
+    preconditions: &windows_pre
+      - sh: test -f "{{.WINDOWS_SSH_KEY}}"
+        msg: "no {{.WINDOWS_SSH_KEY}}; run task wsl-host:sshd first"
+      - sh: test -d "{{.WINDOWS_ANSIBLE_COLLECTIONS}}/ansible_collections/ansible/windows"
+        msg: "collections missing; run task wsl-host:windows-init first"
+      - sh: command -v x86_64-w64-mingw32-gcc && command -v 7z && command -v unzip
+        msg: "the Coral detector role builds on the controller: sudo apt-get install -y gcc-mingw-w64-x86-64 p7zip-full unzip"
+
+  windows-apply:
+    desc: Apply the Windows host playbook (Coral detector service, ...)
+    dir: "{{.ANSIBLE_DIR}}"
+    env: *windows_env
+    cmds:
+      - "{{.WINDOWS_UVX}} ansible-playbook -i inventory/windows.yml playbooks/windows-host.yml --diff {{.CLI_ARGS}}"
+    preconditions: *windows_pre
 
   monitoring:
     desc: Install/update the Windows host's monitoring agents (windows_exporter, smartctl_exporter) and scope their firewall rules (UAC prompt)

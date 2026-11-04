@@ -1,0 +1,31 @@
+---
+# Windows host DESKTOP-HKE05KI (docs/wsl/windows-ansible.md), over its
+# OpenSSH server. Needs ansible-core >= 2.18 and the Windows collections:
+#
+#   task wsl-host:windows-init    # once: collections for the pinned ansible-core
+#   task wsl-host:windows-check   # --check --diff, changes nothing
+#   task wsl-host:windows-apply
+#
+# Bootstrap sshd first (task wsl-host:sshd).
+
+- name: Controller cache for the Windows host
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  # Only fills ~/.cache on the controller, so it also runs under --check.
+  check_mode: false
+  tags: [coral-detector]
+  tasks:
+    - name: Coral detector artifacts
+      ansible.builtin.include_role:
+        name: ../roles/windows_coral_detector
+        tasks_from: controller.yml
+
+- name: Windows host
+  hosts: windows
+  gather_facts: false
+  become: false
+  roles:
+    - role: ../roles/windows_coral_detector
+      tags: [coral-detector]

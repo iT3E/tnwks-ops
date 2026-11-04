@@ -1,0 +1,86 @@
+---
+# Controller side (localhost, runs for real in check mode too: it only fills
+# the local cache). Downloads every pinned artifact, checks its SHA-256,
+# extracts what the host needs and builds the libusb shim. Needs unzip, 7z
+# (p7zip-full) and mingw-w64 (gcc-mingw-w64-x86-64) on the controller.
+
+- name: Cache directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ coral_detector_cache }}"
+    - "{{ coral_detector_cache }}/uv"
+    - "{{ coral_detector_cache }}/libusb"
+    - "{{ coral_detector_cache }}/shim-{{ coral_detector_shim_id }}"
+
+- name: Download pinned artifacts
+  ansible.builtin.get_url:
+    url: "{{ item.value.url }}"
+    dest: "{{ coral_detector_cache }}/{{ item.value.url | basename }}"
+    checksum: "sha256:{{ item.value.sha256 }}"
+    mode: "0644"
+  loop: "{{ coral_detector_artifacts | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Extract the Edge TPU runtime
+  ansible.builtin.unarchive:
+    src: "{{ coral_detector_cache }}/{{ coral_detector_artifacts.edgetpu_runtime.url | basename }}"
+    dest: "{{ coral_detector_cache }}"
+    remote_src: true
+    creates: "{{ coral_detector_cache }}/{{ coral_detector_edgetpu_dll }}"
+
+- name: Extract uv.exe
+  ansible.builtin.unarchive:
+    src: "{{ coral_detector_cache }}/{{ coral_detector_artifacts.uv.url | basename }}"
+    dest: "{{ coral_detector_cache }}/uv"
+    remote_src: true
+    include: [uv.exe]
+    creates: "{{ coral_detector_cache }}/uv/uv.exe"
+
+- name: Extract the libusb DLL
+  ansible.builtin.command:
+    argv:
+      - 7z
+      - e
+      - -y
+      - "-o{{ coral_detector_cache }}/libusb"
+      - "{{ coral_detector_cache }}/{{ coral_detector_artifacts.libusb.url | basename }}"
+      - "{{ coral_detector_libusb_dll }}"
+    creates: "{{ coral_detector_cache }}/libusb/libusb-1.0.dll"
+
+- name: Check the extracted DLLs
+  ansible.builtin.stat:
+    path: "{{ coral_detector_cache }}/{{ item.path }}"
+    checksum_algorithm: sha256
+  loop:
+    - {
+        path: libusb/libusb-1.0.dll,
+        sha256: "{{ coral_detector_libusb_dll_sha256 }}",
+      }
+    - {
+        path: "{{ coral_detector_edgetpu_dll }}",
+        sha256: "{{ coral_detector_edgetpu_dll_sha256 }}",
+      }
+  loop_control:
+    label: "{{ item.path }}"
+  register: coral_detector_dll_stat
+
+- name: Extracted DLLs match their pinned checksums
+  ansible.builtin.assert:
+    that: item.stat.checksum == item.item.sha256
+    fail_msg: "{{ item.item.path }}: sha256 {{ item.stat.checksum }}, expected {{ item.item.sha256 }}"
+    quiet: true
+  loop: "{{ coral_detector_dll_stat.results }}"
+  loop_control:
+    label: "{{ item.item.path }}"
+
+- name: Build the libusb shim (reproducible, so a rebuild gives the same bytes)
+  ansible.builtin.command:
+    argv:
+      - "{{ coral_detector_src }}/shim/build.sh"
+      - "{{ coral_detector_src }}/shim/{{ coral_detector_libusb_def }}"
+      - "{{ coral_detector_cache }}/shim-{{ coral_detector_shim_id }}/libusb-1.0.dll"
+    creates: "{{ coral_detector_cache }}/shim-{{ coral_detector_shim_id }}/libusb-1.0.dll"
