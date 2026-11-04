@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.113.0 - 2026-11-04
+
+### Added
+
+* Prometheus scrapes the Windows Coral detector services (job coral-detector), with alerts CoralDetectorDown, CoralDetectorNotReady and CoralDetectorNoInferences; the last only applies to a Coral that a Frigate detector named coral<id> uses.
+
 ## v1.112.0 - 2026-11-04
 
 ### Added

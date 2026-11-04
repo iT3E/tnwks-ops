@@ -1,3 +1,0 @@
-kind: Added
-body: "Prometheus scrapes the Windows Coral detector services (job coral-detector), with alerts CoralDetectorDown, CoralDetectorNotReady and CoralDetectorNoInferences; the last only applies to a Coral that a Frigate detector named coral<id> uses."
-time: 2026-11-03T20:58:00.000000000-08:00
