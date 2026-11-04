@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.114.0 - 2026-11-04
+
+### Changed
+
+* Frigate detects objects on the USB Coral again, now served natively by the Windows host's tnwks-coral-detector-0 service through Frigate's zmq detector instead of usbip, which takes OpenVINO off the WSL CPU.
+
 ## v1.113.1 - 2026-11-04
 
 ### Fixed
