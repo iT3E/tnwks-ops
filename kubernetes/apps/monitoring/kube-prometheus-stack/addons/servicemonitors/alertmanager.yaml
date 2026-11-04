@@ -6,8 +6,9 @@
 #
 # The stock alertmanager.rules from kube-prometheus-stack select
 # job="kube-prometheus-stack-alertmanager", container="alertmanager". The chart's
-# own Alertmanager is disabled, so the job is relabeled to that name and the
-# container is named `alertmanager` in the HelmRelease. Without both, all nine
+# own Alertmanager is disabled, so both are set here. `container` has to be a
+# static relabel: the operator only derives it from a declared container port,
+# and the app-template pod declares none. Without both labels all nine
 # Alertmanager* rules (AlertmanagerFailedToSendAlerts included) match nothing
 # and can never fire.
 apiVersion: monitoring.coreos.com/v1
@@ -27,3 +28,6 @@ spec:
         - action: replace
           targetLabel: job
           replacement: kube-prometheus-stack-alertmanager
+        - action: replace
+          targetLabel: container
+          replacement: alertmanager

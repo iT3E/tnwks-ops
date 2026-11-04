@@ -43,8 +43,8 @@ if Telegram breaks while nothing needs sending, it goes unnoticed until the
 next alert tries.
 
 Alertmanager's metrics come from the `alertmanager` ServiceMonitor in
-`kube-prometheus-stack/addons/servicemonitors`, relabeled to the job the
-stock `alertmanager.rules` select.
+`kube-prometheus-stack/addons/servicemonitors`, relabeled to the job and container
+the stock `alertmanager.rules` select.
 
 ## Where things live
 
