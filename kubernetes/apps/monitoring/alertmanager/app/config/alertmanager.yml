@@ -27,6 +27,16 @@ receivers:
       - url_file: /etc/secrets/healthchecks_watchdog_url
         send_resolved: false
         timeout: 10s
+  # Telegram delivery heartbeat (AlertDeliveryHeartbeat, kube-prometheus-stack
+  # addons/alerts/heartbeats.yaml) -> check `alert-delivery`. It has to bypass
+  # Telegram, the path it vouches for.
+  - name: "healthchecks-delivery"
+    webhook_configs:
+      # https://hc-ping.com/<ping key>/alert-delivery, from secrets.sops.yaml
+      # (key: healthchecks_delivery_url).
+      - url_file: /etc/secrets/healthchecks_delivery_url
+        send_resolved: false
+        timeout: 10s
 
 route:
   group_by: ["alertname", "job"]
@@ -41,6 +51,12 @@ route:
     - receiver: "healthchecks"
       matchers:
         - alertname = "Watchdog"
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 1m
+    - receiver: "healthchecks-delivery"
+      matchers:
+        - alertname = "AlertDeliveryHeartbeat"
       group_wait: 0s
       group_interval: 1m
       repeat_interval: 1m

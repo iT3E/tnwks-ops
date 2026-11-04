@@ -105,7 +105,7 @@
       },
       "targets": [
         {
-          "expr": "count(ALERTS{alertstate=\"firing\",alertname!=\"Watchdog\"}) or vector(0)",
+          "expr": "count(ALERTS{alertstate=\"firing\",alertname!~\"Watchdog|AlertDeliveryHeartbeat\"}) or vector(0)",
           "refId": "A"
         }
       ],

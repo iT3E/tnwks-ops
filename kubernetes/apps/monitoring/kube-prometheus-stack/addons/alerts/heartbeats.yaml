@@ -1,0 +1,49 @@
+---
+# Always-firing heartbeat alerts. Alertmanager sends each one to its own
+# healthchecks.io check as a webhook every 2 minutes, and healthchecks.io
+# messages Telegram through its own bot when the pings stop. See
+# docs/operations/external-monitoring.md. (Watchdog, the cluster heartbeat,
+# comes from kube-prometheus-stack's default rules.)
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: heartbeat-alerts
+spec:
+  groups:
+    - name: heartbeats
+      rules:
+        # Fires while Alertmanager can deliver to Telegram. It stops (and the
+        # healthchecks.io check `alert-delivery` goes down) when, over the last
+        # 15 minutes, Telegram notifications failed and none got through:
+        # a revoked or hijacked bot token, the bot removed from the War Room,
+        # or the Telegram API unreachable. Single failed messages while others
+        # arrive (e.g. one too long) stay in-stack: AlertmanagerFailedToSendAlerts
+        # reports those to the War Room.
+        #
+        # alertmanager_notifications_failed_total counts a notification once,
+        # after its retries are exhausted, so a transient error that a retry
+        # fixed doesn't count. It also stops, failing safe, when Alertmanager's
+        # metrics are missing (the count() side is empty).
+        #
+        # Blind spot: Telegram breaking while nothing needs sending goes
+        # unnoticed until the next alert tries.
+        - alert: AlertDeliveryHeartbeat
+          expr: |
+            count(alertmanager_notifications_total{job="kube-prometheus-stack-alertmanager",integration="telegram"})
+            unless on ()
+            (
+                sum(increase(alertmanager_notifications_failed_total{job="kube-prometheus-stack-alertmanager",integration="telegram"}[15m])) > 0
+              and on ()
+                (
+                    sum(increase(alertmanager_notifications_total{job="kube-prometheus-stack-alertmanager",integration="telegram"}[15m]))
+                  - sum(increase(alertmanager_notifications_failed_total{job="kube-prometheus-stack-alertmanager",integration="telegram"}[15m]))
+                ) < 0.5
+            )
+          labels:
+            severity: none
+          annotations:
+            summary: "Telegram alert delivery heartbeat"
+            description: >-
+              Always firing while Alertmanager can deliver to Telegram. It is
+              routed to healthchecks.io (check alert-delivery), never to
+              Telegram.
