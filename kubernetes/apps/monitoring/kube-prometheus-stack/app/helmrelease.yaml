@@ -172,6 +172,21 @@ spec:
                 labels:
                   instance: DESKTOP-HKE05KI
 
+          # Coral detector services on the Windows host (docs/wsl/coral-detector.md),
+          # one target per Coral: tnwks-coral-detector-<id> serves /metrics on
+          # 9555 + id. honor_labels keeps the server's own `device` label, which is
+          # the same id as the target label (that one also lands on `up`).
+          - job_name: coral-detector
+            scrape_interval: 30s
+            scrape_timeout: 10s
+            honor_labels: true
+            static_configs:
+              - targets:
+                  - ${WINDOWS_HOST_IP}:9555
+                labels:
+                  instance: DESKTOP-HKE05KI
+                  device: "0"
+
           - job_name: unms_exporter
             # for a static target "unms.example.org", rewrite it to
             # "exporter.example.org:9806/metrics?target=unms.example.org",

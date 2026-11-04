@@ -1,0 +1,72 @@
+---
+# Coral detector services on the Windows host (docs/wsl/coral-detector.md),
+# scraped as job coral-detector, one target per Coral (label `device` = the
+# service's id, tnwks-coral-detector-<id>).
+#
+# Frigate's zmq detector turns a timeout or an error into an empty result
+# without logging, and if Frigate starts while the server is down it never
+# becomes ready and keeps returning empty results until the frigate pod
+# restarts. Frigate's own metrics look healthy in both cases (detections keep
+# "running"), so the server's inference counter is the signal.
+#
+# CoralDetectorNoInferences only applies to a Coral that Frigate actually
+# uses: a Frigate detector named coral<id> (detectors.coral0 for device 0)
+# must exist. Until the cutover from OpenVINO there is none, so it can't fire.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: coral-detector-alerts
+spec:
+  groups:
+    - name: coral-detector
+      rules:
+        - alert: CoralDetectorDown
+          expr: up{job="coral-detector"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Coral detector {{ $labels.device }} on {{ $labels.instance }} is not answering"
+            description: >-
+              Prometheus has not scraped the tnwks-coral-detector-{{ $labels.device }}
+              service on {{ $labels.instance }} (metrics port 9555 + id)
+              for 5 minutes. The service is stopped or crash-looping, or WSL's
+              vEthernet address is gone. On the host: `Get-Service
+              tnwks-coral-detector-{{ $labels.device }}` and
+              C:\ProgramData\tnwks-coral-detector\logs\{{ $labels.device }}\.
+
+        - alert: CoralDetectorNotReady
+          expr: tnwks_detector_ready{job="coral-detector"} == 0 or tnwks_detector_device_ok{job="coral-detector"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Coral detector {{ $labels.device }} on {{ $labels.instance }} has no working Coral"
+            description: >-
+              tnwks-coral-detector-{{ $labels.device }} answers, but its Coral is not
+              open or its last inference failed (ready or device_ok 0 for 5
+              minutes). Usually the Coral is unplugged, moved to another USB port
+              (when the device is selected by path) or held by another process.
+              Check `Get-PnpDevice | ? FriendlyName -match Coral` and the service log.
+
+        - alert: CoralDetectorNoInferences
+          expr: |
+            sum by (instance, device) (rate(tnwks_detector_inferences_total{job="coral-detector"}[5m])) == 0
+            and on (device)
+              label_replace(frigate_detector_inference_speed_seconds{name=~"coral[0-9]+"}, "device", "$1", "name", "coral([0-9]+)")
+            and on ()
+              frigate_detection_total_fps > 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Frigate is detecting but Coral {{ $labels.device }} runs no inferences"
+            description: >-
+              Frigate has detector coral{{ $labels.device }} and runs detection
+              ({{ with query "round(frigate_detection_total_fps, 0.1)" }}{{ . | first | value }}{{ end }}/s),
+              but tnwks-coral-detector-{{ $labels.device }} on {{ $labels.instance }} has
+              done no inference for 10 minutes, so Frigate gets empty results and
+              person alerts are blind. If the service is healthy, Frigate's zmq
+              detector probably never finished its model handshake (Frigate started
+              while the server was down): restart the frigate pod. Otherwise see
+              CoralDetectorDown / CoralDetectorNotReady.
