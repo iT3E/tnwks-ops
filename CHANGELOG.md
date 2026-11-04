@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.111.0 - 2026-11-04
+
+### Added
+
+* Off-site check alert-delivery on healthchecks.io: AlertDeliveryHeartbeat fires while Alertmanager can deliver to Telegram and pings it every 2 minutes, so a revoked or hijacked War Room bot, or the Telegram API being down, reaches a DM through healthchecks.io's own bot.
+
+### Fixed
+
+* Prometheus now scrapes Alertmanager (ServiceMonitor, job relabeled to the one the stock rules select, container renamed to alertmanager). The nine stock Alertmanager* rules, AlertmanagerFailedToSendAlerts included, matched no series before and could never fire.
+
 ## v1.110.0 - 2026-11-03
 
 ### Added
