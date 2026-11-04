@@ -79,7 +79,7 @@ EOF
 # Written as a temp file and renamed, so the exporter never reads half a file.
 # The script goes over as -EncodedCommand (UTF-16LE base64) and the content as
 # base64 inside it, which sidesteps Windows command-line quoting.
-ps="\$b = [Convert]::FromBase64String('$(printf '%s\n' "$prom" | base64 -w0)'); \$d = '$TEXTFILE_DIR';"
+ps="\$ProgressPreference = 'SilentlyContinue'; \$b = [Convert]::FromBase64String('$(printf '%s\n' "$prom" | base64 -w0)'); \$d = '$TEXTFILE_DIR';"
 ps+=" [IO.File]::WriteAllBytes(\"\$d\\$PROM_NAME.prom.tmp\", \$b);"
 ps+=" Move-Item -Force \"\$d\\$PROM_NAME.prom.tmp\" \"\$d\\$PROM_NAME.prom\""
 enc=$(printf '%s' "$ps" | iconv -t UTF-16LE | base64 -w0)
@@ -90,4 +90,4 @@ push=$?
 
 # The unit fails when the host has drift or the report didn't arrive, so
 # `systemctl --failed` shows it too.
-[[ $rc -eq 0 && $push -eq 0 ]]
+[[ $rc -eq 0 && $push -eq 0 && $changed -eq 0 ]]
