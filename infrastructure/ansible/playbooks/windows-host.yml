@@ -73,3 +73,6 @@
       tags: [usb-attach]
     - role: ../roles/windows_wsl_maintenance
       tags: [wsl-maintenance]
+    # Check-only settings; last, so a failed assertion stops nothing else.
+    - role: ../roles/windows_host_settings
+      tags: [host-settings]

@@ -92,6 +92,16 @@ tasks:
       - task: windows-check
         vars: { CLI_ARGS: "--tags monitoring" }
 
+  windows-drift-check:
+    desc: Install the nightly Ansible --check of the Windows host (systemd timer, 04:30, result in Prometheus)
+    cmds:
+      - sudo install -m 0755 "{{.WSL_HOST_DIR}}/tnwks-windows-drift-check.sh" /usr/local/bin/tnwks-windows-drift-check
+      - sudo install -m 0644 "{{.WSL_HOST_DIR}}/tnwks-windows-drift-check.service" "{{.WSL_HOST_DIR}}/tnwks-windows-drift-check.timer" /etc/systemd/system/
+      - sudo systemctl daemon-reload
+      - sudo systemctl enable --now tnwks-windows-drift-check.timer
+      - systemctl list-timers tnwks-windows-drift-check.timer --no-pager
+    preconditions: *windows_pre
+
   unifi-backup:
     desc: Install the daily copy of the UniFi controller backup to Google Drive (systemd timer, 02:30)
     cmds:

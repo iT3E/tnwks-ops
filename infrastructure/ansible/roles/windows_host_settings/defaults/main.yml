@@ -1,0 +1,29 @@
+---
+# windows_host_settings: host settings that are checked, never changed by a
+# normal apply (docs/wsl/windows-ansible.md, "Check-only settings").
+#
+# .wslconfig: a write only takes effect at the next `wsl --shutdown`, which
+# stops the whole cluster, so an apply never writes it on its own. Drift fails
+# the run. To write the template: `task wsl-host:windows-apply -- --tags
+# host-settings -e wslconfig_write=true`, then plan a `wsl --shutdown`.
+wslconfig_path: 'C:\Users\{{ windows_desktop_user }}\.wslconfig'
+wslconfig_write: false
+
+# NIC and power settings. Changing an adapter's advanced properties restarts
+# the adapter, which drops every camera stream for seconds (and once left the
+# Reolink's RTSP server hung), so these are assertions only. Fix drift by hand
+# at a quiet time (docs/wsl/windows-ansible.md).
+host_settings_ethernet: Ethernet
+# RegistryKeyword -> RegistryValue on the Ethernet adapter (Realtek 2.5GbE).
+host_settings_ethernet_advanced:
+  "*EEE": "0"                  # Energy-Efficient Ethernet off
+  AdvancedEEE: "0"
+  EnableGreenEthernet: "0"
+  PowerSavingMode: "0"
+# Power management tab: "Allow the computer to turn off this device" unticked.
+host_settings_ethernet_allow_turn_off: Disabled
+# The Wi-Fi radio stays off, so Windows never fails over to Wi-Fi (a vNIC reset
+# for WSL; homelab-windows-host notes).
+host_settings_disabled_adapters: [Wi-Fi]
+# High performance.
+host_settings_power_scheme: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c

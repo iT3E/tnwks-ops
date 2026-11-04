@@ -1,0 +1,28 @@
+{# The desktop user's .wslconfig, byte for byte. WSL reads it only when the VM starts. #}
+[wsl2]
+# Sized for hosting the Talos-in-Docker production cluster on this rig.
+# Talos uses ~20GiB across CP + 2 workers.
+#
+# 2026-07-28: raised 24GB -> 40GB. At 24GB the VM ran ~14.4GB used / 2.1GB free,
+# and qmd's llama.cpp CUDA backend was aborting on
+#   cuMemAddressReserve(&pool_addr, CUDA_POOL_VMM_MAX_SIZE)
+# (a 32GiB *virtual* address reservation for the ggml CUDA memory pool).
+# WSL2 could not back the reservation under host memory pressure, so ggml_abort()
+# fired mid-sync, stalling the Node event loop and killing gateway sessions
+# (5 crashes on 2026-07-27, all during 70-110s qmd syncs; normal syncs are ~700ms).
+# NOT a VRAM problem - the 3080 had ~8GB of its 10GB free at crash time.
+# Host has 64GiB total - leaves ~24GiB for Windows + gaming.
+memory=40GB
+processors=12
+swap=8GB
+# 2026-09-24: pin the Hyper-V clocksource. On `tsc` the VM's monotonic clock ran
+# ~11% slow (60s timer = 67s real) with Windows stepping wall time forward every
+# few seconds. That made Prometheus log missed rule evaluations on every group
+# and slowed every timer in the cluster. Appended to WSL's default kernel args.
+kernelCommandLine = clocksource=hyperv_clocksource_tsc_page
+# Run `wsl --shutdown` from PowerShell after editing for changes to apply.
+# Managed by tnwks-ops (Ansible role windows_host_settings): edit the template
+# there. Its check reports drift; it writes this file only when asked.
+# AFTER RESTART: nothing to re-attach by hand. The Coral is served from Windows
+# (tnwks-coral-detector-0) and the Z-Stick re-attaches through
+# tnwks-usb-attach.
