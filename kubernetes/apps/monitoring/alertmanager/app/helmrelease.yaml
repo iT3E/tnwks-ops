@@ -33,8 +33,6 @@ spec:
               globalMounts:
                 - path: /alertmanager
         containers:
-          # Named for the stock alertmanager.rules, which select
-          # container="alertmanager" (kube-prometheus-stack addons/servicemonitors).
           alertmanager:
             image:
               repository: quay.io/prometheus/alertmanager
