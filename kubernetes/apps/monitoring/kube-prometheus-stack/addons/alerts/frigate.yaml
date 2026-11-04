@@ -40,11 +40,13 @@ spec:
               Frigate has run no object detection for 3 minutes while cameras
               with motion skip most frames.
               Skipping now:{{ range query "round(frigate_skipped_fps > 0.5 * frigate_camera_fps and frigate_camera_fps > 1, 0.1)" | sortByLabel "camera_name" }} {{ reReplaceAll "^frigate_" "" .Labels.camera_name }} {{ . | value }}fps;{{ end }}
-              Person alerts are off until it recovers. Usually the Coral
-              detector hung after a USB/vNIC drop: check
+              Person alerts are off until it recovers. Detection runs on
+              the CPU (OpenVINO), so check
               `kubectl -n production logs deploy/frigate | grep -i detect`
-              for "Force killing" with no "Detection process has exited",
-              then restart the frigate pod (with the Coral attached).
+              for a stuck or crashing detector and the CPU headroom on
+              homelab-wsl-worker-2, then restart the frigate pod. If the
+              config is back on the USB Coral, check `dmesg` for the
+              vhci_hcd seqnum overflow first.
 
         - alert: FrigateAllCamerasDown
           expr: sum(frigate_camera_fps) == 0

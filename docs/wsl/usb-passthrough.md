@@ -215,6 +215,13 @@ HelmRelease values.
 
 ### Frigate (Coral TPU)
 
+> **Not used for detection on WSL since 2026-11-03.** Frigate runs the
+> OpenVINO detector on the CPU (`resources/config.yml`), because the WSL
+> `vhci_hcd` driver's unlink seqnum overflows past 2^31 after 3-4 days of
+> Coral traffic and hangs the detector until the module is reloaded. The
+> Coral and the mount below stay in place as a fallback; switching back is
+> the `detectors:` block alone.
+
 `kubernetes/apps/production/frigate/app/helmrelease.yaml`:
 
 ```yaml

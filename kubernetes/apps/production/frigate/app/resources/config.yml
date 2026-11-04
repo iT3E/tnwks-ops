@@ -14,10 +14,21 @@ mqtt:
 database:
   path: /data/frigate.db
 
+# OpenVINO on the CPU instead of the USB Coral. The Coral reaches the pod
+# through usbipd + the WSL vhci_hcd driver, and that driver has a seqnum bug
+# (vhci_urb_dequeue stores the unlink seqnum without a (u32) cast; unfixed
+# upstream as of 2026-11): at the Coral's ~8k URBs/s the counter passes 2^31
+# every 3-4 days of WSL uptime, every URB unlink then fails, and the detector
+# hangs until vhci_hcd is reloaded (2026-10-29, 2026-11-03). OpenVINO
+# benchmarked at 8.1ms/inference on 2 i9-14900KF threads (Coral ~10ms) and
+# never touches USB. Frigate fills in the model for an openvino detector
+# (300x300 ssdlite_mobilenet_v2 from /openvino-model, nhwc, bgr), so no
+# `model:` block is needed. The Coral stays attached for now as a fallback:
+# to go back, restore `coral: {type: edgetpu, device: usb}` here.
 detectors:
-  coral:
-    type: edgetpu
-    device: usb
+  ov:
+    type: openvino
+    device: CPU
 
 ffmpeg:
   global_args: ["-hide_banner", "-loglevel", "warning"]
@@ -47,7 +58,7 @@ record:
       days: 2
       mode: active_objects
 
-# Object detection on the Coral. Frigate defaults detect.enabled to false, so
+# Object detection on. Frigate defaults detect.enabled to false, so
 # without this the detector loads but no camera ever sends it a frame: no
 # tracked objects, no alert/detection review items (so nothing reaches
 # frigate/reviews for Home Assistant), and with the active_objects retention
