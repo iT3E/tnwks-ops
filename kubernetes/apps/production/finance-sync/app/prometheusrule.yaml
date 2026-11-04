@@ -36,12 +36,21 @@ spec:
             summary: "The weekly Amazon enrichment hasn't succeeded in over 8 days."
             description: "Check the last finance-sync-amazon Jobs in production."
         - alert: FinanceSyncNeverSucceeded
-          # A CronJob that is enabled but has no successful run at all (the
-          # metric above is absent until the first success).
+          # An enabled CronJob with no successful run at all (the metric above
+          # is absent until the first success). Only counts once a run was due:
+          # 2h after its first scheduled Job, or 2h after a due run that the
+          # controller never started (next_schedule_time stuck in the past, a
+          # broken schedule). A plain `for: 26h` fired on the new weekly Amazon
+          # job days before its first Monday run (2026-11-03).
           expr: |
             kube_cronjob_spec_suspend{namespace="production", cronjob=~"finance-sync-.*"} == 0
+            and on (namespace, cronjob) (
+                (time() - kube_cronjob_status_last_schedule_time{namespace="production", cronjob=~"finance-sync-.*"}) > 2 * 3600
+              or
+                (time() - kube_cronjob_next_schedule_time{namespace="production", cronjob=~"finance-sync-.*"}) > 2 * 3600
+            )
             unless on (namespace, cronjob) kube_cronjob_status_last_successful_time{namespace="production", cronjob=~"finance-sync-.*"}
-          for: 26h
+          for: 15m
           labels:
             severity: warning
           annotations:
