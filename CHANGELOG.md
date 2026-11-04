@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.112.0 - 2026-11-04
+
+### Added
+
+* The Windows host is managed with Ansible over a WSL-only, key-only OpenSSH server (task wsl-host:sshd, wsl-host:windows-check/-apply), and its first role runs each USB Coral as a Windows service (tnwks-coral-detector-<id>) that serves Frigate's zmq detector with Prometheus metrics.
+
 ## v1.111.4 - 2026-11-04
 
 ### Fixed
