@@ -58,7 +58,21 @@ function Get-WslIpv4 {
     return $null
 }
 
-$listener = New-Object System.Net.Sockets.UdpClient($Port)
+# The port can still be held for a moment by the instance this one replaces
+# (a task restart). Without a socket every Receive fails and every packet is
+# dropped, so retry for a minute, then exit and let the task restart it.
+$listener = $null
+for ($attempt = 1; -not $listener; $attempt++) {
+    try {
+        $listener = New-Object System.Net.Sockets.UdpClient($Port) -ErrorAction Stop
+    } catch {
+        if ($attempt -ge 30) {
+            Write-Log "cannot bind udp/${Port}: $($_.Exception.Message); exiting"
+            exit 1
+        }
+        Start-Sleep -Seconds 2
+    }
+}
 $listener.Client.ReceiveTimeout = 5000
 $sender = New-Object System.Net.Sockets.UdpClient
 $remote = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)

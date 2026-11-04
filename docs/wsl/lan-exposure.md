@@ -27,8 +27,8 @@ Why each hop exists:
   bridge on the WSL host forwards from its eth0 to the VIP.
 
 The WSL VM gets a new address on every WSL restart and Windows reboot. The
-TCP side re-derives it in `Sync-TnwksLanBridge.ps1`, which a Scheduled Task
-(`Register-TnwksLanBridgeTask.ps1`) runs at logon and 15 seconds after each
+TCP side re-derives it in `Sync-TnwksLanBridge.ps1`, which the Scheduled Task
+`tnwks-lan-bridge-sync` runs at logon and 15 seconds after each
 Hyper-V VmSwitch EventID 232 (VM NIC connected). That event is written to the
 **System** log; the `Microsoft-Windows-Hyper-V-VmSwitch-Operational` log never
 receives it, so a trigger on that log never fires. The task runs as the
@@ -71,35 +71,43 @@ The router's exports to the desktop:
 
 ## Setup
 
-Both tasks are idempotent and run from WSL. The Windows steps run elevated
-through `infrastructure/wsl-host/invoke-elevated.sh`, so expect a UAC prompt.
+Both tasks are idempotent and run from WSL. The Windows halves are Ansible
+roles in `playbooks/windows-host.yml`, over the host's OpenSSH server
+([windows-ansible.md](windows-ansible.md)); preview them with
+`task wsl-host:windows-check -- --tags lan-bridge,udp-relay`.
 
 ```bash
-task wsl-host:lan-bridge   # socat units (Ansible) + Windows portproxy and firewall
+task wsl-host:lan-bridge   # socat units (WSL) + the Windows TCP half
 task wsl-host:udp-relays   # Windows UDP relays for 2055 and 6001
 ```
 
 - `wsl-host:lan-bridge` runs `playbooks/wsl-lan-bridge.yml` (role
   `wsl_lan_bridge`: socat, `/usr/local/bin/tnwks-lan-bridge`, the
   `tnwks-lan-bridge@.service` template, one instance per entry in
-  `wsl_lan_bridge_instances`), then `Sync-TnwksLanBridge.ps1`, which writes
-  the portproxy rules, opens the TCP ports, and removes retired ones.
-- `wsl-host:udp-relays` runs `Register-TnwksUdpRelays.ps1`, which lists the
-  relays and registers each with `Register-TnwksUdpRelayTask.ps1`: the script
-  is copied to `C:\ProgramData\tnwks-udp-relay`, an inbound UDP firewall rule
-  is scoped to the senders, and the task runs as the desktop user (WSL distros
-  are per-user, so SYSTEM cannot see `Ubuntu`).
-
-To register the TCP sync's Scheduled Task, run
-`invoke-elevated.sh infrastructure/wsl-host/Register-TnwksLanBridgeTask.ps1`.
-It copies `Sync-TnwksLanBridge.ps1` into `C:\ProgramData\tnwks-lan-bridge`, so
-re-run it after editing the sync script.
+  `wsl_lan_bridge_instances`), then the Windows role `windows_lan_bridge`.
+  That role copies `Sync-TnwksLanBridge.ps1` to
+  `C:\ProgramData\tnwks-lan-bridge`, writes `ports.json` there from
+  `lan_bridge_tcp_ports`, owns the firewall rules `tnwks-lan-bridge-<port>`
+  (and removes those of `lan_bridge_retired_tcp_ports`), and registers the
+  `tnwks-lan-bridge-sync` task (desktop user, S4U). When the script or the
+  port list changes it runs the task once.
+- The portproxy entries are the one part Ansible doesn't write: they point at
+  the WSL VM's address, so the script sets them at run time. It leaves an
+  entry alone when it already points at the right address, and removes
+  entries of retired ports. The `2222` and `18789` entries (SSH and the
+  OpenClaw gateway) are outside this bridge and untouched by it.
+- `wsl-host:udp-relays` runs the role `windows_udp_relay`: it copies
+  `Start-TnwksUdpRelay.ps1` to `C:\ProgramData\tnwks-udp-relay`, scopes each
+  inbound UDP firewall rule `tnwks-udp-relay-<port>` to its senders, and keeps
+  one task per relay (`udp_relays`) running as the desktop user (WSL distros
+  are per-user, so SYSTEM cannot see `Ubuntu`). A new script restarts both
+  relays, which drops a few seconds of NetFlow and syslog.
 
 Adding a service: give it a fixed VIP in `cluster-settings.yaml`, add a
 `case` arm to `tnwks-lan-bridge.sh` and an instance to the role defaults,
-then the port to `Sync-TnwksLanBridge.ps1` (TCP; `MappedTcpPorts` when the WSL
-side must listen on a different port, with an optional source scope) or
-`Register-TnwksUdpRelays.ps1` (UDP), and re-run the matching task.
+then the port to `lan_bridge_tcp_ports` (TCP; `wsl_port` when the WSL side
+must listen on a different port, `remote` to scope the firewall rule) or
+`udp_relays` (UDP), and re-run the matching task.
 
 ## Checking it
 

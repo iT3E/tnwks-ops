@@ -104,7 +104,7 @@ AP (VLAN 900)
   L2 discovery is needed.
 - **Port 18080 on WSL:** Docker on this host already holds `0.0.0.0:8080`
   (Scriberr), so socat listens on 18080 and the Windows portproxy maps LAN 8080
-  to it (`MappedTcpPorts` in `Sync-TnwksLanBridge.ps1`). Windows' own
+  to it (`wsl_port` in `lan_bridge_tcp_ports`, role `windows_lan_bridge`). Windows' own
   `wslrelay` holds `127.0.0.1:8080` for that container; a wildcard bind on
   8080 next to it was tested and works.
 - **Override Inform Host:** the controller tells adopted devices where to
@@ -137,9 +137,8 @@ and 6-9.
    one would re-adopt the APs without a reset.
 2. **Deploy:** Flux deploys `networking/unifi`; the first start creates the
    database in about a minute.
-3. **LAN bridge:** `task wsl-host:lan-bridge`, then
-   `infrastructure/wsl-host/invoke-elevated.sh infrastructure/wsl-host/Register-TnwksLanBridgeTask.ps1`
-   to refresh the copy of `Sync-TnwksLanBridge.ps1` the scheduled task runs.
+3. **LAN bridge:** `task wsl-host:lan-bridge` (the socat units, then the
+   Windows half with Ansible: sync script, port list, firewall rules, task).
    Check from the AP subnet, through the real path, on the router:
    `/tool fetch url="http://unifi:8080/inform" src-address=10.10.90.1` fails
    with `Status 400`. That is the controller rejecting an empty inform; a

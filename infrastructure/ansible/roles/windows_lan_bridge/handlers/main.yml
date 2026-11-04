@@ -1,0 +1,17 @@
+---
+# Applies a new script or port list now instead of at the next logon or vNIC
+# reset. Entries that already point at the WSL VM are left alone.
+- name: Run the LAN bridge sync
+  ansible.windows.win_powershell:
+    parameters:
+      Task: "{{ lan_bridge_task }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Task)
+      if ($PSCmdlet.ShouldProcess($Task, 'run')) {
+          Start-ScheduledTask -TaskName $Task
+          $deadline = (Get-Date).AddMinutes(2)
+          do { Start-Sleep -Seconds 2 } while ((Get-ScheduledTask -TaskName $Task).State -eq 'Running' -and (Get-Date) -lt $deadline)
+          $r = (Get-ScheduledTaskInfo -TaskName $Task).LastTaskResult
+          if ($r -ne 0) { throw "$Task finished with $r; see sync.log" }
+      }

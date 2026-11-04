@@ -11,6 +11,8 @@ run that shows drift.
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `windows_coral_detector` (`coral-detector`) | the [Coral detector](coral-detector.md) services, driver, firewall rules                               |
 | `windows_monitoring` (`monitoring`)         | windows_exporter (MSI, `config.yaml` collectors, service), smartmontools, smartctl_exporter and its task, firewall rules |
+| `windows_udp_relay` (`udp-relay`)           | `Start-TnwksUdpRelay.ps1`, the relay tasks `tnwks-udp-relay` (2055) and `tnwks-udp-relay-syslog` (6001), their firewall rules ([lan-exposure.md](lan-exposure.md)) |
+| `windows_lan_bridge` (`lan-bridge`)         | `Sync-TnwksLanBridge.ps1` and its `ports.json`, the task `tnwks-lan-bridge-sync`, the firewall rules `tnwks-lan-bridge-<port>`; the script keeps the portproxy entries pointed at WSL at run time |
 
 Run one role with `task wsl-host:windows-check -- --tags <tag>` (or
 `windows-apply`).
@@ -124,10 +126,10 @@ Host config that still lives outside this playbook, roughly in order:
 
 1. Done: monitoring agents (role `windows_monitoring`; it replaced
    `Install-TnwksWindowsMonitoring.ps1`, which is removed).
-2. **UDP relays** (`Register-TnwksUdpRelays.ps1`, `Start-TnwksUdpRelay.ps1`).
-   The installed `Start-TnwksUdpRelay.ps1` differs from `main`.
-3. **LAN bridge** Windows half (`Sync-TnwksLanBridge.ps1`, netsh portproxy,
-   the `tnwks-lan-bridge-sync` task). The WSL half is already Ansible.
+2. Done: UDP relays (role `windows_udp_relay`, replacing
+   `Register-TnwksUdpRelays.ps1` and `Register-TnwksUdpRelayTask.ps1`).
+3. Done: LAN bridge Windows half (role `windows_lan_bridge`, replacing
+   `Register-TnwksLanBridgeTask.ps1`).
 4. **USB attach** for the Z-Stick: the `tnwks-usb-attach` task and
    `Sync-TnwksUsbAttach.ps1` plus its Register script exist only on the host.
 5. **WSL watchdog and vhdx compaction** tasks (`tnwks-wsl-watchdog`,
