@@ -2,37 +2,38 @@
 #
 # Keeps Windows netsh portproxy rules in sync with the current WSL VM IP so
 # that LAN devices can reach the homelab-wsl cluster's internal services
-# (Ingress 80/443, k8s-gateway DNS 53/UDP, mosquitto 1883, UniFi inform
-# 8080) through this
-# Windows host. UDP services (NetFlow 2055, syslog 6001) use
-# Start-TnwksUdpRelay.ps1 instead.
+# (Ingress 80/443, mosquitto 1883, UniFi inform 8080) through this Windows
+# host. UDP services (NetFlow 2055, syslog 6001) use Start-TnwksUdpRelay.ps1
+# instead. See docs/wsl/lan-exposure.md.
 #
-# Run elevated. Idempotent — safe to invoke from a Scheduled Task on logon
-# or whenever the WSL VM IP changes.
+# The ports come from ports.json next to this script, which Ansible writes
+# (role windows_lan_bridge, `lan_bridge_tcp_ports`). Ansible also owns the
+# firewall rules tnwks-lan-bridge-<port> and this script's Scheduled Task
+# (tnwks-lan-bridge-sync). This script only does what has to happen at run
+# time: point each portproxy entry at the WSL VM's address, which changes on
+# every WSL restart, and drop entries for retired ports.
+#
+# Run elevated. Idempotent: an entry that already points at the right address
+# is left alone, so a run doesn't drop open connections.
 
 [CmdletBinding()]
 param(
     [string]$WslDistro = 'Ubuntu',
-    # Ports forwarded LAN -> Windows -> WSL eth0 -> socat -> MetalLB VIP.
-    # 53/UDP is excluded here because netsh portproxy is TCP-only; UDP DNS
-    # is handled separately (see docs/wsl/lan-exposure.md — port 53 needs a
-    # different forwarder, e.g. PortProxy with WinDivert or running k8s-gateway
-    # DNS on a different LAN entry path).
-    [int[]]$TcpPorts  = @(80, 443, 1883),
-    # Ports whose WSL side listens on a different port, as
-    # @{ <windows port> = @{ WslPort = <port>; RemoteAddress = <scope> } }.
-    # 8080: UniFi inform from the APs (VLAN 900 only). Docker on WSL already
-    # holds 0.0.0.0:8080 (Scriberr), so socat listens on 18080 instead.
-    [hashtable]$MappedTcpPorts = @{
-        8080 = @{ WslPort = 18080; RemoteAddress = '10.10.90.0/24' }
-    },
-    # Ports this script used to forward. Their portproxy entry and firewall
-    # rule are removed on every run. 6001: syslog moved to UDP.
-    [int[]]$RetiredTcpPorts = @(6001),
-    [string]$ListenAddress = '0.0.0.0'
+    # No $PSScriptRoot default: it is empty during param binding under
+    # `powershell.exe -File`, so the path is resolved below instead.
+    [string]$ConfigPath
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
+    $here = $PSScriptRoot
+    if ([string]::IsNullOrWhiteSpace($here) -and $MyInvocation.MyCommand.Path) {
+        $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
+    if ([string]::IsNullOrWhiteSpace($here)) { $here = 'C:\ProgramData\tnwks-lan-bridge' }
+    $ConfigPath = Join-Path $here 'ports.json'
+}
 
 function Require-Admin {
     $id = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -55,75 +56,66 @@ function Get-WslIpv4 {
     return $ip
 }
 
+# Current v4tov4 entries as listen "address:port" -> "connectaddress:connectport".
+function Get-PortProxy {
+    $map = @{}
+    foreach ($line in (netsh interface portproxy show v4tov4)) {
+        if ($line -match '^\s*(\d+\.\d+\.\d+\.\d+)\s+(\d+)\s+(\S+)\s+(\d+)\s*$') {
+            $map["$($Matches[1]):$($Matches[2])"] = "$($Matches[3]):$($Matches[4])"
+        }
+    }
+    return $map
+}
+
 function Sync-PortProxy {
     param(
+        [hashtable]$Current,
         [string]$ListenAddress,
         [int]   $Port,
         [string]$WslIp,
-        [int]   $ConnectPort = 0
+        [int]   $ConnectPort
     )
-    if ($ConnectPort -eq 0) { $ConnectPort = $Port }
-    $existing = netsh interface portproxy show v4tov4 |
-        Select-String -Pattern "^\s*$([regex]::Escape($ListenAddress))\s+$Port\s+"
-    if ($existing) {
-        # Reset to the new target — netsh has no in-place "update".
+    $want = "${WslIp}:${ConnectPort}"
+    $have = $Current["${ListenAddress}:${Port}"]
+    if ($have -eq $want) {
+        Write-Host "portproxy ${ListenAddress}:${Port} -> $want (unchanged)"
+        return
+    }
+    if ($have) {
+        # netsh has no in-place update.
         & netsh interface portproxy delete v4tov4 listenaddress=$ListenAddress listenport=$Port | Out-Null
     }
     & netsh interface portproxy add v4tov4 `
         listenaddress=$ListenAddress listenport=$Port `
         connectaddress=$WslIp connectport=$ConnectPort | Out-Null
-    Write-Host "portproxy ${ListenAddress}:${Port} -> ${WslIp}:${ConnectPort}"
-}
-
-function Sync-FirewallRule {
-    param([int]$Port, [string]$RemoteAddress = 'Any')
-    $name = "tnwks-lan-bridge-$Port"
-    $rule = Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue
-    if (-not $rule) {
-        New-NetFirewallRule -DisplayName $name -Direction Inbound `
-            -Action Allow -Protocol TCP -LocalPort $Port `
-            -RemoteAddress $RemoteAddress -Profile Any | Out-Null
-        Write-Host "firewall: created inbound allow tcp/$Port from $RemoteAddress"
-    } else {
-        $current = ($rule | Get-NetFirewallAddressFilter).RemoteAddress -join ','
-        if ($current -ne $RemoteAddress) {
-            $rule | Set-NetFirewallRule -RemoteAddress $RemoteAddress
-            Write-Host "firewall: tcp/$Port scope $current -> $RemoteAddress"
-        }
-    }
+    if ($LASTEXITCODE -ne 0) { throw "netsh portproxy add ${ListenAddress}:${Port} failed ($LASTEXITCODE)" }
+    Write-Host "portproxy ${ListenAddress}:${Port} -> $want (was: $(if ($have) { $have } else { 'none' }))"
 }
 
 function Remove-RetiredPort {
-    param([string]$ListenAddress, [int]$Port)
-    $existing = netsh interface portproxy show v4tov4 |
-        Select-String -Pattern "^\s*$([regex]::Escape($ListenAddress))\s+$Port\s+"
-    if ($existing) {
+    param([hashtable]$Current, [string]$ListenAddress, [int]$Port)
+    if ($Current.ContainsKey("${ListenAddress}:${Port}")) {
         & netsh interface portproxy delete v4tov4 listenaddress=$ListenAddress listenport=$Port | Out-Null
         Write-Host "portproxy ${ListenAddress}:${Port} removed (retired)"
     }
-    $rule = Get-NetFirewallRule -DisplayName "tnwks-lan-bridge-$Port" -ErrorAction SilentlyContinue
-    if ($rule) {
-        $rule | Remove-NetFirewallRule
-        Write-Host "firewall: removed tnwks-lan-bridge-$Port (retired)"
-    }
 }
 
+Write-Host "=== $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') Sync-TnwksLanBridge"
 Require-Admin
+
+if (-not (Test-Path $ConfigPath)) { throw "No port list at $ConfigPath (written by Ansible, role windows_lan_bridge)." }
+$config = Get-Content -Raw -Path $ConfigPath | ConvertFrom-Json
+$listen = $config.ListenAddress
 
 $wslIp = Get-WslIpv4 -Distro $WslDistro
 Write-Host "WSL ($WslDistro) IPv4: $wslIp"
 
-foreach ($port in $TcpPorts) {
-    Sync-PortProxy -ListenAddress $ListenAddress -Port $port -WslIp $wslIp
-    Sync-FirewallRule -Port $port
+$current = Get-PortProxy
+foreach ($p in @($config.TcpPorts)) {
+    Sync-PortProxy -Current $current -ListenAddress $listen -Port $p.Port -WslIp $wslIp -ConnectPort $p.WslPort
 }
-foreach ($port in $MappedTcpPorts.Keys) {
-    $m = $MappedTcpPorts[$port]
-    Sync-PortProxy -ListenAddress $ListenAddress -Port $port -WslIp $wslIp -ConnectPort $m.WslPort
-    Sync-FirewallRule -Port $port -RemoteAddress $m.RemoteAddress
-}
-foreach ($port in $RetiredTcpPorts) {
-    Remove-RetiredPort -ListenAddress $ListenAddress -Port $port
+foreach ($port in @($config.RetiredTcpPorts)) {
+    Remove-RetiredPort -Current $current -ListenAddress $listen -Port $port
 }
 
 Write-Host ''

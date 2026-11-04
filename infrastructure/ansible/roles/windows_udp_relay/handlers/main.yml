@@ -1,0 +1,16 @@
+---
+# A running relay keeps executing the script it started with.
+- name: Restart UDP relays
+  ansible.windows.win_powershell:
+    parameters:
+      Tasks: "{{ udp_relays | map(attribute='task') | list }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string[]]$Tasks)
+      foreach ($t in $Tasks) {
+          if (-not (Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue)) { continue }
+          if ($PSCmdlet.ShouldProcess($t, 'restart')) {
+              Stop-ScheduledTask -TaskName $t
+              Start-ScheduledTask -TaskName $t
+          }
+      }

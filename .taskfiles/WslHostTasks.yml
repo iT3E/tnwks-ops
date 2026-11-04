@@ -1,9 +1,10 @@
 ---
 version: "3"
 
-# Host-side plumbing that lets the LAN reach the WSL cluster
-# (docs/wsl/lan-exposure.md). Each task is idempotent. The Windows steps run
-# elevated through invoke-elevated.sh, so expect a UAC prompt.
+# Host-side plumbing for the WSL cluster: the LAN bridge (docs/wsl/lan-exposure.md),
+# the Windows host over Ansible (docs/wsl/windows-ansible.md), backups. Each
+# task is idempotent. The sshd bootstrap runs elevated through
+# invoke-elevated.sh, so expect a UAC prompt there.
 
 vars:
   WSL_HOST_DIR: "{{.ROOT_DIR}}/infrastructure/wsl-host"
@@ -16,16 +17,18 @@ vars:
 
 tasks:
   lan-bridge:
-    desc: Install the WSL socat bridges and sync the Windows TCP portproxy rules (UAC prompt)
+    desc: Install the WSL socat bridges and the Windows half of the LAN bridge (portproxy sync script, its task, firewall rules)
     dir: "{{.ANSIBLE_DIR}}"
     cmds:
       - ansible-playbook -i inventory/wsl.yml playbooks/wsl-lan-bridge.yml
-      - "{{.WSL_HOST_DIR}}/invoke-elevated.sh {{.WSL_HOST_DIR}}/Sync-TnwksLanBridge.ps1"
+      - task: windows-apply
+        vars: { CLI_ARGS: "--tags lan-bridge" }
 
   udp-relays:
-    desc: Register the Windows UDP relays for NetFlow (2055) and router syslog (6001) (UAC prompt)
+    desc: The Windows UDP relays for NetFlow (2055) and router syslog (6001) (Ansible, role windows_udp_relay)
     cmds:
-      - "{{.WSL_HOST_DIR}}/invoke-elevated.sh {{.WSL_HOST_DIR}}/Register-TnwksUdpRelays.ps1"
+      - task: windows-apply
+        vars: { CLI_ARGS: "--tags udp-relay" }
 
   sshd:
     desc: Bootstrap the Windows OpenSSH server for Ansible (WSL-only listener, key-only, UAC prompt)

@@ -65,3 +65,7 @@
       tags: [coral-detector]
     - role: ../roles/windows_monitoring
       tags: [monitoring]
+    - role: ../roles/windows_udp_relay
+      tags: [udp-relay]
+    - role: ../roles/windows_lan_bridge
+      tags: [lan-bridge]

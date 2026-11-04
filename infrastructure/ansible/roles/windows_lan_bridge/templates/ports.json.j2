@@ -1,0 +1,10 @@
+{
+  "_comment": "Written by tnwks-ops (role windows_lan_bridge), read by Sync-TnwksLanBridge.ps1. Edit lan_bridge_tcp_ports instead.",
+  "ListenAddress": {{ lan_bridge_listen_address | to_json }},
+  "TcpPorts": [
+{% for p in lan_bridge_tcp_ports %}
+    { "Port": {{ p.port | int }}, "WslPort": {{ p.wsl_port | default(p.port) | int }} }{{ '' if loop.last else ',' }}
+{% endfor %}
+  ],
+  "RetiredTcpPorts": {{ lan_bridge_retired_tcp_ports | map('int') | list | to_json }}
+}

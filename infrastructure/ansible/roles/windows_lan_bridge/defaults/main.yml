@@ -1,0 +1,34 @@
+---
+# windows_lan_bridge: the Windows half of the TCP LAN bridge
+# (docs/wsl/lan-exposure.md). LAN -> netsh portproxy on this host -> the WSL
+# VM's eth0 -> socat (tnwks-lan-bridge@<name>, role wsl_lan_bridge) -> the
+# MetalLB VIP.
+#
+# Ansible owns the script, its port list (ports.json), the firewall rules and
+# the Scheduled Task. The portproxy entries themselves are written at run time
+# by Sync-TnwksLanBridge.ps1, because they point at the WSL VM's address,
+# which changes on every WSL restart. The task runs it at logon and 15s after
+# each Hyper-V VmSwitch EventID 232 (VM NIC connected, System log).
+
+lan_bridge_dir: 'C:\ProgramData\tnwks-lan-bridge'
+lan_bridge_src: "{{ playbook_dir }}/../../wsl-host/Sync-TnwksLanBridge.ps1"
+lan_bridge_task: tnwks-lan-bridge-sync
+# The account that owns the WSL distro (its wsl.exe reads the VM's address).
+lan_bridge_user: "{{ windows_desktop_user }}"
+lan_bridge_listen_address: 0.0.0.0
+
+#   port      LAN-facing port on the Windows host
+#   wsl_port  port socat listens on in WSL (default: port)
+#   remote    sources the firewall rule tnwks-lan-bridge-<port> admits (default: any)
+# 53/UDP isn't here: portproxy is TCP-only and the router answers DNS.
+lan_bridge_tcp_ports:
+  - { port: 80 }    # ingress-nginx-internal
+  - { port: 443 }   # ingress-nginx-internal
+  - { port: 1883 }  # mosquitto
+  # UniFi inform from the APs (VLAN 900 only). Docker on WSL already holds
+  # 0.0.0.0:8080 (Scriberr), so socat listens on 18080.
+  - { port: 8080, wsl_port: 18080, remote: [10.10.90.0/24] }
+
+# Ports this bridge used to forward: their portproxy entry (script) and
+# firewall rule (Ansible) are removed. 6001: syslog moved to UDP.
+lan_bridge_retired_tcp_ports: [6001]

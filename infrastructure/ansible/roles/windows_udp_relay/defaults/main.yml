@@ -1,0 +1,27 @@
+---
+# windows_udp_relay: the UDP half of the LAN bridge (docs/wsl/lan-exposure.md).
+# netsh portproxy is TCP-only, so each UDP service gets a long-running
+# Start-TnwksUdpRelay.ps1 instance, one Scheduled Task per port, running as the
+# desktop user (WSL distros are per-user; SYSTEM's wsl.exe can't see Ubuntu).
+# The WSL side is the socat unit tnwks-lan-bridge@<name> (role wsl_lan_bridge).
+
+udp_relay_dir: 'C:\ProgramData\tnwks-udp-relay'
+udp_relay_src: "{{ playbook_dir }}/../../wsl-host/Start-TnwksUdpRelay.ps1"
+# The account that owns the WSL distro.
+udp_relay_user: "{{ windows_desktop_user }}"
+
+#   task    Scheduled Task name
+#   port    UDP port on the Windows host and in WSL
+#   remote  senders the firewall rule tnwks-udp-relay-<port> admits
+udp_relays:
+  # NetFlow v9 from the router -> monitoring/flow-collector. From the LAN.
+  - task: tnwks-udp-relay
+    port: 2055
+    remote: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+  # Router syslog -> monitoring/vector-aggregator. Only the router (its 910
+  # address) sends syslog. Written as a range because that's how Windows
+  # stored the rule's single address; `10.10.91.1` alone reads as a /32 to
+  # win_firewall_rule and shows up as a change against the existing rule.
+  - task: tnwks-udp-relay-syslog
+    port: 6001
+    remote: [10.10.91.1-10.10.91.1]

@@ -1,0 +1,43 @@
+---
+- name: LAN bridge directory
+  ansible.windows.win_file:
+    path: "{{ lan_bridge_dir }}"
+    state: directory
+
+- name: Sync script
+  ansible.windows.win_copy:
+    src: "{{ lan_bridge_src }}"
+    dest: '{{ lan_bridge_dir }}\Sync-TnwksLanBridge.ps1'
+  notify: Run the LAN bridge sync
+
+- name: Port list for the sync script
+  ansible.windows.win_copy:
+    content: "{{ lookup('ansible.builtin.template', 'ports.json.j2') }}"
+    dest: '{{ lan_bridge_dir }}\ports.json'
+  notify: Run the LAN bridge sync
+
+- name: Firewall rules (inbound TCP per bridged port)
+  ansible.windows.win_firewall_rule:
+    name: tnwks-lan-bridge-{{ item.port }}
+    localport: "{{ item.port }}"
+    protocol: tcp
+    direction: in
+    action: allow
+    remoteip: "{{ item.remote | default(['any']) | join(',') }}"
+    enabled: true
+    state: present
+  loop: "{{ lan_bridge_tcp_ports }}"
+  loop_control:
+    label: "tcp/{{ item.port }} from {{ item.remote | default(['any']) | join(',') }}"
+
+- name: Firewall rules of retired ports are gone
+  ansible.windows.win_firewall_rule:
+    name: tnwks-lan-bridge-{{ item }}
+    state: absent
+  loop: "{{ lan_bridge_retired_tcp_ports }}"
+
+- name: Sync task (desktop user, at logon and after a WSL vNIC reset)
+  tnwks_win_scheduled_task:
+    name: "{{ lan_bridge_task }}"
+    xml: "{{ lookup('ansible.builtin.template', 'lan-bridge-sync.xml.j2') }}"
+  notify: Run the LAN bridge sync

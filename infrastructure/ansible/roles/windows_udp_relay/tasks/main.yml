@@ -1,0 +1,35 @@
+---
+- name: Relay directory
+  ansible.windows.win_file:
+    path: "{{ udp_relay_dir }}"
+    state: directory
+
+- name: Relay script
+  ansible.windows.win_copy:
+    src: "{{ udp_relay_src }}"
+    dest: '{{ udp_relay_dir }}\Start-TnwksUdpRelay.ps1'
+  notify: Restart UDP relays
+
+- name: Firewall rules (inbound UDP from the senders only)
+  ansible.windows.win_firewall_rule:
+    name: tnwks-udp-relay-{{ item.port }}
+    localport: "{{ item.port }}"
+    protocol: udp
+    direction: in
+    action: allow
+    remoteip: "{{ item.remote | join(',') }}"
+    enabled: true
+    state: present
+  loop: "{{ udp_relays }}"
+  loop_control:
+    label: "{{ item.task }} udp/{{ item.port }}"
+
+- name: Relay tasks (desktop user, at boot and logon, restarted on exit)
+  tnwks_win_scheduled_task:
+    name: "{{ item.task }}"
+    xml: "{{ lookup('ansible.builtin.template', 'udp-relay.xml.j2') }}"
+    running: true
+  loop: "{{ udp_relays }}"
+  loop_control:
+    label: "{{ item.task }} udp/{{ item.port }}"
+  notify: Restart UDP relays
