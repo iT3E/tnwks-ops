@@ -11,6 +11,10 @@
           if (-not (Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue)) { continue }
           if ($PSCmdlet.ShouldProcess($t, 'restart')) {
               Stop-ScheduledTask -TaskName $t
+              # Start only once the old relay has let go of its port.
+              $deadline = (Get-Date).AddSeconds(30)
+              while ((Get-ScheduledTask -TaskName $t).State -eq 'Running' -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+              Start-Sleep -Seconds 2
               Start-ScheduledTask -TaskName $t
           }
       }
