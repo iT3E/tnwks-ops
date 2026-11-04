@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.118.0 - 2026-11-04
+
+### Added
+
+* Check-only Ansible role windows_host_settings (.wslconfig byte for byte, Ethernet power settings, Wi-Fi off, High performance plan; drift fails the run, nothing is ever set on the NIC) and a nightly drift check: the WSL timer tnwks-windows-drift-check runs the Windows --check against main and reports through windows_exporter's new textfile collector, with alerts WindowsHostConfigDrift and WindowsHostDriftCheckStale.
+
 ## v1.117.0 - 2026-11-04
 
 ### Changed

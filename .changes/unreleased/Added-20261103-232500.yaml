@@ -1,3 +1,0 @@
-kind: Added
-body: "Check-only Ansible role windows_host_settings (.wslconfig byte for byte, Ethernet power settings, Wi-Fi off, High performance plan; drift fails the run, nothing is ever set on the NIC) and a nightly drift check: the WSL timer tnwks-windows-drift-check runs the Windows --check against main and reports through windows_exporter's new textfile collector, with alerts WindowsHostConfigDrift and WindowsHostDriftCheckStale."
-time: 2026-11-03T23:25:00.000000000-08:00
