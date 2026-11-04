@@ -1,0 +1,63 @@
+---
+# windows_monitoring: the Windows host's Prometheus agents, scraped by the WSL
+# cluster at ${WINDOWS_HOST_IP} (kube-prometheus-stack additionalScrapeConfigs):
+#
+#   windows_exporter   :9182  service, collectors from config.yaml
+#   smartctl_exporter  :9633  SYSTEM scheduled task \Prometheus\smartctl_exporter,
+#                             reading drives through smartmontools' smartctl
+#
+# Both are reachable only from the WSL subnet (firewall rules below). Every
+# download is pinned and checked by SHA-256 on the controller.
+
+windows_exporter_version: 0.31.7
+windows_exporter_msi:
+  url: https://github.com/prometheus-community/windows_exporter/releases/download/v0.31.7/windows_exporter-0.31.7-amd64.msi
+  sha256: d29114fb7ae6af2865a9f1c4be7fdccc2b9fbbb4366a811b620bc85c983d0007
+windows_exporter_dir: 'C:\Program Files\windows_exporter'
+windows_exporter_port: 9182
+# diskdrive feeds the WindowsDiskDriveStatusBad alert (disk-health.yaml).
+# time feeds the clock skew panel on the Windows Exporter dashboard
+# (windows_time_current_timestamp_seconds; the NTP counters are absent
+# because W32Time is trigger-start on this desktop).
+windows_exporter_collectors:
+  - cpu
+  - logical_disk
+  - memory
+  - net
+  - os
+  - physical_disk
+  - service
+  - system
+  - diskdrive
+  - time
+
+smartmontools_version: "7.5"
+smartmontools_installer:
+  url: https://github.com/smartmontools/smartmontools/releases/download/RELEASE_7_5/smartmontools-7.5.win32-setup.exe
+  sha256: 896337fcc253220614cf8cdbd5cf2321c5aa326a37a04160a672a281e6104c70
+smartmontools_smartctl: 'C:\Program Files\smartmontools\bin\smartctl.exe'
+
+smartctl_exporter_version: 0.14.0
+smartctl_exporter_zip:
+  url: https://github.com/prometheus-community/smartctl_exporter/releases/download/v0.14.0/smartctl_exporter-0.14.0.windows-amd64.zip
+  sha256: dc4345fdc877e9e70afc510df293b1ec59f11e0d7a847a3482290aa7f4b0340a
+# smartctl_exporter.exe inside that zip.
+smartctl_exporter_exe_sha256: 90ada171056f21cb04ac8255100943b0bf094fb57e62e709039391254eb1cf19
+smartctl_exporter_dir: 'C:\Program Files\smartctl_exporter'
+smartctl_exporter_port: 9633
+smartctl_exporter_task_path: '\Prometheus\'
+smartctl_exporter_task_name: smartctl_exporter
+# Drives are re-read every 120s (the cluster scrapes every 60s); the device
+# list is rescanned every 10m, so a hot-plugged drive appears without a restart.
+smartctl_exporter_args: >-
+  --smartctl.path="{{ smartmontools_smartctl }}" --smartctl.interval=120s
+  --smartctl.rescan=10m --web.listen-address=:{{ smartctl_exporter_port }} --log.level=warn
+
+# Firewall rules admit only this subnet. Empty = read it from the vEthernet
+# (WSL) adapter.
+windows_monitoring_wsl_subnet: ""
+
+windows_monitoring_cache: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/tnwks-ops/windows-monitoring"
+# Installers are copied here only when an install or upgrade is due, and
+# removed afterwards.
+windows_monitoring_staging: 'C:\Windows\Temp\tnwks-monitoring'

@@ -1,0 +1,36 @@
+---
+# Controller side (localhost, runs for real in check mode too: it only fills
+# the local cache). Downloads the pinned installers and checks their SHA-256.
+
+- name: Cache directory
+  ansible.builtin.file:
+    path: "{{ windows_monitoring_cache }}"
+    state: directory
+    mode: "0755"
+
+- name: Download pinned artifacts
+  ansible.builtin.get_url:
+    url: "{{ item.url }}"
+    dest: "{{ windows_monitoring_cache }}/{{ item.url | basename }}"
+    checksum: "sha256:{{ item.sha256 }}"
+    mode: "0644"
+  loop:
+    - "{{ windows_exporter_msi }}"
+    - "{{ smartmontools_installer }}"
+    - "{{ smartctl_exporter_zip }}"
+  loop_control:
+    label: "{{ item.url | basename }}"
+
+- name: Extract smartctl_exporter
+  ansible.builtin.unarchive:
+    src: "{{ windows_monitoring_cache }}/{{ smartctl_exporter_zip.url | basename }}"
+    dest: "{{ windows_monitoring_cache }}"
+    remote_src: true
+    creates: "{{ windows_monitoring_cache }}/smartctl_exporter-{{ smartctl_exporter_version }}.windows-amd64/smartctl_exporter.exe"
+
+- name: Check the extracted smartctl_exporter.exe
+  ansible.builtin.stat:
+    path: "{{ windows_monitoring_cache }}/smartctl_exporter-{{ smartctl_exporter_version }}.windows-amd64/smartctl_exporter.exe"
+    checksum_algorithm: sha256
+  register: windows_monitoring_se_exe
+  failed_when: windows_monitoring_se_exe.stat.checksum | default('') != smartctl_exporter_exe_sha256

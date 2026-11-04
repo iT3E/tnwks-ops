@@ -1,0 +1,167 @@
+---
+# Windows host side. Check-mode safe; `--check --diff` after an apply reports
+# no changes. Run controller.yml on localhost first (the playbook does).
+
+- name: Firewall subnet
+  ansible.builtin.set_fact:
+    windows_monitoring_subnet: "{{ windows_monitoring_wsl_subnet or windows_wsl_subnet }}"
+
+# --- windows_exporter --------------------------------------------------------
+
+- name: Installed windows_exporter version
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      $p = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue |
+          Where-Object { $_.DisplayName -eq 'windows_exporter' } | Select-Object -First 1
+      "$($p.DisplayVersion)"
+  check_mode: false
+  register: windows_exporter_installed
+
+# Written before the MSI runs, which reads it through CONFIG_FILE.
+- name: windows_exporter config.yaml (collectors)
+  ansible.windows.win_copy:
+    content: "collectors:\n  enabled: {{ windows_exporter_collectors | join(',') }}\n"
+    dest: '{{ windows_exporter_dir }}\config.yaml'
+  notify: Restart windows_exporter
+
+- name: windows_exporter {{ windows_exporter_version }}
+  when: (windows_exporter_installed.output | first | default('')) != windows_exporter_version
+  block:
+    - name: Stage the windows_exporter MSI
+      ansible.windows.win_copy:
+        src: "{{ windows_monitoring_cache }}/{{ windows_exporter_msi.url | basename }}"
+        dest: '{{ windows_monitoring_staging }}\'
+
+    - name: Install windows_exporter
+      ansible.windows.win_package:
+        path: '{{ windows_monitoring_staging }}\{{ windows_exporter_msi.url | basename }}'
+        arguments: 'CONFIG_FILE="{{ windows_exporter_dir }}\config.yaml"'
+        state: present
+      notify: Restart windows_exporter
+
+- name: windows_exporter service runs at boot
+  ansible.windows.win_service:
+    name: windows_exporter
+    start_mode: delayed
+    state: started
+  register: windows_exporter_service
+  # A check run can't look at a service the MSI hasn't installed yet.
+  when: not (ansible_check_mode and (windows_exporter_installed.output | first | default('')) == '')
+
+- name: windows_exporter reads that config.yaml
+  ansible.builtin.assert:
+    that: windows_exporter_service.path is search('--config.file="' ~ (windows_exporter_dir ~ '\config.yaml') | regex_escape ~ '"')
+    fail_msg: "windows_exporter runs {{ windows_exporter_service.path }}"
+    quiet: true
+  when: windows_exporter_service is not skipped
+
+# --- smartmontools -----------------------------------------------------------
+
+- name: Installed smartmontools version
+  ansible.windows.win_powershell:
+    parameters:
+      Smartctl: "{{ smartmontools_smartctl }}"
+    script: |
+      param([string]$Smartctl)
+      $Ansible.Changed = $false
+      if (Test-Path $Smartctl) { ((& $Smartctl --version | Select-Object -First 1) -split ' ')[1] } else { '' }
+  check_mode: false
+  register: smartmontools_installed
+
+- name: smartmontools {{ smartmontools_version }}
+  when: (smartmontools_installed.output | first | default('')) != smartmontools_version
+  block:
+    - name: Stage the smartmontools installer
+      ansible.windows.win_copy:
+        src: "{{ windows_monitoring_cache }}/{{ smartmontools_installer.url | basename }}"
+        dest: '{{ windows_monitoring_staging }}\'
+
+    - name: Install smartmontools (silent NSIS installer)
+      ansible.windows.win_command:
+        argv:
+          - '{{ windows_monitoring_staging }}\{{ smartmontools_installer.url | basename }}'
+          - /S
+
+# --- smartctl_exporter -------------------------------------------------------
+
+- name: Installed smartctl_exporter binary
+  ansible.windows.win_stat:
+    path: '{{ smartctl_exporter_dir }}\smartctl_exporter.exe'
+    checksum_algorithm: sha256
+  register: smartctl_exporter_exe
+
+- name: smartctl_exporter {{ smartctl_exporter_version }}
+  when: smartctl_exporter_exe.stat.checksum | default('') | lower != smartctl_exporter_exe_sha256
+  block:
+    - name: Stop the running exporter so its binary can be replaced
+      ansible.windows.win_powershell:
+        parameters:
+          TaskPath: "{{ smartctl_exporter_task_path }}"
+          TaskName: "{{ smartctl_exporter_task_name }}"
+        script: |
+          [CmdletBinding(SupportsShouldProcess)]
+          param([string]$TaskPath, [string]$TaskName)
+          if ($PSCmdlet.ShouldProcess($TaskName, 'stop')) {
+              Stop-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue
+              Get-Process smartctl_exporter -ErrorAction SilentlyContinue | Stop-Process -Force
+          }
+
+    - name: smartctl_exporter files
+      ansible.windows.win_copy:
+        src: "{{ windows_monitoring_cache }}/smartctl_exporter-{{ smartctl_exporter_version }}.windows-amd64/{{ item }}"
+        dest: '{{ smartctl_exporter_dir }}\{{ item }}'
+      loop: [smartctl_exporter.exe, LICENSE]
+
+- name: smartctl_exporter task (SYSTEM, at boot, restarted on failure)
+  tnwks_win_scheduled_task:
+    path: "{{ smartctl_exporter_task_path }}"
+    name: "{{ smartctl_exporter_task_name }}"
+    xml: "{{ lookup('ansible.builtin.template', 'smartctl_exporter.xml.j2') }}"
+    running: true
+
+- name: Installers are not left behind
+  ansible.windows.win_file:
+    path: "{{ windows_monitoring_staging }}"
+    state: absent
+
+# --- firewall: both exporters, WSL subnet only -------------------------------
+
+- name: Firewall rules (WSL subnet only)
+  ansible.windows.win_firewall_rule:
+    name: "{{ item.name }}"
+    localport: "{{ item.port }}"
+    protocol: tcp
+    direction: in
+    action: allow
+    remoteip: "{{ windows_monitoring_subnet }}"
+    enabled: true
+    state: present
+  loop:
+    - { name: windows_exporter (Prometheus), port: "{{ windows_exporter_port }}" }
+    - { name: smartctl_exporter (Prometheus), port: "{{ smartctl_exporter_port }}" }
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+# --- verify ------------------------------------------------------------------
+
+- name: Exporters answer with their key series
+  ansible.windows.win_uri:
+    url: "http://localhost:{{ item.port }}/metrics"
+    return_content: true
+  register: windows_monitoring_probe
+  until: windows_monitoring_probe.content is defined and item.expect in windows_monitoring_probe.content
+  retries: 10
+  delay: 3
+  loop:
+    - { name: windows_exporter, port: "{{ windows_exporter_port }}", expect: windows_diskdrive_status }
+    - { name: smartctl_exporter, port: "{{ smartctl_exporter_port }}", expect: "smartctl_device{" }
+  loop_control:
+    label: "{{ item.name }}"
+  check_mode: false
+  # Before the first apply there is nothing to probe.
+  when: not (ansible_check_mode and smartctl_exporter_exe.stat.exists is false)
+  no_log: false

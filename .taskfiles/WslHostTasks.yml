@@ -70,7 +70,7 @@ tasks:
         msg: "the Coral detector role builds on the controller: sudo apt-get install -y gcc-mingw-w64-x86-64 p7zip-full unzip"
 
   windows-apply:
-    desc: Apply the Windows host playbook (Coral detector service, ...)
+    desc: Apply the Windows host playbook (Coral detector service, monitoring agents, ...)
     dir: "{{.ANSIBLE_DIR}}"
     env: *windows_env
     cmds:
@@ -78,15 +78,16 @@ tasks:
     preconditions: *windows_pre
 
   monitoring:
-    desc: Install/update the Windows host's monitoring agents (windows_exporter, smartctl_exporter) and scope their firewall rules (UAC prompt)
+    desc: Install/update the Windows host's monitoring agents (windows_exporter, smartctl_exporter) and their firewall rules (Ansible, role windows_monitoring)
     cmds:
-      - "{{.WSL_HOST_DIR}}/invoke-elevated.sh {{.WSL_HOST_DIR}}/Install-TnwksWindowsMonitoring.ps1"
+      - task: windows-apply
+        vars: { CLI_ARGS: "--tags monitoring" }
 
   monitoring-check:
-    desc: Report drift between the Windows host's monitoring agents and the repo; changes nothing (UAC prompt)
+    desc: Show drift of the Windows host's monitoring agents (--check --diff, role windows_monitoring); changes nothing
     cmds:
-      # The script exits 2 when something differs.
-      - "{{.WSL_HOST_DIR}}/invoke-elevated.sh {{.WSL_HOST_DIR}}/Install-TnwksWindowsMonitoring.ps1 -Check || [ $? -eq 2 ]"
+      - task: windows-check
+        vars: { CLI_ARGS: "--tags monitoring" }
 
   unifi-backup:
     desc: Install the daily copy of the UniFi controller backup to Google Drive (systemd timer, 02:30)

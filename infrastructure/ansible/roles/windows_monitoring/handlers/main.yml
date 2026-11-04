@@ -1,0 +1,6 @@
+---
+- name: Restart windows_exporter
+  ansible.windows.win_service:
+    name: windows_exporter
+    state: restarted
+  when: not (ansible_check_mode and (windows_exporter_installed.output | first | default('')) == '')
