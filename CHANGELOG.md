@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.113.1 - 2026-11-04
+
+### Fixed
+
+* FinanceSyncNeverSucceeded waits until a finance CronJob's first run was actually due, so a new weekly job no longer alerts days before its first Monday run.
+
 ## v1.113.0 - 2026-11-04
 
 ### Added
