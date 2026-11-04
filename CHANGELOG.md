@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.111.2 - 2026-11-04
+
+### Fixed
+
+* Kitchen display holiday effects (falling emoji, crossing characters) stay on the Kitchen dashboard instead of following you to other Home Assistant pages; cards 1.12.1.
+
 ## v1.111.1 - 2026-11-04
 
 ### Fixed
