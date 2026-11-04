@@ -1,0 +1,3 @@
+kind: Changed
+body: "The Windows host's monitoring agents (windows_exporter, smartmontools, smartctl_exporter, their task and firewall rules) are now the Ansible role windows_monitoring, run by task wsl-host:monitoring and wsl-host:monitoring-check; Install-TnwksWindowsMonitoring.ps1 is removed. Scheduled tasks on the host are declared as whole task XML through the new tnwks_win_scheduled_task module."
+time: 2026-11-03T23:15:00.000000000-08:00

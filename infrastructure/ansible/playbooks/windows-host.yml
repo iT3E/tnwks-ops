@@ -6,7 +6,8 @@
 #   task wsl-host:windows-check   # --check --diff, changes nothing
 #   task wsl-host:windows-apply
 #
-# Bootstrap sshd first (task wsl-host:sshd).
+# Bootstrap sshd first (task wsl-host:sshd). Scheduled tasks go through
+# library/tnwks_win_scheduled_task.ps1 (whole task XML, diffed in check mode).
 
 - name: Controller cache for the Windows host
   hosts: localhost
@@ -15,17 +16,52 @@
   become: false
   # Only fills ~/.cache on the controller, so it also runs under --check.
   check_mode: false
-  tags: [coral-detector]
   tasks:
     - name: Coral detector artifacts
       ansible.builtin.include_role:
         name: ../roles/windows_coral_detector
         tasks_from: controller.yml
+        apply:
+          tags: [coral-detector]
+      tags: [coral-detector]
+
+    - name: Monitoring agent artifacts
+      ansible.builtin.include_role:
+        name: ../roles/windows_monitoring
+        tasks_from: controller.yml
+        apply:
+          tags: [monitoring]
+      tags: [monitoring]
 
 - name: Windows host
   hosts: windows
   gather_facts: false
   become: false
+  pre_tasks:
+    - name: Read the vEthernet (WSL) address and subnet
+      ansible.windows.win_powershell:
+        script: |
+          $ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+              Where-Object { $_.InterfaceAlias -like 'vEthernet (WSL*' } | Select-Object -First 1
+          if (-not $ip) { throw 'no vEthernet (WSL) adapter; is WSL running?' }
+          $Ansible.Changed = $false
+          $bytes = ([Net.IPAddress]$ip.IPAddress).GetAddressBytes()
+          [Array]::Reverse($bytes)
+          $mask = [uint32]([math]::Pow(2, 32) - [math]::Pow(2, 32 - $ip.PrefixLength))
+          $net = [BitConverter]::GetBytes([BitConverter]::ToUInt32($bytes, 0) -band $mask)
+          [Array]::Reverse($net)
+          @{ address = $ip.IPAddress; subnet = '{0}/{1}' -f ([Net.IPAddress]$net).IPAddressToString, $ip.PrefixLength }
+      check_mode: false
+      register: windows_wsl_ip
+      tags: [always]
+
+    - name: WSL address facts
+      ansible.builtin.set_fact:
+        windows_wsl_address: "{{ windows_wsl_ip.output[0].address }}"
+        windows_wsl_subnet: "{{ windows_wsl_ip.output[0].subnet }}"
+      tags: [always]
   roles:
     - role: ../roles/windows_coral_detector
       tags: [coral-detector]
+    - role: ../roles/windows_monitoring
+      tags: [monitoring]

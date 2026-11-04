@@ -3,8 +3,17 @@
 The Windows host under the WSL cluster (DESKTOP-HKE05KI) is configured from
 this repo with Ansible over its built-in OpenSSH server. Goal: every host
 change is declarative, idempotent and reviewable, with a `--check --diff`
-run that shows drift. The first component on it is the
-[Coral detector](coral-detector.md).
+run that shows drift.
+
+## What it manages
+
+| Role (tag)                                  | What                                                                                                   |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `windows_coral_detector` (`coral-detector`) | the [Coral detector](coral-detector.md) services, driver, firewall rules                               |
+| `windows_monitoring` (`monitoring`)         | windows_exporter (MSI, `config.yaml` collectors, service), smartmontools, smartctl_exporter and its task, firewall rules |
+
+Run one role with `task wsl-host:windows-check -- --tags <tag>` (or
+`windows-apply`).
 
 Why Ansible: Windows over SSH has been official since ansible-core 2.18,
 WinRM stays off, the playbooks live next to the existing ones, SOPS works
@@ -21,6 +30,7 @@ scheduled tasks, firewall rules and portproxy and has no SOPS story.
 | `infrastructure/ansible/requirements.yml`              | `ansible.windows`, `community.windows` (pinned)                          |
 | `infrastructure/ansible/inventory/windows.yml`         | the host, its connection settings, `coral_detector_devices`              |
 | `infrastructure/ansible/playbooks/windows-host.yml`    | controller cache play, then the Windows roles                            |
+| `infrastructure/ansible/playbooks/library/`            | `tnwks_win_scheduled_task`, scheduled tasks as whole task XML            |
 | `.taskfiles/WslHostTasks.yml`                          | `wsl-host:windows-init`, `windows-check`, `windows-apply`                |
 
 **Controller.** The apt ansible in WSL is 2.16, too old for Windows over
@@ -80,6 +90,30 @@ change" without changing anything. On a host that never had the role, a
 check run skips the ACL and service-state tasks that need the directory tree
 and the service to exist.
 
+## Scheduled tasks
+
+Roles declare each Scheduled Task as the full task XML, in the form
+`Export-ScheduledTask` prints it (a template per task), through the module
+`playbooks/library/tnwks_win_scheduled_task.ps1`. It compares the template
+with the registered task after dropping registration metadata (date, author,
+URI, schema version, comments) and turning account names into SIDs, shows the
+difference as an XML diff, and registers the template with
+`Register-ScheduledTask -Xml` when they differ. `running: true` also starts a
+long-running task that isn't running.
+
+Why not `community.windows.win_scheduled_task`: it models the definition as
+options, and fields it doesn't model go unchecked. A template is the exact
+definition Task Scheduler stores, so adopting a hand-made task is a copy of
+its export, and check mode compares every field.
+
+Write templates in full. Task Scheduler fills in defaults
+(`DisallowStartIfOnBatteries`, `IdleSettings`, `MultipleInstancesPolicy`,
+`UseUnifiedSchedulingEngine`, ...) when it registers a task, so a template that
+leaves them out reports a change on every run. To add a task: register it once
+by hand or from a draft template, copy `Export-ScheduledTask -TaskName <name>`
+into the template, and check that `--check` reports no change. S4U tasks
+(desktop user, no stored password) register fine over the SSH session.
+
 A scheduled `--check` (a WSL systemd timer, with the result pushed to a
 healthchecks.io check or a Prometheus textfile) is the obvious next step for
 continuous drift detection.
@@ -88,8 +122,8 @@ continuous drift detection.
 
 Host config that still lives outside this playbook, roughly in order:
 
-1. **Monitoring agents** (`Install-TnwksWindowsMonitoring.ps1`:
-   windows_exporter, smartctl_exporter, their firewall rules) into a role.
+1. Done: monitoring agents (role `windows_monitoring`; it replaced
+   `Install-TnwksWindowsMonitoring.ps1`, which is removed).
 2. **UDP relays** (`Register-TnwksUdpRelays.ps1`, `Start-TnwksUdpRelay.ps1`).
    The installed `Start-TnwksUdpRelay.ps1` differs from `main`.
 3. **LAN bridge** Windows half (`Sync-TnwksLanBridge.ps1`, netsh portproxy,

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<!-- Managed by tnwks-ops (role windows_monitoring). -->
+<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Prometheus smartctl_exporter (SMART disk health) on :{{ smartctl_exporter_port }}</Description>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-5-18</UserId>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <RestartOnFailure>
+      <Count>999</Count>
+      <Interval>PT1M</Interval>
+    </RestartOnFailure>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <IdleSettings>
+      <Duration>PT10M</Duration>
+      <WaitTimeout>PT1H</WaitTimeout>
+      <StopOnIdleEnd>true</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+  </Settings>
+  <Triggers>
+    <BootTrigger />
+  </Triggers>
+  <Actions Context="Author">
+    <Exec>
+      <Command>{{ smartctl_exporter_dir | e }}\smartctl_exporter.exe</Command>
+      <Arguments>{{ smartctl_exporter_args | e }}</Arguments>
+      <WorkingDirectory>{{ smartctl_exporter_dir | e }}</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>

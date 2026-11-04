@@ -55,9 +55,9 @@ there. The UDP relays re-resolve it every 60 seconds.
 The Windows host's own monitoring agents (windows_exporter `:9182`,
 smartctl_exporter `:9633`) are scraped by the cluster from inside the WSL NAT
 subnet, and their firewall rules accept only that subnet, not the LAN. They are
-installed and kept in line by `task wsl-host:monitoring`
-(`Install-TnwksWindowsMonitoring.ps1`; `task wsl-host:monitoring-check` reports
-drift without changing anything).
+installed and kept in line by the Ansible role `windows_monitoring`
+(`task wsl-host:monitoring`; `task wsl-host:monitoring-check` reports drift
+without changing anything, see [windows-ansible.md](windows-ansible.md)).
 
 The router's exports to the desktop:
 
