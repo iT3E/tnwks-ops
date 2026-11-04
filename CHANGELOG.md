@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.111.3 - 2026-11-04
+
+### Fixed
+
+* Frigate detects objects with OpenVINO on the CPU instead of the USB Coral, so the WSL vhci_hcd seqnum overflow can no longer hang detection every few days.
+
 ## v1.111.2 - 2026-11-04
 
 ### Fixed
