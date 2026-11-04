@@ -1,0 +1,90 @@
+---
+# windows_coral_detector: the Coral Edge TPU detector for Frigate's `zmq`
+# detector, as one Windows service per Coral (tnwks-coral-detector-<id>) on the host under the
+# WSL cluster. See docs/wsl/coral-detector.md.
+
+# One Windows service per Coral: <prefix>-<id>, each on its own ports.
+coral_detector_service_prefix: tnwks-coral-detector
+coral_detector_display_name: tnwks Coral detector
+coral_detector_root: 'C:\ProgramData\tnwks-coral-detector'
+
+# The Corals. Adding one is one more list entry (in the inventory).
+#   id      instance name: service <prefix>-<id>, `device` label on its metrics,
+#           ports zmq_port_base + id and metrics_port_base + id (override with
+#           zmq_port / metrics_port)
+#   device  usb:<n> = n-th Coral in libedgetpu's enumeration order, or the
+#           Coral's USB port as edgetpu_list_devices reports it
+#           (/sys/bus/usb/devices/<bus>-<port>), which stays put across
+#           re-enumeration; see docs/wsl/coral-detector.md
+coral_detector_devices:
+  - id: 0
+    device: usb:0
+coral_detector_zmq_port_base: 5555
+coral_detector_metrics_port_base: 9555
+# Firewall rules open the whole range, so adding a Coral needs no rule change.
+coral_detector_max_devices: 4
+
+# The vEthernet (WSL) host address; the play checks it against the adapter.
+coral_detector_listen_address: "{{ ansible_host }}"
+coral_detector_backend: edgetpu
+# NT SERVICE\<service> is each service's virtual account: no password, no
+# rights beyond the ACLs below. It opens the Coral through WinUSB.
+coral_detector_service_account_prefix: 'NT SERVICE\'
+# Models come from this role. Frigate's zmq detector can upload its own model
+# when the server lacks it; that stays off, so nothing on the WSL subnet can
+# write files on the host.
+coral_detector_allow_model_upload: false
+coral_detector_log_level: INFO
+
+# Firewall rules for both port ranges admit only this subnet. Empty = read it from
+# the vEthernet (WSL) adapter.
+coral_detector_wsl_subnet: ""
+
+coral_detector_python_version: 3.9.25
+
+# Pinned downloads, checked by SHA-256 on the controller before anything is
+# copied to the host.
+coral_detector_artifacts:
+  winsw:
+    # .NET Framework 4.6.1 build: runs on the inbox .NET Framework 4.8.
+    url: https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW.NET461.exe
+    sha256: b5066b7bbdfba1293e5d15cda3caaea88fbeab35bd5b38c41c913d492aadfc4f
+  uv:
+    url: https://github.com/astral-sh/uv/releases/download/0.13.7/uv-x86_64-pc-windows-msvc.zip
+    sha256: 0cdc5b38fe5a8168ed6a25814f5ba43c21d313dd3187314fccb37b7cec46e021
+  edgetpu_runtime:
+    url: https://github.com/google-coral/libedgetpu/releases/download/release-grouper/edgetpu_runtime_20221024.zip
+    sha256: 7f17d85e6f21ec861af3f9168043a7ec351b80e08c9f168013ab68e99410aee2
+  libusb:
+    url: https://github.com/libusb/libusb/releases/download/v1.0.30/libusb-1.0.30.7z
+    sha256: 7fb1dfec805b97983763d7d0ae244320da12add1003d4249c96cc4d586398c79
+  model:
+    # Frigate's /edgetpu_model.tflite (SSDLite MobileDet, 320x320 uint8).
+    url: https://github.com/google-coral/test_data/raw/release-frogfish/ssdlite_mobiledet_coco_qat_postprocess_edgetpu.tflite
+    sha256: 4a2be2bbb614e576d56dcb914fa52752bf0f13411512710d355d97faa1b35641
+
+coral_detector_model_name: edgetpu_model.tflite
+coral_detector_libusb_dll: VS2022/MS64/dll/libusb-1.0.dll
+coral_detector_libusb_dll_sha256: 7cbf37e76dae9c840c7e8dbf7348ee8897dcc86c8ba45e46ada60b89411569f7
+# The shim's export list, generated from that DLL by shim/gen-def.sh.
+coral_detector_libusb_def: libusb-1.0.30.def
+coral_detector_edgetpu_dll: edgetpu_runtime/libedgetpu/direct/x64_windows/edgetpu.dll
+coral_detector_edgetpu_dll_sha256: c29d8fb22cb16010d74e7b61a98ef7993fa382b8c43b60b7f8cb1b1be0b0ca89
+# Signer of the Coral WinUSB driver catalogs (Google LLC; expired 2021, the
+# catalogs are timestamped).
+coral_detector_driver_cert_thumbprint: CB7E84887F3C6015FE7EDFB4F8F36DF7DC10590E
+coral_detector_driver_files:
+  - Coral_USB_Accelerator.inf
+  - Coral_USB_Accelerator.cat
+  - Coral_USB_Accelerator_(DFU).inf
+  - Coral_USB_Accelerator_(DFU).cat
+  - amd64/WdfCoInstaller01009.dll
+  - amd64/winusbcoinstaller2.dll
+
+# Controller side: sources in the repo and the download/build cache.
+coral_detector_src: "{{ playbook_dir }}/../../wsl-host/coral-detector"
+coral_detector_cache: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/tnwks-ops/windows-coral-detector"
+coral_detector_shim_id: >-
+  {{ (lookup('ansible.builtin.file', coral_detector_src ~ '/shim/libusb-usbdk-shim.c')
+      ~ lookup('ansible.builtin.file', coral_detector_src ~ '/shim/' ~ coral_detector_libusb_def)
+      ~ lookup('ansible.builtin.file', coral_detector_src ~ '/shim/build.sh')) | hash('sha256') | truncate(12, true, '', 0) }}

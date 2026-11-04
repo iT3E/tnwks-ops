@@ -1,0 +1,4 @@
+# Controller for the Windows host playbooks (playbooks/windows-host.yml).
+# Windows over SSH needs ansible-core >= 2.18; the apt ansible (2.16) keeps
+# running the other playbooks. Used through uv: `task wsl-host:windows-init`.
+ansible-core==2.21.6

@@ -1,0 +1,21 @@
+<!-- Managed by Ansible: tnwks-ops infrastructure/ansible/roles/windows_coral_detector. Local edits are overwritten. -->
+<!-- WinSW 2.12 configuration of the {{ coral_instance.service }} service (docs/wsl/coral-detector.md).
+     The service itself (account, start mode, restart on failure) is set by Ansible's win_service. -->
+<service>
+  <id>{{ coral_instance.service }}</id>
+  <name>{{ coral_detector_display_name }} {{ coral_instance.id }} (Frigate zmq)</name>
+  <description>Coral Edge TPU {{ coral_instance.device }} for Frigate's zmq detector.</description>
+  <executable>{{ coral_detector_root }}\venv\Scripts\python.exe</executable>
+  <arguments>-u -m tnwks_detector --name {{ coral_instance.id }} --backend {{ coral_detector_backend }} --device {{ coral_instance.device }} --lib-dir "{{ coral_detector_root }}\bin" --model-dir "{{ coral_detector_root }}\models" --model {{ coral_detector_model_name }} --listen-address {{ coral_detector_listen_address }} --zmq-port {{ coral_instance.zmq_port }} --metrics-port {{ coral_instance.metrics_port }} --log-level {{ coral_detector_log_level }}{{ ' --allow-model-upload' if coral_detector_allow_model_upload else '' }}</arguments>
+  <workingdirectory>{{ coral_detector_root }}\app</workingdirectory>
+  <env name="PYTHONDONTWRITEBYTECODE" value="1"/>
+  <env name="PYTHONUNBUFFERED" value="1"/>
+  <priority>High</priority>
+  <!-- Ctrl+C first (the server stops cleanly and releases the Coral), killed after this. -->
+  <stoptimeout>15 sec</stoptimeout>
+  <logpath>{{ coral_detector_root }}\logs\{{ coral_instance.id }}</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+</service>

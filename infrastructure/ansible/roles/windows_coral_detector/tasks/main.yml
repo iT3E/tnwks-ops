@@ -1,0 +1,387 @@
+---
+# Windows host side. Idempotent and check-mode safe: `--check --diff` after an
+# apply reports no changes. Run controller.yml on localhost first (the
+# playbook does).
+
+- name: Read the vEthernet (WSL) address
+  ansible.windows.win_powershell:
+    script: |
+      $ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+          Where-Object { $_.InterfaceAlias -like 'vEthernet (WSL*' } | Select-Object -First 1
+      if (-not $ip) { throw 'no vEthernet (WSL) adapter; is WSL running?' }
+      $Ansible.Changed = $false
+      $bytes = ([Net.IPAddress]$ip.IPAddress).GetAddressBytes()
+      [Array]::Reverse($bytes)
+      $mask = [uint32]([math]::Pow(2, 32) - [math]::Pow(2, 32 - $ip.PrefixLength))
+      $net = [BitConverter]::GetBytes([BitConverter]::ToUInt32($bytes, 0) -band $mask)
+      [Array]::Reverse($net)
+      @{ address = $ip.IPAddress; subnet = '{0}/{1}' -f ([Net.IPAddress]$net).IPAddressToString, $ip.PrefixLength }
+  check_mode: false
+  register: coral_detector_wsl_ip
+
+- name: WSL subnet for the firewall rules
+  ansible.builtin.set_fact:
+    coral_detector_subnet: "{{ coral_detector_wsl_subnet or coral_detector_wsl_ip.output[0].subnet }}"
+
+- name: The service listens on the vEthernet (WSL) address
+  ansible.builtin.assert:
+    that: coral_detector_wsl_ip.output[0].address == coral_detector_listen_address
+    fail_msg: >-
+      vEthernet (WSL) is {{ coral_detector_wsl_ip.output[0].address }}, the inventory says
+      {{ coral_detector_listen_address }}; update ansible_host and WINDOWS_HOST_IP together.
+    quiet: true
+
+- name: Directories
+  ansible.windows.win_file:
+    path: "{{ coral_detector_root }}{{ item }}"
+    state: directory
+  loop:
+    [
+      "",
+      '\bin',
+      '\app',
+      '\app\tnwks_detector',
+      '\models',
+      '\logs',
+      '\driver',
+      '\driver\amd64',
+      '\python',
+      '\uv-cache',
+    ]
+  register: coral_detector_dirs
+
+- name: Note whether this is a check run against a host without the service yet
+  ansible.builtin.set_fact:
+    # ACL and service-state tasks can't be simulated before the tree and the
+    # service exist; they are skipped in that one case.
+    coral_detector_fresh_check: "{{ ansible_check_mode and coral_detector_dirs.results[0] is changed }}"
+
+- name: Detector instances (one per Coral)
+  ansible.builtin.set_fact:
+    coral_detector_instances: >-
+      {%- set out = [] -%}
+      {%- for d in coral_detector_devices -%}
+      {%-   set name = coral_detector_service_prefix ~ '-' ~ d.id -%}
+      {%-   set _ = out.append({
+              'id': d.id | string,
+              'device': d.device | default('usb:' ~ d.id),
+              'service': name,
+              'account': coral_detector_service_account_prefix ~ name,
+              'zmq_port': d.zmq_port | default(coral_detector_zmq_port_base + d.id | int),
+              'metrics_port': d.metrics_port | default(coral_detector_metrics_port_base + d.id | int),
+            }) -%}
+      {%- endfor -%}
+      {{ out }}
+
+- name: Instance ids are unique and inside the firewall port ranges
+  ansible.builtin.assert:
+    that:
+      - coral_detector_instances | map(attribute='id') | unique | length == coral_detector_instances | length
+      - coral_detector_instances | map(attribute='zmq_port') | max < coral_detector_zmq_port_base + coral_detector_max_devices
+      - coral_detector_instances | map(attribute='metrics_port') | max < coral_detector_metrics_port_base + coral_detector_max_devices
+    quiet: true
+
+# --- binaries ----------------------------------------------------------------
+
+- name: Binaries (uv, Edge TPU runtime, libusb and its shim)
+  ansible.windows.win_copy:
+    src: "{{ coral_detector_cache }}/{{ item.src }}"
+    dest: '{{ coral_detector_root }}\bin\{{ item.dest }}'
+  loop:
+    - { src: uv/uv.exe, dest: uv.exe }
+    - { src: "{{ coral_detector_edgetpu_dll }}", dest: edgetpu.dll }
+    - { src: libusb/libusb-1.0.dll, dest: libusbreal.dll }
+    - {
+        src: "shim-{{ coral_detector_shim_id }}/libusb-1.0.dll",
+        dest: libusb-1.0.dll,
+      }
+  loop_control:
+    label: "{{ item.dest }}"
+  notify: Restart coral detectors
+
+- name: Model
+  ansible.windows.win_copy:
+    src: "{{ coral_detector_cache }}/{{ coral_detector_artifacts.model.url | basename }}"
+    dest: '{{ coral_detector_root }}\models\{{ coral_detector_model_name }}'
+  notify: Restart coral detectors
+
+# --- driver ------------------------------------------------------------------
+
+- name: Coral WinUSB driver files
+  ansible.windows.win_copy:
+    src: "{{ coral_detector_cache }}/edgetpu_runtime/third_party/coral_accelerator_windows/{{ item }}"
+    dest: '{{ coral_detector_root }}\driver\{{ item | replace("/", "\\") }}'
+  loop: "{{ coral_detector_driver_files }}"
+
+- name: Trust the driver signer (LocalMachine\TrustedPublisher)
+  ansible.windows.win_powershell:
+    parameters:
+      Catalog: '{{ coral_detector_root }}\driver\Coral_USB_Accelerator.cat'
+      Thumbprint: "{{ coral_detector_driver_cert_thumbprint }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Catalog, [string]$Thumbprint)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      if (Get-ChildItem Cert:\LocalMachine\TrustedPublisher | Where-Object Thumbprint -eq $Thumbprint) { return }
+      $Ansible.Changed = $true
+      if (-not (Test-Path $Catalog)) { return }  # check mode before the first copy
+      $cert = (Get-AuthenticodeSignature $Catalog).SignerCertificate
+      if (-not $cert -or $cert.Thumbprint -ne $Thumbprint) { throw "$Catalog is signed by $($cert.Thumbprint), expected $Thumbprint" }
+      if ($PSCmdlet.ShouldProcess($cert.Subject, 'add to LocalMachine\TrustedPublisher')) {
+          $store = New-Object Security.Cryptography.X509Certificates.X509Store('TrustedPublisher', 'LocalMachine')
+          $store.Open('ReadWrite')
+          try { $store.Add($cert) } finally { $store.Close() }
+      }
+
+- name: Coral WinUSB driver (runtime and DFU INFs, never UsbDk)
+  ansible.windows.win_powershell:
+    parameters:
+      DriverDir: '{{ coral_detector_root }}\driver'
+      Infs: [Coral_USB_Accelerator.inf, Coral_USB_Accelerator_(DFU).inf]
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$DriverDir, [string[]]$Infs)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      # pnputil /enum-drivers lists blocks of "Name: value" lines per driver.
+      $drivers = @(); $cur = $null
+      foreach ($line in (pnputil.exe /enum-drivers)) {
+          if ($line -match '^\s*Published Name:\s*(\S+)') { $cur = @{ Published = $Matches[1] }; $drivers += $cur }
+          elseif ($cur -and $line -match '^\s*Original Name:\s*(\S+)') { $cur.Original = $Matches[1].ToLower() }
+          elseif ($cur -and $line -match '^\s*Driver Version:\s*\S+\s+(\S+)') { $cur.Version = $Matches[1] }
+      }
+      foreach ($inf in $Infs) {
+          $path = Join-Path $DriverDir $inf
+          $want = if (Test-Path $path) {
+              if ((Get-Content $path | Select-String -Pattern '^\s*DriverVer\s*=\s*[^,]+,\s*(\S+)' | Select-Object -First 1).Line -match ',\s*(\S+)') { $Matches[1] }
+          }
+          # The INF says 11.25.00.000, pnputil 11.25.0.0: compare as versions.
+          $have = $drivers | Where-Object { $_.Original -eq $inf.ToLower() -and (-not $want -or [version]$_.Version -eq [version]$want) }
+          if ($have) { continue }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($inf, 'pnputil /add-driver /install')) {
+              $out = pnputil.exe /add-driver $path /install 2>&1 | Out-String
+              # 0 = added, 259 = added but no matching device present right now.
+              if ($LASTEXITCODE -notin @(0, 259, 3010)) { throw "pnputil /add-driver $inf failed ($LASTEXITCODE): $out" }
+          }
+      }
+
+- name: Coral is present and bound to WinUSB
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      $dev = Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match 'VID_18D1&PID_9302|VID_1A6E&PID_089A' }
+      @($dev | ForEach-Object { @{ id = $_.InstanceId; status = "$($_.Status)"; service = "$($_.Service)"; name = $_.FriendlyName } })
+  check_mode: false
+  register: coral_detector_device
+  failed_when: >-
+    coral_detector_device.output | length == 0
+    or (coral_detector_device.output | selectattr('status', 'equalto', 'OK') | selectattr('service', 'equalto', 'WINUSB') | list | length) == 0
+
+# --- Python ------------------------------------------------------------------
+
+- name: Python {{ coral_detector_python_version }} (uv-managed, no registry or PATH entries)
+  ansible.windows.win_command:
+    argv:
+      - '{{ coral_detector_root }}\bin\uv.exe'
+      - python
+      - install
+      - --no-bin
+      - --no-registry
+      - "{{ coral_detector_python_version }}"
+    creates: '{{ coral_detector_root }}\python\cpython-{{ coral_detector_python_version }}-windows-x86_64-none\python.exe'
+  environment:
+    UV_PYTHON_INSTALL_DIR: '{{ coral_detector_root }}\python'
+    UV_CACHE_DIR: '{{ coral_detector_root }}\uv-cache'
+
+- name: Virtualenv
+  ansible.windows.win_command:
+    argv:
+      - '{{ coral_detector_root }}\bin\uv.exe'
+      - venv
+      - --python
+      - '{{ coral_detector_root }}\python\cpython-{{ coral_detector_python_version }}-windows-x86_64-none\python.exe'
+      - '{{ coral_detector_root }}\venv'
+    creates: '{{ coral_detector_root }}\venv\Scripts\python.exe'
+  environment:
+    UV_CACHE_DIR: '{{ coral_detector_root }}\uv-cache'
+  notify: Restart coral detectors
+
+- name: Python requirements (hash-pinned)
+  ansible.windows.win_copy:
+    src: "{{ coral_detector_src }}/requirements.txt"
+    dest: '{{ coral_detector_root }}\requirements.txt'
+
+- name: Python packages match requirements.txt exactly
+  ansible.windows.win_powershell:
+    parameters:
+      Uv: '{{ coral_detector_root }}\bin\uv.exe'
+      Python: '{{ coral_detector_root }}\venv\Scripts\python.exe'
+      Requirements: '{{ coral_detector_root }}\requirements.txt'
+      Cache: '{{ coral_detector_root }}\uv-cache'
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Uv, [string]$Python, [string]$Requirements, [string]$Cache)
+      $ErrorActionPreference = 'Continue'
+      $Ansible.Changed = $false
+      if (-not (Test-Path $Python) -or -not (Test-Path $Uv) -or -not (Test-Path $Requirements)) { $Ansible.Changed = $true; return }
+      $env:UV_CACHE_DIR = $Cache
+      $sync = @('pip', 'sync', '--require-hashes', '--python', $Python, $Requirements)
+      $dry = (& $Uv @sync --dry-run 2>&1 | ForEach-Object { "$_" }) -join "`n"
+      if ($LASTEXITCODE -ne 0) { throw "uv pip sync --dry-run failed: $dry" }
+      if ($dry -match 'Would make no changes') { return }
+      $Ansible.Changed = $true
+      $dry
+      if ($PSCmdlet.ShouldProcess($Python, 'uv pip sync')) {
+          $out = (& $Uv @sync 2>&1 | ForEach-Object { "$_" }) -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw "uv pip sync failed: $out" }
+          $out
+      }
+  notify: Restart coral detectors
+
+# --- server code -------------------------------------------------------------
+
+- name: Server package directories
+  ansible.windows.win_file:
+    path: '{{ coral_detector_root }}\app\tnwks_detector\{{ item.path | replace("/", "\\") }}'
+    state: directory
+  loop: "{{ query('community.general.filetree', coral_detector_src ~ '/tnwks_detector') | selectattr('state', 'equalto', 'directory') | rejectattr('path', 'search', '(^|/)(__pycache__|\\.)') | list }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Server package (tnwks_detector)
+  ansible.windows.win_copy:
+    src: "{{ item.src }}"
+    dest: '{{ coral_detector_root }}\app\tnwks_detector\{{ item.path | replace("/", "\\") }}'
+  loop: "{{ query('community.general.filetree', coral_detector_src ~ '/tnwks_detector') | selectattr('state', 'equalto', 'file') | selectattr('path', 'search', '\\.py$') | rejectattr('path', 'search', '(^|/)(__pycache__|\\.)') | list }}"
+  loop_control:
+    label: "{{ item.path }}"
+  notify: Restart coral detectors
+
+# The tree is readable by Users and writable only by Administrators and SYSTEM
+# (ProgramData would let any user add files, i.e. DLLs next to the server).
+# Each service account reads everything and writes only its own logs\<id>.
+- name: ACL on {{ coral_detector_root }}
+  ansible.windows.win_acl:
+    path: "{{ coral_detector_root }}"
+    user: "{{ item.user }}"
+    rights: "{{ item.rights }}"
+    type: allow
+    state: present
+    inherit: ContainerInherit, ObjectInherit
+    propagation: None
+  loop:
+    - { user: "S-1-5-18", rights: FullControl }
+    - { user: "S-1-5-32-544", rights: FullControl }
+    - { user: "S-1-5-32-545", rights: ReadAndExecute }
+  loop_control:
+    label: "{{ item.user }} {{ item.rights }}"
+  when: not coral_detector_fresh_check
+
+- name: No inherited ACL on {{ coral_detector_root }}
+  ansible.windows.win_acl_inheritance:
+    path: "{{ coral_detector_root }}"
+    state: absent
+    reorganize: false
+  when: not coral_detector_fresh_check
+
+# --- services ----------------------------------------------------------------
+
+- name: Detector services
+  ansible.builtin.include_tasks: instance.yml
+  loop: "{{ coral_detector_instances }}"
+  loop_control:
+    loop_var: coral_instance
+    label: "{{ coral_instance.service }} {{ coral_instance.device }} :{{ coral_instance.zmq_port }}"
+
+- name: Installed detector services
+  ansible.windows.win_service_info:
+    name: "{{ coral_detector_service_prefix }}*"
+  register: coral_detector_installed
+
+- name: Services for Corals no longer in coral_detector_devices are removed
+  ansible.windows.win_service:
+    name: "{{ item }}"
+    state: absent
+  loop: >-
+    {{ coral_detector_installed.services | map(attribute='name')
+       | select('match', '^' ~ (coral_detector_service_prefix | regex_escape) ~ '(-\d+)?$')
+       | difference(coral_detector_instances | map(attribute='service')) | list }}
+  register: coral_detector_removed
+
+- name: Their event log sources are removed too
+  ansible.windows.win_regedit:
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\Application\{{ item.item }}'
+    state: absent
+    delete_key: true
+  loop: "{{ coral_detector_removed.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Their WinSW wrappers are removed too
+  ansible.windows.win_file:
+    path: '{{ coral_detector_root }}\bin\{{ item.0.item }}.{{ item.1 }}'
+    state: absent
+  loop: "{{ coral_detector_removed.results | default([]) | product(['exe', 'xml']) | list }}"
+  loop_control:
+    label: "{{ item.0.item }}.{{ item.1 }}"
+
+# --- firewall ----------------------------------------------------------------
+
+- name: Firewall rules (WSL subnet only, the whole port ranges)
+  ansible.windows.win_firewall_rule:
+    name: "{{ item.name }}"
+    description: "{{ item.description }} Managed by tnwks-ops (windows_coral_detector)."
+    localport: "{{ item.base }}-{{ item.base + coral_detector_max_devices - 1 }}"
+    protocol: tcp
+    direction: in
+    action: allow
+    remoteip: "{{ coral_detector_subnet }}"
+    profiles: [domain, private, public]
+    enabled: true
+    state: present
+  loop:
+    - name: "{{ coral_detector_service_prefix }} zmq (WSL)"
+      base: "{{ coral_detector_zmq_port_base }}"
+      description: Frigate zmq detector requests from the WSL cluster, one port per Coral.
+    - name: "{{ coral_detector_service_prefix }} metrics (WSL)"
+      base: "{{ coral_detector_metrics_port_base }}"
+      description: Prometheus scrapes of the Coral detectors, one port per Coral.
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Spike-era firewall rule is gone
+  ansible.windows.win_firewall_rule:
+    name: tnwks-coral-zmq (spike)
+    state: absent
+
+# --- running -----------------------------------------------------------------
+
+- name: Services are running
+  ansible.windows.win_service:
+    name: "{{ item.service }}"
+    state: started
+  loop: "{{ coral_detector_instances }}"
+  loop_control:
+    label: "{{ item.service }}"
+  when: not (coral_detector_fresh_check or (ansible_check_mode and item.service in coral_detector_new_services | default([])))
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Detectors are ready (device open, model loaded, socket bound)
+  ansible.windows.win_uri:
+    url: "http://{{ coral_detector_listen_address }}:{{ item.metrics_port }}/metrics"
+    return_content: true
+  register: coral_detector_metrics
+  until: >-
+    coral_detector_metrics.content is defined
+    and coral_detector_metrics.content is search('(?m)^tnwks_detector_ready\{device="' ~ item.id ~ '"\} 1\.0$')
+  retries: 30
+  delay: 3
+  loop: "{{ coral_detector_instances }}"
+  loop_control:
+    label: "{{ item.service }}"
+  check_mode: false
+  when: not ansible_check_mode

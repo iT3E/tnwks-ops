@@ -1,0 +1,86 @@
+---
+# One detector service (coral_instance from main.yml's loop).
+
+- name: "{{ coral_instance.service }}: log directory"
+  ansible.windows.win_file:
+    path: '{{ coral_detector_root }}\logs\{{ coral_instance.id }}'
+    state: directory
+
+# WinSW reads <exe name>.xml next to its exe, so each service gets a copy.
+- name: "{{ coral_instance.service }}: WinSW wrapper"
+  ansible.windows.win_copy:
+    src: "{{ coral_detector_cache }}/{{ coral_detector_artifacts.winsw.url | basename }}"
+    dest: '{{ coral_detector_root }}\bin\{{ coral_instance.service }}.exe'
+  register: coral_detector_wrapper_result
+
+- name: "{{ coral_instance.service }}: WinSW configuration"
+  ansible.windows.win_template:
+    src: winsw.xml.j2
+    dest: '{{ coral_detector_root }}\bin\{{ coral_instance.service }}.xml'
+  register: coral_detector_xml_result
+
+- name: "{{ coral_instance.service }}: service"
+  ansible.windows.win_service:
+    name: "{{ coral_instance.service }}"
+    path: '{{ coral_detector_root }}\bin\{{ coral_instance.service }}.exe'
+    display_name: "{{ coral_detector_display_name }} {{ coral_instance.id }} (Frigate zmq)"
+    description: >-
+      Coral Edge TPU {{ coral_instance.device }} for Frigate's zmq detector on the WSL cluster
+      (tcp {{ coral_detector_listen_address }}:{{ coral_instance.zmq_port }}, metrics :{{ coral_instance.metrics_port }}).
+      Managed by tnwks-ops infrastructure/ansible/roles/windows_coral_detector.
+    start_mode: auto
+    username: "{{ coral_instance.account }}"
+    sid_info: unrestricted
+    failure_actions:
+      - { type: restart, delay_ms: 5000 }
+      - { type: restart, delay_ms: 15000 }
+      - { type: restart, delay_ms: 60000 }
+    failure_reset_period_sec: 3600
+    failure_actions_on_non_crash_failure: true
+  register: coral_detector_service_result
+
+- name: "{{ coral_instance.service }}: remember it is new (check mode)"
+  ansible.builtin.set_fact:
+    coral_detector_new_services: "{{ coral_detector_new_services | default([]) + [coral_instance.service] }}"
+  when: ansible_check_mode and coral_detector_service_result is changed
+
+# WinSW logs start/stop to the Application event log under the service name.
+# The virtual account can't register that source itself, so register it here.
+- name: "{{ coral_instance.service }}: Application event log source"
+  ansible.windows.win_regedit:
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\Application\{{ coral_instance.service }}'
+    name: EventMessageFile
+    data: '%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\EventLogMessages.dll'
+    type: expandstring
+
+- name: "{{ coral_instance.service }}: service account access"
+  ansible.windows.win_acl:
+    path: "{{ coral_detector_root }}{{ item.path }}"
+    user: "{{ coral_instance.account }}"
+    rights: "{{ item.rights }}"
+    type: allow
+    state: present
+    inherit: ContainerInherit, ObjectInherit
+    propagation: None
+  loop:
+    - { path: "", rights: ReadAndExecute }
+    - { path: '\logs\{{ coral_instance.id }}', rights: Modify }
+    - {
+        path: '\models',
+        rights: "{{ 'Modify' if coral_detector_allow_model_upload else 'ReadAndExecute' }}",
+      }
+  loop_control:
+    label: "{{ item.path or '\\' }} {{ item.rights }}"
+  # The virtual account only resolves once the service exists.
+  when: not (coral_detector_fresh_check or (ansible_check_mode and coral_detector_service_result is changed))
+
+# Only this instance restarts for its own changes (adding a Coral leaves the
+# others running). A new service is started by main.yml.
+- name: "{{ coral_instance.service }}: restart for its changed configuration"
+  ansible.windows.win_service:
+    name: "{{ coral_instance.service }}"
+    state: restarted
+  when:
+    - coral_detector_wrapper_result is changed or coral_detector_xml_result is changed or coral_detector_service_result is changed
+    - (coral_detector_service_result.exists | default(true)) and coral_detector_service_result.state | default('') == 'running'
+    - not ansible_check_mode
