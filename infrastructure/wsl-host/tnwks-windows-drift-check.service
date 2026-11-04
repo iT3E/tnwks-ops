@@ -1,0 +1,14 @@
+[Unit]
+Description=Nightly Ansible --check of the Windows host, reported to Prometheus (docs/wsl/windows-ansible.md)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=it3e
+Environment=HOME=/home/it3e
+# task, yq and sops come from Homebrew, uvx from ~/.local/bin.
+Environment=PATH=/home/linuxbrew/.linuxbrew/bin:/home/it3e/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/local/bin/tnwks-windows-drift-check
+TimeoutStartSec=30min
+Nice=10

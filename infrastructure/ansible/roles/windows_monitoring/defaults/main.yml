@@ -19,6 +19,8 @@ windows_exporter_port: 9182
 # time feeds the clock skew panel on the Windows Exporter dashboard
 # (windows_time_current_timestamp_seconds; the NTP counters are absent
 # because W32Time is trigger-start on this desktop).
+# textfile serves the .prom files in <dir>\textfile_inputs, where the nightly
+# drift check (tnwks-windows-drift-check) writes its result.
 windows_exporter_collectors:
   - cpu
   - logical_disk
@@ -30,6 +32,7 @@ windows_exporter_collectors:
   - system
   - diskdrive
   - time
+  - textfile
 
 smartmontools_version: "7.5"
 smartmontools_installer:
