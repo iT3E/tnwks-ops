@@ -1,0 +1,25 @@
+---
+# windows_usb_attach: the Windows-side Z-Stick attach (docs/wsl/usb-passthrough.md).
+# The WSL unit tnwks-usb-attach@0658:0200 (role wsl_usb_attach) keeps the
+# Z-Stick attached from inside WSL; this task is the backup that also
+# restarts worker-2 after a fresh attach, so the device reaches zwave-js-ui.
+# The Coral isn't on usbip any more (docs/wsl/coral-detector.md), so the task
+# passes no Coral IDs and the script leaves it alone.
+
+usb_attach_dir: 'C:\ProgramData\tnwks-usb-attach'
+usb_attach_src: "{{ playbook_dir }}/../../wsl-host/Sync-TnwksUsbAttach.ps1"
+usb_attach_task: tnwks-usb-attach
+# The account that owns the WSL distro (usbipd attach --wsl and docker restart
+# go through its wsl.exe).
+usb_attach_user: "{{ windows_desktop_user }}"
+# Extra script arguments. The usbip fallback for the Coral would add
+# `-CoralDfuVidPid 1a6e:089a -CoralRuntimeVidPid 18d1:9302`.
+usb_attach_args: ""
+
+# Superseded by this role (the task registration and old backups); removed.
+usb_attach_leftovers:
+  - Register-TnwksUsbAttachTask.ps1
+  - Register-TnwksUsbAttachTask.ps1.bak-20260817-202257
+  - Register-TnwksUsbAttachTask.ps1.bak-20261026
+  - Sync-TnwksUsbAttach.ps1.bak-20260817-202257
+  - _validate.ps1

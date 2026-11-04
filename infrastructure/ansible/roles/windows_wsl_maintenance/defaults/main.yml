@@ -1,0 +1,30 @@
+---
+# windows_wsl_maintenance: two host tasks that keep WSL itself in shape.
+#
+#   tnwks-wsl-watchdog  every 5 min and at boot: WSL service up, Ubuntu running,
+#                       the OpenClaw gateway unit active, the Z-Stick attached;
+#                       restarts worker-2 after a cold start of the distro.
+#   tnwks-vhdx-compact  on demand: offline compaction of the WSL vhdx on E:
+#                       (stops WSL and the cluster; homelab-windows-host notes).
+#
+# Both run as the desktop user (S4U, elevated): WSL distros are per-user.
+
+wsl_maintenance_user: "{{ windows_desktop_user }}"
+wsl_maintenance_src: "{{ playbook_dir }}/../../wsl-host"
+
+wsl_watchdog_dir: 'C:\ProgramData\tnwks-watchdog'
+wsl_watchdog_task: tnwks-wsl-watchdog
+vhdx_compact_dir: 'C:\ProgramData\tnwks-vhdx-compact'
+vhdx_compact_task: tnwks-vhdx-compact
+
+# Superseded by this role (registration and verification one-offs, their
+# output, old backups); removed.
+wsl_maintenance_leftovers:
+  - '{{ wsl_watchdog_dir }}\Register-Watchdog.ps1'
+  - '{{ wsl_watchdog_dir }}\Verify-Watchdog.ps1'
+  - '{{ wsl_watchdog_dir }}\Disable-OldTask.ps1'
+  - '{{ wsl_watchdog_dir }}\reg-out.txt'
+  - '{{ wsl_watchdog_dir }}\verify-out.txt'
+  - '{{ wsl_watchdog_dir }}\dis-out.txt'
+  - '{{ vhdx_compact_dir }}\Register-CompactTask.ps1'
+  - '{{ vhdx_compact_dir }}\Compact-WslVhdx.ps1.bak-20261031'
