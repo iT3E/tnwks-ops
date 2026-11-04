@@ -21,14 +21,27 @@ database:
 # every 3-4 days of WSL uptime, every URB unlink then fails, and the detector
 # hangs until vhci_hcd is reloaded (2026-10-29, 2026-11-03). OpenVINO
 # benchmarked at 8.1ms/inference on 2 i9-14900KF threads (Coral ~10ms) and
-# never touches USB. Frigate fills in the model for an openvino detector
-# (300x300 ssdlite_mobilenet_v2 from /openvino-model, nhwc, bgr), so no
-# `model:` block is needed. The Coral stays attached for now as a fallback:
-# to go back, restore `coral: {type: edgetpu, device: usb}` here.
+# never touches USB.
+# The Coral stays attached for now as a fallback: to go back, restore
+# `coral: {type: edgetpu, device: usb}` here and drop the `model:` block.
 detectors:
   ov:
     type: openvino
     device: CPU
+
+# The OpenVINO default model, spelled out. Frigate 0.18.2 fills these in on
+# the detector's own model only, and sizes each camera's detection shm from
+# it (300x300), while the camera processes read this top-level `model:`
+# (default 320x320). Without it every camera processor dies at start with
+# "TypeError: buffer is too small for requested array" and detection never
+# runs (2026-11-03).
+model:
+  width: 300
+  height: 300
+  input_tensor: nhwc
+  input_pixel_format: bgr
+  path: /openvino-model/ssdlite_mobilenet_v2.xml
+  labelmap_path: /openvino-model/coco_91cl_bkgr.txt
 
 ffmpeg:
   global_args: ["-hide_banner", "-loglevel", "warning"]
