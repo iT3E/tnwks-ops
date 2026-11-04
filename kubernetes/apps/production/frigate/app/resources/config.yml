@@ -14,34 +14,28 @@ mqtt:
 database:
   path: /data/frigate.db
 
-# OpenVINO on the CPU instead of the USB Coral. The Coral reaches the pod
-# through usbipd + the WSL vhci_hcd driver, and that driver has a seqnum bug
-# (vhci_urb_dequeue stores the unlink seqnum without a (u32) cast; unfixed
-# upstream as of 2026-11): at the Coral's ~8k URBs/s the counter passes 2^31
-# every 3-4 days of WSL uptime, every URB unlink then fails, and the detector
-# hangs until vhci_hcd is reloaded (2026-10-29, 2026-11-03). OpenVINO
-# benchmarked at 8.1ms/inference on 2 i9-14900KF threads (Coral ~10ms) and
-# never touches USB.
-# The Coral stays attached for now as a fallback: to go back, restore
-# `coral: {type: edgetpu, device: usb}` here and drop the `model:` block.
+# The USB Coral on the Windows host, through Frigate's zmq detector
+# (docs/wsl/coral-detector.md). The service tnwks-coral-detector-0 serves it at
+# the vEthernet (WSL) address (WINDOWS_HOST_IP); usbip and its vhci_hcd seqnum
+# overflow, which hung detection every 3-4 days, are out of the path. The
+# detector name coral<id> must match the service's id: the alert
+# CoralDetectorNoInferences joins on it. A second Coral is coral1 at :5556.
+# Back to OpenVINO: `ov: {type: openvino, device: CPU}` plus the 300x300
+# `model:` block from PR #1679.
 detectors:
-  ov:
-    type: openvino
-    device: CPU
+  coral0:
+    type: zmq
+    endpoint: tcp://172.26.80.1:5555
 
-# The OpenVINO default model, spelled out. Frigate 0.18.2 fills these in on
-# the detector's own model only, and sizes each camera's detection shm from
-# it (300x300), while the camera processes read this top-level `model:`
-# (default 320x320). Without it every camera processor dies at start with
-# "TypeError: buffer is too small for requested array" and detection never
-# runs (2026-11-03).
+# Frigate's Edge TPU model (the server loads the same file, pinned by
+# SHA-256 in the windows_coral_detector role; Frigate only sends its name).
 model:
-  width: 300
-  height: 300
+  width: 320
+  height: 320
   input_tensor: nhwc
-  input_pixel_format: bgr
-  path: /openvino-model/ssdlite_mobilenet_v2.xml
-  labelmap_path: /openvino-model/coco_91cl_bkgr.txt
+  input_pixel_format: rgb
+  path: /edgetpu_model.tflite
+  labelmap_path: /labelmap.txt
 
 ffmpeg:
   global_args: ["-hide_banner", "-loglevel", "warning"]
