@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.118.1 - 2026-11-04
+
+### Fixed
+
+* Frigate sv3c_west: a motion mask over the eave and the clock overlay (which counted as motion all night and kept the playhouse in front of the detector) and a person mask on the playhouse's front wall, which the Coral model scored as a person at night and set off two false night alerts.
+
 ## v1.118.0 - 2026-11-04
 
 ### Added
