@@ -551,7 +551,10 @@ back to `default` in the week after it; one picked after the holiday stays
 (the pick time is `last_changed` of the select on the wall display, which an
 HA restart resets, so a restart in that week can leave one up; for everyone
 else it's saved with the pick). The screensaver just follows the select.
-Animations respect the device's reduced-motion setting.
+Animations respect the device's reduced-motion setting. The falling emoji and
+the characters sit on a layer over the whole page, so they show only while
+the Kitchen dashboard is open: on any other HA page in the same tab they're
+hidden and paused, and they come back with the dashboard.
 
 Calendars, the meal plan and extra to-do lists are integrations, so they're
 UI-owned. The dashboard expects `calendar.family` (the family Google
