@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.12.0";
+const VERSION = "1.12.1";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -698,7 +698,7 @@ const Theme = {
   },
   _cameo(th, pick) {
     const root = this._host?.shadowRoot;
-    if (!root || document.visibilityState !== "visible") return;
+    if (!root || !Bars.owners.size || document.visibilityState !== "visible") return;
     const c = pick || th.cameo[Math.floor(Math.random() * th.cameo.length)];
     if (c.kind === "fireworks") {
       for (let i = 0; i < 4; i++)
@@ -719,7 +719,13 @@ const Theme = {
     return this.palette?.bg || DARK_BG;
   },
   // A dozen slow emoji over the page. Only transform and opacity animate, so
-  // the tablet's GPU does the work and the cards never re-layout.
+  // the tablet's GPU does the work and the cards never re-layout. The layer
+  // hangs off <body>, outside HA's panels, so it's shown only while the
+  // Kitchen dashboard is on screen (a kitchen-pages-card is in Bars.owners);
+  // on other HA pages it's hidden, which also stops its animations.
+  showFx() {
+    if (this._host) this._host.style.display = Bars.owners.size ? "" : "none";
+  },
   _particles(th) {
     this._host?.remove();
     this._host = null;
@@ -742,6 +748,7 @@ const Theme = {
     root.innerHTML = html;
     document.body.appendChild(host);
     this._host = host;
+    this.showFx();
   },
 };
 
@@ -1481,10 +1488,12 @@ const Bars = {
   attach(card) {
     this.owners.add(card);
     this.update();
+    Theme.showFx();
   },
   detach(card) {
     this.owners.delete(card);
     this.update();
+    Theme.showFx();
   },
   update() {
     const want = this.owners.size && !KM.escaped() ? Theme.bg() : null;
