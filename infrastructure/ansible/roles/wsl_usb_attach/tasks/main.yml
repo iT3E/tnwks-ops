@@ -2,7 +2,8 @@
 # wsl_usb_attach — install the attach script + templated systemd unit, then
 # enable+start one instance per dongle so each stays attached into the WSL VM
 # across WSL restarts. Inverts the old Windows-Scheduled-Task model; the
-# Windows side now only starts WSL. See docs/wsl/usb-passthrough.md.
+# Windows side runs a backup attach that also restarts worker-2 (role
+# windows_usb_attach). See docs/wsl/usb-passthrough.md.
 
 - name: Install tnwks-usb-attach script
   ansible.builtin.copy:
@@ -34,6 +35,7 @@
   ansible.builtin.command: "systemd-escape '{{ item }}'"
   register: usb_attach_escaped
   changed_when: false
+  check_mode: false
   loop: "{{ wsl_usb_attach_devices }}"
 
 - name: Enable and start tnwks-usb-attach instances
@@ -53,3 +55,19 @@
   loop_control:
     label: "{{ item.item }}"
   when: usb_attach_script.changed or usb_attach_unit.changed
+
+- name: Compute escaped names of retired instances
+  ansible.builtin.command: "systemd-escape '{{ item }}'"
+  register: usb_attach_retired_escaped
+  changed_when: false
+  check_mode: false
+  loop: "{{ wsl_usb_attach_retired_devices }}"
+
+- name: Retired instances are stopped and disabled
+  ansible.builtin.systemd:
+    name: "tnwks-usb-attach@{{ item.stdout }}.service"
+    enabled: false
+    state: stopped
+  loop: "{{ usb_attach_retired_escaped.results }}"
+  loop_control:
+    label: "{{ item.item }}"

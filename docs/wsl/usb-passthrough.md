@@ -1,7 +1,14 @@
-# USB Passthrough: Coral TPU and Z-Wave Stick
+# USB Passthrough: Z-Wave Stick (and the Coral fallback)
 
 How USB devices physically attached to the workstation get exposed to pods
 running in the WSL Talos cluster.
+
+> **Since 2026-11-03 only the Aeotec Z-Stick goes through usbip.** The Coral
+> TPU is owned by a Windows WinUSB driver and served to Frigate by the
+> `tnwks-coral-detector-<id>` services over Frigate's `zmq` detector
+> ([coral-detector.md](coral-detector.md)), because the WSL `vhci_hcd` driver
+> hung the Coral every 3-4 days. The Coral parts below are kept as the usbip
+> fallback; coral-detector.md's rollback section lists what to undo first.
 
 The chain has four hops:
 
@@ -42,8 +49,8 @@ Look for:
 
 | Device | Vendor:Product (typical) | Notes |
 |---|---|---|
-| Google Coral TPU | `1a6e:089a` (uninitialized) / `18d1:9302` (after first run) | Vendor ID flips after the device's firmware loads |
 | Aeotec Z-Stick Gen5 / Gen5+ | `0658:0200` | Sigma Designs CDC ACM |
+| Google Coral TPU (fallback only) | `1a6e:089a` (uninitialized) / `18d1:9302` (after first run) | Vendor ID flips after the device's firmware loads; not bound to usbipd since 2026-11-03 |
 
 Note the BUSID column — looks like `2-3` or `4-1`. That's what you bind/attach by.
 
@@ -59,42 +66,48 @@ usbipd attach --wsl --busid 2-3
 usbipd attach --wsl --busid 4-1
 ```
 
-> **Don't do the attach by hand on every reboot — WSL owns it now.**
-> `usbipd bind` is persistent but `usbipd attach --wsl` is per-session, so a
-> Windows reboot, `wsl --shutdown`, or a WSL-only crash (dockerd bounce, VM
-> OOM) drops both dongles out of WSL and the frigate / zwave-js-ui pods break.
+> **Don't do the attach by hand on every reboot.** `usbipd bind` is
+> persistent but `usbipd attach --wsl` is per-session, so a Windows reboot,
+> `wsl --shutdown`, or a WSL-only crash (dockerd bounce, VM OOM) drops the
+> Z-Stick out of WSL and the zwave-js-ui pod breaks. Three things re-attach
+> it:
 >
-> The recovery is a **systemd service inside WSL**, one instance per dongle
-> (`tnwks-usb-attach@<vid:pid>`), installed by Ansible. Each runs
-> `usbipd.exe attach --wsl --auto-attach --hardware-id <VID:PID>` over interop
-> and is `enabled` (`WantedBy=multi-user.target`) so it fires on **every WSL
-> boot** — including a WSL-only restart, which a Windows-logon-keyed Scheduled
-> Task would miss. `--auto-attach` re-attaches on replug (covers the Coral
-> firmware flip), and `Restart=always` covers the interop child exiting.
+> - **A systemd service inside WSL** (`tnwks-usb-attach@0658:0200`, role
+>   `wsl_usb_attach`). It runs `usbipd.exe attach --wsl --auto-attach
+>   --hardware-id <VID:PID>` over interop and is `enabled`
+>   (`WantedBy=multi-user.target`), so it fires on every WSL boot, including
+>   a WSL-only restart. `--auto-attach` re-attaches on replug and
+>   `Restart=always` covers the interop child exiting. The Coral's instance
+>   (`18d1:9302`) is kept stopped and disabled
+>   (`wsl_usb_attach_retired_devices`).
 >
-> This inverts the old model: **the Windows side now only needs to start WSL**
-> (logon autostart / a one-line task). Everything else lives in WSL. Install
-> or re-run via the bootstrap task:
+>   ```bash
+>   task bootstrap:wsl-usb-attach          # idempotent; also part of `task bootstrap:wsl`
+>   ```
 >
-> ```bash
-> task bootstrap:wsl-usb-attach          # idempotent; also part of `task bootstrap:wsl`
-> ```
+> - **The Windows Scheduled Task `tnwks-usb-attach`** (role
+>   `windows_usb_attach`, `task wsl-host:windows-apply -- --tags usb-attach`).
+>   It runs `Sync-TnwksUsbAttach.ps1` as the desktop user at logon, every 15
+>   minutes and 15s after a WSL vNIC reset (Hyper-V VmSwitch EventID 232 in
+>   the System log). When it attaches the Z-Stick itself, it also restarts
+>   `homelab-wsl-worker-2` (with a 15 minute cooldown) so the device reaches
+>   the node. Log: `C:\ProgramData\tnwks-usb-attach\sync.log`; dry run with
+>   `-DryRun`. Its Coral handling (the DFU to runtime firmware flip) is off
+>   unless `-CoralDfuVidPid` and `-CoralRuntimeVidPid` are passed
+>   (`usb_attach_args`).
+> - **The watchdog `tnwks-wsl-watchdog`** (role `windows_wsl_maintenance`)
+>   tries the Z-Stick attach every 5 minutes and restarts worker-2 after it
+>   had to cold-start the distro.
 >
-> **One-time Windows prerequisite (elevated):** each dongle must be
+> **One-time Windows prerequisite (elevated):** the Z-Stick must be
 > `usbipd bind`-ed once so it's shareable and the binding persists
 > (`attach`, which the service does repeatedly, needs no elevation):
 >
 > ```powershell
 > usbipd bind --force --hardware-id 0658:0200   # Z-Stick
-> usbipd bind --force --hardware-id 18d1:9302   # Coral (runtime VID — see gotcha)
 > ```
->
-> The old `Register-TnwksUsbAttachTask.ps1` / `Sync-TnwksUsbAttach.ps1`
-> Scheduled-Task approach is superseded by this and can be removed. The Coral
-> firmware flip still needs a manual nudge in the worst case (see the gotcha
-> below).
 
-> **Coral gotcha — bind after firmware loads, not before.** When the
+> **Coral gotcha (usbip fallback only) — bind after firmware loads, not before.** When the
 > Coral first appears on Windows it shows VID/PID `1a6e:089a` (DFU
 > bootloader). Windows itself completes the firmware load, after which
 > `usbipd list` flips it to `18d1:9302` (Google runtime). **You must
@@ -215,17 +228,14 @@ HelmRelease values.
 
 ### Frigate (Coral TPU)
 
-> **Not used for detection on WSL since 2026-11-03.** Frigate runs the
-> OpenVINO detector on the CPU (`resources/config.yml`), because the WSL
-> `vhci_hcd` driver's unlink seqnum overflows past 2^31 after 3-4 days of
-> Coral traffic and hangs the detector until the module is reloaded. The
-> Coral and the mount below stay in place as a fallback; switching back is
-> the `detectors:` block alone.
->
-> Since 2026-11-03 the Coral is also unbound from usbipd and owned by a
-> Windows WinUSB driver, served by the `tnwks-coral-detector-0` service to
-> Frigate's `zmq` detector: [coral-detector.md](coral-detector.md). Its
-> rollback section lists what to undo before the Coral can come back here.
+> **Not used on WSL since 2026-11-03.** Frigate's detector `coral0` is the
+> `zmq` detector talking to the `tnwks-coral-detector-0` service on the
+> Windows host, which owns the Coral through WinUSB
+> ([coral-detector.md](coral-detector.md)). Through usbip the WSL
+> `vhci_hcd` driver's unlink seqnum overflowed past 2^31 after 3-4 days of
+> Coral traffic and hung the detector until the module was reloaded. The
+> mount below stays in place as a fallback; coral-detector.md's rollback
+> section lists what to undo before the Coral can come back here.
 
 `kubernetes/apps/production/frigate/app/helmrelease.yaml`:
 
@@ -321,7 +331,7 @@ If any layer doesn't see the device, fix that layer before going up.
 | `usbipd list` shows device but `lsusb` in WSL is empty | Attach service not running (or `vhci_hcd` not loaded) | `systemctl status 'tnwks-usb-attach@*'`; if absent, `task bootstrap:wsl-usb-attach` |
 | Devices drop out after every WSL/Windows restart | `bind` is persistent; `attach` is per-session, and the WSL attach service isn't installed/enabled | `task bootstrap:wsl-usb-attach` (then confirm `systemctl is-enabled 'tnwks-usb-attach@0658:0200'`) |
 | Pod crashes with "no such device" / zwave "is not a character device" | worker-2 container doesn't see the live node (stale `--device` snapshot, or attached after container start) | Re-run `task bootstrap:wsl` to recreate worker-2 with the `rslave` binds (Step 2) |
-| Coral throws permission errors / `Failed to load delegate` | Coral firmware flip kicked it back to the Windows host at `18d1:9302` | `--auto-attach` should re-grab it; if stuck, `systemctl restart 'tnwks-usb-attach@18d1:9302'` or manually re-bind/attach the runtime VID (see Coral gotcha) |
+| (usbip fallback only) Coral throws permission errors / `Failed to load delegate` | Coral firmware flip kicked it back to the Windows host at `18d1:9302` | `--auto-attach` should re-grab it; if stuck, `systemctl restart 'tnwks-usb-attach@18d1:9302'` or manually re-bind/attach the runtime VID (see Coral gotcha) |
 | Z-Wave controller "stuck" | wrong CDC path in hostPath | `talosctl -n <node> ls /hostdev \| grep ttyACM` (WSL) and confirm the overlay path |
 
 ## References

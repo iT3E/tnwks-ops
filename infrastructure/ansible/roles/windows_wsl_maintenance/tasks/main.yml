@@ -1,0 +1,33 @@
+---
+- name: Directories
+  ansible.windows.win_file:
+    path: "{{ item }}"
+    state: directory
+  loop: ["{{ wsl_watchdog_dir }}", "{{ vhdx_compact_dir }}"]
+
+# Both tasks start their script fresh on every run.
+- name: Scripts
+  ansible.windows.win_copy:
+    src: "{{ wsl_maintenance_src }}/{{ item.src }}"
+    dest: '{{ item.dir }}\{{ item.src }}'
+  loop:
+    - { src: Watch-TnwksWsl.ps1, dir: "{{ wsl_watchdog_dir }}" }
+    - { src: Compact-WslVhdx.ps1, dir: "{{ vhdx_compact_dir }}" }
+  loop_control:
+    label: "{{ item.src }}"
+
+- name: Watchdog task (every 5 min and at boot)
+  tnwks_win_scheduled_task:
+    name: "{{ wsl_watchdog_task }}"
+    xml: "{{ lookup('ansible.builtin.template', 'wsl-watchdog.xml.j2') }}"
+
+- name: vhdx compaction task (on demand)
+  tnwks_win_scheduled_task:
+    name: "{{ vhdx_compact_task }}"
+    xml: "{{ lookup('ansible.builtin.template', 'vhdx-compact.xml.j2') }}"
+
+- name: Superseded files are gone
+  ansible.windows.win_file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ wsl_maintenance_leftovers }}"

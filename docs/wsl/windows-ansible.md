@@ -13,6 +13,8 @@ run that shows drift.
 | `windows_monitoring` (`monitoring`)         | windows_exporter (MSI, `config.yaml` collectors, service), smartmontools, smartctl_exporter and its task, firewall rules |
 | `windows_udp_relay` (`udp-relay`)           | `Start-TnwksUdpRelay.ps1`, the relay tasks `tnwks-udp-relay` (2055) and `tnwks-udp-relay-syslog` (6001), their firewall rules ([lan-exposure.md](lan-exposure.md)) |
 | `windows_lan_bridge` (`lan-bridge`)         | `Sync-TnwksLanBridge.ps1` and its `ports.json`, the task `tnwks-lan-bridge-sync`, the firewall rules `tnwks-lan-bridge-<port>`; the script keeps the portproxy entries pointed at WSL at run time |
+| `windows_usb_attach` (`usb-attach`)         | `Sync-TnwksUsbAttach.ps1` and the task `tnwks-usb-attach` (Z-Stick attach plus worker-2 restart, [usb-passthrough.md](usb-passthrough.md)) |
+| `windows_wsl_maintenance` (`wsl-maintenance`) | `Watch-TnwksWsl.ps1` and the task `tnwks-wsl-watchdog` (every 5 min), `Compact-WslVhdx.ps1` and the on-demand task `tnwks-vhdx-compact` |
 
 Run one role with `task wsl-host:windows-check -- --tags <tag>` (or
 `windows-apply`).
@@ -130,10 +132,10 @@ Host config that still lives outside this playbook, roughly in order:
    `Register-TnwksUdpRelays.ps1` and `Register-TnwksUdpRelayTask.ps1`).
 3. Done: LAN bridge Windows half (role `windows_lan_bridge`, replacing
    `Register-TnwksLanBridgeTask.ps1`).
-4. **USB attach** for the Z-Stick: the `tnwks-usb-attach` task and
-   `Sync-TnwksUsbAttach.ps1` plus its Register script exist only on the host.
-5. **WSL watchdog and vhdx compaction** tasks (`tnwks-wsl-watchdog`,
-   `tnwks-vhdx-compact`), host-only.
+4. Done: USB attach for the Z-Stick (role `windows_usb_attach`). The script
+   came from the host into the repo; its Coral handling is off by default.
+5. Done: WSL watchdog and vhdx compaction (role `windows_wsl_maintenance`).
+   The watchdog no longer tries to attach the Coral.
 6. **`.wslconfig`** (memory cap, networking).
 7. **NIC settings** (Ethernet power management, Wi-Fi radio off).
 

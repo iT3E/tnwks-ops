@@ -1,0 +1,22 @@
+---
+- name: USB attach directory
+  ansible.windows.win_file:
+    path: "{{ usb_attach_dir }}"
+    state: directory
+
+# The task starts the script fresh every run, so a new copy needs no restart.
+- name: Sync script
+  ansible.windows.win_copy:
+    src: "{{ usb_attach_src }}"
+    dest: '{{ usb_attach_dir }}\Sync-TnwksUsbAttach.ps1'
+
+- name: Sync task (desktop user; logon, every 15 min, after a WSL vNIC reset)
+  tnwks_win_scheduled_task:
+    name: "{{ usb_attach_task }}"
+    xml: "{{ lookup('ansible.builtin.template', 'usb-attach.xml.j2') }}"
+
+- name: Superseded files are gone
+  ansible.windows.win_file:
+    path: '{{ usb_attach_dir }}\{{ item }}'
+    state: absent
+  loop: "{{ usb_attach_leftovers }}"

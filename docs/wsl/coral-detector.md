@@ -7,10 +7,9 @@ service, `tnwks-coral-detector-<id>`, which Ansible manages from this repo
 (role `infrastructure/ansible/roles/windows_coral_detector`, server code in
 `infrastructure/wsl-host/coral-detector/`).
 
-Status (2026-11-03): one Coral, service `tnwks-coral-detector-0` running and
-verified end to end from the frigate pod. Frigate itself still detects with
-OpenVINO on the CPU; switching it over is a separate change (see
-[Cutover and rollback](#cutover-and-rollback)).
+Status (2026-11-03): one Coral, service `tnwks-coral-detector-0`. Frigate
+detects on it since PR #1682 (detector `coral0`, type `zmq`); see
+[Cutover and rollback](#cutover-and-rollback) for going back.
 
 ## Why on Windows
 
@@ -213,7 +212,9 @@ detector services can keep running; they only answer requests.
 **Back to the Coral in WSL (usbip):** stop and disable the services
 (`Set-Service tnwks-coral-detector-0 -StartupType Disabled; Stop-Service
 tnwks-coral-detector-0`), then undo the passthrough changes made for the Windows-native Coral:
-re-enable `tnwks-usb-attach@18d1:9302`, drop the
-`-CoralDfuVidPid 0000:0000 -CoralRuntimeVidPid 0000:0000` arguments from the
-`tnwks-usb-attach` task, `usbipd bind --force --hardware-id 18d1:9302`. The
+move `18d1:9302` from `wsl_usb_attach_retired_devices` back to
+`wsl_usb_attach_devices` (role `wsl_usb_attach`), set `usb_attach_args` to
+`-CoralDfuVidPid 1a6e:089a -CoralRuntimeVidPid 18d1:9302` (role
+`windows_usb_attach`), add the Coral back to `Watch-TnwksWsl.ps1`'s device
+list, and `usbipd bind --force --hardware-id 18d1:9302`. The
 vhci_hcd bug above comes back with it.

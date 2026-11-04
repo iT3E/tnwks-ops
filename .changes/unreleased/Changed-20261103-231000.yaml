@@ -1,0 +1,3 @@
+kind: Changed
+body: "The Windows host's USB attach task (Z-Stick only now, Coral handling off by default), the WSL watchdog and the vhdx compaction task are Ansible-managed (roles windows_usb_attach, windows_wsl_maintenance) with their scripts in the repo; the watchdog stops trying to attach the Coral, and the WSL role wsl_usb_attach keeps the Coral's unit disabled."
+time: 2026-11-03T23:10:00.000000000-08:00
