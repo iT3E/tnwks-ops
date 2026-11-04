@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.111.4 - 2026-11-04
+
+### Fixed
+
+* Frigate's OpenVINO detector actually runs: the model is set explicitly so the camera processes no longer crash at start.
+
 ## v1.111.3 - 2026-11-04
 
 ### Fixed
