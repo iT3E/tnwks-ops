@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.117.0 - 2026-11-04
+
+### Changed
+
+* The Windows host's USB attach task (Z-Stick only now, Coral handling off by default), the WSL watchdog and the vhdx compaction task are Ansible-managed (roles windows_usb_attach, windows_wsl_maintenance) with their scripts in the repo; the watchdog stops trying to attach the Coral, and the WSL role wsl_usb_attach keeps the Coral's unit disabled.
+
 ## v1.116.0 - 2026-11-04
 
 ### Changed
