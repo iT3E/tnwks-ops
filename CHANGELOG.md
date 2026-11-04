@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.116.0 - 2026-11-04
+
+### Changed
+
+* The Windows UDP relays (role windows_udp_relay) and the Windows half of the TCP LAN bridge (windows_lan_bridge: sync script, ports.json, firewall rules, the tnwks-lan-bridge-sync task) are now managed by Ansible; the Register-*.ps1 scripts are removed. Sync-TnwksLanBridge.ps1 reads its ports from ports.json, leaves entries that already point at WSL alone, and no longer touches firewall rules.
+
 ## v1.115.0 - 2026-11-04
 
 ### Changed
