@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Alertmanager''s scraped series now carry container="alertmanager" (static relabel in its ServiceMonitor), which the stock Alertmanager* rules also select. The operator derives that label only from a declared container port, and the app-template pod declares none, so after #1673 the rules still matched nothing.'
-time: 2026-11-03T16:03:06.253589727-08:00

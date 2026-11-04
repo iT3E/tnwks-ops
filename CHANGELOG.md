@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.111.1 - 2026-11-04
+
+### Fixed
+
+* Alertmanager's scraped series now carry container="alertmanager" (static relabel in its ServiceMonitor), which the stock Alertmanager* rules also select. The operator derives that label only from a declared container port, and the app-template pod declares none, so after #1673 the rules still matched nothing.
+
 ## v1.111.0 - 2026-11-04
 
 ### Added
