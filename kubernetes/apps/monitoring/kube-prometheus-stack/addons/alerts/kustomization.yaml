@@ -11,4 +11,5 @@ resources:
   - ./wan-latency.yaml
   - ./flow-collector.yaml
   - ./frigate.yaml
+  - ./coral-detector.yaml
   - ./heartbeats.yaml
