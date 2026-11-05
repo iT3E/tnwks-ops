@@ -61,29 +61,38 @@ spec:
         # through the barman-cloud plugin, which reports its own metric; the
         # cnpg_collector_* backup metrics stay 0 (they are for the in-tree
         # barmanObjectStore).
+        # Per CNPG cluster (the pod name minus its instance number): with one
+        # cluster per app (kubernetes/components/cnpg-cluster) several share a
+        # namespace, and a max per namespace let the freshest hide a stale one.
         - alert: PostgresBackupStale
           annotations:
             description: >-
-              The newest base backup of {{ $labels.namespace }}/postgres is
-              older than 30 hours (or none exists). Check the ScheduledBackup
-              postgres-daily, the barman-cloud plugin and the STS credentials
-              CronJob kopiur-system/aws-backup-credentials.
+              The newest base backup of {{ $labels.namespace }}/{{ $labels.cluster }}
+              is older than 30 hours (or none exists). Check the ScheduledBackup
+              {{ $labels.cluster }}-daily, the barman-cloud plugin and the STS
+              credentials CronJob kopiur-system/aws-backup-credentials.
             summary: Postgres base backup is stale
           expr: |-
-            (time() - max by (namespace) (barman_cloud_cloudnative_pg_io_last_available_backup_timestamp)) > 30 * 3600
+            (time() - max by (namespace, cluster) (
+              label_replace(barman_cloud_cloudnative_pg_io_last_available_backup_timestamp, "cluster", "$1", "pod", "(.+)-[0-9]+")
+            )) > 30 * 3600
           for: 1h
           labels:
             severity: warning
+        # Failing, not idle: an idle database writes no WAL, so "nothing
+        # archived for an hour" fired on every quiet per-app cluster at night.
+        # The archiver's last failure being newer than its last success means
+        # the segment it's on keeps failing.
         - alert: PostgresWALArchivingStalled
           annotations:
             description: >-
-              {{ $labels.pod }} has not archived a WAL segment to S3 in over an
-              hour while archiving is configured. Point-in-time recovery is
-              falling behind.
+              {{ $labels.pod }} has been failing to archive WAL to S3 for 15
+              minutes (its last failure is newer than its last success).
+              Point-in-time recovery is falling behind. Check the barman-cloud
+              sidecar's log and the STS credentials (aws-backup-sts).
             summary: Postgres WAL archiving stalled
           expr: |-
-            (time() - cnpg_pg_stat_archiver_last_archived_time) > 3600
-            and on (pod) cnpg_pg_stat_archiver_archived_count > 0
+            cnpg_pg_stat_archiver_last_failed_time > cnpg_pg_stat_archiver_last_archived_time
           for: 15m
           labels:
             severity: warning
