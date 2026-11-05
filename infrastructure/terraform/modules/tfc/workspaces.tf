@@ -77,3 +77,19 @@ resource "tfe_workspace_settings" "tnwks-healthchecks-prod_workspace_settings" {
   workspace_id   = tfe_workspace.tnwks-healthchecks-prod.id
   execution_mode = "local"
 }
+
+# Cloudflare is a public API, but the credentials are read from SOPS with the
+# CI age key on the self-hosted runner (cloudflare-{plan,apply}.yaml), so
+# execution is local. Renamed from tnwks-cloudflare-prod_old and moved into
+# this project on 2026-11-04; same workspace, so the state is unchanged.
+resource "tfe_workspace" "tnwks-cloudflare-prod" {
+  name              = "tnwks-cloudflare-prod"
+  organization      = var.tfc_organization
+  project_id        = tfe_project.tfe_project_aws.id
+  working_directory = "environments/prod/cloudflare"
+}
+
+resource "tfe_workspace_settings" "tnwks-cloudflare-prod_workspace_settings" {
+  workspace_id   = tfe_workspace.tnwks-cloudflare-prod.id
+  execution_mode = "local"
+}

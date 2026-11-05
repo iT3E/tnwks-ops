@@ -6,7 +6,7 @@ version: "3"
 ##
 ## CI plans on the PR and applies on merge (cloudflare-{plan,apply}.yaml on the
 ## self-hosted runner). These tasks are break-glass, against the same TFC state
-## (tnwks-cloudflare-prod_old, execution mode local).
+## (tnwks-cloudflare-prod, execution mode local).
 ## ---------------------------------------------------------------------------------------------------------------------
 
 tasks:

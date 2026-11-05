@@ -65,10 +65,3 @@ module "healthchecks" {
   channel_kind = "telegram"
   checks       = local.checks
 }
-
-# The checks were created in this root before the module existed. The
-# healthchecks-apply run on merge records the moves. Safe to delete after it.
-moved {
-  from = healthchecksio_check.this
-  to   = module.healthchecks.healthchecksio_check.this
-}
