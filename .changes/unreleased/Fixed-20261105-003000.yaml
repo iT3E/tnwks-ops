@@ -1,0 +1,3 @@
+kind: Fixed
+body: "`windows_monitoring` creates the windows_exporter and smartctl_exporter directories before writing into them, so the first apply on a fresh Windows host (WSL-02) no longer fails at `config.yaml`."
+time: 2026-11-05T00:30:00.000000000-08:00
