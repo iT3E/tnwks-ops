@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.133.0 - 2026-11-05
+
+### Added
+
+* The WSL watchdog and the vhdx compaction task run on WSL-02: `Watch-TnwksWsl.ps1` takes `-SkipGateway` / `-SkipUsb` (per host, `wsl_watchdog_args`) so it only keeps WSL and the distro up where there is no OpenClaw gateway or Z-Stick, and `Compact-WslVhdx.ps1` gets the distro's vhdx per host (`vhdx_compact_vhdx`) and logs the free space of that drive. DESKTOP-HKE05KI's tasks are unchanged.
+
 ## v1.132.1 - 2026-11-05
 
 ### Fixed
