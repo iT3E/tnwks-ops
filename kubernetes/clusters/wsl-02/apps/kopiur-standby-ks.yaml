@@ -1,0 +1,19 @@
+---
+# homelab-wsl's kopiur repository, read-only on homelab-wsl-02 (see the file).
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: kopiur-standby-repository
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: kopiur-repository
+  path: ./kubernetes/clusters/wsl-02/apps/kopiur-standby
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 3m

@@ -55,6 +55,10 @@ data:
   CILIUM_SERVICEMONITOR_ENABLED: "false"
   CILIUM_HUBBLE_UI_INGRESS_ENABLED: "false"
   SERVICE_MONITOR_ENABLED: "false"
+  # Backups: the shared bucket; this cluster's own kopia repository prefix
+  # (write) next to homelab-wsl's kopiur/ (read-only, kopiur-standby).
+  BACKUP_S3_BUCKET: "tnwks-homelab-backups-654654262098"
+  KOPIUR_PREFIX: "kopiur-homelab-wsl-02/"
   # Backups (aws-backup-credentials): this cluster's Roles Anywhere profile and
   # role (environments/prod/aws outputs rolesanywhere_backups_site_*["wsl-02"]),
   # the shared trust anchor.
