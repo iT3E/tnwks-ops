@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.121.0 - 2026-11-05
+
+### Changed
+
+* Ansible: one inventory (`inventory/hosts.yml`) with `windows_hosts`, `wsl_distros`, `mikrotik` and per-site groups; one pinned ansible-core for every playbook (uv: `pyproject.toml` and `uv.lock`); `ansible.cfg` paths that resolve; pinned SSH host keys; the Windows host account in SOPS; `playbooks/wsl-distro.yml` replaces the per-role WSL playbooks (docs/operations/ansible.md).
+
+### Removed
+
+* Ansible: the k3s, kube-vip, Kasm and Proxmox playbooks, roles and inventory, and the unused Galaxy roles and collections.
+
 ## v1.120.0 - 2026-11-05
 
 ### Changed

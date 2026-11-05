@@ -1,3 +1,0 @@
-kind: Changed
-body: "Ansible: one inventory (`inventory/hosts.yml`) with `windows_hosts`, `wsl_distros`, `mikrotik` and per-site groups; one pinned ansible-core for every playbook (uv: `pyproject.toml` and `uv.lock`); `ansible.cfg` paths that resolve; pinned SSH host keys; the Windows host account in SOPS; `playbooks/wsl-distro.yml` replaces the per-role WSL playbooks (docs/operations/ansible.md)."
-time: 2026-11-04T12:00:00.000000000-08:00
