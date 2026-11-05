@@ -5,16 +5,13 @@
 # a session. nginx routes by longest-matching path, so these specific prefixes
 # win over the catch-all `/` on the authenticated `plausible` ingress below.
 #
-# This ingress owns the analytics.${SECRET_DOMAIN} DNS record (external-dns
-# target); the dashboard ingress below deliberately omits the target so the two
-# don't fight over ownership of the same host.
+# analytics.${SECRET_DOMAIN} is a public DNS record in Terraform
+# (infrastructure/terraform/environments/prod/cloudflare/public-dns.tf).
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: plausible-tracking
   namespace: selfhosted
-  annotations:
-    external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
 spec:
   ingressClassName: nginx
   # No secretName — the ingress-nginx default-ssl-certificate is the
@@ -48,10 +45,6 @@ spec:
 # A separate Ingress (rather than auth annotations on the tracking one above)
 # keeps the auth surface surgically scoped: a misconfigured auth-url can never
 # take down public tracking. Both target the same `plausible` Service.
-#
-# No external-dns target here: the tracking ingress above already owns the
-# analytics.${SECRET_DOMAIN} record. A second claim would make external-dns
-# fight itself over ownership.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

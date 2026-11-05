@@ -64,8 +64,6 @@ spec:
     ingress:
       app:
         className: nginx
-        annotations:
-          external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
         hosts:
           - host: &host "invite.${SECRET_DOMAIN}"
             paths:

@@ -10,7 +10,6 @@ resources:
   - ./cloudnative-pg.yaml
   - ./descheduler.yaml
   - ./emberstack.yaml
-  - ./external-dns.yaml
   - ./flannel.yaml
   - ./grafana.yaml
   - ./hajimari.yaml

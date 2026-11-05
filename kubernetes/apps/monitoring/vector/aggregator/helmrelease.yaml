@@ -47,8 +47,6 @@ spec:
         type: LoadBalancer
         # WSL: a fixed MetalLB VIP that the WSL host's socat bridges to.
         loadBalancerIP: "${VECTOR_LB_ADDR:=}"
-        annotations:
-          external-dns.alpha.kubernetes.io/hostname: "vector.${INTERNAL_DOMAIN}"
         externalTrafficPolicy: Cluster
         ports:
           http:

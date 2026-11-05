@@ -16,5 +16,4 @@ resources:
   # Its secrets are out-of-band (see its ks.yaml), so there is no
   # secrets.sops.yaml under firefly/app.
   - ./firefly/ks.yaml
-  # - ./external-dns/ks.yaml
 
