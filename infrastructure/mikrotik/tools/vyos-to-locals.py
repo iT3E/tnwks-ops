@@ -191,15 +191,31 @@ CI_ZONE_RULES = {
 # desktop's wg01-home tunnel. Processed after CI_ZONE_RULES, so a pair added
 # here is numbered last and never renumbers existing ones.
 MONITORING_ZONE_RULES = {
-    # snmp-exporter polls SW03's AP ports (monitoring/snmp-exporter). SNMP
-    # only: SSH, the web UI and ICMP to the switch stay VPN-only.
-    ("unifi-frontend-910", "switch-mgmt"): [{  # NATIVE_VLAN["zone"]
-        "description": "snmp-exporter (WSL cluster) SNMP polls of SW03",
-        "protocol": "udp",
-        "dst_port": "161",
+    # smokeping pings the 3 APs' management addresses (role ap). Joins the
+    # existing 910 -> 900 pair, so it numbers nothing new.
+    ("unifi-frontend-910", "unifi-mgmt-900"): [{
+        "description": "smokeping (WSL cluster) pings of the APs",
+        "protocol": "icmp",
         "src_address_list": "monitoring",
-        "dst_address": "10.98.0.251",
+        "dst_address": "10.10.90.11-10.10.90.13",
     }],
+    # snmp-exporter polls SW03's AP ports (monitoring/snmp-exporter), and
+    # smokeping pings SW03 (role switch). SSH and the web UI stay VPN-only.
+    ("unifi-frontend-910", "switch-mgmt"): [  # NATIVE_VLAN["zone"]
+        {
+            "description": "snmp-exporter (WSL cluster) SNMP polls of SW03",
+            "protocol": "udp",
+            "dst_port": "161",
+            "src_address_list": "monitoring",
+            "dst_address": "10.98.0.251",
+        },
+        {
+            "description": "smokeping (WSL cluster) pings of SW03",
+            "protocol": "icmp",
+            "src_address_list": "monitoring",
+            "dst_address": "10.98.0.251",
+        },
+    ],
 }
 
 # Static DNS records that pointed at container IPs. None drops the record;

@@ -62,11 +62,11 @@ zone pair with no rule falls to the terminal forward drop.
 
 | VLAN | Zone | Subnet (router) | Purpose |
 | --- | --- | --- | --- |
-| 1 (native) | `switch-mgmt` | `10.98.0.1/24` | Switch management, untagged on ether2. From 910 only SNMP (udp/161) from the desktop to SW03, for snmp-exporter |
+| 1 (native) | `switch-mgmt` | `10.98.0.1/24` | Switch management, untagged on ether2. From 910 only the desktop to SW03: SNMP (udp/161) for snmp-exporter and ICMP for smokeping |
 | — | `transit-10` | — | The outside (internet) zone: only `ether1`. Its old VLAN 10 transit hop is disabled, so `172.16.1.0/24` is not routed |
 | 140 | `UISP-140` | `10.10.140.1/24` | EP-R6 bridge; `10.60.10.0/24` is routed via `10.10.140.140` |
 | 610 | `seccam-610` | `10.10.60.1/24` | Cameras. Untrusted: router services only, Frigate pulls RTSP |
-| 900 | `unifi-mgmt-900` | `10.10.90.1/24` | UniFi AP management |
+| 900 | `unifi-mgmt-900` | `10.10.90.1/24` | UniFi AP management. From 910: the controller (inform, SSH, STUN) and ICMP from the desktop to the 3 APs (smokeping) |
 | 910 | `unifi-frontend-910` | `10.10.91.1/24` | Main client network; hosts the WSL desktop |
 | — | `vpn` (wg01) | `10.10.30.1/24` | Admin VPN |
 | — | `vpn-mobile` (wg02) | `10.10.31.1/24` | Mobile VPN: internet and 910, plus admin peers by address |
