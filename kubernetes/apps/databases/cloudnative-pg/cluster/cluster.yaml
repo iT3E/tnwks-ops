@@ -30,11 +30,8 @@ spec:
       # database belongs to `mealie`). It is kept, with login off, rather than
       # dropped: cnpg created it and expects it. Its old memberships were the
       # temporary bridge while ownership moved (reassign-owner/).
-      # The `app` database (Mealie's until 2026-11) is no longer managed by a
-      # Database CR: Mealie moves to its own `mealie` database, and `app` is
-      # kept as the rollback copy (its CR had databaseReclaimPolicy: retain,
-      # so removing the CR left it in place). Drop it later with a Database
-      # CR `ensure: absent`.
+      # The `app` database (Mealie's until 2026-11, then its rollback copy) is
+      # dropped by database-app.yaml (`ensure: absent`, 2026-11-05).
       - name: app
         ensure: present
         login: false
