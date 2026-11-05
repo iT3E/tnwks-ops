@@ -17,6 +17,7 @@ resources:
   - ./secret-finance-sync-role.sops.yaml
   - ./database-finance-sync.yaml
   - ./database-mealie.yaml
+  - ./database-app.yaml
   - ./database-vaultwarden.yaml
   - ./database-vantrip.yaml
   - ./database-things-api.yaml

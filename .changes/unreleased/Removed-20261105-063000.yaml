@@ -1,0 +1,3 @@
+kind: Removed
+body: "Drop the shared Postgres cluster's `app` database: Mealie's database until 2026-11, kept since as its rollback copy, unused (no connections, same data as `mealie` from 2026-11-01). A CNPG `Database` with `ensure: absent` drops it on the running cluster."
+time: 2026-11-05T06:30:00.000000000-08:00

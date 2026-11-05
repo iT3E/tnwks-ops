@@ -1,0 +1,21 @@
+---
+# Drops `app`, the cluster's first-boot database and Mealie's database until
+# 2026-11, kept since then as the rollback copy (see the `app` role in
+# cluster.yaml). On 2026-11-05 it had no connections and the same 67 recipes
+# as `mealie` from 2026-11-01; the owner approved dropping it. Base backups
+# and WAL from before the drop stay in the bucket under their retention.
+#
+# The operator drops it on the running cluster (`ensure: absent`). Keep this
+# resource: it is idempotent, and the cluster's bootstrap (initdb: app) would
+# only create `app` again on a rebuilt cluster.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: app
+  namespace: databases
+spec:
+  cluster:
+    name: postgres
+  name: app
+  owner: mealie
+  ensure: absent
