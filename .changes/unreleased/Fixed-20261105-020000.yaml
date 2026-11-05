@@ -1,3 +1,0 @@
-kind: Fixed
-body: "WSL-02's distro stays up: WSL stops a distro seconds after its last `wsl.exe` client exits, and nothing on WSL-02 held one open, so the watchdog's restart only lasted until its next run. New per-host task `tnwks-wsl-keepalive` (one `wsl.exe` client from boot) and watchdog switch `-KeepAliveTask`, which starts it again after a WSL restart. On for WSL-02 only."
-time: 2026-11-05T02:00:00.000000000-08:00

@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.134.1 - 2026-11-05
+
+### Fixed
+
+* WSL-02's distro stays up: WSL stops a distro seconds after its last `wsl.exe` client exits, and nothing on WSL-02 held one open, so the watchdog's restart only lasted until its next run. New per-host task `tnwks-wsl-keepalive` (one `wsl.exe` client from boot) and watchdog switch `-KeepAliveTask`, which starts it again after a WSL restart. On for WSL-02 only.
+
 ## v1.134.0 - 2026-11-05
 
 ### Changed
