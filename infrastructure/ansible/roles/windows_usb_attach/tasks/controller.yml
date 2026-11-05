@@ -14,3 +14,9 @@
     dest: "{{ usb_attach_cache }}/{{ usb_attach_usbipd_msi.url | basename }}"
     checksum: "sha256:{{ usb_attach_usbipd_msi.sha256 }}"
     mode: "0644"
+    # GitHub release downloads sometimes take longer than the 10s default.
+    timeout: 120
+  register: usb_attach_download
+  until: usb_attach_download is succeeded
+  retries: 3
+  delay: 10

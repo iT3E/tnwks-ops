@@ -21,6 +21,12 @@
     dest: "{{ coral_detector_cache }}/{{ item.value.url | basename }}"
     checksum: "sha256:{{ item.value.sha256 }}"
     mode: "0644"
+    # GitHub release downloads sometimes take longer than the 10s default.
+    timeout: 120
+  register: coral_detector_download
+  until: coral_detector_download is succeeded
+  retries: 3
+  delay: 10
   loop: "{{ coral_detector_artifacts | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
