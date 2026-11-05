@@ -1,0 +1,3 @@
+kind: Added
+body: "`05-talos-upgrade.yml` rolls any Talos-in-Docker cluster in `talos_clusters` (`-e talos_target=wsl-02`, `task talos:upgrade:wsl-02`); node names and health-check IPs come from the cluster entry. `01-talos-bootstrap.yml` writes the talosconfig to `~/.talos/config-<cluster>`, where the upgrade playbook and `mint-talosconfig.sh` look for it."
+time: 2026-11-05T04:00:00.000000000-08:00

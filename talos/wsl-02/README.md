@@ -25,6 +25,9 @@ task bootstrap:wsl-02   # playbooks 01-04 with -e talos_target=wsl-02
 
 1. `01-talos-bootstrap.yml`: `talosctl cluster create docker` with
    `patches/cluster.yaml` (all nodes) and `patches/controlplane.yaml`.
+   Writes `~/.talos/config-homelab-wsl-02` and
+   `~/.kube/config-homelab-wsl-02` on WSL-02's distro (not `/tmp`: a WSL
+   restart wipes it).
 2. `02-cni-bootstrap.yml`: Cilium, with the values Flux will use
    (rendered from `kubernetes/apps/kube-system/cilium/app/helmrelease.yaml`
    and `kubernetes/clusters/wsl-02/cluster-settings.yaml`).
@@ -33,6 +36,12 @@ task bootstrap:wsl-02   # playbooks 01-04 with -e talos_target=wsl-02
 4. `04-flux-install.yml`: applies `kubernetes/clusters/wsl-02/flux-system`
    (no `flux bootstrap`: the repo is public, Flux pulls it over HTTPS, and
    nothing is pushed to `main`).
+
+## Upgrades
+
+`task talos:upgrade:wsl-02` (`05-talos-upgrade.yml -e talos_target=wsl-02`)
+rolls the node containers onto `versions.yaml`, one at a time, with
+`talos/wsl/roll-node.sh`.
 
 ## Patches need talosctl >= 1.14
 
