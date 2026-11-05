@@ -1,0 +1,5 @@
+---
+# SSH trusts only the host keys pinned in inventory/known_hosts.
+ansible_ssh_common_args: >-
+  -o UserKnownHostsFile={{ inventory_dir }}/known_hosts
+  -o StrictHostKeyChecking=yes

@@ -15,7 +15,7 @@
 #
 # Run via:
 #   task talos:upgrade:wsl
-#   ansible-playbook -i ansible/inventory/wsl.yml ansible/playbooks/05-talos-upgrade.yml
+#   ansible-playbook playbooks/05-talos-upgrade.yml
 #
 # Kubernetes versions are separate: tuppr's KubernetesUpgrade
 # (kubernetes/apps/system-upgrade/tuppr). docs/operations/cluster-upgrades.md.

@@ -1,35 +1,21 @@
 ---
 version: "3"
 
-vars:
-  ANSIBLE_PLAYBOOK_DIR: "{{.ANSIBLE_DIR}}/playbooks"
-  ANSIBLE_INVENTORY_DIR: "{{.ANSIBLE_DIR}}/inventory"
-
-env:
-  ANSIBLE_CONFIG: "{{.ANSIBLE_DIR}}/ansible.cfg"
+# Cluster bootstrap: playbooks 01-04 on the controller, for the Talos cluster
+# named by talos_target (inventory/group_vars/all/talos.yml).
 
 tasks:
   wsl:
-    desc: Bootstrap the WSL Talos cluster (Talos → CNI → SOPS → Flux → USB attach)
+    desc: Bootstrap the WSL Talos cluster (Talos → CNI → SOPS → Flux → WSL distro units)
     dir: "{{.ANSIBLE_DIR}}"
     cmds:
-      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/wsl.yml {{.ANSIBLE_PLAYBOOK_DIR}}/01-talos-bootstrap.yml
-      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/wsl.yml {{.ANSIBLE_PLAYBOOK_DIR}}/02-cni-bootstrap.yml
-      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/wsl.yml {{.ANSIBLE_PLAYBOOK_DIR}}/03-sops-keys.yml
-      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/wsl.yml {{.ANSIBLE_PLAYBOOK_DIR}}/04-flux-install.yml
-      - task: wsl-usb-attach
-
-  wsl-usb-attach:
-    desc: Install/enable the WSL USB auto-attach systemd units (Z-Stick + Coral)
-    dir: "{{.ANSIBLE_DIR}}"
-    cmds:
-      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/wsl.yml {{.ANSIBLE_PLAYBOOK_DIR}}/wsl-usb-attach.yml
+      - for: &bootstrap [01-talos-bootstrap, 02-cni-bootstrap, 03-sops-keys, 04-flux-install]
+        cmd: "{{.ANSIBLE}} ansible-playbook playbooks/{{.ITEM}}.yml -e talos_target=wsl"
+      - task: :wsl-host:distro-apply
 
   ms-01:
     desc: Bootstrap the MS-01 Talos cluster (Talos → CNI → SOPS → Flux)
     dir: "{{.ANSIBLE_DIR}}"
     cmds:
-      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/ms-01.yml {{.ANSIBLE_PLAYBOOK_DIR}}/01-talos-bootstrap.yml
-      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/ms-01.yml {{.ANSIBLE_PLAYBOOK_DIR}}/02-cni-bootstrap.yml
-      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/ms-01.yml {{.ANSIBLE_PLAYBOOK_DIR}}/03-sops-keys.yml
-      - ansible-playbook -i {{.ANSIBLE_INVENTORY_DIR}}/ms-01.yml {{.ANSIBLE_PLAYBOOK_DIR}}/04-flux-install.yml
+      - for: *bootstrap
+        cmd: "{{.ANSIBLE}} ansible-playbook playbooks/{{.ITEM}}.yml -e talos_target=ms-01"

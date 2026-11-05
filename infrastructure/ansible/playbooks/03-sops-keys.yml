@@ -12,8 +12,8 @@
 # encrypted secrets in the repo become unrecoverable for this cluster.
 #
 # Run via:
-#   ansible-playbook -i inventory/wsl.yml   playbooks/03-sops-keys.yml
-#   ansible-playbook -i inventory/ms-01.yml playbooks/03-sops-keys.yml
+#   ansible-playbook playbooks/03-sops-keys.yml                      # wsl
+#   ansible-playbook playbooks/03-sops-keys.yml -e talos_target=ms-01
 
 - name: Provision SOPS age keys
   hosts: localhost

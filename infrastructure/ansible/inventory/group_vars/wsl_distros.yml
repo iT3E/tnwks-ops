@@ -1,0 +1,6 @@
+---
+# The WSL distro on each Windows host. From a workstation the controller is
+# that distro, so the connection is local; a CI runner reaches it over SSH
+# instead (it overrides these per host).
+ansible_connection: local
+ansible_python_interpreter: /usr/bin/python3

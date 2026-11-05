@@ -1,0 +1,13 @@
+---
+# Windows over its built-in OpenSSH server (docs/wsl/windows-ansible.md).
+# sshd listens only on the vEthernet (WSL) address and takes only the Ansible
+# key; bootstrap it once with `task wsl-host:sshd`. ansible_host and
+# ansible_user are per host (host_vars/<host>/).
+ansible_connection: ssh
+ansible_shell_type: powershell
+ansible_ssh_private_key_file: ~/.ssh/id_ed25519_winhost
+# The SSH session already has the admin's full token.
+ansible_become: false
+# The account that owns the WSL distro. Tasks that call wsl.exe run as it
+# (S4U, elevated): SYSTEM's wsl.exe can't see the per-user Ubuntu.
+windows_desktop_user: "{{ ansible_user }}"

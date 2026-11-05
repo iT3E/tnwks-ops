@@ -2,10 +2,9 @@
 # Install QMD as a GPU-accelerated HTTP MCP server on the WSL host so the
 # OpenClaw gateway pods (CPU-only MS-01 cluster) can reach it over the LAN.
 #
-#   cd infrastructure/ansible
-#   ansible-playbook -i inventory/wsl.yml playbooks/wsl-qmd.yml
+#   task wsl-host:qmd
 #
-# Run from infrastructure/ so ansible.cfg's relative paths resolve.
+# Not part of wsl-distro.yml: QMD is opt-in (not deployed on DESKTOP-HKE05KI-ubuntu).
 #
 # WHAT THIS DOES (WSL host only — does NOT touch the k8s cluster):
 #   - installs/pins @tobilu/qmd, registers collections, pre-warms the index
@@ -22,8 +21,9 @@
 # SECURITY: QMD HTTP MCP has no auth. The host firewall MUST restrict the
 # bridge port to the cluster CIDRs (see roles/qmd/defaults/main.yml).
 
-- hosts: localhost
+- name: QMD on the WSL distro
+  hosts: wsl_distros
   become: true
   gather_facts: true
   roles:
-    - ../roles/qmd
+    - qmd

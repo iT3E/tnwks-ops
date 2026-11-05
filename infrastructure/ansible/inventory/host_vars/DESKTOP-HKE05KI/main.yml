@@ -1,0 +1,12 @@
+---
+# The Windows host under the homelab-wsl cluster. ansible_user is in
+# secrets.sops.yml next to this file.
+
+# The vEthernet (WSL) address: WINDOWS_HOST_IP in
+# kubernetes/clusters/wsl/cluster-settings.yaml.
+ansible_host: 172.26.80.1
+
+# One tnwks-coral-detector-<id> service per Coral; a second Coral is one more
+# line (ports 5556 / 9556). docs/wsl/coral-detector.md.
+coral_detector_devices:
+  - { id: 0, device: "usb:0" }

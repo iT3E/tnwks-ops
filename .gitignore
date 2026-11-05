@@ -9,9 +9,8 @@ kubeconfig
 *.agekey
 *.pub
 *.key
-# Ansible
-/infrastructure/ansible/roles/install_common/files/kasm_release
-xanmanning.k3s*
+# Ansible (the uv controller environment)
+/infrastructure/ansible/.venv/
 # Terraform
 .terraform
 .terraform.tfstate*

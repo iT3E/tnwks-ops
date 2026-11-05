@@ -225,11 +225,7 @@ distro. Everything cluster-side is GitOps, so it rebuilds from this repo:
    shrink the tar.
 2. Re-bootstrap per `docs/wsl/bootstrap.md`:
    ```bash
-   cd infrastructure
-   ansible-playbook -i ansible/inventory/wsl.yml ansible/playbooks/01-talos-bootstrap.yml
-   ansible-playbook -i ansible/inventory/wsl.yml ansible/playbooks/02-cni-bootstrap.yml
-   ansible-playbook -i ansible/inventory/wsl.yml ansible/playbooks/03-sops-keys.yml
-   ansible-playbook -i ansible/inventory/wsl.yml ansible/playbooks/04-flux-install.yml
+   task bootstrap:wsl   # playbooks 01-04, then the WSL distro units
    ```
    Flux then reconciles the whole platform back from `main`. **Caveat:** PVC data
    (postgres, the sites NFS export contents) is NOT preserved on a clean-slate

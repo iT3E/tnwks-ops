@@ -33,23 +33,21 @@ scheduled tasks, firewall rules and portproxy and has no SOPS story.
 
 ## Pieces
 
-|                                                        |                                                                          |
-| ------------------------------------------------------ | ------------------------------------------------------------------------ |
-| `infrastructure/wsl-host/Install-TnwksWindowsSshd.ps1` | sshd bootstrap (`task wsl-host:sshd`, drift: `task wsl-host:sshd-check`) |
-| `infrastructure/ansible/requirements-windows.txt`      | the pinned ansible-core, run through `uvx`                               |
-| `infrastructure/ansible/requirements.yml`              | `ansible.windows`, `community.windows` (pinned)                          |
-| `infrastructure/ansible/inventory/windows.yml`         | the host, its connection settings, `coral_detector_devices`              |
-| `infrastructure/ansible/playbooks/windows-host.yml`    | controller cache play, then the Windows roles                            |
-| `infrastructure/ansible/playbooks/library/`            | `tnwks_win_scheduled_task`, scheduled tasks as whole task XML            |
-| `.taskfiles/WslHostTasks.yml`                          | `wsl-host:windows-init`, `windows-check`, `windows-apply`                |
+|                                                                 |                                                                          |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `infrastructure/wsl-host/Install-TnwksWindowsSshd.ps1`          | sshd bootstrap (`task wsl-host:sshd`, drift: `task wsl-host:sshd-check`) |
+| `infrastructure/ansible/inventory/hosts.yml`                    | the host, in `windows_hosts` and its `site_<name>` group                 |
+| `infrastructure/ansible/inventory/group_vars/windows_hosts.yml` | connection settings shared by every Windows host                         |
+| `infrastructure/ansible/inventory/host_vars/<host>/`            | `ansible_host`, `coral_detector_devices`; `ansible_user` in SOPS         |
+| `infrastructure/ansible/inventory/known_hosts`                  | the sshd host key, pinned                                                |
+| `infrastructure/ansible/playbooks/windows-host.yml`             | controller cache play, then the Windows roles                            |
+| `infrastructure/ansible/playbooks/library/`                     | `tnwks_win_scheduled_task`, scheduled tasks as whole task XML            |
+| `.taskfiles/WslHostTasks.yml`                                   | `wsl-host:windows-check`, `windows-apply`, one task per role             |
 
-**Controller.** The apt ansible in WSL is 2.16, too old for Windows over
-SSH. The Windows tasks run the ansible-core from `requirements-windows.txt`
-through `uvx`, with collections in `~/.ansible/collections-windows`
-(`ANSIBLE_COLLECTIONS_PATH`), so the apt ansible and its collections that run
-the other playbooks are untouched. The tasks also set
-`ANSIBLE_STDOUT_CALLBACK=default` with `result_format=yaml`, because
-`ansible.cfg`'s `yaml` callback is gone from current community.general.
+**Controller.** Every playbook runs on the one pinned ansible-core in
+`infrastructure/ansible/pyproject.toml` and `uv.lock`, with the collections
+in `requirements.yml` (`task ansible:init`); [ansible.md](../operations/ansible.md) has
+the layout.
 
 ## sshd bootstrap (once, and after a WSL subnet change)
 
