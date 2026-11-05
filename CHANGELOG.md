@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.150.0 - 2026-11-05
+
+### Added
+
+* WSL-02 exposes homelab-wsl-02's internal ingress on the LAN (`10.10.91.112:80/443`), the same portproxy -> socat chain as DESKTOP-HKE05KI. `tnwks-lan-bridge` takes its target addresses per host (`wsl_lan_bridge_targets`, a systemd drop-in); without them the units are unchanged.
+
 ## v1.149.0 - 2026-11-05
 
 ### Added

@@ -1,3 +1,0 @@
-kind: Added
-body: "WSL-02 exposes homelab-wsl-02's internal ingress on the LAN (`10.10.91.112:80/443`), the same portproxy -> socat chain as DESKTOP-HKE05KI. `tnwks-lan-bridge` takes its target addresses per host (`wsl_lan_bridge_targets`, a systemd drop-in); without them the units are unchanged."
-time: 2026-11-05T16:30:00.000000000-08:00
