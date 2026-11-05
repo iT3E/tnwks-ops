@@ -211,6 +211,11 @@ locals {
             mac_address = "54:F8:F0:17:18:87"
             comment     = "Tesla Wall Connector (HA tesla_wall_connector)"
           }
+          wsl-02 = {
+            address     = "10.10.91.112"
+            mac_address = "F4:C8:8A:87:96:19"
+            comment     = "WSL-02 (second WSL host, homelab-wsl-02), wifi NIC"
+          }
           wyze_cam_1 = {
             comment     = "wyze_cam_1"
             address     = "10.10.91.105"
