@@ -33,6 +33,10 @@ wsl_keepalive_enabled: true
 # on-demand compaction task.
 vhdx_compact_vhdx: 'C:\Users\{{ ansible_user }}\AppData\Local\wsl\{d3e1f4cf-83d5-47be-8d7a-64fb9e7ebb25}\ext4.vhdx'
 
+# homelab-wsl's Prometheus scrapes both exporters over the LAN (from
+# DESKTOP-HKE05KI's address, where its pods' traffic leaves).
+windows_monitoring_remote_extra: [10.10.91.142]
+
 # Only the distro's sshd, and only from DESKTOP-HKE05KI (its controller). It
 # replaces the hand-made rule that admitted any address.
 lan_bridge_tcp_ports:
