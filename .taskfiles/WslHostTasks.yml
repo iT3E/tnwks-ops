@@ -3,12 +3,15 @@ version: "3"
 
 # The hosts under a WSL cluster: the Windows host (playbooks/windows-host.yml,
 # docs/wsl/windows-ansible.md) and its WSL distro (playbooks/wsl-distro.yml).
+# `task wsl-host:sshd` is the one step outside a playbook: Ansible can't
+# connect before it.
 # Every playbook run takes --limit and --tags through CLI_ARGS, e.g.
 # `task wsl-host:windows-check -- --tags monitoring`. The sshd bootstrap runs
 # elevated through invoke-elevated.sh, so expect a UAC prompt there.
 
 vars:
-  WSL_HOST_DIR: "{{.ROOT_DIR}}/infrastructure/wsl-host"
+  SSHD_SCRIPT: "{{.ANSIBLE_DIR}}/roles/windows_sshd/files/Install-TnwksWindowsSshd.ps1"
+  INVOKE_ELEVATED: "{{.ANSIBLE_DIR}}/scripts/invoke-elevated.sh"
   WINDOWS_SSH_KEY: "{{.HOME}}/.ssh/id_ed25519_winhost"
   # The Windows host the sshd bootstrap runs on: this workstation's own.
   WINDOWS_HOST: DESKTOP-HKE05KI
@@ -53,7 +56,7 @@ tasks:
       - "{{.ANSIBLE}} ansible-playbook playbooks/wsl-distro.yml --check --diff {{.CLI_ARGS}}"
 
   distro-apply:
-    desc: Apply the WSL distro playbook (LAN bridge socat units, USB attach units)
+    desc: Apply the WSL distro playbook (LAN bridge and USB attach units, backup and drift-check timers)
     dir: "{{.ANSIBLE_DIR}}"
     cmds:
       - "{{.ANSIBLE}} ansible-playbook playbooks/wsl-distro.yml --diff {{.CLI_ARGS}}"
@@ -108,7 +111,7 @@ tasks:
     cmds:
       - test -f "{{.WINDOWS_SSH_KEY}}" || ssh-keygen -q -t ed25519 -N '' -C 'ansible@wsl to {{.WINDOWS_HOST}}' -f "{{.WINDOWS_SSH_KEY}}"
       - chmod 600 "{{.WINDOWS_SSH_KEY}}"
-      - '{{.WSL_HOST_DIR}}/invoke-elevated.sh {{.WSL_HOST_DIR}}/Install-TnwksWindowsSshd.ps1 -PublicKeyFile "$(wslpath -w "{{.WINDOWS_SSH_KEY}}.pub")" -AdminUser {{.ADMIN_USER}}'
+      - '{{.INVOKE_ELEVATED}} {{.SSHD_SCRIPT}} -PublicKeyFile "$(wslpath -w "{{.WINDOWS_SSH_KEY}}.pub")" -AdminUser {{.ADMIN_USER}}'
       # Key login works (password logins are refused by sshd_config), against
       # the host key pinned in inventory/known_hosts.
       - ssh -o BatchMode=yes -o UserKnownHostsFile={{.ANSIBLE_DIR}}/inventory/known_hosts -i "{{.WINDOWS_SSH_KEY}}" "{{.ADMIN_USER}}@{{.WINDOWS_ADDR}}" whoami
@@ -118,40 +121,26 @@ tasks:
     vars: *sshd_vars
     cmds:
       # The script exits 2 when something differs.
-      - '{{.WSL_HOST_DIR}}/invoke-elevated.sh {{.WSL_HOST_DIR}}/Install-TnwksWindowsSshd.ps1 -PublicKeyFile "$(wslpath -w "{{.WINDOWS_SSH_KEY}}.pub")" -AdminUser {{.ADMIN_USER}} -Check || [ $? -eq 2 ]'
+      - '{{.INVOKE_ELEVATED}} {{.SSHD_SCRIPT}} -PublicKeyFile "$(wslpath -w "{{.WINDOWS_SSH_KEY}}.pub")" -AdminUser {{.ADMIN_USER}} -Check || [ $? -eq 2 ]'
 
   windows-drift-check:
-    desc: Install the nightly Ansible --check of the Windows host (systemd timer, 04:30, result in Prometheus)
+    desc: Install the nightly Ansible --check of the Windows host (systemd timer, 04:30, result in Prometheus; role wsl_drift_check)
     cmds:
-      - sudo install -m 0755 "{{.WSL_HOST_DIR}}/tnwks-windows-drift-check.sh" /usr/local/bin/tnwks-windows-drift-check
-      - sudo install -m 0644 "{{.WSL_HOST_DIR}}/tnwks-windows-drift-check.service" "{{.WSL_HOST_DIR}}/tnwks-windows-drift-check.timer" /etc/systemd/system/
-      - sudo systemctl daemon-reload
-      - sudo systemctl enable --now tnwks-windows-drift-check.timer
-      - systemctl list-timers tnwks-windows-drift-check.timer --no-pager
-    preconditions: *windows_pre
+      - task: distro-apply
+        vars: { CLI_ARGS: "--tags drift-check" }
+
+  backups:
+    desc: Install the daily UniFi (02:30) and Aruba SW03 (02:45) backup copies to Google Drive (role wsl_backups)
+    cmds:
+      - task: distro-apply
+        vars: { CLI_ARGS: "--tags backups" }
 
   unifi-backup:
-    desc: Install the daily copy of the UniFi controller backup to Google Drive (systemd timer, 02:30)
+    desc: Same as wsl-host:backups (both backup timers)
     cmds:
-      - sudo install -m 0755 "{{.WSL_HOST_DIR}}/tnwks-unifi-backup.sh" /usr/local/bin/tnwks-unifi-backup
-      - sudo install -m 0644 "{{.WSL_HOST_DIR}}/tnwks-unifi-backup.service" "{{.WSL_HOST_DIR}}/tnwks-unifi-backup.timer" /etc/systemd/system/
-      - sudo systemctl daemon-reload
-      - sudo systemctl enable --now tnwks-unifi-backup.timer
-      - systemctl list-timers tnwks-unifi-backup.timer --no-pager
+      - task: backups
 
   aruba-backup:
-    desc: Install the daily Aruba SW03 running-config backup to Google Drive (systemd timer, 02:45)
+    desc: Same as wsl-host:backups (both backup timers)
     cmds:
-      - sudo install -d -m 0755 /etc/tnwks
-      - |
-        sops -d --output-type json "{{.ROOT_DIR}}/infrastructure/aruba/secrets.sops.yaml" |
-          jq -r '"ARUBA_HOST=\(.aruba_host)\nARUBA_USER=\(.aruba_user)\nARUBA_PASSWORD=\(.aruba_password | @sh)"' |
-          sudo install -m 0600 -o "$(id -un)" /dev/stdin /etc/tnwks/aruba.env
-      - sudo install -m 0755 "{{.WSL_HOST_DIR}}/tnwks-aruba-backup.sh" /usr/local/bin/tnwks-aruba-backup
-      - sudo install -m 0644 "{{.WSL_HOST_DIR}}/tnwks-aruba-backup.service" "{{.WSL_HOST_DIR}}/tnwks-aruba-backup.timer" /etc/systemd/system/
-      - sudo systemctl daemon-reload
-      - sudo systemctl enable --now tnwks-aruba-backup.timer
-      - systemctl list-timers tnwks-aruba-backup.timer --no-pager
-    preconditions:
-      - sh: command -v sshpass
-        msg: "sshpass is required (sudo apt-get install -y sshpass)"
+      - task: backups

@@ -5,7 +5,7 @@ Coral USB Accelerators plugged into the Windows host DESKTOP-HKE05KI, over
 Frigate's built-in `zmq` detector. Each Coral is served by its own Windows
 service, `tnwks-coral-detector-<id>`, which Ansible manages from this repo
 (role `infrastructure/ansible/roles/windows_coral_detector`, server code in
-`infrastructure/wsl-host/coral-detector/`).
+`infrastructure/ansible/roles/windows_coral_detector/files/coral-detector/`).
 
 Status (2026-11-03): one Coral, service `tnwks-coral-detector-0`. Frigate
 detects on it since PR #1682 (detector `coral0`, type `zmq`); see
@@ -143,7 +143,7 @@ gcc-mingw-w64-x86-64 p7zip-full unzip`, and the sshd bootstrap from
 [windows-ansible.md](windows-ansible.md).
 
 ```bash
-task wsl-host:windows-init    # once: collections for the pinned ansible-core
+task ansible:init             # once: the pinned controller and collections
 task wsl-host:windows-check   # --check --diff, expect changed=0
 task wsl-host:windows-apply
 ```

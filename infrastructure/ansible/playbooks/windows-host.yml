@@ -1,8 +1,8 @@
 ---
-# Windows host DESKTOP-HKE05KI (docs/wsl/windows-ansible.md), over its
-# OpenSSH server. Needs ansible-core >= 2.18 and the Windows collections:
+# The Windows hosts under the WSL clusters (inventory group windows_hosts,
+# docs/wsl/windows-ansible.md), over their OpenSSH server:
 #
-#   task wsl-host:windows-init    # once: collections for the pinned ansible-core
+#   task ansible:init             # once: the pinned controller and collections
 #   task wsl-host:windows-check   # --check --diff, changes nothing
 #   task wsl-host:windows-apply
 #
@@ -73,6 +73,11 @@
       tags: [usb-attach]
     - role: windows_wsl_maintenance
       tags: [wsl-maintenance]
+    # Check-only by default (an sshd_config rewrite restarts sshd under the
+    # session). Like host-settings, near the end: a failed assertion stops
+    # nothing else.
+    - role: windows_sshd
+      tags: [sshd]
     # Check-only settings; last, so a failed assertion stops nothing else.
     - role: windows_host_settings
       tags: [host-settings]

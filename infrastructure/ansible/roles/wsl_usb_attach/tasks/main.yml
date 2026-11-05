@@ -7,7 +7,7 @@
 
 - name: Install tnwks-usb-attach script
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../wsl-host/tnwks-usb-attach.sh"
+    src: tnwks-usb-attach.sh
     dest: /usr/local/bin/tnwks-usb-attach
     owner: root
     group: root
@@ -16,7 +16,7 @@
 
 - name: Install tnwks-usb-attach templated systemd unit
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../wsl-host/tnwks-usb-attach@.service"
+    src: tnwks-usb-attach@.service
     dest: /etc/systemd/system/tnwks-usb-attach@.service
     owner: root
     group: root

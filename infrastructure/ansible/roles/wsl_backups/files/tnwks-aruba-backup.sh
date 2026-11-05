@@ -6,7 +6,7 @@
 # community, so the folder is as sensitive as the other break-glass files.
 #
 # Credentials: /etc/tnwks/aruba.env (mode 600), written by
-# `task wsl-host:aruba-backup` from infrastructure/aruba/secrets.sops.yaml.
+# the role wsl_backups from infrastructure/aruba/secrets.sops.yaml.
 set -euo pipefail
 
 DEST="${DEST:-/mnt/g/My Drive/Backup/aruba}"

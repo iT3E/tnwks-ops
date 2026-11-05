@@ -1,20 +1,25 @@
-# Install-TnwksWindowsSshd.ps1 -PublicKeyFile <path> [-AdminUser <name>] [-Check]
+# Install-TnwksWindowsSshd.ps1 -PublicKeyFile <path> | -PublicKey <key>[,<key>...]
+#                              [-AdminUser <name>] [-Check]
 #
 # Bootstrap for managing this Windows host with Ansible (docs/wsl/windows-ansible.md):
-# the built-in OpenSSH server, reachable only from WSL.
+# the built-in OpenSSH server, reachable only from WSL. The role windows_sshd
+# runs this same file through win_powershell, so the nightly check reports
+# drift from it.
 #
 #   - OpenSSH.Server capability installed, sshd Automatic (delayed) and running,
 #     restarted by the service manager when it fails
 #   - DefaultShell = Windows PowerShell (what Ansible's powershell shell expects)
 #   - sshd_config: ListenAddress = the vEthernet (WSL) host IP, keys only,
 #     AllowUsers = the admin user
-#   - administrators_authorized_keys = the key in -PublicKeyFile, ACL
-#     Administrators + SYSTEM only (sshd ignores the file otherwise)
+#   - administrators_authorized_keys = the key(s) in -PublicKeyFile or
+#     -PublicKey, ACL Administrators + SYSTEM only (sshd ignores the file
+#     otherwise)
 #   - firewall: tcp/22 from the WSL subnet only; the capability's own
 #     OpenSSH-Server-In-TCP rule (any address) is removed
 #
 # Idempotent: only what differs from this file is changed. -Check reports
-# drift, changes nothing and exits 2 when something differs.
+# drift, changes nothing and exits 2 when something differs (under Ansible:
+# reports changed instead of exiting).
 #
 # Run elevated: `task wsl-host:sshd` (or `task wsl-host:sshd-check`).
 #
@@ -26,6 +31,7 @@
 [CmdletBinding()]
 param(
     [string]$PublicKeyFile,
+    [string[]]$PublicKey,
     [string]$AdminUser,
     [switch]$Check,
     # Default: the address of the vEthernet (WSL) adapter, e.g. 172.26.80.1.
@@ -68,9 +74,14 @@ if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole([Securit
 }
 if (-not $AdminUser) { $AdminUser = $env:USERNAME }
 $AdminUser = $AdminUser.ToLower()
-if (-not $PublicKeyFile) { throw '-PublicKeyFile <path to the Ansible public key> is required' }
-$pubKey = ((Get-Content -Raw $PublicKeyFile) -replace "`r", '').Trim()
-if ($pubKey -notmatch '^ssh-ed25519 \S+') { throw "$PublicKeyFile is not an ssh-ed25519 public key" }
+# Under Ansible (win_powershell) there is an $Ansible object, and `exit` would
+# end the module instead of reporting.
+$UnderAnsible = [bool](Get-Variable -Name Ansible -ErrorAction SilentlyContinue)
+if ($PublicKeyFile) { $PublicKey = @(((Get-Content -Raw $PublicKeyFile) -replace "`r", '').Trim()) }
+if (-not $PublicKey) { throw '-PublicKeyFile <path> or -PublicKey <key> (the Ansible public keys) is required' }
+foreach ($k in $PublicKey) {
+    if ($k -notmatch '^ssh-ed25519 \S+') { throw "not an ssh-ed25519 public key: $k" }
+}
 
 function Get-WslAddress {
     $ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
@@ -111,6 +122,9 @@ if ($shellNow -ne $Shell) {
 }
 
 # --- sshd_config ---------------------------------------------------------------
+# The header below names this script's old path (infrastructure/wsl-host/). It
+# is part of the file content, so changing it means rewriting sshd_config and
+# restarting sshd; leave it until there is another reason to restart.
 $configWanted = @"
 # Managed by tnwks-ops infrastructure/wsl-host/Install-TnwksWindowsSshd.ps1.
 # Edits here are reported as drift and overwritten by the next run.
@@ -154,10 +168,10 @@ if ($configNow -ne $configWanted) {
 }
 
 # --- administrators_authorized_keys ------------------------------------------------
-$keysWanted = "$pubKey`n"
+$keysWanted = ($PublicKey -join "`n") + "`n"
 $keysNow = if (Test-Path $AdminKeys) { (Get-Content -Raw $AdminKeys) -replace "`r", '' } else { '' }
 if ($keysNow -ne $keysWanted) {
-    Drift "$AdminKeys (1 key: $(($pubKey -split ' ')[2]))"
+    Drift "$AdminKeys ($($PublicKey.Count) key(s): $(($PublicKey | ForEach-Object { ($_ -split ' ')[2] }) -join ', '))"
     if (-not $Check) { [IO.File]::WriteAllText($AdminKeys, $keysWanted) }
 }
 if (Test-Path $AdminKeys) {
@@ -269,7 +283,12 @@ if ($listen.Count) {
     Say 'WARN   sshd is not listening on port 22'
 }
 
+if ($UnderAnsible) { $Ansible.Changed = $script:drift -gt 0 }
 if ($Check) {
-    if ($script:drift) { Say "$($script:drift) item(s) differ from Install-TnwksWindowsSshd.ps1"; exit 2 }
-    Say 'No drift.'
+    if ($script:drift) {
+        Say "$($script:drift) item(s) differ from Install-TnwksWindowsSshd.ps1"
+        if (-not $UnderAnsible) { exit 2 }
+    } else {
+        Say 'No drift.'
+    }
 }

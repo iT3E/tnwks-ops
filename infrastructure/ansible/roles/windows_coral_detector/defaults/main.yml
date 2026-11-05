@@ -82,7 +82,7 @@ coral_detector_driver_files:
   - amd64/winusbcoinstaller2.dll
 
 # Controller side: sources in the repo and the download/build cache.
-coral_detector_src: "{{ playbook_dir }}/../../wsl-host/coral-detector"
+coral_detector_src: "{{ role_path }}/files/coral-detector"
 coral_detector_cache: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/tnwks-ops/windows-coral-detector"
 coral_detector_shim_id: >-
   {{ (lookup('ansible.builtin.file', coral_detector_src ~ '/shim/libusb-usbdk-shim.c')

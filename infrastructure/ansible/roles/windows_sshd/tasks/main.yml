@@ -1,0 +1,17 @@
+---
+# The script changes nothing with -Check, so it runs in check mode too.
+- name: sshd matches Install-TnwksWindowsSshd.ps1 (applied only with windows_sshd_apply=true)
+  ansible.windows.win_powershell:
+    script: "{{ lookup('ansible.builtin.file', 'Install-TnwksWindowsSshd.ps1') }}"
+    parameters:
+      PublicKey: "{{ windows_sshd_authorized_keys }}"
+      AdminUser: "{{ windows_sshd_admin_user }}"
+      Check: "{{ ansible_check_mode or not (windows_sshd_apply | bool) }}"
+  check_mode: false
+  register: windows_sshd_result
+
+- name: No sshd drift (Ansible changes it only with windows_sshd_apply=true)
+  ansible.builtin.assert:
+    that: windows_sshd_result is not changed or (windows_sshd_apply | bool and not ansible_check_mode)
+    fail_msg: "{{ windows_sshd_result.host_out | default('') | replace('\r', '') | split('\n') | select | list }}"
+    quiet: true

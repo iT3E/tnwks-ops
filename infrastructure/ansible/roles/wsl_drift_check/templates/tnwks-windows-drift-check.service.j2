@@ -5,10 +5,10 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=it3e
-Environment=HOME=/home/it3e
+User={{ wsl_distro_user }}
+Environment=HOME={{ wsl_distro_home }}
 # task, yq and sops come from Homebrew, uvx from ~/.local/bin.
-Environment=PATH=/home/linuxbrew/.linuxbrew/bin:/home/it3e/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=/home/linuxbrew/.linuxbrew/bin:{{ wsl_distro_home }}/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/usr/local/bin/tnwks-windows-drift-check
 TimeoutStartSec=30min
 Nice=10

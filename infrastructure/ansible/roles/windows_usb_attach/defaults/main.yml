@@ -7,7 +7,7 @@
 # passes no Coral IDs and the script leaves it alone.
 
 usb_attach_dir: 'C:\ProgramData\tnwks-usb-attach'
-usb_attach_src: "{{ playbook_dir }}/../../wsl-host/Sync-TnwksUsbAttach.ps1"
+usb_attach_src: Sync-TnwksUsbAttach.ps1
 usb_attach_task: tnwks-usb-attach
 # The account that owns the WSL distro (usbipd attach --wsl and docker restart
 # go through its wsl.exe).

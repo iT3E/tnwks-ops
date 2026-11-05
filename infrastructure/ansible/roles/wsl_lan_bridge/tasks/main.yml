@@ -10,7 +10,7 @@
 
 - name: Install tnwks-lan-bridge script
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../wsl-host/tnwks-lan-bridge.sh"
+    src: tnwks-lan-bridge.sh
     dest: /usr/local/bin/tnwks-lan-bridge
     owner: root
     group: root
@@ -19,7 +19,7 @@
 
 - name: Install tnwks-lan-bridge templated systemd unit
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../wsl-host/tnwks-lan-bridge@.service"
+    src: tnwks-lan-bridge@.service
     dest: /etc/systemd/system/tnwks-lan-bridge@.service
     owner: root
     group: root

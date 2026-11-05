@@ -1,0 +1,19 @@
+---
+# wsl_backups: the WSL distro's daily copies of the backups nothing else takes
+# off the desktop's disk, to the Google Drive for desktop folder (G:)
+# (docs/operations/backups.md):
+#
+#   tnwks-unifi-backup.timer  02:30  the UniFi controller's newest .unf
+#                                    (docs/network/unifi.md)
+#   tnwks-aruba-backup.timer  02:45  the Aruba SW03 running-config, when it
+#                                    changed; credentials in /etc/tnwks/aruba.env
+#
+# Both run as wsl_distro_user (its kubeconfig, its G: mount).
+
+wsl_backups_timers:
+  - tnwks-unifi-backup
+  - tnwks-aruba-backup
+
+# The switch credentials, decrypted on the controller.
+wsl_backups_aruba_secrets: "{{ tnwks_repo_root }}/infrastructure/aruba/secrets.sops.yaml"
+wsl_backups_aruba_env: /etc/tnwks/aruba.env

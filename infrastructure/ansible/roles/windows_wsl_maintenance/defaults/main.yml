@@ -10,7 +10,6 @@
 # Both run as the desktop user (S4U, elevated): WSL distros are per-user.
 
 wsl_maintenance_user: "{{ windows_desktop_user }}"
-wsl_maintenance_src: "{{ playbook_dir }}/../../wsl-host"
 
 wsl_watchdog_dir: 'C:\ProgramData\tnwks-watchdog'
 wsl_watchdog_task: tnwks-wsl-watchdog

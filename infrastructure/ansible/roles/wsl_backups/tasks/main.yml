@@ -1,0 +1,69 @@
+---
+# ArubaOS 7.4 only takes password logins, which ssh does through sshpass.
+- name: Install sshpass
+  ansible.builtin.apt:
+    name: sshpass
+    state: present
+
+- name: Backup scripts
+  ansible.builtin.copy:
+    src: "{{ item }}.sh"
+    dest: /usr/local/bin/{{ item }}
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ wsl_backups_timers }}"
+
+- name: Backup services
+  ansible.builtin.template:
+    src: "{{ item }}.service.j2"
+    dest: /etc/systemd/system/{{ item }}.service
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ wsl_backups_timers }}"
+  notify: Reload systemd
+
+- name: Backup timers
+  ansible.builtin.copy:
+    src: "{{ item }}.timer"
+    dest: /etc/systemd/system/{{ item }}.timer
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ wsl_backups_timers }}"
+  notify: Reload systemd
+
+- name: Directory for the switch credentials
+  ansible.builtin.file:
+    path: "{{ wsl_backups_aruba_env | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Sourced by the script: ARUBA_PASSWORD is always single-quoted (as jq's @sh
+# did when a task wrote this file).
+- name: Switch credentials
+  ansible.builtin.copy:
+    content: |
+      ARUBA_HOST={{ wsl_backups_aruba.aruba_host }}
+      ARUBA_USER={{ wsl_backups_aruba.aruba_user }}
+      ARUBA_PASSWORD='{{ wsl_backups_aruba.aruba_password | replace("'", "'\\''") }}'
+    dest: "{{ wsl_backups_aruba_env }}"
+    owner: "{{ wsl_distro_user }}"
+    group: root
+    mode: "0600"
+  vars:
+    wsl_backups_aruba: "{{ lookup('community.sops.sops', wsl_backups_aruba_secrets) | from_yaml }}"
+  no_log: true
+
+- name: Flush the systemd reload before enabling the timers
+  ansible.builtin.meta: flush_handlers
+
+- name: Timers are enabled and running
+  ansible.builtin.systemd:
+    name: "{{ item }}.timer"
+    enabled: true
+    state: started
+  loop: "{{ wsl_backups_timers }}"
