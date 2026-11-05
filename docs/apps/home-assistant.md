@@ -15,13 +15,14 @@ oauth2-proxy gate:
 | `https://hass.internal.tnwks.us` | MikroTik's `*.internal.tnwks.us` record → Windows portproxy → nginx-internal | the LAN |
 
 The two hostnames are distinct, so there's no split-horizon DNS.
-`hass.tnwks.us` is public DNS (external-dns → Cloudflare), resolved for the LAN
+`hass.tnwks.us` is public DNS (Cloudflare, in Terraform:
+`infrastructure/terraform/environments/prod/cloudflare/public-dns.tf`), resolved for the LAN
 by the MikroTik.
 
 **New public hostnames and the MikroTik's cache:** the MikroTik caches "no such
 name" answers for 30 minutes (the zone's SOA minimum), and Force-DNS redirects
 mean everything on the LAN goes through that cache. If a hostname is looked up
-in the moments before external-dns creates it, it stays unresolvable on the
+in the moments before Terraform creates it, it stays unresolvable on the
 LAN for up to half an hour. Run `/ip dns cache flush` on the router to clear
 it.
 

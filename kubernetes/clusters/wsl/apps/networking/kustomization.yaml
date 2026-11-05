@@ -10,16 +10,14 @@
 #
 # Each cluster runs its own Cloudflare tunnel — the tunnel ID is in
 # clusters/<target>/cluster-secrets.sops.yaml. When the inactive cluster
-# is shut down its tunnel just disconnects; DNS records (managed by
-# external-dns via the cloudflared DNSEndpoint) re-publish on the active
-# cluster's startup.
+# is shut down its tunnel just disconnects. The public DNS records are in
+# Terraform (infrastructure/terraform/environments/prod/cloudflare/public-dns.tf).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../../apps/networking/namespace.yaml
   - ../../../../apps/networking/metallb/ks.yaml
   - ../../../../apps/networking/cloudflared/ks.yaml
-  - ../../../../apps/networking/external-dns/ks.yaml
   - ../../../../apps/networking/ingress-nginx/ks.yaml
   - ../../../../apps/networking/ingress-nginx-internal/ks.yaml
   - ../../../../apps/networking/k8s-gateway/ks.yaml

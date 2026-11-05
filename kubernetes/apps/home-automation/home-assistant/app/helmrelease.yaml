@@ -179,7 +179,6 @@ spec:
       app:
         className: nginx
         annotations:
-          external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
           hajimari.io/icon: mdi:home-assistant
           # The frontend holds one long-lived websocket; don't let nginx's
           # 60s default idle timeout cut it.

@@ -11,8 +11,6 @@ kind: Ingress
 metadata:
   name: sites
   namespace: production
-  annotations:
-    external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
 spec:
   ingressClassName: nginx
   # No secretName — the ingress-nginx default-ssl-certificate is the
@@ -40,10 +38,6 @@ spec:
 # auth surface surgically scoped to the private prefix — the public ingress
 # stays annotation-free so a misconfigured auth-url can never take the whole
 # site down. Both target the same `sites` Service.
-#
-# No external-dns target annotation here: the public `sites` ingress above
-# already owns the sites.${SECRET_DOMAIN} DNS record. A second claim on the same
-# host would make external-dns fight itself over ownership.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

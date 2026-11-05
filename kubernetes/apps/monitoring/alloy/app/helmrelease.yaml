@@ -93,8 +93,6 @@ spec:
       enabled: true
       ingressClassName: nginx
       faroPort: 12347
-      annotations:
-        external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
       hosts:
         - faro.${SECRET_DOMAIN}
       path: /

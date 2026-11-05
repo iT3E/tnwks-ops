@@ -82,7 +82,6 @@ spec:
       app:
         className: nginx
         annotations:
-          external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
           hajimari.io/icon: mdi:lock
         hosts:
           - host: &host "bitwarden.${SECRET_DOMAIN}"

@@ -23,7 +23,6 @@ metadata:
   name: oauth2-proxy-public
   namespace: auth
   annotations:
-    external-dns.alpha.kubernetes.io/target: "ingress.${SECRET_DOMAIN}"
     # Cognito JWTs are large; oauth2-proxy splits the session cookie into
     # chunks whose combined Set-Cookie headers overflow nginx's default 4k
     # proxy buffer on /oauth2/callback (surfaces as 502). Match the internal
