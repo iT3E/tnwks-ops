@@ -12,6 +12,28 @@ module "cf_domain_1" {
   domain     = data.sops_file.secrets.data["cf_domain_1"]
   account_id = data.sops_file.secrets.data["cf_account_id"]
 
+  # Public apps behind the cloudflared tunnel (modules/cloudflare/tunnel-dns.tf).
+  # "unlisted" is the one whose name is a secret (SECRET_PREFIX on the clusters).
+  tunnel_id = data.sops_file.secrets.data["cf_domain_1_tunnel_id"]
+  tunnel_public_hosts = [
+    "analytics",
+    "bitwarden",
+    "echo-server",
+    "faro",
+    "flux-webhook",
+    "hass",
+    "invite",
+    "jellyfin",
+    "oauth2",
+    "onboard",
+    "recipes",
+    "request",
+    "requests",
+    "sites",
+    "unlisted",
+  ]
+  tunnel_host_names = { unlisted = data.sops_file.secrets.data["cf_domain_1_secret_host"] }
+
   dns_entries = [
     # Generic settings
     {

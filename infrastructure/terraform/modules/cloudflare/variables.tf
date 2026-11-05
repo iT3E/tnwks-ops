@@ -35,3 +35,21 @@ variable "waf_custom_rules" {
   }))
   default = []
 }
+
+variable "tunnel_id" {
+  description = "cloudflared tunnel ID that ingress.<domain> points at (tunnel-dns.tf). Needed when tunnel_public_hosts is set."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+variable "tunnel_public_hosts" {
+  description = "Public app names (keys) served through the tunnel, each a proxied CNAME to ingress.<domain>."
+  type        = set(string)
+  default     = []
+}
+variable "tunnel_host_names" {
+  description = "Real names for keys in tunnel_public_hosts whose name is a secret (key -> name)."
+  type        = map(string)
+  default     = {}
+  sensitive   = true
+}
