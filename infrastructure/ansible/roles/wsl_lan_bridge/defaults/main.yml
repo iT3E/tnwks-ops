@@ -8,6 +8,12 @@
 # LAN 8080 to it).
 # 'dns' is intentionally omitted by default — netsh portproxy is TCP-only,
 # so the LAN-side DNS path goes via VyOS, not via this bridge.
+# Target addresses for tnwks-lan-bridge.sh, per host (env var -> address). The
+# script's defaults are homelab-wsl's MetalLB VIPs (10.5.0.x); another cluster
+# sets its own here (WSL-02: INTERNAL_INGRESS_IP 10.6.0.200), and they reach
+# the units through a drop-in. Empty: no drop-in, the defaults apply.
+wsl_lan_bridge_targets: {}
+
 wsl_lan_bridge_instances:
   - http
   - https

@@ -16,7 +16,11 @@ wsl_cluster_tools_enabled: true
 
 # Nothing on this distro for these roles yet; an empty list skips the role
 # (playbooks/wsl-distro.yml).
-wsl_lan_bridge_instances: []
+# LAN 80/443 -> homelab-wsl-02's ingress-nginx-internal (Cilium LB IP; the
+# Windows half forwards them, host_vars/WSL-02).
+wsl_lan_bridge_instances: [http, https]
+wsl_lan_bridge_targets:
+  INTERNAL_INGRESS_IP: 10.6.0.200
 wsl_usb_attach_devices: []
 wsl_backups_timers: []
 # The tnwks-ansible runners on homelab-wsl (group_vars/site_wsl02.yml). They
