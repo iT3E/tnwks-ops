@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.132.0 - 2026-11-05
+
+### Added
+
+* Ansible site `site_wsl02` for WSL-02, the second WSL host, checked and applied by CI from homelab-wsl's runner, which reaches it over the LAN (2222, from DESKTOP-HKE05KI only) and jumps through the distro to Windows sshd (`wsl_ci_access` `permit_open`). New distro role `wsl_docker` installs Docker Engine from Docker's apt repository (pinned to 28.3.1, a no-op on DESKTOP-HKE05KI). Roles for hardware a host doesn't have (Coral, Z-Stick, UDP relays, backups, the watchdog) are skipped when their per-host list is empty, and `windows_host_settings` skips the Ethernet checks on a Wi-Fi host. WSL-02's unused hand-made llama.cpp portproxy and firewall rule are removed.
+
 ## v1.131.0 - 2026-11-05
 
 ### Added
