@@ -1,0 +1,11 @@
+---
+# yaml-language-server: $schema=https://json.schemastore.org/kustomization
+# A CloudNativePG cluster of the app's own, with barman-cloud WAL archiving and
+# daily base backups to s3://${BACKUP_S3_BUCKET}/cnpg/<app>/<serverName>/.
+# Variables and usage: README.md next to this file.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - ./cluster.yaml
+  - ./objectstore.yaml
+  - ./scheduledbackup.yaml

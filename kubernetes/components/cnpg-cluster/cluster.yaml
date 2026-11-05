@@ -1,0 +1,69 @@
+---
+# The app's own Postgres. Lives in `databases` whatever the app's namespace:
+# that's where the STS refresher writes aws-backup-sts, and where the role
+# Secrets (postgres-<app>) already are. Services: ${CNPG_APP}-pg-rw/-ro/-r.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: ${CNPG_APP}-pg
+  namespace: databases
+  annotations:
+    kyverno.io/ignore: "true"
+  labels:
+    app.kubernetes.io/name: ${CNPG_APP}-pg
+    app.kubernetes.io/instance: ${CNPG_APP}-pg
+    app.kubernetes.io/part-of: cloudnative-pg
+spec:
+  # cluster-settings sets CNPG_INSTANCES per cluster (1 on WSL); the app's
+  # postBuild.substitute overrides it.
+  instances: ${CNPG_INSTANCES:=1}
+  primaryUpdateStrategy: unsupervised
+  storage:
+    size: ${CNPG_SIZE:=2Gi}
+    # Needs Linux permission semantics (initdb chmods its files), see
+    # STORAGE_CLASS_DATABASE in cluster-settings.
+    storageClass: ${STORAGE_CLASS_DATABASE}
+  resources:
+    requests:
+      cpu: ${CNPG_CPU_REQUEST:=10m}
+      memory: ${CNPG_MEMORY_REQUEST:=128Mi}
+    limits:
+      memory: ${CNPG_MEMORY_LIMIT:=512Mi}
+  monitoring:
+    enablePodMonitor: ${SERVICE_MONITOR_ENABLED:=false}
+  postgresql:
+    parameters:
+      # Small-cluster defaults: one app, a handful of connections.
+      shared_buffers: ${CNPG_SHARED_BUFFERS:=32MB}
+      # Parameters must be strings, and kustomize drops the quotes around a
+      # ${...} before Flux substitutes it, so a bare 20 would land as an int
+      # and fail validation. The quotes travel inside the value instead: the
+      # default carries them, and an override is written '"50"' (README.md).
+      max_connections: ${CNPG_MAX_CONNECTIONS:="20"}
+      wal_compression: zstd
+  # The owner's password follows its Secret (basic-auth, in `databases`),
+  # on every reconcile, not only at initdb.
+  managed:
+    roles:
+      - name: ${CNPG_USER:=${CNPG_APP}}
+        ensure: present
+        login: true
+        passwordSecret:
+          name: ${CNPG_USER_SECRET:=postgres-${CNPG_APP}}
+  # Only read when the Cluster is created. A migration (initdb.import) or a
+  # restore (recovery) replaces this block with a patch, see README.md.
+  bootstrap:
+    initdb:
+      database: ${CNPG_DATABASE:=${CNPG_USER:=${CNPG_APP}}}
+      owner: ${CNPG_USER:=${CNPG_APP}}
+      secret:
+        name: ${CNPG_USER_SECRET:=postgres-${CNPG_APP}}
+  # Continuous WAL archiving to cnpg/<app>/<serverName>/. serverName is the
+  # site, so two sites can share one ObjectStore. Bump it (homelab-wsl-g2)
+  # after a restore: barman won't archive a new timeline into an old folder.
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: ${CNPG_APP}-pg
+        serverName: ${CNPG_SERVER_NAME:=${CLUSTER_NAME}}

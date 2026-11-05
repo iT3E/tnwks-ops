@@ -1,0 +1,45 @@
+---
+# The app's own prefix in the backup bucket (same bucket and STS Secret as the
+# shared cluster's ObjectStore, docs/operations/backups.md). Each Cluster
+# writes under <destinationPath>/<serverName>/ and prunes only its own folder.
+# spec.configuration.serverName must stay empty: it comes from the Cluster.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: ${CNPG_APP}-pg
+  namespace: databases
+  labels:
+    app.kubernetes.io/name: ${CNPG_APP}-pg
+    app.kubernetes.io/instance: ${CNPG_APP}-pg
+    app.kubernetes.io/part-of: cloudnative-pg
+spec:
+  retentionPolicy: "${CNPG_BACKUP_RETENTION:=30d}"
+  configuration:
+    destinationPath: "s3://${BACKUP_S3_BUCKET}/cnpg/${CNPG_APP}"
+    s3Credentials:
+      accessKeyId:
+        name: aws-backup-sts
+        key: AWS_ACCESS_KEY_ID
+      secretAccessKey:
+        name: aws-backup-sts
+        key: AWS_SECRET_ACCESS_KEY
+      sessionToken:
+        name: aws-backup-sts
+        key: AWS_SESSION_TOKEN
+      region:
+        name: aws-backup-sts
+        key: AWS_REGION
+    wal:
+      compression: zstd
+      maxParallel: 2
+    data:
+      compression: gzip
+      jobs: 2
+  # The barman-cloud sidecar in each instance pod (about 60 MiB idle).
+  instanceSidecarConfiguration:
+    resources:
+      requests:
+        cpu: 5m
+        memory: ${CNPG_SIDECAR_MEMORY_REQUEST:=64Mi}
+      limits:
+        memory: ${CNPG_SIDECAR_MEMORY_LIMIT:=256Mi}

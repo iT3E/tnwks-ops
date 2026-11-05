@@ -1,0 +1,21 @@
+---
+# Daily base backup (six-field cron, seconds first). With continuous WAL
+# archiving this gives point-in-time recovery over the ObjectStore's retention.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: ${CNPG_APP}-pg-daily
+  namespace: databases
+  labels:
+    app.kubernetes.io/name: ${CNPG_APP}-pg
+    app.kubernetes.io/instance: ${CNPG_APP}-pg
+    app.kubernetes.io/part-of: cloudnative-pg
+spec:
+  schedule: "${CNPG_BACKUP_SCHEDULE:=0 30 1 * * *}"
+  immediate: true
+  backupOwnerReference: self
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+  cluster:
+    name: ${CNPG_APP}-pg
