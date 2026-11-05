@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.148.1 - 2026-11-05
+
+### Fixed
+
+* Docs: a Windows feature update removes the OpenSSH Server capability (seen on WSL-02, 23H2 to 25H2), so the sshd bootstrap has to run again after one; `windows-patching.md` and `windows-ansible.md` say so, and record WSL-02 on 25H2.
+
 ## v1.148.0 - 2026-11-05
 
 ### Changed
