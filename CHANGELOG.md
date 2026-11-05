@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.127.0 - 2026-11-05
+
+### Changed
+
+* mikrotik: allow SNMP (udp/161) from the desktop to SW03 only, so the snmp-exporter scrape of the AP ports no longer depends on the desktop's wg01-home VPN tunnel (new zone pair `190-unifi-frontend-910-switch-mgmt`, also in the generator's `MONITORING_ZONE_RULES`)
+
 ## v1.126.0 - 2026-11-05
 
 ### Added

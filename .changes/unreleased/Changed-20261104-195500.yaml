@@ -1,3 +1,0 @@
-kind: Changed
-body: "mikrotik: allow SNMP (udp/161) from the desktop to SW03 only, so the snmp-exporter scrape of the AP ports no longer depends on the desktop's wg01-home VPN tunnel (new zone pair `190-unifi-frontend-910-switch-mgmt`, also in the generator's `MONITORING_ZONE_RULES`)"
-time: 2026-11-04T19:55:00.000000-08:00
