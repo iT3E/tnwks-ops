@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.146.0 - 2026-11-05
+
+### Removed
+
+* external-dns is gone: the public Cloudflare records are in Terraform (`environments/prod/cloudflare/public-dns.tf`, #1736), so the controller, its HelmRepository, the `external-dns.alpha.kubernetes.io/target` and `hostname` annotations, the tunnel's `DNSEndpoint` and `cloudflared`'s dependency on it are removed. A new public app is a line in `local.cf1_public_hosts`.
+
 ## v1.145.0 - 2026-11-05
 
 ### Changed

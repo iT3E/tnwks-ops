@@ -1,3 +1,0 @@
-kind: Removed
-body: "external-dns is gone: the public Cloudflare records are in Terraform (`environments/prod/cloudflare/public-dns.tf`, #1736), so the controller, its HelmRepository, the `external-dns.alpha.kubernetes.io/target` and `hostname` annotations, the tunnel's `DNSEndpoint` and `cloudflared`'s dependency on it are removed. A new public app is a line in `local.cf1_public_hosts`."
-time: 2026-11-05T08:00:00.000000000-08:00
