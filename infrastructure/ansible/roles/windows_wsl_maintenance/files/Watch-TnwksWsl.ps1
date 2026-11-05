@@ -33,7 +33,10 @@ param(
     [string]$LogDir  = 'C:\ProgramData\tnwks-watchdog',
     [int]$MaxLogKB   = 1024,
     [switch]$SkipGateway,
-    [switch]$SkipUsb
+    [switch]$SkipUsb,
+    # A scheduled task holding a wsl.exe client open (tnwks-wsl-keepalive);
+    # started again when it isn't running, e.g. after a wsl --shutdown.
+    [string]$KeepAliveTask
 )
 
 $ErrorActionPreference = 'Continue'
@@ -164,6 +167,18 @@ if (-not $distroWasUp) {
     if (-not (Start-Distro)) { Write-Log 'aborting: distro failed to start.' 'ERROR'; exit 1 }
 }
 
+if ($KeepAliveTask) {
+    $ka = Get-ScheduledTask -TaskName $KeepAliveTask -ErrorAction SilentlyContinue
+    if (-not $ka) {
+        Write-Log ("keepalive task '{0}' not found." -f $KeepAliveTask) 'WARN'
+    }
+    elseif ("$($ka.State)" -ne 'Running') {
+        Write-Log ("keepalive task '{0}' is {1}; starting it." -f $KeepAliveTask, $ka.State) 'WARN'
+        Start-ScheduledTask -TaskName $KeepAliveTask -ErrorAction SilentlyContinue
+        $script:Actions += 'keepalive-started'
+    }
+}
+
 if (-not $SkipUsb) {
     Sync-UsbDevices
 }
@@ -183,6 +198,7 @@ if (-not $distroWasUp -and -not $SkipUsb) {
 
 if ($script:Actions.Count -eq 0) {
     $healthy = @('wsl up')
+    if ($KeepAliveTask) { $healthy += 'keepalive running' }
     if (-not $SkipGateway) { $healthy += 'gateway active' }
     if (-not $SkipUsb) { $healthy += 'Z-Stick attached' }
     Write-Log ('healthy ({0}).' -f ($healthy -join ', '))

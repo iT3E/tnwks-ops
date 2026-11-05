@@ -16,6 +16,12 @@ wsl_watchdog_task: tnwks-wsl-watchdog
 # Extra arguments for Watch-TnwksWsl.ps1: `-SkipGateway -SkipUsb` on a host
 # without the OpenClaw gateway or the Z-Stick.
 wsl_watchdog_args: ""
+# tnwks-wsl-keepalive: one long-running wsl.exe client, so WSL doesn't stop
+# the distro for lack of one. Per host (WSL-02); pair it with the watchdog's
+# `-KeepAliveTask tnwks-wsl-keepalive`, which restarts it after a WSL restart.
+wsl_keepalive_enabled: false
+wsl_keepalive_task: tnwks-wsl-keepalive
+wsl_keepalive_distro: Ubuntu
 vhdx_compact_dir: 'C:\ProgramData\tnwks-vhdx-compact'
 vhdx_compact_task: tnwks-vhdx-compact
 # The distro's ext4.vhdx; empty = the script's default (E:\WSL\Ubuntu, on
