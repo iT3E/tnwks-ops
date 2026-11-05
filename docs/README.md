@@ -26,6 +26,7 @@ Device config lives with its tooling: `infrastructure/terraform/modules/mikrotik
 | [`wsl/coral-detector.md`](wsl/coral-detector.md) | Corals served from Windows services to Frigate's zmq detector: design, apply, cutover and rollback |
 | [`wsl/windows-ansible.md`](wsl/windows-ansible.md) | Managing the Windows host with Ansible over its OpenSSH server: bootstrap, check mode, what's next |
 | [`wsl/move-disk-off-c.md`](wsl/move-disk-off-c.md) | Moving the WSL disk off `C:` |
+| [`wsl/multi-site.md`](wsl/multi-site.md) | Two WSL clusters on Cilium Cluster Mesh (design): routed network, BGP shared VIPs, runtime switchover, app tiers, router capacity, spike plan |
 
 Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md).
 
@@ -45,6 +46,7 @@ Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md)
 | [`operations/external-monitoring.md`](operations/external-monitoring.md) | Off-site heartbeats (healthchecks.io): power, WAN and "cluster didn't come back" alerts |
 | [`operations/sops.md`](operations/sops.md) | Secrets: recipients, editing, re-keying |
 | [`operations/ansible.md`](operations/ansible.md) | Ansible: the pinned controller, the one inventory, running playbooks, adding a host |
+| [`operations/windows-patching.md`](operations/windows-patching.md) | Windows Update on the WSL hosts (design): brakes, approval in git, armed windows, failover before patching, pre and post checks |
 | [`operations/renew-kubeconfig-cert.md`](operations/renew-kubeconfig-cert.md) | Renewing the kubeconfig client certificate |
 | [`operations/renovate.md`](operations/renovate.md) | Renovate tiers, and how impact/high PRs reach Ori's reviewer agent |
 
