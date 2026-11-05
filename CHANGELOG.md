@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.131.0 - 2026-11-05
+
+### Added
+
+* DHCP reservation for WSL-02 (10.10.91.112), the Windows host for the second WSL cluster `homelab-wsl-02`. It is on the wifi NIC for now; swap the MAC when the box is wired.
+
 ## v1.130.0 - 2026-11-05
 
 ### Changed
