@@ -153,3 +153,89 @@ resource "aws_rolesanywhere_profile" "backups" {
   role_arns        = [aws_iam_role.rolesanywhere_backups[0].arn]
   duration_seconds = 14400
 }
+
+## ---------------------------------------------------------------------------------------------------------------------
+## Backups for other sites (rolesanywhere_backups_sites): same trust anchor, one role and profile per site. A site
+## reads the whole bucket (so it can restore or replay the other site's backups) but writes, overwrites and deletes
+## only under its own prefixes: homelab-wsl-02 can't touch homelab-wsl's archives, and a standby promoted by mistake
+## can't damage them. homelab-wsl keeps the role above (read/write on everything).
+## ---------------------------------------------------------------------------------------------------------------------
+
+locals {
+  rolesanywhere_backups_sites = local.rolesanywhere_enabled ? var.rolesanywhere_backups_sites : {}
+}
+
+data "aws_iam_policy_document" "rolesanywhere_backups_site_trust" {
+  for_each = local.rolesanywhere_backups_sites
+
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole", "sts:TagSession", "sts:SetSourceIdentity"]
+    principals {
+      type        = "Service"
+      identifiers = ["rolesanywhere.amazonaws.com"]
+    }
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values   = [aws_rolesanywhere_trust_anchor.tnwks[0].arn]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:PrincipalTag/x509Subject/CN"
+      values   = each.value.common_names
+    }
+  }
+}
+
+data "aws_iam_policy_document" "rolesanywhere_backups_site" {
+  for_each = local.rolesanywhere_backups_sites
+
+  statement {
+    sid       = "ListBucket"
+    actions   = ["s3:ListBucket", "s3:GetBucketLocation", "s3:ListBucketMultipartUploads"]
+    resources = [aws_s3_bucket.homelab_backups.arn]
+  }
+  statement {
+    sid       = "ReadEverything"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.homelab_backups.arn}/*"]
+  }
+  statement {
+    sid = "WriteOwnPrefixes"
+    actions = [
+      "s3:PutObject",
+      "s3:DeleteObject",
+      "s3:AbortMultipartUpload",
+      "s3:ListMultipartUploadParts",
+    ]
+    resources = [for p in each.value.write_prefixes : "${aws_s3_bucket.homelab_backups.arn}/${p}"]
+  }
+}
+
+resource "aws_iam_role" "rolesanywhere_backups_site" {
+  for_each = local.rolesanywhere_backups_sites
+
+  name                 = "tnwks-rolesanywhere-backups-${each.key}"
+  description          = "Roles Anywhere role for ${each.key} backups: read the backup bucket, write its own prefixes"
+  assume_role_policy   = data.aws_iam_policy_document.rolesanywhere_backups_site_trust[each.key].json
+  max_session_duration = 14400
+}
+
+resource "aws_iam_role_policy" "rolesanywhere_backups_site" {
+  for_each = local.rolesanywhere_backups_sites
+
+  name   = "homelab-backups-bucket-${each.key}"
+  role   = aws_iam_role.rolesanywhere_backups_site[each.key].id
+  policy = data.aws_iam_policy_document.rolesanywhere_backups_site[each.key].json
+}
+
+# Same 4-hour sessions as the homelab-wsl profile.
+resource "aws_rolesanywhere_profile" "backups_site" {
+  for_each = local.rolesanywhere_backups_sites
+
+  name             = "tnwks-ops-backups-${each.key}"
+  enabled          = true
+  role_arns        = [aws_iam_role.rolesanywhere_backups_site[each.key].arn]
+  duration_seconds = 14400
+}

@@ -22,5 +22,16 @@ module "aws" {
   rolesanywhere_sops_common_names = ["it3e-wsl"]
   # The homelab-wsl backup credential refresher (docs/operations/backups.md).
   rolesanywhere_backups_common_names = ["homelab-wsl-backups"]
-  sops_role_arn                      = "arn:aws:iam::654654220436:role/iam-role-sops"
+  # homelab-wsl-02 (WSL-02): its own certificate and role. It reads homelab-wsl's
+  # backups (CNPG replicas replay its WAL, kopiur restores its snapshots) and
+  # writes only its own: CNPG archives under cnpg/<app>/homelab-wsl-02*/
+  # (serverName = the site, kubernetes/components/cnpg-cluster) and its own
+  # kopiur repository.
+  rolesanywhere_backups_sites = {
+    "wsl-02" = {
+      common_names   = ["homelab-wsl-02-backups"]
+      write_prefixes = ["cnpg/*/homelab-wsl-02*/*", "kopiur-homelab-wsl-02/*"]
+    }
+  }
+  sops_role_arn = "arn:aws:iam::654654220436:role/iam-role-sops"
 }

@@ -136,3 +136,13 @@ output "rolesanywhere_backups_role_arn" {
   description = "Role the homelab-wsl backup tools assume through Roles Anywhere."
   value       = module.aws.rolesanywhere_backups_role_arn
 }
+
+output "rolesanywhere_backups_site_profile_arns" {
+  description = "Roles Anywhere profile per backup site (wsl-02)."
+  value       = module.aws.rolesanywhere_backups_site_profile_arns
+}
+
+output "rolesanywhere_backups_site_role_arns" {
+  description = "Role per backup site, assumed through Roles Anywhere."
+  value       = module.aws.rolesanywhere_backups_site_role_arns
+}

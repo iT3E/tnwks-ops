@@ -46,6 +46,18 @@ variable "sops_role_arn" {
   default     = null
 }
 
+variable "rolesanywhere_backups_sites" {
+  description = <<-EOT
+    Backup roles for other sites (rolesanywhere.tf), keyed by site (wsl-02): the certificate CNs allowed a session,
+    and the bucket key patterns that site may write and delete (it can read everything).
+  EOT
+  type = map(object({
+    common_names   = list(string)
+    write_prefixes = list(string)
+  }))
+  default = {}
+}
+
 variable "rolesanywhere_backups_common_names" {
   description = "Certificate CNs allowed a Roles Anywhere session as the homelab backup role (S3 read/write on the backup bucket)."
   type        = list(string)
