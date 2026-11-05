@@ -1,3 +1,0 @@
-kind: Changed
-body: "unifi: 5 GHz Roaming Assistant at -73 dBm, Kitchen 5 GHz power to medium and Master 2.4 GHz power to high, from the 2026-11-04 Wi-Fi analysis; the module now takes optional per-radio `tx_power_mode`/`tx_power` and `wlan.roaming_assistant_5g_rssi`"
-time: 2026-11-04T19:00:00.000000-08:00

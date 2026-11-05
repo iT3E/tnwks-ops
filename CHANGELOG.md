@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.123.0 - 2026-11-05
+
+### Changed
+
+* unifi: 5 GHz Roaming Assistant at -73 dBm, Kitchen 5 GHz power to medium and Master 2.4 GHz power to high, from the 2026-11-04 Wi-Fi analysis; the module now takes optional per-radio `tx_power_mode`/`tx_power` and `wlan.roaming_assistant_5g_rssi`
+
 ## v1.122.0 - 2026-11-05
 
 ### Added
