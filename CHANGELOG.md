@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.135.0 - 2026-11-05
+
+### Changed
+
+* Renovate review: Ori only reviews an impact/high PR after the owner adds the new owner/review label; a Renovate push clears it again.
+
 ## v1.134.1 - 2026-11-05
 
 ### Fixed
