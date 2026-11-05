@@ -13,3 +13,4 @@ resources:
   - ./frigate.yaml
   - ./coral-detector.yaml
   - ./heartbeats.yaml
+  - ./wifi.yaml
