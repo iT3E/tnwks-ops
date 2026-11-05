@@ -35,3 +35,11 @@ spec:
         memory: 64Mi
       limits:
         memory: 256Mi
+    # Off unless set. The controller serves its own on controllerManagerAddr
+    # and starts every listener with listenerAddr, which gives the listener
+    # pod a "metrics" port (job queue and run time per scale set). Scraped by
+    # the PodMonitors in ../monitoring.
+    metrics:
+      controllerManagerAddr: ":8080"
+      listenerAddr: ":8080"
+      listenerEndpoint: "/metrics"

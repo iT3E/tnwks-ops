@@ -41,9 +41,15 @@ spec:
     runnerScaleSetName: tnwks-ansible-${CLUSTER_NAME}
     # Same GitHub App as the other runners (one installation).
     githubConfigSecret: sites-runner-github-app
-    # Idle costs nothing; one runner, so two runs never change a host at once.
+    # Idle costs nothing. One runner per site that names this scale set as
+    # its ci_runner (group_vars/site_*.yml; two today), so the matrix runs the
+    # sites side by side instead of queueing them. The workflow's per-site
+    # concurrency group, not this cap, keeps two runs off one host.
+    # Trade-off: a site_wsl apply that restarts dockerd (a wsl_docker pin
+    # bump) restarts this cluster's nodes, and with them any other site's job
+    # running here at the time; re-run it.
     minRunners: 0
-    maxRunners: 1
+    maxRunners: 2
     controllerServiceAccount:
       namespace: tools
       name: gha-runner-scale-set-controller-gha-rs-controller

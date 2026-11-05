@@ -152,6 +152,9 @@ jobs:
       MODE: ${{ needs.plan.outputs.mode }}
       SITE: ${{ matrix.site.name }}
       HOSTS: ${{ matrix.site.hosts }}
+      # Per-task times in the full log, and the slowest in the job summary
+      # (ci-report.py --timings). CI only: a workstation run stays as it was.
+      ANSIBLE_CALLBACKS_ENABLED: ansible.posix.profile_tasks
       SOPS_VERSION: v3.13.3
       SOPS_SHA256: e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b
       AGE_VERSION: v1.3.2
@@ -165,11 +168,25 @@ jobs:
 
       - name: Set up uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: infrastructure/ansible/uv.lock
 
-      - name: Controller and collections
-        run: |
-          uv sync --locked
-          uv run --locked ansible-galaxy collection install -r requirements.yml
+      - name: Controller
+        run: uv sync --locked
+
+      # Galaxy is most of a cold job's setup (~40s for five collections, one
+      # request at a time); the pins only change with requirements.yml.
+      - name: Restore the collections
+        id: collections
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.ansible/collections-tnwks-ops
+          key: ansible-collections-${{ hashFiles('infrastructure/ansible/requirements.yml') }}
+
+      - name: Collections
+        if: steps.collections.outputs.cache-hit != 'true'
+        run: uv run --locked ansible-galaxy collection install -r requirements.yml
 
       # sops for the community.sops vars plugin (SOPS_AGE_KEY is in the pod's
       # env), age to encrypt the full log.
@@ -221,8 +238,9 @@ jobs:
         run: |
           python3 -I scripts/ci-report.py --log "$RUNNER_TEMP/ansible.log" --site "$SITE" --hosts "$HOSTS" \
             --mode "$MODE" --rc "$RC" --duration "$DURATION" \
-            --summary "$RUNNER_TEMP/summary.md" --prom "$RUNNER_TEMP/drift.prom"
-          cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
+            --summary "$RUNNER_TEMP/summary.md" --prom "$RUNNER_TEMP/drift.prom" \
+            --timings "$RUNNER_TEMP/timings.md"
+          cat "$RUNNER_TEMP/summary.md" "$RUNNER_TEMP/timings.md" >> "$GITHUB_STEP_SUMMARY"
           age -r "$LOG_RECIPIENT" -o "$RUNNER_TEMP/ansible-$SITE.log.age" "$RUNNER_TEMP/ansible.log"
 
       - name: Upload the encrypted full output

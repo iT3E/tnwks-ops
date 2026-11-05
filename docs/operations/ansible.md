@@ -142,17 +142,20 @@ How a run goes:
    controller play (downloads, the Coral libusb shim built with mingw-w64)
    and uploads `~/.cache/tnwks-ops` as an artifact, so the runner needs no
    compiler.
-2. **run** (`runs-on: <ci_runner>`, one at a time per site): downloads that
-   cache, then `ansible-playbook windows-host.yml wsl-distro.yml --limit
-   site_<name>,localhost --skip-tags aruba-credentials`. The controller play
-   finds everything in place, and asserts the shim's SHA-256
-   (`coral_detector_shim_sha256`), so a different toolchain fails instead of
-   replacing the DLL.
+2. **run** (`runs-on: <ci_runner>`, one at a time per site, sites side by
+   side): downloads that cache, restores the Galaxy collections from the
+   Actions cache (keyed on `requirements.yml`), then `ansible-playbook
+   windows-host.yml wsl-distro.yml --limit site_<name>,localhost --skip-tags
+   aruba-credentials`. The controller play finds everything in place, and
+   asserts the shim's SHA-256 (`coral_detector_shim_sha256`), so a different
+   toolchain fails instead of replacing the DLL.
 
 **Public logs.** The repo is public, and so are its Actions logs and PR
 comments. The job log, job summary and PR comment carry only the per-host
 recap counts and the names of changed and failed tasks
-(`scripts/ci-report.py`). The full output, with the diffs, is the run's
+(`scripts/ci-report.py`); the job summary adds the ten slowest tasks and
+their seconds (`ansible.posix.profile_tasks`, enabled in CI only). The full
+output, with the diffs and every task's time, is the run's
 `ansible-<site>-log` artifact, encrypted to the owner's age key:
 
 ```bash
@@ -161,7 +164,11 @@ age -d -i ~/.config/sops/age/keys.txt ansible-site_wsl.log.age | less
 
 **The runners.** `tnwks-ansible-<CLUSTER_NAME>`, one scale set per cluster
 (`kubernetes/apps/tools/actions-runner-controller/ansible-runner`), separate
-from `tnwks-ops-runner` (network devices). Its Secret holds:
+from `tnwks-ops-runner` (network devices). It scales 0–2, one runner per site
+that names it, so a run's sites don't queue behind each other; the per-site
+concurrency group still keeps two runs off one host. Queue and run times per
+scale set are in Grafana's _ARC Autoscaling Runner Set Monitoring_ dashboard.
+Its Secret holds:
 
 - a CI SSH key: admin on the Windows hosts (`windows_sshd_authorized_keys`)
   and `wsl_distro_user` on the distros (`wsl_ci_authorized_keys`, from the
