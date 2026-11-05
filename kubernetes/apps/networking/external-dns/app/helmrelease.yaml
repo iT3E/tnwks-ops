@@ -40,7 +40,11 @@ spec:
       - --cloudflare-proxied
       - --crd-source-apiversion=externaldns.k8s.io/v1alpha1
       - --crd-source-kind=DNSEndpoint
-    policy: sync
+    # upsert-only: creates and updates records, never deletes. Step 1 of moving
+    # the public records to Terraform (environments/prod/cloudflare); it also
+    # makes a second external-dns (another cluster, same txtOwnerId) unable to
+    # delete this one's records.
+    policy: upsert-only
     sources: ["crd", "ingress"]
     txtPrefix: k8s.
     txtOwnerId: default
