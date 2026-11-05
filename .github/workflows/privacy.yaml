@@ -1,15 +1,19 @@
 ---
 name: "Privacy"
 
-# Denylist check for family names and personal emails (bin/privacy-check):
-# every tracked file and path, the PR's commit messages and author/committer
-# identities, and the PR title and body. The list is the PRIVACY_TERMS
-# Actions secret, synced from .github/privacy-terms.sops.yaml with
-# `task privacy:sync`, so this job never needs a SOPS key. Hits print as
-# "term #N: path:line" without the matched text. Comments and reviews are
-# privacy-text.yaml. Exceptions:
-# .github/privacy-allow. Required by the main ruleset.
-
+# The logic is in the reusable workflow it calls, from
+# https://github.com/iT3E/github-workflows (README there documents inputs and
+# check names), pinned to a release commit (@<sha> # vX.Y.Z) that Renovate
+# moves.
+#
+# bin/privacy-check on every tracked file and path, the commits the event
+# adds (messages and identities) and the PR title and body, against the
+# PRIVACY_TERMS secret (synced from .github/privacy-terms.sops.yaml with
+# `task privacy:sync`). Hits print as "term #N: path:line" without the
+# matched text. The repo is public and fork PRs get no secrets, so a missing
+# secret warns instead of failing. Comments and reviews are
+# privacy-text.yaml. Exceptions: .github/privacy-allow. Required by the main
+# ruleset (check "privacy / privacy").
 on:
   pull_request:
     # edited: a changed title or body is checked again.
@@ -17,40 +21,15 @@ on:
   push:
     branches: ["main"]
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   privacy:
     name: privacy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Check
-        env:
-          PRIVACY_TERMS: ${{ secrets.PRIVACY_TERMS }}
-          # A bot's PR body is third-party text (Renovate's release notes
-          # name upstream contributors), so only its title counts.
-          PRIVACY_EXTRA_TEXT: ${{ github.event.pull_request.title }} ${{ github.event.pull_request.user.type != 'Bot' && github.event.pull_request.body || '' }}
-          EVENT: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BEFORE_SHA: ${{ github.event.before }}
-        run: |
-          if [ -z "${PRIVACY_TERMS}" ]; then
-            # Fork PRs get no secrets.
-            echo "::warning::PRIVACY_TERMS is not available to this run; skipped"
-            exit 0
-          fi
-          if [ "$EVENT" = "pull_request" ]; then
-            range="${BASE_SHA}..${HEAD_SHA}"
-          elif [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
-            range="HEAD~1..HEAD"
-          else
-            range="${BEFORE_SHA}..HEAD"
-          fi
-          bin/privacy-check --commits "$range"
+    permissions:
+      contents: read
+    uses: iT3E/github-workflows/.github/workflows/privacy.yaml@282008593fefd7f0392c41c3127a630c091c3d1d # v1.4.1
+    with:
+      allow-missing-terms: true
+    secrets:
+      PRIVACY_TERMS: ${{ secrets.PRIVACY_TERMS }}

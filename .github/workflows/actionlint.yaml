@@ -1,0 +1,24 @@
+---
+name: "Actionlint"
+
+# The logic is in the reusable workflow it calls, from
+# https://github.com/iT3E/github-workflows (README there documents inputs and
+# check names), pinned to a release commit (@<sha> # vX.Y.Z) that Renovate
+# moves.
+#
+# actionlint (with shellcheck on run: blocks, and .github/actionlint.yaml)
+# on the workflows, only when a PR touches them.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".github/actionlint.yaml"
+
+permissions: {}
+
+jobs:
+  actionlint:
+    name: actionlint
+    permissions:
+      contents: read
+    uses: iT3E/github-workflows/.github/workflows/actionlint.yaml@282008593fefd7f0392c41c3127a630c091c3d1d # v1.4.1

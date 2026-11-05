@@ -1,6 +1,12 @@
 ---
 name: "Meta Sync labels"
 
+# The logic is in the reusable workflow it calls, from
+# https://github.com/iT3E/github-workflows (README there documents inputs and
+# check names), pinned to a release commit (@<sha> # vX.Y.Z) that Renovate
+# moves.
+#
+# The repo's labels follow .github/labels.yaml; others are deleted.
 on:
   workflow_dispatch:
   push:
@@ -11,22 +17,8 @@ permissions: {}
 
 jobs:
   labels:
-    name: Sync Labels
-    runs-on: ubuntu-latest
-    # Creating, editing and deleting labels needs issues: write; the default
-    # read-only token failed every sync with a 403.
+    name: sync-labels
     permissions:
       contents: read
       issues: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Sync Labels
-        uses: EndBug/label-sync@52074158190acb45f3077f9099fea818aa43f97a # v2.3.3
-        with:
-          config-file: .github/labels.yaml
-          token: "${{ secrets.GITHUB_TOKEN }}"
-          delete-other-labels: true
+    uses: iT3E/github-workflows/.github/workflows/sync-labels.yaml@282008593fefd7f0392c41c3127a630c091c3d1d # v1.4.1
