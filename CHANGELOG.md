@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.136.0 - 2026-11-05
+
+### Added
+
+* Distro role `wsl_cluster_tools` installs the CLIs the Talos bootstrap runs (talosctl, kubectl, helm, flux, sops, age, uv), pinned by version and SHA-256, on a distro without Homebrew. On for WSL-02, where homelab-wsl-02 will be bootstrapped.
+
 ## v1.135.0 - 2026-11-05
 
 ### Changed
