@@ -13,7 +13,12 @@ spec:
   backend:
     s3:
       bucket: "${BACKUP_S3_BUCKET}"
-      prefix: kopiur/
+      # Each cluster writes its own kopia repository: homelab-wsl kopiur/
+      # (the default), homelab-wsl-02 kopiur-homelab-wsl-02/. One shared prefix
+      # would mix snapshot identities and maintenance ownership. The other
+      # site's repository is mounted read-only for restores (wsl-02:
+      # kubernetes/clusters/wsl-02/apps/kopiur-standby).
+      prefix: ${KOPIUR_PREFIX:=kopiur/}
       endpoint: s3.us-west-2.amazonaws.com
       region: us-west-2
       auth:

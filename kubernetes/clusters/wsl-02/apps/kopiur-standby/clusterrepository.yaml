@@ -1,0 +1,45 @@
+---
+# homelab-wsl's kopia repository (kopiur/), read-only: restores of its
+# snapshots onto this cluster (the standby PVCs, the weekly drill, a
+# failover). Not "s3": kopiur names the maintenance owner after the
+# repository, and this one must never run maintenance or retention on
+# homelab-wsl's snapshots (adoption Ignore). The IAM role
+# (tnwks-rolesanywhere-backups-wsl-02) can't write kopiur/ anyway.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: ClusterRepository
+metadata:
+  name: homelab-wsl
+spec:
+  mode: ReadOnly
+  create:
+    enabled: false
+  maintenance:
+    enabled: false
+  catalog:
+    adoption: Ignore
+    periodicRefresh: true
+    refreshInterval: 6h
+  backend:
+    s3:
+      bucket: "${BACKUP_S3_BUCKET}"
+      prefix: kopiur/
+      endpoint: s3.us-west-2.amazonaws.com
+      region: us-west-2
+      auth:
+        secretRef:
+          name: aws-backup-sts
+          namespace: kopiur-system
+  # Same password as homelab-wsl's repository (one secret for both sites).
+  encryption:
+    passwordSecretRef:
+      name: kopiur-repository
+      namespace: kopiur-system
+      key: KOPIA_PASSWORD
+  allowedNamespaces:
+    list:
+      - kopiur-system
+      - home-automation
+      - networking
+      - production
+  credentialProjection:
+    allowed: true
