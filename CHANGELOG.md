@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.139.0 - 2026-11-05
+
+### Added
+
+* `05-talos-upgrade.yml` rolls any Talos-in-Docker cluster in `talos_clusters` (`-e talos_target=wsl-02`, `task talos:upgrade:wsl-02`); node names and health-check IPs come from the cluster entry. `01-talos-bootstrap.yml` writes the talosconfig to `~/.talos/config-<cluster>`, where the upgrade playbook and `mint-talosconfig.sh` look for it.
+
 ## v1.138.0 - 2026-11-05
 
 ### Added
