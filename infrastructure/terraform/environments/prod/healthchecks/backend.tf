@@ -1,9 +1,10 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 ## BACKEND
-## Terraform Cloud holds the state; runs execute locally (workspace execution
-## mode `local`, modules/tfc/workspaces.tf) so the API key is read from SOPS on
-## the desktop, like environments/prod/cloudflare. Not wired into CI:
-## `task healthchecks:plan` / `task healthchecks:apply`.
+## Terraform Cloud holds the state; runs execute where Terraform is invoked
+## (workspace execution mode `local`, modules/tfc/workspaces.tf), which is the
+## self-hosted tnwks-ops-runner: healthchecks-plan.yaml on PRs,
+## healthchecks-apply.yaml on merge. It reads the API key from SOPS with the
+## CI age key. `task healthchecks:plan|apply` is break-glass only.
 ## ---------------------------------------------------------------------------------------------------------------------
 
 terraform {

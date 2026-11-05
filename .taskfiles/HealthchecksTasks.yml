@@ -4,8 +4,9 @@ version: "3"
 ## ---------------------------------------------------------------------------------------------------------------------
 ## healthchecks.io off-site heartbeats (environments/prod/healthchecks).
 ##
-## Not wired into CI: plans and applies run from the desktop, state in
-## Terraform Cloud (tnwks-healthchecks-prod, execution mode local).
+## CI plans on the PR and applies on merge (healthchecks-{plan,apply}.yaml on
+## the self-hosted runner). These tasks are break-glass, against the same TFC
+## state (tnwks-healthchecks-prod, execution mode local).
 ## See docs/operations/external-monitoring.md.
 ## ---------------------------------------------------------------------------------------------------------------------
 

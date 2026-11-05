@@ -50,8 +50,11 @@ the stock `alertmanager.rules` select.
 
 - Checks: `infrastructure/terraform/modules/healthchecks` (resources), values
   in `infrastructure/terraform/environments/prod/healthchecks`, state in
-  Terraform Cloud `tnwks-healthchecks-prod` (execution mode local), applied
-  from the desktop with `task healthchecks:plan` / `task healthchecks:apply`.
+  Terraform Cloud `tnwks-healthchecks-prod` (execution mode local, so runs
+  execute on the runner, not in TFC). CI plans on the PR and applies on merge
+  on the self-hosted `tnwks-ops-runner` (`healthchecks-{plan,apply}.yaml`,
+  [`docs/network/ci.md`](../network/ci.md)). `task healthchecks:plan` /
+  `task healthchecks:apply` from the desktop are for break-glass only.
   `task healthchecks:status` lists each check's status and last ping.
 - Cluster pinger: `kubernetes/apps/monitoring/alertmanager/app/config/alertmanager.yml`,
   receivers `healthchecks` and `healthchecks-delivery`. The URLs are

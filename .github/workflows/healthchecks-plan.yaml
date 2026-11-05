@@ -1,0 +1,65 @@
+---
+name: "Healthchecks Plan"
+
+# Plans the healthchecks.io root module on the self-hosted tnwks-ops-runner
+# (docs/network/ci.md) and posts the change summary on the PR. Same runner and
+# flow as MikroTik and UniFi; healthchecks.io itself is a public API.
+
+on:
+  pull_request:
+    paths:
+      - "infrastructure/terraform/environments/prod/healthchecks/**"
+      - "infrastructure/terraform/modules/healthchecks/**"
+      - ".github/actions/healthchecks-terraform/**"
+      - ".github/workflows/healthchecks-*.yaml"
+
+permissions: {}
+
+# One healthchecks.io project: plans and applies never overlap.
+concurrency:
+  group: healthchecks-terraform
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    # Never run fork or third-party code on the self-hosted runner. Fork PRs
+    # also need approval for any workflow at all (repo setting).
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == 'iT3E'
+    name: "Healthchecks Plan"
+    runs-on: tnwks-ops-runner
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Plan
+        id: tf
+        uses: ./.github/actions/healthchecks-terraform
+        with:
+          mode: plan
+          tf-api-token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          SUMMARY: ${{ steps.tf.outputs.summary }}
+        with:
+          script: |
+            const marker = '<!-- healthchecks-plan -->';
+            const body = `${marker}\n#### Healthchecks Plan\n${process.env.SUMMARY}\n\n[Run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo, issue_number: context.issue.number });
+            const prev = comments.find(c => c.body.startsWith(marker));
+            if (prev) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: prev.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }

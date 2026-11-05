@@ -124,6 +124,13 @@ system actually owns the change:
   the TFC UI. Plans run automatically only for the owner's same-repo PRs;
   anything else waits in the `external-contributions` environment.
 
+- **Terraform MikroTik, UniFi, healthchecks.io
+  (`infrastructure/terraform/environments/prod/{mikrotik,unifi,healthchecks}/**`
+  and their `modules/`)** — plan on the PR and apply on merge on the
+  self-hosted `tnwks-ops-runner` (`<svc>-{plan,apply}.yaml`; state in TFC
+  with local execution). See `docs/network/ci.md`. The `task <svc>:apply`
+  targets are break-glass only.
+
 - **Terraform Cloudflare (`infrastructure/terraform/environments/prod/cloudflare/**`)** —
   not wired into CI. After the PR merges, run `task terraform:apply`
   locally to push the change.
