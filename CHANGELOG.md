@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.143.0 - 2026-11-05
+
+### Changed
+
+* Per-app CNPG clusters (`kubernetes/components/cnpg-cluster`) store their data on the cluster's default class (`local-path`, ext4 on every worker) instead of `STORAGE_CLASS_DATABASE` (worker-1-only `local-path-ext4` on homelab-wsl, which has no room), so each lands on whichever worker has room; `CNPG_STORAGE_CLASS` overrides it. The README explains two instances for an app whose database should move between workers.
+
+### Removed
+
+* Drop the shared Postgres cluster's `app` database: Mealie's database until 2026-11, kept since as its rollback copy, unused (no connections, same data as `mealie` from 2026-11-01). A CNPG `Database` with `ensure: absent` drops it on the running cluster.
+
 ## v1.142.1 - 2026-11-05
 
 ### Fixed
