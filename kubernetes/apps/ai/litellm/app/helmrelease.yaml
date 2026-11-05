@@ -53,7 +53,7 @@ spec:
                 print("aws_signing_helper", os.environ["HELPER_VERSION"], "ok")
             env:
               # renovate: datasource=github-releases depName=aws/rolesanywhere-credential-helper
-              HELPER_VERSION: "1.8.5"
+              HELPER_VERSION: "1.8.6"
               HELPER_URL: "https://rolesanywhere.amazonaws.com/releases/1.8.5/X86_64/Linux/Amzn2023/aws_signing_helper"
               HELPER_SHA256: "beec9ed1c492d93db809890f16713e3556353294b823c2184ad4e891f1b2b54d"
         containers:
