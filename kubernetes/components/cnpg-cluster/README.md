@@ -199,12 +199,11 @@ second component, not by changing this one:
 
 `enablePodMonitor` follows `SERVICE_MONITOR_ENABLED`, as on the shared
 cluster (the field is deprecated in CNPG 1.30; both move to a PodMonitor
-together). The cnpg PrometheusRule needs work before the first app moves:
-
-- `PostgresBackupStale` takes the newest backup per namespace, so the shared
-  cluster's fresh backup hides a stale per-app one. Group by cluster.
-- `PostgresWALArchivingStalled` (no archive in an hour) will likely fire
-  overnight on a quiet app: an idle database produces no WAL to switch.
+together). The cnpg PrometheusRule
+(`kubernetes/apps/databases/cloudnative-pg/cluster-prometheusrules`) covers
+each cluster on its own: `PostgresBackupStale` groups by cluster (the pod name
+minus its instance number), and `PostgresWALArchivingStalled` fires on failing
+archiving, not on an idle database that writes no WAL.
 
 ## Cost
 

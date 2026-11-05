@@ -163,7 +163,7 @@ systemctl list-timers 'tnwks-*-backup.timer'
 journalctl -u tnwks-unifi-backup -u tnwks-aruba-backup -n 20
 ```
 
-Alerts: `PostgresBackupStale` (no base backup in 30 h), `PostgresWALArchivingStalled`,
+Alerts: `PostgresBackupStale` (no base backup in 30 h, per CNPG cluster), `PostgresWALArchivingStalled` (archiving failing for 15 min),
 `LastFailedArchiveTime` (cnpg rules); kopiur's own PrometheusRule (failed or
 stale snapshots); `KubeJobFailed` for the credentials CronJob. The desktop
 timers have no alert yet: check the journal.
