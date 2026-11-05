@@ -4,7 +4,8 @@
 #
 # .wslconfig: a write only takes effect at the next `wsl --shutdown`, which
 # stops the whole cluster, so an apply never writes it on its own. Drift fails
-# the run. To write the template: `task wsl-host:windows-apply -- --tags
+# the run. With wslconfig_write=true (a host without a cluster sets it in
+# host_vars) the check shows the write as a change instead. To write the template: `task wsl-host:windows-apply -- --tags
 # host-settings -e wslconfig_write=true`, then plan a `wsl --shutdown`.
 wslconfig_path: 'C:\Users\{{ windows_desktop_user }}\.wslconfig'
 wslconfig_write: false
@@ -13,6 +14,7 @@ wslconfig_write: false
 # the adapter, which drops every camera stream for seconds (and once left the
 # Reolink's RTSP server hung), so these are assertions only. Fix drift by hand
 # at a quiet time (docs/wsl/windows-ansible.md).
+# Empty on a host without a wired link (WSL-02): no Ethernet checks.
 host_settings_ethernet: Ethernet
 # RegistryKeyword -> RegistryValue on the Ethernet adapter (Realtek 2.5GbE).
 host_settings_ethernet_advanced:

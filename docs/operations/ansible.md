@@ -55,7 +55,7 @@ another inventory file.
 | `windows_hosts` | Windows hosts under a WSL cluster, by Windows computer name   | OpenSSH, PowerShell, key in SOPS   |
 | `wsl_distros`   | the WSL distro on each, `<computer>-<distro>`                 | local from a workstation           |
 | `mikrotik`      | RouterOS devices                                              | REST from the controller           |
-| `site_<name>`   | one Windows host plus its distro (`site_wsl`)                 |                                    |
+| `site_<name>`   | one Windows host plus its distro (`site_wsl`, `site_wsl02`)   |                                    |
 
 The Windows host's inventory name is its computer name because that is also
 the `instance` label of its windows_exporter metrics.
@@ -71,16 +71,35 @@ keys against `inventory/known_hosts` (`group_vars/all/connection.yml`); after a
 host key changes, compare `ssh-keyscan` with the key file on the host before
 re-pinning.
 
+| Site         | Windows host      | Distro                   | CI runner (`ci_runner`)                          |
+| ------------ | ----------------- | ------------------------ | ------------------------------------------------ |
+| `site_wsl`   | `DESKTOP-HKE05KI` | `DESKTOP-HKE05KI-ubuntu` | `tnwks-ansible-homelab-wsl`                      |
+| `site_wsl02` | `WSL-02`          | `WSL-02-ubuntu`          | `tnwks-ansible-homelab-wsl` (over the LAN, jump) |
+
 ### Adding a second Windows host
 
-1. Bootstrap its sshd (`Install-TnwksWindowsSshd.ps1`) and pin its host key in
-   `inventory/known_hosts`.
+1. Bootstrap its sshd (`Install-TnwksWindowsSshd.ps1`, elevated, from that
+   host's own distro: `scripts/invoke-elevated.sh`) and pin its host key in
+   `inventory/known_hosts`. sshd listens on that host's vEthernet (WSL)
+   address only, so another site's runner jumps through the distro's sshd:
+   `ansible_ssh_common_args` with a `ProxyCommand` in its host_vars (see
+   `host_vars/WSL-02/main.yml`), with the distro's sshd reachable on the LAN
+   through the `2222` LAN-bridge port, limited to that runner's cluster host.
+   The runner key goes in the distro's `wsl_ci_authorized_keys` with
+   `permit_open` = the Windows sshd. CI can't add its own key, so the first
+   time, authorize it from a workstation that can already log in:
+   `task wsl-host:distro-apply -- --limit <distro> --tags ci-access`.
 2. Add it to `windows_hosts`, its distro to `wsl_distros`, and a
-   `site_<name>` group with both in `inventory/hosts.yml`.
+   `site_<name>` group with both and its `ci_runner` in
+   `inventory/hosts.yml` / `group_vars/site_<name>.yml`.
 3. `host_vars/<host>/main.yml` (`ansible_host`, per-host role vars such as
    `coral_detector_devices`) and `host_vars/<host>/secrets.sops.yml`
-   (`ansible_user`).
-4. `task wsl-host:check -- --limit site_<name>`, then apply.
+   (`ansible_user`). A role's list left empty skips the role on that host
+   (`coral_detector_devices`, `udp_relays`, `usb_attach_bound_devices`;
+   distro: `wsl_lan_bridge_instances`, `wsl_usb_attach_devices`,
+   `wsl_backups_timers`); `windows_wsl_maintenance_enabled: false` skips the
+   watchdog.
+4. The PR's Ansible Hosts check runs the site from its runner; merging applies it.
 
 ## Running playbooks
 

@@ -1,7 +1,9 @@
 # Managing the Windows host with Ansible
 
-The Windows host under the WSL cluster (DESKTOP-HKE05KI) is configured from
-this repo with Ansible over its built-in OpenSSH server. Goal: every host
+The Windows hosts under the WSL clusters (DESKTOP-HKE05KI, and WSL-02 for the
+second cluster) are configured from this repo with Ansible over their built-in
+OpenSSH server. A host without a Coral, a Z-Stick or a cluster to relay to
+skips those roles ([ansible.md](../operations/ansible.md#adding-a-second-windows-host)). Goal: every host
 change is declarative, idempotent and reviewable, with a `--check --diff`
 run that shows drift.
 
@@ -149,13 +151,16 @@ these differ, and lists each difference:
   template, run `task wsl-host:windows-apply -- --tags host-settings -e
   wslconfig_write=true`, and plan the `wsl --shutdown` for a quiet moment.
   The only edit so far (2026-11-03) replaced the outdated comment about
-  re-attaching the Coral after a restart; the settings are unchanged.
+  re-attaching the Coral after a restart; the settings are unchanged. A host
+  without a cluster yet (WSL-02) sets `wslconfig_write: true` in host_vars,
+  so CI writes it there and WSL picks it up at its next restart.
 - **Ethernet** (`host_settings_ethernet`, the Realtek 2.5GbE): power
   management "Allow the computer to turn off this device" off, and the
   advanced properties `*EEE`, `AdvancedEEE`, `EnableGreenEthernet` and
-  `PowerSavingMode` at 0.
-- **Wi-Fi adapter disabled**, so Windows never fails over to Wi-Fi (which
-  resets the WSL vNIC).
+  `PowerSavingMode` at 0. Empty on a host on Wi-Fi (WSL-02): not checked.
+- **Wi-Fi adapter disabled** (`host_settings_disabled_adapters`), so Windows
+  never fails over to Wi-Fi (which resets the WSL vNIC). Empty on WSL-02,
+  which stays on Wi-Fi.
 - **Power plan** High performance (`8c5e7fda-...`).
 
 Why Ansible doesn't fix these: setting an adapter property restarts the

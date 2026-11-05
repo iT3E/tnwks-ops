@@ -1,0 +1,10 @@
+---
+# Site wsl02: WSL-02 and its distro, the second WSL host (the future
+# homelab-wsl-02 cluster).
+
+# Checked and applied by CI from homelab-wsl's runner (cross-site, so the
+# site doesn't depend on its own cluster). The runner reaches the distro over
+# the LAN (10.10.91.112:2222, admitted from DESKTOP-HKE05KI's address, which
+# the runner pods' traffic leaves from) and jumps through it to Windows sshd
+# (host_vars/WSL-02/main.yml, wsl_ci_access permit_open).
+ci_runner: tnwks-ansible-homelab-wsl

@@ -23,6 +23,8 @@ kernelCommandLine = clocksource=hyperv_clocksource_tsc_page
 # Run `wsl --shutdown` from PowerShell after editing for changes to apply.
 # Managed by tnwks-ops (Ansible role windows_host_settings): edit the template
 # there. Its check reports drift; it writes this file only when asked.
+{% if coral_detector_devices | default([]) | length > 0 %}
 # AFTER RESTART: nothing to re-attach by hand. The Coral is served from Windows
 # (tnwks-coral-detector-0) and the Z-Stick re-attaches through
 # tnwks-usb-attach.
+{% endif %}

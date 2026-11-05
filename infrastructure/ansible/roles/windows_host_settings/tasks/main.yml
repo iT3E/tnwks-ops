@@ -20,8 +20,8 @@
       param([string]$Ethernet, [hashtable]$Advanced, [string]$AllowTurnOff, [string[]]$Disabled, [string]$Scheme)
       $Ansible.Changed = $false
       $drift = @()
-      $nic = Get-NetAdapter -Name $Ethernet -ErrorAction SilentlyContinue
-      if (-not $nic) { $drift += "no adapter named $Ethernet" } else {
+      $nic = if ($Ethernet) { Get-NetAdapter -Name $Ethernet -ErrorAction SilentlyContinue }
+      if ($Ethernet -and -not $nic) { $drift += "no adapter named $Ethernet" } elseif ($nic) {
           $pm = Get-NetAdapterPowerManagement -Name $Ethernet
           if ("$($pm.AllowComputerToTurnOffDevice)" -ne $AllowTurnOff) {
               $drift += "$Ethernet AllowComputerToTurnOffDevice is $($pm.AllowComputerToTurnOffDevice), want $AllowTurnOff"
@@ -55,4 +55,4 @@
       {{ host_settings_read.output
          + ([wslconfig_path ~ ' differs from templates/wslconfig.j2 (diff above): fix the template, or write it with'
              ~ ' -e wslconfig_write=true; WSL reads it at the next wsl --shutdown']
-            if (host_settings_wslconfig is changed and (ansible_check_mode or not (wslconfig_write | bool))) else []) }}
+            if (host_settings_wslconfig is changed and not (wslconfig_write | bool)) else []) }}

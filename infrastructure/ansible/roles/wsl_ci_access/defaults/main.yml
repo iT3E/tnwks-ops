@@ -4,6 +4,9 @@
 # account's authorized_keys, each limited to the addresses in `from` and with
 # no forwarding. Other keys in the file are left alone.
 #
-#   key   the public key
-#   from  sources it is accepted from (the runner pods' nodes)
+#   key          the public key
+#   from         sources it is accepted from (the runner pods' nodes)
+#   permit_open  optional host:port it may forward to, and nothing else
+#                (instead of no-port-forwarding): the Windows sshd behind a
+#                distro that controllers jump through (WSL-02)
 wsl_ci_authorized_keys: []
