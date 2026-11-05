@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.129.0 - 2026-11-05
+
+### Added
+
+* Ansible host config is GitOps: `.github/workflows/ansible-hosts.yaml` runs `windows-host.yml` and `wsl-distro.yml` per site from a new self-hosted `tnwks-ansible-<cluster>` runner, posting a `--check --diff` summary on PRs, applying on merge, and replacing the WSL systemd timer as the nightly drift check (now covering the WSL distro too). Logs and PR comments carry only recap counts and task names; the diffs are an age-encrypted artifact. The runner has its own SSH and age keys (docs/operations/ansible.md).
+
 ## v1.128.0 - 2026-11-05
 
 ### Changed
