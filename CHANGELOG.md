@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.147.0 - 2026-11-05
+
+### Added
+
+* homelab-wsl's Prometheus scrapes the other site's Windows host (WSL-02) over the LAN, next to its own (`PEER_WINDOWS_HOST_ADDR`/`_NAME`, `WINDOWS_HOST_NAME` in cluster-settings), and the Windows alerts (CPU, memory, commit, paging, disk, host down, Ansible drift) apply to every scraped host per `instance` instead of only DESKTOP-HKE05KI.
+
 ## v1.146.0 - 2026-11-05
 
 ### Removed
