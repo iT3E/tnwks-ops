@@ -94,7 +94,7 @@ Cluster Mesh needs a unique cluster name and ID per cluster, and pod
 ranges that don't overlap. wsl-02 gets its ranges before its bootstrap;
 changing them later means rebuilding the cluster.
 
-| | `homelab-wsl` (exists) | `homelab-wsl-02` (proposed) |
+| | `homelab-wsl` (exists) | `homelab-wsl-02` (decided 2026-11-05) |
 | --- | --- | --- |
 | Cluster ID | 1 | 2 |
 | Docker bridge (nodes) | `10.5.0.0/24` | `10.6.0.0/24` |
@@ -239,9 +239,11 @@ camera views.
 120 to 170 Mbps of TCP, shared in both directions. With Frigate failed over
 to wsl-02, about 100 Mbps of camera streams (with the three planned
 cameras) arrives over that wifi on top of replication and the tunnel.
-Either wire wsl-02 (its 2.5GbE port is unused; move the DHCP reservation to
-its MAC), or give Frigate a lighter per-site config there: detect on
-substreams and record less.
+**Decided 2026-11-05: wsl-02 stays on wifi for now.** Wiring it needs new
+copper and new hardware first. Until then the mitigation is a lighter
+Frigate profile on wsl-02 (detect on substreams, record less), and the
+spike measures what the wifi actually carries. When it's wired, move the
+DHCP reservation to the 2.5GbE port's MAC.
 
 ## Cluster Mesh
 
@@ -450,6 +452,7 @@ BGP session on the router added by a Terraform PR the owner approves:
   needs beyond the 2026-11-04 overrides?
 - The same address on both clusters' LB IPAM pools for shared services:
   confirm Cilium allows it with no L2 announcement on either side.
-- Wire wsl-02, or plan a lighter Frigate profile for it?
+- The lighter Frigate profile for wsl-02: which streams it detects and
+  records on, set from the spike's wifi measurements.
 - RouterOS 7.25 BGP: per-session local preference through routing
   filters, and hold timers as low as 9 seconds.
