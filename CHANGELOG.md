@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.128.0 - 2026-11-05
+
+### Changed
+
+* mikrotik: allow ICMP from the desktop to the 3 UniFi APs and SW03, so smokeping's AP and switch pings (and `WifiAPUnreachable`) no longer depend on the desktop's wg01-home VPN tunnel
+
 ## v1.127.0 - 2026-11-05
 
 ### Changed

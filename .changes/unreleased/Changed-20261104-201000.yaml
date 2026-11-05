@@ -1,3 +1,0 @@
-kind: Changed
-body: "mikrotik: allow ICMP from the desktop to the 3 UniFi APs and SW03, so smokeping's AP and switch pings (and `WifiAPUnreachable`) no longer depend on the desktop's wg01-home VPN tunnel"
-time: 2026-11-04T20:10:00.000000-08:00
