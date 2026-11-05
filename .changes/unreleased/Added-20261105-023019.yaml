@@ -1,3 +1,0 @@
-kind: Added
-body: "Reusable Kustomize component `kubernetes/components/cnpg-cluster`: an app's own CloudNativePG cluster in `databases` with small-cluster defaults (`shared_buffers` 32MB, `max_connections` 20), barman-cloud WAL archiving and daily base backups to `cnpg/<app>/<site>/` in the backup bucket. Set per app through `postBuild.substitute`; no app uses it yet."
-time: 2026-11-05T02:30:19.000000000-08:00

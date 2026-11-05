@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.138.0 - 2026-11-05
+
+### Added
+
+* Reusable Kustomize component `kubernetes/components/cnpg-cluster`: an app's own CloudNativePG cluster in `databases` with small-cluster defaults (`shared_buffers` 32MB, `max_connections` 20), barman-cloud WAL archiving and daily base backups to `cnpg/<app>/<site>/` in the backup bucket. Set per app through `postBuild.substitute`; no app uses it yet.
+
 ## v1.137.0 - 2026-11-05
 
 ### Added
