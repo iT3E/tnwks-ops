@@ -265,7 +265,8 @@ flowchart LR
 
 - Requirements: unique `cluster.name` and `cluster.id` (table above),
   non-overlapping pod ranges, Cilium versions within one minor of each
-  other, and the same CA so the two sides trust each other's certificates.
+  other, and a shared Cilium CA (the documented setup) so each side trusts
+  the other's certificates.
 - Each cluster runs a `clustermesh-apiserver` behind a LoadBalancer address
   from its own pool (not shared: each side has to reach the other's).
   KVStoreMesh caches the remote state locally, so agents never talk across
