@@ -1,0 +1,65 @@
+---
+- name: A directory per tool version
+  ansible.builtin.file:
+    path: "{{ wsl_cluster_tools_dir }}/{{ item.name }}-{{ item.version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ wsl_cluster_tools }}"
+  loop_control:
+    label: "{{ item.name }} {{ item.version }}"
+  register: wsl_cluster_tools_dirs
+
+# A plain binary downloads as the tool's name; an archive keeps its file name.
+# Check mode creates no directory, so a new version is reported by the task
+# above and downloaded, unpacked and linked from the first apply on.
+- name: Download, checksum pinned
+  ansible.builtin.get_url:
+    url: "{{ item.item.url }}"
+    dest: >-
+      {{ item.path }}/{{ item.item.name if (item.item.bins.values() | first) == '' else (item.item.url | basename) }}
+    checksum: sha256:{{ item.item.sha256 }}
+    owner: root
+    group: root
+    mode: "0755"
+    timeout: 120
+  register: wsl_cluster_tools_download
+  until: wsl_cluster_tools_download is succeeded
+  retries: 3
+  delay: 10
+  loop: "{{ wsl_cluster_tools_dirs.results }}"
+  loop_control:
+    label: "{{ item.item.name }} {{ item.item.version }}"
+  when: not (ansible_check_mode and item is changed)
+
+- name: Unpack the archives
+  ansible.builtin.unarchive:
+    src: "{{ item.item.path }}/{{ item.item.item.url | basename }}"
+    dest: "{{ item.item.path }}"
+    remote_src: true
+    creates: "{{ item.item.path }}/{{ item.item.item.bins.values() | first }}"
+  loop: "{{ wsl_cluster_tools_download.results }}"
+  loop_control:
+    label: "{{ item.item.item.name }} {{ item.item.item.version }}"
+  when:
+    - item is not skipped
+    - (item.item.item.bins.values() | first) != ''
+    - not (ansible_check_mode and item is changed)
+
+- name: Binaries on PATH
+  ansible.builtin.file:
+    src: "{{ item.path }}"
+    dest: /usr/local/bin/{{ item.bin }}
+    state: link
+    force: true
+  loop: "{{ wsl_cluster_tools_links }}"
+  when: not (ansible_check_mode and (wsl_cluster_tools_dirs.results | select('changed') | list | length) > 0)
+  loop_control:
+    label: "{{ item.bin }} -> {{ item.path }}"
+  vars:
+    # One entry per binary: {bin, path} from each tool's bins map.
+    wsl_cluster_tools_links: >-
+      {% set out = [] %}{% for t in wsl_cluster_tools %}{% for b, p in t.bins.items() %}{%
+      set _ = out.append({'bin': b, 'path': wsl_cluster_tools_dir ~ '/' ~ t.name ~ '-' ~ t.version ~ '/' ~ (t.name if p == '' else p)})
+      %}{% endfor %}{% endfor %}{{ out }}

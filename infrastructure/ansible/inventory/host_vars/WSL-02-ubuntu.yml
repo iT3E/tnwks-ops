@@ -10,6 +10,10 @@ wsl_distro_windows_host: WSL-02
 wsl_distro_ssh_host: 10.10.91.112
 ansible_port: 2222
 
+# The Talos bootstrap for homelab-wsl-02 runs here (local Docker), with the
+# pinned CLIs from wsl_cluster_tools.
+wsl_cluster_tools_enabled: true
+
 # Nothing on this distro for these roles yet; an empty list skips the role
 # (playbooks/wsl-distro.yml).
 wsl_lan_bridge_instances: []
