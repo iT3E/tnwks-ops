@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.152.0 - 2026-11-05
+
+### Added
+
+* homelab-wsl-02 has an off-site dead-man switch: a CronJob pings the new healthchecks.io check `homelab-wsl-02` every 2 minutes, and healthchecks.io messages Telegram when it goes quiet.
+
 ## v1.151.0 - 2026-11-05
 
 ### Added
