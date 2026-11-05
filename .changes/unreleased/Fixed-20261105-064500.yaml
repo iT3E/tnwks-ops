@@ -1,3 +1,0 @@
-kind: Fixed
-body: "The `tnwks-wsl-keepalive` task template carries the `IdleSettings` block Windows adds to every task, so the nightly check no longer reports WSL-02 as drifted (`changed=1` on that task every run)."
-time: 2026-11-05T06:45:00.000000000-08:00

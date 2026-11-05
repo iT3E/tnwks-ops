@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.142.1 - 2026-11-05
+
+### Fixed
+
+* The `tnwks-wsl-keepalive` task template carries the `IdleSettings` block Windows adds to every task, so the nightly check no longer reports WSL-02 as drifted (`changed=1` on that task every run).
+
 ## v1.142.0 - 2026-11-05
 
 ### Added
