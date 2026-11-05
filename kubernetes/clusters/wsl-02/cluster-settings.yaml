@@ -57,3 +57,9 @@ data:
   SERVICE_MONITOR_ENABLED: "false"
   # The vEthernet (WSL) address of WSL-02 (inventory/host_vars/WSL-02).
   WINDOWS_HOST_IP: "172.25.16.1"
+  # The Windows computer name, and the other site's Windows host for its
+  # Prometheus (once monitoring runs here; DESKTOP-HKE05KI's exporters admit
+  # only its WSL subnet so far).
+  WINDOWS_HOST_NAME: "WSL-02"
+  PEER_WINDOWS_HOST_ADDR: "10.10.91.142"
+  PEER_WINDOWS_HOST_NAME: "DESKTOP-HKE05KI"

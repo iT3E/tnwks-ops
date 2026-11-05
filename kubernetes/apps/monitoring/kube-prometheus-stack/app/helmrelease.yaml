@@ -149,6 +149,9 @@ spec:
             api_version: v2
         additionalScrapeConfigs:
 
+          # This site's Windows host over vEthernet, and the other site's over
+          # the LAN (docs/wsl/multi-site.md: each site watches the other).
+          # instance = the Windows computer name (cluster-settings).
           - job_name: windows-exporter
             scrape_interval: 30s
             scrape_timeout: 10s
@@ -156,7 +159,11 @@ spec:
               - targets:
                   - ${WINDOWS_HOST_IP}:9182
                 labels:
-                  instance: DESKTOP-HKE05KI
+                  instance: ${WINDOWS_HOST_NAME}
+              - targets:
+                  - ${PEER_WINDOWS_HOST_ADDR}:9182
+                labels:
+                  instance: ${PEER_WINDOWS_HOST_NAME}
 
           # SMART disk health on the Windows host. smartctl_exporter runs there as the
           # SYSTEM scheduled task \Prometheus\smartctl_exporter and re-reads the drives
@@ -170,7 +177,11 @@ spec:
               - targets:
                   - ${WINDOWS_HOST_IP}:9633
                 labels:
-                  instance: DESKTOP-HKE05KI
+                  instance: ${WINDOWS_HOST_NAME}
+              - targets:
+                  - ${PEER_WINDOWS_HOST_ADDR}:9633
+                labels:
+                  instance: ${PEER_WINDOWS_HOST_NAME}
 
           # Coral detector services on the Windows host (docs/wsl/coral-detector.md),
           # one target per Coral: tnwks-coral-detector-<id> serves /metrics on
@@ -184,7 +195,7 @@ spec:
               - targets:
                   - ${WINDOWS_HOST_IP}:9555
                 labels:
-                  instance: DESKTOP-HKE05KI
+                  instance: ${WINDOWS_HOST_NAME}
                   device: "0"
 
           - job_name: unms_exporter
