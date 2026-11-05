@@ -26,6 +26,7 @@ Device config lives with its tooling: `infrastructure/terraform/modules/mikrotik
 | [`wsl/coral-detector.md`](wsl/coral-detector.md) | Corals served from Windows services to Frigate's zmq detector: design, apply, cutover and rollback |
 | [`wsl/windows-ansible.md`](wsl/windows-ansible.md) | Managing the Windows host with Ansible over its OpenSSH server: bootstrap, check mode, what's next |
 | [`wsl/move-disk-off-c.md`](wsl/move-disk-off-c.md) | Moving the WSL disk off `C:` |
+| [`wsl/multi-site.md`](wsl/multi-site.md) | Two WSL clusters on Cilium Cluster Mesh (design): routed network, BGP shared VIPs, runtime switchover, app tiers, router capacity, spike plan |
 
 Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md).
 

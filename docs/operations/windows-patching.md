@@ -1,8 +1,10 @@
 # Windows patching (wsl-01, wsl-02)
 
 **Status: design.** Nothing here is built yet. It depends on the second WSL
-cluster (`homelab-wsl-02` on `WSL-02`) and its failover tooling; see
-[Dependencies](#dependencies) and [Build order](#build-order).
+cluster (`homelab-wsl-02` on `WSL-02`) and the multi-site design in
+[multi-site.md](../wsl/multi-site.md): Cluster Mesh, the routed network and
+`task failover`. See [Dependencies](#dependencies) and
+[Build order](#build-order).
 
 Windows Update on the two hosts under the WSL clusters is driven from this
 repo. Windows never installs or reboots on its own. Every patch is approved
@@ -191,8 +193,9 @@ Both sites:
   Kustomizations and HelmReleases Ready, no critical alert firing, its
   runner up (it's running this job), enough free memory for the apps that
   will fail over onto it.
-- Its DNS runner is up: failover DNS changes are applied by the Terraform
-  runner, which must be on the surviving site.
+- The mesh is healthy: `cilium clustermesh status` shows both clusters
+  connected, and the other site's BGP session on the router is up, so the
+  shared VIPs move when this host goes down.
 
 The host being patched:
 
@@ -206,8 +209,8 @@ The host being patched:
 Every key app (see [What happens to each app](#what-happens-to-each-app)):
 
 - Its standby is healthy: the CNPG replica cluster on the other site
-  replaying WAL with lag under 5 minutes, and its last weekly PVC restore
-  drill verified less than 8 days ago.
+  streaming over the mesh with lag under 1 minute, and its last weekly PVC
+  restore drill verified less than 8 days ago.
 - Last barman base backup succeeded in the last 24 hours.
 
 Snapshot, written as a run artifact (age-encrypted like the Ansible log)
@@ -221,21 +224,27 @@ pods that are already not Ready, the Talos node list.
   (host instance and that cluster's targets, for the window plus 30
   minutes), and pause that site's healthchecks.io checks
   ([external-monitoring.md](external-monitoring.md)).
-- Post the outage notice (which pinned apps go down, for how long).
-- For each warm-tier app on the patched site, one at a time, run the same
-  planned switchover as `task failover APP=<app> TO=<other site>`:
-  1. scale the app to 0 on the patched site;
-  2. take a final kopiur snapshot of its PVCs and restore it on the other
-     site, so the restore is current instead of up to a week old;
-  3. switch the CNPG primary over to the replica on the other site
-     (distributed topology: demote the old primary, promote the replica).
-     With the app stopped there are no writes in flight, so nothing is
-     lost;
-  4. flip the app's `active` in the placement map; Flux on the other
-     cluster starts it, and the DNS Terraform points its names there;
-  5. check it: the app answers on its own DNS name from the other site's
-     ingress, its pods are Ready, its database is primary there.
-- Stateless apps move the same way, without the data steps.
+- Post the outage notice: Z-Wave is down for the window, everything else
+  moves.
+- For each app that moves ([below](#what-happens-to-each-app)), one at a
+  time, run `task failover APP=<app> TO=<other site>`, the planned
+  switchover in [multi-site.md](../wsl/multi-site.md#planned-switchover):
+  1. set `<APP>_REPLICAS=0` in the patched site's `site-overrides`
+     ConfigMap and reconcile; the app stops;
+  2. warm apps: take a final kopiur snapshot of its PVCs and restore it on
+     the other site, so the restore is current instead of up to a week old;
+  3. warm apps: hand the CNPG primary over (the old side demotes and gives
+     its demotion token, the other side promotes with it). With the app
+     stopped there are no writes in flight, so nothing is lost;
+  4. set the app's replicas and primary in the other site's
+     `site-overrides` and reconcile; Flux starts it there;
+  5. check it: the app answers on its own name, its pods are Ready, its
+     database is primary there. Its global service already sends traffic
+     to the other site, and the shared VIP moves on its own when the host
+     goes down, so no DNS changes.
+- Frigate and mosquitto move the same way without the data steps: each
+  site keeps its own Frigate database and recordings, and Frigate on
+  `WSL-02` detects on the GPU detector service.
 
 A patch run is a **planned switchover**, which the "failover is manual"
 decision allows: both sites are reachable, the old side is stopped before
@@ -243,18 +252,20 @@ the new side is promoted, and a human armed it. The split-brain risk that
 rules out automatic failover comes from guessing whether a site is dead,
 and nothing here guesses.
 
-The placement-map changes are commits to `main`, like any failover: the
-workflow opens the PR with `task failover` and merges it with the CI app's
-token, labelled `skip-changelog`. The arm is the human review for them.
+The switch needs only the two clusters' API servers: no pull request, no
+DNS change, nothing on GitHub in the path once the run has started. The
+overrides are runtime state, and an alert fires if one outlives the window
+by a day.
 
 ### 3. Drain the host
 
 - Pause every host task that calls `wsl.exe`: `tnwks-wsl-watchdog`,
   `tnwks-usb-attach`, `tnwks-lan-bridge-sync`. Otherwise the watchdog
   starts WSL again five minutes in.
-- Stop what's left on the cluster cleanly: cold-tier and pinned apps scale
-  to 0 (Frigate writes out its recordings), then the Talos nodes shut down
-  (worker-2, worker-1, control plane).
+- Stop what's left on the cluster cleanly: cold-tier apps and zwave-js-ui
+  scale to 0, then the Talos nodes shut down (worker-2, worker-1, control
+  plane). The distro's BGP sessions drop with them, and the router sends
+  the shared VIPs to the other site.
 - `wsl --shutdown`, and confirm `wsl --list --running` is empty.
 - Write `tnwks_windows_patch_window_open 1` to the host's textfile
   collector.
@@ -283,15 +294,17 @@ token, labelled `skip-changelog`. The arm is the human review for them.
 - Unpause the tasks from phase 3. The watchdog brings WSL and the distro
   back; confirm `systemd` is running and, on `DESKTOP-HKE05KI`, the
   OpenClaw gateway unit is active.
-- Run the LAN bridge sync now: the WSL IP can change on reboot.
+- The distro's WireGuard tunnel to the router is up again and its BGP
+  sessions are established. Until the LAN bridge is retired, run its sync
+  too: the WSL IP can change on reboot.
 - Talos nodes Ready, Flux Ready, no pod Not Ready that wasn't in the
   snapshot.
 - Hardware on wsl-01: Z-Stick attached over usbip and zwave-js-ui
   connected; Coral detector service answering with normal inference
-  times; every camera reporting FPS above 0 in Frigate.
+  times. On `WSL-02`: the GPU detector service answering.
 - Exporters up (`up{job="windows-exporter"}`, `smartctl-exporter`).
-- The replica clusters on this site catch up on WAL: they're the standby
-  for the apps that just moved away.
+- The replica clusters on this site catch up over the mesh: they're the
+  standby for the apps that just moved away.
 - Write `tnwks_windows_patch_window_open 0` and the success timestamp.
 
 ### 7. Fail back
@@ -299,7 +312,10 @@ token, labelled `skip-changelog`. The arm is the human review for them.
 - Wait an hour after phase 6 passed (`failback_hold`, set to `manual` to
   keep the apps on the other site until someone runs `task failover`).
 - For each app moved in phase 2, the same switchover in reverse, with the
-  same checks, once its replica on the home site has lag under 5 minutes.
+  same checks, once its replica on the home site has lag under 1 minute.
+  Failback ends with both sites' overrides for the app deleted, so it runs
+  on its git default again.
+- Frigate on wsl-01: every camera reporting FPS above 0 on the Coral.
 - Expire the silence, resume healthchecks.io, post the all-clear.
 
 ### 8. Soak and promote
@@ -324,18 +340,19 @@ key apps carry on at the other one until it's fixed.
 
 ## What happens to each app
 
-The tier comes from the placement map (see the second-cluster design).
+Tiers as in [multi-site.md](../wsl/multi-site.md#apps).
 
 | Tier | When its home host is patched |
 | --- | --- |
-| Warm (Mealie, Home Assistant, Firefly, storefront API) | planned switchover to the other site in phase 2, back in phase 7 |
-| Stateless (sites, playwright-mcp) | moves with the placement map, back in phase 7 |
+| Warm (Mealie, Home Assistant, Firefly, storefront API) | planned switchover to the other site in phase 2, back in phase 7. Home Assistant runs without Z-Wave meanwhile |
+| Moves, state per site (Frigate, mosquitto) | scaled over in phase 2 without the data steps, back in phase 7. Frigate detects on the RTX 3080 on `WSL-02` |
+| Stateless (sites, playwright-mcp) | scaled over in phase 2, back in phase 7 |
 | Cold (media stack, Immich) | stops with the host in phase 3, starts with it in phase 6 |
-| Pinned (Frigate: Coral; zwave-js-ui: Z-Stick) | down for the window, announced in phase 2 |
+| Pinned (zwave-js-ui: Z-Stick) | down for the window, announced in phase 2; accepted |
 | Not placed (monitoring, the OpenClaw gateway on wsl-01) | down for the window. The other site's Prometheus watches the patched site |
 
 When `WSL-02` is patched, its own apps (wsl-02-primary, mostly cold) stop
-with it, and the replicas it holds for wsl-01 pause and catch up on WAL
+with it, and the replicas it holds for wsl-01 pause and catch up
 afterwards. Nothing on wsl-01 moves.
 
 ## Monitoring and alerts
@@ -374,10 +391,14 @@ Patching with failover needs these from the second-cluster project:
 
 - Cross-site Ansible: sshd on each host's LAN address for the other host,
   `wsl_ci_access` widened, `ci_runner` pointing at the other site.
-- Runners on both clusters, including the Terraform runner for DNS.
-- The placement map, and DNS generated from it.
+- Runners on both clusters.
+- The multi-site network and mesh ([multi-site.md](../wsl/multi-site.md)):
+  WireGuard and BGP to the router, Cluster Mesh, global services, the
+  shared VIPs. wsl-01 has to be on Cilium for this.
 - Per-app CNPG clusters with replica clusters on the other site, weekly
-  kopiur restores, and `task failover` with its first Mealie drill.
+  kopiur restores, `site-overrides` in both clusters' Flux, and `task
+  failover` with its first Mealie drill.
+- The GPU detector service on `WSL-02`, before Frigate can move.
 - Cross-site monitoring: each cluster's Prometheus watches the other.
 
 Until `task failover` exists, the window run can patch with `failover:
@@ -412,11 +433,9 @@ chooses it.
   `accept_list` treat combined SSU plus LCU packages?
 - Arm check: confirm a GitHub Environment approval leaves a deployment the
   window run can read with `deployments: read`.
-- Merging the placement PRs from CI: which app token, and does branch
-  protection need a bypass for it?
-- Which apps are key? The warm tier as written, plus vaultwarden? Is Home
-  Assistant worth moving when Z-Wave, MQTT and Frigate stay down with
-  wsl-01, or should it be `on_patch: stop`?
+- `WSL-02` on wifi: about 100 Mbps of camera streams lands on it while
+  Frigate is failed over. Wire it, or give Frigate a lighter profile there
+  ([multi-site.md](../wsl/multi-site.md#router-capacity)).
 - How long is a window? Set the silence and the outage notice from the
   Mealie drill's RTO times the number of key apps.
 - Notifications: the OpenClaw gateway is down while wsl-01 patches, so the
