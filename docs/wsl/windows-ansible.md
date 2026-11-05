@@ -18,7 +18,7 @@ run that shows drift.
 | `windows_usb_attach` (`usb-attach`)         | usbipd-win (pinned MSI), the forced bind of the Z-Stick, `Sync-TnwksUsbAttach.ps1` and the task `tnwks-usb-attach` (Z-Stick attach plus worker-2 restart, [usb-passthrough.md](usb-passthrough.md)) |
 | `windows_wsl_maintenance` (`wsl-maintenance`) | `Watch-TnwksWsl.ps1` and the task `tnwks-wsl-watchdog` (every 5 min), `Compact-WslVhdx.ps1` and the on-demand task `tnwks-vhdx-compact` |
 | `windows_sshd` (`sshd`)                     | check only by default: the OpenSSH server as `Install-TnwksWindowsSshd.ps1` sets it up ([below](#sshd-bootstrap-once-and-after-a-wsl-subnet-change)) |
-| `windows_host_settings` (`host-settings`)   | check only: `.wslconfig`, Ethernet power settings, Wi-Fi off, power plan, Fast Startup where set ([below](#check-only-settings)) |
+| `windows_host_settings` (`host-settings`)   | check only: `.wslconfig`, Ethernet power settings, Wi-Fi off, power plan ([below](#check-only-settings)) |
 
 Every role is idempotent: on the live host, the first apply of each role
 adopted what was there with only the changes listed in its PR, and
@@ -151,7 +151,9 @@ these differ, and lists each difference:
   template, run `task wsl-host:windows-apply -- --tags host-settings -e
   wslconfig_write=true`, and plan the `wsl --shutdown` for a quiet moment.
   The only edit so far (2026-11-03) replaced the outdated comment about
-  re-attaching the Coral after a restart; the settings are unchanged.
+  re-attaching the Coral after a restart; the settings are unchanged. A host
+  without a cluster yet (WSL-02) sets `wslconfig_write: true` in host_vars,
+  so CI writes it there and WSL picks it up at its next restart.
 - **Ethernet** (`host_settings_ethernet`, the Realtek 2.5GbE): power
   management "Allow the computer to turn off this device" off, and the
   advanced properties `*EEE`, `AdvancedEEE`, `EnableGreenEthernet` and
@@ -160,10 +162,6 @@ these differ, and lists each difference:
   never fails over to Wi-Fi (which resets the WSL vNIC). Empty on WSL-02,
   which stays on Wi-Fi.
 - **Power plan** High performance (`8c5e7fda-...`).
-- **Fast Startup off** (`HiberbootEnabled` 0), where
-  `host_settings_fast_startup_off` is true (WSL-02). With it on, a shutdown
-  hibernates the kernel instead. Fix by hand, elevated:
-  `Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' HiberbootEnabled 0`.
 
 Why Ansible doesn't fix these: setting an adapter property restarts the
 adapter, which drops every camera stream for several seconds (and once left

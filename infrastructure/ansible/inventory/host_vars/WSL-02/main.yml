@@ -33,9 +33,15 @@ lan_bridge_tcp_ports:
   - { port: 2222, wsl_port: 22, remote: [10.10.91.142] }
 lan_bridge_replaced_rules:
   - WSL SSH Rule # tcp/2222 from any
+  - WSL llama.cpp # tcp/50052 from any, unused
+# The hand-made llama.cpp RPC portproxy entry (nothing listens behind it).
+lan_bridge_retired_tcp_ports: [50052]
 
 # On wifi for the foreseeable future: no wired NIC to check, and Wi-Fi stays
-# on. Fast Startup off: a shutdown is a real shutdown.
+# on.
 host_settings_ethernet: ""
 host_settings_disabled_adapters: []
-host_settings_fast_startup_off: true
+# No cluster here yet, so an apply (CI) may write .wslconfig; WSL reads it at
+# its next restart. Drop this once homelab-wsl-02 runs here, like
+# DESKTOP-HKE05KI (a .wslconfig change is then planned with a wsl --shutdown).
+wslconfig_write: true

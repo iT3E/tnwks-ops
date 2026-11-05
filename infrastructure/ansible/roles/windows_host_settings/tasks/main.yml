@@ -16,9 +16,8 @@
       AllowTurnOff: "{{ host_settings_ethernet_allow_turn_off }}"
       Disabled: "{{ host_settings_disabled_adapters }}"
       Scheme: "{{ host_settings_power_scheme }}"
-      FastStartupOff: "{{ host_settings_fast_startup_off | bool }}"
     script: |
-      param([string]$Ethernet, [hashtable]$Advanced, [string]$AllowTurnOff, [string[]]$Disabled, [string]$Scheme, [string]$FastStartupOff)
+      param([string]$Ethernet, [hashtable]$Advanced, [string]$AllowTurnOff, [string[]]$Disabled, [string]$Scheme)
       $Ansible.Changed = $false
       $drift = @()
       $nic = if ($Ethernet) { Get-NetAdapter -Name $Ethernet -ErrorAction SilentlyContinue }
@@ -41,10 +40,6 @@
       }
       $active = if ((powercfg.exe /getactivescheme) -match '([0-9a-f]{8}-[0-9a-f-]{27})') { $Matches[1] } else { '?' }
       if ($active -ne $Scheme) { $drift += "active power scheme is $active, want $Scheme" }
-      if ($FastStartupOff -eq 'True') {
-          $hb = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' -ErrorAction SilentlyContinue).HiberbootEnabled
-          if ("$hb" -ne '0') { $drift += "Fast Startup is on (HiberbootEnabled=$hb), want off" }
-      }
       $drift
   check_mode: false
   register: host_settings_read
@@ -60,4 +55,4 @@
       {{ host_settings_read.output
          + ([wslconfig_path ~ ' differs from templates/wslconfig.j2 (diff above): fix the template, or write it with'
              ~ ' -e wslconfig_write=true; WSL reads it at the next wsl --shutdown']
-            if (host_settings_wslconfig is changed and (ansible_check_mode or not (wslconfig_write | bool))) else []) }}
+            if (host_settings_wslconfig is changed and not (wslconfig_write | bool)) else []) }}

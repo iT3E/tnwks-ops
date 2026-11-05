@@ -15,5 +15,11 @@ ansible_port: 2222
 wsl_lan_bridge_instances: []
 wsl_usb_attach_devices: []
 wsl_backups_timers: []
-# No runner reaches this site yet (group_vars/site_wsl02.yml).
-wsl_ci_authorized_keys: []
+# The tnwks-ansible runners on homelab-wsl (group_vars/site_wsl02.yml). They
+# arrive through the 2222 portproxy, so the distro sees them from the
+# vEthernet address (the LAN-side scope is the Windows firewall rule), and
+# they may forward only to Windows sshd, for the jump in host_vars/WSL-02.
+wsl_ci_authorized_keys:
+  - key: "{{ wsl_ci_authorized_keys_runner }}"
+    from: 172.25.16.1
+    permit_open: 172.25.16.1:22

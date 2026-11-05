@@ -4,7 +4,8 @@
 #
 # .wslconfig: a write only takes effect at the next `wsl --shutdown`, which
 # stops the whole cluster, so an apply never writes it on its own. Drift fails
-# the run. To write the template: `task wsl-host:windows-apply -- --tags
+# the run. With wslconfig_write=true (a host without a cluster sets it in
+# host_vars) the check shows the write as a change instead. To write the template: `task wsl-host:windows-apply -- --tags
 # host-settings -e wslconfig_write=true`, then plan a `wsl --shutdown`.
 wslconfig_path: 'C:\Users\{{ windows_desktop_user }}\.wslconfig'
 wslconfig_write: false
@@ -28,6 +29,3 @@ host_settings_ethernet_allow_turn_off: Disabled
 host_settings_disabled_adapters: [Wi-Fi]
 # High performance.
 host_settings_power_scheme: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-# true: Fast Startup must be off (HiberbootEnabled 0), so a shutdown doesn't
-# hibernate the kernel and bring WSL back half-restored. Set per host.
-host_settings_fast_startup_off: false

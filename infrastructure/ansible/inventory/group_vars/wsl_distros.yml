@@ -15,6 +15,7 @@ wsl_distro_home: /home/{{ wsl_distro_user }}
 # Keys wsl_ci_access authorizes for wsl_distro_user: the tnwks-ansible
 # runners', usable only from the cluster's Docker network (the runner pods'
 # nodes).
+wsl_ci_authorized_keys_runner: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAYekUuwVqJdoise5COwMtb4nWPMSVVgY/8SUIrwHeJl ansible@tnwks-ansible-runner
 wsl_ci_authorized_keys:
-  - key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAYekUuwVqJdoise5COwMtb4nWPMSVVgY/8SUIrwHeJl ansible@tnwks-ansible-runner
+  - key: "{{ wsl_ci_authorized_keys_runner }}"
     from: 10.5.0.0/24
