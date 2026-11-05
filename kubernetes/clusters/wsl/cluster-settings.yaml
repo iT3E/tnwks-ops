@@ -32,11 +32,12 @@ data:
   # flags. Don't reintroduce it without solving both at the bootstrap layer.
   STORAGE_CLASS_DEFAULT: "local-path"
   STORAGE_CLASS_BULK: "local-path"
-  # Database (postgres) storage. Must support Linux permission semantics
-  # (initdb chmods config files). The default local-path SC sits on a
-  # Windows DrvFs bind-mount which doesn't, so postgres uses local-path-ext4
-  # — pinned to homelab-wsl-worker-1 on the WSL ext4.vhdx (still C:, but
-  # postgres data is small and this avoids the DrvFs permission wall).
+  # Database storage of the shared postgres cluster and Immich: local-path-ext4,
+  # pinned to homelab-wsl-worker-1 (it predates the move of local-path off
+  # DrvFs; existing PVCs can't change class). Since then every worker's
+  # local-path is ext4 (/var on the WSL vhdx, checked 2026-11-05), so per-app
+  # CNPG clusters (kubernetes/components/cnpg-cluster) use the default class
+  # and land on either worker.
   STORAGE_CLASS_DATABASE: "local-path-ext4"
 
   # Bulk PVC size — WSL uses smaller sizes (local-path is whatever the host has).

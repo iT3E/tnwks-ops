@@ -20,9 +20,11 @@ spec:
   primaryUpdateStrategy: unsupervised
   storage:
     size: ${CNPG_SIZE:=2Gi}
-    # Needs Linux permission semantics (initdb chmods its files), see
-    # STORAGE_CLASS_DATABASE in cluster-settings.
-    storageClass: ${STORAGE_CLASS_DATABASE}
+    # Any worker: the cluster's default class (local-path, ext4 on every
+    # worker's /var), bound where the scheduler places the instance
+    # (WaitForFirstConsumer). Not STORAGE_CLASS_DATABASE: on homelab-wsl that
+    # is local-path-ext4, pinned to worker-1, which has no room.
+    storageClass: ${CNPG_STORAGE_CLASS:=${STORAGE_CLASS_DEFAULT}}
   resources:
     requests:
       cpu: ${CNPG_CPU_REQUEST:=10m}

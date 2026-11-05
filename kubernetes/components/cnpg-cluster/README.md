@@ -33,27 +33,28 @@ or Secret copies are needed.
 Set per app in the consuming Flux Kustomization's `postBuild.substitute`.
 Anything not set there comes from `cluster-settings`, then from the default.
 
-| Variable                      | Default                | Meaning                                                                                                                               |
-| ----------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `CNPG_APP`                    | required               | App name, DNS-1123 (`home-assistant`). Names every object and the S3 prefix. Unset, the objects render as `-pg` and fail to apply     |
-| `CNPG_USER`                   | `${CNPG_APP}`          | Owner role. Postgres-style name (`home_assistant`) where the app name has a hyphen                                                    |
-| `CNPG_DATABASE`               | `${CNPG_USER}`         | Database created at initdb                                                                                                            |
-| `CNPG_USER_SECRET`            | `postgres-${CNPG_APP}` | basic-auth Secret in `databases` with the owner's `username` (= `CNPG_USER`) and `password`. Must exist before the Cluster bootstraps |
-| `CNPG_INSTANCES`              | `1`                    | Instances. `cluster-settings` sets it per cluster (1 on both WSL clusters, 3 on MS-01)                                                |
-| `CNPG_SIZE`                   | `2Gi`                  | PVC size per instance. Not `CNPG_INSTANCE_SIZE`: that one sizes the shared cluster                                                    |
-| `CNPG_SHARED_BUFFERS`         | `32MB`                 | `shared_buffers`. Always with a unit, so it stays a string                                                                            |
-| `CNPG_MAX_CONNECTIONS`        | `"20"`                 | `max_connections`. Write an override with the quotes inside: `CNPG_MAX_CONNECTIONS: '"50"'` (see below)                               |
-| `CNPG_CPU_REQUEST`            | `10m`                  | Postgres container CPU request. No CPU limit                                                                                          |
-| `CNPG_MEMORY_REQUEST`         | `128Mi`                | Postgres container memory request                                                                                                     |
-| `CNPG_MEMORY_LIMIT`           | `512Mi`                | Postgres container memory limit                                                                                                       |
-| `CNPG_SIDECAR_MEMORY_REQUEST` | `64Mi`                 | barman-cloud sidecar memory request                                                                                                   |
-| `CNPG_SIDECAR_MEMORY_LIMIT`   | `256Mi`                | barman-cloud sidecar memory limit                                                                                                     |
-| `CNPG_SERVER_NAME`            | `${CLUSTER_NAME}`      | Archive folder under `cnpg/<app>/`. Bump it (`homelab-wsl-g2`) after a restore or an unplanned promote                                |
-| `CNPG_BACKUP_SCHEDULE`        | `0 30 1 * * *`         | Base backup cron, six fields, seconds first. Don't start it with `*` (YAML alias)                                                     |
-| `CNPG_BACKUP_RETENTION`       | `30d`                  | barman retention, applied per `serverName`                                                                                            |
+| Variable                      | Default                    | Meaning                                                                                                                                                                |
+| ----------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CNPG_APP`                    | required                   | App name, DNS-1123 (`home-assistant`). Names every object and the S3 prefix. Unset, the objects render as `-pg` and fail to apply                                      |
+| `CNPG_USER`                   | `${CNPG_APP}`              | Owner role. Postgres-style name (`home_assistant`) where the app name has a hyphen                                                                                     |
+| `CNPG_DATABASE`               | `${CNPG_USER}`             | Database created at initdb                                                                                                                                             |
+| `CNPG_USER_SECRET`            | `postgres-${CNPG_APP}`     | basic-auth Secret in `databases` with the owner's `username` (= `CNPG_USER`) and `password`. Must exist before the Cluster bootstraps                                  |
+| `CNPG_INSTANCES`              | `1`                        | Instances. `cluster-settings` sets it per cluster (1 on both WSL clusters, 3 on MS-01)                                                                                 |
+| `CNPG_SIZE`                   | `2Gi`                      | PVC size per instance. Not `CNPG_INSTANCE_SIZE`: that one sizes the shared cluster                                                                                     |
+| `CNPG_STORAGE_CLASS`          | `${STORAGE_CLASS_DEFAULT}` | StorageClass for the instance PVCs. `local-path` on both WSL clusters: ext4 on every worker, so instances go where there is room (not worker-1-only `local-path-ext4`) |
+| `CNPG_SHARED_BUFFERS`         | `32MB`                     | `shared_buffers`. Always with a unit, so it stays a string                                                                                                             |
+| `CNPG_MAX_CONNECTIONS`        | `"20"`                     | `max_connections`. Write an override with the quotes inside: `CNPG_MAX_CONNECTIONS: '"50"'` (see below)                                                                |
+| `CNPG_CPU_REQUEST`            | `10m`                      | Postgres container CPU request. No CPU limit                                                                                                                           |
+| `CNPG_MEMORY_REQUEST`         | `128Mi`                    | Postgres container memory request                                                                                                                                      |
+| `CNPG_MEMORY_LIMIT`           | `512Mi`                    | Postgres container memory limit                                                                                                                                        |
+| `CNPG_SIDECAR_MEMORY_REQUEST` | `64Mi`                     | barman-cloud sidecar memory request                                                                                                                                    |
+| `CNPG_SIDECAR_MEMORY_LIMIT`   | `256Mi`                    | barman-cloud sidecar memory limit                                                                                                                                      |
+| `CNPG_SERVER_NAME`            | `${CLUSTER_NAME}`          | Archive folder under `cnpg/<app>/`. Bump it (`homelab-wsl-g2`) after a restore or an unplanned promote                                                                 |
+| `CNPG_BACKUP_SCHEDULE`        | `0 30 1 * * *`             | Base backup cron, six fields, seconds first. Don't start it with `*` (YAML alias)                                                                                      |
+| `CNPG_BACKUP_RETENTION`       | `30d`                      | barman retention, applied per `serverName`                                                                                                                             |
 
 From `cluster-settings` (no default, every cluster must define them):
-`CLUSTER_NAME`, `STORAGE_CLASS_DATABASE`, `BACKUP_S3_BUCKET`.
+`CLUSTER_NAME`, `STORAGE_CLASS_DEFAULT`, `BACKUP_S3_BUCKET`.
 `SERVICE_MONITOR_ENABLED` defaults to `false`.
 
 **Why the odd quoting on `CNPG_MAX_CONNECTIONS`.** Postgres parameters must be
@@ -192,7 +193,7 @@ second component, not by changing this one:
   refresher, `BACKUP_S3_BUCKET` in its `cluster-settings`, and its own Roles
   Anywhere certificate and role (read on `cnpg/`, write only on
   `cnpg/*/homelab-wsl-02*/*`), so a mis-rendered `serverName` can't write into
-  wsl-01's archive. wsl-02's `STORAGE_CLASS_DATABASE` is `local-path`, which
+  wsl-01's archive. wsl-02's `STORAGE_CLASS_DEFAULT` is `local-path`, which
   is ext4 there.
 
 ## Monitoring
@@ -214,3 +215,14 @@ warm tier on the other site (about 0.5 GiB). Apps that need more (Home
 Assistant's recorder) raise `CNPG_SHARED_BUFFERS` and the memory limit. CPU,
 WAL upload and S3 cost are negligible. On homelab-wsl, worker-1 (where
 `local-path-ext4` lives) has no room for this today; that gate comes first.
+
+## Where instances run
+
+Local storage ties an instance to the worker its PVC was created on. With
+`CNPG_STORAGE_CLASS` on `local-path` (both workers), each app's instance is
+placed where the scheduler finds room, so per-app clusters spread across
+worker-1 and worker-2. To let an app's database move between workers without
+a restore, run two instances (`CNPG_INSTANCES: "2"`): CNPG's default pod
+anti-affinity puts them on different workers, the second streams from the
+first, and a switchover (or a lost worker) promotes the other one. That
+doubles the app's Postgres memory (roughly 120-150 MiB per idle instance).
