@@ -6,6 +6,14 @@
   ansible.builtin.set_fact:
     windows_monitoring_subnet: "{{ windows_monitoring_wsl_subnet or windows_wsl_subnet }}"
 
+# Both are written into before their installer runs (config.yaml for the MSI,
+# the smartctl_exporter files), so on a fresh host they must exist first.
+- name: Exporter directories
+  ansible.windows.win_file:
+    path: "{{ item }}"
+    state: directory
+  loop: ["{{ windows_exporter_dir }}", "{{ smartctl_exporter_dir }}"]
+
 # --- windows_exporter --------------------------------------------------------
 
 - name: Installed windows_exporter version
