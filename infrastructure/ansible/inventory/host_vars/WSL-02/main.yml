@@ -40,6 +40,9 @@ windows_monitoring_remote_extra: [10.10.91.142]
 # Only the distro's sshd, and only from DESKTOP-HKE05KI (its controller). It
 # replaces the hand-made rule that admitted any address.
 lan_bridge_tcp_ports:
+  # homelab-wsl-02's internal ingress, from the LAN like homelab-wsl's.
+  - { port: 80 }
+  - { port: 443 }
   - { port: 2222, wsl_port: 22, remote: [10.10.91.142] }
 lan_bridge_replaced_rules:
   - WSL SSH Rule # tcp/2222 from any

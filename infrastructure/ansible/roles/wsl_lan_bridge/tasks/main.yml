@@ -27,6 +27,31 @@
   register: bridge_unit
   notify: Reload systemd
 
+- name: Drop-in directory for this host's targets
+  ansible.builtin.file:
+    path: /etc/systemd/system/tnwks-lan-bridge@.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: wsl_lan_bridge_targets | length > 0
+
+- name: This host's targets (wsl_lan_bridge_targets)
+  ansible.builtin.copy:
+    content: |
+      # Managed by tnwks-ops (role wsl_lan_bridge, wsl_lan_bridge_targets).
+      [Service]
+      {% for k, v in wsl_lan_bridge_targets | dictsort %}
+      Environment={{ k }}={{ v }}
+      {% endfor %}
+    dest: /etc/systemd/system/tnwks-lan-bridge@.service.d/targets.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: bridge_targets
+  notify: Reload systemd
+  when: wsl_lan_bridge_targets | length > 0
+
 - name: Flush the systemd reload before starting instances
   ansible.builtin.meta: flush_handlers
 
@@ -36,10 +61,14 @@
     enabled: true
     state: started
   loop: "{{ wsl_lan_bridge_instances }}"
+  # Check mode on a fresh distro: the unit file isn't there yet.
+  when: not (ansible_check_mode and bridge_unit is changed)
 
 - name: Restart tnwks-lan-bridge instances if script or unit changed
   ansible.builtin.systemd:
     name: "tnwks-lan-bridge@{{ item }}.service"
     state: restarted
   loop: "{{ wsl_lan_bridge_instances }}"
-  when: bridge_script.changed or bridge_unit.changed
+  when:
+    - bridge_script.changed or bridge_unit.changed or (bridge_targets.changed | default(false))
+    - not (ansible_check_mode and bridge_unit is changed)
