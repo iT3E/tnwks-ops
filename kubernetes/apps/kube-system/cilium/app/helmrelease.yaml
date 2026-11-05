@@ -26,6 +26,26 @@ spec:
   uninstall:
     keepHistory: false
   values:
+    # Talos lets no pod load kernel modules, and the WSL2 kernel refuses
+    # CAP_SYS_MODULE in nested containers (cilium#13768), so the agent and
+    # clean-cilium-state run without it, and Cilium uses the cgroup v2 mount
+    # Talos already has (Talos' Cilium guide; talos/wsl-02/README.md).
+    securityContext:
+      capabilities:
+        ciliumAgent: [CHOWN, KILL, NET_ADMIN, NET_RAW, IPC_LOCK, SYS_ADMIN, SYS_RESOURCE, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+        cleanCiliumState: [NET_ADMIN, SYS_ADMIN, SYS_RESOURCE]
+    cgroup:
+      autoMount:
+        enabled: false
+      hostRoot: /sys/fs/cgroup
+    # LoadBalancer IPs answered over ARP (cilium/config-ks.yaml); per cluster.
+    l2announcements:
+      enabled: ${CILIUM_L2_ANNOUNCEMENTS_ENABLED:=false}
+    # L2 announcements hold a lease per Service; Cilium's docs raise the
+    # client rate limit for them.
+    k8sClientRateLimit:
+      qps: 10
+      burst: 20
     bpf:
       masquerade: true
     cluster:

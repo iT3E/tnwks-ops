@@ -3,8 +3,44 @@
 # talos_target they take as an extra var (`-e talos_target=ms-01`; default
 # wsl). Their nodes are addresses here, not inventory hosts: Talos has no SSH.
 talos_clusters:
-  # Talos in Docker on the WSL distro (talosctl cluster create docker).
-  wsl: {}
+  # Talos in Docker on a WSL distro (talosctl cluster create docker), run on
+  # that distro: 01-talos-bootstrap.yml reads the fields below. Sizing notes
+  # are in that playbook.
+  #   subnet / controlplane_ip  the Docker network and the control plane on it
+  #   config_patches            --config-patch (all nodes), relative to talos/<target>/
+  #   controlplane_patches      --config-patch-controlplanes
+  #   worker2_augment           rebuild worker-2 with the USB devices and E:
+  #                             (DESKTOP-HKE05KI's Coral and Z-Stick)
+  # homelab-wsl on DESKTOP-HKE05KI.
+  wsl:
+    provisioner: docker
+    subnet: 10.5.0.0/24
+    controlplane_ip: 10.5.0.2
+    workers: 2
+    cpus_controlplanes: "4.0"
+    cpus_workers: "4.0"
+    memory_controlplanes: 4GiB
+    memory_workers: 13GiB
+    config_patches: [cluster-config.yaml, patches/kubelet-image-gc.yaml]
+    controlplane_patches: [patches/talos-api-access.yaml]
+    worker2_augment: true
+  # homelab-wsl-02 on WSL-02 (talos/wsl-02/README.md): Cilium, the
+  # multi-document patches (talosctl >= 1.14), no USB. Same sizes inside the
+  # same 40 GB .wslconfig.
+  wsl-02:
+    provisioner: docker
+    subnet: 10.6.0.0/24
+    controlplane_ip: 10.6.0.2
+    workers: 2
+    cpus_controlplanes: "4.0"
+    cpus_workers: "4.0"
+    memory_controlplanes: 4GiB
+    memory_workers: 13GiB
+    config_patches: [patches/cluster.yaml]
+    controlplane_patches: [patches/controlplane.yaml]
+    # Flux from the committed flux-system/ manifests (public repo, HTTPS,
+    # no deploy key) instead of `flux bootstrap github` (04-flux-install.yml).
+    flux_install: manifests
   # 3x Minisforum MS-01, controlplane + worker each
   # (allowSchedulingOnControlPlanes: true).
   ms-01:

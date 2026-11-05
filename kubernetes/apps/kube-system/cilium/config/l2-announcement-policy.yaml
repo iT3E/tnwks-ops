@@ -1,0 +1,11 @@
+---
+# Answer ARP for every LoadBalancer IP on the nodes' eth0 (on Talos in Docker,
+# the Docker bridge; tested on homelab-wsl-02's host 2026-11-05).
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: default
+spec:
+  interfaces:
+    - ^eth[0-9]+
+  loadBalancerIPs: true

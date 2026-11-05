@@ -8,12 +8,18 @@ holds infrastructure config, manifests, or playbooks.
 | Cluster         | Where                               | CNI                                         | Storage default                                                | LB                                           | Notes                                                                   |
 | --------------- | ----------------------------------- | ------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------- |
 | `homelab-wsl`   | Talos-in-Docker on the WSL2 desktop | **Flannel**                                 | `local-path`                                                   | MetalLB on the docker bridge (`10.5.0.0/24`) | USB passthrough via `usbipd-win` for Frigate/Coral + Z-Stick            |
+| `homelab-wsl-02` | Talos-in-Docker on the second WSL2 host (WSL-02) | **Cilium** (kube-proxy replacement, L2) | `local-path` (ext4 vhdx on C:) | Cilium LB IPAM + L2 on the docker bridge (`10.6.0.0/24`) | Being brought up: platform only so far (`talos/wsl-02/README.md`) |
 | `homelab-ms-01` | 3× MS-01 bare-metal Talos           | **Cilium** (kube-proxy replacement, L2/BGP) | `ceph-block` (Rook), `nfs-bulk` (democratic-csi → TerraMaster) | Cilium L2/BGP on VLAN 910 (`10.10.91.50–60`) | Public ingress via cloudflared; runs Rook Ceph, Loki/Thanos/Vector, NFD |
 
-Cilium cannot run on WSL — `clean-cilium-state` requests `CAP_SYS_MODULE` which
-the WSL2 kernel rejects in nested containers ([cilium#13768](https://github.com/cilium/cilium/issues/13768)).
-That single fact drives most of the WSL/MS-01 divergence (no
-`CiliumNetworkPolicy` ⇒ no `pod-gateway` ⇒ no qbittorrent/prowlarr on WSL).
+`homelab-wsl` runs Flannel because Cilium's default `clean-cilium-state`
+requests `CAP_SYS_MODULE`, which the WSL2 kernel rejects in nested containers
+([cilium#13768](https://github.com/cilium/cilium/issues/13768)). Cilium doesn't
+need it: without it (Talos' own Cilium values, in the shared HelmRelease) it
+runs on Talos-in-Docker, and `homelab-wsl-02` uses it. On `homelab-wsl` the
+Flannel choice still drives the divergence from Cilium clusters (no
+`CiliumNetworkPolicy` ⇒ no `pod-gateway` ⇒ no qbittorrent/prowlarr there), and
+a NetworkPolicy in a shared app is enforced on `homelab-wsl-02` and ignored on
+`homelab-wsl`.
 
 ## Common commands
 

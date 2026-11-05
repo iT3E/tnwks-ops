@@ -1,0 +1,18 @@
+# homelab-wsl-02: control plane only (Talos refuses these on workers).
+#
+# Finished pods are deleted at once: a WSL restart shuts the nodes down
+# gracefully, leaving every pod Failed/Succeeded, and the default threshold
+# (12500) never collects them (talos/wsl/cluster-config.yaml has the history).
+apiVersion: v1alpha1
+kind: KubeControllerManagerConfig
+extraArgs:
+  terminated-pod-gc-threshold: "1"
+---
+# tuppr (system-upgrade) drives the Talos API from inside the cluster
+# (talos/wsl/patches/talos-api-access.yaml).
+machine:
+  features:
+    kubernetesTalosAPIAccess:
+      enabled: true
+      allowedRoles: [os:admin]
+      allowedKubernetesNamespaces: [system-upgrade]

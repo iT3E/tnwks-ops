@@ -64,10 +64,17 @@ This runs four Ansible playbooks in sequence:
 After step 4, **everything is GitOps**. Push to the tracked branch and
 Flux reconciles.
 
-## Why Flannel on WSL instead of Cilium
+## Why Flannel on `homelab-wsl` (and Cilium on `homelab-wsl-02`)
 
-MS-01 runs Cilium. WSL runs Flannel. The split exists because Cilium
-fundamentally cannot run on Talos-in-Docker on WSL2:
+`homelab-wsl` runs Flannel because Cilium, with its default values, could
+not start on Talos-in-Docker on WSL2. That turned out to be avoidable: the
+blocker is a capability Cilium asks for, not one it needs. Talos' Cilium
+guide drops it (pods can't load kernel modules on Talos anyway), and so does
+the shared HelmRelease now (`securityContext.capabilities`,
+`cgroup.autoMount.enabled: false`). `homelab-wsl-02` runs Cilium that way,
+tested on 2026-11-05 (`talos/wsl-02/README.md`). `homelab-wsl` stays on
+Flannel for now: swapping the CNI under a running cluster re-networks every
+pod. What blocked the default values:
 
 - Cilium's `clean-cilium-state` init container requests `CAP_SYS_MODULE`
   (along with `CAP_SYS_ADMIN`, `CAP_NET_ADMIN`, `CAP_SYS_RESOURCE`).

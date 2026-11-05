@@ -13,6 +13,13 @@ tasks:
         cmd: "{{.ANSIBLE}} ansible-playbook playbooks/{{.ITEM}}.yml -e talos_target=wsl"
       - task: :wsl-host:distro-apply
 
+  wsl-02:
+    desc: Bootstrap homelab-wsl-02 (Talos → Cilium → SOPS → Flux), run on WSL-02's distro (talos/wsl-02/README.md)
+    dir: "{{.ANSIBLE_DIR}}"
+    cmds:
+      - for: *bootstrap
+        cmd: "{{.ANSIBLE}} ansible-playbook playbooks/{{.ITEM}}.yml -e talos_target=wsl-02"
+
   ms-01:
     desc: Bootstrap the MS-01 Talos cluster (Talos → CNI → SOPS → Flux)
     dir: "{{.ANSIBLE_DIR}}"

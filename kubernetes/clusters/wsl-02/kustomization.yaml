@@ -1,0 +1,11 @@
+---
+# Entry point of the flux-system Kustomization (flux-system/gotk-sync.yaml,
+# path ./kubernetes/clusters/wsl-02), same shape as kubernetes/clusters/wsl.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./flux-system
+  - ./cluster-settings.yaml
+  - ./cluster-secrets.sops.yaml
+  - ./meta.yaml
+  - ./apps.yaml

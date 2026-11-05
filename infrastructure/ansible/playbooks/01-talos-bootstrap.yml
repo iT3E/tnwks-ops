@@ -25,7 +25,10 @@
     # Talos image and initial Kubernetes version (Renovate-managed). After
     # creation the cluster follows tuppr's KubernetesUpgrade and
     # 05-talos-upgrade.yml; see docs/operations/cluster-upgrades.md.
-    wsl_versions: "{{ lookup('ansible.builtin.file', talos_dir ~ '/versions.yaml') | from_yaml if cluster_target == 'wsl' else {} }}"
+    talos_cluster: "{{ talos_clusters[cluster_target] }}"
+    # Talos in Docker (homelab-wsl, homelab-wsl-02): talosctl cluster create.
+    docker_cluster: "{{ (talos_cluster.provisioner | default('')) == 'docker' }}"
+    wsl_versions: "{{ lookup('ansible.builtin.file', talos_dir ~ '/versions.yaml') | from_yaml if docker_cluster else {} }}"
     # Node addresses, from talos_clusters (inventory/group_vars/all/talos.yml).
     talos_controlplane: "{{ talos_clusters[cluster_target].controlplane | default([]) }}"
 
@@ -43,12 +46,12 @@
         mode: "0755"
 
     # ─── WSL (Docker mode) ──────────────────────────────────────────────
-    - name: Check for existing WSL Talos containers
+    - name: Check for existing Talos node containers
       ansible.builtin.command: >-
         docker ps -aq --filter name=^{{ cluster_name }}-controlplane
       register: cluster_containers
       changed_when: false
-      when: cluster_target == 'wsl'
+      when: docker_cluster
 
     # Resource sizing notes (host has 64GiB RAM; WSL VM gets 40GiB via .wslconfig):
     #   * 4 CPU / 4 GiB on the CP — etcd + apiserver + flux-system pods that
@@ -69,33 +72,33 @@
     #     memory limits are ceilings, not reservations, so this coexists with
     #     the Docker daemon, WSL services, and qmd's CUDA address reservation
     #     inside the 40GiB VM. Raising these further needs a `.wslconfig` bump.
-    - name: Create WSL Talos Docker cluster
+    - name: Create the Talos Docker cluster
       ansible.builtin.command: >-
         talosctl cluster create docker
         --name {{ cluster_name }}
-        --workers 2
-        --cpus-controlplanes 4.0
-        --cpus-workers 4.0
-        --memory-controlplanes 4GiB
-        --memory-workers 13GiB
+        --subnet {{ talos_cluster.subnet }}
+        --workers {{ talos_cluster.workers }}
+        --cpus-controlplanes {{ talos_cluster.cpus_controlplanes }}
+        --cpus-workers {{ talos_cluster.cpus_workers }}
+        --memory-controlplanes {{ talos_cluster.memory_controlplanes }}
+        --memory-workers {{ talos_cluster.memory_workers }}
         --kubernetes-version {{ wsl_versions.kubernetes | regex_replace('^v', '') }}
         --image ghcr.io/siderolabs/talos:{{ wsl_versions.talos }}
-        --config-patch @{{ talos_dir }}/cluster-config.yaml
-        --config-patch @{{ talos_dir }}/patches/kubelet-image-gc.yaml
-        --config-patch-controlplanes @{{ talos_dir }}/patches/talos-api-access.yaml
+        {% for p in talos_cluster.config_patches %}--config-patch @{{ talos_dir }}/{{ p }} {% endfor %}
+        {% for p in talos_cluster.controlplane_patches | default([]) %}--config-patch-controlplanes @{{ talos_dir }}/{{ p }} {% endfor %}
       when:
-        - cluster_target == 'wsl'
+        - docker_cluster
         - cluster_containers.stdout | trim | length == 0
       register: cluster_create
       # Only runs when no cluster containers exist.
       changed_when: true
 
-    - name: Fetch WSL kubeconfig
+    - name: Fetch the Docker cluster's kubeconfig
       ansible.builtin.command: >-
         talosctl kubeconfig {{ kubeconfig_path }}
-        --nodes 10.5.0.2
+        --nodes {{ talos_cluster.controlplane_ip }}
         --force
-      when: cluster_target == 'wsl'
+      when: docker_cluster
       changed_when: true
 
     # ─── WSL: augment worker-2 with USB + bulk storage ──────────────────
@@ -113,7 +116,7 @@
     # all three. Skipped entirely on hosts where the bulk-storage path
     # or USB devices aren't present (e.g. CI / fresh clones).
     - name: Configure worker-2 augmentations (USB + bulk storage)
-      when: cluster_target == 'wsl'
+      when: talos_cluster.worker2_augment | default(false)
       vars:
         worker_name: "{{ cluster_name }}-worker-2"
         bulk_host_path: /mnt/e/k8s-storage

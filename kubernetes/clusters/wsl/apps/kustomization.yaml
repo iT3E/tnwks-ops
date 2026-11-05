@@ -2,9 +2,9 @@
 # WSL cluster apps: shared namespaces, with trimmed overlays for any
 # namespace that excludes apps not viable on Docker-mode Talos.
 #
-# CNI: Flannel (Cilium can't run on Talos-in-Docker on WSL2 — the
-# clean-cilium-state init requests CAP_SYS_MODULE which the WSL2 kernel
-# rejects in nested containers). MS-01 uses Cilium.
+# CNI: Flannel (chosen when Cilium's default CAP_SYS_MODULE request kept it
+# off Talos-in-Docker; homelab-wsl-02 runs Cilium without it). MS-01 uses
+# Cilium.
 #
 # Trimmed (per-namespace overlay below):
 #   - home-automation  (zwave-js-ui kept, USB passthrough required)

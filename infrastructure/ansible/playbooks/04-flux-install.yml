@@ -25,6 +25,11 @@
     github_owner: "iT3E"
     github_repo: "tnwks-ops"
     github_branch: "{{ flux_branch | default('main') }}"
+    # `manifests`: apply the committed kubernetes/clusters/<target>/flux-system
+    # (homelab-wsl-02: public repo over HTTPS, no deploy key, nothing pushed to
+    # main). Otherwise `flux bootstrap github`.
+    flux_install: "{{ talos_clusters[cluster_target].flux_install | default('github') }}"
+    repo_root: "{{ playbook_dir }}/../../.."
 
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
@@ -52,11 +57,33 @@
         msg: |
           GITHUB_TOKEN environment variable is required.
           Try: export GITHUB_TOKEN=$(op read 'op://Private/GitHub Flux Token/credential')
-      when: lookup('env', 'GITHUB_TOKEN') | length == 0
+      when:
+        - flux_install == 'github'
+        - lookup('env', 'GITHUB_TOKEN') | length == 0
 
     - name: Verify cluster is reachable
       ansible.builtin.command: kubectl cluster-info
       changed_when: false
+
+    # The CRDs and the objects using them are in one build, so the first pass
+    # can fail on "no matches for kind" until the CRDs are established.
+    - name: Apply the committed flux-system (controllers, GitRepository, Kustomization)
+      ansible.builtin.command: >-
+        kubectl apply --server-side --force-conflicts
+        -k {{ repo_root }}/{{ cluster_path }}/flux-system
+      register: flux_manifests
+      until: flux_manifests.rc == 0
+      retries: 3
+      delay: 15
+      changed_when: "' serverside-applied' in flux_manifests.stdout"
+      when: flux_install == 'manifests'
+
+    - name: Wait for the Flux controllers
+      ansible.builtin.command: >-
+        kubectl -n flux-system rollout status deploy/{{ item }} --timeout=300s
+      loop: [source-controller, kustomize-controller, helm-controller, notification-controller]
+      changed_when: false
+      when: flux_install == 'manifests'
 
     - name: Run flux bootstrap github
       ansible.builtin.command: >-
@@ -69,7 +96,9 @@
         --components-extra=image-reflector-controller,image-automation-controller
       register: flux_bootstrap
       changed_when: "'unchanged' not in flux_bootstrap.stdout"
+      when: flux_install == 'github'
 
     - name: Show flux bootstrap result
       ansible.builtin.debug:
         var: flux_bootstrap.stdout_lines
+      when: flux_install == 'github'

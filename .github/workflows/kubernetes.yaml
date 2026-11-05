@@ -61,11 +61,17 @@ jobs:
       # Each render is capped at 5 minutes. On a hang, SIGQUIT makes the Go
       # runtime print every goroutine's stack to the log before exiting, so
       # the failure shows where flate was stuck instead of just a timeout.
+      # .github/flate/all.krmignore keeps out cluster entrypoints that render
+      # on their own below (homelab-wsl-02), or their cluster-settings would
+      # replace homelab-wsl's in this render.
       - name: Render all Kustomizations and HelmReleases
-        run: timeout --signal=QUIT --kill-after=30s 5m flate test all --no-progress -p kubernetes
+        run: timeout --signal=QUIT --kill-after=30s 5m flate test all --no-progress -p kubernetes --krmignore .github/flate/all.krmignore
 
       - name: Render the live cluster (wsl) from its entrypoint
         run: timeout --signal=QUIT --kill-after=30s 5m flate test all --no-progress -p kubernetes/clusters/wsl
+
+      - name: Render homelab-wsl-02 from its entrypoint
+        run: timeout --signal=QUIT --kill-after=30s 5m flate test all --no-progress -p kubernetes/clusters/wsl-02
 
       # A Flux Alert event source only matches one namespace, so every
       # namespace with a HelmRelease needs its own entry, or its failures
@@ -100,7 +106,7 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
-          BLOCKING_CLUSTERS: wsl
+          BLOCKING_CLUSTERS: wsl wsl-02
         run: |
           set -euo pipefail
           images="$(bin/images-added "origin/${BASE_REF}")"

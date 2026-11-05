@@ -92,27 +92,45 @@
       changed_when: false
       when: cni_kind == 'cilium'
 
+    # The HelmRelease's own values (kubernetes/apps/kube-system/cilium/app),
+    # substituted with this cluster's settings the way Flux does, so Flux's
+    # first reconcile of the same release changes nothing. A hand-kept --set
+    # list here drifted from them (it lacked the Talos/WSL capability set).
+    - name: Render the Cilium values Flux will apply
+      ansible.builtin.command: >-
+        {{ ansible_playbook_python }} {{ playbook_dir }}/files/render-helmrelease-values.py
+        {{ playbook_dir }}/../../../kubernetes/apps/kube-system/cilium/app/helmrelease.yaml
+        {{ cluster_settings_path }}
+      register: cilium_values
+      changed_when: false
+      when: cni_kind == 'cilium'
+
+    - name: Cilium values file
+      ansible.builtin.tempfile:
+        suffix: -cilium-values.yaml
+      register: cilium_values_file
+      when: cni_kind == 'cilium'
+
+    - name: Write the Cilium values
+      ansible.builtin.copy:
+        content: "{{ cilium_values.stdout }}"
+        dest: "{{ cilium_values_file.path }}"
+        mode: "0600"
+      when: cni_kind == 'cilium'
+
+    # Off until the cluster has what they need (Flux turns them on): the
+    # ServiceMonitor CRD (kube-prometheus-stack) and an ingress controller.
     - name: Install or upgrade Cilium
       ansible.builtin.command: >-
         helm upgrade --install cilium cilium/cilium
         --namespace {{ cni_namespace }}
         --version {{ cilium_chart_version }}
-        --set bpf.masquerade=true
-        --set cluster.name={{ cluster_name }}
-        --set cluster.id=1
-        --set hubble.enabled=true
-        --set hubble.relay.enabled=true
-        --set hubble.ui.enabled=true
+        --values {{ cilium_values_file.path }}
+        --set prometheus.serviceMonitor.enabled=false
+        --set operator.prometheus.serviceMonitor.enabled=false
+        --set hubble.metrics.serviceMonitor.enabled=false
+        --set hubble.relay.prometheus.serviceMonitor.enabled=false
         --set hubble.ui.ingress.enabled=false
-        --set ipam.mode=kubernetes
-        --set k8sServiceHost=localhost
-        --set k8sServicePort=7445
-        --set kubeProxyReplacement=true
-        --set kubeProxyReplacementHealthzBindAddr=0.0.0.0:10256
-        --set operator.replicas=1
-        --set autoDirectNodeRoutes=true
-        --set ipv4NativeRoutingCIDR={{ cluster_pod_cidr }}
-        --set routingMode=native
       register: cilium_install
       changed_when: "'has been upgraded' in cilium_install.stdout or 'has been installed' in cilium_install.stdout"
       when: cni_kind == 'cilium'
