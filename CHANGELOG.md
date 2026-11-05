@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.129.1 - 2026-11-05
+
+### Fixed
+
+* Ansible Hosts: the summary and the drift metrics counted a host twice when one run covered both host playbooks (each playbook prints a cumulative recap); `drift` can be dispatched by hand.
+
 ## v1.129.0 - 2026-11-05
 
 ### Added
