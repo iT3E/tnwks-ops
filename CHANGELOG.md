@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.124.0 - 2026-11-05
+
+### Added
+
+* CI for Ansible (`.github/workflows/ansible.yaml`): every PR touching `infrastructure/ansible/` syntax-checks each playbook and runs ansible-lint (production profile, `.ansible-lint`) on the pinned controller; `task ansible:lint` runs the same locally.
+
 ## v1.123.0 - 2026-11-05
 
 ### Changed

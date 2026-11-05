@@ -1,3 +1,0 @@
-kind: Added
-body: "CI for Ansible (`.github/workflows/ansible.yaml`): every PR touching `infrastructure/ansible/` syntax-checks each playbook and runs ansible-lint (production profile, `.ansible-lint`) on the pinned controller; `task ansible:lint` runs the same locally."
-time: 2026-11-04T14:00:00.000000000-08:00
