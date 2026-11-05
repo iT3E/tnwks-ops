@@ -19,7 +19,7 @@
 ##   Address lists        5 (11 members)
 ##   Port lists           1
 ##   Zone-pair chains     19
-##   Firewall accepts     12 (expanded from VyOS tcp_udp / port-limit splits)
+##   Firewall accepts     14 (expanded from VyOS tcp_udp / port-limit splits)
 ##   Input-chain accepts  23
 ##   dstnat rules         8
 ##   Static routes        1
@@ -299,6 +299,12 @@ locals {
           protocol         = "udp"
           dst_port         = "22,3478"
         },
+        {
+          comment          = "smokeping (WSL cluster) pings of the APs"
+          src_address_list = "monitoring"
+          dst_address      = "10.10.90.11-10.10.90.13"
+          protocol         = "icmp"
+        },
       ]
     }
     "020-UISP-140-transit-10" = {
@@ -482,6 +488,12 @@ locals {
           dst_address      = "10.98.0.251"
           protocol         = "udp"
           dst_port         = "161"
+        },
+        {
+          comment          = "smokeping (WSL cluster) pings of SW03"
+          src_address_list = "monitoring"
+          dst_address      = "10.98.0.251"
+          protocol         = "icmp"
         },
       ]
     }

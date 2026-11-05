@@ -231,12 +231,13 @@ and 6-9.
 - **Monitoring path:** the SW03 SNMP scrape doesn't need the VPN: the
   router allows udp/161 from the desktop (address list `monitoring`) to SW03
   (zone pair `190-unifi-frontend-910-switch-mgmt`, `MONITORING_ZONE_RULES`
-  in the generator). While the desktop's `wg01-home` tunnel is up, the WSL
-  host routes 10.98.0.0/24 through it instead; either path works. The AP and
-  SW03 pings still need the tunnel (ICMP to the management VLANs is not
-  allowed from 910), so with it down the ping panels drop to 100% loss
-  together, and `WifiAPUnreachable`, gated on SW03 answering pings, stays
-  quiet instead of paging for all three APs.
+  in the generator), and ICMP from the desktop to SW03 and the 3 APs
+  (`10.10.90.11-13`, in pair `010-unifi-frontend-910-unifi-mgmt-900`), so the
+  pings don't need it either. While the desktop's `wg01-home` tunnel is up,
+  the WSL host routes 10.10.90.0/24 and 10.98.0.0/24 through it instead;
+  either path works. `WifiAPUnreachable` is gated on SW03 answering pings, so
+  if the path from the cluster breaks it stays quiet instead of paging for
+  all three APs.
 - **SNMP on SW03:** read-only v1/v2c. The community is in the snmp-exporter
   Secret (`monitoring/snmp-exporter/app/secret.sops.yaml`, `auth.yml`), loaded
   as a second `--config.file` next to the image's stock modules.
