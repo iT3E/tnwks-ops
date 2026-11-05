@@ -1,3 +1,0 @@
-kind: Added
-body: "WSL-02's windows_exporter and smartctl_exporter also admit DESKTOP-HKE05KI's address, so homelab-wsl's Prometheus can scrape the other site's Windows host over the LAN (`windows_monitoring_remote_extra`, per host)."
-time: 2026-11-05T06:00:00.000000000-08:00
