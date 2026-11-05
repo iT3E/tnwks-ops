@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.148.0 - 2026-11-05
+
+### Changed
+
+* The public tunnel DNS records live in `modules/cloudflare/tunnel-dns.tf` (inputs `tunnel_id`, `tunnel_public_hosts`, `tunnel_host_names`); the Cloudflare root only passes them, with `moved` blocks for the 16 records. No DNS changes.
+
 ## v1.147.0 - 2026-11-05
 
 ### Added
