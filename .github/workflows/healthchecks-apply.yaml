@@ -12,7 +12,7 @@ on:
     paths:
       - "infrastructure/terraform/environments/prod/healthchecks/**"
       - "infrastructure/terraform/modules/healthchecks/**"
-      - ".github/actions/healthchecks-terraform/**"
+      - ".github/actions/runner-terraform/**"
       - ".github/workflows/healthchecks-*.yaml"
   workflow_dispatch:
 
@@ -40,7 +40,8 @@ jobs:
           persist-credentials: false
 
       - name: Plan and apply
-        uses: ./.github/actions/healthchecks-terraform
+        uses: ./.github/actions/runner-terraform
         with:
+          root: prod/healthchecks
           mode: apply
           tf-api-token: ${{ secrets.TF_API_TOKEN }}

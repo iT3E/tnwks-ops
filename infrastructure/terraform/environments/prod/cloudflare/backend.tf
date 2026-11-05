@@ -1,7 +1,9 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 ## BACKEND
-## Terraform Cloud remote backend. Not wired into CI — this root module is
-## applied locally via `task terraform:apply` after a PR merges.
+## Terraform Cloud holds the state; runs execute where Terraform is invoked
+## (workspace execution mode `local`), which is the self-hosted
+## tnwks-ops-runner: cloudflare-plan.yaml on PRs, cloudflare-apply.yaml on
+## merge. `task terraform:plan|apply` is break-glass only.
 ## ---------------------------------------------------------------------------------------------------------------------
 
 terraform {

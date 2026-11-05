@@ -44,7 +44,8 @@ task talos:status:wsl
 task talos:reset:wsl       # destroy + recreate
 task talos:destroy:wsl
 
-# Terraform — the local task targets Cloudflare *only*. AWS state is in
+# Terraform — the local task targets Cloudflare *only*, break-glass: CI
+# applies Cloudflare on merge (cloudflare-{plan,apply}.yaml). AWS state is in
 # Terraform Cloud (workspace tnwks-ops-aws-prod) and is driven by the
 # .github/workflows/terraform-{plan,apply}.yaml on PRs/pushes touching
 # infrastructure/terraform/environments/prod/aws/** or modules/aws/**.
@@ -124,16 +125,12 @@ system actually owns the change:
   the TFC UI. Plans run automatically only for the owner's same-repo PRs;
   anything else waits in the `external-contributions` environment.
 
-- **Terraform MikroTik, UniFi, healthchecks.io
-  (`infrastructure/terraform/environments/prod/{mikrotik,unifi,healthchecks}/**`
+- **Terraform MikroTik, UniFi, healthchecks.io, Cloudflare
+  (`infrastructure/terraform/environments/prod/{mikrotik,unifi,healthchecks,cloudflare}/**`
   and their `modules/`)** — plan on the PR and apply on merge on the
   self-hosted `tnwks-ops-runner` (`<svc>-{plan,apply}.yaml`; state in TFC
-  with local execution). See `docs/network/ci.md`. The `task <svc>:apply`
-  targets are break-glass only.
-
-- **Terraform Cloudflare (`infrastructure/terraform/environments/prod/cloudflare/**`)** —
-  not wired into CI. After the PR merges, run `task terraform:apply`
-  locally to push the change.
+  with local execution). See `docs/network/ci.md`. The local
+  `task <svc>:apply` / `task terraform:apply` targets are break-glass only.
 
 - **Ansible (`infrastructure/ansible/**`)** — playbooks run on demand
   from a workstation (`task bootstrap:<cluster>` or a direct
@@ -268,7 +265,8 @@ and `task aws:ra-profile`; see
   custom domains uses an aliased `us_east_1` provider (Cognito custom
   domains require us-east-1 ACM regardless of pool region).
 - `infrastructure/terraform/environments/prod/cloudflare/` — DNS + zone/account-level
-  config, driven locally via `task terraform:{plan,apply}`.
+  config, planned and applied by `cloudflare-{plan,apply}.yaml` on the
+  self-hosted runner (`task terraform:{plan,apply}` is break-glass).
 - `infrastructure/terraform/environments/bootstrap/{aws-init,aws-identity}/` — org
   bootstrap and Identity Center. CLI/VCS driven, not wired into CI.
 - `infrastructure/terraform/modules/` — shared child modules, namespaced by

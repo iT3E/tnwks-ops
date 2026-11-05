@@ -10,7 +10,7 @@ on:
     paths:
       - "infrastructure/terraform/environments/prod/healthchecks/**"
       - "infrastructure/terraform/modules/healthchecks/**"
-      - ".github/actions/healthchecks-terraform/**"
+      - ".github/actions/runner-terraform/**"
       - ".github/workflows/healthchecks-*.yaml"
 
 permissions: {}
@@ -42,8 +42,9 @@ jobs:
 
       - name: Plan
         id: tf
-        uses: ./.github/actions/healthchecks-terraform
+        uses: ./.github/actions/runner-terraform
         with:
+          root: prod/healthchecks
           mode: plan
           tf-api-token: ${{ secrets.TF_API_TOKEN }}
 

@@ -1,17 +1,22 @@
 ---
-name: Healthchecks Terraform
+name: Runner Terraform
 description: >-
-  Plan (and optionally apply) infrastructure/terraform/environments/prod/healthchecks
-  on the tnwks-ops-runner scale set. healthchecks.io is a public API, so no
-  tunnel or endpoint override is needed. This repo is public, so job logs are
+  Plan (and optionally apply) one root under infrastructure/terraform/environments
+  on the tnwks-ops-runner scale set, for roots behind a public API that need
+  no tunnel or endpoint override (healthchecks.io, Cloudflare). State is in
+  the root's TFC workspace (execution mode local); secrets come from its
+  SOPS file via the runner's CI age key. This repo is public, so job logs are
   too: the plan body is never printed, only counts and the addresses that
   change, and on failure only Terraform's error blocks.
 inputs:
+  root:
+    description: "Root module path under infrastructure/terraform/environments, e.g. prod/cloudflare"
+    required: true
   mode:
     description: "plan or apply"
     required: true
   tf-api-token:
-    description: Terraform Cloud token (state for tnwks-healthchecks-prod)
+    description: Terraform Cloud token (state for the root's workspace)
     required: true
 outputs:
   summary:
@@ -27,7 +32,7 @@ runs:
 
     - name: Init
       shell: bash
-      working-directory: infrastructure/terraform/environments/prod/healthchecks
+      working-directory: infrastructure/terraform/environments/${{ inputs.root }}
       env:
         TF_TOKEN_app_terraform_io: ${{ inputs.tf-api-token }}
       run: |
@@ -37,7 +42,7 @@ runs:
     - name: Plan
       id: plan
       shell: bash
-      working-directory: infrastructure/terraform/environments/prod/healthchecks
+      working-directory: infrastructure/terraform/environments/${{ inputs.root }}
       env:
         TF_TOKEN_app_terraform_io: ${{ inputs.tf-api-token }}
         TF_IN_AUTOMATION: "true"
@@ -76,7 +81,7 @@ runs:
     - name: Apply
       if: inputs.mode == 'apply' && steps.plan.outputs.changes == 'true'
       shell: bash
-      working-directory: infrastructure/terraform/environments/prod/healthchecks
+      working-directory: infrastructure/terraform/environments/${{ inputs.root }}
       env:
         TF_TOKEN_app_terraform_io: ${{ inputs.tf-api-token }}
         TF_IN_AUTOMATION: "true"
