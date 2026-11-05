@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.140.0 - 2026-11-05
+
+### Added
+
+* AWS: a Roles Anywhere backup role per extra site (`rolesanywhere_backups_sites`), first `wsl-02`: certificate CN `homelab-wsl-02-backups`, profile `tnwks-ops-backups-wsl-02`. It reads the whole backup bucket (to replay and restore homelab-wsl's backups) and writes only its own prefixes (`cnpg/*/homelab-wsl-02*/*`, `kopiur-homelab-wsl-02/*`). homelab-wsl's role is unchanged.
+
 ## v1.139.1 - 2026-11-05
 
 ### Fixed
