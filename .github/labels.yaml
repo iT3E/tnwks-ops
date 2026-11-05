@@ -43,13 +43,18 @@
   color: "F6412D"
 - name: type/break
   color: "F6412D"
-# Renovate: never automerged, wakes Ori (.github/renovate/autoMerge.json5)
+# Renovate: never automerged; Ori reviews it once the owner adds owner/review
+# (.github/renovate/autoMerge.json5)
 - name: impact/high
   color: "B60205"
 # Renovate: a bad merge can't be undone by a revert. Ori prepares it, the owner
 # approves it (.github/renovate/autoMerge.json5, docs/operations/renovate.md)
 - name: impact/critical
   color: "000000"
+# The owner asks Ori to review this impact/high PR. Nothing is reviewed without
+# it. A Renovate push clears it; Ori's own migration push doesn't.
+- name: owner/review
+  color: "1D76DB"
 # Ori left an impact/high PR open; renovate-review.yaml skips it until a new
 # push or the label is removed (docs/operations/renovate.md)
 - name: ori/blocked
