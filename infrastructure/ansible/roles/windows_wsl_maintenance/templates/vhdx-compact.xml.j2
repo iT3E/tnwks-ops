@@ -32,7 +32,7 @@
   <Actions Context="Author">
     <Exec>
       <Command>powershell.exe</Command>
-      <Arguments>-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{{ vhdx_compact_dir | e }}\Compact-WslVhdx.ps1"</Arguments>
+      <Arguments>-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{{ vhdx_compact_dir | e }}\Compact-WslVhdx.ps1"{% if vhdx_compact_vhdx %} -Vhdx "{{ vhdx_compact_vhdx | e }}"{% endif %}</Arguments>
     </Exec>
   </Actions>
 </Task>

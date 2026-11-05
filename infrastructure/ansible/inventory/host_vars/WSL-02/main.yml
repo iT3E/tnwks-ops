@@ -23,9 +23,12 @@ ansible_ssh_common_args: >-
 coral_detector_devices: []
 usb_attach_bound_devices: []
 udp_relays: []
-# The watchdog checks the OpenClaw gateway and the Z-Stick, both
-# DESKTOP-HKE05KI only. Off until its checks are per host.
-windows_wsl_maintenance_enabled: false
+# The watchdog only keeps WSL and the distro up here: no OpenClaw gateway, no
+# Z-Stick (and so no worker-2 restart after a cold start).
+wsl_watchdog_args: -SkipGateway -SkipUsb
+# The distro's disk (on C:, where `wsl --install` put it), for the
+# on-demand compaction task.
+vhdx_compact_vhdx: 'C:\Users\{{ ansible_user }}\AppData\Local\wsl\{d3e1f4cf-83d5-47be-8d7a-64fb9e7ebb25}\ext4.vhdx'
 
 # Only the distro's sshd, and only from DESKTOP-HKE05KI (its controller). It
 # replaces the hand-made rule that admitted any address.

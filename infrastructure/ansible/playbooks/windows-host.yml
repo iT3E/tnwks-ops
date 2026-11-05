@@ -85,7 +85,6 @@
       when: usb_attach_bound_devices | length > 0
       tags: [usb-attach]
     - role: windows_wsl_maintenance
-      when: windows_wsl_maintenance_enabled | default(true) | bool
       tags: [wsl-maintenance]
     # Check-only by default (an sshd_config rewrite restarts sshd under the
     # session). Like host-settings, near the end: a failed assertion stops

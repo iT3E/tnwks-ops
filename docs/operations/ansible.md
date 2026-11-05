@@ -97,8 +97,9 @@ re-pinning.
    (`ansible_user`). A role's list left empty skips the role on that host
    (`coral_detector_devices`, `udp_relays`, `usb_attach_bound_devices`;
    distro: `wsl_lan_bridge_instances`, `wsl_usb_attach_devices`,
-   `wsl_backups_timers`); `windows_wsl_maintenance_enabled: false` skips the
-   watchdog.
+   `wsl_backups_timers`). The watchdog takes `wsl_watchdog_args`
+   (`-SkipGateway -SkipUsb` without the OpenClaw gateway or the Z-Stick), the
+   compaction task `vhdx_compact_vhdx` (the distro's disk).
 4. The PR's Ansible Hosts check runs the site from its runner; merging applies it.
 
 ## Running playbooks

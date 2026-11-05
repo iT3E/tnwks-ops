@@ -37,6 +37,8 @@ param(
 if (-not $Distro) { $Distro = 'Ubuntu' }
 if (-not $Vhdx)   { $Vhdx   = 'E:\WSL\Ubuntu\ext4.vhdx' }
 if (-not $LogDir) { $LogDir = 'C:\ProgramData\tnwks-vhdx-compact' }
+# The drive the vhdx is on, for the free-space log lines (E: on DESKTOP-HKE05KI).
+$Drive = (Split-Path -Qualifier $Vhdx).TrimEnd(':')
 
 $ErrorActionPreference = 'Continue'
 $LogFile = Join-Path $LogDir 'compact.log'
@@ -49,7 +51,7 @@ function Write-Log([string]$Message) {
 
 function Get-SizeGB([string]$Path) { [math]::Round((Get-Item $Path).Length / 1GB, 1) }
 
-Write-Log "start: vhdx $(Get-SizeGB $Vhdx) GB, E: free $([math]::Round((Get-PSDrive E).Free / 1GB, 1)) GB"
+Write-Log "start: vhdx $(Get-SizeGB $Vhdx) GB, ${Drive}: free $([math]::Round((Get-PSDrive $Drive).Free / 1GB, 1)) GB"
 
 Disable-ScheduledTask -TaskName 'tnwks-wsl-watchdog' | Out-Null
 Write-Log 'watchdog task disabled'
@@ -88,7 +90,7 @@ try {
     ) | Set-Content -Path $dp -Encoding ASCII
     $out = & diskpart.exe /s $dp 2>&1
     $out | ForEach-Object { if ($_.Trim()) { Write-Log "diskpart: $_" } }
-    Write-Log "compacted: vhdx $(Get-SizeGB $Vhdx) GB, E: free $([math]::Round((Get-PSDrive E).Free / 1GB, 1)) GB"
+    Write-Log "compacted: vhdx $(Get-SizeGB $Vhdx) GB, ${Drive}: free $([math]::Round((Get-PSDrive $Drive).Free / 1GB, 1)) GB"
 }
 catch {
     Write-Log "ERROR: $_"
