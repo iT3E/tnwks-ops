@@ -22,6 +22,8 @@
     cluster_name: "homelab-{{ cluster_target }}"
     talos_dir: "{{ playbook_dir }}/../../../talos/{{ cluster_target }}"
     kubeconfig_path: "{{ ansible_env.HOME }}/.kube/config-{{ cluster_name }}"
+    # Where 05-talos-upgrade.yml and talos/wsl/mint-talosconfig.sh look for it.
+    talosconfig_path: "{{ ansible_env.HOME }}/.talos/config-{{ cluster_name }}"
     # Talos image and initial Kubernetes version (Renovate-managed). After
     # creation the cluster follows tuppr's KubernetesUpgrade and
     # 05-talos-upgrade.yml; see docs/operations/cluster-upgrades.md.
@@ -76,6 +78,7 @@
       ansible.builtin.command: >-
         talosctl cluster create docker
         --name {{ cluster_name }}
+        --talosconfig-destination {{ talosconfig_path }}
         --subnet {{ talos_cluster.subnet }}
         --workers {{ talos_cluster.workers }}
         --cpus-controlplanes {{ talos_cluster.cpus_controlplanes }}
@@ -95,7 +98,7 @@
 
     - name: Fetch the Docker cluster's kubeconfig
       ansible.builtin.command: >-
-        talosctl kubeconfig {{ kubeconfig_path }}
+        talosctl --talosconfig {{ talosconfig_path }} kubeconfig {{ kubeconfig_path }}
         --nodes {{ talos_cluster.controlplane_ip }}
         --force
       when: docker_cluster

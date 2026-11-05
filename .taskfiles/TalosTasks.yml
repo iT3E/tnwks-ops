@@ -18,6 +18,16 @@ tasks:
     cmds:
       - talosctl cluster destroy --name homelab-wsl
 
+  status:wsl-02:
+    desc: Show the homelab-wsl-02 Talos-in-Docker cluster (run on WSL-02's distro)
+    cmds:
+      - talosctl cluster show --name homelab-wsl-02
+
+  upgrade:wsl-02:
+    desc: Roll the homelab-wsl-02 node containers onto talos/wsl-02/versions.yaml (run on WSL-02's distro)
+    cmds:
+      - "{{.ANSIBLE}} ansible-playbook {{.ANSIBLE_DIR}}/playbooks/05-talos-upgrade.yml -e talos_target=wsl-02"
+
   upgrade:wsl:
     desc: Roll the WSL Talos node containers onto talos/wsl/versions.yaml (one node at a time)
     cmds:

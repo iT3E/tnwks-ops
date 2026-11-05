@@ -1,6 +1,6 @@
 ---
 # One node of 05-talos-upgrade.yml. Expects `node` (container name) and
-# `target_image`, `target_version`, `talos_dir`.
+# `target_image`, `target_version`, `roll_script`.
 
 - name: "{{ node }}: current image"
   ansible.builtin.command: docker inspect -f '{{ '{{' }}.Config.Image{{ '}}' }}' {{ node }}
@@ -30,7 +30,7 @@
       changed_when: true
 
     - name: "{{ node }}: swap the container onto {{ target_image }}"
-      ansible.builtin.command: "{{ talos_dir }}/roll-node.sh {{ node }} {{ target_image }}"
+      ansible.builtin.command: "{{ roll_script }} {{ node }} {{ target_image }}"
       changed_when: true
 
     - name: "{{ node }}: wait for Talos {{ target_version }}"

@@ -1,6 +1,8 @@
 ---
-# Roll the WSL Talos-in-Docker nodes onto the Talos version in
-# talos/wsl/versions.yaml (Renovate bumps it).
+# Roll a Talos-in-Docker cluster's nodes onto the Talos version in
+# talos/<target>/versions.yaml (Renovate bumps it). The cluster comes from
+# talos_clusters (inventory/group_vars/all/talos.yml) by talos_target:
+# homelab-wsl (default) or homelab-wsl-02, run on the distro that hosts it.
 #
 # Talos refuses in-place upgrades in container mode, so each node container
 # is swapped for one on the new image with the same volumes, env, address
@@ -14,29 +16,38 @@
 # two while it restarts; workloads keep running.
 #
 # Run via:
-#   task talos:upgrade:wsl
-#   ansible-playbook playbooks/05-talos-upgrade.yml
+#   task talos:upgrade:wsl      # or talos:upgrade:wsl-02
+#   ansible-playbook playbooks/05-talos-upgrade.yml [-e talos_target=wsl-02]
 #
 # Kubernetes versions are separate: tuppr's KubernetesUpgrade
 # (kubernetes/apps/system-upgrade/tuppr). docs/operations/cluster-upgrades.md.
 
-- name: Roll WSL Talos nodes onto the pinned Talos version
+- name: Roll Talos-in-Docker nodes onto the pinned Talos version
   hosts: localhost
   connection: local
   gather_facts: true
   become: false
 
   vars:
-    cluster_name: homelab-wsl
+    cluster_target: "{{ talos_target | default('wsl') }}"
+    cluster_name: "homelab-{{ cluster_target }}"
+    talos_cluster: "{{ talos_clusters[cluster_target] }}"
     repo_root: "{{ playbook_dir }}/../../.."
-    talos_dir: "{{ repo_root }}/talos/wsl"
+    # versions.yaml is per cluster; roll-node.sh is generic (it copies
+    # everything from the node container it replaces) and lives in talos/wsl.
+    talos_dir: "{{ repo_root }}/talos/{{ cluster_target }}"
+    roll_script: "{{ repo_root }}/talos/wsl/roll-node.sh"
     target_version: "{{ (lookup('ansible.builtin.file', talos_dir ~ '/versions.yaml') | from_yaml).talos }}"
     target_image: "ghcr.io/siderolabs/talos:{{ target_version }}"
+    # talosctl cluster create gives the control plane .2 and the workers the
+    # next addresses, in order.
+    ip_prefix: "{{ talos_cluster.controlplane_ip.rsplit('.', 1)[0] }}"
+    ip_first: "{{ talos_cluster.controlplane_ip.rsplit('.', 1)[1] | int }}"
+    worker_ips: >-
+      {% set out = [] %}{% for i in range(1, talos_cluster.workers + 1) %}{%
+      set _ = out.append(ip_prefix ~ '.' ~ (ip_first | int + i)) %}{% endfor %}{{ out }}
     # Control plane first (Talos upgrade order), then the workers.
-    nodes:
-      - homelab-wsl-controlplane-1
-      - homelab-wsl-worker-1
-      - homelab-wsl-worker-2
+    nodes: "{{ [cluster_name ~ '-controlplane-1'] + range(1, talos_cluster.workers + 1) | map('regex_replace', '^', cluster_name ~ '-worker-') | list }}"
 
   environment:
     KUBECONFIG: "{{ ansible_env.HOME }}/.kube/config-{{ cluster_name }}"
@@ -86,6 +97,6 @@
 
     - name: Final cluster health
       ansible.builtin.command: >-
-        talosctl -n 10.5.0.2 health --wait-timeout 10m
-        --control-plane-nodes 10.5.0.2 --worker-nodes 10.5.0.3,10.5.0.4
+        talosctl -n {{ talos_cluster.controlplane_ip }} health --wait-timeout 10m
+        --control-plane-nodes {{ talos_cluster.controlplane_ip }} --worker-nodes {{ worker_ips | join(',') }}
       changed_when: false
