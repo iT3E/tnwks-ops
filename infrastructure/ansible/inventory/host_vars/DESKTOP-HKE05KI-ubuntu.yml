@@ -4,3 +4,9 @@
 
 # The distro account that runs the timers (its kubeconfig, SSH and age keys).
 wsl_distro_user: it3e
+# The Windows host it runs on: a controller with this hostname is the distro
+# itself (WSL takes the Windows computer name) and connects locally.
+wsl_distro_windows_host: DESKTOP-HKE05KI
+# Where other controllers reach its sshd: the gateway of the homelab-wsl
+# Docker network, from the runner pods (host key in inventory/known_hosts).
+wsl_distro_ssh_host: 10.5.0.1

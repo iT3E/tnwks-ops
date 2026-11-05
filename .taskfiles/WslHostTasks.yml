@@ -12,6 +12,9 @@ version: "3"
 vars:
   SSHD_SCRIPT: "{{.ANSIBLE_DIR}}/roles/windows_sshd/files/Install-TnwksWindowsSshd.ps1"
   INVOKE_ELEVATED: "{{.ANSIBLE_DIR}}/scripts/invoke-elevated.sh"
+  # The authorized keys file the sshd bootstrap writes from the inventory. On
+  # the C: drive mount, so the elevated Windows PowerShell can read it.
+  SSHD_KEYS: /mnt/c/Windows/Temp/tnwks-sshd-authorized-keys.txt
   WINDOWS_SSH_KEY: "{{.HOME}}/.ssh/id_ed25519_winhost"
   # The Windows host the sshd bootstrap runs on: this workstation's own.
   WINDOWS_HOST: DESKTOP-HKE05KI
@@ -111,7 +114,11 @@ tasks:
     cmds:
       - test -f "{{.WINDOWS_SSH_KEY}}" || ssh-keygen -q -t ed25519 -N '' -C 'ansible@wsl to {{.WINDOWS_HOST}}' -f "{{.WINDOWS_SSH_KEY}}"
       - chmod 600 "{{.WINDOWS_SSH_KEY}}"
-      - '{{.INVOKE_ELEVATED}} {{.SSHD_SCRIPT}} -PublicKeyFile "$(wslpath -w "{{.WINDOWS_SSH_KEY}}.pub")" -AdminUser {{.ADMIN_USER}}'
+      # Every controller's key (windows_sshd_authorized_keys), not just this one.
+      - "{{.ANSIBLE}} ansible-inventory --host {{.WINDOWS_HOST}} | jq -r '.windows_sshd_authorized_keys[]' > {{.SSHD_KEYS}}"
+      # Refuse to lock this workstation out.
+      - grep -qxF "$(cat "{{.WINDOWS_SSH_KEY}}.pub")" {{.SSHD_KEYS}} || { echo "{{.WINDOWS_SSH_KEY}}.pub is not in windows_sshd_authorized_keys"; exit 1; }
+      - '{{.INVOKE_ELEVATED}} {{.SSHD_SCRIPT}} -PublicKeyFile "$(wslpath -w {{.SSHD_KEYS}})" -AdminUser {{.ADMIN_USER}}'
       # Key login works (password logins are refused by sshd_config), against
       # the host key pinned in inventory/known_hosts.
       - ssh -o BatchMode=yes -o UserKnownHostsFile={{.ANSIBLE_DIR}}/inventory/known_hosts -i "{{.WINDOWS_SSH_KEY}}" "{{.ADMIN_USER}}@{{.WINDOWS_ADDR}}" whoami
@@ -121,13 +128,15 @@ tasks:
     vars: *sshd_vars
     cmds:
       # The script exits 2 when something differs.
-      - '{{.INVOKE_ELEVATED}} {{.SSHD_SCRIPT}} -PublicKeyFile "$(wslpath -w "{{.WINDOWS_SSH_KEY}}.pub")" -AdminUser {{.ADMIN_USER}} -Check || [ $? -eq 2 ]'
+      - "{{.ANSIBLE}} ansible-inventory --host {{.WINDOWS_HOST}} | jq -r '.windows_sshd_authorized_keys[]' > {{.SSHD_KEYS}}"
+      - '{{.INVOKE_ELEVATED}} {{.SSHD_SCRIPT}} -PublicKeyFile "$(wslpath -w {{.SSHD_KEYS}})" -AdminUser {{.ADMIN_USER}} -Check || [ $? -eq 2 ]'
 
-  windows-drift-check:
-    desc: Install the nightly Ansible --check of the Windows host (systemd timer, 04:30, result in Prometheus; role wsl_drift_check)
+  ci-check:
+    desc: Run the Ansible Hosts workflow's --check on the sites' runners now (what the nightly drift check runs); changes nothing
     cmds:
-      - task: distro-apply
-        vars: { CLI_ARGS: "--tags drift-check" }
+      - env -u GITHUB_TOKEN gh workflow run ansible-hosts.yaml --ref main -f mode=check
+      # The run just queued; `gh run watch <id>` follows it.
+      - env -u GITHUB_TOKEN gh run list --workflow ansible-hosts.yaml --limit 1
 
   backups:
     desc: Install the daily UniFi (02:30) and Aruba SW03 (02:45) backup copies to Google Drive (role wsl_backups)

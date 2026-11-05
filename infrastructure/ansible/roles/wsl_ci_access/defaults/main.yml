@@ -1,0 +1,9 @@
+---
+# wsl_ci_access: lets the tnwks-ansible runners reach the WSL distro over SSH
+# as wsl_distro_user (passwordless sudo, so root): their keys in that
+# account's authorized_keys, each limited to the addresses in `from` and with
+# no forwarding. Other keys in the file are left alone.
+#
+#   key   the public key
+#   from  sources it is accepted from (the runner pods' nodes)
+wsl_ci_authorized_keys: []

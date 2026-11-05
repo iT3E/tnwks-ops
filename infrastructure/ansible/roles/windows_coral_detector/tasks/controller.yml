@@ -80,3 +80,18 @@
       - "{{ coral_detector_src }}/shim/{{ coral_detector_libusb_def }}"
       - "{{ coral_detector_cache }}/shim-{{ coral_detector_shim_id }}/libusb-1.0.dll"
     creates: "{{ coral_detector_cache }}/shim-{{ coral_detector_shim_id }}/libusb-1.0.dll"
+
+- name: Check the shim build
+  ansible.builtin.stat:
+    path: "{{ coral_detector_cache }}/shim-{{ coral_detector_shim_id }}/libusb-1.0.dll"
+    checksum_algorithm: sha256
+  register: coral_detector_shim_stat
+
+- name: The shim is the same build every controller makes
+  ansible.builtin.assert:
+    that: coral_detector_shim_stat.stat.checksum == coral_detector_shim_sha256
+    fail_msg: >-
+      libusb shim sha256 {{ coral_detector_shim_stat.stat.checksum }}, expected
+      {{ coral_detector_shim_sha256 }}: a different mingw-w64 or changed shim
+      source. Update coral_detector_shim_sha256 only for a source change.
+    quiet: true

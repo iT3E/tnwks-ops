@@ -1,9 +1,20 @@
 ---
-# The WSL distro on each Windows host. From a workstation the controller is
-# that distro, so the connection is local; a CI runner reaches it over SSH
-# instead (it overrides these per host).
-ansible_connection: local
+# The WSL distro on each Windows host. A workstation running in that distro
+# reaches it locally; any other controller (a CI runner pod, another WSL host)
+# over SSH, as wsl_distro_user with the controller's key (role wsl_ci_access
+# authorizes the runners').
+ansible_connection: "{{ 'local' if lookup('ansible.builtin.pipe', 'hostname') == wsl_distro_windows_host else 'ssh' }}"
+ansible_host: "{{ wsl_distro_ssh_host }}"
+ansible_user: "{{ wsl_distro_user }}"
+ansible_ssh_private_key_file: "{{ lookup('ansible.builtin.env', 'TNWKS_ANSIBLE_SSH_KEY') | default('~/.ssh/id_ed25519', true) }}"
 ansible_python_interpreter: /usr/bin/python3
 
 # The distro account the wsl_* timers run as (host_vars sets wsl_distro_user).
 wsl_distro_home: /home/{{ wsl_distro_user }}
+
+# Keys wsl_ci_access authorizes for wsl_distro_user: the tnwks-ansible
+# runners', usable only from the cluster's Docker network (the runner pods'
+# nodes).
+wsl_ci_authorized_keys:
+  - key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAYekUuwVqJdoise5COwMtb4nWPMSVVgY/8SUIrwHeJl ansible@tnwks-ansible-runner
+    from: 10.5.0.0/24

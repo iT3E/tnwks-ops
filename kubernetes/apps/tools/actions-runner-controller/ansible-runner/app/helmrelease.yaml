@@ -1,0 +1,87 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2beta2.json
+# Self-hosted runners for this repo's Ansible host config, one scale set per
+# cluster: `runs-on: tnwks-ansible-${CLUSTER_NAME}`, the ci_runner of the sites
+# it manages (infrastructure/ansible/inventory/group_vars/site_*.yml). See
+# docs/operations/ansible.md.
+#
+# Separate from tnwks-ops-runner on purpose: its keys are admin on the Windows
+# hosts and root on the WSL distros, and the network-device runner carries
+# neither. secret.sops.yaml holds the CI SSH key and the Ansible CI age key,
+# which decrypts infrastructure/ansible secrets and nothing else.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: tnwks-ansible-runner
+  namespace: tools
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: gha-runner-scale-set
+      version: 0.15.1
+      sourceRef:
+        kind: HelmRepository
+        name: actions-runner-controller
+        namespace: flux-system
+  maxHistory: 2
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  dependsOn:
+    - name: gha-runner-scale-set-controller
+  values:
+    githubConfigUrl: "https://github.com/iT3E/tnwks-ops"
+    runnerScaleSetName: tnwks-ansible-${CLUSTER_NAME}
+    # Same GitHub App as the other runners (one installation).
+    githubConfigSecret: sites-runner-github-app
+    # Idle costs nothing; one runner, so two runs never change a host at once.
+    minRunners: 0
+    maxRunners: 1
+    controllerServiceAccount:
+      namespace: tools
+      name: gha-runner-scale-set-controller-gha-rs-controller
+    template:
+      spec:
+        securityContext:
+          seccompProfile:
+            type: RuntimeDefault
+        containers:
+          - name: runner
+            image: ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232
+            command: ["/home/runner/run.sh"]
+            env:
+              # The workflow writes it to a 0600 file and points
+              # TNWKS_ANSIBLE_SSH_KEY at it (group_vars/windows_hosts.yml,
+              # wsl_distros.yml).
+              - name: TNWKS_ANSIBLE_SSH_KEY_CONTENT
+                valueFrom:
+                  secretKeyRef:
+                    name: tnwks-ansible-runner
+                    key: ssh-key
+              # Read by sops for the community.sops vars plugin.
+              - name: SOPS_AGE_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: tnwks-ansible-runner
+                    key: sops-age-key
+              # The KMS recipient is unusable here and the age key suffices;
+              # skip the EC2 metadata lookup the AWS SDK would otherwise try.
+              - name: AWS_EC2_METADATA_DISABLED
+                value: "true"
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
+            resources:
+              requests:
+                cpu: 100m
+                memory: 512Mi
+              limits:
+                memory: 2Gi

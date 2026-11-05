@@ -68,6 +68,10 @@ coral_detector_libusb_dll: VS2022/MS64/dll/libusb-1.0.dll
 coral_detector_libusb_dll_sha256: 7cbf37e76dae9c840c7e8dbf7348ee8897dcc86c8ba45e46ada60b89411569f7
 # The shim's export list, generated from that DLL by shim/gen-def.sh.
 coral_detector_libusb_def: libusb-1.0.30.def
+# What shim/build.sh produces from that source with Ubuntu 24.04's
+# gcc-mingw-w64-x86-64 (13-win32). Every controller must build the same bytes,
+# or each run would replace the other's DLL; update with the source.
+coral_detector_shim_sha256: 57bc83704c10addb0c1b680e41977e05e3da023f957436b754610f898539a19f
 coral_detector_edgetpu_dll: edgetpu_runtime/libedgetpu/direct/x64_windows/edgetpu.dll
 coral_detector_edgetpu_dll_sha256: c29d8fb22cb16010d74e7b61a98ef7993fa382b8c43b60b7f8cb1b1be0b0ca89
 # Signer of the Coral WinUSB driver catalogs (Google LLC; expired 2021, the

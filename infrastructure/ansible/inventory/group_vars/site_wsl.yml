@@ -1,0 +1,8 @@
+---
+# Site wsl: DESKTOP-HKE05KI and its distro, under the homelab-wsl cluster.
+
+# The self-hosted runner scale set (runs-on label) that checks and applies
+# this site in CI (.github/workflows/ansible-hosts.yaml). Each cluster has one,
+# tnwks-ansible-<CLUSTER_NAME>; a site can name another cluster's runner, so a
+# second WSL host can manage this one and the other way round.
+ci_runner: tnwks-ansible-homelab-wsl

@@ -1,7 +1,7 @@
 ---
-# wsl_drift_check: the nightly `--check` of the Windows host playbook against
-# main, run from the WSL distro and reported to Prometheus through
-# windows_exporter's textfile collector (docs/wsl/windows-ansible.md,
-# "Nightly drift check"). Runs as wsl_distro_user, which holds the Ansible
-# SSH key and an age key for the SOPS host vars.
+# wsl_drift_check: removes the nightly drift-check timer the distro used to
+# run. The drift check is a scheduled run of .github/workflows/ansible-hosts.yaml
+# on the site's runner now, and it writes the same metrics
+# (docs/wsl/windows-ansible.md, "Nightly drift check"). Delete this role once
+# no distro has the timer.
 wsl_drift_check_name: tnwks-windows-drift-check
