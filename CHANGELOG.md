@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.126.0 - 2026-11-05
+
+### Added
+
+* Home Wi-Fi monitoring: a git-managed "Home Wi-Fi" Grafana dashboard, Wi-Fi alerts in `wifi.yaml` (unpoller blind, AP uplink below 1G, AP unreachable, AP switch port flapping, channel busy, retries, satisfaction, AP reboot outside the upgrade window), smokeping pings of the three APs and SW03, and an snmp-exporter scrape of the AP ports on SW03.
+
 ## v1.125.0 - 2026-11-05
 
 ### Added
