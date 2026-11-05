@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.141.0 - 2026-11-05
+
+### Added
+
+* Runtime switchover hook (`docs/wsl/multi-site.md`, "Switching an app"): every app Kustomization on both WSL clusters reads an optional ConfigMap `flux-system/site-overrides` after `cluster-settings` and `cluster-secrets`, so a value there wins. Nothing in git creates it; `SiteOverrideLingering` fires when one exists for more than a day. No effect until one is created.
+
 ## v1.140.0 - 2026-11-05
 
 ### Added
