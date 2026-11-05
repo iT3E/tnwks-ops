@@ -1,0 +1,3 @@
+kind: Added
+body: "homelab-wsl-02 has an off-site dead-man switch: a CronJob pings the new healthchecks.io check `homelab-wsl-02` every 2 minutes, and healthchecks.io messages Telegram when it goes quiet."
+time: 2026-11-05T18:00:00.000000000-08:00

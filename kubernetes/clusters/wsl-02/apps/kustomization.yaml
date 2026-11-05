@@ -20,6 +20,8 @@ resources:
   # Storage: this cluster's node names (see the file).
   - ./local-path-provisioner-ks.yaml
   - ../../../apps/kube-system/metrics-server/ks.yaml
+  # Off-site dead-man switch (healthchecks.io check homelab-wsl-02).
+  - ./heartbeat-ks.yaml
   # Certificates: cert-manager with the Let's Encrypt DNS-01 issuers, and the
   # wildcard certificates the ingress controllers use (internal and public).
   - ../../../apps/cert-manager/namespace.yaml
