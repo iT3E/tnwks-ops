@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.134.0 - 2026-11-05
+
+### Changed
+
+* ARC runners: Ansible Hosts runs its sites side by side (tnwks-ansible scale set to 2 runners) and caches the Galaxy collections; per-task timings in the job summary; controller and listener metrics scraped, with a Grafana dashboard; sites-builder drops the unused dind sidecar, pins its runner image and scales from zero.
+
 ## v1.133.1 - 2026-11-05
 
 ### Fixed

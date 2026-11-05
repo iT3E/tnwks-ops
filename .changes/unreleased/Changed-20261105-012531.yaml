@@ -1,3 +1,0 @@
-kind: Changed
-body: 'ARC runners: Ansible Hosts runs its sites side by side (tnwks-ansible scale set to 2 runners) and caches the Galaxy collections; per-task timings in the job summary; controller and listener metrics scraped, with a Grafana dashboard; sites-builder drops the unused dind sidecar, pins its runner image and scales from zero.'
-time: 2026-11-05T01:25:31.284074601-08:00
