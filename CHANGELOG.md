@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.132.1 - 2026-11-05
+
+### Fixed
+
+* `windows_monitoring` creates the windows_exporter and smartctl_exporter directories before writing into them, so the first apply on a fresh Windows host (WSL-02) no longer fails at `config.yaml`.
+
 ## v1.132.0 - 2026-11-05
 
 ### Added
