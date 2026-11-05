@@ -14,3 +14,4 @@ resources:
   - ./coral-detector.yaml
   - ./heartbeats.yaml
   - ./wifi.yaml
+  - ./site-overrides.yaml

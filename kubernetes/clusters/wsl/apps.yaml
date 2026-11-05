@@ -24,6 +24,12 @@ spec:
         name: cluster-settings
       - kind: Secret
         name: cluster-secrets
+      # Runtime switchover (docs/wsl/multi-site.md, "Switching an app"): last,
+      # so it wins. Never in git: `task failover` creates it, and an alert
+      # fires when one lives longer than a day.
+      - kind: ConfigMap
+        name: site-overrides
+        optional: true
   patches:
     - patch: |-
         apiVersion: kustomize.toolkit.fluxcd.io/v1
@@ -41,6 +47,12 @@ spec:
                 name: cluster-settings
               - kind: Secret
                 name: cluster-secrets
+              # Runtime switchover (docs/wsl/multi-site.md, "Switching an app"): last,
+              # so it wins. Never in git: `task failover` creates it, and an alert
+              # fires when one lives longer than a day.
+              - kind: ConfigMap
+                name: site-overrides
+                optional: true
       target:
         group: kustomize.toolkit.fluxcd.io
         kind: Kustomization
