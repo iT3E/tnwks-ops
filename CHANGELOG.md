@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.130.0 - 2026-11-05
+
+### Changed
+
+* CI: the secret scan, privacy, label, changelog and release workflows now call the reusable workflows in iT3E/github-workflows (v1.4.1) instead of keeping their own copies, and PRs that touch workflows get an actionlint check. The required checks are now named betterleaks / betterleaks and privacy / privacy.
+
 ## v1.129.1 - 2026-11-05
 
 ### Fixed
