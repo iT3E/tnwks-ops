@@ -133,7 +133,7 @@
     path: "{{ windows_monitoring_staging }}"
     state: absent
 
-# --- firewall: both exporters, WSL subnet only -------------------------------
+# --- firewall: both exporters, WSL subnet (+ windows_monitoring_remote_extra) -
 
 - name: Firewall rules (WSL subnet only)
   ansible.windows.win_firewall_rule:
@@ -142,7 +142,7 @@
     protocol: tcp
     direction: in
     action: allow
-    remoteip: "{{ windows_monitoring_subnet }}"
+    remoteip: "{{ ([windows_monitoring_subnet] + windows_monitoring_remote_extra) | join(',') }}"
     enabled: true
     state: present
   loop:

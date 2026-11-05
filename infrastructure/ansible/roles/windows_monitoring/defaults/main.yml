@@ -59,6 +59,9 @@ smartctl_exporter_args: >-
 # Firewall rules admit only this subnet. Empty = read it from the vEthernet
 # (WSL) adapter.
 windows_monitoring_wsl_subnet: ""
+# More sources the exporters' firewall rules admit, per host: the other site's
+# Prometheus scrapes this host over the LAN (each site watches the other).
+windows_monitoring_remote_extra: []
 
 windows_monitoring_cache: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/tnwks-ops/windows-monitoring"
 # Installers are copied here only when an install or upgrade is due, and
