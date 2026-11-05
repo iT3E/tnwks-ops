@@ -32,6 +32,11 @@ resources:
   # (kubernetes/components/cnpg-cluster).
   - ../../../apps/databases/namespace.yaml
   - ../../../apps/databases/cloudnative-pg/ks.yaml
+  # Backup credentials: certificate -> STS session for barman-cloud and kopiur
+  # (role tnwks-rolesanywhere-backups-wsl-02: read the bucket, write only
+  # homelab-wsl-02's prefixes).
+  - ../../../apps/kopiur-system/namespace.yaml
+  - ./aws-backup-credentials-ks.yaml
 # Parts of those shared ks.yaml files that don't run here (yet):
 #   - PrometheusRules: no kube-prometheus-stack on this cluster.
 #   - ingress-nginx (public): waits for this cluster's own cloudflared tunnel.

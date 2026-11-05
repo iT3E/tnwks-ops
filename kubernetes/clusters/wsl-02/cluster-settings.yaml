@@ -55,6 +55,12 @@ data:
   CILIUM_SERVICEMONITOR_ENABLED: "false"
   CILIUM_HUBBLE_UI_INGRESS_ENABLED: "false"
   SERVICE_MONITOR_ENABLED: "false"
+  # Backups (aws-backup-credentials): this cluster's Roles Anywhere profile and
+  # role (environments/prod/aws outputs rolesanywhere_backups_site_*["wsl-02"]),
+  # the shared trust anchor.
+  RA_TRUST_ANCHOR_ARN: "arn:aws:rolesanywhere:us-west-2:654654262098:trust-anchor/6488e8e2-90be-467b-af60-eb66e745039d"
+  RA_BACKUPS_PROFILE_ARN: "arn:aws:rolesanywhere:us-west-2:654654262098:profile/840a5e02-4f40-4ee7-a712-287f536b23c0"
+  RA_BACKUPS_ROLE_ARN: "arn:aws:iam::654654262098:role/tnwks-rolesanywhere-backups-wsl-02"
   # The vEthernet (WSL) address of WSL-02 (inventory/host_vars/WSL-02).
   WINDOWS_HOST_IP: "172.25.16.1"
   # The Windows computer name, and the other site's Windows host for its
