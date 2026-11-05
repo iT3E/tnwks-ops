@@ -57,6 +57,9 @@
   vars:
     wsl_backups_aruba: "{{ lookup('community.sops.sops', wsl_backups_aruba_secrets) | from_yaml }}"
   no_log: true
+  # CI has no key for the Aruba secrets (.sops.yaml), so the runner skips this
+  # one task (--skip-tags aruba-credentials).
+  tags: [aruba-credentials]
 
 - name: Flush the systemd reload before enabling the timers
   ansible.builtin.meta: flush_handlers

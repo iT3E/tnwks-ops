@@ -112,9 +112,10 @@ spec:
             summary: "Windows host unreachable"
             description: "DESKTOP-HKE05KI has been down for 5 minutes"
 
-    # The nightly Ansible --check of the Windows host (tnwks-windows-drift-check
-    # timer in WSL, docs/wsl/windows-ansible.md). It writes its PLAY RECAP
-    # counts to windows_exporter's textfile directory.
+    # The nightly Ansible --check of the Windows host and its WSL distro (the
+    # scheduled run of .github/workflows/ansible-hosts.yaml on the site's
+    # runner, docs/wsl/windows-ansible.md). It writes the PLAY RECAP counts,
+    # per host (`host` label), to windows_exporter's textfile directory.
     - name: windows-host-config
       rules:
         - alert: WindowsHostConfigDrift
@@ -131,14 +132,14 @@ spec:
           annotations:
             summary: "Windows host config differs from tnwks-ops main"
             description: >-
-              The nightly `--check` of playbooks/windows-host.yml on {{ $labels.instance }}
-              reported
-              {{ with query "max(tnwks_windows_drift_check_changed)" }}{{ . | first | value }}{{ end }} change(s),
-              {{ with query "max(tnwks_windows_drift_check_failed)" }}{{ . | first | value }}{{ end }} failure(s)
-              (failed check-only assertions: .wslconfig, NIC power settings, power plan).
-              Read the diff in `journalctl -u tnwks-windows-drift-check` or
-              ~/.cache/tnwks-ops/windows-drift-check/last-check.log in WSL, then fix the
-              host or the repo; `task wsl-host:windows-check` reruns it.
+              The nightly `--check` of playbooks/windows-host.yml and wsl-distro.yml for
+              {{ $labels.instance }} reported
+              {{ with query "sum(tnwks_windows_drift_check_changed)" }}{{ . | first | value }}{{ end }} change(s),
+              {{ with query "sum(tnwks_windows_drift_check_failed)" }}{{ . | first | value }}{{ end }} failure(s)
+              (failed check-only assertions: .wslconfig, NIC power settings, power plan, sshd).
+              The task names are in the summary of the latest scheduled Ansible Hosts run,
+              the diffs in its age-encrypted log artifact; fix the host or the repo.
+              `task wsl-host:check` reruns it from the workstation.
 
         - alert: WindowsHostDriftCheckStale
           expr: >-
@@ -150,8 +151,8 @@ spec:
           annotations:
             summary: "The Windows host drift check hasn't reported for over a day"
             description: >-
-              No result from tnwks-windows-drift-check for more than 30h (or ever,
-              while windows_exporter is up). Check `systemctl status
-              tnwks-windows-drift-check.timer tnwks-windows-drift-check.service` in WSL
-              (`task wsl-host:windows-drift-check` installs it), the SSH key login to the
-              host, and that windows_exporter's textfile collector is on.
+              No drift-check result for more than 30h (or ever, while windows_exporter is
+              up). Check the scheduled runs of the Ansible Hosts workflow (GitHub Actions),
+              that the site's tnwks-ansible runner is up (tools namespace), the runner's
+              SSH key login to the host, and that windows_exporter's textfile collector
+              is on.

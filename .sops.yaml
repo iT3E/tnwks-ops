@@ -8,6 +8,8 @@
 #     Only on the secrets of roots the runner applies (MikroTik, EdgeOS, UniFi,
 #     healthchecks.io, Cloudflare), so a leaked CI key exposes those and
 #     nothing else.
+#   * Ansible CI age — the tnwks-ansible runner's key
+#     (docs/operations/ansible.md). Only on infrastructure/ansible secrets.
 creation_rules:
   # EdgeOS devices (infrastructure/edgeos): same recipients as the MikroTik
   # secrets, including the CI age key, so the same runner can manage them.
@@ -60,6 +62,17 @@ creation_rules:
       age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2,
       age12uckcdwv9p2s75ae3h20wgn70taatdzzl44n9x6vr8h9qurzkaqqkhphz7,
       age1hmmuna95ktwl9sf9j56wjjukyf22ukdyjd8c47nlf5fjgyeyk5rsmhtyjx
+    kms: 'arn:aws:kms:us-west-2:654654220436:key/mrk-74c4597ebffd41d38a852228e13d76cc+arn:aws:iam::654654220436:role/iam-role-sops'
+  # Ansible inventory secrets (infrastructure/ansible): also the Ansible CI
+  # age key, so the tnwks-ansible runner can read the host vars
+  # (docs/operations/ansible.md). On no other path. Before the general
+  # ansible/ rule, which would match these paths as well.
+  - path_regex: infrastructure/ansible/.*\.sops\.ya?ml
+    age: >-
+      age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2,
+      age12uckcdwv9p2s75ae3h20wgn70taatdzzl44n9x6vr8h9qurzkaqqkhphz7,
+      age1hmmuna95ktwl9sf9j56wjjukyf22ukdyjd8c47nlf5fjgyeyk5rsmhtyjx,
+      age1qkcz9agzn60kaudasls9aknr3ys848ef5kt9tdxl38vukepey56qtttcad
     kms: 'arn:aws:kms:us-west-2:654654220436:key/mrk-74c4597ebffd41d38a852228e13d76cc+arn:aws:iam::654654220436:role/iam-role-sops'
   - path_regex: ansible/.*\.sops\.ya?ml
     age: >-

@@ -1,0 +1,3 @@
+kind: Added
+body: "Ansible host config is GitOps: `.github/workflows/ansible-hosts.yaml` runs `windows-host.yml` and `wsl-distro.yml` per site from a new self-hosted `tnwks-ansible-<cluster>` runner, posting a `--check --diff` summary on PRs, applying on merge, and replacing the WSL systemd timer as the nightly drift check (now covering the WSL distro too). Logs and PR comments carry only recap counts and task names; the diffs are an age-encrypted artifact. The runner has its own SSH and age keys (docs/operations/ansible.md)."
+time: 2026-11-04T16:00:00.000000000-08:00

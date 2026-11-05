@@ -1,0 +1,277 @@
+---
+name: "Ansible Hosts"
+
+# Runs playbooks/windows-host.yml and wsl-distro.yml against each site (a
+# Windows host and its WSL distro, inventory group site_<name>) from the
+# site's self-hosted runner (its ci_runner, a tnwks-ansible-<cluster> scale
+# set). docs/operations/ansible.md.
+#
+#   pull_request   --check --diff of the PR head; summary posted on the PR
+#   push to main   apply
+#   schedule       nightly --check, counts written to the site's Windows host
+#                  for Prometheus (WindowsHostConfigDrift)
+#   dispatch       check or apply, by hand
+#
+# The repo is public, so are these logs: the job log and the PR comment carry
+# only recap counts and task names (scripts/ci-report.py). The full output,
+# with the diffs, is an artifact encrypted to the owner's age key:
+#   age -d -i ~/.config/sops/age/keys.txt ansible-<site>.log.age
+
+on:
+  pull_request:
+    paths: &paths
+      - "infrastructure/ansible/**"
+      - ".github/workflows/ansible-hosts.yaml"
+  push:
+    branches: [main]
+    paths: *paths
+  schedule:
+    # 04:30 Pacific standard time, after the 02:30/02:45 backups.
+    - cron: "30 12 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: check (changes nothing) or apply
+        type: choice
+        options: [check, apply]
+        default: check
+
+permissions: {}
+
+env:
+  # Readers of the encrypted full log: the owner's age key.
+  LOG_RECIPIENT: age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
+
+jobs:
+  plan:
+    # Never run fork or third-party code against the hosts. Fork PRs also
+    # need approval for any workflow at all (repo setting).
+    if: >-
+      github.event_name != 'pull_request' || (
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.user.login == 'iT3E')
+    name: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.mode.outputs.mode }}
+      sites: ${{ steps.sites.outputs.sites }}
+    defaults:
+      run:
+        working-directory: infrastructure/ansible
+    env:
+      ANSIBLE_CONFIG: ${{ github.workspace }}/infrastructure/ansible/ansible.cfg
+      # No secrets in this job; it needs only the inventory's shape and
+      # the controller-side downloads.
+      ANSIBLE_VARS_ENABLED: host_group_vars
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Mode
+        id: mode
+        working-directory: .
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_MODE: ${{ inputs.mode }}
+        run: |
+          case "$EVENT" in
+            pull_request) mode=check ;;
+            push) mode=apply ;;
+            schedule) mode=drift ;;
+            *) mode="$INPUT_MODE" ;;
+          esac
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: infrastructure/ansible/uv.lock
+
+      - name: Controller and collections
+        run: |
+          uv sync --locked
+          uv run --locked ansible-galaxy collection install -r requirements.yml
+
+      # Each site_* group and its ci_runner.
+      - name: Sites
+        id: sites
+        run: |
+          sites=$(uv run --locked ansible-inventory --list --export | jq -c '
+            [to_entries[] | select(.key | startswith("site_"))
+             | {name: .key, runner: .value.vars.ci_runner, hosts: (.value.hosts | join(","))}
+             | select(.runner)]')
+          echo "$sites" | jq .
+          echo "sites=$sites" >> "$GITHUB_OUTPUT"
+
+      # The controller play builds the libusb shim with mingw-w64 and unpacks
+      # the pinned downloads. Done here, where apt works; the runner gets the
+      # result and the play finds everything in place (creates:, checksums).
+      - name: Controller tools
+        run: sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 p7zip-full unzip
+
+      - name: Controller cache
+        run: uv run --locked ansible-playbook playbooks/windows-host.yml --limit localhost
+
+      - name: Upload the controller cache
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: controller-cache
+          path: ~/.cache/tnwks-ops
+          include-hidden-files: true
+          retention-days: 1
+
+  run:
+    needs: plan
+    if: needs.plan.outputs.sites != '[]'
+    name: ${{ needs.plan.outputs.mode }} ${{ matrix.site.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        site: ${{ fromJSON(needs.plan.outputs.sites) }}
+    runs-on: ${{ matrix.site.runner }}
+    timeout-minutes: 60
+    # One run per site at a time; never cancel one halfway.
+    concurrency:
+      group: ansible-hosts-${{ matrix.site.name }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: infrastructure/ansible
+    env:
+      ANSIBLE_CONFIG: ${{ github.workspace }}/infrastructure/ansible/ansible.cfg
+      MODE: ${{ needs.plan.outputs.mode }}
+      SITE: ${{ matrix.site.name }}
+      HOSTS: ${{ matrix.site.hosts }}
+      SOPS_VERSION: v3.13.3
+      SOPS_SHA256: e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b
+      AGE_VERSION: v1.3.2
+      AGE_SHA256: cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: Controller and collections
+        run: |
+          uv sync --locked
+          uv run --locked ansible-galaxy collection install -r requirements.yml
+
+      # sops for the community.sops vars plugin (SOPS_AGE_KEY is in the pod's
+      # env), age to encrypt the full log.
+      - name: Install sops and age
+        working-directory: ${{ runner.temp }}
+        run: |
+          mkdir -p bin
+          curl -fsSL -o bin/sops "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64"
+          echo "${SOPS_SHA256}  bin/sops" | sha256sum -c -
+          curl -fsSL -o age.tar.gz "https://github.com/FiloSottile/age/releases/download/${AGE_VERSION}/age-${AGE_VERSION}-linux-amd64.tar.gz"
+          echo "${AGE_SHA256}  age.tar.gz" | sha256sum -c -
+          tar -xzf age.tar.gz --strip-components=1 -C bin age/age
+          chmod +x bin/sops bin/age
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Download the controller cache
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: controller-cache
+          path: ~/.cache/tnwks-ops
+
+      # TNWKS_ANSIBLE_SSH_KEY_CONTENT is in the pod's env (the runner Secret).
+      - name: SSH key
+        run: |
+          install -m 0600 /dev/null "$RUNNER_TEMP/ansible_ssh_key"
+          printf '%s\n' "$TNWKS_ANSIBLE_SSH_KEY_CONTENT" > "$RUNNER_TEMP/ansible_ssh_key"
+          echo "TNWKS_ANSIBLE_SSH_KEY=$RUNNER_TEMP/ansible_ssh_key" >> "$GITHUB_ENV"
+
+      # Full output to a file only: it has the diffs. The Aruba credentials
+      # task is skipped: CI has no key for that secret (.sops.yaml).
+      - name: ansible-playbook (${{ env.MODE }})
+        id: play
+        run: |
+          args=(--limit "$SITE,localhost" --skip-tags aruba-credentials --diff)
+          [[ "$MODE" == apply ]] || args+=(--check)
+          started=$(date +%s)
+          set +e
+          uv run --locked ansible-playbook playbooks/windows-host.yml playbooks/wsl-distro.yml "${args[@]}" \
+            > "$RUNNER_TEMP/ansible.log" 2>&1
+          rc=$?
+          set -e
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          echo "duration=$(( $(date +%s) - started ))" >> "$GITHUB_OUTPUT"
+
+      - name: Report
+        env:
+          RC: ${{ steps.play.outputs.rc }}
+          DURATION: ${{ steps.play.outputs.duration }}
+        run: |
+          python3 -I scripts/ci-report.py --log "$RUNNER_TEMP/ansible.log" --site "$SITE" --hosts "$HOSTS" \
+            --mode "$MODE" --rc "$RC" --duration "$DURATION" \
+            --summary "$RUNNER_TEMP/summary.md" --prom "$RUNNER_TEMP/drift.prom"
+          cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          age -r "$LOG_RECIPIENT" -o "$RUNNER_TEMP/ansible-$SITE.log.age" "$RUNNER_TEMP/ansible.log"
+
+      - name: Upload the encrypted full output
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ansible-${{ matrix.site.name }}-log
+          path: ${{ runner.temp }}/ansible-${{ matrix.site.name }}.log.age
+          retention-days: 14
+
+      - name: Comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          SUMMARY_FILE: ${{ runner.temp }}/summary.md
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = `<!-- ansible-hosts:${process.env.SITE} -->`;
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = `${marker}\n${fs.readFileSync(process.env.SUMMARY_FILE, 'utf8')}\nDiffs: the run's \`ansible-${process.env.SITE}-log\` artifact (age-encrypted). [Run](${run})`;
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo, issue_number: context.issue.number });
+            const prev = comments.find(c => c.body.startsWith(marker));
+            if (prev) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: prev.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }
+
+      # Into windows_exporter's textfile directory on the site's Windows host.
+      # JSON args: key=value would read the \t in \textfile_inputs as a tab.
+      - name: Drift metrics
+        if: env.MODE == 'drift'
+        run: |
+          args=$(jq -nc --arg src "$RUNNER_TEMP/drift.prom" \
+            '{src: $src, dest: "C:\\Program Files\\windows_exporter\\textfile_inputs\\tnwks_windows_drift_check.prom"}')
+          uv run --locked ansible "$SITE:&windows_hosts" -m ansible.windows.win_copy -a "$args" > /dev/null
+
+      - name: Remove the SSH key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/ansible_ssh_key"
+
+      # A check that finds drift passes (the summary shows it); a run that
+      # failed or an apply that didn't finish doesn't.
+      - name: Result
+        env:
+          RC: ${{ steps.play.outputs.rc }}
+        run: |
+          if [[ "$RC" != 0 ]]; then
+            echo "::error::ansible-playbook exited $RC; see the summary, and the encrypted log for detail"
+            exit 1
+          fi

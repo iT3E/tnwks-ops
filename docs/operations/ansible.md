@@ -98,3 +98,73 @@ re-pinning.
 Every role is idempotent, and `--check` after an apply reports `changed=0`.
 See [windows-ansible.md](../wsl/windows-ansible.md) for the Windows roles,
 check mode and the nightly drift check.
+
+## CI
+
+Two workflows:
+
+- **`ansible.yaml`** (GitHub-hosted, no secrets): every PR touching
+  `infrastructure/ansible/` syntax-checks each playbook and runs ansible-lint.
+- **`ansible-hosts.yaml`**: the host playbooks (`windows-host.yml`,
+  `wsl-distro.yml`) against each site, from the site's own self-hosted runner.
+
+| Event          | Runs                                                         |
+| -------------- | ------------------------------------------------------------ |
+| PR (owner's)   | `--check --diff` of the PR head; summary posted on the PR    |
+| push to `main` | apply                                                        |
+| 12:30 UTC      | `--check`, counts written for the drift alerts               |
+| dispatch       | check or apply (`task wsl-host:ci-check` for a check)        |
+
+How a run goes:
+
+1. **plan** (`ubuntu-24.04`, no secrets): reads the `site_*` groups and their
+   `ci_runner` from the inventory, one matrix entry per site. It runs the
+   controller play (downloads, the Coral libusb shim built with mingw-w64)
+   and uploads `~/.cache/tnwks-ops` as an artifact, so the runner needs no
+   compiler.
+2. **run** (`runs-on: <ci_runner>`, one at a time per site): downloads that
+   cache, then `ansible-playbook windows-host.yml wsl-distro.yml --limit
+   site_<name>,localhost --skip-tags aruba-credentials`. The controller play
+   finds everything in place, and asserts the shim's SHA-256
+   (`coral_detector_shim_sha256`), so a different toolchain fails instead of
+   replacing the DLL.
+
+**Public logs.** The repo is public, and so are its Actions logs and PR
+comments. The job log, job summary and PR comment carry only the per-host
+recap counts and the names of changed and failed tasks
+(`scripts/ci-report.py`). The full output, with the diffs, is the run's
+`ansible-<site>-log` artifact, encrypted to the owner's age key:
+
+```bash
+age -d -i ~/.config/sops/age/keys.txt ansible-site_wsl.log.age | less
+```
+
+**The runners.** `tnwks-ansible-<CLUSTER_NAME>`, one scale set per cluster
+(`kubernetes/apps/tools/actions-runner-controller/ansible-runner`), separate
+from `tnwks-ops-runner` (network devices). Its Secret holds:
+
+- a CI SSH key: admin on the Windows hosts (`windows_sshd_authorized_keys`)
+  and `wsl_distro_user` on the distros (`wsl_ci_authorized_keys`, from the
+  cluster's Docker network only, no forwarding);
+- the Ansible CI age key, a recipient only of `infrastructure/ansible`
+  secrets (`.sops.yaml`). It can't read the Aruba credentials, which is why
+  the runs skip `aruba-credentials`; that one file is applied from a
+  workstation (`task wsl-host:backups`).
+
+A runner pod reaches its site's Windows host at the vEthernet (WSL) address,
+like Frigate reaches the Coral detector, and the distro at the Docker
+network's gateway (`wsl_distro_ssh_host`). The distro's connection is local
+only when the controller's hostname is the Windows host's
+(`wsl_distro_windows_host`), so the same inventory works from a workstation
+and from a pod.
+
+**Which runner runs which site** is the site's `ci_runner`
+(`group_vars/site_<name>.yml`). With a second WSL host, each site can name
+the other cluster's runner, so a run never configures the host its own
+runner lives on. Reaching another host's Windows sshd and distro then needs
+them listening beyond their WSL network (`Install-TnwksWindowsSshd.ps1
+-ListenAddress`, `wsl_distro_ssh_host`) and the runner's key allowed from
+there (`wsl_ci_authorized_keys`).
+
+Merging a change applies it. Read the PR's check summary first; the check
+covers exactly what the apply will run.

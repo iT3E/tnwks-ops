@@ -1,35 +1,27 @@
 ---
-- name: Drift check script
-  ansible.builtin.copy:
-    src: "{{ wsl_drift_check_name }}.sh"
-    dest: /usr/local/bin/{{ wsl_drift_check_name }}
-    owner: root
-    group: root
-    mode: "0755"
+- name: Check for the old timer
+  ansible.builtin.stat:
+    path: /etc/systemd/system/{{ wsl_drift_check_name }}.timer
+  register: wsl_drift_check_timer
 
-- name: Drift check service
-  ansible.builtin.template:
-    src: "{{ wsl_drift_check_name }}.service.j2"
-    dest: /etc/systemd/system/{{ wsl_drift_check_name }}.service
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Reload systemd
-
-- name: Drift check timer
-  ansible.builtin.copy:
-    src: "{{ wsl_drift_check_name }}.timer"
-    dest: /etc/systemd/system/{{ wsl_drift_check_name }}.timer
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Reload systemd
-
-- name: Flush the systemd reload before enabling the timer
-  ansible.builtin.meta: flush_handlers
-
-- name: Timer is enabled and running
+- name: Old timer is stopped and disabled
   ansible.builtin.systemd:
     name: "{{ wsl_drift_check_name }}.timer"
-    enabled: true
-    state: started
+    enabled: false
+    state: stopped
+  when: wsl_drift_check_timer.stat.exists
+
+- name: Old timer, service and script are gone
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/{{ wsl_drift_check_name }}.timer
+    - /etc/systemd/system/{{ wsl_drift_check_name }}.service
+    - /usr/local/bin/{{ wsl_drift_check_name }}
+  register: wsl_drift_check_removed
+
+- name: Reload systemd after removing the units
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: wsl_drift_check_removed is changed  # noqa: no-handler

@@ -168,30 +168,35 @@ quiet moment, for example
 
 ## Nightly drift check
 
-`tnwks-windows-drift-check.timer` (WSL, 04:30 plus up to 15 minutes,
-installed by the role `wsl_drift_check`, `task wsl-host:windows-drift-check`) runs
-`infrastructure/ansible/roles/wsl_drift_check/files/tnwks-windows-drift-check.sh`:
+The scheduled run of `.github/workflows/ansible-hosts.yaml` (12:30 UTC, on
+each site's `tnwks-ansible-<cluster>` runner, [ansible.md](../operations/ansible.md#ci))
+checks `main`:
 
-1. Updates its own shallow clone of `main` in
-   `~/.cache/tnwks-ops/windows-drift-check/tnwks-ops` (never a working
-   checkout).
-2. Runs `task wsl-host:windows-check` there. The output goes to the journal
-   (`journalctl -u tnwks-windows-drift-check`) and to `last-check.log` next to
-   the clone.
-3. Writes the Windows host's PLAY RECAP counts over SSH to
+1. `ansible-playbook windows-host.yml wsl-distro.yml --check --diff
+   --limit site_<name>,localhost`, so the WSL distro is covered too. The job
+   summary lists the hosts' recap counts and the names of the tasks that
+   would change or failed; the full output, with the diffs, is the run's
+   `ansible-<site>-log` artifact, age-encrypted to the owner's key.
+2. Writes the counts to the site's Windows host:
    `C:\Program Files\windows_exporter\textfile_inputs\tnwks_windows_drift_check.prom`
-   (windows_exporter's `textfile` collector, on since this check exists):
-   `tnwks_windows_drift_check_{timestamp_seconds,exit_code,changed,failed,unreachable,duration_seconds}`.
+   (windows_exporter's `textfile` collector):
+   `tnwks_windows_drift_check_{timestamp_seconds,exit_code,duration_seconds}` and,
+   per host (`host` label), `tnwks_windows_drift_check_{changed,failed,unreachable}`.
+
+`task wsl-host:ci-check` runs the same check on demand (without writing the
+metrics). Until 2026-11 a systemd timer in the distro ran it; the role
+`wsl_drift_check` now removes that timer.
 
 Prometheus scrapes them with the `windows-exporter` job. Alerts in
 `kube-prometheus-stack/addons/alerts/windows.yaml`:
 
 - `WindowsHostConfigDrift` (warning): the last check had changes, failures
   (including the check-only assertions above), was unreachable, or exited
-  non-zero. Read the diff in the journal, then fix the host or the repo.
+  non-zero. Read the run's summary (and the encrypted log for the diffs),
+  then fix the host or the repo.
 - `WindowsHostDriftCheckStale` (warning): no result for 30 hours, or never
-  while windows_exporter is up. The timer, the SSH key login or the textfile
-  collector is broken.
+  while windows_exporter is up. The schedule, the runner, its SSH key login
+  or the textfile collector is broken.
 
 The off-site healthchecks.io checks are deliberately limited to the router
 and the monitoring stack ([external-monitoring.md](../operations/external-monitoring.md)),

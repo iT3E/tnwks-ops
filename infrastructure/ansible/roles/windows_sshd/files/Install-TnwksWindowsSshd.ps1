@@ -77,7 +77,11 @@ $AdminUser = $AdminUser.ToLower()
 # Under Ansible (win_powershell) there is an $Ansible object, and `exit` would
 # end the module instead of reporting.
 $UnderAnsible = [bool](Get-Variable -Name Ansible -ErrorAction SilentlyContinue)
-if ($PublicKeyFile) { $PublicKey = @(((Get-Content -Raw $PublicKeyFile) -replace "`r", '').Trim()) }
+# One key per line.
+if ($PublicKeyFile) {
+    $PublicKey = @(((Get-Content -Raw $PublicKeyFile) -replace "`r", '') -split "`n" |
+            ForEach-Object { $_.Trim() } | Where-Object { $_ })
+}
 if (-not $PublicKey) { throw '-PublicKeyFile <path> or -PublicKey <key> (the Ansible public keys) is required' }
 foreach ($k in $PublicKey) {
     if ($k -notmatch '^ssh-ed25519 \S+') { throw "not an ssh-ed25519 public key: $k" }

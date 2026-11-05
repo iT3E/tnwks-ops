@@ -2,3 +2,4 @@
 # (group_vars/all/connection.yml). Re-pin after a host key changes:
 # compare ssh-keyscan with the key file on the host first.
 172.26.80.1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFb/79I4MftNW1H1t7LDOpZ9oNxbmQDlxWw+onknrBZZ
+10.5.0.1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBaJAbLmWM3+JwN8YK3VJ4OQL/hUKVYBBTgLQlg1vsgd

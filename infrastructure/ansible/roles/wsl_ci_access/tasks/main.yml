@@ -1,0 +1,11 @@
+---
+- name: Runner keys are authorized, from their own addresses only
+  ansible.posix.authorized_key:
+    user: "{{ wsl_distro_user }}"
+    key: "{{ item.key }}"
+    key_options: 'from="{{ item.from }}",no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty'
+    exclusive: false
+    state: present
+  loop: "{{ wsl_ci_authorized_keys }}"
+  loop_control:
+    label: "{{ item.key.split(' ')[-1] }} from {{ item.from }}"

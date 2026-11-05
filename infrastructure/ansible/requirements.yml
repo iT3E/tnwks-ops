@@ -1,6 +1,8 @@
 ---
 # Collections the playbooks and roles use (Renovate keeps the pins current).
 collections:
+  - name: ansible.posix
+    version: 2.2.2
   - name: ansible.windows
     version: 3.9.2
   - name: community.docker

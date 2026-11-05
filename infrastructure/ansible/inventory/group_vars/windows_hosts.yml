@@ -1,11 +1,13 @@
 ---
 # Windows over its built-in OpenSSH server (docs/wsl/windows-ansible.md).
 # sshd listens only on the vEthernet (WSL) address and takes only the Ansible
-# key; bootstrap it once with `task wsl-host:sshd`. ansible_host and
+# keys; bootstrap it once with `task wsl-host:sshd`. ansible_host and
 # ansible_user are per host (host_vars/<host>/).
 ansible_connection: ssh
 ansible_shell_type: powershell
-ansible_ssh_private_key_file: ~/.ssh/id_ed25519_winhost
+# The controller's key: the workstation's by default; a CI runner points
+# TNWKS_ANSIBLE_SSH_KEY at its own.
+ansible_ssh_private_key_file: "{{ lookup('ansible.builtin.env', 'TNWKS_ANSIBLE_SSH_KEY') | default('~/.ssh/id_ed25519_winhost', true) }}"
 # The SSH session already has the admin's full token.
 ansible_become: false
 # The account that owns the WSL distro. Tasks that call wsl.exe run as it
@@ -13,7 +15,9 @@ ansible_become: false
 windows_desktop_user: "{{ ansible_user }}"
 
 # The keys sshd accepts (role windows_sshd): one per controller, so each can
-# be revoked on its own. The private half of the workstation's is
-# ansible_ssh_private_key_file.
+# be revoked on its own.
 windows_sshd_authorized_keys:
+  # The workstation (~/.ssh/id_ed25519_winhost).
   - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOL+VUOfAwSabKaep6ApqaYPG0eY+PqoDP0FbdjDOsXX ansible@wsl to DESKTOP-HKE05KI
+  # The tnwks-ansible runners (ssh-key in their SOPS Secret).
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAYekUuwVqJdoise5COwMtb4nWPMSVVgY/8SUIrwHeJl ansible@tnwks-ansible-runner

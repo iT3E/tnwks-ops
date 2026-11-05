@@ -136,10 +136,17 @@ system actually owns the change:
   with local execution). See `docs/network/ci.md`. The local
   `task <svc>:apply` / `task terraform:apply` targets are break-glass only.
 
-- **Ansible (`infrastructure/ansible/**`)** — playbooks run on demand
-  from a workstation (`task bootstrap:<cluster>` or a direct
-  `ansible-playbook` invocation). Not driven by CI; merging only ships
-  the playbook source.
+- **Ansible (`infrastructure/ansible/**`)** — the host playbooks
+  (`windows-host.yml`, `wsl-distro.yml`) are GitOps like Kubernetes:
+  `.github/workflows/ansible-hosts.yaml` posts a `--check --diff` summary
+  on the PR and applies on merge, from each site's self-hosted
+  `tnwks-ansible-<cluster>` runner; a nightly scheduled check reports
+  drift to Prometheus. The summary carries only recap counts and task
+  names (the repo is public); the diffs are in the run's age-encrypted
+  log artifact. Validate with that PR comment, or `task wsl-host:check`.
+  The bootstrap playbooks (`01-05`, `mikrotik-bootstrap.yml`,
+  `wsl-qmd.yml`) still run on demand from a workstation
+  (`task bootstrap:<cluster>` and the like); `docs/operations/ansible.md`.
 
 - **Talos (`talos/**`)** — machineconfig edits are inert until applied
   with `talosctl apply-config` (or the bootstrap playbook for a fresh

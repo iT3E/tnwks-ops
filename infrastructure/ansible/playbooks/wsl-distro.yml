@@ -1,13 +1,13 @@
 ---
 # The WSL distro on each Windows host (inventory group wsl_distros): the WSL
-# halves of the LAN bridge and the USB attach, the backup timers and the
-# nightly Windows drift check. The Windows halves are in
-# windows-host.yml.
+# halves of the LAN bridge and the USB attach, the backup timers, and the CI
+# runners' SSH access. The Windows halves are in windows-host.yml.
 #
 #   task wsl-host:distro-check   # --check --diff, changes nothing
 #   task wsl-host:distro-apply
 #
-# One role with `--tags lan-bridge` / `usb-attach` / `backups` / `drift-check`.
+# One role with `--tags ci-access` / `lan-bridge` / `usb-attach` / `backups` /
+# `drift-check`.
 #
 # USB attach needs each dongle `usbipd bind`-ed on Windows, so it is shareable
 # and the binding persists across reboots: windows-host.yml does that (role
@@ -18,6 +18,9 @@
   become: true
   gather_facts: false
   roles:
+    # The tnwks-ansible runners' key (CI reaches the distro over SSH).
+    - role: wsl_ci_access
+      tags: [ci-access]
     # Exposes *.internal.tnwks.us services to the LAN with the Windows-side
     # portproxy (docs/wsl/lan-exposure.md).
     - role: wsl_lan_bridge
@@ -28,6 +31,7 @@
     # UniFi and Aruba backups to Google Drive (docs/operations/backups.md).
     - role: wsl_backups
       tags: [backups]
-    # The nightly --check of the Windows host, reported to Prometheus.
+    # Removes the old nightly drift-check timer: the drift check runs in CI
+    # now (.github/workflows/ansible-hosts.yaml).
     - role: wsl_drift_check
       tags: [drift-check]
