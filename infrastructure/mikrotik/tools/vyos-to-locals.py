@@ -187,6 +187,21 @@ CI_ZONE_RULES = {
     }],
 }
 
+# Monitoring from the WSL cluster into the management VLANs, without the
+# desktop's wg01-home tunnel. Processed after CI_ZONE_RULES, so a pair added
+# here is numbered last and never renumbers existing ones.
+MONITORING_ZONE_RULES = {
+    # snmp-exporter polls SW03's AP ports (monitoring/snmp-exporter). SNMP
+    # only: SSH, the web UI and ICMP to the switch stay VPN-only.
+    ("unifi-frontend-910", "switch-mgmt"): [{  # NATIVE_VLAN["zone"]
+        "description": "snmp-exporter (WSL cluster) SNMP polls of SW03",
+        "protocol": "udp",
+        "dst_port": "161",
+        "src_address_list": "monitoring",
+        "dst_address": "10.98.0.251",
+    }],
+}
+
 # Static DNS records that pointed at container IPs. None drops the record;
 # a string retargets it. Per-name overrides win over per-address ones.
 DNS_RECORD_RETARGET_BY_NAME: dict[str, str | None] = {}
@@ -1195,7 +1210,8 @@ def build_zone_policies(
     # The switch resolves through the router like every other internal network.
     add_dns_input(NATIVE_VLAN["zone"], dns_rule, 0, "")
 
-    for table, label in ((EXTRA_ZONE_RULES, "EXTRA_ZONE_RULES"), (CI_ZONE_RULES, "CI_ZONE_RULES")):
+    for table, label in ((EXTRA_ZONE_RULES, "EXTRA_ZONE_RULES"), (CI_ZONE_RULES, "CI_ZONE_RULES"),
+                         (MONITORING_ZONE_RULES, "MONITORING_ZONE_RULES")):
         for (from_zone, to_zone), extra_rules in table.items():
             pol = get_pair(from_zone, to_zone, f"From {from_zone} to {to_zone}")
             for num, rule in enumerate(extra_rules, start=1):

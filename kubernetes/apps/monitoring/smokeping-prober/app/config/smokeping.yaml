@@ -12,7 +12,8 @@
 #   switch   SW03, the switch every AP hangs off. Tells "one AP
 #            is down" apart from "the path to the management VLANs is down".
 # The ap/switch addresses are reached through the WSL host's routes, which
-# go over its wg01-home tunnel; the desktop's own LAN path can't reach them.
+# go over its wg01-home tunnel; the router allows only SNMP (to SW03) from the
+# desktop's LAN address into the management VLANs, not ICMP.
 # protocol udp = unprivileged ICMP echo via SOCK_DGRAM; needs
 # net.ipv4.ping_group_range (set on the pod) and no capabilities.
 targets:

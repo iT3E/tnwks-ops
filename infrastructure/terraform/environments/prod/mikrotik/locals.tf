@@ -18,8 +18,8 @@
 ##   DHCP static leases   25
 ##   Address lists        5 (11 members)
 ##   Port lists           1
-##   Zone-pair chains     18
-##   Firewall accepts     11 (expanded from VyOS tcp_udp / port-limit splits)
+##   Zone-pair chains     19
+##   Firewall accepts     12 (expanded from VyOS tcp_udp / port-limit splits)
 ##   Input-chain accepts  23
 ##   dstnat rules         8
 ##   Static routes        1
@@ -468,6 +468,20 @@ locals {
           dst_address = "10.10.140.140"
           protocol    = "tcp"
           dst_port    = "22"
+        },
+      ]
+    }
+    "190-unifi-frontend-910-switch-mgmt" = {
+      from    = "unifi-frontend-910"
+      to      = "switch-mgmt"
+      comment = "From unifi-frontend-910 to switch-mgmt"
+      rules = [
+        {
+          comment          = "snmp-exporter (WSL cluster) SNMP polls of SW03"
+          src_address_list = "monitoring"
+          dst_address      = "10.98.0.251"
+          protocol         = "udp"
+          dst_port         = "161"
         },
       ]
     }

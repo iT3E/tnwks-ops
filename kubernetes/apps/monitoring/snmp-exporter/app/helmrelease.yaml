@@ -8,7 +8,10 @@
 # --config.file next to the image's stock snmp.yml (modules incl. if_mib).
 # It is read at startup, so restart the pod after changing the Secret.
 #
-# Path: the pod reaches SW03 (10.98.0.0/24) through the WSL host's routes.
+# Path: the pod's traffic leaves as the desktop (10.10.91.142); the router
+# allows udp/161 from it to SW03 (mikrotik zone pair
+# 190-unifi-frontend-910-switch-mgmt). With the desktop's wg01-home tunnel
+# up, the WSL host routes 10.98.0.0/24 through the tunnel instead.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
