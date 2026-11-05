@@ -52,12 +52,19 @@ scheduled tasks, firewall rules and portproxy and has no SOPS story.
 in `requirements.yml` (`task ansible:init`); [ansible.md](../operations/ansible.md) has
 the layout.
 
-## sshd bootstrap (once, and after a WSL subnet change)
+## sshd bootstrap (once, after a WSL subnet change, and after a feature update)
 
 ```bash
 task wsl-host:sshd        # UAC prompt; generates ~/.ssh/id_ed25519_winhost if missing
 task wsl-host:sshd-check  # drift report, exit 2 on drift
 ```
+
+A Windows feature update (WSL-02, 23H2 -> 25H2, 2026-11-05) uninstalls the
+`OpenSSH.Server` capability and with it the `sshd` service; the config, the
+keys file and the firewall rule stay. Re-run the bootstrap (it reinstalls the
+capability and changes nothing else). From another host, the script and
+`invoke-elevated.sh` have to be copied into that host's distro first: the UAC
+prompt shows on its own desktop.
 
 The script (idempotent, `-Check` for drift) installs the `OpenSSH.Server`
 capability and sets:

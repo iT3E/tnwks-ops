@@ -31,7 +31,7 @@ the host's key apps over to the other site first and back afterwards.
 | Host | Windows | Update policy | What happens |
 | --- | --- | --- | --- |
 | `DESKTOP-HKE05KI` (wsl-01) | 11 Pro 25H2 (26200) | none | Active hours 14:00 to 08:00, so Windows treats 08:00 to 14:00 as free time. It rebooted at about 08:30 the morning after Patch Tuesday in September and October, taking the whole cluster down mid-morning. |
-| `WSL-02` (wsl-02) | 11 Pro 23H2 (22631.6199) | none | 23H2 Home/Pro left servicing on 2025-11-11 and gets no security updates. Active hours 02:00 to 20:00. |
+| `WSL-02` (wsl-02) | 11 Pro 25H2 (26200.9711) since 2026-11-05 | none | Was 23H2 (22631.6199, out of servicing since 2025-11-11); moved to 25H2 by hand on 2026-11-05 with Windows Update's offered feature update, only that update (no drivers). Active hours 02:00 to 20:00. |
 
 A Store update of the WSL app also took wsl-01's distro down for 38 hours on
 2026-07-25 (`Watch-TnwksWsl.ps1` exists because of it).
@@ -281,6 +281,15 @@ by a day.
 
 ### 5. Verify the host (gates)
 
+- **A feature update removes the OpenSSH Server capability.** Seen on WSL-02's
+  23H2 -> 25H2 (2026-11-05): `sshd` was gone afterwards, while
+  `sshd_config`, `administrators_authorized_keys`, the `tnwks-sshd (WSL)`
+  firewall rule, windows_exporter, smartctl_exporter and every tnwks
+  scheduled task survived. The distro (and its 2222 bridge) came back on its
+  own. Ansible can't reach the host until the sshd bootstrap runs again
+  (`Install-TnwksWindowsSshd.ps1`, elevated: UAC on the host), so a feature
+  update needs that step or a host-side self-heal; cumulative updates
+  haven't shown it.
 - SSH answers, the build is what the KBs promise, every approved KB is in
   `Get-HotFix`, no reboot pending, no install failures in the
   WindowsUpdateClient events since the window opened.
