@@ -1,0 +1,16 @@
+---
+# Controller side (localhost, runs for real in check mode too: it only fills
+# the local cache). Downloads the pinned usbipd-win MSI and checks its SHA-256.
+
+- name: Cache directory
+  ansible.builtin.file:
+    path: "{{ usb_attach_cache }}"
+    state: directory
+    mode: "0755"
+
+- name: Download usbipd-win {{ usb_attach_usbipd_version }}
+  ansible.builtin.get_url:
+    url: "{{ usb_attach_usbipd_msi.url }}"
+    dest: "{{ usb_attach_cache }}/{{ usb_attach_usbipd_msi.url | basename }}"
+    checksum: "sha256:{{ usb_attach_usbipd_msi.sha256 }}"
+    mode: "0644"

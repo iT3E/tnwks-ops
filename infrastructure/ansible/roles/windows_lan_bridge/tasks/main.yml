@@ -30,6 +30,22 @@
   loop_control:
     label: "tcp/{{ item.port }} from {{ item.remote | default(['any']) | join(',') }}"
 
+# After the rules above, so the port is never closed in between.
+- name: Hand-made rules the bridge's rules replaced are gone
+  ansible.windows.win_powershell:
+    parameters:
+      Names: "{{ lan_bridge_replaced_rules }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string[]]$Names)
+      $Ansible.Changed = $false
+      foreach ($n in $Names) {
+          $rules = @(Get-NetFirewallRule -DisplayName $n -ErrorAction SilentlyContinue)
+          if (-not $rules.Count) { continue }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($n, 'remove firewall rule')) { $rules | Remove-NetFirewallRule }
+      }
+
 - name: Firewall rules of retired ports are gone
   ansible.windows.win_firewall_rule:
     name: tnwks-lan-bridge-{{ item }}
