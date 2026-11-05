@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.125.0 - 2026-11-05
+
+### Added
+
+* Ansible now owns the last hand-managed Windows host pieces: usbipd-win is pinned (MSI checked by SHA-256) and the Z-Stick's forced bind is enforced (role `windows_usb_attach`), and the tcp/2222 (WSL sshd) and tcp/18789 (OpenClaw gateway) forwards are LAN bridge ports, so their portproxy entries follow the WSL address; `tnwks-lan-bridge-2222`/`-18789` replace the hand-made rules, with the same any-address scope.
+
 ## v1.124.0 - 2026-11-05
 
 ### Added
