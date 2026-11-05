@@ -1,0 +1,48 @@
+---
+- name: Docker's apt signing key
+  ansible.builtin.get_url:
+    url: "{{ wsl_docker_signing_url }}"
+    dest: "{{ wsl_docker_keyring }}"
+    checksum: sha256:{{ wsl_docker_signing_sha256 }}
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Docker's apt repository
+  ansible.builtin.copy:
+    content: "{{ wsl_docker_source }}\n"
+    dest: "{{ wsl_docker_list }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: wsl_docker_repo
+
+# Only after the list changed: a full apt update fails on DESKTOP-HKE05KI.
+- name: apt cache, with Docker's repository
+  ansible.builtin.apt:
+    update_cache: true
+  when: wsl_docker_repo is changed # noqa: no-handler
+
+# Check mode on a host without the repository can't see the packages yet
+# (the update above didn't run), so the install, service and group are
+# checked from the next run on.
+- name: Docker Engine
+  ansible.builtin.apt:
+    name: "{{ ['docker-ce=' ~ wsl_docker_version, 'docker-ce-cli=' ~ wsl_docker_version] + wsl_docker_packages }}"
+    state: present
+  when: not (ansible_check_mode and wsl_docker_repo is changed)
+
+- name: dockerd runs at boot
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+  when: not (ansible_check_mode and wsl_docker_repo is changed)
+
+# The timers and the Talos tooling run docker as this account.
+- name: The distro user is in the docker group
+  ansible.builtin.user:
+    name: "{{ wsl_distro_user }}"
+    groups: docker
+    append: true
+  when: not (ansible_check_mode and wsl_docker_repo is changed)

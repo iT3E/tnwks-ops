@@ -1,0 +1,41 @@
+---
+# The second WSL host (site_wsl02). ansible_user is in secrets.sops.yml next
+# to this file; it owns the WSL distro too.
+
+# The vEthernet (WSL) address, where Install-TnwksWindowsSshd.ps1 binds sshd.
+# Only the distro can reach it, so other controllers jump through the
+# distro's sshd (WSL-02-ubuntu: LAN 10.10.91.112:2222, role
+# windows_lan_bridge). Re-pin it here and in known_hosts if WSL ever picks
+# another subnet.
+ansible_host: 172.25.16.1
+# Replaces group_vars/all/connection.yml for this host: the same pinned host
+# keys, plus the jump. The jump logs in with the distro's key.
+ansible_ssh_common_args: >-
+  -o UserKnownHostsFile={{ inventory_dir }}/known_hosts
+  -o StrictHostKeyChecking=yes
+  -o ProxyCommand="ssh -W %h:%p -p {{ hostvars['WSL-02-ubuntu'].ansible_port }}
+  -o UserKnownHostsFile={{ inventory_dir }}/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes
+  -i {{ hostvars['WSL-02-ubuntu'].ansible_ssh_private_key_file }}
+  {{ ansible_user }}@{{ hostvars['WSL-02-ubuntu'].wsl_distro_ssh_host }}"
+
+# Not on this host (yet): no Coral, no Z-Stick, no UDP relays (no cluster to
+# relay to). An empty list skips the role (playbooks/windows-host.yml).
+coral_detector_devices: []
+usb_attach_bound_devices: []
+udp_relays: []
+# The watchdog checks the OpenClaw gateway and the Z-Stick, both
+# DESKTOP-HKE05KI only. Off until its checks are per host.
+windows_wsl_maintenance_enabled: false
+
+# Only the distro's sshd, and only from DESKTOP-HKE05KI (its controller). It
+# replaces the hand-made rule that admitted any address.
+lan_bridge_tcp_ports:
+  - { port: 2222, wsl_port: 22, remote: [10.10.91.142] }
+lan_bridge_replaced_rules:
+  - WSL SSH Rule # tcp/2222 from any
+
+# On wifi for the foreseeable future: no wired NIC to check, and Wi-Fi stays
+# on. Fast Startup off: a shutdown is a real shutdown.
+host_settings_ethernet: ""
+host_settings_disabled_adapters: []
+host_settings_fast_startup_off: true

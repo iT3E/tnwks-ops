@@ -68,18 +68,24 @@
         windows_wsl_address: "{{ windows_wsl_ip.output[0].address }}"
         windows_wsl_subnet: "{{ windows_wsl_ip.output[0].subnet }}"
       tags: [always]
+  # A host without the hardware or service a role is for sets its list empty
+  # in host_vars, and the role is skipped (WSL-02: no Coral, no Z-Stick).
   roles:
     - role: windows_coral_detector
+      when: coral_detector_devices | length > 0
       tags: [coral-detector]
     - role: windows_monitoring
       tags: [monitoring]
     - role: windows_udp_relay
+      when: udp_relays | length > 0
       tags: [udp-relay]
     - role: windows_lan_bridge
       tags: [lan-bridge]
     - role: windows_usb_attach
+      when: usb_attach_bound_devices | length > 0
       tags: [usb-attach]
     - role: windows_wsl_maintenance
+      when: windows_wsl_maintenance_enabled | default(true) | bool
       tags: [wsl-maintenance]
     # Check-only by default (an sshd_config rewrite restarts sshd under the
     # session). Like host-settings, near the end: a failed assertion stops

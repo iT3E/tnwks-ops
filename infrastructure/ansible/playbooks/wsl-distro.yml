@@ -6,8 +6,9 @@
 #   task wsl-host:distro-check   # --check --diff, changes nothing
 #   task wsl-host:distro-apply
 #
-# One role with `--tags ci-access` / `lan-bridge` / `usb-attach` / `backups` /
-# `drift-check`.
+# One role with `--tags docker` / `ci-access` / `lan-bridge` / `usb-attach` /
+# `backups` / `drift-check`. A distro with nothing for a role sets its list
+# empty in host_vars, and the role is skipped.
 #
 # USB attach needs each dongle `usbipd bind`-ed on Windows, so it is shareable
 # and the binding persists across reboots: windows-host.yml does that (role
@@ -18,18 +19,24 @@
   become: true
   gather_facts: false
   roles:
+    # Docker Engine, which runs the Talos nodes (docs/wsl/bootstrap.md).
+    - role: wsl_docker
+      tags: [docker]
     # The tnwks-ansible runners' key (CI reaches the distro over SSH).
     - role: wsl_ci_access
       tags: [ci-access]
     # Exposes *.internal.tnwks.us services to the LAN with the Windows-side
     # portproxy (docs/wsl/lan-exposure.md).
     - role: wsl_lan_bridge
+      when: wsl_lan_bridge_instances | length > 0
       tags: [lan-bridge]
     # Keeps the Z-Stick attached into the WSL VM across WSL restarts.
     - role: wsl_usb_attach
+      when: wsl_usb_attach_devices | length > 0
       tags: [usb-attach]
     # UniFi and Aruba backups to Google Drive (docs/operations/backups.md).
     - role: wsl_backups
+      when: wsl_backups_timers | length > 0
       tags: [backups]
     # Removes the old nightly drift-check timer: the drift check runs in CI
     # now (.github/workflows/ansible-hosts.yaml).

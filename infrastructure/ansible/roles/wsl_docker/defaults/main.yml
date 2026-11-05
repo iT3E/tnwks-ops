@@ -1,0 +1,24 @@
+---
+# wsl_docker: Docker Engine in the WSL distro, from Docker's apt repository
+# (no Docker Desktop). The Talos nodes are its containers.
+#
+# docker-ce and docker-ce-cli are pinned. Another version on a host shows as
+# a change, but the role never downgrades (an older pin is an error), and
+# changing the pin restarts dockerd and with it every Talos node on that
+# host: bump it at a quiet time. The other packages are installed once and
+# left to apt.
+wsl_docker_version: 5:28.3.1-1~ubuntu.24.04~noble
+wsl_docker_packages:
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+wsl_docker_keyring: /etc/apt/keyrings/docker.asc
+wsl_docker_signing_url: https://download.docker.com/linux/ubuntu/gpg
+wsl_docker_signing_sha256: 1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570
+wsl_docker_list: /etc/apt/sources.list.d/docker.list
+# Byte for byte what Docker's install instructions wrote on DESKTOP-HKE05KI
+# (the three spaces included), so the role doesn't rewrite it there: a
+# changed source list means an apt update, which fails on that host
+# (a broken third-party source).
+wsl_docker_source: "deb [arch=amd64 signed-by={{ wsl_docker_keyring }}] https://download.docker.com/linux/ubuntu   noble stable"

@@ -1,0 +1,11 @@
+---
+# Site wsl02: WSL-02 and its distro, the second WSL host (the future
+# homelab-wsl-02 cluster). Managed from the workstation on DESKTOP-HKE05KI:
+#
+#   task wsl-host:check -- --limit site_wsl02,localhost
+#
+# No ci_runner yet, so .github/workflows/ansible-hosts.yaml skips this site.
+# A runner reaches the distro only from its own cluster's Docker network
+# (wsl_ci_access), and it can't jump through the distro to Windows sshd
+# (no-port-forwarding), so CI for this site waits for the cross-site sshd
+# listener.

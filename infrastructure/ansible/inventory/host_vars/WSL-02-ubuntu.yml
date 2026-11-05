@@ -1,0 +1,19 @@
+---
+# The Ubuntu WSL distro on WSL-02: Docker and, later, the homelab-wsl-02 Talos
+# nodes.
+
+# The Windows admin account owns the distro (same name inside it).
+wsl_distro_user: "{{ hostvars['WSL-02'].ansible_user }}"
+wsl_distro_windows_host: WSL-02
+# Its sshd from the LAN: windows_lan_bridge on WSL-02 forwards 2222 to it
+# (from DESKTOP-HKE05KI only). Host key in inventory/known_hosts.
+wsl_distro_ssh_host: 10.10.91.112
+ansible_port: 2222
+
+# Nothing on this distro for these roles yet; an empty list skips the role
+# (playbooks/wsl-distro.yml).
+wsl_lan_bridge_instances: []
+wsl_usb_attach_devices: []
+wsl_backups_timers: []
+# No runner reaches this site yet (group_vars/site_wsl02.yml).
+wsl_ci_authorized_keys: []

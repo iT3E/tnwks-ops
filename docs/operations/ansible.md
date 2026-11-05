@@ -55,7 +55,7 @@ another inventory file.
 | `windows_hosts` | Windows hosts under a WSL cluster, by Windows computer name   | OpenSSH, PowerShell, key in SOPS   |
 | `wsl_distros`   | the WSL distro on each, `<computer>-<distro>`                 | local from a workstation           |
 | `mikrotik`      | RouterOS devices                                              | REST from the controller           |
-| `site_<name>`   | one Windows host plus its distro (`site_wsl`)                 |                                    |
+| `site_<name>`   | one Windows host plus its distro (`site_wsl`, `site_wsl02`)   |                                    |
 
 The Windows host's inventory name is its computer name because that is also
 the `instance` label of its windows_exporter metrics.
@@ -71,16 +71,31 @@ keys against `inventory/known_hosts` (`group_vars/all/connection.yml`); after a
 host key changes, compare `ssh-keyscan` with the key file on the host before
 re-pinning.
 
+| Site         | Windows host      | Distro                   | Managed from                       |
+| ------------ | ----------------- | ------------------------ | ---------------------------------- |
+| `site_wsl`   | `DESKTOP-HKE05KI` | `DESKTOP-HKE05KI-ubuntu` | its own distro, CI runner          |
+| `site_wsl02` | `WSL-02`          | `WSL-02-ubuntu`          | the DESKTOP-HKE05KI workstation    |
+
 ### Adding a second Windows host
 
-1. Bootstrap its sshd (`Install-TnwksWindowsSshd.ps1`) and pin its host key in
-   `inventory/known_hosts`.
+1. Bootstrap its sshd (`Install-TnwksWindowsSshd.ps1`, elevated, from that
+   host's own distro: `scripts/invoke-elevated.sh`) and pin its host key in
+   `inventory/known_hosts`. sshd listens on that host's vEthernet (WSL)
+   address only, so another controller jumps through the distro's sshd:
+   `ansible_ssh_common_args` with a `ProxyCommand` in its host_vars (see
+   `host_vars/WSL-02/main.yml`), with the distro's sshd reachable on the LAN
+   through the `2222` LAN-bridge port, limited to the controller's address.
 2. Add it to `windows_hosts`, its distro to `wsl_distros`, and a
-   `site_<name>` group with both in `inventory/hosts.yml`.
+   `site_<name>` group with both in `inventory/hosts.yml`. Without
+   `ci_runner` the CI workflow skips the site.
 3. `host_vars/<host>/main.yml` (`ansible_host`, per-host role vars such as
    `coral_detector_devices`) and `host_vars/<host>/secrets.sops.yml`
-   (`ansible_user`).
-4. `task wsl-host:check -- --limit site_<name>`, then apply.
+   (`ansible_user`). A role's list left empty skips the role on that host
+   (`coral_detector_devices`, `udp_relays`, `usb_attach_bound_devices`;
+   distro: `wsl_lan_bridge_instances`, `wsl_usb_attach_devices`,
+   `wsl_backups_timers`); `windows_wsl_maintenance_enabled: false` skips the
+   watchdog.
+4. `task wsl-host:check -- --limit site_<name>,localhost`, then apply.
 
 ## Running playbooks
 

@@ -20,7 +20,8 @@ brew install \
 ```
 
 You also need:
-- Docker Desktop or Docker Engine running on Windows / WSL2
+- Docker Engine in the WSL2 distro (no Docker Desktop), installed by the
+  Ansible role `wsl_docker` (`task wsl-host:distro-apply -- --tags docker`)
 - A GitHub Personal Access Token with `repo` scope, exported as `GITHUB_TOKEN`
 - 1Password CLI configured (or supply tokens manually)
 - For USB-attached apps (Frigate, zwave-js-ui): `usbipd-win` on the Windows

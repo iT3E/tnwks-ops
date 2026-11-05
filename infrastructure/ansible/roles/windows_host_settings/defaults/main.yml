@@ -13,6 +13,7 @@ wslconfig_write: false
 # the adapter, which drops every camera stream for seconds (and once left the
 # Reolink's RTSP server hung), so these are assertions only. Fix drift by hand
 # at a quiet time (docs/wsl/windows-ansible.md).
+# Empty on a host without a wired link (WSL-02): no Ethernet checks.
 host_settings_ethernet: Ethernet
 # RegistryKeyword -> RegistryValue on the Ethernet adapter (Realtek 2.5GbE).
 host_settings_ethernet_advanced:
@@ -27,3 +28,6 @@ host_settings_ethernet_allow_turn_off: Disabled
 host_settings_disabled_adapters: [Wi-Fi]
 # High performance.
 host_settings_power_scheme: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+# true: Fast Startup must be off (HiberbootEnabled 0), so a shutdown doesn't
+# hibernate the kernel and bring WSL back half-restored. Set per host.
+host_settings_fast_startup_off: false
