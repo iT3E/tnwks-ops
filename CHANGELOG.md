@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.151.0 - 2026-11-05
+
+### Added
+
+* homelab-wsl-02 gets its backup credentials: a Roles Anywhere certificate (CN `homelab-wsl-02-backups`, issued 2026-11-05, valid a year) and the shared refresher CronJob, which turns it into 4-hour STS sessions (`aws-backup-sts` in `databases` and `kopiur-system`) for role `tnwks-rolesanywhere-backups-wsl-02`: reads the backup bucket, writes only homelab-wsl-02's prefixes.
+
 ## v1.150.1 - 2026-11-05
 
 ### Fixed
