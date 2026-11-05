@@ -42,7 +42,7 @@
   <Actions Context="Author">
     <Exec>
       <Command>powershell.exe</Command>
-      <Arguments>-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{{ wsl_watchdog_dir | e }}\Watch-TnwksWsl.ps1"</Arguments>
+      <Arguments>-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{{ wsl_watchdog_dir | e }}\Watch-TnwksWsl.ps1"{% if wsl_watchdog_args %} {{ wsl_watchdog_args | e }}{% endif %}</Arguments>
     </Exec>
   </Actions>
 </Task>

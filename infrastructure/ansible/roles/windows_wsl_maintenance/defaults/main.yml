@@ -9,16 +9,18 @@
 #
 # Both run as the desktop user (S4U, elevated): WSL distros are per-user.
 
-# false skips the role on a host (playbooks/windows-host.yml): WSL-02 until
-# the watchdog's gateway and Z-Stick checks are per host.
-windows_wsl_maintenance_enabled: true
-
 wsl_maintenance_user: "{{ windows_desktop_user }}"
 
 wsl_watchdog_dir: 'C:\ProgramData\tnwks-watchdog'
 wsl_watchdog_task: tnwks-wsl-watchdog
+# Extra arguments for Watch-TnwksWsl.ps1: `-SkipGateway -SkipUsb` on a host
+# without the OpenClaw gateway or the Z-Stick.
+wsl_watchdog_args: ""
 vhdx_compact_dir: 'C:\ProgramData\tnwks-vhdx-compact'
 vhdx_compact_task: tnwks-vhdx-compact
+# The distro's ext4.vhdx; empty = the script's default (E:\WSL\Ubuntu, on
+# DESKTOP-HKE05KI).
+vhdx_compact_vhdx: ""
 
 # Superseded by this role (registration and verification one-offs, their
 # output, old backups); removed.

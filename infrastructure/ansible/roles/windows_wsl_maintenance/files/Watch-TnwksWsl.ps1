@@ -21,12 +21,19 @@
 #   4. The Aeotec Z-Stick is attached to WSL (usbip). The Coral TPU isn't on
 #      usbip since 2026-11-03: a Windows service serves it to Frigate
 #      (docs/wsl/coral-detector.md).
+#
+# A host without the gateway or the Z-Stick (WSL-02) runs it with -SkipGateway
+# and -SkipUsb (task arguments, wsl_watchdog_args in host_vars): checks 3 and
+# 4 and the worker-2 restart are skipped, so it only keeps WSL and the distro
+# up.
 
 [CmdletBinding()]
 param(
     [string]$Distro  = 'Ubuntu',
     [string]$LogDir  = 'C:\ProgramData\tnwks-watchdog',
-    [int]$MaxLogKB   = 1024
+    [int]$MaxLogKB   = 1024,
+    [switch]$SkipGateway,
+    [switch]$SkipUsb
 )
 
 $ErrorActionPreference = 'Continue'
@@ -157,23 +164,28 @@ if (-not $distroWasUp) {
     if (-not (Start-Distro)) { Write-Log 'aborting: distro failed to start.' 'ERROR'; exit 1 }
 }
 
-Sync-UsbDevices
+if (-not $SkipUsb) {
+    Sync-UsbDevices
+}
 
-if (-not (Test-Gateway)) {
+if (-not $SkipGateway -and -not (Test-Gateway)) {
     Restart-Gateway | Out-Null
 }
 
 # If we had to cold-start the distro, restart worker-2 so the Z-Stick's serial
 # node is visible inside the Talos node (it was added for the same problem
 # with the Coral, see the 2026-07-23 Frigate incident).
-if (-not $distroWasUp) {
+if (-not $distroWasUp -and -not $SkipUsb) {
     Write-Log 'distro was cold-started; restarting worker-2 for USB bind mount.' 'WARN'
     & wsl.exe -d $Distro -u root -e /bin/sh -c 'docker restart homelab-wsl-worker-2' 2>&1 | Out-Null
     $script:Actions += 'worker2-restarted'
 }
 
 if ($script:Actions.Count -eq 0) {
-    Write-Log 'healthy (wsl up, gateway active, Z-Stick attached).'
+    $healthy = @('wsl up')
+    if (-not $SkipGateway) { $healthy += 'gateway active' }
+    if (-not $SkipUsb) { $healthy += 'Z-Stick attached' }
+    Write-Log ('healthy ({0}).' -f ($healthy -join ', '))
 } else {
     Write-Log ('recovery actions: ' + ($script:Actions -join ', ')) 'WARN'
 }
