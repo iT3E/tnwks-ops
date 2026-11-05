@@ -181,7 +181,7 @@ docker start $(docker ps -aq --filter label=talos.owned=true)
 Then re-check `kubectl get nodes` until all three are `Ready`.
 
 > **LAN bridge / port-proxy:** the `tnwks-lan-bridge` systemd units
-> (`infrastructure/wsl-host/`) and any Windows `netsh portproxy` are tied to the
+> (role `wsl_lan_bridge`) and any Windows `netsh portproxy` are tied to the
 > WSL VM, not the vhdx — they should survive, but if LAN access to the cluster
 > is broken after the move, re-run the bridge setup (see
 > `docs/wsl/lan-exposure.md`).

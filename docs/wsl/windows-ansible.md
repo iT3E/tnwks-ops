@@ -15,6 +15,7 @@ run that shows drift.
 | `windows_lan_bridge` (`lan-bridge`)         | `Sync-TnwksLanBridge.ps1` and its `ports.json`, the task `tnwks-lan-bridge-sync`, the firewall rules `tnwks-lan-bridge-<port>`; the script keeps the portproxy entries pointed at WSL at run time |
 | `windows_usb_attach` (`usb-attach`)         | `Sync-TnwksUsbAttach.ps1` and the task `tnwks-usb-attach` (Z-Stick attach plus worker-2 restart, [usb-passthrough.md](usb-passthrough.md)) |
 | `windows_wsl_maintenance` (`wsl-maintenance`) | `Watch-TnwksWsl.ps1` and the task `tnwks-wsl-watchdog` (every 5 min), `Compact-WslVhdx.ps1` and the on-demand task `tnwks-vhdx-compact` |
+| `windows_sshd` (`sshd`)                     | check only by default: the OpenSSH server as `Install-TnwksWindowsSshd.ps1` sets it up ([below](#sshd-bootstrap-once-and-after-a-wsl-subnet-change)) |
 | `windows_host_settings` (`host-settings`)   | check only: `.wslconfig`, Ethernet power settings, Wi-Fi off, power plan ([below](#check-only-settings)) |
 
 Every role is idempotent: on the live host, the first apply of each role
@@ -35,7 +36,7 @@ scheduled tasks, firewall rules and portproxy and has no SOPS story.
 
 |                                                                 |                                                                          |
 | --------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `infrastructure/wsl-host/Install-TnwksWindowsSshd.ps1`          | sshd bootstrap (`task wsl-host:sshd`, drift: `task wsl-host:sshd-check`) |
+| `infrastructure/ansible/roles/windows_sshd/files/Install-TnwksWindowsSshd.ps1` | sshd bootstrap (`task wsl-host:sshd`) and the role `windows_sshd`'s check |
 | `infrastructure/ansible/inventory/hosts.yml`                    | the host, in `windows_hosts` and its `site_<name>` group                 |
 | `infrastructure/ansible/inventory/group_vars/windows_hosts.yml` | connection settings shared by every Windows host                         |
 | `infrastructure/ansible/inventory/host_vars/<host>/`            | `ansible_host`, `coral_detector_devices`; `ansible_user` in SOPS         |
@@ -64,8 +65,10 @@ capability and sets:
   adapter at run time (172.26.80.1); `PasswordAuthentication no`,
   `KbdInteractiveAuthentication no`, `PubkeyAuthentication yes`,
   `AllowUsers <admin>`, no agent or TCP forwarding.
-- `administrators_authorized_keys` = the one Ansible key, ACL Administrators
-  and SYSTEM only (sshd ignores the file otherwise).
+- `administrators_authorized_keys` = the controllers' Ansible keys
+  (`windows_sshd_authorized_keys` in `group_vars/windows_hosts.yml`; the
+  bootstrap writes the one in `~/.ssh/id_ed25519_winhost.pub`), ACL
+  Administrators and SYSTEM only (sshd ignores the file otherwise).
 - Firewall: `tnwks-sshd (WSL)` admits tcp/22 to `sshd.exe` from the WSL subnet
   only. The capability's own `OpenSSH-Server-In-TCP` rule (any address) is
   removed.
@@ -78,13 +81,24 @@ address", and the failure actions restart it until the address is there
 (tested 2026-11-03 with an unassigned ListenAddress: the service manager
 restarted sshd 30s later). Since Ansible itself runs inside WSL, sshd is
 always back by the time anything needs it. The sessions get the admin's full
-token (`High Mandatory Level`), so no `become` is needed; the inventory sets
-`ansible_become: false` against `ansible.cfg`'s `become = True`.
+token (`High Mandatory Level`), so no `become` is needed
+(`ansible_become: false` in `group_vars/windows_hosts.yml`).
 
 Verified 2026-11-03: key login works, a password login is refused
 (`Permission denied (publickey)`), and `netstat` shows sshd only on
 `172.26.80.1:22` (the `127.0.0.1:22` listener is `wslrelay.exe` mirroring
 WSL's own sshd).
+
+**Afterwards, the role `windows_sshd`** runs the same script through
+`win_powershell` on every playbook run, with `-Check` unless
+`-e windows_sshd_apply=true`. Drift fails the run (and so the nightly check)
+with the script's `DRIFT` lines. A normal apply never fixes it, because
+rewriting `sshd_config` restarts sshd under the Ansible session. Fix it with
+`task wsl-host:sshd` (UAC prompt), or with
+`task wsl-host:windows-apply -- --tags sshd -e windows_sshd_apply=true` when a
+dropped session is acceptable. The `sshd_config` header still names the
+script's old path (`infrastructure/wsl-host/`); it is part of the file
+content, so it changes the next time sshd has to restart anyway.
 
 ## Check mode
 
@@ -155,8 +169,8 @@ quiet moment, for example
 ## Nightly drift check
 
 `tnwks-windows-drift-check.timer` (WSL, 04:30 plus up to 15 minutes,
-installed by `task wsl-host:windows-drift-check`) runs
-`infrastructure/wsl-host/tnwks-windows-drift-check.sh`:
+installed by the role `wsl_drift_check`, `task wsl-host:windows-drift-check`) runs
+`infrastructure/ansible/roles/wsl_drift_check/files/tnwks-windows-drift-check.sh`:
 
 1. Updates its own shallow clone of `main` in
    `~/.cache/tnwks-ops/windows-drift-check/tnwks-ops` (never a working

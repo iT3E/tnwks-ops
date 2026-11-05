@@ -1,4 +1,6 @@
 ---
 # The Ubuntu WSL distro on DESKTOP-HKE05KI: Docker, the homelab-wsl Talos
 # nodes, and the WSL half of the LAN bridge and USB attach.
-{}
+
+# The distro account that runs the timers (its kubeconfig, SSH and age keys).
+wsl_distro_user: it3e

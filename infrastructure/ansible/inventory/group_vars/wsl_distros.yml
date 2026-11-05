@@ -4,3 +4,6 @@
 # instead (it overrides these per host).
 ansible_connection: local
 ansible_python_interpreter: /usr/bin/python3
+
+# The distro account the wsl_* timers run as (host_vars sets wsl_distro_user).
+wsl_distro_home: /home/{{ wsl_distro_user }}

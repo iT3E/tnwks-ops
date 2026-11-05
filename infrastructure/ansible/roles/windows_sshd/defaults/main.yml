@@ -1,0 +1,19 @@
+---
+# windows_sshd: the OpenSSH server Ansible itself connects through, as
+# files/Install-TnwksWindowsSshd.ps1 sets it up (docs/wsl/windows-ansible.md,
+# "sshd bootstrap"). The role runs that same script, so the bootstrap and the
+# drift check can't disagree.
+#
+# Check only by default: rewriting sshd_config restarts sshd under the Ansible
+# session, so a normal apply never changes it and drift fails the run, like
+# windows_host_settings. Fix drift with `task wsl-host:sshd` (UAC prompt), or
+# `task wsl-host:windows-apply -- --tags sshd -e windows_sshd_apply=true` when
+# losing the session halfway is acceptable.
+windows_sshd_apply: false
+
+# The account in AllowUsers (also the one that owns the WSL distro).
+windows_sshd_admin_user: "{{ ansible_user }}"
+
+# administrators_authorized_keys, in this order. The public halves of the
+# controllers' Ansible keys; set for windows_hosts in group_vars.
+windows_sshd_authorized_keys: []

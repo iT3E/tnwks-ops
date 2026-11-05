@@ -6,7 +6,7 @@
 # The WSL side is the socat unit tnwks-lan-bridge@<name> (role wsl_lan_bridge).
 
 udp_relay_dir: 'C:\ProgramData\tnwks-udp-relay'
-udp_relay_src: "{{ playbook_dir }}/../../wsl-host/Start-TnwksUdpRelay.ps1"
+udp_relay_src: Start-TnwksUdpRelay.ps1
 # The account that owns the WSL distro.
 udp_relay_user: "{{ windows_desktop_user }}"
 

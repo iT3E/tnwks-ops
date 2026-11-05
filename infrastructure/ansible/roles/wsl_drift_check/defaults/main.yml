@@ -1,0 +1,7 @@
+---
+# wsl_drift_check: the nightly `--check` of the Windows host playbook against
+# main, run from the WSL distro and reported to Prometheus through
+# windows_exporter's textfile collector (docs/wsl/windows-ansible.md,
+# "Nightly drift check"). Runs as wsl_distro_user, which holds the Ansible
+# SSH key and an age key for the SOPS host vars.
+wsl_drift_check_name: tnwks-windows-drift-check

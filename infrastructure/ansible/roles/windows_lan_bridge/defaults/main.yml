@@ -11,7 +11,7 @@
 # each Hyper-V VmSwitch EventID 232 (VM NIC connected, System log).
 
 lan_bridge_dir: 'C:\ProgramData\tnwks-lan-bridge'
-lan_bridge_src: "{{ playbook_dir }}/../../wsl-host/Sync-TnwksLanBridge.ps1"
+lan_bridge_src: Sync-TnwksLanBridge.ps1
 lan_bridge_task: tnwks-lan-bridge-sync
 # The account that owns the WSL distro (its wsl.exe reads the VM's address).
 lan_bridge_user: "{{ windows_desktop_user }}"

@@ -1,0 +1,4 @@
+---
+# The checkout the controller runs from, for roles that read files elsewhere
+# in the repo (SOPS files of other tools, for example).
+tnwks_repo_root: "{{ (inventory_dir ~ '/../../..') | realpath }}"

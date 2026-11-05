@@ -70,7 +70,7 @@
         rights: "{{ 'Modify' if coral_detector_allow_model_upload else 'ReadAndExecute' }}",
       }
   loop_control:
-    label: "{{ item.path or '\\' }} {{ item.rights }}"
+    label: "{{ item.path or '(root)' }} {{ item.rights }}"
   # The virtual account only resolves once the service exists.
   when: not (coral_detector_fresh_check or (ansible_check_mode and coral_detector_service_result is changed))
 

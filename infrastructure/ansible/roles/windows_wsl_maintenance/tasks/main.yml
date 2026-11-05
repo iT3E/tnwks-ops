@@ -8,7 +8,7 @@
 # Both tasks start their script fresh on every run.
 - name: Scripts
   ansible.windows.win_copy:
-    src: "{{ wsl_maintenance_src }}/{{ item.src }}"
+    src: "{{ item.src }}"
     dest: '{{ item.dir }}\{{ item.src }}'
   loop:
     - { src: Watch-TnwksWsl.ps1, dir: "{{ wsl_watchdog_dir }}" }

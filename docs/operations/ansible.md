@@ -23,7 +23,9 @@ infrastructure/ansible/
 │   ├── wsl-qmd.yml      # opt-in: QMD on a WSL distro
 │   ├── mikrotik-bootstrap.yml
 │   └── library/         # tnwks_win_scheduled_task
-└── roles/               # one per piece of host config, windows_* and wsl_*
+├── roles/               # one per piece of host config, windows_* and wsl_*; each
+│                        # carries its scripts and units in files/ and templates/
+└── scripts/             # the few things Ansible can't do from inside WSL (README)
 ```
 
 ## Controller

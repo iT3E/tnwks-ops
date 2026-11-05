@@ -1,12 +1,13 @@
 ---
 # The WSL distro on each Windows host (inventory group wsl_distros): the WSL
-# halves of the LAN bridge and the USB attach. The Windows halves are in
+# halves of the LAN bridge and the USB attach, the backup timers and the
+# nightly Windows drift check. The Windows halves are in
 # windows-host.yml.
 #
 #   task wsl-host:distro-check   # --check --diff, changes nothing
 #   task wsl-host:distro-apply
 #
-# One role with `--tags lan-bridge` / `usb-attach`.
+# One role with `--tags lan-bridge` / `usb-attach` / `backups` / `drift-check`.
 #
 # USB attach PREREQUISITE (one-time, Windows-side, elevated): each dongle must
 # be `usbipd bind`-ed so it is shareable and the binding persists across
@@ -25,3 +26,9 @@
     # Keeps the Z-Stick attached into the WSL VM across WSL restarts.
     - role: wsl_usb_attach
       tags: [usb-attach]
+    # UniFi and Aruba backups to Google Drive (docs/operations/backups.md).
+    - role: wsl_backups
+      tags: [backups]
+    # The nightly --check of the Windows host, reported to Prometheus.
+    - role: wsl_drift_check
+      tags: [drift-check]
