@@ -1,0 +1,26 @@
+---
+# A runtime switchover (docs/wsl/multi-site.md, "Switching an app") is a
+# ConfigMap flux-system/site-overrides that the cluster-apps Kustomization
+# reads after cluster-settings. Meant to be temporary: making a move permanent
+# is a PR to cluster-settings, then deleting the override.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: site-overrides
+spec:
+  groups:
+    - name: site-overrides
+      rules:
+        - alert: SiteOverrideLingering
+          annotations:
+            description: >-
+              flux-system/site-overrides on this cluster has existed for more
+              than 24 hours, so some apps run off their git default site.
+              Fail back (task failover), or make the move permanent in
+              cluster-settings and delete the ConfigMap.
+            summary: A site override has outlived a day
+          expr: |-
+            time() - kube_configmap_created{namespace="flux-system", configmap="site-overrides"} > 24 * 3600
+          for: 10m
+          labels:
+            severity: warning
