@@ -239,10 +239,10 @@ camera views.
 120 to 170 Mbps of TCP, shared in both directions. With Frigate failed over
 to wsl-02, about 100 Mbps of camera streams (with the three planned
 cameras) arrives over that wifi on top of replication and the tunnel.
-**Decided 2026-11-05: wsl-02 stays on wifi for now.** Wiring it needs new
-copper and new hardware first. Until then the mitigation is a lighter
-Frigate profile on wsl-02 (detect on substreams, record less), and the
-spike measures what the wifi actually carries. When it's wired, move the
+**Decided 2026-11-05: wsl-02 stays on wifi for now, and Frigate may
+underperform there while failed over.** Wiring it needs new copper and new
+hardware first. Frigate keeps its normal profile on wsl-02; dropped frames
+or recording gaps during a failover are accepted. When it's wired, move the
 DHCP reservation to the 2.5GbE port's MAC.
 
 ## Cluster Mesh
@@ -452,7 +452,5 @@ BGP session on the router added by a Terraform PR the owner approves:
   needs beyond the 2026-11-04 overrides?
 - The same address on both clusters' LB IPAM pools for shared services:
   confirm Cilium allows it with no L2 announcement on either side.
-- The lighter Frigate profile for wsl-02: which streams it detects and
-  records on, set from the spike's wifi measurements.
 - RouterOS 7.25 BGP: per-session local preference through routing
   filters, and hold timers as low as 9 seconds.

@@ -433,9 +433,6 @@ chooses it.
   `accept_list` treat combined SSU plus LCU packages?
 - Arm check: confirm a GitHub Environment approval leaves a deployment the
   window run can read with `deployments: read`.
-- `WSL-02` stays on wifi for now, so Frigate runs a lighter profile there
-  while failed over ([multi-site.md](../wsl/multi-site.md#router-capacity)).
-  Size the window's camera load from the spike's wifi measurements.
 - How long is a window? Set the silence and the outage notice from the
   Mealie drill's RTO times the number of key apps.
 - Notifications: the OpenClaw gateway is down while wsl-01 patches, so the
