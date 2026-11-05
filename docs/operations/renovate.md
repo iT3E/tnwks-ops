@@ -10,8 +10,10 @@ Every Renovate PR lands in one of three tiers, decided by
   plus "every new image exists"). If a merged bump then fails to reconcile,
   Flux error events page the War Room (`flux-system/addons/alerts`).
 - **`impact/high`.** Cluster plumbing, Terraform, majors, and anything new.
-  Never automerged. These go to Ori's reviewer agent, whose job is to land
-  them: it reads the release notes, pushes whatever migration the bump needs
+  Never automerged. **The owner opts each one in by adding `owner/review`**;
+  until then it just waits (reviews cost model time, so none run on their
+  own). An opted-in PR goes to Ori's reviewer agent, whose job is to land
+  it: it reads the release notes, pushes whatever migration the bump needs
   onto the Renovate branch (values, API versions, regenerated files, a
   sibling bump that has to ship in the same commit, Terraform `moved`/`import`
   blocks), merges once CI is green on that head, verifies the rollout, and
@@ -74,8 +76,9 @@ ruleset.
 
 ```
 Renovate opens PR, labels impact/high
+Owner adds owner/review
   -> renovate-review.yaml  "Select" (GitHub-hosted)
-       eligible? open, renovate[bot], this repo, impact/high,
+       eligible? open, renovate[bot], this repo, impact/high, owner/review,
                  no ori/blocked, Build Success = success on the head sha
   -> renovate-review.yaml  "Review #<n>" (runs-on: openclaw-hooks)
        POST http://10.5.0.1:18789/hooks/agent   (OpenClaw gateway, WSL host)
@@ -93,12 +96,12 @@ Triggers, all in [`renovate-review.yaml`](../../.github/workflows/renovate-revie
 
 | Event | When it fires |
 | --- | --- |
-| `pull_request_target: labeled` (impact/high) | Renovate labels the PR. Usually CI hasn't finished yet, so Select skips it |
-| `workflow_run: Kubernetes` completed | Build Success finished on a PR. This is normally what sends it |
-| `pull_request_target: synchronize` | A new push (Renovate's, or the agent's migration commit). Clears `ori/blocked`, `ori/awaiting-approval` and `owner/approved`, so each new head gets its own review |
+| `pull_request_target: labeled` (owner/review) | The owner asked for a review. Sends it if Build Success already passed |
+| `workflow_run: Kubernetes` completed | Build Success finished on a PR. Sends it if `owner/review` is already on |
+| `pull_request_target: synchronize` | A new push (Renovate's, or the agent's migration commit). Clears `ori/blocked`, `ori/awaiting-approval` and `owner/approved`, so each new head gets its own review. A push from Renovate also clears `owner/review`, so a rebase or newer version waits for the owner again; the agent's push keeps it |
 | `pull_request_target: unlabeled` (ori/blocked) | The owner removed the label to ask for another review |
 | `pull_request_target: labeled` (owner/approved) | The owner approved an `impact/critical` PR; the agent merges the sha it named |
-| `schedule` 16:00 UTC | Daily sweep: re-sends anything still eligible (a failed review, a missed event) |
+| `schedule` 16:00 UTC | Daily sweep: re-sends anything still eligible (a failed review, a missed event). Only PRs with `owner/review` |
 | `workflow_dispatch` | Manual, one PR or all |
 
 State lives on the PR: a merged PR is closed, a blocked one carries
@@ -121,6 +124,7 @@ instead of starting a second review (while the gateway still has it in memory).
 | Workflow | `.github/workflows/renovate-review.yaml` | No job checks out PR code, so `pull_request_target` and `workflow_run` (both run main's copy) are safe with the secret |
 | Runner scale set `openclaw-hooks` | `kubernetes/apps/tools/actions-runner-controller/openclaw-runner/` | `minRunners: 0`, `maxRunners: 1`, no secrets, runs as uid 1001. Same GitHub App as `sites-builder` |
 | Environment `openclaw-hooks` | repo settings | Secret `OPENCLAW_HOOK_TOKEN`; variables `OPENCLAW_NOTIFY_CHANNEL` / `_ACCOUNT` / `_TO` (where the agent's reply goes). Deployment branches: `main` only |
+| Label `owner/review` | `.github/labels.yaml` | Only the owner sets it. Required for any review. Cleared by a Renovate push |
 | Label `ori/blocked` | `.github/labels.yaml` | Set by the agent, cleared by a new push or by hand |
 | Labels `impact/critical`, `ori/awaiting-approval`, `owner/approved` | `.github/labels.yaml` | Critical tier: Renovate or the agent sets the first, the agent sets the second, only the owner sets the third. A new push clears the last two |
 | OpenClaw hook | `~/.openclaw/openclaw.json` on the WSL host, `hooks.*` | `allowedAgentIds: ["renovate"]`, no caller session keys. Token copy in `~/.openclaw/credentials/openclaw-hooks.env` |
@@ -136,8 +140,9 @@ token in the GitHub environment.
   restart mid-run, or `curl` couldn't reach `10.5.0.1:18789`). The PR is
   still eligible, so the next daily sweep retries it. To retry now: re-run the
   job, or `gh workflow run renovate-review.yaml -f pr=<n>`.
-- **Nothing happened for an impact/high PR.** Look at the Select log of the
-  latest run: each PR prints `eligible` or `skipped, <why>`.
+- **Nothing happened for an impact/high PR.** It needs `owner/review`, and
+  Renovate's last push may have cleared it. Otherwise look at the Select log
+  of the latest run: each PR prints `eligible` or `skipped, <why>`.
 - **A PR you want reviewed again.** Remove `ori/blocked`.
 - **An `impact/critical` PR you want merged.** Read Ori's "ready" comment,
   then add `owner/approved`. If Renovate or Ori pushed after that comment, the

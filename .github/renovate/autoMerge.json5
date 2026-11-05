@@ -6,9 +6,10 @@
   //     green, including "Build Success" from .github/workflows/kubernetes.yaml
   //     (flate render + image exists). Flux error events page the War Room if
   //     a merged bump then fails to reconcile (flux-system/addons/alerts).
-  //   * impact/high: never automerged. renovate-review.yaml hands these to
-  //     Ori's reviewer agent, which does whatever migration the bump needs,
-  //     merges, verifies live, and reverts if the check fails.
+  //   * impact/high: never automerged. Once the owner adds owner/review,
+  //     renovate-review.yaml hands the PR to Ori's reviewer agent, which does
+  //     whatever migration the bump needs, merges, verifies live, and reverts
+  //     if the check fails. Without that label it waits.
   //   * impact/critical (on top of impact/high): a bad merge can't be undone
   //     by reverting the PR. Data formats, the cluster's own version, the
   //     CNI, and Flux itself. The agent prepares these the same way but only

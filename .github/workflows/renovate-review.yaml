@@ -1,7 +1,9 @@
 ---
 name: "Renovate review"
 
-# Hands each impact/high Renovate PR to Ori's reviewer agent. The agent does
+# Hands an impact/high Renovate PR to Ori's reviewer agent once the owner asks
+# for it with the owner/review label. Nothing is reviewed automatically: each
+# review costs model time, so the owner opts each PR in. The agent does
 # whatever migration the bump needs and merges it, or leaves it open with a
 # comment and the ori/blocked label. impact/critical PRs get the same review,
 # but the agent stops at ori/awaiting-approval and merges only after the owner adds
@@ -14,16 +16,19 @@ name: "Renovate review"
 #                            the run to finish, fail if it didn't end ok
 #
 # A PR is eligible when it is open, opened by Renovate from this repo, labeled
-# impact/high, not labeled ori/blocked, not waiting on the owner (ori/awaiting-
-# approval without owner/approved), and Build Success passed on its head.
-# It is picked up the moment the last of those becomes true:
-#   - the impact/high label lands               (pull_request_target: labeled)
+# impact/high and owner/review, not labeled ori/blocked, not waiting on the
+# owner (ori/awaiting-approval without owner/approved), and Build Success
+# passed on its head. It is picked up the moment the last of those becomes true:
+#   - the owner adds owner/review               (pull_request_target: labeled)
 #   - Build Success finishes                    (workflow_run: Kubernetes)
 #   - the owner removes ori/blocked             (pull_request_target: unlabeled)
 #   - the owner adds owner/approved             (pull_request_target: labeled)
 # A new push (Renovate's, or a migration commit from the agent) clears
 # ori/blocked, ori/awaiting-approval and owner/approved, so each new head gets
 # its own review and an approval never carries over to different code.
+# A push from Renovate (a rebase or a newer version) also clears owner/review,
+# so a PR that churns doesn't buy a review per push; the agent's own migration
+# push keeps it, so the review it asked for still happens.
 # The daily run re-sends anything still eligible (a review that failed, or
 # one missed while the gateway was down).
 #
@@ -58,7 +63,7 @@ jobs:
     if: >-
       (github.event_name == 'pull_request_target' &&
         ((github.event.action == 'labeled' &&
-           (github.event.label.name == 'impact/high' || github.event.label.name == 'owner/approved')) ||
+           (github.event.label.name == 'owner/review' || github.event.label.name == 'owner/approved')) ||
          (github.event.action == 'unlabeled' && github.event.label.name == 'ori/blocked') ||
          github.event.action == 'synchronize' || github.event.action == 'reopened')) ||
       (github.event_name == 'workflow_run' &&
@@ -80,9 +85,14 @@ jobs:
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          SENDER: ${{ github.event.sender.login }}
         run: |
           set -euo pipefail
-          for l in ori/blocked ori/awaiting-approval owner/approved; do
+          clear=(ori/blocked ori/awaiting-approval owner/approved)
+          # Renovate's pushes need a fresh go-ahead; the agent's (it pushes as
+          # the owner) are part of the review the owner already asked for.
+          if [[ "$SENDER" == "renovate[bot]" ]]; then clear+=(owner/review); fi
+          for l in "${clear[@]}"; do
             if jq -e --arg l "$l" 'index($l)' <<<"$LABELS" >/dev/null; then
               gh api -X DELETE "repos/${REPO}/issues/${PR}/labels/${l/\//%2F}" --silent
               echo "#${PR}: cleared ${l}"
@@ -103,7 +113,7 @@ jobs:
           if [[ -n "${ONE_PR// /}" ]]; then
             candidates="${ONE_PR// /}"
           else
-            candidates="$(gh pr list --repo "$REPO" --state open --label impact/high \
+            candidates="$(gh pr list --repo "$REPO" --state open --label owner/review \
               --limit 100 --json number --jq '.[].number')"
           fi
           prs='[]'
@@ -120,6 +130,7 @@ jobs:
             elif [[ "$author" != "renovate[bot]" ]]; then why="author is $author"
             elif [[ "$head_repo" != "$REPO" ]]; then why="head repo is $head_repo"
             elif ! jq -e 'index("impact/high")' <<<"$labels" >/dev/null; then why="no impact/high label"
+            elif ! jq -e 'index("owner/review")' <<<"$labels" >/dev/null; then why="no owner/review label"
             elif jq -e 'index("ori/blocked")' <<<"$labels" >/dev/null; then why="labeled ori/blocked"
             elif jq -e 'index("ori/awaiting-approval") and (index("owner/approved") | not)' \
                 <<<"$labels" >/dev/null; then why="waiting for owner/approved"
@@ -162,8 +173,8 @@ jobs:
         include: ${{ fromJSON(needs.select.outputs.prs) }}
     steps:
       # The job may have queued behind another review. Skip if the PR moved on
-      # in the meantime (merged, closed, new push, blocked, or now waiting on
-      # the owner).
+      # in the meantime (merged, closed, new push, blocked, review request
+      # withdrawn, or now waiting on the owner).
       - name: Still eligible
         id: still
         env:
@@ -176,7 +187,7 @@ jobs:
           pr="$(curl -sS --fail-with-body -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${REPO}/pulls/${PR}")"
           if jq -e --arg sha "$SHA" '.state == "open" and .head.sha == $sha and
-              ([.labels[].name] | (index("ori/blocked") | not) and
+              ([.labels[].name] | (index("ori/blocked") | not) and (index("owner/review") != null) and
                 (index("ori/awaiting-approval") == null or index("owner/approved") != null))' \
               <<<"$pr" >/dev/null; then
             echo "go=true" >>"$GITHUB_OUTPUT"
