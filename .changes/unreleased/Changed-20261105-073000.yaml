@@ -1,0 +1,3 @@
+kind: Changed
+body: "The public Cloudflare records (the app names behind the tunnel and `ingress` itself) are managed by Terraform (`environments/prod/cloudflare/public-dns.tf`), adopted with `import` blocks from what external-dns created. Adding a public app is a line in `local.cf1_public_hosts`. external-dns stays in `upsert-only` until it is removed in the next step."
+time: 2026-11-05T07:30:00.000000000-08:00
