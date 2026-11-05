@@ -13,6 +13,7 @@ healthchecks.io messages Telegram through its own bot when the pings stop.
 | `sce-rtr01`      | RB5009 scheduler `heartbeat` (`/tool fetch`)                                 | 1m    | 2m + 3m grace             | Power or internet at home is out                                                    |
 | `homelab-wsl`    | Alertmanager, the always-firing `Watchdog` alert (webhook)                   | 2m    | 3m + 4m grace             | Prometheus, Alertmanager, the cluster, the desktop or the house is down             |
 | `alert-delivery` | Alertmanager, `AlertDeliveryHeartbeat`, firing while Telegram delivery works | 2m    | 3m + 4m grace             | Alerts fire but can't reach the War Room (bot token revoked, bot removed, API down) |
+| `homelab-wsl-02` | homelab-wsl-02 CronJob `kube-system/healthchecks-heartbeat` (`curl`)         | 2m    | 3m + 4m grace             | homelab-wsl-02 can't run a pod, or WSL-02, its WSL or its wifi is offline           |
 
 Each layer depends on the one above it, so read them top down:
 

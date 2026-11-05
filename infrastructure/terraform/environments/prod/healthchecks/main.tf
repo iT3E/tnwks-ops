@@ -8,9 +8,10 @@
 ## in-cluster alerting can't report on: a power cut, a WAN outage, the desktop
 ## not booting back up, or Prometheus/Alertmanager being dead.
 ##
-## Three checks, so a Telegram message says which layer failed:
+## Four checks, so a Telegram message says which layer failed:
 ##   - sce-rtr01 down (and the others with it): power or internet at home.
 ##   - homelab-wsl down: the house is online, the cluster or its alerting isn't.
+##   - homelab-wsl-02 down: the second cluster (or WSL-02) isn't.
 ##   - only alert-delivery down: alerts fire but can't reach the War Room.
 ##
 ## Pingers address a check by slug, https://hc-ping.com/<ping key>/<slug>, so
@@ -47,6 +48,15 @@ locals {
       grace   = 4 * 60
     }
 
+    # homelab-wsl-02's heartbeat CronJob pings every 2 minutes
+    # (kubernetes/clusters/wsl-02/apps/heartbeat) until it has its own
+    # Alertmanager; then the Watchdog takes over, like homelab-wsl's.
+    homelab-wsl-02 = {
+      desc    = "Heartbeat from a homelab-wsl-02 CronJob (every 2m). Down: the cluster can't run a pod, or WSL-02, its WSL or its wifi is offline. Check sce-rtr01 and homelab-wsl to tell which."
+      tags    = ["homelab-wsl-02"]
+      timeout = 3 * 60
+      grace   = 4 * 60
+    }
     # The router's scheduler fetches its ping URL every minute
     # (modules/mikrotik heartbeat.tf). Silence means power or WAN is out.
     sce-rtr01 = {
