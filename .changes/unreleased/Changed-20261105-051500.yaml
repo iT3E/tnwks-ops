@@ -1,0 +1,3 @@
+kind: Changed
+body: "CI: the secret scan, privacy and label workflows now call the reusable workflows in iT3E/github-workflows (v1.3.0) instead of keeping their own copies, and PRs that touch workflows get an actionlint check. The required checks are now named betterleaks / betterleaks and privacy / privacy."
+time: 2026-11-05T05:15:00.000000000Z

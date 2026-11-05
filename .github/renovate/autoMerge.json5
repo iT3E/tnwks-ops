@@ -71,6 +71,14 @@
       automerge: true,
     },
     {
+      description: "Our own reusable workflows (iT3E/github-workflows): no wait",
+      matchManagers: ["github-actions"],
+      matchPackageNames: ["iT3E/github-workflows"],
+      matchUpdateTypes: ["minor", "patch", "digest"],
+      minimumReleaseAge: null,
+      automerge: true,
+    },
+    {
       description: "CI tools pinned in workflows (# renovate: comments): minor and patch",
       matchFileNames: [".github/workflows/**"],
       matchManagers: ["custom.regex"],

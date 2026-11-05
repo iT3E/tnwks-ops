@@ -1,23 +1,23 @@
 ---
 name: "Meta Labeler"
 
+# The logic is in the reusable workflow it calls, from
+# https://github.com/iT3E/github-workflows (README there documents inputs and
+# check names), pinned to a release commit (@<sha> # vX.Y.Z) that Renovate
+# moves.
+#
+# area/* labels from the paths a PR changes (.github/labeler.yaml).
 on:
   workflow_dispatch:
   pull_request:
     branches: ["main"]
 
-permissions:
-  checks: write
-  contents: read
-  pull-requests: write
+permissions: {}
 
 jobs:
   labeler:
-    name: Labeler
-    runs-on: ubuntu-latest
-    steps:
-      - name: Labeler
-        uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
-        with:
-          configuration-path: .github/labeler.yaml
-          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+    name: labeler
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: iT3E/github-workflows/.github/workflows/labeler.yaml@39a44e0ed437699eaafe4b01afedd6063b69ee4d # v1.3.0
