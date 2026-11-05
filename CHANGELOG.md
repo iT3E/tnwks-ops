@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.120.0 - 2026-11-05
+
+### Changed
+
+* terraform: rename the Cloudflare TFC workspace to `tnwks-cloudflare-prod` (same workspace and state, now in the AWS project and declared in `modules/tfc`, adopted by `aws-init` imports), and drop the healthchecks `moved` block now that the runner has applied it
+
 ## v1.119.0 - 2026-11-05
 
 ### Changed

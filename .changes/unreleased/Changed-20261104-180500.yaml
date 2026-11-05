@@ -1,3 +1,0 @@
-kind: Changed
-body: "terraform: rename the Cloudflare TFC workspace to `tnwks-cloudflare-prod` (same workspace and state, now in the AWS project and declared in `modules/tfc`, adopted by `aws-init` imports), and drop the healthchecks `moved` block now that the runner has applied it"
-time: 2026-11-04T18:05:00.000000-08:00
