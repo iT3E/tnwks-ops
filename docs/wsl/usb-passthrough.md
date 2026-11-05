@@ -99,9 +99,11 @@ usbipd attach --wsl --busid 4-1
 >   tries the Z-Stick attach every 5 minutes and restarts worker-2 after it
 >   had to cold-start the distro.
 >
-> **One-time Windows prerequisite (elevated):** the Z-Stick must be
-> `usbipd bind`-ed once so it's shareable and the binding persists
-> (`attach`, which the service does repeatedly, needs no elevation):
+> **Windows side:** the role `windows_usb_attach` installs the pinned
+> usbipd-win (`usb_attach_usbipd_version`) and keeps each device in
+> `usb_attach_bound_devices` bound with `--force`, so it's shareable and the
+> binding persists (`attach`, which the service does repeatedly, needs no
+> elevation). By hand that is:
 >
 > ```powershell
 > usbipd bind --force --hardware-id 0658:0200   # Z-Stick

@@ -12,8 +12,8 @@ run that shows drift.
 | `windows_coral_detector` (`coral-detector`) | the [Coral detector](coral-detector.md) services, driver, firewall rules                               |
 | `windows_monitoring` (`monitoring`)         | windows_exporter (MSI, `config.yaml` collectors, service), smartmontools, smartctl_exporter and its task, firewall rules |
 | `windows_udp_relay` (`udp-relay`)           | `Start-TnwksUdpRelay.ps1`, the relay tasks `tnwks-udp-relay` (2055) and `tnwks-udp-relay-syslog` (6001), their firewall rules ([lan-exposure.md](lan-exposure.md)) |
-| `windows_lan_bridge` (`lan-bridge`)         | `Sync-TnwksLanBridge.ps1` and its `ports.json`, the task `tnwks-lan-bridge-sync`, the firewall rules `tnwks-lan-bridge-<port>`; the script keeps the portproxy entries pointed at WSL at run time |
-| `windows_usb_attach` (`usb-attach`)         | `Sync-TnwksUsbAttach.ps1` and the task `tnwks-usb-attach` (Z-Stick attach plus worker-2 restart, [usb-passthrough.md](usb-passthrough.md)) |
+| `windows_lan_bridge` (`lan-bridge`)         | `Sync-TnwksLanBridge.ps1` and its `ports.json` (80, 443, 1883, 8080, 2222, 18789), the task `tnwks-lan-bridge-sync`, the firewall rules `tnwks-lan-bridge-<port>`; the script keeps the portproxy entries pointed at WSL at run time |
+| `windows_usb_attach` (`usb-attach`)         | usbipd-win (pinned MSI), the forced bind of the Z-Stick, `Sync-TnwksUsbAttach.ps1` and the task `tnwks-usb-attach` (Z-Stick attach plus worker-2 restart, [usb-passthrough.md](usb-passthrough.md)) |
 | `windows_wsl_maintenance` (`wsl-maintenance`) | `Watch-TnwksWsl.ps1` and the task `tnwks-wsl-watchdog` (every 5 min), `Compact-WslVhdx.ps1` and the on-demand task `tnwks-vhdx-compact` |
 | `windows_sshd` (`sshd`)                     | check only by default: the OpenSSH server as `Install-TnwksWindowsSshd.ps1` sets it up ([below](#sshd-bootstrap-once-and-after-a-wsl-subnet-change)) |
 | `windows_host_settings` (`host-settings`)   | check only: `.wslconfig`, Ethernet power settings, Wi-Fi off, power plan ([below](#check-only-settings)) |
@@ -231,11 +231,13 @@ Done on 2026-11-03 (backups of the task XML, rule settings and script in
 - The roles removed the old Register scripts, their `.bak-*` copies and
   one-off verification scripts from `C:\ProgramData\tnwks-*`.
 
-Still open, deliberately unmanaged by the playbook for now:
+Since then, also in the playbook:
 
-- The `WSL2 SSH` tcp/2222 rule and the 2222 portproxy entry (WSL sshd), and
-  the `OpenClaw Gateway 18789` rule and its portproxy entry (gateway LAN
-  access). Both rules admit any address; scoping them to the LAN is the next
-  step if they stay.
-- usbipd-win 4.3.0 is installed by hand; pinning it is a candidate for a
-  `windows_usb_attach` addition.
+- The tcp/2222 (WSL sshd) and tcp/18789 (OpenClaw gateway) forwards are ports
+  of `windows_lan_bridge`: the sync script keeps their portproxy entries on
+  the WSL address, and `tnwks-lan-bridge-2222` / `-18789` replace the
+  hand-made `WSL2 SSH` and `OpenClaw Gateway 18789` rules. They still admit
+  any address, as before; scoping them is a `remote:` on their
+  `lan_bridge_tcp_ports` entry.
+- usbipd-win is pinned (`usb_attach_usbipd_version`, MSI checked by SHA-256)
+  and the Z-Stick's `usbipd bind --force` is enforced (`windows_usb_attach`).

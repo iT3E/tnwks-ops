@@ -33,6 +33,14 @@
           tags: [monitoring]
       tags: [monitoring]
 
+    - name: usbipd-win installer
+      ansible.builtin.include_role:
+        name: windows_usb_attach
+        tasks_from: controller.yml
+        apply:
+          tags: [usb-attach]
+      tags: [usb-attach]
+
 - name: Windows host
   hosts: windows_hosts
   gather_facts: false

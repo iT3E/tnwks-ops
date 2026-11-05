@@ -1,4 +1,61 @@
 ---
+# Run controller.yml on localhost first (the playbook does).
+
+# --- usbipd-win ----------------------------------------------------------------
+
+- name: Installed usbipd-win version
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      $p = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue |
+          Where-Object { $_.DisplayName -eq 'usbipd-win' } | Select-Object -First 1
+      "$($p.DisplayVersion)"
+  check_mode: false
+  register: usb_attach_usbipd_installed
+
+- name: usbipd-win {{ usb_attach_usbipd_version }}
+  when: (usb_attach_usbipd_installed.output | first | default('')) != usb_attach_usbipd_version
+  block:
+    - name: Stage the usbipd-win MSI
+      ansible.windows.win_copy:
+        src: "{{ usb_attach_cache }}/{{ usb_attach_usbipd_msi.url | basename }}"
+        dest: '{{ usb_attach_staging }}\'
+
+    - name: Install usbipd-win
+      ansible.windows.win_package:
+        path: '{{ usb_attach_staging }}\{{ usb_attach_usbipd_msi.url | basename }}'
+        state: present
+
+# Check mode reports the bind without running it (-WhatIf).
+- name: Devices are bound (shared, forced) for usbip
+  ansible.windows.win_powershell:
+    parameters:
+      Exe: "{{ usb_attach_usbipd_exe }}"
+      Devices: "{{ usb_attach_bound_devices }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Exe, [string[]]$Devices)
+      $Ansible.Changed = $false
+      if (-not (Test-Path $Exe)) {
+          # Only in a check run before usbipd-win is installed.
+          $Ansible.Changed = [bool]$Devices
+          return
+      }
+      $state = ((& $Exe state) -join "`n") | ConvertFrom-Json
+      if ($LASTEXITCODE -ne 0) { throw "usbipd state failed ($LASTEXITCODE)" }
+      foreach ($d in $Devices) {
+          $vid, $prod = $d.ToUpper() -split ':'
+          $match = @($state.Devices | Where-Object { $_.InstanceId -like "USB\VID_${vid}&PID_${prod}\*" })
+          if (@($match | Where-Object { $_.PersistedGuid -and $_.IsForced }).Count) { continue }
+          $Ansible.Changed = $true
+          if ($PSCmdlet.ShouldProcess($d, 'usbipd bind --force')) {
+              $out = & $Exe bind --force --hardware-id $d 2>&1
+              if ($LASTEXITCODE -ne 0) { throw "usbipd bind --force --hardware-id $d failed ($LASTEXITCODE): $out" }
+          }
+      }
+
+# --- the attach task ---------------------------------------------------------
+
 - name: USB attach directory
   ansible.windows.win_file:
     path: "{{ usb_attach_dir }}"

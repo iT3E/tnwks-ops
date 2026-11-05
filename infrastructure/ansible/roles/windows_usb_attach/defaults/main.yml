@@ -1,10 +1,28 @@
 ---
-# windows_usb_attach: the Windows-side Z-Stick attach (docs/wsl/usb-passthrough.md).
+# windows_usb_attach: usbipd-win, the devices it shares, and the Windows-side
+# Z-Stick attach (docs/wsl/usb-passthrough.md).
 # The WSL unit tnwks-usb-attach@0658:0200 (role wsl_usb_attach) keeps the
 # Z-Stick attached from inside WSL; this task is the backup that also
 # restarts worker-2 after a fresh attach, so the device reaches zwave-js-ui.
 # The Coral isn't on usbip any more (docs/wsl/coral-detector.md), so the task
 # passes no Coral IDs and the script leaves it alone.
+
+# usbipd-win, pinned and checked by SHA-256 on the controller. A version change
+# reinstalls its drivers (the release notes ask for a reboot) and drops the
+# attached devices, so bump it at a quiet moment.
+usb_attach_usbipd_version: 4.3.0
+usb_attach_usbipd_msi:
+  url: https://github.com/dorssel/usbipd-win/releases/download/v4.3.0/usbipd-win_4.3.0.msi
+  sha256: 8eeae6f117f48fc18fef41cd565cd574a6a7e76306dd59071b352dc396753da2
+usb_attach_usbipd_exe: 'C:\Program Files\usbipd-win\usbipd.exe'
+usb_attach_cache: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/tnwks-ops/windows-usb-attach"
+usb_attach_staging: 'C:\Windows\Temp\tnwks-usb-attach'
+
+# Devices usbipd keeps shared (bound, persisted across reboots), by VID:PID.
+# Bound with --force: Windows has its own driver for the Z-Stick (a COM port),
+# and --force hands the device to usbipd anyway.
+usb_attach_bound_devices:
+  - "0658:0200" # Aeotec Z-Stick Gen5
 
 usb_attach_dir: 'C:\ProgramData\tnwks-usb-attach'
 usb_attach_src: Sync-TnwksUsbAttach.ps1

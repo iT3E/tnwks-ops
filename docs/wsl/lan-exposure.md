@@ -94,8 +94,10 @@ task wsl-host:udp-relays   # Windows UDP relays for 2055 and 6001
 - The portproxy entries are the one part Ansible doesn't write: they point at
   the WSL VM's address, so the script sets them at run time. It leaves an
   entry alone when it already points at the right address, and removes
-  entries of retired ports. The `2222` and `18789` entries (SSH and the
-  OpenClaw gateway) are outside this bridge and untouched by it.
+  entries of retired ports. `2222` (the distro's own sshd on 22) and `18789`
+  (the OpenClaw gateway) are bridge ports too, forwarded straight to the WSL
+  service with no socat in between; their rules admit any address, like the
+  hand-made rules they replaced.
 - `wsl-host:udp-relays` runs the role `windows_udp_relay`: it copies
   `Start-TnwksUdpRelay.ps1` to `C:\ProgramData\tnwks-udp-relay`, scopes each
   inbound UDP firewall rule `tnwks-udp-relay-<port>` to its senders, and keeps

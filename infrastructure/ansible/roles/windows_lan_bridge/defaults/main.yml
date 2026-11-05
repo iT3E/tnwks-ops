@@ -18,7 +18,8 @@ lan_bridge_user: "{{ windows_desktop_user }}"
 lan_bridge_listen_address: 0.0.0.0
 
 #   port      LAN-facing port on the Windows host
-#   wsl_port  port socat listens on in WSL (default: port)
+#   wsl_port  port in WSL it forwards to: socat's, or a WSL service's own
+#             (default: port)
 #   remote    sources the firewall rule tnwks-lan-bridge-<port> admits (default: any)
 # 53/UDP isn't here: portproxy is TCP-only and the router answers DNS.
 lan_bridge_tcp_ports:
@@ -28,7 +29,18 @@ lan_bridge_tcp_ports:
   # UniFi inform from the APs (VLAN 900 only). Docker on WSL already holds
   # 0.0.0.0:8080 (Scriberr), so socat listens on 18080.
   - { port: 8080, wsl_port: 18080, remote: [10.10.90.0/24] }
+  # Straight to WSL services, no socat: the distro's own sshd, and the
+  # OpenClaw gateway unit. Same scope as the hand-made rules they replace
+  # (any address).
+  - { port: 2222, wsl_port: 22 }
+  - { port: 18789 }
 
 # Ports this bridge used to forward: their portproxy entry (script) and
 # firewall rule (Ansible) are removed. 6001: syslog moved to UDP.
 lan_bridge_retired_tcp_ports: [6001]
+
+# Hand-made firewall rules (by display name) that tnwks-lan-bridge-<port>
+# rules replaced; removed once their replacement exists.
+lan_bridge_replaced_rules:
+  - WSL2 SSH                # tcp/2222
+  - OpenClaw Gateway 18789  # tcp/18789
