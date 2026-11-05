@@ -1,4 +1,14 @@
 ---
+# SNMP exporter. Scrapes the Aruba switch SW03 (if_mib) for the ports that
+# feed the UniFi APs, so AP uplink flaps show up in Prometheus (alerts:
+# kube-prometheus-stack/addons/alerts/wifi.yaml, dashboard: Home Wi-Fi).
+#
+# The switch's v2c community is not in git: it comes from the SOPS Secret
+# snmp-exporter-auth (secret.sops.yaml), whose auth.yml is loaded as a second
+# --config.file next to the image's stock snmp.yml (modules incl. if_mib).
+# It is read at startup, so restart the pod after changing the Secret.
+#
+# Path: the pod reaches SW03 (10.98.0.0/24) through the WSL host's routes.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -15,8 +25,42 @@ spec:
         name: prometheus-community
         namespace: flux-system
   values:
+    extraArgs:
+      - --config.file=/etc/snmp_exporter/snmp.yml
+      - --config.file=/etc/snmp-auth/auth.yml
+    extraSecretMounts:
+      - name: snmp-auth
+        mountPath: /etc/snmp-auth
+        secretName: snmp-exporter-auth
+        readOnly: true
+        defaultMode: 292 # 0444: the exporter runs as uid 1000
     serviceMonitor:
-      enabled: false
+      enabled: ${SERVICE_MONITOR_ENABLED}
+      interval: 30s
+      scrapeTimeout: 10s
+      params:
+        - name: sw03
+          target: 10.98.0.251
+          module: [if_mib]
+          auth: [sw03_v2]
+          additionalMetricsRelabelConfigs:
+            # Only the AP uplink ports (and the per-device series that have
+            # no ifName, e.g. ifNumber). SW03 port -> AP per docs/network/unifi.md.
+            - sourceLabels: [ifName]
+              regex: "gigabitethernet0/0/(0|1|12)|"
+              action: keep
+            - sourceLabels: [ifName]
+              regex: gigabitethernet0/0/0
+              targetLabel: ap
+              replacement: AP Kitchen
+            - sourceLabels: [ifName]
+              regex: gigabitethernet0/0/1
+              targetLabel: ap
+              replacement: AP Master
+            - sourceLabels: [ifName]
+              regex: gigabitethernet0/0/12
+              targetLabel: ap
+              replacement: AP Living Room
     resources:
       requests:
         cpu: 10m

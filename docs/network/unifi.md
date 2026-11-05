@@ -12,7 +12,8 @@ and its configuration (site settings, the WLAN, each AP) is Terraform in
 | Inform URL the APs use | `http://unifi:8080/inform` (router record `unifi` -> `10.10.91.142`) |
 | Configuration | `environments/prod/unifi` + `modules/unifi`: planned on the PR and applied on merge by `unifi-{plan,apply}.yaml` on the self-hosted runner ([`ci.md`](ci.md)). State in TFC workspace `tnwks-unifi-prod`. `task unifi:*` for bootstrap and break-glass |
 | Secrets | `environments/prod/unifi/secrets.sops.yaml`: controller logins, device SSH, SSID, passphrase, AP MACs |
-| Metrics | `monitoring/unpoller` (local controller user `unifipoller`) |
+| Metrics | `monitoring/unpoller` (local controller user `unifipoller`); AP pings in `monitoring/smokeping-prober` (role `ap`); SW03 AP ports via `monitoring/snmp-exporter` |
+| Dashboard and alerts | Grafana "Home Wi-Fi" (`grafana/app/dashboard/home-wifi.json`); `kube-prometheus-stack/addons/alerts/wifi.yaml` |
 | Home Assistant | UniFi Network integration, read-only local user `homeassistant`, phones only (presence; [`apps/home-assistant.md`](../apps/home-assistant.md#presence)) |
 
 The SSID and the AP MAC addresses are kept in SOPS, never in this public repo:
@@ -212,6 +213,17 @@ and 6-9.
   30 kept), so a dead desktop disk doesn't take the backups with it. A `.unf`
   holds the Wi-Fi passphrase and the device keys (its encryption uses a
   well-known fixed key), so treat copies as secrets.
+
+- **Monitoring path:** the AP pings and the SW03 SNMP scrape leave the
+  cluster through the WSL host's routes for 10.10.90.0/24 and 10.98.0.0/24,
+  which exist only while its `wg01-home` WireGuard tunnel is up; the
+  desktop's own LAN address can't reach the management VLANs. With the tunnel
+  down, the AP and SW03 ping panels drop to 100% loss together and the SW03
+  panels go empty. `WifiAPUnreachable` is gated on SW03 answering, so it
+  stays quiet then instead of paging for all three APs.
+- **SNMP on SW03:** read-only v1/v2c. The community is in the snmp-exporter
+  Secret (`monitoring/snmp-exporter/app/secret.sops.yaml`, `auth.yml`), loaded
+  as a second `--config.file` next to the image's stock modules.
 
 ## History
 

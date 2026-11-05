@@ -1,0 +1,3 @@
+kind: Added
+body: 'Home Wi-Fi monitoring: a git-managed "Home Wi-Fi" Grafana dashboard, Wi-Fi alerts in `wifi.yaml` (unpoller blind, AP uplink below 1G, AP unreachable, AP switch port flapping, channel busy, retries, satisfaction, AP reboot outside the upgrade window), smokeping pings of the three APs and SW03, and an snmp-exporter scrape of the AP ports on SW03.'
+time: 2026-11-04T19:15:00.000000000-08:00
