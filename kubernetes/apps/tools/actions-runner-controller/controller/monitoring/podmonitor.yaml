@@ -1,0 +1,39 @@
+---
+# The controller's own metrics (gha_controller_*, controller-runtime and
+# workqueue). Port "metrics" exists once the HelmRelease sets `metrics:`.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: gha-rs-controller
+  namespace: tools
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: gha-rs-controller
+      app.kubernetes.io/component: controller-manager
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+---
+# One listener pod per scale set; the controller gives each a "metrics" port
+# when its own `metrics.listenerAddr` is set. gha_job_startup_duration_seconds
+# is the queue time, gha_job_execution_duration_seconds the run time.
+# The scale-set labels are copied from the pod (actions_github_com_scale_set_*)
+# because the sample dashboard groups by them.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: gha-rs-listeners
+  namespace: tools
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: runner-scale-set-listener
+  podTargetLabels:
+    - actions.github.com/scale-set-name
+    - actions.github.com/scale-set-namespace
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s

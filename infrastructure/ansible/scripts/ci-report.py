@@ -7,10 +7,15 @@ the names of the tasks that changed or failed. Diffs, item labels and error
 messages stay in the full log, which the workflow keeps age-encrypted.
 
     ci-report.py --log run.log --site site_wsl --hosts A,B --mode check \
-        [--rc N] [--duration S] [--summary out.md] [--prom out.prom]
+        [--rc N] [--duration S] [--summary out.md] [--prom out.prom] \
+        [--timings out.md]
 
 --prom writes the drift-check metrics for windows_exporter's textfile
 collector (the WindowsHostConfigDrift alerts read them).
+
+--timings writes the slowest tasks from ansible.posix.profile_tasks' TASKS
+RECAP (the workflow enables it) as a table: task names and seconds only, like
+the summary. Empty when the log has no recap.
 """
 import argparse
 import re
@@ -22,14 +27,29 @@ RECAP = re.compile(
 )
 HEADER = re.compile(r"^(?:TASK|RUNNING HANDLER) \[(?P<name>.+?)\] \*+$")
 RESULT = re.compile(r"^(?P<status>changed|fatal|failed): \[(?P<host>[^\]]+)\]")
+# profile_tasks: "TASKS RECAP ***" then, per task, "<name> ----- 12.34s".
+TIMINGS_START = re.compile(r"^TASKS RECAP \*+$")
+TIMING = re.compile(r"^(?P<name>.+?) -* ?(?P<secs>\d+\.\d\d)s$")
+SLOWEST = 10
 COUNTS = ("ok", "changed", "unreachable", "failed", "skipped")
 PROM = "tnwks_windows_drift_check"
 
 
 def parse(lines):
     totals, events, task = {}, [], None
+    timings, in_recap = [], False
     for line in lines:
         line = line.rstrip("\n")
+        if TIMINGS_START.match(line):
+            # One per playbook, cumulative like the PLAY RECAP: keep the last.
+            timings, in_recap = [], True
+            continue
+        if in_recap:
+            if m := TIMING.match(line):
+                timings.append((m["name"], float(m["secs"])))
+                continue
+            if timings:
+                in_recap = False
         if m := HEADER.match(line):
             task = m["name"]
         elif m := RESULT.match(line):
@@ -41,7 +61,7 @@ def parse(lines):
             # One ansible-playbook run with several playbooks prints a recap
             # after each, cumulative: a host's last line is its total.
             totals[m["host"]] = {k: int(m[k]) for k in COUNTS}
-    return totals, events
+    return totals, events, timings
 
 
 def main():
@@ -54,10 +74,11 @@ def main():
     ap.add_argument("--duration", type=int, default=0)
     ap.add_argument("--summary")
     ap.add_argument("--prom")
+    ap.add_argument("--timings")
     a = ap.parse_args()
 
     with open(a.log, encoding="utf-8", errors="replace") as f:
-        totals, events = parse(f)
+        totals, events, timings = parse(f)
     hosts = [h for h in a.hosts.split(",") if h]
     # A host without a recap line never ran: count it as failed.
     for h in hosts:
@@ -82,6 +103,17 @@ def main():
     if a.summary:
         with open(a.summary, "w", encoding="utf-8") as f:
             f.write(summary)
+
+    if a.timings:
+        out = []
+        if timings:
+            top = sorted(timings, key=lambda t: -t[1])[:SLOWEST]
+            out = [f"#### Slowest tasks: `{a.site}` ({a.duration}s in all)", "",
+                   "| Task | Seconds |", "| --- | --: |"]
+            out += ["| %s | %.1f |" % (n.replace("|", r"\|"), secs) for n, secs in top]
+            out.append("")
+        with open(a.timings, "w", encoding="utf-8") as f:
+            f.write("\n".join(out) + ("\n" if out else ""))
 
     if a.prom:
         lines = [
