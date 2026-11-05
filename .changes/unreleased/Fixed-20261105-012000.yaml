@@ -1,3 +1,0 @@
-kind: Fixed
-body: "The Ansible downloads of pinned artifacts (Coral detector, monitoring agents, usbipd-win, Docker's apt key) wait up to 120s and retry 3 times instead of failing at the 10s default, which made the Ansible Hosts plan job fail twice in a row on slow GitHub downloads."
-time: 2026-11-05T01:20:00.000000000-08:00

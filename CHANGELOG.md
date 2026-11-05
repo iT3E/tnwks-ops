@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.133.1 - 2026-11-05
+
+### Fixed
+
+* The Ansible downloads of pinned artifacts (Coral detector, monitoring agents, usbipd-win, Docker's apt key) wait up to 120s and retry 3 times instead of failing at the 10s default, which made the Ansible Hosts plan job fail twice in a row on slow GitHub downloads.
+
 ## v1.133.0 - 2026-11-05
 
 ### Added
