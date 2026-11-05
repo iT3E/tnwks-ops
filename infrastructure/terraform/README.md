@@ -8,7 +8,7 @@ environments/          thin roots — one per Terraform Cloud workspace
 │   ├── aws-init/      tnwks-ops-aws-init       (CLI run, static root keys)
 │   └── aws-identity/  tnwks-ops-aws-identity   (org, Identity Center, SOPS KMS)
 ├── aws-prod/          tnwks-ops-aws-prod       (CI-driven, day-to-day infra)
-└── cloudflare/        tnwks-cloudflare-prod_old (local via `task terraform:*`)
+└── cloudflare/        tnwks-cloudflare-prod    (CI-driven, self-hosted runner)
 
 modules/               child modules, namespaced by provider
 ├── aws/               prod account infra (+ oidc/ and identity/ nested)
@@ -46,7 +46,7 @@ module conventions.
    | `tnwks-ops-aws-init` | `environments/bootstrap/aws-init` | local | CLI, by hand |
    | `tnwks-ops-aws-identity` | `environments/bootstrap/aws-identity` | remote | API/CLI, by hand |
    | `tnwks-ops-aws-prod` | `environments/prod/aws` | remote | `.github/workflows/terraform-{plan,apply}.yaml` |
-   | `tnwks-cloudflare-prod_old` | `environments/prod/cloudflare` | local | `.github/workflows/cloudflare-{plan,apply}.yaml` (self-hosted runner) |
+   | `tnwks-cloudflare-prod` | `environments/prod/cloudflare` | local | `.github/workflows/cloudflare-{plan,apply}.yaml` (self-hosted runner) |
 
    None of these workspaces currently has a VCS connection; runs are created by
    the GitHub Actions workflows (prod) or from the CLI.

@@ -11,7 +11,7 @@ terraform {
     hostname     = "app.terraform.io"
     organization = "tnwks-ops"
     workspaces {
-      name = "tnwks-cloudflare-prod_old"
+      name = "tnwks-cloudflare-prod"
     }
   }
   required_version = ">= 1.2.2"
