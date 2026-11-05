@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.119.0 - 2026-11-05
+
+### Changed
+
+* terraform: move the healthchecks.io checks into `modules/healthchecks` with `environments/prod/healthchecks` as a thin root (`moved` blocks, no checks recreated), and plan/apply both the healthchecks.io and Cloudflare roots in CI on the self-hosted runner (`healthchecks-{plan,apply}.yaml`, `cloudflare-{plan,apply}.yaml`, shared `.github/actions/runner-terraform`) instead of from the desktop
+
 ## v1.118.1 - 2026-11-04
 
 ### Fixed
