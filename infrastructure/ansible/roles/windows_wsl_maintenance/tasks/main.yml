@@ -21,6 +21,15 @@
     name: "{{ wsl_watchdog_task }}"
     xml: "{{ lookup('ansible.builtin.template', 'wsl-watchdog.xml.j2') }}"
 
+# WSL stops a distro soon after its last wsl.exe client exits, Docker and the
+# Talos nodes inside or not. DESKTOP-HKE05KI always has one (the UDP relays,
+# the OpenClaw gateway, interactive use); a host without them needs this.
+- name: Keepalive task (one wsl.exe client from boot)
+  tnwks_win_scheduled_task:
+    name: "{{ wsl_keepalive_task }}"
+    xml: "{{ lookup('ansible.builtin.template', 'wsl-keepalive.xml.j2') }}"
+  when: wsl_keepalive_enabled | bool
+
 - name: vhdx compaction task (on demand)
   tnwks_win_scheduled_task:
     name: "{{ vhdx_compact_task }}"

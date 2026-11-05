@@ -99,7 +99,10 @@ re-pinning.
    distro: `wsl_lan_bridge_instances`, `wsl_usb_attach_devices`,
    `wsl_backups_timers`). The watchdog takes `wsl_watchdog_args`
    (`-SkipGateway -SkipUsb` without the OpenClaw gateway or the Z-Stick), the
-   compaction task `vhdx_compact_vhdx` (the distro's disk).
+   compaction task `vhdx_compact_vhdx` (the distro's disk). A host where
+   nothing else keeps a `wsl.exe` client open needs `wsl_keepalive_enabled`
+   and `-KeepAliveTask tnwks-wsl-keepalive`, or WSL stops the distro (and
+   its cluster) seconds after the watchdog starts it.
 4. The PR's Ansible Hosts check runs the site from its runner; merging applies it.
 
 ## Running playbooks

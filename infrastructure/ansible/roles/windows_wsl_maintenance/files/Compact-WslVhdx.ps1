@@ -56,7 +56,9 @@ Write-Log "start: vhdx $(Get-SizeGB $Vhdx) GB, ${Drive}: free $([math]::Round((G
 Disable-ScheduledTask -TaskName 'tnwks-wsl-watchdog' | Out-Null
 Write-Log 'watchdog task disabled'
 
-$Paused = @('tnwks-udp-relay', 'tnwks-udp-relay-syslog', 'tnwks-usb-attach', 'tnwks-lan-bridge-sync')
+# tnwks-wsl-keepalive (where present) restarts on failure and would start WSL
+# again mid-compaction.
+$Paused = @('tnwks-udp-relay', 'tnwks-udp-relay-syslog', 'tnwks-usb-attach', 'tnwks-lan-bridge-sync', 'tnwks-wsl-keepalive')
 
 try {
     foreach ($t in $Paused) {
@@ -107,7 +109,7 @@ finally {
     Start-Sleep -Seconds 30
     # usb-attach re-attaches the Z-Stick; lan-bridge-sync points the
     # portproxy at WSL's (possibly new) IP; the relays run until stopped.
-    foreach ($t in @('tnwks-usb-attach', 'tnwks-lan-bridge-sync', 'tnwks-udp-relay', 'tnwks-udp-relay-syslog', 'tnwks-wsl-watchdog')) {
+    foreach ($t in @('tnwks-wsl-keepalive', 'tnwks-usb-attach', 'tnwks-lan-bridge-sync', 'tnwks-udp-relay', 'tnwks-udp-relay-syslog', 'tnwks-wsl-watchdog')) {
         Start-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
     }
     Write-Log "re-enabled and started: watchdog, $($Paused -join ', ')"

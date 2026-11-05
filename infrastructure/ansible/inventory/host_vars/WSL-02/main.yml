@@ -25,7 +25,10 @@ usb_attach_bound_devices: []
 udp_relays: []
 # The watchdog only keeps WSL and the distro up here: no OpenClaw gateway, no
 # Z-Stick (and so no worker-2 restart after a cold start).
-wsl_watchdog_args: -SkipGateway -SkipUsb
+wsl_watchdog_args: -SkipGateway -SkipUsb -KeepAliveTask tnwks-wsl-keepalive
+# Nothing else here keeps a wsl.exe client open, so WSL would stop the distro
+# a few seconds after the watchdog starts it (seen 2026-11-05).
+wsl_keepalive_enabled: true
 # The distro's disk (on C:, where `wsl --install` put it), for the
 # on-demand compaction task.
 vhdx_compact_vhdx: 'C:\Users\{{ ansible_user }}\AppData\Local\wsl\{d3e1f4cf-83d5-47be-8d7a-64fb9e7ebb25}\ext4.vhdx'

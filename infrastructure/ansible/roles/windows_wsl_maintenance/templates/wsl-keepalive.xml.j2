@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<!-- Managed by tnwks-ops (role windows_wsl_maintenance). -->
+<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Holds one wsl.exe client open so WSL doesn't stop the {{ wsl_keepalive_distro | e }} distro (and the Talos cluster in it) when no other wsl.exe is running. The watchdog (tnwks-wsl-watchdog -KeepAliveTask) starts it again when it isn't running.</Description>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <UserId>{{ wsl_maintenance_user | e }}</UserId>
+      <LogonType>S4U</LogonType>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <RestartOnFailure>
+      <Count>999</Count>
+      <Interval>PT1M</Interval>
+    </RestartOnFailure>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+  </Settings>
+  <Triggers>
+    <BootTrigger />
+  </Triggers>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\Windows\System32\wsl.exe</Command>
+      <Arguments>-d {{ wsl_keepalive_distro | e }} -u root -e /bin/sleep infinity</Arguments>
+    </Exec>
+  </Actions>
+</Task>
