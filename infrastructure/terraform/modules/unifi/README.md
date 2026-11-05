@@ -23,8 +23,12 @@ the maintained successor of `paultyng/unifi`.
   that is not pending yet fails the apply; reset it and apply again.
 - **`forget_on_destroy = false`.** Removing an AP from the config stops
   managing it; it stays adopted.
-- **Radios** are matched by band (`ng`, `na`). Only the channel and width are
-  set; everything else, including transmit power, stays with the controller.
+- **Radios** are matched by band (`ng`, `na`). Channel and width are always
+  set; transmit power only where an AP sets `tx_power_mode` (and `tx_power`
+  with `custom`). Everything else stays with the controller.
+- **Roaming Assistant** (`wlan.roaming_assistant_5g_rssi`) lives on
+  `unifi_wlan` in UniFi Network 10.x; the radio-level `assisted_roaming_*`
+  fields are deprecated.
 - **Channel AI** (the nightly optimizer) would override pinned channels. It is
   off on a new self-hosted controller and this module does not turn it on.
 - **Things Terraform can't do** (`task unifi:bootstrap` does them over the API): the

@@ -21,18 +21,23 @@ resource "unifi_device" "ap" {
     dnssuffix = var.management.dnssuffix
   }
 
-  # Matched to the device's radios by band; fields left out keep the
-  # controller's values (transmit power, for one).
+  # Matched to the device's radios by band; fields left out (null) keep the
+  # controller's values, e.g. transmit power on a radio with no
+  # tx_power_mode.
   radio_table = [
     {
-      radio   = "ng"
-      channel = each.value.ng.channel
-      ht      = each.value.ng.ht
+      radio         = "ng"
+      channel       = each.value.ng.channel
+      ht            = each.value.ng.ht
+      tx_power_mode = each.value.ng.tx_power_mode
+      tx_power      = each.value.ng.tx_power
     },
     {
-      radio   = "na"
-      channel = each.value.na.channel
-      ht      = each.value.na.ht
+      radio         = "na"
+      channel       = each.value.na.channel
+      ht            = each.value.na.ht
+      tx_power_mode = each.value.na.tx_power_mode
+      tx_power      = each.value.na.tx_power
     },
   ]
 
