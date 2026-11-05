@@ -6,7 +6,7 @@
 #   task wsl-host:distro-check   # --check --diff, changes nothing
 #   task wsl-host:distro-apply
 #
-# One role with `--tags docker` / `ci-access` / `lan-bridge` / `usb-attach` /
+# One role with `--tags docker` / `cluster-tools` / `ci-access` / `lan-bridge` / `usb-attach` /
 # `backups` / `drift-check`. A distro with nothing for a role sets its list
 # empty in host_vars, and the role is skipped.
 #
@@ -22,6 +22,10 @@
     # Docker Engine, which runs the Talos nodes (docs/wsl/bootstrap.md).
     - role: wsl_docker
       tags: [docker]
+    # The pinned CLIs the Talos bootstrap runs on a distro without Homebrew.
+    - role: wsl_cluster_tools
+      when: wsl_cluster_tools_enabled | bool
+      tags: [cluster-tools]
     # The tnwks-ansible runners' key (CI reaches the distro over SSH).
     - role: wsl_ci_access
       tags: [ci-access]

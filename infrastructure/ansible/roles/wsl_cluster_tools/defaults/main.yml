@@ -1,0 +1,56 @@
+---
+# wsl_cluster_tools: the CLIs the Talos bootstrap and upgrade playbooks
+# (01-05) run on the distro that hosts the cluster, pinned by version and
+# SHA-256. For a distro without Homebrew (WSL-02); DESKTOP-HKE05KI's
+# workstation installs them with `task init`. Off unless a host sets
+# wsl_cluster_tools_enabled.
+#
+# Each tool lands in /opt/tnwks-tools/<name>-<version>/ and its binaries are
+# linked into /usr/local/bin, so a version bump is one entry here (version,
+# url, sha256) and the old directory is left for rollback.
+#
+#   bins: binary name -> path inside the archive; a plain binary download
+#         (no archive) has bins: {<name>: ""}.
+#
+# Keep talosctl on the Talos version the cluster runs (talos/<cluster>/
+# versions.yaml) and kubectl within one minor of its Kubernetes.
+wsl_cluster_tools_enabled: false
+wsl_cluster_tools_dir: /opt/tnwks-tools
+wsl_cluster_tools:
+  - name: talosctl
+    version: v1.14.5
+    url: https://github.com/siderolabs/talos/releases/download/v1.14.5/talosctl-linux-amd64
+    sha256: ff432b68986709e6b69c563a08a2ced4232d5196b0dccd6d2e783e9d714d7d7d
+    bins: { talosctl: "" }
+  - name: kubectl
+    version: v1.37.2
+    url: https://dl.k8s.io/release/v1.37.2/bin/linux/amd64/kubectl
+    sha256: c04487523e7aa7d1493f7808174c899db93d7a9cf57531420cd76b9bd415f8f4
+    bins: { kubectl: "" }
+  - name: helm
+    version: v4.1.4
+    url: https://get.helm.sh/helm-v4.1.4-linux-amd64.tar.gz
+    sha256: 70b2c30a19da4db264dfd68c8a3664e05093a361cefd89572ffb36f8abfa3d09
+    bins: { helm: linux-amd64/helm }
+  - name: flux
+    version: v2.10.0
+    url: https://github.com/fluxcd/flux2/releases/download/v2.10.0/flux_2.10.0_linux_amd64.tar.gz
+    sha256: 208dd7012c04fedeed5b2d0b6e63df3b15b1c34a381527811685c098bc9f8659
+    bins: { flux: flux }
+  # Same pins as .github/workflows/ansible-hosts.yaml (SOPS_*, AGE_*).
+  - name: sops
+    version: v3.13.3
+    url: https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64
+    sha256: e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b
+    bins: { sops: "" }
+  - name: age
+    version: v1.3.2
+    url: https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz
+    sha256: cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10
+    bins: { age: age/age, age-keygen: age/age-keygen }
+  # Runs the pinned Ansible controller (infrastructure/ansible/uv.lock).
+  - name: uv
+    version: 0.13.7
+    url: https://github.com/astral-sh/uv/releases/download/0.13.7/uv-x86_64-unknown-linux-gnu.tar.gz
+    sha256: c5221ff41b7892bfc223543883600125f6a47fe845093e0f5bdff4f359196d83
+    bins: { uv: uv-x86_64-unknown-linux-gnu/uv, uvx: uv-x86_64-unknown-linux-gnu/uvx }
