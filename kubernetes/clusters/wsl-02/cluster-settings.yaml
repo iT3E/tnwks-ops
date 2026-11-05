@@ -1,0 +1,59 @@
+---
+# homelab-wsl-02: Talos in Docker on WSL-02 (talos/wsl-02/README.md). Same
+# keys as kubernetes/clusters/wsl/cluster-settings.yaml where an app shared
+# with homelab-wsl reads them; only what this cluster runs so far is set.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-settings
+  namespace: flux-system
+data:
+  # Identity
+  CLUSTER_NAME: "homelab-wsl-02"
+  # Same domains as homelab-wsl: which cluster serves a name is decided per
+  # app (the placement map), not per cluster.
+  CLUSTER_DOMAIN: "internal.tnwks.us"
+  SECRET_DOMAIN: "internal.tnwks.us"
+  INTERNAL_DOMAIN: "internal.tnwks.us"
+  TIMEZONE: "America/Los_Angeles"
+  # Storage: one ext4 vhdx on C: (no DrvFs, no E:), so all three classes are
+  # the same disk; they exist so apps shared with homelab-wsl keep their
+  # storageClassName (kubernetes/clusters/wsl-02/apps/local-path-provisioner-ks.yaml).
+  STORAGE_CLASS_DEFAULT: "local-path"
+  STORAGE_CLASS_BULK: "local-path"
+  STORAGE_CLASS_DATABASE: "local-path"
+  BULK_PVC_SIZE: "10Gi"
+  BULK_PVC_ACCESS_MODE: "ReadWriteOnce"
+  CNPG_INSTANCES: "1"
+  CNPG_INSTANCE_SIZE: "5Gi"
+  # Network (talos/wsl-02/patches/cluster.yaml). Cluster Mesh needs a unique
+  # cluster ID and pod ranges that don't overlap homelab-wsl's (ID 1,
+  # 10.42.0.0/16, 10.43.0.0/16): docs/wsl/multi-site.md "Addressing".
+  CILIUM_CLUSTER_ID: "2"
+  CLUSTER_CIDR: "10.44.0.0/16"
+  SERVICE_CIDR: "10.45.0.0/16"
+  KUBE_VIP_ADDR: "127.0.0.1"
+  # LoadBalancer IPs: Cilium LB IPAM + L2 announcements on the
+  # homelab-wsl-02 Docker bridge (kubernetes/apps/kube-system/cilium/config),
+  # not MetalLB. This is the cluster's own pool (e.g. its clustermesh-apiserver);
+  # the shared VIPs (10.10.95.0/24, over BGP) come with the routed network. Same offsets as homelab-wsl's 10.5.0.0/24. The METALLB_*
+  # names are what shared apps read; any LB implementation honours their
+  # spec.loadBalancerIP.
+  LB_RANGE: "10.6.0.200-10.6.0.220"
+  CILIUM_LB_POOL_START: "10.6.0.200"
+  CILIUM_LB_POOL_STOP: "10.6.0.220"
+  INGRESS_INTERNAL_ADDR: "10.6.0.200"
+  METALLB_K8S_GATEWAY_ADDR: "10.6.0.201"
+  METALLB_INGRESS_ADDR: "10.6.0.202"
+  MQTT_LB_ADDR: "10.6.0.203"
+  # CNI: Cilium (talos/wsl-02/README.md, "Why Cilium works here"). Read by
+  # 02-cni-bootstrap.yml and the Cilium HelmRelease.
+  CNI: "cilium"
+  CILIUM_VERSION: "1.19.4"
+  CILIUM_L2_ANNOUNCEMENTS_ENABLED: "true"
+  # No Prometheus operator (ServiceMonitor CRD) or ingress on this cluster yet.
+  CILIUM_SERVICEMONITOR_ENABLED: "false"
+  CILIUM_HUBBLE_UI_INGRESS_ENABLED: "false"
+  SERVICE_MONITOR_ENABLED: "false"
+  # The vEthernet (WSL) address of WSL-02 (inventory/host_vars/WSL-02).
+  WINDOWS_HOST_IP: "172.25.16.1"

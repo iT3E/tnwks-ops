@@ -1,0 +1,33 @@
+# homelab-wsl-02: all nodes. talosctl >= 1.14 generates the multi-document
+# machine config, and Talos rejects the same settings in v1alpha1 form
+# (.cluster.network, .cluster.proxy, .machine.features.kubePrism,
+# .machine.kubelet, .cluster.discovery), so these patch the new documents.
+# KubePrism (localhost:7445, which Cilium uses) is on by default.
+# Cluster Mesh needs pod ranges that don't overlap homelab-wsl's
+# (10.42.0.0/16, 10.43.0.0/16); docs/wsl/multi-site.md "Addressing".
+apiVersion: v1alpha1
+kind: KubeNetworkConfig
+podSubnets: [10.44.0.0/16]
+serviceSubnets: [10.45.0.0/16]
+---
+# No CNI from Talos: Cilium is installed by 02-cni-bootstrap.yml, then Flux.
+apiVersion: v1alpha1
+kind: KubeFlannelCNIConfig
+$patch: delete
+---
+# Cilium replaces kube-proxy (kubeProxyReplacement: true).
+apiVersion: v1alpha1
+kind: KubeProxyConfig
+$patch: delete
+---
+# No external discovery service (discovery.talos.dev), like homelab-wsl.
+apiVersion: v1alpha1
+kind: DiscoveryServiceConfig
+name: default
+$patch: delete
+---
+# Delete images unused for a week (talos/wsl/patches/kubelet-image-gc.yaml).
+apiVersion: v1alpha1
+kind: KubeletConfig
+config:
+  imageMaximumGCAge: 168h

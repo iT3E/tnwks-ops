@@ -65,9 +65,9 @@ data:
   CLUSTER_CIDR: "10.42.0.0/16"
   SERVICE_CIDR: "10.43.0.0/16"
 
-  # CNI — WSL uses Flannel. The Cilium HelmRelease is filtered out of the
-  # WSL apps overlay (it can't run on Talos-in-Docker on WSL2 — Cilium issue
-  # #13768, CAP_SYS_MODULE rejected in nested containers).
+  # CNI — homelab-wsl uses Flannel. The Cilium HelmRelease is filtered out of
+  # this apps overlay (docs/wsl/bootstrap.md: Cilium's default CAP_SYS_MODULE
+  # request; homelab-wsl-02 runs Cilium without it).
   CNI: "flannel"
   FLANNEL_VERSION: "v0.28.4"
 

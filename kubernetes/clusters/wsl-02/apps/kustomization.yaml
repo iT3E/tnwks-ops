@@ -1,0 +1,23 @@
+---
+# homelab-wsl-02 apps. Starts with the platform only; apps join one by one
+# (each a ks.yaml from kubernetes/apps, like the trimmed overlays of
+# kubernetes/clusters/wsl/apps). A shared ks.yaml whose app has *.sops.yaml
+# files needs this cluster's age key on them first (.sops.yaml).
+#
+# NOT external-dns (networking/external-dns) until it is retired for
+# Terraform-owned DNS: a second instance with homelab-wsl's txtOwnerId and
+# policy: sync would delete homelab-wsl's public records.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # Namespaces. flux-system is owned here, not by flux-system/ (its
+  # kustomization.yaml drops the Namespace from that build).
+  - ../../../apps/flux-system/namespace.yaml
+  - ../../../apps/kube-system/namespace.yaml
+  # CNI and LoadBalancer IPs (Cilium LB IPAM + L2), instead of Flannel and
+  # MetalLB on homelab-wsl.
+  - ../../../apps/kube-system/cilium/ks.yaml
+  - ../../../apps/kube-system/cilium/config-ks.yaml
+  # Storage: this cluster's node names (see the file).
+  - ./local-path-provisioner-ks.yaml
+  - ../../../apps/kube-system/metrics-server/ks.yaml

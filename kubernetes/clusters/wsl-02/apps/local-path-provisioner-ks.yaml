@@ -1,0 +1,45 @@
+---
+# kubernetes/apps/kube-system/local-path-provisioner/ks.yaml for
+# homelab-wsl-02. The shared HelmRelease maps homelab-wsl's node names (and
+# keeps local-path-ext4 on homelab-wsl-worker-1 for its legacy PVs);
+# substitution is off for it (the setup script's ${...}), so the node map
+# is patched here instead: the same three classes on every node, all on the
+# distro's ext4 vhdx.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: local-path-provisioner
+  namespace: flux-system
+  labels:
+    substitution.flux.home.arpa/disabled: "true"
+spec:
+  path: ./kubernetes/apps/kube-system/local-path-provisioner/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+  patches:
+    - target:
+        group: helm.toolkit.fluxcd.io
+        kind: HelmRelease
+        name: local-path-provisioner
+      patch: |-
+        - op: replace
+          path: /spec/values/storageClassConfigs/local-path/nodePathMap
+          value:
+            - node: DEFAULT_PATH_FOR_NON_LISTED_NODES
+              paths: ["/var/lib/rancher/k3s/storage"]
+        - op: replace
+          path: /spec/values/storageClassConfigs/local-path-bulk/nodePathMap
+          value:
+            - node: DEFAULT_PATH_FOR_NON_LISTED_NODES
+              paths: ["/var/lib/rancher/k3s/storage/bulk"]
+        - op: replace
+          path: /spec/values/storageClassConfigs/local-path-ext4/nodePathMap
+          value:
+            - node: DEFAULT_PATH_FOR_NON_LISTED_NODES
+              paths: ["/var/lib/rancher/k3s/storage"]

@@ -1,0 +1,8 @@
+# flate --krmignore for the whole-tree render (-p kubernetes) in
+# .github/workflows/kubernetes.yaml. Patterns are relative to kubernetes/.
+#
+# A cluster entrypoint that has its own render step goes here: every cluster
+# defines flux-system/cluster-settings and cluster-secrets, and the whole-tree
+# render keeps one object per name, so a second reachable cluster would
+# substitute its settings into homelab-wsl's apps.
+clusters/wsl-02/
