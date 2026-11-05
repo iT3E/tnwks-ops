@@ -22,11 +22,10 @@
     group: root
     mode: "0644"
   register: usb_attach_unit
+  notify: Reload systemd
 
-- name: Reload systemd if the unit file changed
-  ansible.builtin.systemd:
-    daemon_reload: true
-  when: usb_attach_unit.changed
+- name: Flush the systemd reload before starting instances
+  ansible.builtin.meta: flush_handlers
 
 # A VID:PID contains ':', which must be escaped for the systemd instance name.
 # systemd-escape produces the on-disk name (e.g. 0658\x3a0200); the unit's %i
