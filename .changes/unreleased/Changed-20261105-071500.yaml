@@ -1,0 +1,3 @@
+kind: Changed
+body: "external-dns runs with `policy: upsert-only` instead of `sync`: it no longer deletes Cloudflare records. First step of moving the public records to Terraform; until then a second external-dns (homelab-wsl-02) can't delete homelab-wsl's records."
+time: 2026-11-05T07:15:00.000000000-08:00
