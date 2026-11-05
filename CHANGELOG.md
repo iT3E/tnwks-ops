@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.145.0 - 2026-11-05
+
+### Changed
+
+* The public Cloudflare records (the app names behind the tunnel and `ingress` itself) are managed by Terraform (`environments/prod/cloudflare/public-dns.tf`), adopted with `import` blocks from what external-dns created. Adding a public app is a line in `local.cf1_public_hosts`. external-dns stays in `upsert-only` until it is removed in the next step.
+
 ## v1.144.0 - 2026-11-05
 
 ### Changed
