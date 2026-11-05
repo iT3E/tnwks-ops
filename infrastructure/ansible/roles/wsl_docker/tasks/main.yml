@@ -7,6 +7,11 @@
     owner: root
     group: root
     mode: "0644"
+    timeout: 120
+  register: wsl_docker_key
+  until: wsl_docker_key is succeeded
+  retries: 3
+  delay: 10
 
 - name: Docker's apt repository
   ansible.builtin.copy:

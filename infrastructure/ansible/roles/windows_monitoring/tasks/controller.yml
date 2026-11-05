@@ -14,6 +14,12 @@
     dest: "{{ windows_monitoring_cache }}/{{ item.url | basename }}"
     checksum: "sha256:{{ item.sha256 }}"
     mode: "0644"
+    # GitHub release downloads sometimes take longer than the 10s default.
+    timeout: 120
+  register: windows_monitoring_download
+  until: windows_monitoring_download is succeeded
+  retries: 3
+  delay: 10
   loop:
     - "{{ windows_exporter_msi }}"
     - "{{ smartmontools_installer }}"
