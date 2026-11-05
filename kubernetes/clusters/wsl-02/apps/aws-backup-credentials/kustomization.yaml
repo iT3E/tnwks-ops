@@ -1,0 +1,25 @@
+---
+# homelab-wsl-02's backup credential refresher: the shared CronJob, RBAC and
+# script (kubernetes/apps/kopiur-system/aws-backup-credentials/app) with this
+# cluster's own certificate (CN homelab-wsl-02-backups). Its role and profile
+# ARNs are RA_* in kubernetes/clusters/wsl-02/cluster-settings.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./secret-certificate.sops.yaml
+  - ../../../../apps/kopiur-system/aws-backup-credentials/app/secret-sts.yaml
+  - ../../../../apps/kopiur-system/aws-backup-credentials/app/rbac.yaml
+  - ../../../../apps/kopiur-system/aws-backup-credentials/app/cronjob.yaml
+configMapGenerator:
+  - name: aws-backup-credentials-scripts
+    namespace: kopiur-system
+    files:
+      - ../../../../apps/kopiur-system/aws-backup-credentials/app/scripts/refresh.py
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled
+labels:
+  - pairs:
+      app.kubernetes.io/name: aws-backup-credentials
+      app.kubernetes.io/instance: aws-backup-credentials
