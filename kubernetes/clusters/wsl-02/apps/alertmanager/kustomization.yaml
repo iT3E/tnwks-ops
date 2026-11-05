@@ -1,0 +1,21 @@
+---
+# homelab-wsl-02's Alertmanager: the shared HelmRelease and config
+# (kubernetes/apps/monitoring/alertmanager/app) with this cluster's secrets:
+# the same Telegram bot and War Room, and its own healthchecks.io URLs
+# (checks homelab-wsl-02 and alert-delivery-wsl-02), so neither cluster's
+# heartbeat can stand in for the other's.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - ./secrets.sops.yaml
+  - ../../../../apps/monitoring/alertmanager/app/helmrelease.yaml
+configMapGenerator:
+  - name: alertmanager-configmap
+    files:
+      - ../../../../apps/monitoring/alertmanager/app/config/alertmanager.yml
+      - ../../../../apps/monitoring/alertmanager/app/config/telegram.tmpl
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled

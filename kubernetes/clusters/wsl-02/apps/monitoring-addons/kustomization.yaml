@@ -1,0 +1,14 @@
+---
+# kube-prometheus-stack-addons on homelab-wsl-02: the alerts that are about
+# this cluster itself (the chart's own Kubernetes rules come with the chart).
+# The Windows host, disk, router, Wi-Fi and app alerts stay on homelab-wsl,
+# which scrapes both Windows hosts; repeating them here would page twice.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - ../../../../apps/monitoring/kube-prometheus-stack/addons/alerts/heartbeats.yaml
+  - ../../../../apps/monitoring/kube-prometheus-stack/addons/alerts/oomkilled.yaml
+  - ../../../../apps/monitoring/kube-prometheus-stack/addons/alerts/resource-pressure.yaml
+  - ../../../../apps/monitoring/kube-prometheus-stack/addons/alerts/site-overrides.yaml
+  - ../../../../apps/monitoring/kube-prometheus-stack/addons/servicemonitors/alertmanager.yaml

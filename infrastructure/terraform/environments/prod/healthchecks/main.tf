@@ -48,12 +48,20 @@ locals {
       grace   = 4 * 60
     }
 
-    # homelab-wsl-02's heartbeat CronJob pings every 2 minutes
-    # (kubernetes/clusters/wsl-02/apps/heartbeat) until it has its own
-    # Alertmanager; then the Watchdog takes over, like homelab-wsl's.
+    # homelab-wsl-02's Alertmanager sends its Watchdog here every 2 minutes,
+    # like homelab-wsl's (kubernetes/clusters/wsl-02/apps/alertmanager).
     homelab-wsl-02 = {
-      desc    = "Heartbeat from a homelab-wsl-02 CronJob (every 2m). Down: the cluster can't run a pod, or WSL-02, its WSL or its wifi is offline. Check sce-rtr01 and homelab-wsl to tell which."
+      desc    = "Watchdog heartbeat from homelab-wsl-02 Alertmanager (every 2m). Down: its Prometheus, Alertmanager, the cluster, WSL-02, its WSL or its wifi is offline. Check sce-rtr01 and homelab-wsl to tell which."
       tags    = ["homelab-wsl-02"]
+      timeout = 3 * 60
+      grace   = 4 * 60
+    }
+    # homelab-wsl-02's AlertDeliveryHeartbeat: its Alertmanager is getting
+    # Telegram messages through. Its own check, so homelab-wsl's delivery
+    # can't hide a broken one here (and the other way round).
+    alert-delivery-wsl-02 = {
+      desc    = "Telegram delivery heartbeat from homelab-wsl-02 Alertmanager (every 2m). Down while homelab-wsl-02 is up: its Alertmanager can't deliver to the War Room."
+      tags    = ["homelab-wsl-02", "alertmanager"]
       timeout = 3 * 60
       grace   = 4 * 60
     }
