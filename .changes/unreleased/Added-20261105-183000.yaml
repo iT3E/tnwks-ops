@@ -1,3 +1,0 @@
-kind: Added
-body: "homelab-wsl-02 runs kopiur: its own kopia repository at `kopiur-homelab-wsl-02/` (the shared ClusterRepository takes `KOPIUR_PREFIX`, default `kopiur/`, so homelab-wsl is unchanged) and homelab-wsl's repository read-only (`homelab-wsl`: no maintenance, adoption Ignore) for restores of its snapshots. Snapshot policies come with the apps."
-time: 2026-11-05T18:30:00.000000000-08:00

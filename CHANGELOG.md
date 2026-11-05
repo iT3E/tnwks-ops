@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.153.0 - 2026-11-05
+
+### Added
+
+* homelab-wsl-02 runs kopiur: its own kopia repository at `kopiur-homelab-wsl-02/` (the shared ClusterRepository takes `KOPIUR_PREFIX`, default `kopiur/`, so homelab-wsl is unchanged) and homelab-wsl's repository read-only (`homelab-wsl`: no maintenance, adoption Ignore) for restores of its snapshots. Snapshot policies come with the apps.
+
 ## v1.152.0 - 2026-11-05
 
 ### Added
