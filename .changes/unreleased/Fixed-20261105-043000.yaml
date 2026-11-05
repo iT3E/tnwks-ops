@@ -1,3 +1,0 @@
-kind: Fixed
-body: "Postgres backup alerts work per CNPG cluster: `PostgresBackupStale` groups by cluster instead of namespace (a fresh backup of one cluster hid a stale one in the same namespace), and `PostgresWALArchivingStalled` fires when archiving keeps failing, not when an idle database has written no WAL for an hour. Ready for one cluster per app (`kubernetes/components/cnpg-cluster`)."
-time: 2026-11-05T04:30:00.000000000-08:00

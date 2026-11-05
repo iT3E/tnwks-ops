@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.139.1 - 2026-11-05
+
+### Fixed
+
+* Postgres backup alerts work per CNPG cluster: `PostgresBackupStale` groups by cluster instead of namespace (a fresh backup of one cluster hid a stale one in the same namespace), and `PostgresWALArchivingStalled` fires when archiving keeps failing, not when an idle database has written no WAL for an hour. Ready for one cluster per app (`kubernetes/components/cnpg-cluster`).
+
 ## v1.139.0 - 2026-11-05
 
 ### Added
