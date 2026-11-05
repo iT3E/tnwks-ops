@@ -25,11 +25,10 @@
     group: root
     mode: "0644"
   register: bridge_unit
+  notify: Reload systemd
 
-- name: Reload systemd if the unit file changed
-  ansible.builtin.systemd:
-    daemon_reload: true
-  when: bridge_unit.changed
+- name: Flush the systemd reload before starting instances
+  ansible.builtin.meta: flush_handlers
 
 - name: Enable and start tnwks-lan-bridge instances
   ansible.builtin.systemd:

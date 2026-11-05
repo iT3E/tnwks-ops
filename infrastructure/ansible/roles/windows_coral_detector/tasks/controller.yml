@@ -56,14 +56,10 @@
     path: "{{ coral_detector_cache }}/{{ item.path }}"
     checksum_algorithm: sha256
   loop:
-    - {
-        path: libusb/libusb-1.0.dll,
-        sha256: "{{ coral_detector_libusb_dll_sha256 }}",
-      }
-    - {
-        path: "{{ coral_detector_edgetpu_dll }}",
-        sha256: "{{ coral_detector_edgetpu_dll_sha256 }}",
-      }
+    - path: libusb/libusb-1.0.dll
+      sha256: "{{ coral_detector_libusb_dll_sha256 }}"
+    - path: "{{ coral_detector_edgetpu_dll }}"
+      sha256: "{{ coral_detector_edgetpu_dll_sha256 }}"
   loop_control:
     label: "{{ item.path }}"
   register: coral_detector_dll_stat

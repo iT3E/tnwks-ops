@@ -1,0 +1,60 @@
+---
+name: "Ansible"
+
+# Syntax-checks every playbook and runs ansible-lint, on the same pinned
+# controller the workstation uses (infrastructure/ansible/pyproject.toml,
+# uv.lock) and the pinned collections (requirements.yml). Needs no host or
+# secret; what a change would do to the hosts is the Ansible Check workflow's
+# job (docs/operations/ansible.md).
+
+on:
+  pull_request:
+    paths:
+      - "infrastructure/ansible/**"
+      - ".github/workflows/ansible.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "infrastructure/ansible/**"
+      - ".github/workflows/ansible.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: infrastructure/ansible
+    env:
+      ANSIBLE_CONFIG: ${{ github.workspace }}/infrastructure/ansible/ansible.cfg
+      # No SOPS key here, and neither check needs a host var's value.
+      ANSIBLE_VARS_ENABLED: host_group_vars
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: infrastructure/ansible/uv.lock
+
+      - name: Controller and collections
+        run: |
+          uv sync --locked --all-groups
+          uv run --locked ansible-galaxy collection install -r requirements.yml
+
+      - name: Syntax check
+        run: |
+          for p in playbooks/*.yml; do
+            uv run --locked ansible-playbook --syntax-check "$p"
+          done
+
+      - name: ansible-lint
+        run: uv run --locked ansible-lint --nocolor

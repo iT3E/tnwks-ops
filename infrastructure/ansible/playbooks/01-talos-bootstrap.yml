@@ -87,6 +87,8 @@
         - cluster_target == 'wsl'
         - cluster_containers.stdout | trim | length == 0
       register: cluster_create
+      # Only runs when no cluster containers exist.
+      changed_when: true
 
     - name: Fetch WSL kubeconfig
       ansible.builtin.command: >-

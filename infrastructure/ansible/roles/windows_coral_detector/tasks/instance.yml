@@ -65,10 +65,8 @@
   loop:
     - { path: "", rights: ReadAndExecute }
     - { path: '\logs\{{ coral_instance.id }}', rights: Modify }
-    - {
-        path: '\models',
-        rights: "{{ 'Modify' if coral_detector_allow_model_upload else 'ReadAndExecute' }}",
-      }
+    - path: '\models'
+      rights: "{{ 'Modify' if coral_detector_allow_model_upload else 'ReadAndExecute' }}"
   loop_control:
     label: "{{ item.path or '(root)' }} {{ item.rights }}"
   # The virtual account only resolves once the service exists.

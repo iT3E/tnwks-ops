@@ -37,10 +37,15 @@
       changed_when: false
       failed_when: false
 
-    - name: Install flux CLI if missing
+    # The upstream installer script; it picks the release and the binary.
+    - name: Install flux CLI if missing  # noqa: command-instead-of-module
       ansible.builtin.shell: |
-        curl -s https://fluxcd.io/install.sh | sudo bash
+        set -o pipefail
+        curl -fsS https://fluxcd.io/install.sh | sudo bash
+      args:
+        executable: /bin/bash
       when: flux_check.rc != 0
+      changed_when: true
 
     - name: Verify GITHUB_TOKEN is set
       ansible.builtin.fail:

@@ -51,7 +51,8 @@
 
     - name: Generate new age key for cluster
       ansible.builtin.command: age-keygen -o {{ age_key_file }}
-      when: not age_key_stat.stat.exists
+      args:
+        creates: "{{ age_key_file }}"
 
     - name: Set strict perms on age key
       ansible.builtin.file:
@@ -60,7 +61,10 @@
 
     - name: Read age public key
       ansible.builtin.shell: |
+        set -o pipefail
         grep '^# public key:' {{ age_key_file }} | awk '{print $4}'
+      args:
+        executable: /bin/bash
       register: age_pubkey
       changed_when: false
 
@@ -71,15 +75,21 @@
 
     - name: Apply flux-system namespace
       ansible.builtin.shell: |
+        set -o pipefail
         echo '{{ ns_yaml.stdout }}' | kubectl apply -f -
+      args:
+        executable: /bin/bash
       changed_when: true
 
     - name: Create sops-age secret in flux-system
       ansible.builtin.shell: |
+        set -o pipefail
         kubectl create secret generic sops-age \
           --namespace=flux-system \
           --from-file=age.agekey={{ age_key_file }} \
           --dry-run=client -o yaml | kubectl apply -f -
+      args:
+        executable: /bin/bash
       changed_when: true
 
     - name: Print backup reminder

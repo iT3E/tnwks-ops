@@ -1,0 +1,29 @@
+---
+# ansible-lint for infrastructure/ansible (`task ansible:lint`, and CI in
+# .github/workflows/ansible.yaml). Runs from this directory so it reads
+# ansible.cfg.
+profile: production
+
+exclude_paths:
+  - .venv/
+  # SOPS-encrypted: the ciphertext isn't meant to be readable YAML style.
+  - inventory/host_vars/*/secrets.sops.yml
+  # Application source the Coral role ships (Python, C), not Ansible.
+  - roles/windows_coral_detector/files/
+
+skip_list:
+  # Roles prefix their variables with a short name of their own
+  # (coral_detector_, lan_bridge_, usb_attach_, ...), and the inventory sets
+  # several of them; renaming every one to the full role name buys nothing.
+  - var-naming[no-role-prefix]
+  # Names like "{{ coral_instance.service }}: restart" put the instance first
+  # on purpose, so per-instance tasks read as a group in the output.
+  - name[template]
+  # Task names that start with a program's own lowercase name
+  # (windows_exporter, smartctl_exporter, sshd, vhdx).
+  - name[casing]
+
+warn_list:
+  # Inline PowerShell in win_powershell scripts has a few long lines that
+  # can't be wrapped without changing the script.
+  - yaml[line-length]

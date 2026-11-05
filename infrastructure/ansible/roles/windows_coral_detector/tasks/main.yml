@@ -36,18 +36,16 @@
     path: "{{ coral_detector_root }}{{ item }}"
     state: directory
   loop:
-    [
-      "",
-      '\bin',
-      '\app',
-      '\app\tnwks_detector',
-      '\models',
-      '\logs',
-      '\driver',
-      '\driver\amd64',
-      '\python',
-      '\uv-cache',
-    ]
+    - ""
+    - '\bin'
+    - '\app'
+    - '\app\tnwks_detector'
+    - '\models'
+    - '\logs'
+    - '\driver'
+    - '\driver\amd64'
+    - '\python'
+    - '\uv-cache'
   register: coral_detector_dirs
 
 - name: Note whether this is a check run against a host without the service yet
@@ -91,10 +89,8 @@
     - { src: uv/uv.exe, dest: uv.exe }
     - { src: "{{ coral_detector_edgetpu_dll }}", dest: edgetpu.dll }
     - { src: libusb/libusb-1.0.dll, dest: libusbreal.dll }
-    - {
-        src: "shim-{{ coral_detector_shim_id }}/libusb-1.0.dll",
-        dest: libusb-1.0.dll,
-      }
+    - src: "shim-{{ coral_detector_shim_id }}/libusb-1.0.dll"
+      dest: libusb-1.0.dll
   loop_control:
     label: "{{ item.dest }}"
   notify: Restart coral detectors
@@ -246,7 +242,10 @@
   ansible.windows.win_file:
     path: '{{ coral_detector_root }}\app\tnwks_detector\{{ item.path | replace("/", "\\") }}'
     state: directory
-  loop: "{{ query('community.general.filetree', coral_detector_src ~ '/tnwks_detector') | selectattr('state', 'equalto', 'directory') | rejectattr('path', 'search', '(^|/)(__pycache__|\\.)') | list }}"
+  loop: >-
+    {{ query('community.general.filetree', coral_detector_src ~ '/tnwks_detector')
+       | selectattr('state', 'equalto', 'directory')
+       | rejectattr('path', 'search', '(^|/)(__pycache__|\.)') | list }}
   loop_control:
     label: "{{ item.path }}"
 
@@ -254,7 +253,10 @@
   ansible.windows.win_copy:
     src: "{{ item.src }}"
     dest: '{{ coral_detector_root }}\app\tnwks_detector\{{ item.path | replace("/", "\\") }}'
-  loop: "{{ query('community.general.filetree', coral_detector_src ~ '/tnwks_detector') | selectattr('state', 'equalto', 'file') | selectattr('path', 'search', '\\.py$') | rejectattr('path', 'search', '(^|/)(__pycache__|\\.)') | list }}"
+  loop: >-
+    {{ query('community.general.filetree', coral_detector_src ~ '/tnwks_detector')
+       | selectattr('state', 'equalto', 'file') | selectattr('path', 'search', '\.py$')
+       | rejectattr('path', 'search', '(^|/)(__pycache__|\.)') | list }}
   loop_control:
     label: "{{ item.path }}"
   notify: Restart coral detectors
