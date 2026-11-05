@@ -1,0 +1,47 @@
+---
+name: "Healthchecks Apply"
+
+# Applies the healthchecks.io root module on merge to main, from the
+# self-hosted tnwks-ops-runner (docs/network/ci.md). Plan and apply run in one
+# job, so what is applied is exactly the plan computed here.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "infrastructure/terraform/environments/prod/healthchecks/**"
+      - "infrastructure/terraform/modules/healthchecks/**"
+      - ".github/actions/runner-terraform/**"
+      - ".github/workflows/healthchecks-*.yaml"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: healthchecks-terraform
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: "Healthchecks Apply"
+    runs-on: tnwks-ops-runner
+    timeout-minutes: 30
+    # No reviewer gate: merging to main is the approval. The prod environment
+    # only accepts deployments from protected branches.
+    environment:
+      name: prod
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Plan and apply
+        uses: ./.github/actions/runner-terraform
+        with:
+          root: prod/healthchecks
+          mode: apply
+          tf-api-token: ${{ secrets.TF_API_TOKEN }}

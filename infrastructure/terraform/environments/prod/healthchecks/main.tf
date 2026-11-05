@@ -1,5 +1,8 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 ## MAIN
+## Thin root module: modules/healthchecks holds the resources, this file the
+## values, and secrets.sops.yaml the API key.
+##
 ## Off-site heartbeats: things at home ping healthchecks.io on a schedule, and
 ## healthchecks.io messages Telegram when the pings stop. It catches what
 ## in-cluster alerting can't report on: a power cut, a WAN outage, the desktop
@@ -55,14 +58,17 @@ locals {
   }
 }
 
-resource "healthchecksio_check" "this" {
-  for_each = local.checks
+module "healthchecks" {
+  source = "../../../modules/healthchecks"
 
-  name    = each.key
-  desc    = each.value.desc
-  tags    = each.value.tags
-  timeout = each.value.timeout
-  grace   = each.value.grace
+  # The one Telegram integration, added in the UI (docs/operations/external-monitoring.md).
+  channel_kind = "telegram"
+  checks       = local.checks
+}
 
-  channels = [data.healthchecksio_channel.telegram.id]
+# The checks were created in this root before the module existed. The
+# healthchecks-apply run on merge records the moves. Safe to delete after it.
+moved {
+  from = healthchecksio_check.this
+  to   = module.healthchecks.healthchecksio_check.this
 }

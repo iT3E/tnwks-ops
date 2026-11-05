@@ -48,9 +48,13 @@ the stock `alertmanager.rules` select.
 
 ## Where things live
 
-- Checks: `infrastructure/terraform/environments/prod/healthchecks`, state in
-  Terraform Cloud `tnwks-healthchecks-prod` (execution mode local), applied
-  from the desktop with `task healthchecks:plan` / `task healthchecks:apply`.
+- Checks: `infrastructure/terraform/modules/healthchecks` (resources), values
+  in `infrastructure/terraform/environments/prod/healthchecks`, state in
+  Terraform Cloud `tnwks-healthchecks-prod` (execution mode local, so runs
+  execute on the runner, not in TFC). CI plans on the PR and applies on merge
+  on the self-hosted `tnwks-ops-runner` (`healthchecks-{plan,apply}.yaml`,
+  [`docs/network/ci.md`](../network/ci.md)). `task healthchecks:plan` /
+  `task healthchecks:apply` from the desktop are for break-glass only.
   `task healthchecks:status` lists each check's status and last ping.
 - Cluster pinger: `kubernetes/apps/monitoring/alertmanager/app/config/alertmanager.yml`,
   receivers `healthchecks` and `healthchecks-delivery`. The URLs are
@@ -72,7 +76,7 @@ Integrations and API keys can't be created through the API.
 1. Sign up at healthchecks.io (free tier: 20 checks).
 2. **Integrations > Telegram:** connect the HealthchecksBot to the chat that
    should get the messages. Terraform looks up the single Telegram integration
-   (`data.healthchecksio_channel.telegram`), so keep exactly one.
+   (`data.healthchecksio_channel.this` in the module), so keep exactly one.
 3. **Settings > API Access:** create a read-write API key (Terraform) and a
    ping key (the pingers). Store them in SOPS:
    - `environments/prod/healthchecks/secrets.sops.yaml`: `api_key`

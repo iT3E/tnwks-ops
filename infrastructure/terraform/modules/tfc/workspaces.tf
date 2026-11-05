@@ -63,8 +63,9 @@ resource "tfe_workspace_settings" "tnwks-unifi-prod_workspace_settings" {
   execution_mode = "local"
 }
 
-# healthchecks.io is a public API, but the key is read from SOPS on the
-# desktop, so runs are local like the Cloudflare root.
+# healthchecks.io is a public API, but the key is read from SOPS with the CI
+# age key on the self-hosted runner (healthchecks-{plan,apply}.yaml), so
+# execution is local, like the MikroTik and UniFi workspaces.
 resource "tfe_workspace" "tnwks-healthchecks-prod" {
   name              = "tnwks-healthchecks-prod"
   organization      = var.tfc_organization

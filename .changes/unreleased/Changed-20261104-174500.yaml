@@ -1,0 +1,3 @@
+kind: Changed
+body: "terraform: move the healthchecks.io checks into `modules/healthchecks` with `environments/prod/healthchecks` as a thin root (`moved` blocks, no checks recreated), and plan/apply both the healthchecks.io and Cloudflare roots in CI on the self-hosted runner (`healthchecks-{plan,apply}.yaml`, `cloudflare-{plan,apply}.yaml`, shared `.github/actions/runner-terraform`) instead of from the desktop"
+time: 2026-11-04T17:45:00.000000-08:00
