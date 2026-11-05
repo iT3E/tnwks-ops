@@ -1,3 +1,0 @@
-kind: Changed
-body: "Ansible: every Windows host and WSL distro script now ships with the role that deploys it (`roles/<role>/files/`), and `infrastructure/wsl-host/` is gone. The UniFi and Aruba backup timers (role `wsl_backups`) and the nightly Windows drift check (role `wsl_drift_check`) are Ansible roles on the WSL distro instead of `sudo install` tasks."
-time: 2026-11-04T13:00:00.000000000-08:00
