@@ -6,12 +6,13 @@ announcements on the Docker bridge instead of MetalLB). The plan and its
 phases are in the owner's project notes; the cluster's GitOps entry point is
 `kubernetes/clusters/wsl-02`.
 
-|                  |                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------- |
-| Docker network   | `homelab-wsl-02`, `10.6.0.0/24` (control plane `10.6.0.2`)                            |
-| Pods / services  | `10.42.0.0/16` / `10.43.0.0/16`                                                       |
-| LoadBalancer IPs | `10.6.0.200-10.6.0.220` (Cilium LB IPAM, `kubernetes/apps/kube-system/cilium/config`) |
-| Storage          | `local-path` (and `-bulk`, `-ext4`) on the distro's ext4 vhdx on C:                   |
+|                   |                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| Docker network    | `homelab-wsl-02`, `10.6.0.0/24` (control plane `10.6.0.2`)                            |
+| Cilium cluster ID | 2 (homelab-wsl is 1; Cluster Mesh, `docs/wsl/multi-site.md`)                          |
+| Pods / services   | `10.44.0.0/16` / `10.45.0.0/16`                                                       |
+| LoadBalancer IPs  | `10.6.0.200-10.6.0.220` (Cilium LB IPAM, `kubernetes/apps/kube-system/cilium/config`) |
+| Storage           | `local-path` (and `-bulk`, `-ext4`) on the distro's ext4 vhdx on C:                   |
 
 ## Bootstrap
 

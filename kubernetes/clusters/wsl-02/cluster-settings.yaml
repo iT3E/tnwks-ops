@@ -26,13 +26,17 @@ data:
   BULK_PVC_ACCESS_MODE: "ReadWriteOnce"
   CNPG_INSTANCES: "1"
   CNPG_INSTANCE_SIZE: "5Gi"
-  # Network (talos/wsl-02/patches/cluster.yaml)
-  CLUSTER_CIDR: "10.42.0.0/16"
-  SERVICE_CIDR: "10.43.0.0/16"
+  # Network (talos/wsl-02/patches/cluster.yaml). Cluster Mesh needs a unique
+  # cluster ID and pod ranges that don't overlap homelab-wsl's (ID 1,
+  # 10.42.0.0/16, 10.43.0.0/16): docs/wsl/multi-site.md "Addressing".
+  CILIUM_CLUSTER_ID: "2"
+  CLUSTER_CIDR: "10.44.0.0/16"
+  SERVICE_CIDR: "10.45.0.0/16"
   KUBE_VIP_ADDR: "127.0.0.1"
   # LoadBalancer IPs: Cilium LB IPAM + L2 announcements on the
   # homelab-wsl-02 Docker bridge (kubernetes/apps/kube-system/cilium/config),
-  # not MetalLB. Same offsets as homelab-wsl's 10.5.0.0/24. The METALLB_*
+  # not MetalLB. This is the cluster's own pool (e.g. its clustermesh-apiserver);
+  # the shared VIPs (10.10.95.0/24, over BGP) come with the routed network. Same offsets as homelab-wsl's 10.5.0.0/24. The METALLB_*
   # names are what shared apps read; any LB implementation honours their
   # spec.loadBalancerIP.
   LB_RANGE: "10.6.0.200-10.6.0.220"

@@ -50,7 +50,8 @@ spec:
       masquerade: true
     cluster:
       name: ${CLUSTER_NAME}
-      id: 1
+      # Unique per cluster for Cluster Mesh (docs/wsl/multi-site.md).
+      id: ${CILIUM_CLUSTER_ID:=1}
     hubble:
       enabled: true
       metrics:
