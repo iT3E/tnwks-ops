@@ -28,7 +28,7 @@ jobs:
     name: privacy
     permissions:
       contents: read
-    uses: iT3E/github-workflows/.github/workflows/privacy.yaml@39a44e0ed437699eaafe4b01afedd6063b69ee4d # v1.3.0
+    uses: iT3E/github-workflows/.github/workflows/privacy.yaml@282008593fefd7f0392c41c3127a630c091c3d1d # v1.4.1
     with:
       allow-missing-terms: true
     secrets:

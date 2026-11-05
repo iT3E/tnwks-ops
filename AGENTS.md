@@ -302,7 +302,8 @@ plus `talos/ms-01/patches/` are applied with `talosctl apply-config`.
   so they remain portable between WSL and MS-01.
 - Most app `HelmRelease`s use the `bjw-s` `app-template` chart from the
   HelmRepository in `kubernetes/flux/meta/helm/bjw-s.yaml`.
-- The generic CI (secret scan, privacy, labels, actionlint) is thin callers
+- The generic CI (secret scan, privacy, labels, actionlint, changelog,
+  release) is thin callers
   of the reusable workflows in
   [iT3E/github-workflows](https://github.com/iT3E/github-workflows), pinned
   `@<sha> # vX.Y.Z` and moved by Renovate. Change the logic there, not
