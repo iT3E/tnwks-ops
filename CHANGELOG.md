@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.144.0 - 2026-11-05
+
+### Changed
+
+* external-dns runs with `policy: upsert-only` instead of `sync`: it no longer deletes Cloudflare records. First step of moving the public records to Terraform; until then a second external-dns (homelab-wsl-02) can't delete homelab-wsl's records.
+
 ## v1.143.0 - 2026-11-05
 
 ### Changed
