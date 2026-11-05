@@ -1,0 +1,3 @@
+kind: Changed
+body: "Per-app CNPG clusters (`kubernetes/components/cnpg-cluster`) store their data on the cluster's default class (`local-path`, ext4 on every worker) instead of `STORAGE_CLASS_DATABASE` (worker-1-only `local-path-ext4` on homelab-wsl, which has no room), so each lands on whichever worker has room; `CNPG_STORAGE_CLASS` overrides it. The README explains two instances for an app whose database should move between workers."
+time: 2026-11-05T07:00:00.000000000-08:00
