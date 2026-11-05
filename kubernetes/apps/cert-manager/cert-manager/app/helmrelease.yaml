@@ -27,8 +27,15 @@ spec:
     keepHistory: false
   values:
     installCRDs: true
+    # The DNS-01 self-check (is the _acme-challenge TXT visible yet?) over
+    # DNS-over-HTTPS. Plain DNS to 1.1.1.1:53 is redirected to the MikroTik
+    # (Force-DNS), whose static *.internal.tnwks.us record answers
+    # _acme-challenge.internal.tnwks.us with NXDOMAIN, so the internal wildcard
+    # certificate never got past "not yet propagated" (seen 2026-11-05 on
+    # homelab-wsl-02; homelab-wsl's renewal on 2026-11-22 would have failed the
+    # same way). DoH (TCP 443) isn't redirected.
     extraArgs:
-      - --dns01-recursive-nameservers=1.1.1.1:53,9.9.9.9:53
+      - --dns01-recursive-nameservers=https://1.1.1.1/dns-query,https://9.9.9.9/dns-query
       - --dns01-recursive-nameservers-only
     podDnsPolicy: None
     podDnsConfig:

@@ -1,0 +1,3 @@
+kind: Fixed
+body: "cert-manager checks DNS-01 propagation over DNS-over-HTTPS: plain DNS is redirected to the MikroTik, whose `*.internal.tnwks.us` record answers the challenge name with NXDOMAIN, so the internal wildcard certificate could not be issued (homelab-wsl-02) or renewed (homelab-wsl, due 2026-11-22)."
+time: 2026-11-05T17:30:00.000000000-08:00
