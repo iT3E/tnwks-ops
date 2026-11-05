@@ -83,6 +83,11 @@ data:
 
   # Windows host (WSL gateway) — windows_exporter target
   WINDOWS_HOST_IP: "172.26.80.1"
+  # The Windows computer name (the `instance` of its metrics), and the other
+  # site's Windows host, scraped over the LAN (kube-prometheus-stack).
+  WINDOWS_HOST_NAME: "DESKTOP-HKE05KI"
+  PEER_WINDOWS_HOST_ADDR: "10.10.91.112"
+  PEER_WINDOWS_HOST_NAME: "WSL-02"
 
   # Ollama — runs as a native process on the WSL host (not in k8s), listening
   # on 0.0.0.0:11434. Pods reach it via the homelab-wsl docker bridge gateway

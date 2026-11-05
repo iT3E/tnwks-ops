@@ -1,0 +1,3 @@
+kind: Added
+body: "homelab-wsl's Prometheus scrapes the other site's Windows host (WSL-02) over the LAN, next to its own (`PEER_WINDOWS_HOST_ADDR`/`_NAME`, `WINDOWS_HOST_NAME` in cluster-settings), and the Windows alerts (CPU, memory, commit, paging, disk, host down, Ansible drift) apply to every scraped host per `instance` instead of only DESKTOP-HKE05KI."
+time: 2026-11-05T06:10:00.000000000-08:00

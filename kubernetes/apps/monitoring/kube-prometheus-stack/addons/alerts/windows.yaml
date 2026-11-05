@@ -3,36 +3,38 @@ apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: windows-alerts
+# Every Windows host homelab-wsl scrapes (job windows-exporter: its own and
+# the other site's), per `instance` (the Windows computer name).
 spec:
   groups:
     - name: windows
       rules:
         - alert: WindowsHostHighCPU
-          expr: 1 - avg(rate(windows_cpu_time_total{mode="idle",instance="DESKTOP-HKE05KI"}[10m])) > 0.9
+          expr: 1 - avg by (instance) (rate(windows_cpu_time_total{mode="idle",job="windows-exporter"}[10m])) > 0.9
           for: 15m
           labels:
             severity: warning
           annotations:
             summary: "Windows host CPU above 90% for 15m"
-            description: "DESKTOP-HKE05KI CPU at {{ $value | humanizePercentage }}"
+            description: "{{ $labels.instance }} CPU at {{ $value | humanizePercentage }}"
 
         - alert: WindowsHostHighMemory
-          expr: 1 - (windows_memory_physical_free_bytes{instance="DESKTOP-HKE05KI"} / windows_memory_physical_total_bytes{instance="DESKTOP-HKE05KI"}) > 0.9
+          expr: 1 - (windows_memory_physical_free_bytes{job="windows-exporter"} / windows_memory_physical_total_bytes{job="windows-exporter"}) > 0.9
           for: 10m
           labels:
             severity: warning
           annotations:
             summary: "Windows host memory above 90%"
-            description: "DESKTOP-HKE05KI memory at {{ $value | humanizePercentage }}"
+            description: "{{ $labels.instance }} memory at {{ $value | humanizePercentage }}"
 
         - alert: WindowsHostCriticalMemory
-          expr: 1 - (windows_memory_physical_free_bytes{instance="DESKTOP-HKE05KI"} / windows_memory_physical_total_bytes{instance="DESKTOP-HKE05KI"}) > 0.95
+          expr: 1 - (windows_memory_physical_free_bytes{job="windows-exporter"} / windows_memory_physical_total_bytes{job="windows-exporter"}) > 0.95
           for: 5m
           labels:
             severity: critical
           annotations:
             summary: "Windows host memory above 95%"
-            description: "DESKTOP-HKE05KI memory at {{ $value | humanizePercentage }} — risk of OOM"
+            description: "{{ $labels.instance }} memory at {{ $value | humanizePercentage }} — risk of OOM"
 
         # Commit charge vs commit limit (RAM + page file). This, not RAM %, is
         # what makes Windows fail allocations: at the limit it grows the
@@ -41,32 +43,32 @@ spec:
         # max 94.8%, mostly vmmemWSL (~39 GB commit). Same alertname for both
         # severities so the critical inhibits the warning.
         - alert: WindowsHostCommitHigh
-          expr: windows_memory_committed_bytes{instance="DESKTOP-HKE05KI"} / windows_memory_commit_limit{instance="DESKTOP-HKE05KI"} > 0.95
+          expr: windows_memory_committed_bytes{job="windows-exporter"} / windows_memory_commit_limit{job="windows-exporter"} > 0.95
           for: 15m
           labels:
             severity: warning
           annotations:
             summary: "Windows host commit charge above 95% of the commit limit"
             description: >-
-              DESKTOP-HKE05KI has committed
-              {{ with query "round(windows_memory_committed_bytes{instance='DESKTOP-HKE05KI'} / 2^30, 0.1)" }}{{ . | first | value }}{{ end }} GiB
-              of its {{ with query "round(windows_memory_commit_limit{instance='DESKTOP-HKE05KI'} / 2^30, 0.1)" }}{{ . | first | value }}{{ end }} GiB
+              {{ $labels.instance }} has committed
+              {{ with printf "round(windows_memory_committed_bytes{instance='%s'} / 2^30, 0.1)" $labels.instance | query }}{{ . | first | value }}{{ end }} GiB
+              of its {{ with printf "round(windows_memory_commit_limit{instance='%s'} / 2^30, 0.1)" $labels.instance | query }}{{ . | first | value }}{{ end }} GiB
               commit limit (RAM + page file) for 15m. Near the limit Windows grows
               the page file, then new allocations fail and apps crash or hang.
               Usual cause is vmmemWSL (the WSL VM that runs the cluster); cap it in
               .wslconfig, close apps, or raise the page file size.
 
         - alert: WindowsHostCommitHigh
-          expr: windows_memory_committed_bytes{instance="DESKTOP-HKE05KI"} / windows_memory_commit_limit{instance="DESKTOP-HKE05KI"} > 0.98
+          expr: windows_memory_committed_bytes{job="windows-exporter"} / windows_memory_commit_limit{job="windows-exporter"} > 0.98
           for: 5m
           labels:
             severity: critical
           annotations:
             summary: "Windows host commit charge above 98% of the commit limit"
             description: >-
-              DESKTOP-HKE05KI has committed
-              {{ with query "round(windows_memory_committed_bytes{instance='DESKTOP-HKE05KI'} / 2^30, 0.1)" }}{{ . | first | value }}{{ end }} GiB
-              of its {{ with query "round(windows_memory_commit_limit{instance='DESKTOP-HKE05KI'} / 2^30, 0.1)" }}{{ . | first | value }}{{ end }} GiB
+              {{ $labels.instance }} has committed
+              {{ with printf "round(windows_memory_committed_bytes{instance='%s'} / 2^30, 0.1)" $labels.instance | query }}{{ . | first | value }}{{ end }} GiB
+              of its {{ with printf "round(windows_memory_commit_limit{instance='%s'} / 2^30, 0.1)" $labels.instance | query }}{{ . | first | value }}{{ end }} GiB
               commit limit (RAM + page file) for 5m. Allocations are about to fail;
               apps and the WSL VM (the whole cluster) can crash. Free memory now:
               close apps or restart the heaviest one (usually vmmemWSL).
@@ -78,39 +80,39 @@ spec:
         # used on its own.
         - alert: WindowsHostPaging
           expr: >-
-            rate(windows_memory_swap_pages_written_total{instance="DESKTOP-HKE05KI"}[5m]) > 500
+            rate(windows_memory_swap_pages_written_total{job="windows-exporter"}[5m]) > 500
             and on (instance)
-            windows_memory_available_bytes{instance="DESKTOP-HKE05KI"} < 0.1 * windows_memory_physical_total_bytes{instance="DESKTOP-HKE05KI"}
+            windows_memory_available_bytes{job="windows-exporter"} < 0.1 * windows_memory_physical_total_bytes{job="windows-exporter"}
           for: 10m
           labels:
             severity: warning
           annotations:
             summary: "Windows host is swapping to the page file"
             description: >-
-              DESKTOP-HKE05KI has written {{ $value | humanize }} pages/s to the page
+              {{ $labels.instance }} has written {{ $value | humanize }} pages/s to the page
               file for 10m with only
-              {{ with query "round(windows_memory_available_bytes{instance='DESKTOP-HKE05KI'} / 2^30, 0.1)" }}{{ . | first | value }}{{ end }} GiB
+              {{ with printf "round(windows_memory_available_bytes{instance='%s'} / 2^30, 0.1)" $labels.instance | query }}{{ . | first | value }}{{ end }} GiB
               of RAM available. Everything on the host, the WSL VM included, slows
               down. Usual cause is vmmemWSL growing; close apps or cap WSL memory in
               .wslconfig.
 
         - alert: WindowsDiskCritical
-          expr: 1 - (windows_logical_disk_free_bytes{instance="DESKTOP-HKE05KI"} / windows_logical_disk_size_bytes{instance="DESKTOP-HKE05KI"}) > 0.9
+          expr: 1 - (windows_logical_disk_free_bytes{job="windows-exporter"} / windows_logical_disk_size_bytes{job="windows-exporter"}) > 0.9
           for: 10m
           labels:
             severity: critical
           annotations:
-            summary: "Windows disk {{ $labels.volume }} above 90% full"
+            summary: "Windows disk {{ $labels.volume }} on {{ $labels.instance }} above 90% full"
             description: "{{ $labels.volume }} at {{ $value | humanizePercentage }}"
 
         - alert: WindowsHostDown
-          expr: up{job="windows-exporter",instance="DESKTOP-HKE05KI"} == 0
+          expr: up{job="windows-exporter"} == 0
           for: 5m
           labels:
             severity: critical
           annotations:
             summary: "Windows host unreachable"
-            description: "DESKTOP-HKE05KI has been down for 5 minutes"
+            description: "{{ $labels.instance }} has been down for 5 minutes"
 
     # The nightly Ansible --check of the Windows host and its WSL distro (the
     # scheduled run of .github/workflows/ansible-hosts.yaml on the site's
@@ -134,8 +136,8 @@ spec:
             description: >-
               The nightly `--check` of playbooks/windows-host.yml and wsl-distro.yml for
               {{ $labels.instance }} reported
-              {{ with query "sum(tnwks_windows_drift_check_changed)" }}{{ . | first | value }}{{ end }} change(s),
-              {{ with query "sum(tnwks_windows_drift_check_failed)" }}{{ . | first | value }}{{ end }} failure(s)
+              {{ with printf "sum(tnwks_windows_drift_check_changed{instance='%s'})" $labels.instance | query }}{{ . | first | value }}{{ end }} change(s),
+              {{ with printf "sum(tnwks_windows_drift_check_failed{instance='%s'})" $labels.instance | query }}{{ . | first | value }}{{ end }} failure(s)
               (failed check-only assertions: .wslconfig, NIC power settings, power plan, sshd).
               The task names are in the summary of the latest scheduled Ansible Hosts run,
               the diffs in its age-encrypted log artifact; fix the host or the repo.
@@ -144,7 +146,8 @@ spec:
         - alert: WindowsHostDriftCheckStale
           expr: >-
             (time() - max by (instance) (tnwks_windows_drift_check_timestamp_seconds) > 30 * 3600)
-            or (absent(tnwks_windows_drift_check_timestamp_seconds) and on () up{job="windows-exporter"} == 1)
+            or (max by (instance) (up{job="windows-exporter"}) == 1
+                unless on (instance) tnwks_windows_drift_check_timestamp_seconds)
           for: 30m
           labels:
             severity: warning

@@ -1,5 +1,5 @@
 ---
-# Disk hardware health for DESKTOP-HKE05KI (the Windows host under the WSL cluster).
+# Disk hardware health for the Windows hosts (each site's own and the other's).
 # Sources:
 #   - smartctl_exporter (job smartctl-exporter, :9633) runs as the SYSTEM scheduled
 #     task \Prometheus\smartctl_exporter on the Windows host and reads SMART data
