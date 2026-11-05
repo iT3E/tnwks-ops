@@ -44,6 +44,7 @@ Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md)
 | [`operations/backups.md`](operations/backups.md) | Backups: what, where, why (S3 via barman-cloud and kopiur, Drive for UniFi and the switch), credentials, restores |
 | [`operations/external-monitoring.md`](operations/external-monitoring.md) | Off-site heartbeats (healthchecks.io): power, WAN and "cluster didn't come back" alerts |
 | [`operations/sops.md`](operations/sops.md) | Secrets: recipients, editing, re-keying |
+| [`operations/ansible.md`](operations/ansible.md) | Ansible: the pinned controller, the one inventory, running playbooks, adding a host |
 | [`operations/renew-kubeconfig-cert.md`](operations/renew-kubeconfig-cert.md) | Renewing the kubeconfig client certificate |
 | [`operations/renovate.md`](operations/renovate.md) | Renovate tiers, and how impact/high PRs reach Ori's reviewer agent |
 

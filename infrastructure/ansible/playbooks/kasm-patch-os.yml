@@ -1,9 +1,0 @@
-- import_playbook: kasm-stop.yml
-
-- hosts: kasm
-  roles:
-    - patch_os
-
-- import_playbook: kasm-stop.yml
-
-- import_playbook: kasm-start.yml

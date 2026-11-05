@@ -13,7 +13,7 @@
 ##
 ## Usage:
 ##   task mikrotik:bootstrap
-##   ansible-playbook -i inventory/mikrotik.yml playbooks/mikrotik-bootstrap.yml
+##   ansible-playbook playbooks/mikrotik-bootstrap.yml   (credentials in the environment)
 ## ---------------------------------------------------------------------------------------------------------------------
 
 - name: MikroTik RB5009 post-bootstrap verification

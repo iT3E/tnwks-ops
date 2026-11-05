@@ -1,3 +1,0 @@
-- import_playbook: kasm-stop.yml
-
-- import_playbook: kasm-start.yml

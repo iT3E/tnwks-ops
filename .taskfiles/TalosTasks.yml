@@ -6,7 +6,7 @@ tasks:
     desc: Destroy and recreate the WSL Talos Docker cluster
     cmds:
       - talosctl cluster destroy --name homelab-wsl || true
-      - ansible-playbook -i {{.ANSIBLE_DIR}}/inventory/wsl.yml {{.ANSIBLE_DIR}}/playbooks/01-talos-bootstrap.yml
+      - "{{.ANSIBLE}} ansible-playbook {{.ANSIBLE_DIR}}/playbooks/01-talos-bootstrap.yml -e talos_target=wsl"
 
   status:wsl:
     desc: Show status of the WSL Talos cluster
@@ -21,7 +21,7 @@ tasks:
   upgrade:wsl:
     desc: Roll the WSL Talos node containers onto talos/wsl/versions.yaml (one node at a time)
     cmds:
-      - ansible-playbook -i {{.ANSIBLE_DIR}}/inventory/wsl.yml {{.ANSIBLE_DIR}}/playbooks/05-talos-upgrade.yml
+      - "{{.ANSIBLE}} ansible-playbook {{.ANSIBLE_DIR}}/playbooks/05-talos-upgrade.yml -e talos_target=wsl"
 
   upgrade:wsl:dry-run:
     desc: Print the docker run each WSL node would get from talos/wsl/roll-node.sh (USERDATA hidden)

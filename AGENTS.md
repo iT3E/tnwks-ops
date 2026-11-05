@@ -57,12 +57,16 @@ task precommit:init   # once per clone
 task precommit:run
 ```
 
-To run a single Ansible playbook directly (e.g. when re-running just the
-SOPS-key step), use the inventory under `infrastructure/ansible/inventory/`:
+Ansible runs from one pinned controller (`infrastructure/ansible/pyproject.toml`
++ `uv.lock`, set up by `task ansible:init`) against one inventory
+(`infrastructure/ansible/inventory/hosts.yml`); `docs/operations/ansible.md` has the
+layout. To run a single playbook directly (e.g. when re-running just the
+SOPS-key step), go through the same controller:
 
 ```bash
+task ansible:init   # once per clone: uv environment + collections
 cd infrastructure/ansible
-ansible-playbook -i inventory/wsl.yml playbooks/03-sops-keys.yml
+ANSIBLE_CONFIG=$PWD/ansible.cfg uv run --locked ansible-playbook playbooks/03-sops-keys.yml -e talos_target=wsl
 ```
 
 ## Change workflow

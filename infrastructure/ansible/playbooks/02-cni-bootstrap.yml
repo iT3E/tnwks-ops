@@ -21,8 +21,8 @@
 # re-enables both via the HelmRelease once their dependencies exist.
 #
 # Run via:
-#   ansible-playbook -i inventory/wsl.yml   playbooks/02-cni-bootstrap.yml
-#   ansible-playbook -i inventory/ms-01.yml playbooks/02-cni-bootstrap.yml
+#   ansible-playbook playbooks/02-cni-bootstrap.yml                      # wsl
+#   ansible-playbook playbooks/02-cni-bootstrap.yml -e talos_target=ms-01
 
 - name: Bootstrap CNI
   hosts: localhost

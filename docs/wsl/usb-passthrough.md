@@ -82,7 +82,7 @@ usbipd attach --wsl --busid 4-1
 >   (`wsl_usb_attach_retired_devices`).
 >
 >   ```bash
->   task bootstrap:wsl-usb-attach          # idempotent; also part of `task bootstrap:wsl`
+>   task wsl-host:usb-attach              # idempotent; also part of `task bootstrap:wsl`
 >   ```
 >
 > - **The Windows Scheduled Task `tnwks-usb-attach`** (role
@@ -155,8 +155,7 @@ binds the whole host `/dev` tree at a dedicated `/hostdev` mountpoint (its
 CDC tty's only parent dir is `/dev` itself). See the `--device` caveat below.
 
 ```bash
-cd infrastructure
-ansible-playbook -i ansible/inventory/wsl.yml ansible/playbooks/01-talos-bootstrap.yml
+task talos:reset:wsl   # or the first step of task bootstrap:wsl
 ```
 
 The augmentation step is idempotent — re-runs are a no-op once
@@ -328,8 +327,8 @@ If any layer doesn't see the device, fix that layer before going up.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `usbipd list` shows device but `lsusb` in WSL is empty | Attach service not running (or `vhci_hcd` not loaded) | `systemctl status 'tnwks-usb-attach@*'`; if absent, `task bootstrap:wsl-usb-attach` |
-| Devices drop out after every WSL/Windows restart | `bind` is persistent; `attach` is per-session, and the WSL attach service isn't installed/enabled | `task bootstrap:wsl-usb-attach` (then confirm `systemctl is-enabled 'tnwks-usb-attach@0658:0200'`) |
+| `usbipd list` shows device but `lsusb` in WSL is empty | Attach service not running (or `vhci_hcd` not loaded) | `systemctl status 'tnwks-usb-attach@*'`; if absent, `task wsl-host:usb-attach` |
+| Devices drop out after every WSL/Windows restart | `bind` is persistent; `attach` is per-session, and the WSL attach service isn't installed/enabled | `task wsl-host:usb-attach` (then confirm `systemctl is-enabled 'tnwks-usb-attach@0658:0200'`) |
 | Pod crashes with "no such device" / zwave "is not a character device" | worker-2 container doesn't see the live node (stale `--device` snapshot, or attached after container start) | Re-run `task bootstrap:wsl` to recreate worker-2 with the `rslave` binds (Step 2) |
 | (usbip fallback only) Coral throws permission errors / `Failed to load delegate` | Coral firmware flip kicked it back to the Windows host at `18d1:9302` | `--auto-attach` should re-grab it; if stuck, `systemctl restart 'tnwks-usb-attach@18d1:9302'` or manually re-bind/attach the runtime VID (see Coral gotcha) |
 | Z-Wave controller "stuck" | wrong CDC path in hostPath | `talosctl -n <node> ls /hostdev \| grep ttyACM` (WSL) and confirm the overlay path |

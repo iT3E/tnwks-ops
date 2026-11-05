@@ -18,11 +18,7 @@ attached to the desktop.
 Driven by ansible — don't invoke `talosctl cluster create` directly:
 
 ```bash
-cd infrastructure
-ansible-playbook -i ansible/inventory/wsl.yml ansible/playbooks/01-talos-bootstrap.yml
-ansible-playbook -i ansible/inventory/wsl.yml ansible/playbooks/02-cni-bootstrap.yml
-ansible-playbook -i ansible/inventory/wsl.yml ansible/playbooks/03-sops-keys.yml
-ansible-playbook -i ansible/inventory/wsl.yml ansible/playbooks/04-flux-install.yml
+task bootstrap:wsl   # playbooks 01-04 (-e talos_target=wsl), then the WSL distro units
 ```
 
 `01-talos-bootstrap.yml` runs `talosctl cluster create docker` and then

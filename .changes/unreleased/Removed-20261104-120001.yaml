@@ -1,0 +1,3 @@
+kind: Removed
+body: "Ansible: the k3s, kube-vip, Kasm and Proxmox playbooks, roles and inventory, and the unused Galaxy roles and collections."
+time: 2026-11-04T12:00:01.000000000-08:00

@@ -30,10 +30,13 @@ git -C "$REPO_DIR" fetch --quiet --depth 1 origin main &&
   git -C "$REPO_DIR" checkout --quiet --force --detach FETCH_HEAD || exit 1
 commit=$(git -C "$REPO_DIR" rev-parse --short HEAD)
 
-inventory="$REPO_DIR/infrastructure/ansible/inventory/windows.yml"
-host=$(yq '.all.children.windows.hosts | keys | .[0]' "$inventory")
-address=$(yq ".all.children.windows.hosts.\"$host\".ansible_host" "$inventory")
-user=$(yq '.all.children.windows.vars.ansible_user' "$inventory")
+ansible_dir="$REPO_DIR/infrastructure/ansible"
+export ANSIBLE_CONFIG="$ansible_dir/ansible.cfg"
+inventory=$(uv run --project "$ansible_dir" --locked ansible-inventory --list) || exit 1
+host=$(jq -r '.windows_hosts.hosts[0]' <<<"$inventory")
+address=$(jq -r --arg h "$host" '._meta.hostvars[$h].ansible_host' <<<"$inventory")
+user=$(jq -r --arg h "$host" '._meta.hostvars[$h].ansible_user' <<<"$inventory")
+known_hosts="$ansible_dir/inventory/known_hosts"
 
 started=$(date +%s)
 (cd "$REPO_DIR" && task wsl-host:windows-check) >"$log" 2>&1
@@ -83,7 +86,7 @@ ps="\$ProgressPreference = 'SilentlyContinue'; \$b = [Convert]::FromBase64String
 ps+=" [IO.File]::WriteAllBytes(\"\$d\\$PROM_NAME.prom.tmp\", \$b);"
 ps+=" Move-Item -Force \"\$d\\$PROM_NAME.prom.tmp\" \"\$d\\$PROM_NAME.prom\""
 enc=$(printf '%s' "$ps" | iconv -t UTF-16LE | base64 -w0)
-ssh -o BatchMode=yes -o ConnectTimeout=20 -i "$WINDOWS_SSH_KEY" "$user@$address" \
+ssh -o BatchMode=yes -o ConnectTimeout=20 -o UserKnownHostsFile="$known_hosts" -o StrictHostKeyChecking=yes -i "$WINDOWS_SSH_KEY" "$user@$address" \
   "powershell.exe -NoProfile -NonInteractive -EncodedCommand $enc"
 push=$?
 [[ $push -eq 0 ]] || echo "could not write the metrics file on $host (ssh exit $push)" >&2

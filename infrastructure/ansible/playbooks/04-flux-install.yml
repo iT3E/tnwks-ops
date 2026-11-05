@@ -8,8 +8,8 @@
 #   - GITHUB_TOKEN environment variable (or 1Password CLI configured)
 #
 # Run via:
-#   ansible-playbook -i inventory/wsl.yml   playbooks/04-flux-install.yml
-#   ansible-playbook -i inventory/ms-01.yml playbooks/04-flux-install.yml
+#   ansible-playbook playbooks/04-flux-install.yml                      # wsl
+#   ansible-playbook playbooks/04-flux-install.yml -e talos_target=ms-01
 
 - name: Bootstrap Flux against GitHub repo
   hosts: localhost

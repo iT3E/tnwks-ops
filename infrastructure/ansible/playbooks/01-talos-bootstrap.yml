@@ -8,8 +8,8 @@
 # Idempotent — checks if the cluster already exists before recreating.
 #
 # Run via:
-#   ansible-playbook -i inventory/wsl.yml   playbooks/01-talos-bootstrap.yml
-#   ansible-playbook -i inventory/ms-01.yml playbooks/01-talos-bootstrap.yml
+#   ansible-playbook playbooks/01-talos-bootstrap.yml                      # wsl
+#   ansible-playbook playbooks/01-talos-bootstrap.yml -e talos_target=ms-01
 
 - name: Bootstrap Talos cluster
   hosts: localhost
@@ -26,6 +26,8 @@
     # creation the cluster follows tuppr's KubernetesUpgrade and
     # 05-talos-upgrade.yml; see docs/operations/cluster-upgrades.md.
     wsl_versions: "{{ lookup('ansible.builtin.file', talos_dir ~ '/versions.yaml') | from_yaml if cluster_target == 'wsl' else {} }}"
+    # Node addresses, from talos_clusters (inventory/group_vars/all/talos.yml).
+    talos_controlplane: "{{ talos_clusters[cluster_target].controlplane | default([]) }}"
 
   tasks:
     - name: Ensure talosctl is installed
@@ -313,12 +315,13 @@
     - name: Verify MS-01 node IPs are configured
       ansible.builtin.fail:
         msg: |
-          MS-01 inventory has placeholder IPs. Update
-          infrastructure/ansible/inventory/ms-01.yml with real MS-01 IPs
-          before running this playbook.
+          MS-01 has no controlplane addresses. Set
+          talos_clusters.ms-01.controlplane in
+          infrastructure/ansible/inventory/group_vars/all/talos.yml to the
+          real MS-01 IPs before running this playbook.
       when:
         - cluster_target == 'ms-01'
-        - groups['talos_controlplane'] is not defined or groups['talos_controlplane'] | length == 0
+        - talos_controlplane | length == 0
 
     - name: Apply controlplane config to each MS-01 node
       ansible.builtin.command: >-
@@ -326,16 +329,16 @@
         --insecure
         --nodes {{ item }}
         --file {{ talos_dir }}/controlplane.yaml
-      loop: "{{ groups['talos_controlplane'] | default([]) }}"
+      loop: "{{ talos_controlplane }}"
       when: cluster_target == 'ms-01'
       changed_when: true
 
     - name: Bootstrap etcd on first controlplane
       ansible.builtin.command: >-
-        talosctl bootstrap --nodes {{ groups['talos_controlplane'][0] }}
+        talosctl bootstrap --nodes {{ talos_controlplane[0] }}
       when:
         - cluster_target == 'ms-01'
-        - groups['talos_controlplane'] | default([]) | length > 0
+        - talos_controlplane | length > 0
       changed_when: true
       register: bootstrap_result
       failed_when:
@@ -345,11 +348,11 @@
     - name: Fetch MS-01 kubeconfig
       ansible.builtin.command: >-
         talosctl kubeconfig {{ kubeconfig_path }}
-        --nodes {{ groups['talos_controlplane'][0] }}
+        --nodes {{ talos_controlplane[0] }}
         --force
       when:
         - cluster_target == 'ms-01'
-        - groups['talos_controlplane'] | default([]) | length > 0
+        - talos_controlplane | length > 0
       changed_when: true
 
     - name: Show kubeconfig location

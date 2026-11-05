@@ -19,8 +19,8 @@ Network: VLAN 910 (10.10.91.0/24).
 
 - [ ] Rack and cable all 3 MS-01 nodes
 - [ ] Configure switch trunk on VLAN 910
-- [ ] Assign static IPs (10.10.91.11–13) and update
-      `infrastructure/ansible/inventory/ms-01.yml`
+- [ ] Assign static IPs (10.10.91.11–13) and update `talos_clusters.ms-01`
+      in `infrastructure/ansible/inventory/group_vars/all/talos.yml`
 - [ ] Decide and document the cluster VIP (probably 10.10.91.10) and update
       `KUBE_VIP_ADDR` in `kubernetes/clusters/ms-01/cluster-settings.yaml`
 - [ ] Reserve LB range in DHCP and update `LB_RANGE`/`METALLB_*_ADDR` in

@@ -1,5 +1,0 @@
-- name: Kasm Install
-  hosts: kasm
-  roles:
-    - ../roles/install_common
-  any_errors_fatal: true

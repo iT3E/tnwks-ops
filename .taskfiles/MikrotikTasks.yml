@@ -67,7 +67,7 @@ tasks:
       - |
         export ROUTEROS_USERNAME=$(sops -d "{{.MIKROTIK_TF_DIR}}/secrets.sops.yaml" | yq -r '.routeros_username')
         export ROUTEROS_PASSWORD=$(sops -d "{{.MIKROTIK_TF_DIR}}/secrets.sops.yaml" | yq -r '.routeros_password')
-        ansible-playbook -i inventory/mikrotik.yml playbooks/mikrotik-bootstrap.yml {{.CLI_ARGS}}
+        {{.ANSIBLE}} ansible-playbook playbooks/mikrotik-bootstrap.yml {{.CLI_ARGS}}
     preconditions:
       - sh: test -f "{{.MIKROTIK_TF_DIR}}/secrets.sops.yaml"
         msg: secrets.sops.yaml is missing; see infrastructure/mikrotik/bootstrap/README.md

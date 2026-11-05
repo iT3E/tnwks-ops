@@ -81,7 +81,7 @@ task wsl-host:lan-bridge   # socat units (WSL) + the Windows TCP half
 task wsl-host:udp-relays   # Windows UDP relays for 2055 and 6001
 ```
 
-- `wsl-host:lan-bridge` runs `playbooks/wsl-lan-bridge.yml` (role
+- `wsl-host:lan-bridge` runs `playbooks/wsl-distro.yml --tags lan-bridge` (role
   `wsl_lan_bridge`: socat, `/usr/local/bin/tnwks-lan-bridge`, the
   `tnwks-lan-bridge@.service` template, one instance per entry in
   `wsl_lan_bridge_instances`), then the Windows role `windows_lan_bridge`.

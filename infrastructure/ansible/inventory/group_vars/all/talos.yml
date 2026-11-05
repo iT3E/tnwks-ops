@@ -1,0 +1,17 @@
+---
+# The Talos clusters the bootstrap playbooks (01-05) stand up, keyed by the
+# talos_target they take as an extra var (`-e talos_target=ms-01`; default
+# wsl). Their nodes are addresses here, not inventory hosts: Talos has no SSH.
+talos_clusters:
+  # Talos in Docker on the WSL distro (talosctl cluster create docker).
+  wsl: {}
+  # 3x Minisforum MS-01, controlplane + worker each
+  # (allowSchedulingOnControlPlanes: true).
+  ms-01:
+    # TODO: the VIP on 10.10.91.0/24 once Cilium L2 announces it.
+    endpoint: https://10.10.91.1:6443
+    # TODO: placeholders until the MS-01 nodes are provisioned.
+    controlplane:
+      - 10.10.91.11
+      - 10.10.91.12
+      - 10.10.91.13

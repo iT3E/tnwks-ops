@@ -103,7 +103,7 @@ frigate pod (worker-2)                 Windows host DESKTOP-HKE05KI
 ## Several Corals
 
 One service per Coral. Add an entry to `coral_detector_devices` in
-`infrastructure/ansible/inventory/windows.yml`:
+the host's `infrastructure/ansible/inventory/host_vars/<host>/main.yml`:
 
 ```yaml
 coral_detector_devices:

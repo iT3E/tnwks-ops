@@ -1,0 +1,9 @@
+---
+# RouterOS over its REST API, from the controller (connection local).
+#
+# Credentials are NOT here. They come from SOPS, same as the Terraform root
+# module; `task mikrotik:bootstrap` exports them from
+# infrastructure/terraform/environments/prod/mikrotik/secrets.sops.yaml.
+ansible_connection: local
+routeros_username: "{{ lookup('env', 'ROUTEROS_USERNAME') | default('terraform', true) }}"
+routeros_password: "{{ lookup('env', 'ROUTEROS_PASSWORD') }}"
