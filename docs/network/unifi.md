@@ -86,6 +86,20 @@ Terraform reproduces the above, with three deliberate changes:
    with Kitchen.
 3. **DNS and gateway are the router** (`10.10.90.1`), so `unifi` resolves.
 
+Tuning added on 2026-11-04 from a measured Wi-Fi analysis (kept in the
+vault):
+
+- **Roaming Assistant on 5 GHz at -73 dBm** (`roaming_assistant_5g_rssi`). A
+  static TV stayed on Kitchen at -73 dBm for days after the 03:00 upgrade
+  rebooted Living Room, which it hears at -42.
+- **Kitchen 5 GHz at medium power** (was max, 22 dBm), to shrink its overlap
+  with Living Room.
+- **Master 2.4 GHz at high power** (was auto, 15 dBm), for the LIFX bulbs it
+  hears weakly.
+- Left alone on purpose: 802.11k (the provider has no setting for it), the
+  1 Mbps 2.4 GHz minimum rate (raising it can drop the LIFX), meshing and
+  the 03:00 auto-upgrade.
+
 ## How the APs reach the controller
 
 ```

@@ -27,6 +27,11 @@ resource "unifi_wlan" "main" {
   }
   pmf_mode       = "disabled"
   bss_transition = var.wlan.bss_transition
+  # UniFi Network 10.x keeps Roaming Assistant on the WLAN, not the radio.
+  roaming_assistant_na = var.wlan.roaming_assistant_5g_rssi == null ? null : {
+    enabled = true
+    rssi    = var.wlan.roaming_assistant_5g_rssi
+  }
   # 802.11r stays off: several old IoT clients fail to join FT-enabled SSIDs.
   fast_roaming_enabled = false
   hide_ssid            = false

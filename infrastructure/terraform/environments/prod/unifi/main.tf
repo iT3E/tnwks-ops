@@ -29,6 +29,13 @@ locals {
   # SW03 GE0/0/12 is in the living room; the AC-Pro on GE0/0/1 is in the master
   # bedroom (confirmed on site 2026-11-01).
   #
+  # Transmit power (2026-11-04 Wi-Fi analysis, in the vault under
+  # homelab-refactor/wifi-tuning): Kitchen 5 GHz drops from max (22 dBm) to
+  # medium so it overlaps Living Room less (clients ping-ponged between them,
+  # and a static TV stuck to Kitchen at -73 dBm). Master 2.4 GHz goes from
+  # auto (15 dBm) to high so the weak LIFX bulbs hear it better. Radios with
+  # no tx_power_mode stay on the controller's auto.
+  #
   # managed = false keeps an AP out of Terraform until it is pending or adopted,
   # so plans stay clean (CI applies on merge). Living Room's reset button broke
   # on 2026-11-01; it was reset by shorting the switch with the case open.
@@ -38,14 +45,14 @@ locals {
       mac     = local.secrets["ap_kitchen_mac"]
       ip      = "10.10.90.11"
       ng      = { channel = "1", ht = 20 }
-      na      = { channel = "40", ht = 40 }
+      na      = { channel = "40", ht = 40, tx_power_mode = "medium" }
       managed = true
     }
     master = {
       name    = "AP Master" # SW03 GE0/0/1, UAP-AC-Pro-Gen2
       mac     = local.secrets["ap_master_mac"]
       ip      = "10.10.90.12"
-      ng      = { channel = "11", ht = 20 }
+      ng      = { channel = "11", ht = 20, tx_power_mode = "high" }
       na      = { channel = "44", ht = 40 }
       managed = true
     }
@@ -101,6 +108,9 @@ module "unifi" {
   wlan = {
     ssid       = local.secrets["wlan_ssid"]
     passphrase = local.secrets["wlan_passphrase"]
+    # Pulls sticky 5 GHz clients off a distant AP, e.g. the TV that stayed on
+    # Kitchen at -73 dBm after the 03:00 upgrade rebooted Living Room.
+    roaming_assistant_5g_rssi = -73
   }
 
   management = {
