@@ -21,6 +21,12 @@
       <Interval>PT1M</Interval>
     </RestartOnFailure>
     <StartWhenAvailable>true</StartWhenAvailable>
+    <!-- Windows adds this block to every task; without it the check reports
+         the task as changed on every run. -->
+    <IdleSettings>
+      <StopOnIdleEnd>true</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
     <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
   </Settings>
   <Triggers>
