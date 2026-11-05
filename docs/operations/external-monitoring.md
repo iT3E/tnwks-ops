@@ -48,7 +48,8 @@ the stock `alertmanager.rules` select.
 
 ## Where things live
 
-- Checks: `infrastructure/terraform/environments/prod/healthchecks`, state in
+- Checks: `infrastructure/terraform/modules/healthchecks` (resources), values
+  in `infrastructure/terraform/environments/prod/healthchecks`, state in
   Terraform Cloud `tnwks-healthchecks-prod` (execution mode local), applied
   from the desktop with `task healthchecks:plan` / `task healthchecks:apply`.
   `task healthchecks:status` lists each check's status and last ping.
@@ -72,7 +73,7 @@ Integrations and API keys can't be created through the API.
 1. Sign up at healthchecks.io (free tier: 20 checks).
 2. **Integrations > Telegram:** connect the HealthchecksBot to the chat that
    should get the messages. Terraform looks up the single Telegram integration
-   (`data.healthchecksio_channel.telegram`), so keep exactly one.
+   (`data.healthchecksio_channel.this` in the module), so keep exactly one.
 3. **Settings > API Access:** create a read-write API key (Terraform) and a
    ping key (the pingers). Store them in SOPS:
    - `environments/prod/healthchecks/secrets.sops.yaml`: `api_key`

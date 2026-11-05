@@ -11,7 +11,8 @@ modules/
 │   ├── oidc/            # IAM OIDC provider + role that TFC workspaces assume
 │   └── identity/        # organizations, identity center, kms for sops
 ├── tfc/                 # Terraform Cloud project, workspaces, variable set
-└── cloudflare/          # one zone + its settings, WAF ruleset and DNS records
+├── cloudflare/          # one zone + its settings, WAF ruleset and DNS records
+└── healthchecks/        # healthchecks.io checks notifying one integration
 ```
 
 | Module | Called by | Provisions |
@@ -21,6 +22,7 @@ modules/
 | `tfc/` | `environments/bootstrap/aws-init` | Terraform Cloud project, the workspaces the other environments run in, and the project variable set carrying AWS credentials |
 | `aws/identity/` | `environments/bootstrap/aws-identity` | AWS Organizations prod account, Identity Center users/groups/permission sets, KMS key backing SOPS |
 | `cloudflare/` | `environments/prod/cloudflare` | One Cloudflare zone plus zone settings, custom WAF ruleset and DNS records. Instantiated once per domain |
+| `healthchecks/` | `environments/prod/healthchecks` | healthchecks.io heartbeat checks, all notifying one existing integration (looked up by kind) |
 
 ## Conventions
 

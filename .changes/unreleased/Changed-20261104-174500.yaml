@@ -1,0 +1,3 @@
+kind: Changed
+body: "terraform(healthchecks): move the healthchecks.io checks into `modules/healthchecks`; `environments/prod/healthchecks` is now a thin root that passes the values, with `moved` blocks so state carries over without recreating checks"
+time: 2026-11-04T17:45:00.000000-08:00

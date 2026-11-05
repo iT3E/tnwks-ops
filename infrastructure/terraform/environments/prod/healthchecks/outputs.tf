@@ -6,5 +6,5 @@
 # secret and lives in each pinger's SOPS file.
 output "check_slugs" {
   description = "Check slugs; API v1 derives them from the names."
-  value       = keys(healthchecksio_check.this)
+  value       = module.healthchecks.check_slugs
 }
