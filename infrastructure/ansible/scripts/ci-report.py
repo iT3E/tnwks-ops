@@ -38,9 +38,9 @@ def parse(lines):
             if task and (host, status, task) not in events:
                 events.append((host, status, task))
         elif m := RECAP.match(line):
-            t = totals.setdefault(m["host"], dict.fromkeys(COUNTS, 0))
-            for k in COUNTS:
-                t[k] += int(m[k])
+            # One ansible-playbook run with several playbooks prints a recap
+            # after each, cumulative: a host's last line is its total.
+            totals[m["host"]] = {k: int(m[k]) for k in COUNTS}
     return totals, events
 
 

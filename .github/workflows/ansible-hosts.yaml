@@ -10,7 +10,7 @@ name: "Ansible Hosts"
 #   push to main   apply
 #   schedule       nightly --check, counts written to the site's Windows host
 #                  for Prometheus (WindowsHostConfigDrift)
-#   dispatch       check or apply, by hand
+#   dispatch       check, drift or apply, by hand
 #
 # The repo is public, so are these logs: the job log and the PR comment carry
 # only recap counts and task names (scripts/ci-report.py). The full output,
@@ -31,9 +31,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: check (changes nothing) or apply
+        description: check (changes nothing), drift (check, then write the drift metrics) or apply
         type: choice
-        options: [check, apply]
+        options: [check, drift, apply]
         default: check
 
 permissions: {}
