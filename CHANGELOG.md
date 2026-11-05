@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.150.1 - 2026-11-05
+
+### Fixed
+
+* cert-manager checks DNS-01 propagation over DNS-over-HTTPS: plain DNS is redirected to the MikroTik, whose `*.internal.tnwks.us` record answers the challenge name with NXDOMAIN, so the internal wildcard certificate could not be issued (homelab-wsl-02) or renewed (homelab-wsl, due 2026-11-22).
+
 ## v1.150.0 - 2026-11-05
 
 ### Added
