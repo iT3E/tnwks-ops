@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.164.0 - 2026-11-06
+
+### Changed
+
+* The transcriber's replicas, upstream endpoints (Frigate RTSP, MQTT, LiteLLM, oauth2-proxy) and Helm wait come from cluster-settings, so another site can run it; TranscriberDown only fires where it's meant to run.
+
 ## v1.163.0 - 2026-11-06
 
 ### Added
