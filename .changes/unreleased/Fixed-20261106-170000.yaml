@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'UniFi on homelab-wsl-02: the UI''s login check uses the site''s oauth2-proxy URL instead of an in-cluster address that only exists on homelab-wsl, and the inform Service is global, so APs still informing the desktop (a cached `unifi` address) reach the controller over Cluster Mesh.'
+time: 2026-11-06T17:00:00.000000000-08:00

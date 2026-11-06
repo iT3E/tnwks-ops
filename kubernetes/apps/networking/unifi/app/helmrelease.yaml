@@ -168,6 +168,12 @@ spec:
         controller: unifi
         type: LoadBalancer
         loadBalancerIP: "${UNIFI_LB_ADDR}"
+        # Global too, so both sites' inform paths (LAN bridge -> this VIP) reach
+        # the controller wherever it runs. An AP that still has the other site's
+        # address cached for `unifi` keeps working, during a move and after.
+        annotations:
+          service.cilium.io/global: "true"
+          service.cilium.io/affinity: local
         ports:
           inform:
             port: 8080
@@ -190,7 +196,9 @@ spec:
           nginx.ingress.kubernetes.io/backend-protocol: HTTPS
           # Cognito login first (any tnwks-auth user; the pool is invite-only),
           # then UniFi's own login.
-          nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local:80/oauth2/auth"
+          # OAUTH2_PROXY_URL: in-cluster on homelab-wsl; homelab-wsl-02 asks
+          # homelab-wsl's over the LAN (it has no oauth2-proxy of its own).
+          nginx.ingress.kubernetes.io/auth-url: "${OAUTH2_PROXY_URL:=http://oauth2-proxy.auth.svc.cluster.local:80}/oauth2/auth"
           nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${INTERNAL_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
           # Cognito-backed sessions are split across multiple cookies; the
           # subrequest header chunk overflows nginx's default 4k buffer.
