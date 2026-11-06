@@ -1,5 +1,5 @@
 {
-  "_comment": "Apps bin/site-failover can move between homelab-wsl and homelab-wsl-02. prefix: the app's variable prefix in cluster-settings / site-overrides (<prefix>_REPLICAS, _PG_PRIMARY, _PG_PROMOTION_TOKEN, _BACKUP_SUSPEND). pvcs: copied with kopiur (policy on both sites); transfer_only: the snapshot is deleted after the restore (the PVC isn't backed up). docs/wsl/multi-site.md.",
+  "_comment": "Apps bin/site-failover can move between homelab-wsl and homelab-wsl-02. prefix: the app's variable prefix in cluster-settings / site-overrides (<prefix>_REPLICAS, _PG_PRIMARY, _PG_PROMOTION_TOKEN, _BACKUP_SUSPEND). pvcs: copied with kopiur (policy on both sites); transfer_only: the snapshot is deleted after the restore (for a PVC that isn't backed up). docs/wsl/multi-site.md.",
   "mealie": {
     "prefix": "MEALIE",
     "namespace": "production",
@@ -9,10 +9,17 @@
       "backup": "kopiur-policies"
     },
     "postgres": "mealie-pg",
-    "deployments": ["mealie"],
+    "deployments": [
+      "mealie"
+    ],
     "backup_schedule": true,
     "pvcs": [
-      { "name": "mealie-config", "policy": "mealie", "uid": 1000, "gid": 1000 }
+      {
+        "name": "mealie-config",
+        "policy": "mealie",
+        "uid": 1000,
+        "gid": 1000
+      }
     ],
     "check": {
       "deployment": "mealie",
@@ -23,17 +30,23 @@
   "transcriber": {
     "prefix": "TRANSCRIBER",
     "namespace": "production",
-    "kustomizations": { "db": "transcriber-db", "app": "transcriber" },
+    "kustomizations": {
+      "db": "transcriber-db",
+      "app": "transcriber",
+      "backup": "kopiur-policies"
+    },
     "postgres": "transcriber-pg",
-    "deployments": ["transcriber", "transcriber-frontend"],
-    "backup_schedule": false,
+    "deployments": [
+      "transcriber",
+      "transcriber-frontend"
+    ],
+    "backup_schedule": true,
     "pvcs": [
       {
         "name": "transcriber-audio",
         "policy": "transcriber",
         "uid": 1000,
-        "gid": 1000,
-        "transfer_only": true
+        "gid": 1000
       }
     ],
     "check": {

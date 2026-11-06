@@ -1,9 +1,8 @@
 ---
-# The transcriber's clip audio (transcriber-audio). Not backed up: there is no
-# SnapshotSchedule (docs/apps/transcriber.md, "Storage"). The policy is only
-# for moving the PVC between sites: a switchover (scripts/site-failover.py)
-# takes a one-off Snapshot here, restores it on the other site, then deletes
-# it (deletionPolicy Delete). Models aren't copied; they download again.
+# The transcriber's clip audio (transcriber-audio): nightly, on the site that
+# runs it (homelab-wsl-02 since 2026-11-05). Transcripts are in Postgres;
+# models aren't backed up (they download again). A switchover
+# (bin/site-failover) also takes a one-off snapshot here to copy the PVC.
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotPolicy
 metadata:
@@ -23,7 +22,26 @@ spec:
       runAsUser: 1000
       runAsGroup: 1000
   retention:
-    keepLatest: 1
+    keepLatest: 3
+    keepDaily: 7
+    keepWeekly: 4
+    keepMonthly: 6
   sources:
     - pvc:
         name: transcriber-audio
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: transcriber
+  namespace: production
+spec:
+  policyRef:
+    name: transcriber
+  schedule:
+    cron: "H 2 * * *"
+    runOnCreate: true
+    # Only where the transcriber runs: suspended on the standby site
+    # (TRANSCRIBER_BACKUP_SUSPEND in its cluster-settings; a switchover flips
+    # it in site-overrides).
+    suspend: ${TRANSCRIBER_BACKUP_SUSPEND:=false}
