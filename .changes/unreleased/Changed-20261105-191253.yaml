@@ -1,0 +1,3 @@
+kind: Changed
+body: 'docs: the fencing design for an unplanned failover between the WSL sites (site leases on the router, an app gate, a database fence).'
+time: 2026-11-05T19:12:53.290647987-08:00

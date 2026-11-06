@@ -445,6 +445,48 @@ the one decision that can cause split brain if wsl-01 is in fact alive, so
 it stays manual. When wsl-01 returns, its old primaries must be rebuilt as
 replicas from wsl-02 before anything fails back.
 
+### Fencing: one writer per app (site leases)
+
+The split-brain case: wsl-02 was promoted while wsl-01 was dead, and wsl-01
+comes back. Its etcd still says it's the primary (`<P>_PG_PRIMARY` from git,
+`<P>_REPLICAS=1`), so its Postgres starts as a primary on the old timeline,
+and the app starts writing to it before anyone can intervene. Both sites
+would then accept writes.
+
+A **site lease** per warm app names the one site allowed to write. Every
+writer checks it.
+
+- **Where it lives: the router.** It's a static DNS TXT record,
+  `<app>.lease.tnwks.local` → `homelab-wsl` or `homelab-wsl-02`.
+  - Why not S3: both sites share a house, so they lose power together. After
+    an outage the router and LAN are back within a minute, while the internet
+    may not be. A lease that needs S3 would keep Home Assistant off until the
+    ISP returns.
+  - Reading it needs no credentials: any pod does a DNS TXT lookup.
+  - `tnwks.local` has no wildcard, so the record can't be shadowed (RouterOS
+    checks match-subdomain entries first).
+- **Who writes it.** Terraform creates the records (`modules/mikrotik`,
+  `ignore_changes` on the text), and only `bin/site-failover` changes the
+  text, through the router's REST API. It uses a dedicated RouterOS user
+  whose address is limited to the two WSL hosts. The planned switchover moves
+  the lease just before promoting the new site. An unplanned `--promote` moves
+  it first, then promotes without a token.
+- **App gate.** Each warm app's pod has an initContainer that waits until the
+  lease names its own site (`${CLUSTER_NAME}`). A site that comes back after
+  losing its lease starts its apps, and they wait there instead of writing.
+  An unreadable lease (router down) also waits: fail closed.
+  `<P>_LEASE_GATE: "off"` in `site-overrides` is the escape hatch.
+- **Database fence.** A CronJob on each site checks every minute: if the
+  lease names the other site while this site's `<app>-pg` believes it's the
+  primary, it sets `cnpg.io/fencedInstances: '["*"]'` on that Cluster and
+  `SiteLeaseFenced` fires. That stops writers that don't go through the app,
+  such as finance-sync's CronJobs. Unfencing is manual, after the old
+  primary has been rebuilt as a replica of the new one (delete its Cluster and
+  PVC, bump `CNPG_SERVER_NAME`).
+- **What the lease doesn't cover.** A stateless app has nothing to split.
+  A site that's alive but can't reach the router has no LAN either, so it
+  can't take writes from anyone.
+
 ## Getting wsl-01 onto Cilium
 
 wsl-02 starts on Cilium with all of the above from its first bootstrap.
