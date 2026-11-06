@@ -356,7 +356,9 @@ spec:
           hajimari.io/group: Home
           hajimari.io/icon: mdi:cash-multiple
           # tnwks-auth login via oauth2-proxy, admins only.
-          nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local:80/oauth2/auth?allowed_groups=admins"
+          # OAUTH2_PROXY_URL: in-cluster on homelab-wsl; homelab-wsl-02 asks
+          # homelab-wsl's over the LAN (it has no oauth2-proxy of its own).
+          nginx.ingress.kubernetes.io/auth-url: "${OAUTH2_PROXY_URL:=http://oauth2-proxy.auth.svc.cluster.local:80}/oauth2/auth?allowed_groups=admins"
           nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${INTERNAL_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
           nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-Email"
           nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
