@@ -1,0 +1,3 @@
+kind: Fixed
+body: ingress-nginx-internal resolves names over IPv4 only, so homelab-wsl-02's auth subrequest to homelab-wsl's oauth2-proxy works (the router answers AAAA with NXDOMAIN).
+time: 2026-11-05T17:51:45.721647653-08:00
