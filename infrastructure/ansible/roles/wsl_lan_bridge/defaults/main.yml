@@ -24,3 +24,4 @@ wsl_lan_bridge_instances:
   - unifi-inform
   - rtsp
   - litellm
+  - prometheus

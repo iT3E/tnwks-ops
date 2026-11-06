@@ -1,0 +1,19 @@
+---
+# Prometheus for the other WSL site (docs/wsl/multi-site.md: each site
+# watches the other). It federates a few series from here through this site's
+# LAN bridge, port 9090, which only the other site's Windows host may use
+# (docs/wsl/lan-exposure.md); this is the VIP that bridge forwards to.
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-peer
+spec:
+  type: LoadBalancer
+  loadBalancerIP: "${PROMETHEUS_PEER_LB_ADDR}"
+  selector:
+    app.kubernetes.io/name: prometheus
+    operator.prometheus.io/name: kube-prometheus-stack-prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090

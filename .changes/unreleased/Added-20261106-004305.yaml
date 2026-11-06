@@ -1,0 +1,3 @@
+kind: Added
+body: 'Each WSL site watches the other: Prometheus federates from the other site over the LAN bridge (port 9090, peer only) and alerts when that site is unreachable or a standby replica falls behind its primary.'
+time: 2026-11-06T00:43:05.855735327-08:00

@@ -20,6 +20,7 @@ VECTOR_IP="${VECTOR_IP:-10.5.0.205}"
 UNIFI_IP="${UNIFI_IP:-10.5.0.206}"
 FRIGATE_RTSP_IP="${FRIGATE_RTSP_IP:-10.5.0.207}"
 LITELLM_IP="${LITELLM_IP:-10.5.0.208}"
+PROMETHEUS_IP="${PROMETHEUS_IP:-10.5.0.209}"
 
 # socat must exist on the WSL host. Apt-get on Ubuntu is fine.
 command -v socat >/dev/null || { echo "socat missing — sudo apt-get install -y socat"; exit 1; }
@@ -53,8 +54,10 @@ case "${1:-}" in
   # WSL-02): go2rtc's RTSP restream and LiteLLM.
   rtsp)    run 8554 "${FRIGATE_RTSP_IP}:8554"    TCP ;;
   litellm) run 4000 "${LITELLM_IP}:4000"         TCP ;;
+  # Prometheus federation for the other site (firewall: that site only).
+  prometheus) run 9090 "${PROMETHEUS_IP}:9090"   TCP ;;
   *)
-    echo "usage: $0 {http|https|mqtt|dns|netflow|syslog|unifi-inform|rtsp|litellm}" >&2
+    echo "usage: $0 {http|https|mqtt|dns|netflow|syslog|unifi-inform|rtsp|litellm|prometheus}" >&2
     exit 2
     ;;
 esac

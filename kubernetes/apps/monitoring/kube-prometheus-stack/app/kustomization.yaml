@@ -4,3 +4,6 @@ kind: Kustomization
 namespace: monitoring
 resources:
   - ./helmrelease.yaml
+  # The other WSL site: its federation VIP, and alerts about that site.
+  - ./peer-service.yaml
+  - ./peer-rules.yaml
