@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.175.0 - 2026-11-06
+
+### Changed
+
+* Firefly and finance-sync have their own Postgres clusters (firefly-pg, finance-sync-pg), imported from the shared one, which keeps its copies as the rollback.
+
 ## v1.174.0 - 2026-11-06
 
 ### Changed
