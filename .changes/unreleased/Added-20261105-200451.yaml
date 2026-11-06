@@ -1,0 +1,3 @@
+kind: Added
+body: task failover moves apps without a standby database too (StatefulSets, PVCs the restore creates); changedetection is deployed on homelab-wsl-02 at 0, ready to move there.
+time: 2026-11-05T20:04:51.250133107-08:00

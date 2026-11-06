@@ -7,3 +7,4 @@ kind: Kustomization
 resources:
   - ../../../../apps/kopiur-system/kopiur/policies/mealie.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/transcriber.yaml
+  - ../../../../apps/kopiur-system/kopiur/policies/changedetection.yaml
