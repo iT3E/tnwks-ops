@@ -45,5 +45,29 @@ locals {
       match_subdomain = true
       comment         = "homelab-wsl-02: changedetection"
     }
+    wsl02_immich = {
+      name            = "immich.internal.tnwks.us"
+      address         = local.wsl02_lan_address
+      type            = "A"
+      ttl             = "5m"
+      match_subdomain = true
+      comment         = "homelab-wsl-02: immich"
+    }
+    wsl02_immichframe = {
+      name            = "immichframe.internal.tnwks.us"
+      address         = local.wsl02_lan_address
+      type            = "A"
+      ttl             = "5m"
+      match_subdomain = true
+      comment         = "homelab-wsl-02: immichframe"
+    }
+    wsl02_kitchen_screensaver = {
+      name            = "kitchen-screensaver.internal.tnwks.us"
+      address         = local.wsl02_lan_address
+      type            = "A"
+      ttl             = "5m"
+      match_subdomain = true
+      comment         = "homelab-wsl-02: kitchen-screensaver"
+    }
   }
 }
