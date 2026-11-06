@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.196.0 - 2026-11-06
+
+### Added
+
+* Each WSL site watches the other: Prometheus federates from the other site over the LAN bridge (port 9090, peer only) and alerts when that site is unreachable or a standby replica falls behind its primary.
+
 ## v1.195.0 - 2026-11-06
 
 ### Changed
