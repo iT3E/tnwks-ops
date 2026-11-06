@@ -123,3 +123,6 @@ data:
   TRANSCRIBER_REPLICAS: "0"
   TRANSCRIBER_PG_PRIMARY: "homelab-wsl-02"
   TRANSCRIBER_BACKUP_SUSPEND: "true"
+  # changedetection: on homelab-wsl-02 since 2026-11-05; here at 0.
+  CHANGEDETECTION_REPLICAS: "0"
+  CHANGEDETECTION_BACKUP_SUSPEND: "true"

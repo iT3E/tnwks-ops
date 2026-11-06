@@ -1,0 +1,3 @@
+kind: Changed
+body: changedetection runs on homelab-wsl-02 (moved with task failover); its name resolves to WSL-02.
+time: 2026-11-05T20:20:26.376372017-08:00
