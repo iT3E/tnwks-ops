@@ -51,3 +51,29 @@
     groups: docker
     append: true
   when: not (ansible_check_mode and wsl_docker_repo is changed)
+
+# Talos-in-Docker node containers come back after a reboot, a `wsl --shutdown`
+# or a dockerd restart. talosctl 1.14 creates them with restart policy `no`
+# (homelab-wsl-02's three nodes), where older talosctl set `unless-stopped`
+# (homelab-wsl's). `docker update` changes the policy in place: no restart.
+- name: Talos node containers restart with Docker
+  ansible.builtin.shell: |
+    set -euo pipefail
+    dry="{{ ansible_check_mode | ternary('1', '') }}"
+    for c in $(docker ps -a --filter label=talos.owned=true --format '{{ "{{" }}.Names{{ "}}" }}'); do
+      p=$(docker inspect -f '{{ "{{" }}.HostConfig.RestartPolicy.Name{{ "}}" }}' "$c")
+      if [ "$p" != unless-stopped ]; then
+        if [ -n "$dry" ]; then
+          echo "would set $c ($p)"
+        else
+          docker update --restart unless-stopped "$c" >/dev/null
+          echo "set $c ($p)"
+        fi
+      fi
+    done
+  args:
+    executable: /bin/bash
+  register: wsl_docker_talos_restart
+  changed_when: wsl_docker_talos_restart.stdout | length > 0
+  check_mode: false
+  when: not (ansible_check_mode and wsl_docker_repo is changed)

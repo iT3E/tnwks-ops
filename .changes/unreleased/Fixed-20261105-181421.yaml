@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'homelab-wsl-02''s Talos node containers come back after a reboot: Ansible sets restart policy unless-stopped on every Talos node container (talosctl 1.14 creates them with no).'
+time: 2026-11-05T18:14:21.147006087-08:00
