@@ -1,0 +1,37 @@
+---
+# The transcriber's own CNPG cluster, databases/transcriber-pg, from
+# ../../../../components/cnpg-cluster (added by the transcriber-db Kustomization).
+#
+# First boot imports `transcriber` from the shared cluster (CNPG initdb.import,
+# microservice), as the owner role: the shared cluster has superuser access
+# off, and transcriber owns every object (the `vector` extension is
+# postgres's; the import's restore runs as this cluster's superuser and
+# creates it). bootstrap is only read when the Cluster is created; the shared
+# copy stays as the rollback.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./secret-transcriber-role.sops.yaml
+patches:
+  - target:
+      kind: Cluster
+    patch: |-
+      - op: add
+        path: /spec/bootstrap/initdb/import
+        value:
+          type: microservice
+          databases: [transcriber]
+          source:
+            externalCluster: postgres
+      - op: add
+        path: /spec/externalClusters
+        value:
+          - name: postgres
+            connectionParameters:
+              host: postgres-rw.databases.svc.cluster.local
+              user: transcriber
+              dbname: transcriber
+              sslmode: require
+            password:
+              name: postgres-transcriber
+              key: password

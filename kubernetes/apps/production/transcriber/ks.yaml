@@ -1,14 +1,51 @@
 ---
+# The transcriber's own Postgres (kubernetes/components/cnpg-cluster).
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: transcriber-db
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/production/transcriber/db
+  components:
+    - ../../../../components/cnpg-cluster
+  dependsOn:
+    - name: cloudnative-pg-plugin-barman-cloud
+    - name: aws-backup-credentials
+  # The owner role's Secret ships with it (db/secret-transcriber-role.sops.yaml).
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  prune: true
+  # The Cluster's Ready condition gates the transcriber; kstatus alone calls a
+  # Cluster with no status yet Current (components/cnpg-cluster/README.md).
+  wait: true
+  healthCheckExprs:
+    - apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      current: status.conditions.exists(e, e.type == 'Ready' && e.status == 'True')
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  interval: 30m
+  retryInterval: 1m
+  timeout: 15m
+  postBuild:
+    substitute:
+      CNPG_APP: transcriber
+      CNPG_SIZE: 2Gi
+---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
   name: transcriber
   namespace: flux-system
 spec:
-  # The `transcriber` database and role, the MQTT login and Frigate's speech
-  # topics must exist first; the alert rules need the PrometheusRule CRD.
+  # Its database, the MQTT login and Frigate's speech topics must exist
+  # first; the alert rules need the PrometheusRule CRD.
   dependsOn:
-    - name: cloudnative-pg-cluster
+    - name: transcriber-db
     - name: mosquitto
     - name: frigate
     - name: kube-prometheus-stack
