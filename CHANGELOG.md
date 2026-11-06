@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.211.0 - 2026-11-06
+
+### Added
+
+* A least-privilege path into Google Drive: nfs-server exports /gdrive-sync (cluster nodes write, squashed to one uid; the desktop only reads), UniFi's .unf lands there from whichever site runs the controller, and the desktop's tnwks-gdrive-sync copies new files into G:\My Drive\Backup\nfs-gdrive-sync, mounting only that folder and only inside its own unit. It replaces tnwks-unifi-backup.
+
 ## v1.210.1 - 2026-11-06
 
 ### Fixed
