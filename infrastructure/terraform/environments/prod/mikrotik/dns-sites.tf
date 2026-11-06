@@ -15,9 +15,10 @@ locals {
   # unplanned promote (bin/site-failover --promote refuses otherwise), and
   # back to "none" once that site's database has been rebuilt as a replica.
   site_leases = {
-    mealie      = "none"
-    transcriber = "none"
-    firefly     = "none"
+    mealie         = "none"
+    transcriber    = "none"
+    firefly        = "none"
+    home-assistant = "none"
   }
 
   site_dns_records = {
