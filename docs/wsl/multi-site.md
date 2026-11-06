@@ -245,6 +245,53 @@ hardware first. Frigate keeps its normal profile on wsl-02; dropped frames
 or recording gaps during a failover are accepted. When it's wired, move the
 DHCP reservation to the 2.5GbE port's MAC.
 
+### The router side in Terraform (not applied yet)
+
+The router half of the above is written but **not applied**: it reaches the
+router only when its pull request merges (`mikrotik-apply.yaml`), and the
+distro half (WireGuard, FRR, the forwarding rules, Ansible) doesn't exist
+yet, so the tunnels and sessions would stay down until it does. The inputs
+are hand-written in
+`infrastructure/terraform/environments/prod/mikrotik/site-tunnels.tf`; the
+BGP resources are `modules/mikrotik/bgp.tf`.
+
+| | `wg-site1` (homelab-wsl) | `wg-site2` (homelab-wsl-02) |
+| --- | --- | --- |
+| Router address / distro address | `10.10.33.1/30` / `10.10.33.2` | `10.10.34.1/30` / `10.10.34.2` |
+| Router listen port | 51823 | 51824 |
+| Accepted from (Windows host, VLAN 910) | `10.10.91.142` | `10.10.91.112` |
+| Firewall zone | `wsl-site1` | `wsl-site2` |
+| Distro FRR ASN | 64611 | 64612 |
+| Local preference for shared VIPs | 100 | 50 |
+
+- **WireGuard**: MTU 1420, no endpoint on the router side (the distro
+  dials in). Each peer's allowed addresses are its tunnel address, its node
+  subnet, its pod range and the VIP pool. The router's private keys are in
+  the MikroTik SOPS file; each distro's is `wsl_site_wireguard_private_key`
+  in `infrastructure/ansible/inventory/host_vars/<distro>/secrets.sops.yml`.
+  The router's public keys are the module's `wireguard_public_keys` output
+  once applied.
+- **Firewall**: to the router, each tunnel's UDP port from its Windows host
+  only, and tcp/179 from its distro's tunnel address only. Forward: VLAN 910
+  and the admin VPN (`vpn`) to each site's nodes, pods and the VIP pool;
+  site to site between nodes and pods (Cluster Mesh). Replies are the global
+  established/related accept. Nothing is opened from a site to the LAN or the
+  internet.
+- **BGP**: instance `as64600`, router ID `10.10.91.1`, one eBGP connection
+  per site to the distro's tunnel address, hold time 9 s, keepalive 3 s. In
+  from each site: its node subnet (exactly `/24`), its pod range (`/16` to
+  `/24`) and VIPs from `10.10.95.0/24` (only `/32`, so both sites announce
+  the same prefix and local preference decides). Out to each site: the other
+  site's node subnet and pod range, not the VIPs. Everything else is
+  rejected (a RouterOS filter chain's default).
+- **Not covered**: graceful restart can't be configured on the router
+  (provider v1.99.1 has no argument; RouterOS 7 has no setting), so it's for
+  Cilium and FRR in the distro. Site to LAN (MQTT clients, cameras over the
+  tunnel) stays closed until something needs it. The router's strict
+  reverse-path filter drops a VIP reply that comes back through the site
+  that isn't the VIP's best path; with connmark return routing in the distro
+  that shouldn't happen.
+
 ## Cluster Mesh
 
 ```mermaid

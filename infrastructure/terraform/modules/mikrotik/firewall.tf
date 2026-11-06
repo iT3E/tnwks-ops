@@ -174,14 +174,19 @@ resource "routeros_ip_firewall_filter" "input_mgmt" {
 
 # WireGuard on the out-of-band port as well, so the admin VPN can be tested end
 # to end on the bench (and used over a direct cable) before the router is ever
-# on the network.
+# on the network. Listeners with mgmt_port = false (the WSL site tunnels, each
+# with one LAN peer) are left out.
+locals {
+  mgmt_wireguard_ports = sort([for w in values(var.wireguard_interfaces) : tostring(w.listen_port) if w.mgmt_port])
+}
+
 resource "routeros_ip_firewall_filter" "input_mgmt_wireguard" {
-  count = var.mgmt == null || length(var.wireguard_interfaces) == 0 ? 0 : 1
+  count = var.mgmt == null || length(local.mgmt_wireguard_ports) == 0 ? 0 : 1
 
   chain        = "input"
   action       = "accept"
   protocol     = "udp"
-  dst_port     = join(",", sort([for w in values(var.wireguard_interfaces) : tostring(w.listen_port)]))
+  dst_port     = join(",", local.mgmt_wireguard_ports)
   in_interface = var.mgmt.interface
   comment      = "003 input: WireGuard on the out-of-band mgmt port (terraform)"
 }

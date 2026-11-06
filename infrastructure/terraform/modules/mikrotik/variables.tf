@@ -311,6 +311,9 @@ variable "wireguard_interfaces" {
     zone    = optional(string)
     comment = optional(string)
     mtu     = optional(string)
+    # Also answer on the out-of-band mgmt port (bench testing of the admin
+    # VPN). false for listeners whose only peer is a known LAN host.
+    mgmt_port = optional(bool, true)
     peers = map(object({
       public_key           = string
       allowed_address      = list(string)
@@ -632,5 +635,62 @@ variable "site_leases" {
   validation {
     condition     = alltrue([for v in values(var.site_leases) : contains(["none", "homelab-wsl", "homelab-wsl-02"], v)])
     error_message = "A site lease is \"none\" or a WSL site's CLUSTER_NAME."
+  }
+}
+
+variable "bgp" {
+  description = <<-EOT
+    eBGP with the WSL sites' distro FRR over their site tunnels
+    (docs/wsl/multi-site.md, "BGP"). null disables it. See bgp.tf.
+
+    as / router_id  - this router's ASN and BGP router ID
+    hold_time       - per session; keepalive_time a third of it
+    peers           - one connection each, keyed by a short name that also
+                      names its filter chains (bgp-in-<key>, bgp-out-<key>)
+      remote_address / remote_as - the distro's tunnel address and ASN
+      local_address  - this router's address on that tunnel
+      accept         - routes taken from the peer: a prefix, the prefix
+                       lengths allowed inside it (min_len..max_len, default
+                       exactly the prefix's own), and an optional local
+                       preference for them
+      export         - routes sent to the peer, same shape without local_pref
+
+    Everything not listed is rejected: that is a RouterOS filter chain's
+    default action. Entries in one list must not overlap, because the rules of
+    a chain are evaluated in an order Terraform doesn't control.
+  EOT
+  type = object({
+    as             = number
+    router_id      = string
+    instance       = optional(string) # default as<ASN>
+    hold_time      = optional(string, "9s")
+    keepalive_time = optional(string, "3s")
+    peers = map(object({
+      remote_address = string
+      remote_as      = number
+      local_address  = string
+      comment        = optional(string)
+      accept = list(object({
+        prefix     = string
+        min_len    = optional(number)
+        max_len    = optional(number)
+        local_pref = optional(number)
+      }))
+      export = optional(list(object({
+        prefix  = string
+        min_len = optional(number)
+        max_len = optional(number)
+      })), [])
+    }))
+  })
+  default = null
+
+  validation {
+    condition = var.bgp == null || alltrue(flatten([
+      for p in values(var.bgp.peers) : [
+        for e in concat(p.accept, p.export) : can(cidrnetmask(e.prefix)) && cidrhost(e.prefix, 0) == split("/", e.prefix)[0]
+      ]
+    ]))
+    error_message = "bgp: every accept/export prefix must be an IPv4 network address in CIDR form (e.g. 10.5.0.0/24)."
   }
 }
