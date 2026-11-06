@@ -25,7 +25,7 @@ wsl_site_routing_enabled: false
 # wsl_site_routing_cilium_asn:         64601           this site's Cilium nodes
 # wsl_site_routing_docker_network:     homelab-wsl     the Talos nodes' network
 # wsl_site_routing_node_subnet:        10.5.0.0/24
-# wsl_site_routing_pod_cidr:           10.42.0.0/16
+# wsl_site_routing_pod_cidr:           10.46.0.0/16
 # wsl_site_routing_remote_prefixes:    what the router sends: the other site's
 #                                      node subnet and pod CIDRs
 # The private key is wsl_site_wireguard_private_key (secrets.sops.yml).

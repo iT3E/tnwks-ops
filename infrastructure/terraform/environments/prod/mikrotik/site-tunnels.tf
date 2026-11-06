@@ -27,7 +27,7 @@ locals {
       peer_public_key = "VIsJtdr7dHsCCIjeCywO0r58PjCMrVoVZY4mL99SqAY="
       peer_as         = 64611
       node_subnet     = "10.5.0.0/24"
-      pod_cidr        = "10.42.0.0/16"
+      pod_cidr        = "10.46.0.0/16" # Cilium cluster-pool since 2026-11-06 (10.42 under Flannel)
       vip_local_pref  = 100
     }
     wsl-site2 = {
