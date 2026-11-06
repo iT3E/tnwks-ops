@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.171.0 - 2026-11-06
+
+### Changed
+
+* The transcriber runs on homelab-wsl-02 (moved with task failover); homelab-wsl keeps its standby.
+
 ## v1.170.0 - 2026-11-06
 
 ### Changed
