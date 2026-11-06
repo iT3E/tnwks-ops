@@ -15,10 +15,20 @@ apiVersion: v1alpha1
 kind: KubeFlannelCNIConfig
 $patch: delete
 ---
-# Cilium replaces kube-proxy (kubeProxyReplacement: true).
+# Cilium replaces kube-proxy (kubeProxyReplacement: true). Deleting the
+# KubeProxyConfig document alone doesn't turn kube-proxy off: Talos still
+# deploys its DaemonSet (found 2026-11-06). It also needs the v1alpha1 key,
+# which Talos accepts once the document is gone (KubeProxyConfig has no
+# `disabled` field). A running cluster gets it with `talosctl patch mc
+# --mode=no-reboot`, and the old DaemonSet has to be deleted by hand: Talos
+# stops managing it but doesn't remove it.
 apiVersion: v1alpha1
 kind: KubeProxyConfig
 $patch: delete
+---
+cluster:
+  proxy:
+    disabled: true
 ---
 # No external discovery service (discovery.talos.dev), like homelab-wsl.
 apiVersion: v1alpha1

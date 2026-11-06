@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'homelab-wsl-02 runs without kube-proxy: Talos kept deploying it next to Cilium''s kube-proxy replacement, because deleting the KubeProxyConfig document doesn''t disable it; the patch now also sets cluster.proxy.disabled.'
+time: 2026-11-06T02:50:00.000000000-08:00
