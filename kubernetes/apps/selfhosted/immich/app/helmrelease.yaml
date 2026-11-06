@@ -264,6 +264,11 @@ spec:
     service:
       server:
         controller: server
+        # Global across the WSL sites (Cilium Cluster Mesh): the other site's
+        # ingress (the shared VIP) reaches this app wherever it runs.
+        annotations:
+          service.cilium.io/global: "true"
+          service.cilium.io/affinity: local
         ports:
           http:
             port: *serverPort
@@ -294,6 +299,9 @@ spec:
           nginx.ingress.kubernetes.io/proxy-body-size: "0"
           nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
           nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+          # Through the Service's ClusterIP, not the pod endpoints: on the site
+          # where the app is at 0, only Cilium knows the other site's backends.
+          nginx.ingress.kubernetes.io/service-upstream: "true"
         hosts:
           - host: &host "immich.${INTERNAL_DOMAIN}"
             paths:
