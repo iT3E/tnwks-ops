@@ -125,5 +125,35 @@ spec:
         enabled: ${CILIUM_SERVICEMONITOR_ENABLED}
     rollOutCiliumPods: true
     autoDirectNodeRoutes: true
-    ipv4NativeRoutingCIDR: ${CLUSTER_CIDR}
+    # Pods reached without masquerading: the cluster's own range, or, with
+    # Cluster Mesh, a range covering both sites' pods (10.44.0.0/14 holds
+    # homelab-wsl-02's 10.44 and homelab-wsl's 10.46).
+    ipv4NativeRoutingCIDR: ${CILIUM_NATIVE_ROUTING_CIDR}
+    # Cluster Mesh between the WSL sites (docs/wsl/multi-site.md). The CA they
+    # share is the cilium-ca Secret itself (cilium/clustermesh), which the
+    # chart looks up when tls.ca.cert is unset. Each
+    # cluster's clustermesh-apiserver (KVStoreMesh) on a LoadBalancer VIP of
+    # its own node network, and the other site's to connect to. The other
+    # site's nodes aren't on-link, so their pod CIDRs follow the default
+    # route to the distro, which has them from BGP (directRoutingSkipUnreachable).
+    directRoutingSkipUnreachable: ${CILIUM_CLUSTERMESH_ENABLED:=false}
+    clustermesh:
+      useAPIServer: ${CILIUM_CLUSTERMESH_ENABLED:=false}
+      apiserver:
+        kvstoremesh:
+          enabled: true
+        service:
+          type: LoadBalancer
+          loadBalancerIP: "${CLUSTERMESH_APISERVER_IP:=}"
+        tls:
+          authMode: cluster
+          auto:
+            enabled: true
+            method: helm
+      config:
+        enabled: ${CILIUM_CLUSTERMESH_ENABLED:=false}
+        clusters:
+          - name: ${CLUSTERMESH_PEER_NAME:=none}
+            port: 2379
+            ips: ["${CLUSTERMESH_PEER_IP:=127.0.0.1}"]
     routingMode: native

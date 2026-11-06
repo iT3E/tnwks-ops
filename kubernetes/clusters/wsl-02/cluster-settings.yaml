@@ -45,6 +45,14 @@ data:
   # BGP to the distro's FRR at the bridge gateway (docs/wsl/multi-site.md,
   # "BGP": nodes AS 64602, distro AS 64612), and the shared VIP pool.
   CILIUM_BGP_ENABLED: "true"
+  # Cluster Mesh with homelab-wsl (docs/wsl/multi-site.md): this cluster's
+  # clustermesh-apiserver VIP, the peer's, and native routing for both sites'
+  # pods (10.44.0.0/14 covers 10.44 and 10.46).
+  CILIUM_CLUSTERMESH_ENABLED: "true"
+  CLUSTERMESH_APISERVER_IP: "10.6.0.210"
+  CLUSTERMESH_PEER_NAME: "homelab-wsl"
+  CLUSTERMESH_PEER_IP: "10.5.0.210"
+  CILIUM_NATIVE_ROUTING_CIDR: "10.44.0.0/14"
   CILIUM_BGP_LOCAL_ASN: "64602"
   CILIUM_BGP_PEER_ASN: "64612"
   CILIUM_BGP_PEER_ADDR: "10.6.0.1"

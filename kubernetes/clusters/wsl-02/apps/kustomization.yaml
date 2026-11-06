@@ -16,6 +16,8 @@ resources:
   # CNI and LoadBalancer IPs (Cilium LB IPAM + L2), instead of Flannel and
   # MetalLB on homelab-wsl.
   - ../../../apps/kube-system/cilium/ks.yaml
+  # The CA shared with the other WSL cluster, for Cluster Mesh.
+  - ../../../apps/kube-system/cilium/clustermesh-ks.yaml
   - ../../../apps/kube-system/cilium/config-ks.yaml
   # BGP to the distro's FRR (role wsl_site_routing) and the shared VIP pool.
   - ../../../apps/kube-system/cilium/bgp-ks.yaml
