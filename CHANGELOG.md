@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.189.2 - 2026-11-06
+
+### Fixed
+
+* task failover's final check works for apps checked with a command (Immich), not only a URL.
+
 ## v1.189.1 - 2026-11-06
 
 ### Fixed

@@ -1,3 +1,0 @@
-kind: Fixed
-body: task failover's final check works for apps checked with a command (Immich), not only a URL.
-time: 2026-11-05T21:32:23.529428966-08:00
