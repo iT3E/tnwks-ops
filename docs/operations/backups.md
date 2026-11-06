@@ -10,7 +10,7 @@ it back. The scenario playbooks that use these backups are in
 | --- | --- | --- | --- | --- | --- |
 | Postgres (every app database) | CloudNativePG barman-cloud plugin | WAL continuously, base backup 01:00 | S3 `cnpg/<cluster>/` | 30 days, point-in-time | minutes |
 | App config PVCs (list below) | kopiur (Kopia) | nightly 02:00-03:00 | S3 `kopiur/` | 3 latest, 7 daily, 4 weekly, 6 monthly | 24 h |
-| UniFi controller | controller auto-backup (`.unf`) + `tnwks-unifi-backup` | 02:00, copied 02:30 | controller PVC + Google Drive `Backup/unifi` | 14 on the controller, 30 in Drive | 24 h |
+| UniFi controller | controller auto-backup (`.unf`), `unifi-gdrive-copy` → nfs-server `/gdrive-sync` → `tnwks-gdrive-sync` | 02:00, 02:15, copied 02:30 | controller PVC + Google Drive `Backup/nfs-gdrive-sync/unifi` | 14 on the controller, 30 on the export, 30 in Drive | 24 h |
 | Aruba SW03 config | `tnwks-aruba-backup` | 02:45, saved when changed | Google Drive `Backup/aruba` | 60 versions | 24 h |
 | Everything declarative | git | every merge | GitHub | full history | 0 |
 | Terraform state | Terraform Cloud | every apply | TFC workspaces | TFC history | 0 |
@@ -164,9 +164,11 @@ kubectl cnpg status postgres -n databases     # "Continuous Backup status"
 kubectl get snapshotpolicies,snapshots -A
 # STS session expiry
 kubectl -n databases get secret aws-backup-sts -o jsonpath='{.metadata.annotations.backups\.tnwks\.us/expires}'
-# Desktop timers (UniFi copy, switch config)
-systemctl list-timers 'tnwks-*-backup.timer'
-journalctl -u tnwks-unifi-backup -u tnwks-aruba-backup -n 20
+# Desktop timers (Drive copy of the gdrive-sync export, switch config)
+systemctl list-timers 'tnwks-*.timer'
+journalctl -u tnwks-gdrive-sync -u tnwks-aruba-backup -n 20
+# The writer on the site that runs UniFi
+kubectl -n networking get cronjob unifi-gdrive-copy
 ```
 
 Alerts: `PostgresBackupStale` (no base backup in 30 h, per CNPG cluster), `PostgresWALArchivingStalled` (archiving failing for 15 min),
@@ -266,3 +268,24 @@ The files in Drive `Backup/aruba` are `show running-config` output. To restore,
 paste the relevant sections in config mode, or copy the file to the switch as
 its startup config over TFTP/SCP and reload. The `enable secret` is masked in
 the file and has to be set again.
+
+## Into Google Drive: the gdrive-sync drop box
+
+Backups bound for the desktop's Google Drive (`G:\My Drive\Backup\nfs-gdrive-sync`)
+go through one NFS export, so nothing in the clusters ever touches the Drive:
+
+1. **Writers** (cluster jobs on either site) write to nfs-server's `/gdrive-sync`
+   export (`10.5.0.3:/gdrive-sync`, host network on homelab-wsl's worker-1). Only
+   the six cluster nodes may write, and every client is squashed to uid/gid 1000,
+   the owner of the `0700` export root. Today: `networking/unifi-gdrive-copy`
+   (02:15, on the site that runs UniFi), the newest `.unf` into `unifi/`.
+2. **The desktop** (`tnwks-gdrive-sync.timer`, 02:30, role `wsl_backups`) mounts the
+   export read-only and only that one Drive folder, both inside the unit's own
+   mount namespace, copies files it doesn't have yet (never rewriting one), and
+   keeps the newest 30 per subfolder. The mounts go away with the run.
+
+Adding a writer: a job (or CronJob) with an `nfs:` volume on
+`10.5.0.3:/gdrive-sync`, its own subfolder, umask 077. The node it runs on must
+be in the export's client list (`storage/nfs-server` ConfigMap). The Drive copy
+picks it up on the next run.
+

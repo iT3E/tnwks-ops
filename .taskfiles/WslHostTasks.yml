@@ -145,7 +145,7 @@ tasks:
         vars: { CLI_ARGS: "--tags backups" }
 
   unifi-backup:
-    desc: Same as wsl-host:backups (both backup timers)
+    desc: Same as wsl-host:backups (the Google Drive copy, tnwks-gdrive-sync, and the switch config)
     cmds:
       - task: backups
 

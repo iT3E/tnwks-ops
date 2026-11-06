@@ -238,10 +238,13 @@ and 6-9.
     remotely, then let Terraform adopt it.
 - Auto-backups: daily at 02:00, 14 kept (`super_mgmt`, set by
   `task unifi:bootstrap`), on the `config` PVC
-  (`/config/data/backup/autobackup`), which is local-path on the desktop's
-  disk. `tnwks-unifi-backup.timer` (`task wsl-host:unifi-backup`) copies the
-  newest one at 02:30 to the Google Drive sync folder (`G:\My Drive\Backup\unifi`,
-  30 kept), so a dead desktop disk doesn't take the backups with it. A `.unf`
+  (`/config/data/backup/autobackup`), on whichever site runs the controller.
+  The `unifi-gdrive-copy` CronJob (02:15, only on that site) puts the newest one
+  on nfs-server's `/gdrive-sync` export, and the desktop's
+  `tnwks-gdrive-sync.timer` (02:30) copies it into Google Drive
+  (`G:\My Drive\Backup\nfs-gdrive-sync\unifi`, 30 kept), so a dead disk doesn't
+  take the backups with it (docs/operations/backups.md, "Into Google Drive").
+  Copies older than 2026-11-06 are in `G:\My Drive\Backup\unifi`. A `.unf`
   holds the Wi-Fi passphrase and the device keys (its encryption uses a
   well-known fixed key), so treat copies as secrets.
 
