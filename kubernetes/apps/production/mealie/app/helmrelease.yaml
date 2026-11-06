@@ -27,6 +27,8 @@ spec:
   values:
     controllers:
       mealie:
+        # Which site runs it (docs/wsl/multi-site.md, "Switching an app").
+        replicas: ${MEALIE_REPLICAS:=1}
         containers:
           app:
             image:
