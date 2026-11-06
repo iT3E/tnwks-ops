@@ -31,6 +31,8 @@ spec:
     - name: ingress-nginx
       namespace: networking
   values:
+    # Which site runs it (docs/wsl/multi-site.md, "Switching an app").
+    replicas: ${GRAFANA_REPLICAS:=1}
     deploymentStrategy:
       type: Recreate
     # init-chown-data runs busybox chown as root over the PVC. On WSL
