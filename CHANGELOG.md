@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.214.0 - 2026-11-06
+
+### Added
+
+* Home Assistant and Firefly have global Services too, and their and UniFi's internal Ingresses go through the Service, so either site's ingress serves every app that is deployed on both sites, wherever it runs.
+
 ## v1.213.0 - 2026-11-06
 
 ### Added

@@ -1,3 +1,0 @@
-kind: Added
-body: 'Home Assistant and Firefly have global Services too, and their and UniFi''s internal Ingresses go through the Service, so either site''s ingress serves every app that is deployed on both sites, wherever it runs.'
-time: 2026-11-06T20:15:00.000000000-08:00
