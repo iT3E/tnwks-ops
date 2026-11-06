@@ -21,7 +21,7 @@ desktop means no Home Assistant and no dashboards, but the house stays online.
 
 | What | If it fails | Mitigation |
 | --- | --- | --- |
-| The desktop (the whole WSL cluster, local-path PVCs, the UniFi controller) | Tier 2 and 3 down | Off-site backups (S3, Drive); rebuild from git |
+| The desktop (the whole WSL cluster, local-path PVCs, the UniFi controller) | Tier 2 and 3 down | Off-site backups (S3, Drive); rebuild from git. Warm standbys on WSL-02 (homelab-wsl-02) for Mealie; the transcriber runs there with its standby here (see "Moving an app between the sites") |
 | MikroTik RB5009 | No internet, DNS, DHCP, VPN | Config in Terraform; break-glass sheet in Drive `Backup/tnwks-ops-router-break-glass.txt`. The old VyOS box and EdgeRouter are kept powered off as a fallback |
 | Aruba SW03 | Wired LAN and the APs down | Config in Drive `Backup/aruba` |
 | An AP | One room without Wi-Fi | Replace, add it to `environments/prod/unifi`, adopt ([`../network/unifi.md`](../network/unifi.md)) |
@@ -89,6 +89,23 @@ RTO: under an hour. RPO: minutes (Postgres), last night (PVCs).
 
 Recovery bootstrap from S3, as in [`backups.md`](backups.md#postgres). Every
 app database comes back together. RTO: about an hour.
+
+### Moving an app between the sites (planned)
+
+Apps with a standby on the other WSL site (`bin/site-failover-apps.json`:
+Mealie, the transcriber) move with `task failover APP=<app> TO=<site>`
+([`../wsl/multi-site.md`](../wsl/multi-site.md#running-one-task-failover)):
+stop, copy the PVCs with kopiur, demote the old Postgres, promote the new one
+with the demotion token, start, check.
+
+- RPO: 0. The token makes the new primary replay to the old one's last LSN.
+- RTO, measured (2026-11-05): Mealie 54 s to wsl-02 and 47 s back, until the
+  app answers; the transcriber 83 s to wsl-02 (it stayed there).
+- Public names don't follow yet (cloudflared and the public ingress are on
+  wsl-01 only), so a public app that's moved is up but not reachable from
+  outside. Internal names do, through a router record per app.
+- An unplanned promote (the old site dead) has no tool yet: it needs fencing
+  for when the old site comes back ([`../wsl/multi-site.md`](../wsl/multi-site.md#unplanned-failure)).
 
 ### The desktop's disk dies, or the WSL cluster is unrecoverable
 
@@ -183,6 +200,10 @@ Once a year, and after any change to the backup setup:
       a table from each app database. Delete it.
 - [ ] kopiur: restore one PVC's newest snapshot into a scratch PVC and compare
       a few files with the live one.
+- [ ] Two sites: `task failover APP=mealie TO=homelab-wsl-02`, check, back
+      with `TO=homelab-wsl`, `task failover:clear APP=mealie`. Record the
+      timings. (Weekly, on its own: `kopiur-system/standby-restore` restores the
+      other site's newest snapshots into the standby's PVCs.)
 - [ ] UniFi: open the newest `.unf` in Drive (it should be from last night).
 - [ ] Aruba: the newest `Backup/aruba` file ends in `end`.
 - [ ] Credentials: the backup certificate isn't within 60 days of expiry
@@ -197,3 +218,5 @@ Drill log:
 | --- | --- | --- |
 | 2026-11-02 | First drill, right after setup. Postgres: recovery Cluster from S3 | All 9 databases back to the latest WAL in 80 s; Mealie recipe count and database sizes match |
 | 2026-11-02 | kopiur: newest Mealie snapshot into a scratch PVC | 171 files, checksums identical to the live volume |
+| 2026-11-05 | Two sites: the transcriber moved to homelab-wsl-02 with `task failover` (permanent) | 83 s down; 91 segments and 8 recordings on both, the 8 clip files copied; capture and MQTT up there |
+| 2026-11-05 | Two sites: Mealie to homelab-wsl-02 and back, twice | Second run (after the tool fixes): 54 s there, 47 s back, until the app answers. RPO 0: 67 recipes, 4 users and the schema revision identical at each step, all 171 config files on each side; Postgres timeline 1 → 5, the other side following as a replica every time |
