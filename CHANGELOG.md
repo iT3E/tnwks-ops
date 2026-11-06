@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.172.1 - 2026-11-06
+
+### Fixed
+
+* task failover waits for the app to answer on the new site before it reports done (a Deployment can be Ready before the app listens).
+
 ## v1.172.0 - 2026-11-06
 
 ### Added
