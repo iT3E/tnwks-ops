@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'homelab-wsl runs kube-proxy again: the kernel NFS client (the sites volume and the sites-builder runner) mounts the nfs-server ClusterIP, which Cilium''s kube-proxy replacement doesn''t translate for in-kernel clients, so the sites pages were down after a node restart.'
+time: 2026-11-06T11:35:00.000000000-08:00

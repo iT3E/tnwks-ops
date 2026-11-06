@@ -29,14 +29,14 @@
 # v1alpha1 config"): recreate homelab-wsl with talosctl < 1.14, or move it to
 # the multi-document form of talos/wsl-02/patches/.
 #
-# No kube-proxy: Cilium replaces it (kube-proxy replacement, since the move
-# from Flannel on 2026-11-06). A running cluster gets this with `talosctl
-# patch mc --mode=no-reboot`, plus deleting the old DaemonSet, which Talos
-# stops managing but doesn't remove.
+# kube-proxy stays on next to Cilium's kube-proxy replacement. Cilium handles
+# Services for pods and for host processes (socket LB), but not for the
+# kernel's own clients: the `nfs:` volumes (sites, the sites-builder runner)
+# mount the nfs-server ClusterIP from the kernel NFS client, and without
+# kube-proxy's iptables rules that mount times out (2026-11-06, #1830
+# reverted). Turn it off only once nothing mounts a ClusterIP.
 
 cluster:
-  proxy:
-    disabled: true
   controllerManager:
     extraArgs:
       # Delete finished pods promptly. Graceful node shutdowns (every WSL
