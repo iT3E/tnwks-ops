@@ -285,7 +285,7 @@ WSL forwards localhost, so a Windows browser can use `http://localhost:8123`.
      `https://hass.tnwks.us`. With SSO the app shows a code to enter in the
      phone's browser. This is hass-oidc-auth's device-code login. Registering
      the app isn't enough for alerts: every alert goes to the named phones in the
-     package's `phones`, so add a new adult's phone there (see Person alerts).
+     package's `phones`, so add a new adult there (see Person alerts, Adding an adult).
      Other app devices, like the kitchen wall tablet, get no alerts.
    - **LAN URL:** in the app, Settings > Companion app > (server) set *Internal
      URL* to `https://hass.internal.tnwks.us` and add the home Wi-Fi network(s).
@@ -306,81 +306,82 @@ to areas so the Overview dashboard fills in.
 ## Person alerts
 
 `config/packages/frigate_person_alerts.yaml` holds all of Frigate's person
-alerts: the night alerts to both adults' phones, and normal pushes while the adults
-are away or in a weekday window.
+alerts. Each adult has their own settings, in their own box on the Security
+dashboard's Alerts view, and nobody's settings change anyone else's alerts.
 
-### Night person alerts
+### Who gets what
 
-The night alerts send one Companion app push per
-Frigate review, the first time the review becomes a person alert. The push has
-a snapshot and an *Open in Frigate* button, and tapping it opens the camera
-grid. It fires for the cameras in `watched_cameras`, which is all of them,
-since every camera is exterior. It only fires between *Night alerts start* and
-*end* (set on the Alerts view, 23:00-06:00 now), and only while *Night person
-alerts* is on. Each alert also leaves an HA
-notification, one per camera.
+When a review on a watched camera (`watched_cameras`, all of them, since every
+camera is exterior) first becomes a person alert, each adult's phone gets at
+most one push, from the first of their own rules that applies:
 
-There are two tiers. Right now every watched camera is critical
-(`critical_cameras: "{{ watched_cameras }}"`). To tier them, give
-`critical_cameras` an explicit list, and the cameras left out send normal
-pushes. Turning *Critical night alerts* off drops everything to normal.
+| Rule | Applies when | Push |
+|---|---|---|
+| **At night** | on, and now inside their From/To (every night; a window that ends earlier than it starts runs overnight) | night alert; critical with *Ring through Do Not Disturb* on |
+| **When away from home** | *When I'm away*: they're away. *When everyone's away*: every adult in `phones` is away. `unknown`/`unavailable` doesn't count as away | normal |
+| **On a schedule** | on, today is one of their days, now inside their From/To, home or not (an overnight window's after-midnight part belongs to the day it started on) | normal |
+
+Night wins over the other two for that phone. The push's text says which rule
+sent it ("9:41 PM · Away"). The end of the review swaps in the animated
+preview silently, worked out again for whoever still qualifies. A night alert
+also leaves an HA notification, one per camera.
 
 | Tier | iOS | Android |
 |---|---|---|
-| Normal | time-sensitive: gets through Focus, not DND or mute | high priority, channel *Security alerts* |
+| Normal | active | high priority, channel *Security alerts* |
+| Night | time-sensitive: gets through Focus, not DND or mute | high priority, channel *Security alerts* |
 | Critical | critical alert: overrides DND and mute | alarm stream: rings through silent and vibrate, and through DND when alarms are allowed |
 
-The push goes through HA's mobile push relay (Apple/Google). The phone loads
-the snapshot from HA itself, through whichever URL the app is using, and the
-Frigate integration's notification proxy serves it.
+Every watched camera can ring critical right now
+(`critical_cameras: "{{ watched_cameras }}"`). Give `critical_cameras` an
+explicit list to tier them; night alerts from the rest are time-sensitive.
 
-To test it, move the start and end times on the Alerts view so the window
-covers now, then walk past a camera. Put the times back afterwards: they stay
-where you leave them (see below).
+One template decides all of this: the `plan` attribute of
+`sensor.person_alerts` (anchored as `person_alert_plan` in the package). The
+automations render the same template when a review arrives, and each box's
+**Right now** line reads the sensor, so the dashboard shows exactly what an
+alert would do. The sensor re-renders when a setting or a person changes and
+every minute.
 
-### Away and weekday alerts
+The push goes through HA's mobile push relay (Apple/Google), to the named
+phones in the package's `phones` map (legacy `notify.mobile_app_<device>`
+services). The phone loads the snapshot from HA itself, through whichever URL
+the app is using, and the Frigate integration's notification proxy serves it.
+Nothing calls the base `notify.notify`, which would also reach the kitchen
+wall tablet.
 
-Outside the night alerts (night window with *Night person alerts* on), the same
-person alerts send a **normal** push (high priority, channel *Security alerts*,
-no Do Not Disturb override, no in-app notification) to named phones:
+To test it, set your schedule (or night window) to cover now, then walk past a
+camera. Put the times back afterwards: they stay where you leave them.
 
-- **Away person alerts:** adult1's phone while `person.adult1` is away, and
-  adult2's phone too when `person.adult2` is also away. adult2 away alone sends
-  nothing. `unknown`/`unavailable` doesn't count as away.
-- **Weekday person alerts:** adult1's phone on the days picked
-  (`input_text.weekday_person_alerts_days`, a list like `mon,tue,wed`)
-  between *Weekday alerts start* and *end*, home or not. A window that ends
-  earlier than it starts runs overnight; the part after midnight belongs to
-  the day it started on.
+### Adding an adult
 
-A review that matches both still sends one push per phone, and the end of the
-review swaps in the animated preview silently, as at night. The phones are the
-`phones` variable in the package (legacy `notify.mobile_app_<device>`
-services), shared with the night alerts, so a new or renamed phone needs
-updating there. Nothing calls the base `notify.notify`, which would also reach
-the kitchen wall tablet.
+Add their phone to `phones`, copy an adult's `person_alerts_<adult>_*` helpers
+in the package, and add a `custom:tnwks-person-alerts-card` with their
+`person:` to the Alerts view. Set their box once after the deploy (new helpers
+start off, at 00:00 and with no days).
 
 ### The Alerts view
 
-The night and weekday windows each get a schedule card,
-`custom:tnwks-alert-schedule-card` (`config/www/tnwks-security/alert-schedule-card.js`,
-plain custom element, no build step): an on/off switch, a row of day buttons
-(weekday only) and native From/To time pickers, plus a one-line summary such as
-"Mon-Wed · 9:00 AM - 3:00 PM" that warns when no day is picked or From equals
-To. Every tap calls the helper's own service, so there is nothing to save.
-Bump the `?v=` on its resource in `configuration.yaml` with every change to the
-file.
+Each box is `custom:tnwks-person-alerts-card`
+(`config/www/tnwks-security/person-alerts-card.js`, plain custom element, no
+build step), configured with just `person: person.<adult>`. It finds that
+adult's helpers by name and shows: where they are, a **Right now** line
+(nothing / normal push / night alert / rings through Do Not Disturb, and
+why), and the three rules, each with a one-line summary in plain words, an
+on/off switch or the away choice, day buttons and native From/To pickers.
+Every tap calls the helper's own service, so there is nothing to save. Bump the
+`?v=` on its resource in `configuration.yaml` with every change to the file.
 
 ### Settings survive restarts
 
-Every switch and time on the Alerts view is a helper without `initial`, so HA
+Every setting on the Alerts view is a helper without `initial`, so HA
 restores its last value from `.storage/core.restore_state` (written at shutdown
 and every 15 minutes) after a restart or a config deploy. Set them on the
 dashboard, not in git. A helper with nothing to restore (a new one, or a lost
-`/config` volume) starts at HA's default, off or 00:00, so set it once on the
-dashboard after adding it. Don't add `initial` back: it overrides the restored
-value on every start, which is how the night window used to reset on every
-deploy.
+`/config` volume) starts at HA's default (off, 00:00, the first option, no
+days), so set it once on the dashboard after adding it. Don't add `initial`: it
+overrides the restored value on every start, which is how the night window
+used to reset on every deploy.
 
 ## Kitchen display
 

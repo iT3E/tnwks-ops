@@ -33,7 +33,7 @@ configMapGenerator:
       - config/www/tnwks-kitchen/kitchen-cards.js
   - name: home-assistant-www-security
     files:
-      - config/www/tnwks-security/alert-schedule-card.js
+      - config/www/tnwks-security/person-alerts-card.js
   - name: home-assistant-scripts
     files:
       - scripts/prepare-config.sh

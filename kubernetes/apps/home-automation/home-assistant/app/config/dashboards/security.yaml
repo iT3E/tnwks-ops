@@ -133,54 +133,37 @@ views:
     type: sections
     max_columns: 2
     sections:
-      # The schedule cards (switch, day buttons, time pickers) are ours:
-      # www/tnwks-security/alert-schedule-card.js.
+      # One box per adult, each with only that adult's own settings: our
+      # card, www/tnwks-security/person-alerts-card.js. Helpers and the
+      # template that decides who gets what: packages/frigate_person_alerts.yaml.
+      - type: grid
+        cards:
+          - type: custom:tnwks-person-alerts-card
+            person: person.adult1
+      - type: grid
+        cards:
+          - type: custom:tnwks-person-alerts-card
+            person: person.adult2
       - type: grid
         cards:
           - type: heading
-            heading: Night person alerts
-          - type: custom:tnwks-alert-schedule-card
-            title: Night alerts
-            switch: input_boolean.night_person_alerts
-            start: input_datetime.night_person_alerts_start
-            end: input_datetime.night_person_alerts_end
-            every_day: Every night
-          - type: tile
-            entity: input_boolean.night_person_alerts_critical
-            name: Critical
-          - type: tile
-            entity: automation.security_person_at_night
-            name: Automation
+            heading: How alerts are decided
           - type: markdown
             content: >-
-              Both phones. **Critical** rings through Do Not Disturb and
-              silent mode. Settings here survive restarts and config updates.
-      - type: grid
-        cards:
-          - type: heading
-            heading: Away and weekday alerts
+              When a camera sees a person, each phone gets **at most one**
+              push, based only on its owner's box above. **At night** wins:
+              inside the night window it's a night alert, and with *Ring
+              through Do Not Disturb* it rings even on silent. Otherwise
+              **When away** or **On a schedule** sends a normal push. The push
+              says which rule sent it. Settings are saved and stay as you
+              leave them through restarts and updates.
           - type: tile
-            entity: input_boolean.away_person_alerts
-            name: Away alerts
-          - type: tile
-            entity: automation.security_person_while_away_or_weekday
+            entity: automation.security_person_alert
             # The full alias gets cut off at this width.
-            name: Automation
-          - type: custom:tnwks-alert-schedule-card
-            title: Weekday alerts
-            switch: input_boolean.weekday_person_alerts
-            days: input_text.weekday_person_alerts_days
-            start: input_datetime.weekday_person_alerts_start
-            end: input_datetime.weekday_person_alerts_end
-          - type: markdown
-            # Names come from the person entities, not from git.
-            content: >-
-              {% set a1 = state_attr('person.adult1', 'friendly_name') %}
-              {% set a2 = state_attr('person.adult2', 'friendly_name') %}
-              Normal pushes outside the night window. **Away:** {{ a1 }}'s
-              phone while {{ a1 }} is out, and {{ a2 }}'s too when you're
-              both out. **Weekday:** {{ a1 }}'s phone on the days and times
-              picked above, home or not.
+            name: Alerts
+          - type: tile
+            entity: automation.security_person_alert_preview
+            name: Previews
       - type: grid
         cards:
           - type: heading
@@ -188,6 +171,5 @@ views:
           - type: logbook
             target:
               entity_id:
-                - automation.security_person_at_night
-                - automation.security_person_while_away_or_weekday
+                - automation.security_person_alert
             hours_to_show: 72
