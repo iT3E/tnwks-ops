@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.171.1 - 2026-11-06
+
+### Fixed
+
+* ingress-nginx-internal resolves names over IPv4 only, so homelab-wsl-02's auth subrequest to homelab-wsl's oauth2-proxy works (the router answers AAAA with NXDOMAIN).
+
 ## v1.171.0 - 2026-11-06
 
 ### Changed
