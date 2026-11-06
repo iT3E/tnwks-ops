@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.218.0 - 2026-11-06
+
+### Added
+
+* MQTT on a shared VIP: mqtt.internal.tnwks.us (10.10.95.11, homelab-wsl first) reaches the broker on whichever site runs it. homelab-wsl-02 deploys mosquitto at 0 as a standby, and the broker's Services are global; the per-site address behind the desktop's LAN bridge stays.
+
 ## v1.217.0 - 2026-11-06
 
 ### Added
