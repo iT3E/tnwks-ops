@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.194.3 - 2026-11-06
+
+### Fixed
+
+* The media stack's switchover restores with kopiur's privileged mode (a plain uid-0 mover has no capabilities and can't read other users' private files).
+
 ## v1.194.2 - 2026-11-06
 
 ### Fixed
