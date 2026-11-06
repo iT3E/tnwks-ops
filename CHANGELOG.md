@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.206.3 - 2026-11-06
+
+### Fixed
+
+* homelab-wsl's API server is quiet again: Cilium's LB IPAM, woken by the shared VIP pool, kept clearing the status of MetalLB's LoadBalancer Services while MetalLB rewrote it (about 480 API requests a second). On homelab-wsl Cilium now takes only Services that ask for its class.
+
 ## v1.206.2 - 2026-11-06
 
 ### Fixed
