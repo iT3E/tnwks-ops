@@ -115,15 +115,15 @@
       {
         "name": "immich-library",
         "policy": "immich-library",
-        "uid": 0,
-        "gid": 0,
+        "uid": 1000,
+        "gid": 1000,
         "transfer_only": true
       },
       {
         "name": "data-immich-postgres-0",
         "policy": "immich-postgres",
-        "uid": 0,
-        "gid": 0,
+        "uid": 999,
+        "gid": 999,
         "transfer_only": true,
         "create": {
           "capacity": "10Gi",
