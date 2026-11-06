@@ -3,7 +3,8 @@
 # "Deliberately not backed up"): no SnapshotSchedule. The policy is only for
 # moving the PVC between sites: a switchover (bin/site-failover) takes a
 # one-off snapshot here, restores it on the other site, then deletes it.
-# Immich runs as root and so does its Postgres, so the mover does too.
+# Unprivileged mover (1000): every file in the library is world-readable, so an unprivileged mover reads them all; restored files belong to it, which Immich (root) reads fine. kopiur refuses a root mover unless
+# the namespace opts in, which isn't needed.
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: SnapshotPolicy
 metadata:
@@ -20,8 +21,8 @@ spec:
     enabled: true
   mover:
     securityContext:
-      runAsUser: 0
-      runAsGroup: 0
+      runAsUser: 1000
+      runAsGroup: 1000
   retention:
     keepLatest: 1
   sources:

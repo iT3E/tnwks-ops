@@ -192,7 +192,7 @@ def wait(what, fn, timeout=900, every=10):
         if v:
             return v
         time.sleep(every)
-    die(f"timed out after {timeout}s waiting for {what}")
+    raise RuntimeError(f"timed out after {timeout}s waiting for {what}")
 
 
 def load_app(name):
@@ -353,9 +353,15 @@ def copy_pvc(old, new, app, pvc, stamp):
 
     def snapped():
         o = old.get("snapshot.kopiur.home-operations.com", snap, ns)
-        ph = o.get("status", {}).get("phase")
+        st = o.get("status", {})
+        ph = st.get("phase")
         if ph == "Failed":
-            die(f"{old.name}: Snapshot {snap} failed: {o['status'].get('logTail', '')[-300:]}")
+            raise RuntimeError(f"{old.name}: Snapshot {snap} failed: {st.get('logTail', '')[-300:]}")
+        # A condition that can't clear by itself (e.g. MoverPermitted=False):
+        # fail now instead of at the timeout.
+        for c in st.get("conditions", []):
+            if c.get("type") in ("MoverPermitted",) and c.get("status") == "False":
+                raise RuntimeError(f"{old.name}: Snapshot {snap}: {c.get('reason')}: {c.get('message', '')[:300]}")
         return o if ph == "Succeeded" else None
 
     o = wait(f"Snapshot {snap}", snapped)
@@ -384,7 +390,7 @@ def copy_pvc(old, new, app, pvc, stamp):
         o = new.get("restore.kopiur.home-operations.com", rst, ns)
         ph = o.get("status", {}).get("phase")
         if ph == "Failed":
-            die(f"{new.name}: Restore {rst} failed: {json.dumps(o['status'].get('failure', {}))[:300]} {o['status'].get('logTail', '')[-300:]}")
+            raise RuntimeError(f"{new.name}: Restore {rst} failed: {json.dumps(o['status'].get('failure', {}))[:300]} {o['status'].get('logTail', '')[-300:]}")
         return o if ph in ("Completed", "Succeeded") else None
 
     o = wait(f"Restore {rst}", restored)
@@ -428,8 +434,23 @@ def cmd_switchover(args):
     log(f"{old.name}: {args.app} stopped")
 
     if not args.skip_pvcs:
-        for pvc in app["pvcs"]:
-            copy_pvc(old, new, app, pvc, stamp)
+        try:
+            for pvc in app["pvcs"]:
+                copy_pvc(old, new, app, pvc, stamp)
+        except RuntimeError as e:
+            # Nothing has moved yet (the database is untouched): put the app
+            # back on the old site and stop.
+            log(f"ERROR: {e}")
+            log(f"rolling back: {args.app} starts again on {old.name}")
+            old.set_overrides(args.app, {})
+            old.reconcile(app["kustomizations"]["app"])
+            reconcile_backup(old, app)
+            try:
+                wait(f"{args.app} back on {old.name}", lambda: deployments_ready(old, app), timeout=900)
+                log(f"{old.name}: {args.app} running again; nothing changed on {new.name} except restored PVCs")
+            except RuntimeError as e2:
+                log(f"ERROR: {e2}")
+            sys.exit(1)
     t_pvcs = time.time()
 
     new_ov = {f"{p}_REPLICAS": "1"}
@@ -572,7 +593,10 @@ def main():
     s.add_argument("--yes", action="store_true")
     s.set_defaults(fn=cmd_clear)
     a = ap.parse_args()
-    a.fn(a)
+    try:
+        a.fn(a)
+    except RuntimeError as e:
+        die(str(e))
 
 
 if __name__ == "__main__":
