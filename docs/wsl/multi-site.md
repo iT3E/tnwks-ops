@@ -342,9 +342,9 @@ Every movable app is deployed on both clusters from the shared
   that mutates the cluster.
 - **CNPG** uses the same mechanism. Each warm app's Postgres runs in CNPG's
   distributed topology: one cluster per site, `spec.replica.primary` names
-  the site that's primary, and the standby streams from the primary over
-  the mesh (WAL from S3 stays as the fallback). The override sets
-  `primary` and the promotion token on both sides.
+  the site that's primary, and the standby replays the primary's WAL from
+  S3 (`kubernetes/components/cnpg-standby`; streaming over the mesh can come
+  later). The override sets `primary` and the promotion token on both sides.
 - An alert fires when a `site-overrides` ConfigMap has existed for more
   than 24 hours, so a failover can't quietly become the new normal.
 - Making a move permanent is an ordinary PR to `cluster-settings`, then

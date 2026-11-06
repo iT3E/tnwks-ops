@@ -9,10 +9,15 @@ spec:
   path: ./kubernetes/apps/production/mealie/db
   components:
     - ../../../../components/cnpg-cluster
+    - ../../../../components/cnpg-standby
   dependsOn:
     - name: cloudnative-pg-plugin-barman-cloud
     - name: aws-backup-credentials
-    - name: cloudnative-pg-cluster
+  # The owner role's Secret ships with it (db/secret-mealie-role.sops.yaml).
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
   prune: true
   # The Cluster's Ready condition gates Mealie. kstatus alone isn't enough: a
   # Cluster with no status yet counts as Current, so Mealie started before

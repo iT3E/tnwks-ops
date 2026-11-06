@@ -1,0 +1,51 @@
+---
+# yaml-language-server: $schema=https://json.schemastore.org/kustomization
+# CNPG distributed topology for a cluster from ../cnpg-cluster: the same
+# manifest on both sites, a primary on one and a replica cluster on the other,
+# fed from the primary's WAL archive in S3 (barman-cloud). List it after
+# cnpg-cluster. Usage: README.md next to this file.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  # The component names the Cluster ${CNPG_APP}-pg and Flux substitutes after
+  # the build, so match by kind.
+  - target:
+      kind: Cluster
+    patch: |-
+      # Only read when the Cluster is created: a new Cluster on either site
+      # restores from the peer's archive. Inert on a Cluster that exists.
+      - op: replace
+        path: /spec/bootstrap
+        value:
+          recovery:
+            source: ${CNPG_PEER:=${PEER_CLUSTER_NAME}}
+            # As in cnpg-cluster's initdb; without them CNPG defaults to `app`
+            # and generates a credentials Secret for a role that isn't there.
+            database: ${CNPG_DATABASE:=${CNPG_USER:=${CNPG_APP}}}
+            owner: ${CNPG_USER:=${CNPG_APP}}
+            secret:
+              name: ${CNPG_USER_SECRET:=postgres-${CNPG_APP}}
+      # The app adds replica.primary (its own <APP>_PG_PRIMARY variable, so
+      # failover flips one app at a time).
+      - op: add
+        path: /spec/replica
+        value:
+          self: ${CLUSTER_NAME}
+          source: ${CNPG_PEER:=${PEER_CLUSTER_NAME}}
+      # serverName set explicitly on both: the plugin falls back to the
+      # *local* Cluster name, which would read this site's own folder.
+      - op: add
+        path: /spec/externalClusters
+        value:
+          - name: ${CLUSTER_NAME}
+            plugin:
+              name: barman-cloud.cloudnative-pg.io
+              parameters:
+                barmanObjectName: ${CNPG_APP}-pg
+                serverName: ${CNPG_SERVER_NAME:=${CLUSTER_NAME}}
+          - name: ${CNPG_PEER:=${PEER_CLUSTER_NAME}}
+            plugin:
+              name: barman-cloud.cloudnative-pg.io
+              parameters:
+                barmanObjectName: ${CNPG_APP}-pg
+                serverName: ${CNPG_PEER_SERVER_NAME:=${CNPG_PEER:=${PEER_CLUSTER_NAME}}}

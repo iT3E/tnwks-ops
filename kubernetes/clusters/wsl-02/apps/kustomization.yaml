@@ -42,6 +42,10 @@ resources:
   # (kubernetes/components/cnpg-cluster).
   - ../../../apps/databases/namespace.yaml
   - ../../../apps/databases/cloudnative-pg/ks.yaml
+  # Warm standbys of homelab-wsl's apps: the app at 0 replicas
+  # (MEALIE_REPLICAS) and its database a replica cluster (cnpg-standby).
+  - ../../../apps/production/namespace.yaml
+  - ../../../apps/production/mealie/ks.yaml
   # Backup credentials: certificate -> STS session for barman-cloud and kopiur
   # (role tnwks-rolesanywhere-backups-wsl-02: read the bucket, write only
   # homelab-wsl-02's prefixes).

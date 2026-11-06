@@ -73,3 +73,10 @@ data:
   WINDOWS_HOST_NAME: "WSL-02"
   PEER_WINDOWS_HOST_ADDR: "10.10.91.142"
   PEER_WINDOWS_HOST_NAME: "DESKTOP-HKE05KI"
+  # The other site's CLUSTER_NAME: replica source for per-app CNPG clusters
+  # (kubernetes/components/cnpg-standby).
+  PEER_CLUSTER_NAME: "homelab-wsl"
+  # Warm standbys: deployed here at 0, their databases replicas of homelab-wsl's.
+  # Failover scales them up (docs/wsl/multi-site.md).
+  MEALIE_REPLICAS: "0"
+  MEALIE_HELM_DISABLE_WAIT: "true"

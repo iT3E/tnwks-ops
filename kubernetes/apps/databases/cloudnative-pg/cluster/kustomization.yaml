@@ -13,7 +13,6 @@ resources:
   - ./secret-things-api-role.sops.yaml
   - ./secret-packing-api-role.sops.yaml
   - ./secret-vaultwarden-role.sops.yaml
-  - ./secret-mealie-role.sops.yaml
   - ./secret-finance-sync-role.sops.yaml
   - ./database-finance-sync.yaml
   - ./database-mealie.yaml

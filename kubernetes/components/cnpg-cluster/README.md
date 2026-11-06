@@ -184,7 +184,7 @@ patches:
 `bootstrap` is only read when the Cluster is created, so the patch can be
 removed after the import.
 
-## Restore and standby (later)
+## Restore and standby
 
 The component is the primary-side half. Both build on it with patches or a
 second component, not by changing this one:
@@ -196,7 +196,7 @@ second component, not by changing this one:
   delete the Cluster and its PVC, merge. Set `CNPG_SERVER_NAME` to a new
   generation first: barman refuses to archive a new timeline into a non-empty
   folder. Same flow as the shared cluster in `docs/operations/backups.md`.
-- **Standby on homelab-wsl-02.** The same manifests on both sites (same
+- **Standby on homelab-wsl-02:** `../cnpg-standby` (Mealie first). The same manifests on both sites (same
   Cluster and ObjectStore names, same role Secrets, so wsl-02's age key must
   decrypt them), plus `replica.self/primary/source` and two `externalClusters`
   (`homelab-wsl` and `homelab-wsl-02`) reading `cnpg/<app>/<site>/`. wsl-02
