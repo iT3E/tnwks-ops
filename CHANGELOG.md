@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.208.1 - 2026-11-06
+
+### Fixed
+
+* homelab-wsl-02's internal sites answer again: Cilium's L2 announcements ignore externalTrafficPolicy, and after the agents restarted, the ingress VIP's lease went to a node without an ingress pod, which dropped the traffic. Ingress and k8s-gateway use externalTrafficPolicy Cluster on both WSL clusters.
+
 ## v1.208.0 - 2026-11-06
 
 ### Added
