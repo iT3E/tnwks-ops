@@ -87,6 +87,22 @@ resource "routeros_move_items" "dns_static" {
   depends_on = [routeros_ip_dns_record.static]
 }
 
+# Site leases (docs/wsl/multi-site.md, "Fencing"): the site fenced from
+# writing an app, read over DNS by that app's gate and each site's fence
+# CronJob. Under tnwks.local: no match-subdomain entry covers it, so nothing
+# shadows these. Short TTL, so a fence takes effect within seconds.
+resource "routeros_ip_dns_record" "site_lease" {
+  for_each = var.site_leases
+
+  name    = "${each.key}.lease.tnwks.local"
+  type    = "TXT"
+  text    = each.value
+  ttl     = "10s"
+  comment = "site lease: ${each.key} (docs/wsl/multi-site.md)"
+
+  depends_on = [routeros_ip_dns.this]
+}
+
 # Adlist names live in the DNS cache. When cache_size is too small RouterOS
 # logs "adlist read: max cache size reached", stops the import, and the list
 # stays stuck at a handful of names even after the cache grows; only deleting

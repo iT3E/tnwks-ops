@@ -1,0 +1,3 @@
+kind: Added
+body: 'Site leases on the router for the warm apps (<app>.lease.tnwks.local): the site fenced from writing an app after an unplanned failover, or none.'
+time: 2026-11-05T19:28:30.124980643-08:00

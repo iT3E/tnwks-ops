@@ -73,9 +73,10 @@ module "mikrotik" {
     interfaces = "ether1"
   }
 
-  dns    = merge(local.dns, { static_records = merge(local.dns.static_records, local.site_dns_records) })
-  ntp    = local.ntp
-  syslog = local.syslog
+  dns         = merge(local.dns, { static_records = merge(local.dns.static_records, local.site_dns_records) })
+  site_leases = local.site_leases
+  ntp         = local.ntp
+  syslog      = local.syslog
 
   # WireGuard private keys are injected from SOPS, never committed. The rest of
   # each listener (address, port, peers) is generated from the VyOS config.
