@@ -22,6 +22,11 @@ resources:
   - ../../../apps/kube-system/metrics-server/ks.yaml
   # Off-site dead-man switch (healthchecks.io check homelab-wsl-02).
   - ./heartbeat-ks.yaml
+  # Monitoring of this cluster: Prometheus (kube-prometheus-stack) and
+  # Alertmanager to the War Room, alerts labelled cluster=homelab-wsl-02.
+  - ../../../apps/monitoring/namespace.yaml
+  - ./alertmanager-ks.yaml
+  - ../../../apps/monitoring/kube-prometheus-stack/ks.yaml
   # Certificates: cert-manager with the Let's Encrypt DNS-01 issuers, and the
   # wildcard certificates the ingress controllers use (internal and public).
   - ../../../apps/cert-manager/namespace.yaml
@@ -55,6 +60,40 @@ patches:
       metadata:
         name: cert-manager-prometheusrules
         namespace: flux-system
+  # kube-prometheus-stack here: no extra scrape jobs (homelab-wsl scrapes both
+  # Windows hosts and alerts on them), a smaller Prometheus, and only the
+  # cluster-level addon alerts (monitoring-addons/).
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata:
+        name: kube-prometheus-stack
+        namespace: flux-system
+      spec:
+        patches:
+          - target:
+              kind: HelmRelease
+              name: kube-prometheus-stack
+            patch: |-
+              - op: replace
+                path: /spec/values/prometheus/prometheusSpec/additionalScrapeConfigs
+                value: []
+              - op: replace
+                path: /spec/values/prometheus/prometheusSpec/resources
+                value:
+                  requests:
+                    cpu: 100m
+                    memory: 1Gi
+                  limits:
+                    memory: 2Gi
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata:
+        name: kube-prometheus-stack-addons
+        namespace: flux-system
+      spec:
+        path: ./kubernetes/clusters/wsl-02/apps/monitoring-addons
   # kopiur's snapshot policies are homelab-wsl's apps; they come here with
   # the apps.
   - patch: |-

@@ -215,8 +215,9 @@ spec:
 
 
         enableAdminAPI: true
+        # On every alert too, so the War Room shows which cluster sent it.
         externalLabels:
-          cluster: homelab-wsl
+          cluster: ${CLUSTER_NAME}
         podMonitorSelectorNilUsesHelmValues: false
         probeSelectorNilUsesHelmValues: false
         replicas: 1
