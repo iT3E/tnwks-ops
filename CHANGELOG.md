@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.178.1 - 2026-11-06
+
+### Fixed
+
+* homelab-wsl-02's Talos node containers come back after a reboot: Ansible sets restart policy unless-stopped on every Talos node container (talosctl 1.14 creates them with no).
+
 ## v1.178.0 - 2026-11-06
 
 ### Changed
