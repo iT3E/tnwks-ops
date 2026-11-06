@@ -13,12 +13,16 @@ spec:
         name: bjw-s
         namespace: flux-system
   install:
+    # A site running it at 0 has unbound WaitForFirstConsumer PVCs, which
+    # Helm's wait (kstatus) never sees as ready.
+    disableWait: ${IMMICH_HELM_DISABLE_WAIT:=false}
     remediation:
       retries: 3
   interval: 30m
   maxHistory: 2
   upgrade:
     cleanupOnFail: true
+    disableWait: ${IMMICH_HELM_DISABLE_WAIT:=false}
     remediation:
       retries: 3
   uninstall:
@@ -32,6 +36,9 @@ spec:
       # API, web UI and the background workers (thumbnails, metadata,
       # database backups). Migrates its database schema on start.
       server:
+        # Which site runs it (docs/wsl/multi-site.md, "Switching an app"); the
+        # three Immich apps move together.
+        replicas: ${IMMICH_REPLICAS:=1}
         annotations:
           reloader.stakater.com/auto: "true"
         # The library volume is ReadWriteOnce.
@@ -110,6 +117,9 @@ spec:
       # Face detection and smart search (CLIP), on CPU. Models download into
       # the cache volume on first use.
       machine-learning:
+        # Which site runs it (docs/wsl/multi-site.md, "Switching an app"); the
+        # three Immich apps move together.
+        replicas: ${IMMICH_REPLICAS:=1}
         strategy: Recreate
         containers:
           app:
@@ -155,6 +165,9 @@ spec:
       # that matters: unfinished jobs get queued again by Immich's nightly
       # and on-upload scans, so no volume.
       valkey:
+        # Which site runs it (docs/wsl/multi-site.md, "Switching an app"); the
+        # three Immich apps move together.
+        replicas: ${IMMICH_REPLICAS:=1}
         containers:
           app:
             image:
@@ -201,6 +214,9 @@ spec:
       # for search and faces. Dedicated to Immich; the shared CNPG cluster in
       # `databases` doesn't carry the extension.
       postgres:
+        # Which site runs it (docs/wsl/multi-site.md, "Switching an app"); the
+        # three Immich apps move together.
+        replicas: ${IMMICH_REPLICAS:=1}
         type: statefulset
         annotations:
           reloader.stakater.com/auto: "true"

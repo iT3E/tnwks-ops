@@ -33,6 +33,9 @@ spec:
           type: RuntimeDefault
     controllers:
       kitchen-screensaver:
+        # Which site runs it (docs/wsl/multi-site.md, "Switching an app"); the
+        # three Immich apps move together.
+        replicas: ${IMMICH_REPLICAS:=1}
         annotations:
           # Restart on a code, page or secret change.
           reloader.stakater.com/auto: "true"
@@ -49,7 +52,9 @@ spec:
               PYTHONUNBUFFERED: "1"
               PORT: &port 8080
               # Read-only user "Kitchen screensaver" (group system-read-only).
-              HASS_URL: "http://home-assistant.home-automation.svc.cluster.local:8123"
+              # HOME_ASSISTANT_URL: in-cluster on homelab-wsl; the other site reaches
+              # it by name over the LAN.
+              HASS_URL: "${HOME_ASSISTANT_URL:=http://home-assistant.home-automation.svc.cluster.local:8123}"
               IMMICH_URL: "http://immich-server.selfhosted.svc.cluster.local:2283"
               # The combined album the immich-sync CronJob fills.
               IMMICH_ALBUM_NAME: "Kitchen screensaver"

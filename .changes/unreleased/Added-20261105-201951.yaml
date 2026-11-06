@@ -1,0 +1,3 @@
+kind: Added
+body: Immich, immichframe and kitchen-screensaver are deployed on homelab-wsl-02 at 0, ready to move there with task failover (library and Postgres copied by kopiur, transfer only).
+time: 2026-11-05T20:19:51.68325499-08:00

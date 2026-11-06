@@ -35,6 +35,9 @@ spec:
           type: RuntimeDefault
     controllers:
       immichframe:
+        # Which site runs it (docs/wsl/multi-site.md, "Switching an app"); the
+        # three Immich apps move together.
+        replicas: ${IMMICH_REPLICAS:=1}
         annotations:
           # Restart on a settings, CSS or secret change. The settings database
           # is an emptyDir, so the restart re-imports config/Settings.yml.

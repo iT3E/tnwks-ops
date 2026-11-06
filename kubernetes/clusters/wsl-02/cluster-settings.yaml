@@ -91,6 +91,13 @@ data:
   TRANSCRIBER_PG_PRIMARY: "homelab-wsl-02"
   # changedetection runs here since 2026-11-05 (bin/site-failover, then this
   # setting); homelab-wsl keeps its copy at 0.
+  # Immich, immichframe and kitchen-screensaver: deployed here at 0 to move
+  # them (bin/site-failover); the library and Postgres come over with it.
+  IMMICH_REPLICAS: "0"
+  IMMICH_HELM_DISABLE_WAIT: "true"
+  IMMICH_SYNC_SUSPEND: "true"
+  # Home Assistant stays on homelab-wsl: apps here reach it by name.
+  HOME_ASSISTANT_URL: "https://hass.internal.tnwks.us"
   # What stays on homelab-wsl, over its LAN bridge (docs/wsl/lan-exposure.md):
   # Frigate's go2rtc restream and LiteLLM (admitted only from WSL-02), MQTT,
   # and oauth2-proxy (its sessions live in that site's Valkey).
