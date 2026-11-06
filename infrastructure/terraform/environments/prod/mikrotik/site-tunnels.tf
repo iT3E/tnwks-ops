@@ -105,6 +105,20 @@ locals {
         ]
       }
     },
+    # The mobile VPN reaches the internal names (the shared VIPs) and nothing else at the sites. Its default accept
+    # to VLAN 910 covered the old per-host addresses.
+    {
+      for i, zone in sort(keys(local.wsl_sites)) :
+      format("%03d-vpn-mobile-%s", 260 + 10 * i, zone) => {
+        from    = "vpn-mobile"
+        to      = zone
+        comment = "vpn-mobile -> ${zone}"
+        rules = [{
+          comment          = "shared VIPs (BGP picks the site)"
+          dst_address_list = "wsl_shared_vips"
+        }]
+      }
+    },
     {
       "300-wsl-site1-wsl-site2" = {
         from    = "wsl-site1"
