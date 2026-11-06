@@ -16,6 +16,15 @@ locals {
   # them. A shorter prefix from one site would win on length whatever its preference.
   site_vip_pool = "10.10.95.0/24"
 
+  # The pool in two halves, one per primary site: a VIP in a site's half is preferred there (100) and taken over by
+  # the other site (50) only while that site doesn't announce it. So an app's VIP lands on the site that runs it,
+  # without a second trip through the tunnels. Halves, not per-/32 rules: a RouterOS filter chain stops at its first
+  # accept, so overlapping rules would depend on their order.
+  site_vip_halves = {
+    "10.10.95.0/25"   = "wsl-site1" # homelab-wsl's apps (10.10.95.10: its internal ingress)
+    "10.10.95.128/25" = "wsl-site2" # homelab-wsl-02's apps (10.10.95.200: its internal ingress)
+  }
+
   wsl_sites = {
     wsl-site1 = {
       cluster         = "homelab-wsl"
@@ -28,7 +37,6 @@ locals {
       peer_as         = 64611
       node_subnet     = "10.5.0.0/24"
       pod_cidr        = "10.46.0.0/16" # Cilium cluster-pool since 2026-11-06 (10.42 under Flannel)
-      vip_local_pref  = 100
     }
     wsl-site2 = {
       cluster         = "homelab-wsl-02"
@@ -41,8 +49,6 @@ locals {
       peer_as         = 64612
       node_subnet     = "10.6.0.0/24"
       pod_cidr        = "10.44.0.0/16"
-      # Lower than site 1's: site 2 carries a shared VIP only while site 1 doesn't announce it.
-      vip_local_pref = 50
     }
   }
 
@@ -158,11 +164,14 @@ locals {
         remote_as      = s.peer_as
         local_address  = split("/", s.router_address)[0]
         comment        = "${s.cluster} distro FRR over ${s.interface}"
-        accept = [
+        accept = concat([
           { prefix = s.node_subnet },
           { prefix = s.pod_cidr, max_len = 24 },
-          { prefix = local.site_vip_pool, min_len = 32, max_len = 32, local_pref = s.vip_local_pref },
-        ]
+          ],
+          [
+            for half, primary in local.site_vip_halves :
+            { prefix = half, min_len = 32, max_len = 32, local_pref = primary == zone ? 100 : 50 }
+        ])
         export = flatten([
           for other_zone, o in local.wsl_sites : [
             { prefix = o.node_subnet },

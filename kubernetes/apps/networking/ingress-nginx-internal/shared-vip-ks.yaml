@@ -1,5 +1,5 @@
 ---
-# The internal ingress on the shared VIP 10.10.95.200. Listed by the WSL
+# The internal ingress on the shared VIPs (10.10.95.10, 10.10.95.200). Listed by the WSL
 # clusters, which have the shared-vip pool and BGP (cilium-bgp).
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization

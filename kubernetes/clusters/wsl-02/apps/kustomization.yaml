@@ -44,7 +44,7 @@ resources:
   - ../../../apps/networking/ingress-nginx/ks.yaml
   # *.internal.tnwks.us on ${INGRESS_INTERNAL_ADDR} (10.6.0.200).
   - ../../../apps/networking/ingress-nginx-internal/ks.yaml
-  # The internal ingress on the shared VIP 10.10.95.200 (BGP).
+  # The internal ingress on the shared VIPs 10.10.95.10 and .200 (BGP).
   - ../../../apps/networking/ingress-nginx-internal/shared-vip-ks.yaml
   # UniFi controller: deployed here at 0 to move it (bin/site-failover
   # "unifi"). The APs reach whichever site the router's `unifi` record names.
