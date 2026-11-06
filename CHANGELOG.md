@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.194.1 - 2026-11-06
+
+### Fixed
+
+* The router's BGP connections to the WSL sites are created with the restapi provider, since the routeros provider can't write them on RouterOS 7.22+ (it always sends the removed add-path-out).
+
 ## v1.194.0 - 2026-11-06
 
 ### Added
