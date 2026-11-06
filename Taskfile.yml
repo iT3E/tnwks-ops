@@ -32,6 +32,28 @@ includes:
   wsl-host: .taskfiles/WslHostTasks.yml
 
 tasks:
+  # Move an app between the WSL sites (docs/wsl/multi-site.md, bin/site-failover).
+  # homelab-wsl-02's API is reached over SSH: set FAILOVER_SSH_HOMELAB_WSL_02
+  # ("user@host -p 2222") when running from homelab-wsl's side.
+  failover:
+    desc: "Planned switchover of an app to a site: task failover APP=mealie TO=homelab-wsl-02"
+    requires:
+      vars: [APP, TO]
+    cmds:
+      - bin/site-failover switchover {{.APP}} --to {{.TO}} {{.CLI_ARGS}}
+  failover:status:
+    desc: "Where an app runs and its overrides: task failover:status APP=mealie"
+    requires:
+      vars: [APP]
+    cmds:
+      - bin/site-failover status {{.APP}}
+  failover:clear:
+    desc: "Drop an app's site-overrides once git matches them: task failover:clear APP=mealie"
+    requires:
+      vars: [APP]
+    cmds:
+      - bin/site-failover clear {{.APP}} {{.CLI_ARGS}}
+
   init:
     desc: Initialize workstation dependencies with Brew
     cmds:

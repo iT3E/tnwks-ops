@@ -17,8 +17,15 @@ patches:
   - target:
       kind: Cluster
     patch: |-
-      # Which site is primary. Failover writes MEALIE_PG_PRIMARY to both sites'
-      # site-overrides (docs/wsl/multi-site.md).
+      # Which site is primary. A switchover writes MEALIE_PG_PRIMARY to both
+      # sites' site-overrides (bin/site-failover, docs/wsl/multi-site.md).
       - op: add
         path: /spec/replica/primary
         value: ${MEALIE_PG_PRIMARY:=homelab-wsl}
+      # The old primary's demotion token, on the side being promoted only
+      # (bin/site-failover writes it). The empty default carries its quotes:
+      # kustomize drops quotes around a ${...}, and a bare empty value is
+      # null, which the CRD rejects. A token (base64 JSON, "ey...") needs none.
+      - op: add
+        path: /spec/replica/promotionToken
+        value: ${MEALIE_PG_PROMOTION_TOKEN:=""}

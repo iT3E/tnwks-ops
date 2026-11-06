@@ -377,6 +377,46 @@ The commands `task failover` runs (`kubectl apply` of the ConfigMap, `flux
 reconcile`) need only the two clusters' API servers. From the workstation
 or either site's runner, nothing on GitHub has to be up.
 
+### Running one: `task failover`
+
+`bin/site-failover` runs the sequence above for one app. The apps it knows,
+and their variables, deployments, Postgres cluster and PVCs, are in
+`bin/site-failover-apps.json`.
+
+```bash
+# Run from homelab-wsl's distro. homelab-wsl-02's API is reached over SSH.
+export FAILOVER_SSH_HOMELAB_WSL_02="<user>@10.10.91.112 -p 2222"
+task failover:status APP=mealie
+task failover APP=mealie TO=homelab-wsl-02          # asks for the app name
+task failover APP=mealie TO=homelab-wsl             # failback
+task failover:clear APP=mealie                      # only once git matches
+```
+
+- **Overrides.** It writes only the app's keys (`<P>_REPLICAS`,
+  `<P>_PG_PRIMARY`, `<P>_PG_PROMOTION_TOKEN`, `<P>_BACKUP_SUSPEND`) to
+  `flux-system/site-overrides`, as server-side apply field manager
+  `site-failover-<app>`. Two apps' overrides can't overwrite each other.
+  `clear` removes an app's keys, and deletes the ConfigMap once it's empty.
+- **PVCs.** It takes a one-off kopiur `Snapshot` on the old site and a
+  `Restore` on the new one, from the old site's repository (the read-only
+  peer `ClusterRepository`, named after the site), as an exact mirror. A
+  `transfer_only` PVC's snapshot is deleted afterwards: it isn't backed up
+  (the transcriber's audio).
+- **Postgres.** The old site is demoted first. The new site is promoted
+  with the demotion token, so it replays to the old primary's last LSN: RPO 0.
+  The old site then follows the new one, with no rebuild.
+- **What it doesn't move: public traffic.** Internal names are router DNS
+  records (`infrastructure/terraform/environments/prod/mikrotik/dns-sites.tf`).
+  Public names go through homelab-wsl's cloudflared and public ingress, and
+  homelab-wsl-02 has neither yet. A public app (Mealie) runs on wsl-02 during
+  a drill but isn't reachable from outside until there's a mesh global
+  service or a tunnel per site.
+- **Making a move permanent:** a PR to both `cluster-settings` with the
+  same values (no token), then `task failover:clear`. Clearing first would
+  put the app back on git's defaults.
+- There's no `--promote`. An unplanned promote needs the fencing answer
+  below first.
+
 ### Unplanned failure
 
 ```mermaid
