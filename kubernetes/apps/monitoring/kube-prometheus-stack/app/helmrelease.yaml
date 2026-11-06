@@ -149,6 +149,24 @@ spec:
             api_version: v2
         additionalScrapeConfigs:
 
+          # The other WSL site's Prometheus, through its LAN bridge (port 9090):
+          # just what this site alerts on (peer-rules.yaml). source_site marks
+          # the federated series; honor_labels keeps their own labels.
+          - job_name: peer-federate
+            honor_labels: true
+            metrics_path: /federate
+            scrape_interval: 60s
+            scrape_timeout: 20s
+            params:
+              match[]:
+                - 'cnpg_pg_stat_archiver_last_archived_wal_start_lsn'
+                - 'cnpg_pg_replication_in_recovery'
+            static_configs:
+              - targets:
+                  - ${PEER_WINDOWS_HOST_ADDR}:9090
+                labels:
+                  source_site: ${PEER_CLUSTER_NAME}
+
           # This site's Windows host over vEthernet, and the other site's over
           # the LAN (docs/wsl/multi-site.md: each site watches the other).
           # instance = the Windows computer name (cluster-settings).

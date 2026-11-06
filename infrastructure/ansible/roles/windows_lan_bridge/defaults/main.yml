@@ -38,6 +38,8 @@ lan_bridge_tcp_ports:
   # go2rtc's RTSP restream (Frigate) and LiteLLM. No ingress for either.
   - { port: 8554, remote: [10.10.91.112] }
   - { port: 4000, remote: [10.10.91.112] }
+  # Prometheus federation for homelab-wsl-02 (it watches this site too).
+  - { port: 9090, remote: [10.10.91.112] }
 
 # Ports this bridge used to forward: their portproxy entry (script) and
 # firewall rule (Ansible) are removed. 6001: syslog moved to UDP.

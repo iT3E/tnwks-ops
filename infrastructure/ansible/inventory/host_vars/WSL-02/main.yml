@@ -44,6 +44,8 @@ lan_bridge_tcp_ports:
   - { port: 80 }
   - { port: 443 }
   - { port: 2222, wsl_port: 22, remote: [10.10.91.142] }
+  # Prometheus federation for homelab-wsl (it watches this site too).
+  - { port: 9090, remote: [10.10.91.142] }
 lan_bridge_replaced_rules:
   - WSL SSH Rule # tcp/2222 from any
   - WSL llama.cpp # tcp/50052 from any, unused

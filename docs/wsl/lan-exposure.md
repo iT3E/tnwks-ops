@@ -51,6 +51,7 @@ there. The UDP relays re-resolve it every 60 seconds.
 | `unifi-inform` | 10.5.0.206 | 8080/TCP | portproxy LAN 8080 -> WSL 18080, firewall scoped to `10.10.90.0/24` | `unifi-inform` (listens on 18080: Docker holds 8080) |
 | `frigate-rtsp-peer` (go2rtc) | 10.5.0.207 | 8554/TCP | portproxy, firewall scoped to WSL-02 (`10.10.91.112`) | `rtsp` |
 | `litellm-peer` | 10.5.0.208 | 4000/TCP | portproxy, firewall scoped to WSL-02 (`10.10.91.112`) | `litellm` |
+| `prometheus-peer` | 10.5.0.209 (homelab-wsl-02: 10.6.0.209) | 9090/TCP | portproxy, firewall scoped to the other site's Windows host | `prometheus` (both sites) |
 | `k8s-gateway` | 10.5.0.201 | 53/UDP | not exposed: the router answers DNS | (`dns`, unused) |
 | `ingress-nginx-controller` (public) | 10.5.0.202 | 80, 443 | never exposed: fronted by cloudflared | — |
 
@@ -117,7 +118,7 @@ must listen on a different port, `remote` to scope the firewall rule) or
 
 ```bash
 systemctl status 'tnwks-lan-bridge@*'
-ss -tlnu | grep -E ':(80|443|1883|2055|4000|6001|8554|18080)\b'
+ss -tlnu | grep -E ':(80|443|1883|2055|4000|6001|8554|9090|18080)\b'
 ```
 
 ```powershell

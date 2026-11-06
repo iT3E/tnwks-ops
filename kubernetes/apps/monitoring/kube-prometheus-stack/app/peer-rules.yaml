@@ -1,0 +1,56 @@
+---
+# Alerts about the other WSL site, from this site's Prometheus (the
+# peer-federate job, helmrelease.yaml). Either site raising them means the
+# alert survives the other site being down.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: peer-site
+spec:
+  groups:
+    - name: peer-site
+      rules:
+        - alert: PeerSiteUnreachable
+          expr: up{job="peer-federate"} == 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The other WSL site's Prometheus hasn't answered for 10 minutes."
+            description: >-
+              {{ $labels.source_site }} isn't reachable from here: the site is
+              down, or its LAN bridge (port 9090) or Prometheus is. Its own
+              alerts can't reach anyone if it's down; healthchecks.io covers
+              that case too.
+        # A standby replica cluster here falls behind the primary on the other
+        # site. Both archive WAL (the replica re-archives what it replays,
+        # archive_mode=always), so compare the last archived WAL segments: on
+        # an idle database both stop together, which isn't lag. CNPG's
+        # last_archived_wal_start_lsn is the WAL file name's LOG and SEG as one
+        # int (LOG * 2^32 + SEG); LOG * 256 + SEG is a linear segment count
+        # (16 MB each). More than 4 behind (64 MB) for 30 minutes alerts.
+        - alert: StandbyReplicaBehind
+          expr: >-
+            (
+              max by (pod) (
+                floor(cnpg_pg_stat_archiver_last_archived_wal_start_lsn{source_site!=""} / 4294967296) * 256
+                + cnpg_pg_stat_archiver_last_archived_wal_start_lsn{source_site!=""} % 4294967296
+              )
+              - on (pod)
+              max by (pod) (
+                floor(cnpg_pg_stat_archiver_last_archived_wal_start_lsn{source_site=""} / 4294967296) * 256
+                + cnpg_pg_stat_archiver_last_archived_wal_start_lsn{source_site=""} % 4294967296
+              )
+            ) > 4
+            and on (pod)
+            max by (pod) (cnpg_pg_replication_in_recovery{source_site=""}) == 1
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.pod }}'s standby is {{ $value }} WAL segments (16 MB each) behind the primary."
+            description: >-
+              The replica cluster here hasn't caught up with the other site's
+              primary for 30 minutes. A switchover would wait for it; an
+              unplanned promote would lose the difference. Check the replica's
+              restore from S3 (its logs) and the primary's archiving.

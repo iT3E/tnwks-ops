@@ -67,6 +67,9 @@ data:
   # (ports 8554 and 4000, admitted only from WSL-02).
   FRIGATE_RTSP_LB_ADDR: "10.5.0.207"
   LITELLM_LB_ADDR: "10.5.0.208"
+  # The other site federates from this Prometheus (port 9090, admitted only
+  # from WSL-02).
+  PROMETHEUS_PEER_LB_ADDR: "10.5.0.209"
   KUBE_VIP_ADDR: "127.0.0.1"
 
   # Cluster networking
