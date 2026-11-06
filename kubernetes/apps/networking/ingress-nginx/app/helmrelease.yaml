@@ -58,7 +58,9 @@ spec:
         # client IP. Direct hits on the LB from the WSL host arrive as
         # 10.5.0.1, outside this range, so they keep their real source.
         use-forwarded-headers: "true"
-        proxy-real-ip-cidr: "${CLUSTER_CIDR}"
+        # CLUSTER_CIDR_EXTRA (",<cidr>"): a second pod range while a cluster
+        # moves CNI (homelab-wsl, Flannel -> Cilium); empty elsewhere.
+        proxy-real-ip-cidr: "${CLUSTER_CIDR}${CLUSTER_CIDR_EXTRA:=}"
         # ingress-nginx 1.9+ disables snippet annotations by default after
         # CVE-2024-7646. We use server-snippet on ombi/sonarr/radarr for
         # legacy hostname redirects; flip this back on rather than rip
