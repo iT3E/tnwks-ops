@@ -8,7 +8,6 @@ resources:
   - ./database.yaml
   - ./secret-plausible-role.sops.yaml
   - ./database-plausible.yaml
-  - ./secret-home-assistant-role.sops.yaml
   - ./secret-litellm-role.sops.yaml
   - ./secret-things-api-role.sops.yaml
   - ./secret-packing-api-role.sops.yaml
