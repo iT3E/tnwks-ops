@@ -132,6 +132,18 @@ A role Secret that belongs to the app alone can live in `db/` as
 `cnpg.io/reload: "true"`). Today they are all in
 `kubernetes/apps/databases/cloudnative-pg/cluster/`; each moves with its app.
 
+Gate the app on the database with `wait: true` and this health check on the
+db Kustomization. Without it a new Cluster counts as ready before CNPG has
+written any status, and the app starts against a database that isn't there:
+
+```yaml
+  wait: true
+  healthCheckExprs:
+    - apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      current: status.conditions.exists(e, e.type == 'Ready' && e.status == 'True')
+```
+
 ## Moving an app off the shared cluster (later)
 
 One app at a time, with CNPG's `initdb.import` (`type: microservice`) from the
