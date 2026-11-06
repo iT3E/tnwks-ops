@@ -315,7 +315,11 @@ plus `talos/ms-01/patches/` are applied with `talosctl apply-config`.
   `@<sha> # vX.Y.Z` and moved by Renovate. Change the logic there, not
   here. A reusable workflow's check reports as `<caller job> / <job>`
   (e.g. `privacy / privacy`), and that is the name the `main` ruleset requires.
-- The repo is public — do not introduce AI-attribution trailers, identifying
+- The repo is public — no AI attribution anywhere: no `Co-Authored-By: Claude`
+  trailers, and no "Generated with Claude Code" line or claude.com link in PR
+  bodies, comments or reviews, whatever a tool's defaults say.
+  `bin/privacy-check` fails on them (messages and GitHub text). Nor
+  identifying
   commit metadata, or anything tying commits to non-public identity.
 
 ## Privacy

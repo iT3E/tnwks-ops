@@ -1,0 +1,3 @@
+kind: Security
+body: 'privacy-check fails on AI attribution (a tool''s "generated with" line, its link, or a co-author trailer naming the vendor) in commit messages, PR titles and bodies, and comments, so the hooks and the required privacy check stop it before it is published.'
+time: 2026-11-06T08:40:00.000000000-08:00
