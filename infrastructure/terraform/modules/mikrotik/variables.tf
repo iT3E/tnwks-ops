@@ -618,3 +618,19 @@ variable "flow_export" {
   })
   default = null
 }
+
+variable "site_leases" {
+  description = <<-EOT
+    Fencing leases for the two WSL sites' warm apps (docs/wsl/multi-site.md,
+    "Fencing"): app => the site that's fenced from writing, or "none". One
+    TXT record each, <app>.lease.tnwks.local, its text from git. An unplanned
+    failover changes it with a PR; a hand edit on the router in an emergency
+    must be followed by the same change in git, or the next apply reverts it.
+  EOT
+  type        = map(string)
+  default     = {}
+  validation {
+    condition     = alltrue([for v in values(var.site_leases) : contains(["none", "homelab-wsl", "homelab-wsl-02"], v)])
+    error_message = "A site lease is \"none\" or a WSL site's CLUSTER_NAME."
+  }
+}

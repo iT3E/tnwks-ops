@@ -453,39 +453,44 @@ comes back. Its etcd still says it's the primary (`<P>_PG_PRIMARY` from git,
 and the app starts writing to it before anyone can intervene. Both sites
 would then accept writes.
 
-A **site lease** per warm app names the one site allowed to write. Every
-writer checks it.
+A planned switchover can't split: the old primary demotes itself before the
+new one is promoted with its token. Only an unplanned promote can, and the
+**site lease** guards against exactly that. Each warm app has one: the site
+fenced from writing it, or `none`.
 
-- **Where it lives: the router.** It's a static DNS TXT record,
-  `<app>.lease.tnwks.local` → `homelab-wsl` or `homelab-wsl-02`.
+- **Where it lives: the router**, as a static DNS TXT record
+  `<app>.lease.tnwks.local` → `none`, `homelab-wsl` or `homelab-wsl-02`
+  (Terraform, `site_leases` in
+  `infrastructure/terraform/environments/prod/mikrotik/dns-sites.tf`).
   - Why not S3: both sites share a house, so they lose power together. After
     an outage the router and LAN are back within a minute, while the internet
     may not be. A lease that needs S3 would keep Home Assistant off until the
     ISP returns.
   - Reading it needs no credentials: any pod does a DNS TXT lookup.
-  - `tnwks.local` has no wildcard, so the record can't be shadowed (RouterOS
-    checks match-subdomain entries first).
-- **Who writes it.** Terraform creates the records (`modules/mikrotik`,
-  `ignore_changes` on the text), and only `bin/site-failover` changes the
-  text, through the router's REST API. It uses a dedicated RouterOS user
-  whose address is limited to the two WSL hosts. The planned switchover moves
-  the lease just before promoting the new site. An unplanned `--promote` moves
-  it first, then promotes without a token.
-- **App gate.** Each warm app's pod has an initContainer that waits until the
-  lease names its own site (`${CLUSTER_NAME}`). A site that comes back after
-  losing its lease starts its apps, and they wait there instead of writing.
-  An unreadable lease (router down) also waits: fail closed.
-  `<P>_LEASE_GATE: "off"` in `site-overrides` is the escape hatch.
+  - `tnwks.local` has no match-subdomain entry, so the record can't be
+    shadowed (RouterOS checks those first).
+- **Who changes it: a PR, before the promote.** Set the dead site in
+  `site_leases`, merge, and let the MikroTik workflow apply it.
+  `bin/site-failover --promote` checks the lease and refuses to promote
+  until it fences the old site, so the fence is always in place first. If
+  GitHub is down, edit the TXT record on the router by hand, then make the
+  same change in git (or the next apply reverts it). Planned switchovers
+  never touch the lease.
+- **App gate.** Each warm app's pod has an initContainer that waits while
+  the lease names its own site (`${CLUSTER_NAME}`), and while the lease can't
+  be read (router down, or no record yet), so it fails closed. A fenced site
+  that comes back starts its apps, and they wait there instead of writing.
+  `<P>_LEASE_GATE: "off"` (`site-overrides`) is the escape hatch.
 - **Database fence.** A CronJob on each site checks every minute: if the
-  lease names the other site while this site's `<app>-pg` believes it's the
-  primary, it sets `cnpg.io/fencedInstances: '["*"]'` on that Cluster and
-  `SiteLeaseFenced` fires. That stops writers that don't go through the app,
-  such as finance-sync's CronJobs. Unfencing is manual, after the old
-  primary has been rebuilt as a replica of the new one (delete its Cluster and
-  PVC, bump `CNPG_SERVER_NAME`).
-- **What the lease doesn't cover.** A stateless app has nothing to split.
-  A site that's alive but can't reach the router has no LAN either, so it
-  can't take writes from anyone.
+  lease names this site and its `<app>-pg` believes it's the primary, it
+  sets `cnpg.io/fencedInstances: '["*"]'` on that Cluster, and the Job fails,
+  so KubeJobFailed fires. That stops writers that don't go through the app,
+  such as finance-sync's CronJobs. Afterwards: rebuild the fenced site's
+  Cluster as a replica of the new primary (delete the Cluster and its PVC,
+  bump `CNPG_SERVER_NAME`), then set the lease back to `none`.
+- **What it doesn't cover.** A stateless app has nothing to split. A site
+  that's alive but can't reach the router has no LAN either, so nobody can
+  write to it.
 
 ## Getting wsl-01 onto Cilium
 

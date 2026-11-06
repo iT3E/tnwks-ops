@@ -10,6 +10,15 @@
 locals {
   wsl02_lan_address = "10.10.91.112"
 
+  # Fencing leases (docs/wsl/multi-site.md, "Fencing"): per warm app, the site
+  # fenced from writing it, or "none". Set it to the dead site BEFORE an
+  # unplanned promote (bin/site-failover --promote refuses otherwise), and
+  # back to "none" once that site's database has been rebuilt as a replica.
+  site_leases = {
+    mealie      = "none"
+    transcriber = "none"
+  }
+
   site_dns_records = {
     wsl02_playwright_mcp = {
       name            = "playwright-mcp.internal.tnwks.us"
