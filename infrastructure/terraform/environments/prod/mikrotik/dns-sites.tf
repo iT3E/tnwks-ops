@@ -17,6 +17,7 @@ locals {
   site_leases = {
     mealie      = "none"
     transcriber = "none"
+    firefly     = "none"
   }
 
   site_dns_records = {
