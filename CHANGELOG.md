@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.215.0 - 2026-11-06
+
+### Changed
+
+* Two shared VIPs instead of one, each preferring the site that runs its apps: the router's VIP pool is split in halves (10.10.95.0/25 homelab-wsl first, 10.10.95.128/25 homelab-wsl-02 first), and the internal ingress is on 10.10.95.10 and 10.10.95.200, so an app's traffic doesn't cross the tunnels twice.
+
 ## v1.214.1 - 2026-11-06
 
 ### Fixed
