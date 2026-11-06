@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.171.2 - 2026-11-06
+
+### Fixed
+
+* task failover's preflight checks the replica's WAL replay against the old site's archive (it printed None on a replica).
+
 ## v1.171.1 - 2026-11-06
 
 ### Fixed

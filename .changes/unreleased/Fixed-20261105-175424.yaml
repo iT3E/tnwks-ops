@@ -1,3 +1,0 @@
-kind: Fixed
-body: task failover's preflight checks the replica's WAL replay against the old site's archive (it printed None on a replica).
-time: 2026-11-05T17:54:24.56758435-08:00
