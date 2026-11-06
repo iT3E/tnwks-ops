@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.187.0 - 2026-11-06
+
+### Added
+
+* Immich, immichframe and kitchen-screensaver are deployed on homelab-wsl-02 at 0, ready to move there with task failover (library and Postgres copied by kopiur, transfer only).
+
 ## v1.186.0 - 2026-11-06
 
 ### Changed
