@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.190.1 - 2026-11-06
+
+### Fixed
+
+* task failover:clear applies each site's cluster-settings from git before it drops an app's overrides, so the app can't fall back to defaults on the old site.
+
 ## v1.190.0 - 2026-11-06
 
 ### Changed

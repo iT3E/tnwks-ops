@@ -1,3 +1,0 @@
-kind: Fixed
-body: task failover:clear applies each site's cluster-settings from git before it drops an app's overrides, so the app can't fall back to defaults on the old site.
-time: 2026-11-05T21:47:35.738665541-08:00
