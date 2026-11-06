@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily copy of the gdrive-sync NFS export to Google Drive, after the cluster jobs (02:15)
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,91 @@
+---
+# Copies the controller's newest .unf auto-backup to the gdrive-sync NFS
+# export (nfs-server on homelab-wsl, 10.5.0.3), from which the desktop copies
+# it into Google Drive (tnwks-gdrive-sync). Runs only where the controller
+# runs (UNIFI_BACKUP_SUSPEND), next to it, because its /config PVC is
+# ReadWriteOnce. A .unf holds the Wi-Fi passphrase and the APs' device keys:
+# files are 0600, and the export squashes every writer to one uid.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: unifi-gdrive-copy
+spec:
+  # After the controller's 02:00 auto-backup, before the desktop's 02:30 copy.
+  schedule: "15 2 * * *"
+  timeZone: "${TIMEZONE}"
+  suspend: ${UNIFI_BACKUP_SUSPEND:=false}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 86400
+      activeDeadlineSeconds: 900
+      template:
+        spec:
+          restartPolicy: Never
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: unifi
+                  topologyKey: kubernetes.io/hostname
+          securityContext:
+            # The controller's files are abc's (PUID 1000); the export maps
+            # every client to 1000 as well.
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: copy
+              image: docker.io/library/busybox:1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  umask 077
+                  dst=/out/unifi
+                  mkdir -p "$dst"
+                  latest=$(ls -1t /config/data/backup/autobackup/*.unf 2>/dev/null | head -1)
+                  if [ -z "$latest" ]; then echo "no auto-backup yet"; exit 0; fi
+                  name=$(basename "$latest")
+                  if [ -f "$dst/$name" ]; then echo "already there: $name"; else
+                    cp "$latest" "$dst/$name.part" && mv "$dst/$name.part" "$dst/$name"
+                    echo "copied $name ($(wc -c < "$dst/$name") bytes)"
+                  fi
+                  # Keep the newest 30 here; the desktop keeps its own 30.
+                  ls -1t "$dst"/*.unf | tail -n +31 | while read -r old; do rm -f -- "$old"; echo "pruned $(basename "$old")"; done
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  memory: 64Mi
+              volumeMounts:
+                - name: config
+                  mountPath: /config
+                  readOnly: true
+                - name: out
+                  mountPath: /out
+          volumes:
+            - name: config
+              persistentVolumeClaim:
+                claimName: config-unifi-0
+                readOnly: true
+            - name: out
+              nfs:
+                # nfs-server's node address (host network), as for the sites
+                # share: a kernel mount can't reach a ClusterIP without
+                # kube-proxy. From homelab-wsl-02 it goes over the site tunnels.
+                server: 10.5.0.3
+                path: /gdrive-sync

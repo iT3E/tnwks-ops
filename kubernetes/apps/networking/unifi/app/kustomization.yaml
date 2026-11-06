@@ -5,3 +5,4 @@ namespace: networking
 resources:
   - ./secrets.sops.yaml
   - ./helmrelease.yaml
+  - ./gdrive-copy.yaml
