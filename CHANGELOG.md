@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.194.2 - 2026-11-06
+
+### Fixed
+
+* Home Assistant's standby builds on homelab-wsl-02 (its Prometheus token secret is encrypted for that site), and the media stack's switchover restores as root so owners survive.
+
 ## v1.194.1 - 2026-11-06
 
 ### Fixed
