@@ -510,8 +510,9 @@ def cmd_switchover(args):
             p_ = new.kubectl("exec", "-n", app["namespace"], chk.get("workload") or f"deploy/{chk['deployment']}", "-c", chk["container"], "--",
                              *cmd, check=False)
             return p_.stdout.strip() if p_.returncode == 0 else None
-        status = wait(f"{chk['url']} on {new.name}", answers, timeout=600, every=5)
-        log(f"{new.name}: check {chk['url']}: {status}")
+        what = chk.get("url") or " ".join(chk.get("command", []))
+        status = wait(f"{what} on {new.name}", answers, timeout=600, every=5)
+        log(f"{new.name}: check {what}: {status}")
     t_ready = time.time()
 
     for cl, _ in pg_list(app):
