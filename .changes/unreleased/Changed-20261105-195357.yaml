@@ -1,3 +1,0 @@
-kind: Changed
-body: Grafana, LiteLLM, Vaultwarden, packing-api and the things API are stopped while their databases move to their own CNPG clusters.
-time: 2026-11-05T19:53:57.104511187-08:00

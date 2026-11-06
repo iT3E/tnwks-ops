@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.183.0 - 2026-11-06
+
+### Changed
+
+* Grafana, LiteLLM, Vaultwarden, packing-api and the things API are stopped while their databases move to their own CNPG clusters.
+
 ## v1.182.0 - 2026-11-06
 
 ### Added
