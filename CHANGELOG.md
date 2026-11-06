@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.161.0 - 2026-11-06
+
+### Changed
+
+* playwright-mcp runs on homelab-wsl-02 only; homelab-wsl's copy is scaled to 0.
+
 ## v1.160.3 - 2026-11-06
 
 ### Fixed
