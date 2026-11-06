@@ -86,8 +86,9 @@ data:
   MEALIE_REPLICAS: "0"
   MEALIE_BACKUP_SUSPEND: "true"
   MEALIE_HELM_DISABLE_WAIT: "true"
-  TRANSCRIBER_REPLICAS: "0"
-  TRANSCRIBER_HELM_DISABLE_WAIT: "true"
+  # The transcriber runs here since 2026-11-05 (bin/site-failover, then this
+  # setting); homelab-wsl keeps its standby.
+  TRANSCRIBER_PG_PRIMARY: "homelab-wsl-02"
   # What stays on homelab-wsl, over its LAN bridge (docs/wsl/lan-exposure.md):
   # Frigate's go2rtc restream and LiteLLM (admitted only from WSL-02), MQTT,
   # and oauth2-proxy (its sessions live in that site's Valkey).

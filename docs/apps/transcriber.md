@@ -3,8 +3,17 @@
 Speech on the cameras, transcribed and diarized, into Postgres. Fully local:
 WhisperX on CPU, no cloud API. Manifests:
 `kubernetes/apps/production/transcriber/`. Code and images: tnwks-transcriber
-and tnwks-transcriber-web (`ghcr.io/it3e/tnwks-transcriber[-web]`, public and free of data). WSL-only,
-like Frigate.
+and tnwks-transcriber-web (`ghcr.io/it3e/tnwks-transcriber[-web]`, public and free of data).
+
+Runs on homelab-wsl-02 since 2026-11-05; homelab-wsl keeps a standby (its
+database a CNPG replica, the app at 0). What it reads stays on homelab-wsl and
+is reached over that site's LAN bridge (`docs/wsl/lan-exposure.md`): Frigate's
+go2rtc restream (8554, admitted only from WSL-02), MQTT, LiteLLM (4000, same)
+and oauth2-proxy. The per-site values are in each `cluster-settings`
+(`FRIGATE_RTSP_URL`, `MQTT_BROKER_HOST`, `LITELLM_URL`, `OAUTH2_PROXY_URL`).
+Moving it again: `task failover APP=transcriber TO=<site>`
+(`docs/wsl/multi-site.md`), which copies the clip audio and leaves the models
+to download again.
 
 ## Flow
 
