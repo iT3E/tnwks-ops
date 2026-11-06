@@ -3,6 +3,13 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.210.1 - 2026-11-06
+
+### Fixed
+
+* Ansible Hosts: the controller cache (Coral shim and Windows downloads) is kept in the Actions cache, so most runs skip installing mingw-w64 from GitHub's Ubuntu mirror, whose stalled downloads failed plan jobs; a cache miss retries against archive.ubuntu.com.
+* UniFi on homelab-wsl-02: the UI's login check uses the site's oauth2-proxy URL instead of an in-cluster address that only exists on homelab-wsl, and the inform Service is global, so APs still informing the desktop (a cached `unifi` address) reach the controller over Cluster Mesh.
+
 ## v1.210.0 - 2026-11-06
 
 ### Changed

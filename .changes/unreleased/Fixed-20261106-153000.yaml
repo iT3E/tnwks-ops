@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Ansible Hosts: the controller cache (Coral shim and Windows downloads) is kept in the Actions cache, so most runs skip installing mingw-w64 from GitHub''s Ubuntu mirror, whose stalled downloads failed plan jobs; a cache miss retries against archive.ubuntu.com.'
-time: 2026-11-06T15:30:00.000000000-08:00
