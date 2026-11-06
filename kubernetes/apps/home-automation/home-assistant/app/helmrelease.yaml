@@ -38,6 +38,8 @@ spec:
     controllers:
       home-assistant:
         type: statefulset
+        # Which site runs it (docs/wsl/multi-site.md, "Switching an app").
+        replicas: ${HOME_ASSISTANT_REPLICAS:=1}
         annotations:
           reloader.stakater.com/auto: "true"
         statefulset:
