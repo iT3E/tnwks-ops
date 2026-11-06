@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.212.0 - 2026-11-06
+
+### Added
+
+* The first shared VIP: both WSL clusters' internal ingress on 10.10.95.200, announced over BGP, with the router preferring homelab-wsl and failing over to homelab-wsl-02. DNS doesn't use it yet.
+
 ## v1.211.1 - 2026-11-06
 
 ### Fixed
