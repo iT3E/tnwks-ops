@@ -199,6 +199,8 @@ def load_app(name):
 
 
 def pg_state(site, app):
+    if not app.get("postgres"):
+        return None
     c = site.get("cluster.postgresql.cnpg.io", app["postgres"], "databases", check=False)
     if not c:
         return None
@@ -214,17 +216,24 @@ def pg_state(site, app):
     }
 
 
+def workloads(app):
+    """["deployment/x", "statefulset/y", ...]; plain names in "deployments" are Deployments."""
+    return app.get("workloads") or [f"deployment/{d}" for d in app.get("deployments", [])]
+
+
 def deployments_stopped(site, app):
-    for d in app["deployments"]:
-        o = site.get("deployment", d, app["namespace"], check=False)
+    for w in workloads(app):
+        kind, name = w.split("/", 1)
+        o = site.get(kind, name, app["namespace"], check=False)
         if o and (o["spec"].get("replicas", 1) != 0 or o.get("status", {}).get("replicas", 0) != 0):
             return False
     return True
 
 
 def deployments_ready(site, app):
-    for d in app["deployments"]:
-        o = site.get("deployment", d, app["namespace"], check=False)
+    for w in workloads(app):
+        kind, name = w.split("/", 1)
+        o = site.get(kind, name, app["namespace"], check=False)
         if not o or o["spec"].get("replicas", 0) < 1:
             return False
         if o.get("status", {}).get("readyReplicas", 0) < o["spec"]["replicas"]:
@@ -246,14 +255,16 @@ def cmd_status(args):
     p = app["prefix"]
     for s in map(Site, SITES):
         ov = {k: v for k, v in s.overrides().items() if k.startswith(p + "_")}
-        pg = pg_state(s, app) or {}
+        pg = (pg_state(s, app) or {}) if app.get("postgres") else None
         deps = []
-        for d in app["deployments"]:
-            o = s.get("deployment", d, app["namespace"], check=False)
+        for w in workloads(app):
+            kind, d = w.split("/", 1)
+            o = s.get(kind, d, app["namespace"], check=False)
             deps.append(f"{d}={o['status'].get('readyReplicas', 0)}/{o['spec'].get('replicas')}" if o else f"{d}=absent")
         print(f"{s.name}:")
         print(f"  overrides: {ov or '{}'}")
-        print(f"  postgres:  {pg.get('phase')} primary={pg.get('primary')} in_recovery={pg.get('in_recovery')} pod={pg.get('pod')}")
+        if pg is not None:
+            print(f"  postgres:  {pg.get('phase')} primary={pg.get('primary')} in_recovery={pg.get('in_recovery')} pod={pg.get('pod')}")
         print(f"  app:       {' '.join(deps)}")
 
 
@@ -274,6 +285,9 @@ def check_lease(app_name, old, new, promote):
 
 
 def preflight(old, new, app):
+    if not app.get("postgres"):
+        preflight_pvcs(new, old, app)
+        return None, None
     po, pn = pg_state(old, app), pg_state(new, app)
     if not po or not pn:
         die(f"{app['postgres']} missing on {'old' if not po else 'new'} site")
@@ -293,6 +307,11 @@ def preflight(old, new, app):
         hi, lo = replayed.split("/")
         if ((int(hi, 16) << 32) | int(lo, 16)) < seg_start:
             die(f"{new.name} hasn't replayed {archived} yet; wait for it (or check the replica)")
+    preflight_pvcs(new, old, app)
+    return po, pn
+
+
+def preflight_pvcs(new, old, app):
     if app["pvcs"]:
         repo = new.kubectl("get", "clusterrepository.kopiur.home-operations.com", old.name, "-o", "json", check=False)
         if repo.returncode != 0:
@@ -300,7 +319,16 @@ def preflight(old, new, app):
         conds = {c["type"]: c["status"] for c in json.loads(repo.stdout).get("status", {}).get("conditions", [])}
         if conds.get("Ready") != "True":
             die(f"{new.name}: ClusterRepository {old.name} not Ready")
-    return po, pn
+
+
+def restore_target(site, app, pvc):
+    # A StatefulSet's PVC doesn't exist until its pod does: kopiur creates it
+    # (same name), and the StatefulSet adopts it when it scales up.
+    if pvc.get("create") and not site.get("persistentvolumeclaim", pvc["name"], app["namespace"], check=False):
+        c = pvc["create"]
+        return {"pvc": {"name": pvc["name"], "capacity": c["capacity"], "storageClassName": c["storageClass"],
+                        "accessModes": ["ReadWriteOnce"]}}
+    return {"pvcRef": {"name": pvc["name"]}}
 
 
 def copy_pvc(old, new, app, pvc, stamp):
@@ -339,7 +367,7 @@ def copy_pvc(old, new, app, pvc, stamp):
         "spec": {
             "repository": {"kind": "ClusterRepository", "name": old.name},
             "source": {"identity": {**ident, "snapshotID": sid}},
-            "target": {"pvcRef": {"name": pvc["name"]}},
+            "target": restore_target(new, app, pvc),
             "credentialProjection": {"enabled": True},
             # An exact mirror: the PVC may hold this site's older copy.
             "options": {"enableFileDeletion": True},
@@ -369,7 +397,10 @@ def cmd_switchover(args):
     new = Site(args.to)
     old = Site(next(s for s in SITES if s != args.to))
     log(f"{'PROMOTE' if args.promote else 'switchover'} {args.app}: {old.name} -> {new.name}")
-    check_lease(args.app, old, new, args.promote)
+    if app.get("lease"):
+        check_lease(args.app, old, new, args.promote)
+    elif args.promote:
+        die(f"{args.app} has no site lease and no standby database: --promote is for warm apps")
     if args.promote:
         return promote(args, app, old, new)
     po, pn = preflight(old, new, app)
@@ -394,26 +425,29 @@ def cmd_switchover(args):
             copy_pvc(old, new, app, pvc, stamp)
     t_pvcs = time.time()
 
-    old_ov[f"{p}_PG_PRIMARY"] = new.name
-    old.set_overrides(args.app, old_ov)
-    old.reconcile(app["kustomizations"]["db"])
-    token = wait(f"demotion token on {old.name}", lambda: (pg_state(old, app) or {}).get("demotion_token"), timeout=600)
-    try:
-        info = json.loads(base64.b64decode(token))
-        log(f"{old.name}: demoted; token LSN {info.get('latestCheckpointREDOLocation') or info}")
-    except Exception:
-        log(f"{old.name}: demoted")
-
-    new_ov = {f"{p}_PG_PRIMARY": new.name, f"{p}_PG_PROMOTION_TOKEN": token, f"{p}_REPLICAS": "1"}
+    new_ov = {f"{p}_REPLICAS": "1"}
     if app.get("backup_schedule"):
         new_ov[f"{p}_BACKUP_SUSPEND"] = "false"
-    new.set_overrides(args.app, new_ov)
-    new.reconcile(app["kustomizations"]["db"])
-    wait(f"{app['postgres']} primary on {new.name}",
-         lambda: (lambda s: s and not s["in_recovery"] and s["phase"] == "Cluster in healthy state")(pg_state(new, app)),
-         timeout=900)
+    if app.get("postgres"):
+        old_ov[f"{p}_PG_PRIMARY"] = new.name
+        old.set_overrides(args.app, old_ov)
+        old.reconcile(app["kustomizations"]["db"])
+        token = wait(f"demotion token on {old.name}", lambda: (pg_state(old, app) or {}).get("demotion_token"), timeout=600)
+        try:
+            info = json.loads(base64.b64decode(token))
+            log(f"{old.name}: demoted; token LSN {info.get('latestCheckpointREDOLocation') or info}")
+        except Exception:
+            log(f"{old.name}: demoted")
+        new_ov.update({f"{p}_PG_PRIMARY": new.name, f"{p}_PG_PROMOTION_TOKEN": token})
+        new.set_overrides(args.app, new_ov)
+        new.reconcile(app["kustomizations"]["db"])
+        wait(f"{app['postgres']} primary on {new.name}",
+             lambda: (lambda s: s and not s["in_recovery"] and s["phase"] == "Cluster in healthy state")(pg_state(new, app)),
+             timeout=900)
+        log(f"{new.name}: {app['postgres']} is primary")
+    else:
+        new.set_overrides(args.app, new_ov)
     t_promoted = time.time()
-    log(f"{new.name}: {app['postgres']} is primary")
     new.reconcile(app["kustomizations"]["app"])
     reconcile_backup(new, app)
     wait(f"{args.app} ready on {new.name}", lambda: deployments_ready(new, app), timeout=1200)
@@ -423,7 +457,7 @@ def cmd_switchover(args):
     chk = app.get("check")
     if chk:
         def answers():
-            p_ = new.kubectl("exec", "-n", app["namespace"], f"deploy/{chk['deployment']}", "-c", chk["container"], "--",
+            p_ = new.kubectl("exec", "-n", app["namespace"], chk.get("workload") or f"deploy/{chk['deployment']}", "-c", chk["container"], "--",
                              "python3", "-c", f"import urllib.request;print(urllib.request.urlopen({chk['url']!r},timeout=10).status)",
                              check=False)
             return p_.stdout.strip() if p_.returncode == 0 else None
@@ -431,14 +465,15 @@ def cmd_switchover(args):
         log(f"{new.name}: check {chk['url']}: {status}")
     t_ready = time.time()
 
-    pn2 = pg_state(old, app) or {}
-    log(f"{old.name}: {app['postgres']} now in_recovery={pn2.get('in_recovery')} (follows {new.name})")
+    if app.get("postgres"):
+        pn2 = pg_state(old, app) or {}
+        log(f"{old.name}: {app['postgres']} now in_recovery={pn2.get('in_recovery')} (follows {new.name})")
     print(json.dumps({
         "app": args.app, "from": old.name, "to": new.name,
         "downtime_s": round(t_ready - t_stopped),
         "stop_s": round(t_stopped - t0), "pvc_copy_s": round(t_pvcs - t_stopped),
         "db_switch_s": round(t_promoted - t_pvcs), "app_start_s": round(t_ready - t_promoted),
-        "rpo": "0 (promotion token: replayed to the demoted primary's last LSN)",
+        "rpo": "0 (promotion token: replayed to the demoted primary's last LSN)" if app.get("postgres") else "0 (stopped before the copy)",
     }, indent=2))
     log("done. To make it permanent: a PR to both cluster-settings, then `site-failover clear`.")
 
@@ -505,7 +540,8 @@ def cmd_clear(args):
         if not args.yes and input("Type the app name to go on: ").strip() != args.app:
             die("aborted")
         s.set_overrides(args.app, {})
-        s.reconcile(app["kustomizations"]["db"])
+        if app.get("postgres"):
+            s.reconcile(app["kustomizations"]["db"])
         s.reconcile(app["kustomizations"]["app"])
         reconcile_backup(s, app)
 

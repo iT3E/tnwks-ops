@@ -47,6 +47,7 @@ resources:
   - ../../../apps/production/namespace.yaml
   - ../../../apps/production/mealie/ks.yaml
   - ../../../apps/production/transcriber/ks.yaml
+  - ../../../apps/production/changedetection/ks.yaml
   # Backup credentials: certificate -> STS session for barman-cloud and kopiur
   # (role tnwks-rolesanywhere-backups-wsl-02: read the bucket, write only
   # homelab-wsl-02's prefixes).
