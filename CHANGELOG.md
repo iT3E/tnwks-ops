@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.180.0 - 2026-11-06
+
+### Changed
+
+* docs: the fencing design for an unplanned failover between the WSL sites (site leases on the router, an app gate, a database fence).
+
 ## v1.179.0 - 2026-11-06
 
 ### Added
