@@ -1,3 +1,0 @@
-kind: Added
-body: 'Stage B of the routed multi-site network, ready to run: `talos_clusters` carries each WSL cluster''s Docker network options (nat-unprotected, no masquerading, bridge `br-site1`/`br-site2`), `01-talos-bootstrap.yml` creates the network with them when it''s missing and only warns when an existing one differs, and `talos/wsl/recreate-network.sh` (`task talos:network:wsl`, `talos:network:wsl-02`) moves a running cluster onto it in place, about 90 s down, with `--dry-run` and `--rollback`. Both distros turn on `wsl_site_routing_masquerade` now (no change next to Docker''s own masquerade). The swap itself is the owner''s step.'
-time: 2026-11-06T03:20:42.000000000-08:00

@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.200.0 - 2026-11-06
+
+### Added
+
+* Stage B of the routed multi-site network, ready to run: `talos_clusters` carries each WSL cluster's Docker network options (nat-unprotected, no masquerading, bridge `br-site1`/`br-site2`), `01-talos-bootstrap.yml` creates the network with them when it's missing and only warns when an existing one differs, and `talos/wsl/recreate-network.sh` (`task talos:network:wsl`, `talos:network:wsl-02`) moves a running cluster onto it in place, about 90 s down, with `--dry-run` and `--rollback`. Both distros turn on `wsl_site_routing_masquerade` now (no change next to Docker's own masquerade). The swap itself is the owner's step.
+
 ## v1.199.2 - 2026-11-06
 
 ### Fixed
