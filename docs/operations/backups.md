@@ -55,12 +55,17 @@ S3 is `tnwks-homelab-backups-654654262098` in the prod AWS account,
 
 ### Postgres
 
-The single `databases/postgres` Cluster holds every app database: `app`
-(Mealie), `home_assistant` (recorder history), `bitwarden`, `litellm`,
-`plausible` (metadata), the storefront API, `vantrip`, `grafana`, `firefly`
-(the household ledger). All of it is covered by
-barman-cloud; there is nothing per-database to configure. New databases are
-covered automatically.
+Apps are moving off the shared `databases/postgres` Cluster to one CNPG
+cluster each (`kubernetes/components/cnpg-cluster`, an `<app>-db` Flux
+Kustomization): Mealie, the transcriber, Firefly, finance-sync and Home
+Assistant have their own (2026-11-05). Each archives WAL and takes a daily
+base backup to `s3://<bucket>/cnpg/<app>/<site>/`, from its own ObjectStore;
+an app with a standby on the other WSL site (`cnpg-standby`) has a replica
+there that re-archives under that site's name. The shared cluster still holds
+the rest (`bitwarden`, `litellm`, `plausible`, `grafana`, `vantrip`, the
+things API), plus the rollback copies of the moved databases, and is backed
+up as before under `cnpg/homelab-wsl/`. Anything in a CNPG cluster is covered
+by barman-cloud; there is nothing per-database to configure.
 
 ### PVCs (kopiur)
 
@@ -73,6 +78,7 @@ covered automatically.
 | UniFi | `networking/config-unifi-0` | Includes the controller's `.unf` auto-backups. The MongoDB PVC is skipped: a `.unf` restore is the supported path |
 | changedetection | `production/config-changedetection-0` | Watch list and history |
 | Firefly III | `production/firefly-upload` | Transaction attachments (none yet). The ledger is in Postgres; the Passport keypair and `APP_KEY` are in git (SOPS) |
+| Transcriber | `production/transcriber-audio` | Clip audio (~7 MB per hour of speech, kept 90 days). Transcripts are in Postgres; the models download again. Runs on homelab-wsl-02, so its snapshots are in that site's repository (`kopiur-homelab-wsl-02/`) |
 | finance-sync | `production/finance-sync-state` | The jobs feeding Firefly: rotating Simplifi token, `sync_state.json` (losing it re-posts transactions), account and category maps, Amazon order database and rules. None of it is in git or the image |
 
 The mover must run as the app's user (`mover.securityContext`): kopia fails

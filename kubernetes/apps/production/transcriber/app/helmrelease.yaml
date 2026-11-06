@@ -27,8 +27,8 @@
 # - The buffer is RAM: ~3 KB/s per camera for BUFFER_SECONDS, kept off the
 #   shared WSL disk (the frigate tmp-cache note explains why that matters).
 # - Clip audio on local-path-bulk, ~7 MB per hour of speech, deleted after
-#   AUDIO_RETENTION_DAYS; transcripts stay in Postgres. Not backed up by
-#   kopiur: the transcripts are (with the database), the audio isn't.
+#   AUDIO_RETENTION_DAYS; transcripts stay in Postgres. kopiur backs the
+#   audio up nightly (kopiur-system/kopiur/policies/transcriber.yaml).
 # - Models (~1 GB: whisper, wav2vec2, pyannote) download once into the
 #   models PVC on first start. Until then capture runs and clips queue.
 # - THREADS / OMP_NUM_THREADS 4 and the 4-core limit: transcription bursts

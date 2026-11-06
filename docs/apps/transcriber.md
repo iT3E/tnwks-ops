@@ -66,14 +66,15 @@ speech is missed or background noise triggers it.
 
 | What | Where | Size | Kept |
 | --- | --- | --- | --- |
-| Clip audio | PVC `transcriber-audio` (local-path-bulk) | ~7 MB per hour of speech (Opus ~16 kb/s) | `AUDIO_RETENTION_DAYS` (90) |
+| Clip audio | PVC `transcriber-audio` (local-path-bulk), kopiur nightly | ~7 MB per hour of speech (Opus ~16 kb/s) | `AUDIO_RETENTION_DAYS` (90) |
 | Transcripts, speakers, voiceprints | cnpg database `transcriber` | well under 1 GB a year at household volumes | forever |
 | Models (~1 GB) | PVC `transcriber-models` | | until deleted |
 
 The audio is not in Postgres: blobs would bloat the database, its WAL and
 the S3 backups. The database row holds the clip's path. Transcripts are
-backed up with the rest of the cnpg cluster (barman to S3); clip audio is
-not backed up.
+backed up with its CNPG cluster (barman to S3); clip audio nightly by kopiur
+on the site that runs it (`kopiur-system/kopiur/policies/transcriber.yaml`),
+and restored weekly onto the standby site.
 
 Query the transcripts directly:
 

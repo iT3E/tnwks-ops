@@ -3,8 +3,7 @@
 # restored into this site's copy wherever the app is off here (the script
 # says what it skips). Keeps the standby's PVCs current and is the standing
 # restore drill. A failed run raises KubeJobFailed; no success for 8 days
-# raises StandbyRestoreDrillStale. Mealie only so far: the transcriber's audio
-# has no snapshots to restore (transfer only).
+# raises StandbyRestoreDrillStale.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -53,7 +52,10 @@ spec:
                   value: >-
                     [{"namespace": "production", "pvc": "mealie-config",
                       "policy": "mealie", "deployment": "mealie",
-                      "prefix": "MEALIE", "uid": 1000, "gid": 1000}]
+                      "prefix": "MEALIE", "uid": 1000, "gid": 1000},
+                     {"namespace": "production", "pvc": "transcriber-audio",
+                      "policy": "transcriber", "deployment": "transcriber",
+                      "prefix": "TRANSCRIBER", "uid": 1000, "gid": 1000}]
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
