@@ -7,7 +7,7 @@ holds infrastructure config, manifests, or playbooks.
 
 | Cluster         | Where                               | CNI                                         | Storage default                                                | LB                                           | Notes                                                                   |
 | --------------- | ----------------------------------- | ------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------- |
-| `homelab-wsl`   | Talos-in-Docker on the WSL2 desktop | **Cilium** (since 2026-11-06, moved in place from Flannel; pods `10.46/16`, cluster ID 1) | `local-path`                                                   | MetalLB on the docker bridge (`10.5.0.0/24`) | USB passthrough via `usbipd-win` for Frigate/Coral + Z-Stick            |
+| `homelab-wsl`   | Talos-in-Docker on the WSL2 desktop | **Cilium** (since 2026-11-06, moved in place from Flannel; pods `10.46/16`, cluster ID 1) | `local-path`                                                   | Cilium LB IPAM + L2 on the docker bridge (`10.5.0.0/24`) | USB passthrough via `usbipd-win` for Frigate/Coral + Z-Stick            |
 | `homelab-wsl-02` | Talos-in-Docker on the second WSL2 host (WSL-02) | **Cilium** (kube-proxy replacement, L2) | `local-path` (ext4 vhdx on C:) | Cilium LB IPAM + L2 on the docker bridge (`10.6.0.0/24`); pods `10.44/16`, cluster ID 2 | Being brought up: platform only so far (`talos/wsl-02/README.md`) |
 | `homelab-ms-01` | 3× MS-01 bare-metal Talos           | **Cilium** (kube-proxy replacement, L2/BGP) | `ceph-block` (Rook), `nfs-bulk` (democratic-csi → TerraMaster) | Cilium L2/BGP on VLAN 910 (`10.10.91.50–60`) | Public ingress via cloudflared; runs Rook Ceph, Loki/Thanos/Vector, NFD |
 
@@ -16,7 +16,8 @@ Both WSL clusters run Cilium. Its default `clean-cilium-state` requests
 ([cilium#13768](https://github.com/cilium/cilium/issues/13768)), but Cilium
 doesn't need it: the shared HelmRelease uses Talos' own Cilium values.
 `homelab-wsl` ran Flannel until 2026-11-06 and moved in place (it keeps
-cluster-pool IPAM on `10.46.0.0/16`, and MetalLB for its LoadBalancer IPs).
+cluster-pool IPAM on `10.46.0.0/16`; MetalLB went the same day, so both WSL
+clusters get LoadBalancer IPs from Cilium LB IPAM + L2 announcements).
 NetworkPolicies in shared apps are enforced on every cluster.
 
 ## Common commands

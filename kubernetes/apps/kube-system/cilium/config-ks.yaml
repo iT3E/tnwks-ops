@@ -2,7 +2,7 @@
 # Cilium LB IPAM pool and L2 announcements: LoadBalancer IPs from
 # CILIUM_LB_POOL_START..STOP (cluster-settings), answered over ARP on the
 # nodes' eth0. A cluster lists this next to ks.yaml when Cilium hands out its
-# LoadBalancer IPs (homelab-wsl-02; homelab-wsl uses MetalLB).
+# LoadBalancer IPs (both WSL clusters).
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:

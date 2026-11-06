@@ -108,7 +108,7 @@ AP (VLAN 900)
   -> DNS "unifi" on the router -> 10.10.91.142 (the Windows desktop)
   -> router firewall: unifi-mgmt-900 -> unifi_controller, tcp/udp 8080, 3478, 6789
   -> Windows netsh portproxy 0.0.0.0:8080 -> <wsl-ip>:18080  (firewall: from 10.10.90.0/24 only)
-  -> socat tnwks-lan-bridge@unifi-inform -> MetalLB 10.5.0.206:8080
+  -> socat tnwks-lan-bridge@unifi-inform -> LoadBalancer VIP 10.5.0.206:8080
   -> networking/unifi-inform Service -> the controller pod
 ```
 

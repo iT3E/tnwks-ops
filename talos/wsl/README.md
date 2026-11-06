@@ -47,7 +47,7 @@ talosctl cluster destroy --name homelab-wsl
   - `local-path` (default) — Talos node container's overlay (C:)
   - `local-path-bulk` — pinned to worker-2 → Windows E: at
     `/mnt/e/k8s-storage` for bulk video / archive PVCs
-- Port-forward or MetalLB for service access; the LB range
+- Port-forward or a LoadBalancer VIP (Cilium LB IPAM + L2) for service access; the LB range
   (`10.5.0.200-220`) is reachable from the WSL host directly and from
   the LAN via the socat bridge (`wsl-lan-bridge.yml`)
 - USB-attached pods (Frigate, zwave-js-ui) require USB devices to be

@@ -55,7 +55,13 @@ data:
   # (10.5.0.0/24). Reachable from this WSL host directly; reachable from
   # the Windows host or LAN only via netsh portproxy on Windows.
   LB_RANGE: "10.5.0.200-10.5.0.220"
-  METALLB_LB_RANGE: "10.5.0.200-10.5.0.220"
+  # LoadBalancer IPs: Cilium LB IPAM + L2 announcements on the Docker bridge
+  # (kubernetes/apps/kube-system/cilium/config), like homelab-wsl-02; MetalLB
+  # was removed on 2026-11-06. The METALLB_* names are kept as address
+  # settings other apps read.
+  CILIUM_LB_POOL_START: "10.5.0.200"
+  CILIUM_LB_POOL_STOP: "10.5.0.220"
+  CILIUM_L2_ANNOUNCEMENTS_ENABLED: "true"
   METALLB_K8S_GATEWAY_ADDR: "10.5.0.201"
   METALLB_INGRESS_ADDR: "10.5.0.202"
   INGRESS_INTERNAL_ADDR: "10.5.0.200"
@@ -93,10 +99,6 @@ data:
   # LoadBalancer IPs otherwise stay with MetalLB; Cilium only hands out
   # shared-vip addresses, to Services labelled for them.
   CILIUM_BGP_ENABLED: "true"
-  # MetalLB keeps the LoadBalancer IPs here: Cilium's LB IPAM takes only
-  # Services with loadBalancerClass io.cilium/bgp-control-plane (the shared
-  # VIPs), which MetalLB ignores.
-  CILIUM_DEFAULT_LB_IPAM: "none"
   CILIUM_BGP_LOCAL_ASN: "64601"
   CILIUM_BGP_PEER_ASN: "64611"
   CILIUM_BGP_PEER_ADDR: "10.5.0.1"

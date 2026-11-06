@@ -42,6 +42,8 @@ resources:
   - ../../../apps/kube-system
   # CNI: Cilium (shared HelmRelease; IPAM mode and pool from cluster-settings).
   - ../../../apps/kube-system/cilium/ks.yaml
+  # LoadBalancer IPs: the LB IPAM pool and L2 announcements (no MetalLB).
+  - ../../../apps/kube-system/cilium/config-ks.yaml
   # BGP to the distro's FRR (role wsl_site_routing) and the shared VIP pool.
   - ../../../apps/kube-system/cilium/bgp-ks.yaml
   - ../../../apps/kube-system/local-path-provisioner/ks.yaml
