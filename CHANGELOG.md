@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.204.0 - 2026-11-06
+
+### Changed
+
+* homelab-wsl runs entirely on Cilium's datapath: kube-proxy replacement, BPF masquerade and host routing, and NetworkPolicy enforcement, now that every pod has a Cilium address. The migration node config is removed.
+
 ## v1.203.0 - 2026-11-06
 
 ### Changed
