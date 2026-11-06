@@ -92,6 +92,17 @@ spec:
           webrtc-udp:
             port: 8555
             protocol: UDP
+      # go2rtc's RTSP restream for homelab-wsl-02 (the transcriber there reads
+      # camera audio from it). LAN path: the Windows LAN bridge's port 8554,
+      # admitted only from WSL-02 (windows_lan_bridge defaults); this is the
+      # VIP its socat forwards to.
+      rtsp-peer:
+        controller: frigate
+        type: LoadBalancer
+        loadBalancerIP: "${FRIGATE_RTSP_LB_ADDR}"
+        ports:
+          rtsp:
+            port: 8554
     # Frigate's Prometheus endpoint, for the detection/camera alerts in
     # monitoring/kube-prometheus-stack/addons/alerts/frigate.yaml. Only the
     # series those use are kept: the per-process cpu/mem series are labeled by

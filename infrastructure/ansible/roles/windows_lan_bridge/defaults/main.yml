@@ -34,6 +34,10 @@ lan_bridge_tcp_ports:
   # (any address).
   - { port: 2222, wsl_port: 22 }
   - { port: 18789 }
+  # Peer services for homelab-wsl-02's apps, admitted only from WSL-02:
+  # go2rtc's RTSP restream (Frigate) and LiteLLM. No ingress for either.
+  - { port: 8554, remote: [10.10.91.112] }
+  - { port: 4000, remote: [10.10.91.112] }
 
 # Ports this bridge used to forward: their portproxy entry (script) and
 # firewall rule (Ansible) are removed. 6001: syslog moved to UDP.

@@ -5,7 +5,8 @@
 # syslog→vector-aggregator udp/6001 (the router's remote logging; Windows
 # side: a second Start-TnwksUdpRelay.ps1 instance), unifi-inform→the UniFi
 # controller's tcp/8080 (socat listens on 18080; Sync-TnwksLanBridge.ps1 maps
-# LAN 8080 to it).
+# LAN 8080 to it), rtsp→Frigate's go2rtc tcp/8554 and litellm→LiteLLM tcp/4000
+# (peer services for homelab-wsl-02).
 # 'dns' is intentionally omitted by default — netsh portproxy is TCP-only,
 # so the LAN-side DNS path goes via VyOS, not via this bridge.
 # Target addresses for tnwks-lan-bridge.sh, per host (env var -> address). The
@@ -21,3 +22,5 @@ wsl_lan_bridge_instances:
   - netflow
   - syslog
   - unifi-inform
+  - rtsp
+  - litellm

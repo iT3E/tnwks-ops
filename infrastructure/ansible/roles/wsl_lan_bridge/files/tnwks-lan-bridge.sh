@@ -18,6 +18,8 @@ MQTT_IP="${MQTT_IP:-10.5.0.203}"
 FLOW_COLLECTOR_IP="${FLOW_COLLECTOR_IP:-10.5.0.204}"
 VECTOR_IP="${VECTOR_IP:-10.5.0.205}"
 UNIFI_IP="${UNIFI_IP:-10.5.0.206}"
+FRIGATE_RTSP_IP="${FRIGATE_RTSP_IP:-10.5.0.207}"
+LITELLM_IP="${LITELLM_IP:-10.5.0.208}"
 
 # socat must exist on the WSL host. Apt-get on Ubuntu is fine.
 command -v socat >/dev/null || { echo "socat missing — sudo apt-get install -y socat"; exit 1; }
@@ -47,8 +49,12 @@ case "${1:-}" in
   # UniFi inform from the APs. Listens on 18080 because Docker on this host
   # already holds 8080; Windows portproxy maps LAN 8080 -> WSL 18080.
   unifi-inform) run 18080 "${UNIFI_IP}:8080"     TCP ;;
+  # Peer services for homelab-wsl-02 (the Windows firewall admits only
+  # WSL-02): go2rtc's RTSP restream and LiteLLM.
+  rtsp)    run 8554 "${FRIGATE_RTSP_IP}:8554"    TCP ;;
+  litellm) run 4000 "${LITELLM_IP}:4000"         TCP ;;
   *)
-    echo "usage: $0 {http|https|mqtt|dns|netflow|syslog|unifi-inform}" >&2
+    echo "usage: $0 {http|https|mqtt|dns|netflow|syslog|unifi-inform|rtsp|litellm}" >&2
     exit 2
     ;;
 esac

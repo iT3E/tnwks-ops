@@ -186,6 +186,17 @@ spec:
         ports:
           http:
             port: 4000
+      # For homelab-wsl-02's apps (the transcriber's summaries). No ingress,
+      # so the admin UI stays off the LAN: the Windows LAN bridge's port 4000,
+      # admitted only from WSL-02 (windows_lan_bridge defaults), forwards to
+      # this VIP. Keys are still required.
+      peer:
+        controller: litellm
+        type: LoadBalancer
+        loadBalancerIP: "${LITELLM_LB_ADDR:=}"
+        ports:
+          http:
+            port: 4000
     persistence:
       signing-helper:
         type: emptyDir
