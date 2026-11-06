@@ -9,7 +9,7 @@ and its configuration (site settings, the WLAN, each AP) is Terraform in
 | --- | --- |
 | Controller UI | `https://unifi.internal.tnwks.us`: Cognito login (oauth2-proxy), then the controller's local login (`admin_username` in SOPS) |
 | Controller API | `https://10.5.0.206:8443` (VIP, desktop only) for local Terraform; `unifi.networking.svc.cluster.local:8443` for CI and unpoller |
-| Inform URL the APs use | `http://unifi:8080/inform` (router record `unifi` -> `10.10.91.142`) |
+| Inform URL the APs use | `http://unifi:8080/inform` (router record `unifi` -> `10.10.91.112`, WSL-02, since 2026-11-06) |
 | Configuration | `environments/prod/unifi` + `modules/unifi`: planned on the PR and applied on merge by `unifi-{plan,apply}.yaml` on the self-hosted runner ([`ci.md`](ci.md)). State in TFC workspace `tnwks-unifi-prod`. `task unifi:*` for bootstrap and break-glass |
 | Secrets | `environments/prod/unifi/secrets.sops.yaml`: controller logins, device SSH, SSID, passphrase, AP MACs |
 | Metrics | `monitoring/unpoller` (local controller user `unifipoller`); AP pings in `monitoring/smokeping-prober` (role `ap`); SW03 AP ports via `monitoring/snmp-exporter` |
@@ -112,6 +112,13 @@ AP (VLAN 900)
   -> networking/unifi-inform Service -> the controller pod
 ```
 
+- **It runs on homelab-wsl-02 since 2026-11-06**, moved with
+  `bin/site-failover switchover unifi` (125 s down). Its `unifi` Service is
+  global over Cilium Cluster Mesh, so Home Assistant's UniFi integration,
+  unpoller and the UniFi CI keep using `unifi.networking.svc.cluster.local`
+  from either site. The desktop's `.unf` copy to Google Drive skips while the
+  controller is on the other site; its `/config` (auto-backups included) is
+  in that site's nightly kopiur snapshot.
 - **Either WSL site can run the controller** (docs/wsl/multi-site.md). Both
   deploy it, the standby at `UNIFI_REPLICAS: "0"`, with unpoller following
   it. `bin/site-failover switchover unifi --to <site>` stops it, copies both

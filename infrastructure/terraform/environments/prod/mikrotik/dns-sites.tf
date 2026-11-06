@@ -70,6 +70,14 @@ locals {
       match_subdomain = true
       comment         = "homelab-wsl-02: kitchen-screensaver"
     }
+    wsl02_unifi = {
+      name            = "unifi.internal.tnwks.us"
+      address         = local.wsl02_lan_address
+      type            = "A"
+      ttl             = "5m"
+      match_subdomain = true
+      comment         = "homelab-wsl-02: unifi"
+    }
     wsl02_qbittorrent = {
       name            = "qbittorrent.internal.tnwks.us"
       address         = local.wsl02_lan_address

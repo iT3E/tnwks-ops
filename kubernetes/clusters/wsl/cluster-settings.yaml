@@ -172,3 +172,8 @@ data:
   IMMICH_SYNC_SUSPEND: "true"
   # The media stack: on homelab-wsl-02 since 2026-11-06; here at 0.
   MEDIA_REPLICAS: "0"
+  # The UniFi controller (and unpoller) run on homelab-wsl-02 since
+  # 2026-11-06 (bin/site-failover, then this setting); this site keeps them
+  # at 0, and its global Service reaches the controller over Cluster Mesh.
+  UNIFI_REPLICAS: "0"
+  UNIFI_BACKUP_SUSPEND: "true"
