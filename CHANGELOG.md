@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.168.0 - 2026-11-06
+
+### Added
+
+* kopiur works in both directions between the WSL sites: each has the other's repository read-only, and homelab-wsl-02 carries the policies of its standby apps (schedules suspended), plus a transfer-only policy for the transcriber's audio.
+
 ## v1.167.0 - 2026-11-06
 
 ### Added

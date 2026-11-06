@@ -1,3 +1,0 @@
-kind: Added
-body: 'kopiur works in both directions between the WSL sites: each has the other''s repository read-only, and homelab-wsl-02 carries the policies of its standby apps (schedules suspended), plus a transfer-only policy for the transcriber''s audio.'
-time: 2026-11-05T17:30:28.104612801-08:00
