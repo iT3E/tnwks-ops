@@ -37,6 +37,8 @@ resources:
   - ../../../apps/kopiur-system/kopiur/peer-repository-ks.yaml
   # Weekly restore of the other site's newest snapshots into this site's standby PVCs.
   - ../../../apps/kopiur-system/standby-restore/ks.yaml
+  # Fence a warm app's Postgres when its site lease names this site.
+  - ../../../apps/databases/site-lease-fence/ks.yaml
   - ../../../apps/flux-system
   - ../../../apps/kube-system
   - ../../../apps/kube-system/flannel/ks.yaml

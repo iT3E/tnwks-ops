@@ -89,7 +89,45 @@ spec:
         pod:
           terminationGracePeriodSeconds: 60
         initContainers:
+          site-lease-gate:
+            # Fencing (docs/wsl/multi-site.md): wait while this site is fenced from
+            # writing transcriber (transcriber.lease.tnwks.local names it), or while the lease
+            # can't be read. TRANSCRIBER_LEASE_GATE=off in site-overrides skips it.
+            image:
+              repository: docker.io/library/busybox
+              tag: 1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+            command: ["sh", "-c"]
+            args:
+              - |
+                [ "$GATE" = off ] && { echo "lease gate off"; exit 0; }
+                while true; do
+                  t=$(nslookup -type=txt "$LEASE" 2>/dev/null | sed -n 's/.*text = "\(.*\)"/\1/p' | head -1)
+                  if [ -z "$t" ]; then echo "lease $LEASE unreadable; waiting"
+                  elif [ "$t" = "$SITE" ]; then echo "$SITE is fenced from writing transcriber; waiting"
+                  else echo "lease $LEASE: $t; not fenced, starting"; exit 0; fi
+                  sleep 10
+                done
+            env:
+              LEASE: transcriber.lease.tnwks.local.
+              SITE: ${CLUSTER_NAME}
+              GATE: ${TRANSCRIBER_LEASE_GATE:=on}
+            securityContext:
+              runAsUser: 65534
+              runAsGroup: 65534
+              runAsNonRoot: true
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            resources:
+              requests:
+                cpu: 5m
+                memory: 8Mi
+              limits:
+                memory: 32Mi
           selfcheck:
+            # After the lease gate: a fenced site doesn't touch the database.
+            dependsOn: site-lease-gate
             image: &image
               repository: ghcr.io/it3e/tnwks-transcriber
               tag: 0.3.0@sha256:12cb5fd7e58c50b77a5486b4ebff2924d81b8fccccf24e6561e95163a22ae2f0

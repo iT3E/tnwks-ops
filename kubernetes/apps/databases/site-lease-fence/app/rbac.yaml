@@ -1,0 +1,27 @@
+---
+# Read the warm apps' CNPG Clusters and set the fencing annotation on one.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: site-lease-fence
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: site-lease-fence
+rules:
+  - apiGroups: ["postgresql.cnpg.io"]
+    resources: ["clusters"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: site-lease-fence
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: site-lease-fence
+subjects:
+  - kind: ServiceAccount
+    name: site-lease-fence

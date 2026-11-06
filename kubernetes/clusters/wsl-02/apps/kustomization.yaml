@@ -57,6 +57,8 @@ resources:
   - ../../../apps/kopiur-system/kopiur/peer-repository-ks.yaml
   # Weekly restore of the other site's newest snapshots into this site's standby PVCs.
   - ../../../apps/kopiur-system/standby-restore/ks.yaml
+  # Fence a warm app's Postgres when its site lease names this site.
+  - ../../../apps/databases/site-lease-fence/ks.yaml
 # Parts of those shared ks.yaml files that don't run here (yet):
 #   - PrometheusRules: no kube-prometheus-stack on this cluster.
 #   - ingress-nginx (public): waits for this cluster's own cloudflared tunnel.

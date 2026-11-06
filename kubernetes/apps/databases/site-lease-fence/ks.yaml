@@ -1,0 +1,19 @@
+---
+# Database fence for the warm apps (app/cronjob.yaml). Both WSL sites.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: site-lease-fence
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: cloudnative-pg-app
+  path: ./kubernetes/apps/databases/site-lease-fence/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 3m
