@@ -44,8 +44,6 @@ resources:
   - ../../../apps/kube-system/flannel/ks.yaml
   # Cilium next to Flannel while homelab-wsl moves to it (cilium-ks.yaml).
   - ./cilium-ks.yaml
-  # Which nodes Cilium has taken over (removed when the move is done).
-  - ../../../apps/kube-system/cilium/migration-ks.yaml
   - ../../../apps/kube-system/local-path-provisioner/ks.yaml
   - ../../../apps/media
   - ../../../apps/monitoring
