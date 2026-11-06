@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.200.2 - 2026-11-06
+
+### Fixed
+
+* immich-sync runs again on homelab-wsl-02: it failed every hour with "Name does not resolve" for Home Assistant's LAN name, because the Alpine image's musl resolver gives up on the router's NXDOMAIN answer for AAAA. It now uses the glibc (slim) Python image.
+
 ## v1.200.1 - 2026-11-06
 
 ### Security

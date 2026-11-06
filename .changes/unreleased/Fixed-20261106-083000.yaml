@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'immich-sync runs again on homelab-wsl-02: it failed every hour with "Name does not resolve" for Home Assistant''s LAN name, because the Alpine image''s musl resolver gives up on the router''s NXDOMAIN answer for AAAA. It now uses the glibc (slim) Python image.'
-time: 2026-11-06T08:30:00.000000000-08:00
