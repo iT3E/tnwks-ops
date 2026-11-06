@@ -41,6 +41,8 @@ spec:
           type: RuntimeDefault
     controllers:
       firefly:
+        # Which site runs it (docs/wsl/multi-site.md, "Switching an app").
+        replicas: ${FIREFLY_REPLICAS:=1}
         containers:
           app:
             image:

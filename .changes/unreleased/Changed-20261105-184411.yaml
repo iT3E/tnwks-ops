@@ -1,0 +1,3 @@
+kind: Changed
+body: Firefly is stopped while its and finance-sync's databases move to their own CNPG clusters.
+time: 2026-11-05T18:44:11.780644603-08:00
