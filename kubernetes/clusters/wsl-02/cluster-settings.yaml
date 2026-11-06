@@ -130,6 +130,13 @@ data:
   # The MQTT broker: a standby here, with HA (its Service is global).
   MOSQUITTO_REPLICAS: "0"
   MOSQUITTO_HELM_DISABLE_WAIT: "true"
+  # Ombi, Ombi-f, Wizarr: deployed here at 0 to move them (bin/site-failover);
+  # their PVCs come over with the switchover.
+  OMBI_REPLICAS: "0"
+  OMBI_HELM_DISABLE_WAIT: "true"
+  OMBI_F_REPLICAS: "0"
+  OMBI_F_HELM_DISABLE_WAIT: "true"
+  WIZARR_REPLICAS: "0"
   HOME_ASSISTANT_BACKUP_SUSPEND: "true"
   # The UniFi controller (and unpoller) run here since 2026-11-06
   # (bin/site-failover, then this setting); homelab-wsl keeps them at 0.

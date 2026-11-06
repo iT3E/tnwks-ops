@@ -15,10 +15,14 @@ spec:
         name: k8s-at-home
         namespace: flux-system
       interval: 10m
+  # A standby at 0 (homelab-wsl-02) has a PVC that stays Pending until a pod
+  # needs it, which Helm's wait would never see Ready.
   install:
+    disableWait: ${OMBI_F_HELM_DISABLE_WAIT:=false}
     remediation:
       retries: 3
   upgrade:
+    disableWait: ${OMBI_F_HELM_DISABLE_WAIT:=false}
     remediation:
       retries: 3
       remediateLastFailure: true
@@ -33,10 +37,24 @@ spec:
       tag: 4.53.10
     env:
       TZ: "${TIMEZONE}"
+    # Which site runs it (docs/wsl/multi-site.md, "Switching an app").
+    controller:
+      replicas: ${OMBI_F_REPLICAS:=1}
+    service:
+      main:
+        # Global across the WSL sites (Cilium Cluster Mesh): the public ingress
+        # (cloudflared, on homelab-wsl) reaches it wherever it runs.
+        annotations:
+          service.cilium.io/global: "true"
+          service.cilium.io/affinity: local
     ingress:
       main:
         enabled: true
         ingressClassName: nginx
+        annotations:
+          # Through the Service's ClusterIP: on the site where it's at 0, only
+          # Cilium knows the other site's backends.
+          nginx.ingress.kubernetes.io/service-upstream: "true"
         hosts:
           - host: &host "${SECRET_PREFIX}.${SECRET_DOMAIN}"
             paths:

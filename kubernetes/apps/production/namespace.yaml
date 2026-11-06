@@ -3,6 +3,9 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: production
+  annotations:
+    # kopiur movers may run as root here (Wizarr's root-owned database; bin/site-failover).
+    kopiur.home-operations.com/privileged-movers: "true"
   labels:
     kustomize.toolkit.fluxcd.io/prune: disabled
     # frigate needs hostPath + securityContext.privileged for the Coral

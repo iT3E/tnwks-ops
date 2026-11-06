@@ -28,6 +28,8 @@ spec:
   values:
     controllers:
       wizarr:
+        # Which site runs it (docs/wsl/multi-site.md, "Switching an app").
+        replicas: ${WIZARR_REPLICAS:=1}
         type: statefulset
         annotations:
           reloader.stakater.com/auto: "true"
@@ -58,12 +60,21 @@ spec:
     service:
       app:
         controller: wizarr
+        # Global across the WSL sites (Cilium Cluster Mesh): the public ingress
+        # (cloudflared, on homelab-wsl) reaches it wherever it runs.
+        annotations:
+          service.cilium.io/global: "true"
+          service.cilium.io/affinity: local
         ports:
           http:
             port: 5690
     ingress:
       app:
         className: nginx
+        annotations:
+          # Through the Service's ClusterIP: on the site where it's at 0, only
+          # Cilium knows the other site's backends.
+          nginx.ingress.kubernetes.io/service-upstream: "true"
         hosts:
           - host: &host "invite.${SECRET_DOMAIN}"
             paths:
