@@ -63,6 +63,21 @@ resource "routeros_ip_dns_record" "static" {
   depends_on = [routeros_ip_dns.this]
 }
 
+# RouterOS answers from the first static entry that matches, in list order,
+# and a new entry goes to the end. An exact name added after a
+# match_subdomain wildcard that covers it (a site record under
+# *.internal.tnwks.us) never matches. Keep exact names above the wildcards.
+# The last ID stays where it is and the rest move above it, in this order.
+resource "routeros_move_items" "dns_static" {
+  resource_path = "/ip/dns/static"
+  sequence = concat(
+    [for k, r in var.dns.static_records : routeros_ip_dns_record.static[k].id if !r.match_subdomain],
+    [for k, r in var.dns.static_records : routeros_ip_dns_record.static[k].id if r.match_subdomain],
+  )
+
+  depends_on = [routeros_ip_dns_record.static]
+}
+
 # Adlist names live in the DNS cache. When cache_size is too small RouterOS
 # logs "adlist read: max cache size reached", stops the import, and the list
 # stays stuck at a handful of names even after the cache grows; only deleting
