@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.167.0 - 2026-11-06
+
+### Added
+
+* The transcriber has a standby on homelab-wsl-02 (CNPG replica cluster from S3, the app at 0, its upstreams on homelab-wsl over the LAN bridge); homelab-wsl-02 creates apps' ServiceMonitors now that it runs Prometheus.
+
 ## v1.166.0 - 2026-11-06
 
 ### Changed

@@ -1,3 +1,0 @@
-kind: Added
-body: The transcriber has a standby on homelab-wsl-02 (CNPG replica cluster from S3, the app at 0, its upstreams on homelab-wsl over the LAN bridge); homelab-wsl-02 creates apps' ServiceMonitors now that it runs Prometheus.
-time: 2026-11-05T17:23:32.307590561-08:00
