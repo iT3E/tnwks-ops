@@ -20,6 +20,10 @@ resources:
   # Storage: this cluster's node names (see the file).
   - ./local-path-provisioner-ks.yaml
   - ../../../apps/kube-system/metrics-server/ks.yaml
+  # Apps (one at a time, docs/wsl/multi-site.md). playwright-mcp: stateless,
+  # the pilot of moving an app to homelab-wsl-02.
+  - ../../../apps/ai/namespace.yaml
+  - ../../../apps/ai/playwright-mcp/ks.yaml
   # Monitoring of this cluster: Prometheus (kube-prometheus-stack) and
   # Alertmanager to the War Room, alerts labelled cluster=homelab-wsl-02.
   - ../../../apps/monitoring/namespace.yaml
