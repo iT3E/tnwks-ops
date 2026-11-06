@@ -1,0 +1,3 @@
+kind: Fixed
+body: Home Assistant's standby builds on homelab-wsl-02 (its Prometheus token secret is encrypted for that site), and the media stack's switchover restores as root so owners survive.
+time: 2026-11-06T00:31:51.386444062-08:00
