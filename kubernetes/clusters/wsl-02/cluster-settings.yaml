@@ -102,7 +102,10 @@ data:
   FINANCE_SYNC_BACKUP_SUSPEND: "true"
   # The media stack: deployed here at 0 to move it (bin/site-failover "media").
   MEDIA_REPLICAS: "0"
-  # Home Assistant stays on homelab-wsl: apps here reach it by name.
+  # Home Assistant: warm standby here (bin/site-failover "home-assistant").
+  HOME_ASSISTANT_REPLICAS: "0"
+  HOME_ASSISTANT_BACKUP_SUSPEND: "true"
+  # Home Assistant runs on homelab-wsl: apps here reach it by name.
   HOME_ASSISTANT_URL: "https://hass.internal.tnwks.us"
   # What stays on homelab-wsl, over its LAN bridge (docs/wsl/lan-exposure.md):
   # Frigate's go2rtc restream and LiteLLM (admitted only from WSL-02), MQTT,

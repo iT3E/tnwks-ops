@@ -12,6 +12,7 @@ resources:
   - ../../../../apps/kopiur-system/kopiur/policies/immich-postgres.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/firefly.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/finance-sync.yaml
+  - ../../../../apps/kopiur-system/kopiur/policies/home-assistant.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/media-sonarr.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/media-radarr.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/media-prowlarr.yaml
