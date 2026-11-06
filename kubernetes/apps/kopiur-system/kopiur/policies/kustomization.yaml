@@ -6,6 +6,8 @@ kind: Kustomization
 resources:
   - ./home-assistant.yaml
   - ./mealie.yaml
+  # Transfer only, no schedule (the file says why).
+  - ./transcriber.yaml
   - ./unifi.yaml
   - ./changedetection.yaml
   - ./firefly.yaml

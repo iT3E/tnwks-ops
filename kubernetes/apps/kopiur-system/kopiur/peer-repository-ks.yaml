@@ -1,5 +1,6 @@
 ---
-# homelab-wsl's kopiur repository, read-only on homelab-wsl-02 (see the file).
+# The other site's kopiur repository, read-only here (see the file). Both WSL
+# sites list it; the name is kept from when only homelab-wsl-02 had one.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -8,7 +9,7 @@ metadata:
 spec:
   dependsOn:
     - name: kopiur-repository
-  path: ./kubernetes/clusters/wsl-02/apps/kopiur-standby
+  path: ./kubernetes/apps/kopiur-system/kopiur/peer-repository
   prune: true
   sourceRef:
     kind: GitRepository
