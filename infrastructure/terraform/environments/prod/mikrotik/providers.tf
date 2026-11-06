@@ -18,3 +18,19 @@ provider "routeros" {
   # CA-issued cert is in place (see the PKI Infrastructure project).
   insecure = true
 }
+
+# The same REST API, as plain JSON objects, for what the routeros provider
+# can't write on this RouterOS (7.25): BGP connections. Its v1.99.1 always
+# sends add-path-out, which 7.22+ removed (terraform-provider-routeros#1030,
+# #1016). Back to routeros_routing_bgp_connection once that's fixed.
+provider "restapi" {
+  uri                  = "${trimsuffix(coalesce(var.routeros_url, data.sops_file.secrets.data["routeros_url"]), "/")}/rest"
+  username             = data.sops_file.secrets.data["routeros_username"]
+  password             = data.sops_file.secrets.data["routeros_password"]
+  insecure             = true
+  create_method        = "PUT"
+  update_method        = "PATCH"
+  destroy_method       = "DELETE"
+  write_returns_object = true
+  id_attribute         = ".id"
+}

@@ -1,0 +1,3 @@
+kind: Fixed
+body: The router's BGP connections to the WSL sites are created with the restapi provider, since the routeros provider can't write them on RouterOS 7.22+ (it always sends the removed add-path-out).
+time: 2026-11-06T00:29:18.873324746-08:00

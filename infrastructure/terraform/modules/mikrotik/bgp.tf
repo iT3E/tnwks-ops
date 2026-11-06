@@ -72,33 +72,29 @@ resource "routeros_routing_filter_rule" "bgp" {
   comment = "${each.value.comment} (terraform)"
 }
 
-resource "routeros_routing_bgp_connection" "this" {
+# BGP connections as REST objects (restapi provider): routeros v1.99.1 can't
+# write /routing/bgp/connection on RouterOS 7.22+ (it always sends the removed
+# add-path-out; terraform-provider-routeros#1030). Field names are RouterOS's.
+# RouterOS returns every default too, so only the fields set here are compared.
+resource "restapi_object" "bgp_connection" {
   for_each = local.bgp_peers
 
-  name           = each.key
-  instance       = routeros_routing_bgp_instance.this[0].name
-  as             = tostring(var.bgp.as)
-  hold_time      = var.bgp.hold_time
-  keepalive_time = var.bgp.keepalive_time
-  comment        = "${coalesce(each.value.comment, each.key)} (terraform)"
-
-  local {
-    role    = "ebgp"
-    address = each.value.local_address
-  }
-
-  remote {
-    address = each.value.remote_address
-    as      = tostring(each.value.remote_as)
-  }
-
-  input {
-    filter = "bgp-in-${each.key}"
-  }
-
-  output {
-    filter_chain = "bgp-out-${each.key}"
-  }
+  path = "/routing/bgp/connection"
+  data = jsonencode({
+    name                  = each.key
+    instance              = routeros_routing_bgp_instance.this[0].name
+    as                    = tostring(var.bgp.as)
+    "hold-time"           = var.bgp.hold_time
+    "keepalive-time"      = var.bgp.keepalive_time
+    comment               = "${coalesce(each.value.comment, each.key)} (terraform)"
+    "local.role"          = "ebgp"
+    "local.address"       = each.value.local_address
+    "remote.address"      = each.value.remote_address
+    "remote.as"           = tostring(each.value.remote_as)
+    "input.filter"        = "bgp-in-${each.key}"
+    "output.filter-chain" = "bgp-out-${each.key}"
+  })
+  ignore_server_additions = true
 
   # The chains exist before a session can come up. A named chain with no rules
   # would reject everything anyway, so this is about not starting a session
