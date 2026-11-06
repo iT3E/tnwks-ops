@@ -20,13 +20,12 @@ resources:
   # Storage: this cluster's node names (see the file).
   - ./local-path-provisioner-ks.yaml
   - ../../../apps/kube-system/metrics-server/ks.yaml
-  # Off-site dead-man switch (healthchecks.io check homelab-wsl-02).
-  - ./heartbeat-ks.yaml
   # Monitoring of this cluster: Prometheus (kube-prometheus-stack) and
   # Alertmanager to the War Room, alerts labelled cluster=homelab-wsl-02.
   - ../../../apps/monitoring/namespace.yaml
   - ./alertmanager-ks.yaml
   - ../../../apps/monitoring/kube-prometheus-stack/ks.yaml
+  - ../../../apps/monitoring/node-exporter/ks.yaml
   # Certificates: cert-manager with the Let's Encrypt DNS-01 issuers, and the
   # wildcard certificates the ingress controllers use (internal and public).
   - ../../../apps/cert-manager/namespace.yaml
@@ -104,7 +103,7 @@ patches:
         name: kopiur-policies
         namespace: flux-system
   # kopiur's PrometheusRule and ServiceMonitor need the Prometheus operator's
-  # CRDs, which this cluster doesn't have yet.
+  # CRDs (kube-prometheus-stack), so it waits for them.
   - patch: |-
       apiVersion: kustomize.toolkit.fluxcd.io/v1
       kind: Kustomization
@@ -112,18 +111,8 @@ patches:
         name: kopiur
         namespace: flux-system
       spec:
-        patches:
-          - target:
-              kind: HelmRelease
-              name: kopiur
-            patch: |-
-              - op: replace
-                path: /spec/values/monitoring
-                value:
-                  prometheusRule:
-                    enabled: false
-                  serviceMonitor:
-                    enabled: false
+        dependsOn:
+          - name: kube-prometheus-stack
   - patch: |-
       $patch: delete
       apiVersion: kustomize.toolkit.fluxcd.io/v1
