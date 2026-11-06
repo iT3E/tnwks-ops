@@ -1,0 +1,36 @@
+---
+# Home Assistant's own CNPG cluster, databases/home-assistant-pg (the
+# recorder), from ../../../../components/cnpg-cluster (added by the
+# home-assistant-db Kustomization).
+#
+# First boot imports `home_assistant` from the shared cluster (CNPG
+# initdb.import, microservice) as the owner role: the shared cluster has
+# superuser access off, and home_assistant owns every object. bootstrap is
+# only read when the Cluster is created; the shared copy stays as the rollback.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./secret-home-assistant-role.sops.yaml
+patches:
+  - target:
+      kind: Cluster
+    patch: |-
+      - op: add
+        path: /spec/bootstrap/initdb/import
+        value:
+          type: microservice
+          databases: [home_assistant]
+          source:
+            externalCluster: postgres
+      - op: add
+        path: /spec/externalClusters
+        value:
+          - name: postgres
+            connectionParameters:
+              host: postgres-rw.databases.svc.cluster.local
+              user: home_assistant
+              dbname: home_assistant
+              sslmode: require
+            password:
+              name: postgres-home-assistant
+              key: password

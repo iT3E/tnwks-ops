@@ -122,6 +122,3 @@ data:
   # database a replica of wsl-02's, the app at 0).
   TRANSCRIBER_REPLICAS: "0"
   TRANSCRIBER_PG_PRIMARY: "homelab-wsl-02"
-  # Home Assistant, stopped while its database moves to its own CNPG cluster
-  # (2026-11-05; removed again by the PR that moves it).
-  HOME_ASSISTANT_REPLICAS: "0"

@@ -112,8 +112,10 @@ spec:
                   secretKeyRef:
                     name: home-assistant-secret
                     key: RECORDER_DB_PASSWORD
+              # Its own CNPG cluster since 2026-11-05 (home-assistant/db); the
+              # shared cluster's `home_assistant` database is the rollback copy.
               - name: HASS_RECORDER_DB_URL
-                value: "postgresql://home_assistant:$(POSTGRES_PASSWORD)@postgres-rw.databases.svc.cluster.local:5432/home_assistant"
+                value: "postgresql://home_assistant:$(POSTGRES_PASSWORD)@home-assistant-pg-rw.databases.svc.cluster.local:5432/home_assistant"
             # HASS_LATITUDE / HASS_LONGITUDE / HASS_ELEVATION
             envFrom:
               - secretRef:
