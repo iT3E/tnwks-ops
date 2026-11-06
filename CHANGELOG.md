@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.155.0 - 2026-11-06
+
+### Changed
+
+* homelab-wsl-02: the Alertmanager Watchdog alone keeps healthchecks.io `homelab-wsl-02` alive (the interim CronJob is gone), node-exporter runs there, and kopiur's PrometheusRule and ServiceMonitor are back on (after kube-prometheus-stack).
+
 ## v1.154.0 - 2026-11-06
 
 ### Added

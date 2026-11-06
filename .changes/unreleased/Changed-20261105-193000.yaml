@@ -1,3 +1,0 @@
-kind: Changed
-body: "homelab-wsl-02: the Alertmanager Watchdog alone keeps healthchecks.io `homelab-wsl-02` alive (the interim CronJob is gone), node-exporter runs there, and kopiur's PrometheusRule and ServiceMonitor are back on (after kube-prometheus-stack)."
-time: 2026-11-05T19:30:00.000000000-08:00
