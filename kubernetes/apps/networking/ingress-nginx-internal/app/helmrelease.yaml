@@ -67,6 +67,11 @@ spec:
         # non-snippet way to drop request headers per Ingress.
         allow-snippet-annotations: "true"
         annotations-risk-level: "Critical"
+        # nginx's own resolver (auth-url to another site's oauth2-proxy by
+        # name) asks for A and AAAA. The router answers AAAA for its static
+        # names with NXDOMAIN, and nginx then calls the host not found, though
+        # the A answer is fine. IPv4-only clusters: ask for A only.
+        disable-ipv6-dns: "true"
       metrics:
         enabled: ${SERVICE_MONITOR_ENABLED}
         serviceMonitor:
