@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.206.2 - 2026-11-06
+
+### Fixed
+
+* The sites pages and the sites-builder runner mount their NFS share again on homelab-wsl without kube-proxy: nfs-server runs on its node's host network and the mounts use that node's address, because the kernel NFS client can't reach a ClusterIP through Cilium's kube-proxy replacement. The export now admits only the node subnet.
+
 ## v1.206.1 - 2026-11-06
 
 ### Fixed
