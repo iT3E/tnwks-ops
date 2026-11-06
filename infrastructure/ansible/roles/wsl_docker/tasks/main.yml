@@ -59,10 +59,16 @@
 - name: Talos node containers restart with Docker
   ansible.builtin.shell: |
     set -euo pipefail
+    dry="{{ ansible_check_mode | ternary('1', '') }}"
     for c in $(docker ps -a --filter label=talos.owned=true --format '{{ "{{" }}.Names{{ "}}" }}'); do
       p=$(docker inspect -f '{{ "{{" }}.HostConfig.RestartPolicy.Name{{ "}}" }}' "$c")
       if [ "$p" != unless-stopped ]; then
-        {% if ansible_check_mode %}echo "would set $c ($p)"{% else %}docker update --restart unless-stopped "$c" >/dev/null && echo "set $c ($p)"{% endif %}
+        if [ -n "$dry" ]; then
+          echo "would set $c ($p)"
+        else
+          docker update --restart unless-stopped "$c" >/dev/null
+          echo "set $c ($p)"
+        fi
       fi
     done
   args:
