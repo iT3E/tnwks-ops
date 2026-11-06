@@ -1,37 +1,30 @@
 ---
-# The transcriber's own CNPG cluster, databases/transcriber-pg, from
-# ../../../../components/cnpg-cluster (added by the transcriber-db Kustomization).
+# The transcriber's own CNPG cluster, databases/transcriber-pg:
+# ../../../../components/cnpg-cluster plus cnpg-standby (both added by the
+# transcriber-db Kustomization), the same manifest on both sites. The site
+# named by TRANSCRIBER_PG_PRIMARY runs the primary; the other a replica
+# cluster from its WAL archive.
 #
-# First boot imports `transcriber` from the shared cluster (CNPG initdb.import,
-# microservice), as the owner role: the shared cluster has superuser access
-# off, and transcriber owns every object (the `vector` extension is
-# postgres's; the import's restore runs as this cluster's superuser and
-# creates it). bootstrap is only read when the Cluster is created; the shared
-# copy stays as the rollback.
+# Imported from the shared cluster's `transcriber` database on 2026-11-05
+# (#1767); that copy stays there as the rollback. bootstrap is only read when
+# a Cluster is created, and a new one now restores from the peer's archive.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  # The owner role's password, the same on both sites.
   - ./secret-transcriber-role.sops.yaml
 patches:
   - target:
       kind: Cluster
     patch: |-
+      # Which site is primary, and on the side being promoted only, the old
+      # primary's demotion token (docs/wsl/multi-site.md). Empty is allowed
+      # on a replica; a token isn't. The empty default carries its quotes:
+      # kustomize drops quotes around a ${...}, and a bare empty value is null,
+      # which the CRD rejects. A token (base64 JSON, "ey...") needs none.
       - op: add
-        path: /spec/bootstrap/initdb/import
-        value:
-          type: microservice
-          databases: [transcriber]
-          source:
-            externalCluster: postgres
+        path: /spec/replica/primary
+        value: ${TRANSCRIBER_PG_PRIMARY:=homelab-wsl}
       - op: add
-        path: /spec/externalClusters
-        value:
-          - name: postgres
-            connectionParameters:
-              host: postgres-rw.databases.svc.cluster.local
-              user: transcriber
-              dbname: transcriber
-              sslmode: require
-            password:
-              name: postgres-transcriber
-              key: password
+        path: /spec/replica/promotionToken
+        value: ${TRANSCRIBER_PG_PROMOTION_TOKEN:=""}

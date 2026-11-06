@@ -9,6 +9,7 @@ spec:
   path: ./kubernetes/apps/production/transcriber/db
   components:
     - ../../../../components/cnpg-cluster
+    - ../../../../components/cnpg-standby
   dependsOn:
     - name: cloudnative-pg-plugin-barman-cloud
     - name: aws-backup-credentials
