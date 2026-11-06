@@ -14,8 +14,15 @@ spec:
     - name: aws-backup-credentials
     - name: cloudnative-pg-cluster
   prune: true
-  # The Cluster's Ready condition gates Mealie.
+  # The Cluster's Ready condition gates Mealie. kstatus alone isn't enough: a
+  # Cluster with no status yet counts as Current, so Mealie started before
+  # mealie-pg existed (2026-11-05). This waits for Ready=True; with no status
+  # the expression errors, which Flux also treats as not ready yet.
   wait: true
+  healthCheckExprs:
+    - apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      current: status.conditions.exists(e, e.type == 'Ready' && e.status == 'True')
   sourceRef:
     kind: GitRepository
     name: flux-system

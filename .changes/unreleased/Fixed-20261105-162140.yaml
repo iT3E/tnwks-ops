@@ -1,0 +1,3 @@
+kind: Fixed
+body: Mealie now waits for its Postgres cluster to report Ready before it starts.
+time: 2026-11-05T16:21:40.615833959-08:00
