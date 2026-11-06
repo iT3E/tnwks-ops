@@ -1,0 +1,3 @@
+kind: Fixed
+body: UniFi's Terraform workflows run only on homelab-wsl's ops runner (tnwks-ops-homelab-wsl), where the controller API is; each site's runner carries a site label.
+time: 2026-11-05T23:45:39.458256322-08:00

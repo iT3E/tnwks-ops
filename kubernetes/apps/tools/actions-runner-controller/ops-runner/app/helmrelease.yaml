@@ -39,6 +39,10 @@ spec:
   values:
     githubConfigUrl: "https://github.com/iT3E/tnwks-ops"
     runnerScaleSetName: tnwks-ops-runner
+    # A label per site, for workflows that need something only one site has
+    # (the UniFi controller is in-cluster on homelab-wsl). Everything else
+    # asks for tnwks-ops-runner and runs on either site's runner.
+    scaleSetLabels: ["tnwks-ops-${CLUSTER_NAME}"]
     # Same GitHub App as sites-builder (one installation, both repos).
     githubConfigSecret: sites-runner-github-app
     # Idle costs nothing; one runner at a time so device applies never overlap.

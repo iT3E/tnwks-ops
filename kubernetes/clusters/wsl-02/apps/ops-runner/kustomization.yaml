@@ -20,6 +20,6 @@ patches:
       - op: replace
         path: /spec/values/runnerScaleSetName
         value: tnwks-ops-runner-wsl-02
-      - op: add
+      - op: replace
         path: /spec/values/scaleSetLabels
-        value: ["tnwks-ops-runner"]
+        value: ["tnwks-ops-runner", "tnwks-ops-homelab-wsl-02"]

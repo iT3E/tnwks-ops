@@ -29,7 +29,9 @@ jobs:
   apply:
     if: vars.UNIFI_TERRAFORM_ENABLED == 'true'
     name: "UniFi Apply"
-    runs-on: tnwks-ops-runner
+    # homelab-wsl's runner: the controller API is in-cluster there
+    # (unifi.networking.svc.cluster.local, .github/actions/unifi-terraform).
+    runs-on: tnwks-ops-homelab-wsl
     timeout-minutes: 30
     # No reviewer gate: merging to main is the approval. The prod environment
     # only accepts deployments from protected branches.
