@@ -458,6 +458,46 @@ and it can't carry traffic before Stage B (below).
 - **Monitoring.** The tunnel's handshake, the BGP sessions and the misrouted
   counter have no alert yet.
 
+## Shared VIPs (live since 2026-11-06)
+
+Two addresses from `10.10.95.0/24`, held by both clusters (Cilium LB IPAM, pool
+`shared-vip`) and announced over BGP by every node. The router splits the pool
+into halves, each preferred by one site (local preference 100, the other 50),
+so a VIP lands on the site that runs its apps and moves to the other one within
+the BGP hold time (9 s; a clean FRR stop moves it at once):
+
+| VIP | Preferred | Names (router site records, `dns-sites.tf`) |
+| --- | --- | --- |
+| `10.10.95.10` | homelab-wsl | `hass`, `firefly` |
+| `10.10.95.200` | homelab-wsl-02 | `transcriber`, `changedetection`, `immich`, `immichframe`, `kitchen-screensaver`, `qbittorrent`, `playwright-mcp`, `unifi` |
+
+Both are the internal ingress (`networking/ingress-nginx-internal-vip-wsl` and
+`-vip-wsl-02`, `externalTrafficPolicy: Cluster`). Either site's ingress serves
+an app deployed on both sites, because the app's Service is global over Cluster
+Mesh (`service.cilium.io/global: "true"`, `affinity: local`) and its Ingress goes
+through the Service (`nginx.ingress.kubernetes.io/service-upstream: "true"`;
+ingress-nginx otherwise uses EndpointSlices, which have no remote backends).
+Measured: failover 0 failed requests, failback 5.6 s.
+
+To put an app on a VIP: deploy it on both sites (at 0 on the standby), make the
+Service global, add `service-upstream` to its internal Ingress, use
+`${OAUTH2_PROXY_URL:=…}` for an oauth2-proxy `auth-url` (homelab-wsl-02 has
+none of its own), then a site record for its name on the VIP of the site that
+runs it. Apps on one site only stay on the `*.internal` wildcard (the desktop).
+
+Clients that may reach the VIPs: VLAN 910, the admin VPN, the mobile VPN
+(VIPs only). A client behind a site (its pods, the WSL host) reaches that
+site's own ingress: each distro prefers its cluster's announcement.
+
+Known issues:
+- Cilium L2 announcements ignore `externalTrafficPolicy`, so L2-announced VIPs
+  use `Cluster` (`LB_EXTERNAL_TRAFFIC_POLICY`).
+- Replacing a shared-VIP Service with one of another name can leave the old
+  frontend in the agents (`frontend already owned by another service`), and the
+  new one isn't announced: restart the agents, one node at a time.
+- The router answers AAAA for these names with NXDOMAIN, which musl (Alpine)
+  resolvers treat as "no such name"; glibc clients are fine.
+
 ## Cluster Mesh
 
 ```mermaid
