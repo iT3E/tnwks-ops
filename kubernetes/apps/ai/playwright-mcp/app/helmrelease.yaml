@@ -27,6 +27,10 @@ spec:
   values:
     controllers:
       playwright-mcp:
+        # Which site runs it (docs/wsl/multi-site.md, "Switching an app"): the
+        # default here, per cluster in cluster-settings, at runtime in
+        # site-overrides. Its name points at the running site's ingress.
+        replicas: ${PLAYWRIGHT_MCP_REPLICAS:=1}
         annotations:
           reloader.stakater.com/auto: "true"
         containers:
