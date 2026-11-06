@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.206.0 - 2026-11-06
+
+### Added
+
+* Cilium BGP on homelab-wsl too: its nodes peer with the distro's FRR and announce their pod CIDRs, and the router and homelab-wsl-02's distro accept homelab-wsl's new pod range (10.46.0.0/16) instead of Flannel's 10.42.
+
 ## v1.205.1 - 2026-11-06
 
 ### Fixed
