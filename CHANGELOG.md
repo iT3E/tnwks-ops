@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.185.0 - 2026-11-06
+
+### Added
+
+* task failover moves apps without a standby database too (StatefulSets, PVCs the restore creates); changedetection is deployed on homelab-wsl-02 at 0, ready to move there.
+
 ## v1.184.0 - 2026-11-06
 
 ### Changed
