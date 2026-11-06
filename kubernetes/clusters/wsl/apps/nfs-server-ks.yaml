@@ -44,10 +44,12 @@ spec:
           path: /spec/template/spec/nodeSelector
           value:
             kubernetes.io/hostname: homelab-wsl-worker-1
-    # Both exports' PVCs (the sites share, and gdrive-sync).
+    # The sites share's PVC. nfs-gdrive-sync stays on local-path: on worker-1
+    # that class is ext4 too (/var/lib/rancher/k3s/storage inside the node,
+    # local-path-config), which ganesha's VFS needs; checked 2026-11-06.
     - target:
         kind: PersistentVolumeClaim
-        name: "nfs-server-data|nfs-gdrive-sync"
+        name: nfs-server-data
       patch: |
         - op: replace
           path: /spec/storageClassName
