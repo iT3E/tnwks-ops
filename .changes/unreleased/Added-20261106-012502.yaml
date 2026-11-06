@@ -1,0 +1,3 @@
+kind: Added
+body: "Site routing, Stage A: each WSL distro gets its WireGuard site tunnel to the router (wg-quick), FRR 10.5 in a pinned container peering BGP over it (with a Cilium peer group ready for Stage C), and persistent forwarding, MSS clamping and connmark return routing (role wsl_site_routing, tag site-routing)."
+time: 2026-11-06T01:25:02.177334432-08:00

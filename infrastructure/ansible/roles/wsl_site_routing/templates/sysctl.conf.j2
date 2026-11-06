@@ -1,0 +1,7 @@
+# Managed by tnwks-ops (role wsl_site_routing). The distro forwards between
+# its site tunnel and the Docker bridge. rp_filter loose (2), not strict: LAN
+# clients arrive on the tunnel from sources the main table routes out of
+# {{ wsl_site_routing_uplink }}. tnwks-site-routing sets the same at runtime.
+net.ipv4.ip_forward = 1
+net.ipv4.conf.all.rp_filter = 2
+net.ipv4.conf.default.rp_filter = 2

@@ -32,8 +32,26 @@ wsl_ci_authorized_keys:
     from: 172.25.16.1
     permit_open: 172.25.16.1:22
 
-# The distro's end of wg-site2, its site tunnel to sce-rtr01 (docs/wsl/multi-site.md,
-# "Network"): wsl_site_wireguard_private_key is in secrets.sops.yml next to
-# this file. Its public key, tunnel addresses and the router side are in
-# infrastructure/terraform/environments/prod/mikrotik/site-tunnels.tf. No role
-# reads it yet.
+# Site routing (role wsl_site_routing, docs/wsl/multi-site.md): wg-site2, its
+# site tunnel to sce-rtr01, FRR peering with the router over it, and the
+# forwarding and connmark rules. The router side, and where its public key
+# comes from (the mikrotik module's wireguard_public_keys output), is
+# infrastructure/terraform/environments/prod/mikrotik/site-tunnels.tf. The
+# distro's private key is wsl_site_wireguard_private_key in secrets.sops.yml
+# next to this file.
+wsl_site_routing_enabled: true
+wsl_site_routing_interface: wg-site2
+wsl_site_routing_address: 10.10.34.2/30
+wsl_site_routing_router_address: 10.10.34.1
+wsl_site_routing_router_endpoint: 10.10.91.1:51824
+wsl_site_routing_router_public_key: 0qLb7Dr8HHbpQ6c5GBQKIKQ+8/kz0InSp/Gbd3ESCCA=
+wsl_site_routing_asn: 64612
+wsl_site_routing_cilium_asn: 64602
+wsl_site_routing_docker_network: homelab-wsl-02
+wsl_site_routing_node_subnet: 10.6.0.0/24
+wsl_site_routing_pod_cidr: 10.44.0.0/16
+# What the router sends this site: site 1's node subnet and pod CIDRs.
+wsl_site_routing_remote_prefixes:
+  - prefix: 10.5.0.0/24
+  - prefix: 10.42.0.0/16
+    le: 24

@@ -6,9 +6,13 @@
 #   task wsl-host:distro-check   # --check --diff, changes nothing
 #   task wsl-host:distro-apply
 #
-# One role with `--tags docker` / `cluster-tools` / `ci-access` / `lan-bridge` / `usb-attach` /
-# `backups` / `drift-check`. A distro with nothing for a role sets its list
-# empty in host_vars, and the role is skipped.
+# One role with `--tags docker` / `cluster-tools` / `ci-access` / `lan-bridge` /
+# `site-routing` / `usb-attach` / `backups` / `drift-check`. A distro with
+# nothing for a role sets its list empty in host_vars (or leaves its
+# `_enabled` off), and the role is skipped.
+#
+# The site's border router (wg-site<N>, FRR, connmark return routing):
+# docs/wsl/multi-site.md.
 #
 # USB attach needs each dongle `usbipd bind`-ed on Windows, so it is shareable
 # and the binding persists across reboots: windows-host.yml does that (role
@@ -34,6 +38,12 @@
     - role: wsl_lan_bridge
       when: wsl_lan_bridge_instances | length > 0
       tags: [lan-bridge]
+    # The distro as its site's border router: the WireGuard tunnel to the
+    # router, FRR (BGP), forwarding and connmark return routing. On where
+    # host_vars sets wsl_site_routing_enabled.
+    - role: wsl_site_routing
+      when: wsl_site_routing_enabled | bool
+      tags: [site-routing]
     # Keeps the Z-Stick attached into the WSL VM across WSL restarts.
     - role: wsl_usb_attach
       when: wsl_usb_attach_devices | length > 0

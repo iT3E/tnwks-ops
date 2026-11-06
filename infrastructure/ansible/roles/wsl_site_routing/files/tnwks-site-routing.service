@@ -1,0 +1,18 @@
+[Unit]
+Description=tnwks site routing: forwarding, MSS clamping and connmark return routing for the site tunnel
+# DOCKER-USER and the Docker network's bridge come from dockerd. The tunnel
+# doesn't have to be up: its wg-quick PostUp adds the one piece tied to the
+# interface (the route in the connmark table).
+After=docker.service network-online.target
+Wants=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/tnwks-site-routing up
+# `systemctl reload` re-runs it in place (a renamed bridge, new settings).
+ExecReload=/usr/local/bin/tnwks-site-routing up
+ExecStop=/usr/local/bin/tnwks-site-routing down
+
+[Install]
+WantedBy=multi-user.target

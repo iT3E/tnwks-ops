@@ -1,0 +1,81 @@
+! Managed by tnwks-ops (role wsl_site_routing). The distro's FRR, its site's
+! border router (docs/wsl/multi-site.md, "BGP"). Router side:
+! infrastructure/terraform/modules/mikrotik/bgp.tf, with the inputs in
+! environments/prod/mikrotik/site-tunnels.tf.
+!
+! "traditional" defaults include bgp ebgp-requires-policy: an eBGP session
+! without route-maps sends and accepts nothing, so every session has both.
+frr version 10.5
+frr defaults traditional
+hostname frr-{{ wsl_site_routing_interface }}
+log stdout informational
+service integrated-vtysh-config
+!
+! To the router: exactly what it accepts from this site. It drops anything
+! else silently; filtering here too keeps the two sides honest.
+!   node subnet: exactly, the network statement below
+!   pod CIDRs:   /16 to /24 inside the site's range (Cilium, Stage C)
+!   shared VIPs: /32s from the pool (Cilium LB IPAM, Stage C)
+ip prefix-list TO-RTR seq 10 permit {{ wsl_site_routing_node_subnet }}
+ip prefix-list TO-RTR seq 20 permit {{ wsl_site_routing_pod_cidr }} le 24
+ip prefix-list TO-RTR seq 30 permit {{ wsl_site_routing_vip_pool }} ge 32
+!
+! From the router: the other site's node subnet and pod CIDRs (all it sends).
+{% for p in wsl_site_routing_remote_prefixes %}
+ip prefix-list FROM-RTR seq {{ 10 * loop.index }} permit {{ p.prefix }}{{ (' le ' ~ p.le) if p.le is defined else '' }}
+{% endfor %}
+!
+! From the Cilium nodes (Stage C): their pod CIDRs and the VIPs they serve.
+ip prefix-list FROM-CILIUM seq 10 permit {{ wsl_site_routing_pod_cidr }} le 24
+ip prefix-list FROM-CILIUM seq 20 permit {{ wsl_site_routing_vip_pool }} ge 32
+!
+route-map TO-RTR permit 10
+ match ip address prefix-list TO-RTR
+exit
+!
+route-map FROM-RTR permit 10
+ match ip address prefix-list FROM-RTR
+exit
+!
+route-map FROM-CILIUM permit 10
+ match ip address prefix-list FROM-CILIUM
+exit
+!
+! The nodes need no routes: they reach the other site by their default route,
+! which is this distro.
+route-map TO-CILIUM deny 10
+exit
+!
+router bgp {{ wsl_site_routing_asn }}
+ bgp router-id {{ wsl_site_routing_address.split('/')[0] }}
+ bgp log-neighbor-changes
+ ! sce-rtr01 over the tunnel. Graceful restart: FRR's default, helper only.
+ neighbor {{ wsl_site_routing_router_address }} remote-as {{ wsl_site_routing_router_asn }}
+ neighbor {{ wsl_site_routing_router_address }} description sce-rtr01 over {{ wsl_site_routing_interface }}
+ neighbor {{ wsl_site_routing_router_address }} timers {{ wsl_site_routing_bgp_keepalive }} {{ wsl_site_routing_bgp_hold }}
+ neighbor {{ wsl_site_routing_router_address }} timers connect {{ wsl_site_routing_bgp_connect }}
+ ! This site's Cilium nodes on the Docker bridge, peering with its gateway
+ ! (Stage C). Helper for their graceful restart, so an agent restart doesn't
+ ! withdraw their routes.
+ neighbor CILIUM peer-group
+ neighbor CILIUM remote-as {{ wsl_site_routing_cilium_asn }}
+ neighbor CILIUM description {{ wsl_site_routing_docker_network }} Cilium nodes
+ neighbor CILIUM timers {{ wsl_site_routing_bgp_keepalive }} {{ wsl_site_routing_bgp_hold }}
+ neighbor CILIUM graceful-restart-helper
+ bgp listen range {{ wsl_site_routing_node_subnet }} peer-group CILIUM
+ !
+ address-family ipv4 unicast
+  ! Connected (the Docker bridge); not announced while the network is missing.
+  network {{ wsl_site_routing_node_subnet }}
+  ! ECMP across the nodes that announce the same VIP.
+  maximum-paths {{ wsl_site_routing_cilium_maximum_paths }}
+  neighbor {{ wsl_site_routing_router_address }} activate
+  neighbor {{ wsl_site_routing_router_address }} route-map FROM-RTR in
+  neighbor {{ wsl_site_routing_router_address }} route-map TO-RTR out
+  neighbor CILIUM activate
+  neighbor CILIUM route-map FROM-CILIUM in
+  neighbor CILIUM route-map TO-CILIUM out
+  neighbor CILIUM maximum-prefix {{ wsl_site_routing_cilium_maximum_prefix }}
+ exit-address-family
+exit
+!

@@ -4,6 +4,9 @@
 target for the two WSL clusters and how an app moves between them, for
 [Windows patching](../operations/windows-patching.md) and for real
 failures. The [spike plan](#spike-plan) comes before any of it is built.
+The routed network is going in in stages: the router side is applied, and
+[Stage A](#stage-a-the-distros-as-border-routers) puts the tunnels and FRR
+on the distros ([what B and C still need](#stages-b-and-c-still-open)).
 
 | | wsl-01 | wsl-02 |
 | --- | --- | --- |
@@ -245,15 +248,15 @@ hardware first. Frigate keeps its normal profile on wsl-02; dropped frames
 or recording gaps during a failover are accepted. When it's wired, move the
 DHCP reservation to the 2.5GbE port's MAC.
 
-### The router side in Terraform (not applied yet)
+### The router side in Terraform
 
-The router half of the above is written but **not applied**: it reaches the
-router only when its pull request merges (`mikrotik-apply.yaml`), and the
-distro half (WireGuard, FRR, the forwarding rules, Ansible) doesn't exist
-yet, so the tunnels and sessions would stay down until it does. The inputs
-are hand-written in
+Applied. The inputs are hand-written in
 `infrastructure/terraform/environments/prod/mikrotik/site-tunnels.tf`; the
-BGP resources are `modules/mikrotik/bgp.tf`.
+BGP resources are `modules/mikrotik/bgp.tf`. The router BGP spike
+(2026-11-06) ran against exactly this config from throwaway namespaces on
+both hosts: both tunnels and sessions came up, the shared VIP preferred site
+1 and failed over in 1.3 s (FRR stopped) or about 8 s (site silent), and
+connmark return routing was required.
 
 | | `wg-site1` (homelab-wsl) | `wg-site2` (homelab-wsl-02) |
 | --- | --- | --- |
@@ -270,7 +273,7 @@ BGP resources are `modules/mikrotik/bgp.tf`.
   the MikroTik SOPS file; each distro's is `wsl_site_wireguard_private_key`
   in `infrastructure/ansible/inventory/host_vars/<distro>/secrets.sops.yml`.
   The router's public keys are the module's `wireguard_public_keys` output
-  once applied.
+  (copied into each distro's host_vars, `wsl_site_routing_router_public_key`).
 - **Firewall**: to the router, each tunnel's UDP port from its Windows host
   only, and tcp/179 from its distro's tunnel address only. Forward: VLAN 910
   and the admin VPN (`vpn`) to each site's nodes, pods and the VIP pool;
@@ -291,6 +294,113 @@ BGP resources are `modules/mikrotik/bgp.tf`.
   reverse-path filter drops a VIP reply that comes back through the site
   that isn't the VIP's best path; with connmark return routing in the distro
   that shouldn't happen.
+
+### Stage A: the distros as border routers
+
+Role `wsl_site_routing` (`infrastructure/ansible/roles/wsl_site_routing/`,
+playbook `wsl-distro.yml`, tag `site-routing`), on where a distro's
+host_vars sets `wsl_site_routing_enabled`; both do. CI checks it on the
+pull request and applies it on merge (`ansible-hosts.yaml`). Stage A
+changes nothing a cluster uses today: no traffic arrives on the tunnels
+until something announces a pod CIDR or a VIP. Each distro does learn the
+other site's node subnet, routed into its tunnel, but nothing uses it yet,
+and it can't carry traffic before Stage B (below).
+
+| | site 1 (`DESKTOP-HKE05KI-ubuntu`) | site 2 (`WSL-02-ubuntu`) |
+| --- | --- | --- |
+| Tunnel | `wg-site1`, `10.10.33.2/30`, to `10.10.91.1:51823` | `wg-site2`, `10.10.34.2/30`, to `10.10.91.1:51824` |
+| FRR ASN / router ID | 64611 / `10.10.33.2` | 64612 / `10.10.34.2` |
+| Cilium peer group (Stage C) | `10.5.0.0/24`, AS 64601 | `10.6.0.0/24`, AS 64602 |
+| Docker network (bridge looked up by name) | `homelab-wsl` | `homelab-wsl-02` |
+
+- **WireGuard: `wg-quick@wg-site<N>`** (`/etc/wireguard/wg-site<N>.conf`),
+  in the distro's root namespace, so its UDP leaves `eth0` and Windows NAT
+  gives it the host's VLAN 910 address, which the router requires. MTU 1420,
+  `AllowedIPs = 0.0.0.0/0` (LAN clients' sources are arbitrary; the router
+  restricts), keepalive 25, and `Table = off`: routes come from FRR, replies
+  from the connmark table. The private key is its own 0600 file, set by the
+  first `PostUp`, so the config has nothing secret and its diff can be shown.
+  The second `PostUp` puts back the connmark table's route, which goes away
+  with the interface.
+- **FRR 10.5 in a container: `tnwks-frr.service`**, a systemd unit around
+  `docker run --rm --network host` with the image pinned by digest
+  (`quay.io/frrouting/frr:10.5.0@sha256:…`) and `/etc/tnwks-frr` mounted
+  read-only. Why a container: Ubuntu noble ships FRR 8.4, and FRR's apt
+  repository needs an `apt update`, which fails on `DESKTOP-HKE05KI`. Why
+  systemd around it rather than a restart policy: ordering after dockerd,
+  `systemctl status`/`journalctl -u tnwks-frr` like the other `tnwks-*`
+  units, and a restart when dockerd restarts. The image's entrypoint is
+  tini, so the daemons are reaped (the spike's zombie `bgpd` came from
+  replacing the entrypoint with `sleep`); no `--init`. Every config is
+  checked with the pinned image's `vtysh --dryrun` before it's written; a
+  change restarts the container, which sends NOTIFICATION, so the router
+  moves any VIP at once.
+  - To the router: timers 3/9, connect 5, graceful restart left at FRR's
+    default (helper only). Out (`TO-RTR`): exactly what the router accepts,
+    the node subnet (a `network` statement on the connected bridge route,
+    so it's announced now, and withdrawn while the Docker network is gone),
+    pod CIDRs `/16` to `/24` in the site's range, and `/32`s from the VIP
+    pool. In (`FROM-RTR`): the other site's node subnet and pod CIDRs,
+    installed in the main table.
+  - Ready for Stage C: `bgp listen range <node subnet> peer-group CILIUM`
+    (remote AS 64601 or 64602), timers 3/9, graceful-restart helper, in
+    filter pod CIDRs and VIP `/32`s, `maximum-prefix 512`, `maximum-paths 8`
+    (ECMP across nodes with the same VIP), and an out route-map that denies
+    everything.
+- **Forwarding and return routing: `tnwks-site-routing.service`**, a oneshot
+  unit around `/usr/local/bin/tnwks-site-routing` (settings in
+  `/etc/default/tnwks-site-routing`). It builds its own chains with
+  `iptables-restore --noflush`, so a re-run (`systemctl reload
+  tnwks-site-routing`) replaces them in place, and jumps to them once from
+  the built-in chains and `DOCKER-USER`. It runs at boot after dockerd and on
+  every apply that changes it.
+  - `ip_forward=1`, `rp_filter=2` (also `/etc/sysctl.d/90-tnwks-site-routing.conf`).
+  - Connmark: mangle `PREROUTING -i wg-site<N>` NEW sets bit `0x10000` on
+    the connection; `PREROUTING -i <bridge>` copies it back onto the reply
+    packets; `ip rule fwmark 0x10000/0x10000 lookup 200` (priority 1000),
+    and table 200 holds `default dev wg-site<N>`. Never in `OUTPUT`: the
+    distro's own frag-needed ICMP would follow the mark into the tunnel and
+    break path MTU discovery.
+  - MSS clamping on `wg-site<N>` both ways: set to 1380 on SYNs coming in,
+    clamp to PMTU on SYNs going out.
+  - Filter (`TNWKS-SR-FWD`, from `DOCKER-USER`): from the tunnel only to
+    this site's node subnet, pod range and the VIP pool; anything else is
+    dropped. Allowed traffic returns to Docker's own rules, it isn't
+    accepted here.
+  - `TNWKS-SR-MISROUTED`, a counted drop: a reply to a tunnel connection
+    about to leave by `eth0` (the tunnel is down, so the table's route is
+    gone), and anything from the VIP pool leaving by `eth0`. Without it those
+    leave quietly past Docker's masquerade and Windows drops them.
+    `iptables -vL TNWKS-SR-MISROUTED` shows the count; nothing alerts on it
+    yet.
+  - The bridge is looked up from the Docker network's name on every run
+    (its `com.docker.network.bridge.name`, else `br-<id>`), so after Stage B
+    renames it a `systemctl reload tnwks-site-routing` picks it up. Without
+    the network, the bridge rules are left out and the rest applies.
+
+### Stages B and C: still open
+
+- **Stage B, the Docker networks.** Until then nothing on the tunnel reaches
+  a node: Docker 28's nat-mode bridge drops routed traffic into it (raw
+  `PREROUTING` drops per container address), and Docker masquerades the
+  nodes' traffic to the other site to the distro's tunnel address, which
+  the router's site-to-site policy doesn't allow. Stage B recreates each
+  network as `nat-unprotected` with `enable_ip_masquerade=false` and a fixed
+  bridge name, and turns on `wsl_site_routing_masquerade` (the distro
+  masquerades the node subnet out of `eth0` only). A network can't be
+  changed in place, so the running Talos node containers have to move to
+  the new one (or be recreated): a planned outage per site. After the
+  rename, reload `tnwks-site-routing` (or let the next apply do it).
+- **Stage C, Cilium's BGP control plane** toward FRR at the bridge gateway
+  (`10.5.0.1`, `10.6.0.1`): `CiliumBGPClusterConfig` with local AS
+  64601/64602 and peer AS 64611/64612, timers 9/3 and graceful restart
+  (120 s), advertising `PodCIDR` and the shared VIPs' `LoadBalancerIP`s from
+  `10.10.95.0/24`. Only then does the router learn pod CIDRs and VIPs, and
+  only then does the tunnel carry client traffic. Still open from the design:
+  BGP from inside Talos-in-Docker nodes, and the same LB address in both
+  clusters' pools.
+- **Monitoring.** The tunnel's handshake, the BGP sessions and the misrouted
+  counter have no alert yet.
 
 ## Cluster Mesh
 
