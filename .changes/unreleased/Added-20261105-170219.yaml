@@ -1,3 +1,0 @@
-kind: Added
-body: homelab-wsl exposes Frigate's go2rtc RTSP restream and LiteLLM to WSL-02 only (LAN bridge ports 8554 and 4000), for apps that move to homelab-wsl-02.
-time: 2026-11-05T17:02:19.195316658-08:00

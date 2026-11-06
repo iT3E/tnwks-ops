@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.163.0 - 2026-11-06
+
+### Added
+
+* homelab-wsl exposes Frigate's go2rtc RTSP restream and LiteLLM to WSL-02 only (LAN bridge ports 8554 and 4000), for apps that move to homelab-wsl-02.
+
 ## v1.162.0 - 2026-11-06
 
 ### Added
