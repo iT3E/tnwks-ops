@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.157.0 - 2026-11-06
+
+### Added
+
+* playwright-mcp also runs on homelab-wsl-02, the pilot of moving an app there. Its replica count is the first per-app site switch (`PLAYWRIGHT_MCP_REPLICAS`, default 1; set per cluster in cluster-settings, at runtime in site-overrides).
+
 ## v1.156.0 - 2026-11-06
 
 ### Changed

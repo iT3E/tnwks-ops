@@ -1,3 +1,0 @@
-kind: Added
-body: "playwright-mcp also runs on homelab-wsl-02, the pilot of moving an app there. Its replica count is the first per-app site switch (`PLAYWRIGHT_MCP_REPLICAS`, default 1; set per cluster in cluster-settings, at runtime in site-overrides)."
-time: 2026-11-05T20:00:00.000000000-08:00
