@@ -19,5 +19,13 @@ locals {
       match_subdomain = true
       comment         = "homelab-wsl-02: playwright-mcp"
     }
+    wsl02_transcriber = {
+      name            = "transcriber.internal.tnwks.us"
+      address         = local.wsl02_lan_address
+      type            = "A"
+      ttl             = "5m"
+      match_subdomain = true
+      comment         = "homelab-wsl-02: transcriber"
+    }
   }
 }
