@@ -18,3 +18,5 @@ resources:
   - ../../../../apps/kopiur-system/kopiur/policies/media-prowlarr.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/media-qbittorrent.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/media-recyclarr.yaml
+  - ../../../../apps/kopiur-system/kopiur/policies/unifi.yaml
+  - ../../../../apps/kopiur-system/kopiur/policies/unifi-mongo.yaml

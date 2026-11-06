@@ -46,6 +46,8 @@ data:
   METALLB_K8S_GATEWAY_ADDR: "10.6.0.201"
   METALLB_INGRESS_ADDR: "10.6.0.202"
   MQTT_LB_ADDR: "10.6.0.203"
+  # UniFi inform/STUN/API, behind the LAN bridge like homelab-wsl's 10.5.0.206.
+  UNIFI_LB_ADDR: "10.6.0.206"
   # homelab-wsl federates from this Prometheus (port 9090, admitted only from
   # DESKTOP-HKE05KI).
   PROMETHEUS_PEER_LB_ADDR: "10.6.0.209"
@@ -108,6 +110,10 @@ data:
   # Home Assistant: warm standby here (bin/site-failover "home-assistant").
   HOME_ASSISTANT_REPLICAS: "0"
   HOME_ASSISTANT_BACKUP_SUSPEND: "true"
+  # UniFi controller (and unpoller): deployed here at 0 to move it
+  # (bin/site-failover "unifi"); its PVCs come over with the switchover.
+  UNIFI_REPLICAS: "0"
+  UNIFI_BACKUP_SUSPEND: "true"
   # Home Assistant runs on homelab-wsl: apps here reach it by name.
   HOME_ASSISTANT_URL: "https://hass.internal.tnwks.us"
   # What stays on homelab-wsl, over its LAN bridge (docs/wsl/lan-exposure.md):

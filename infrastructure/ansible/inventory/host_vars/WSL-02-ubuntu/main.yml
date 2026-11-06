@@ -18,10 +18,13 @@ wsl_cluster_tools_enabled: true
 # (playbooks/wsl-distro.yml).
 # LAN 80/443 -> homelab-wsl-02's ingress-nginx-internal (Cilium LB IP; the
 # Windows half forwards them, host_vars/WSL-02).
-wsl_lan_bridge_instances: [http, https, prometheus]
+# unifi-inform: the APs' inform (8080 on Windows -> 18080 here -> the VIP),
+# for when the UniFi controller runs here (docs/network/unifi.md).
+wsl_lan_bridge_instances: [http, https, prometheus, unifi-inform]
 wsl_lan_bridge_targets:
   INTERNAL_INGRESS_IP: 10.6.0.200
   PROMETHEUS_IP: 10.6.0.209
+  UNIFI_IP: 10.6.0.206
 wsl_usb_attach_devices: []
 wsl_backups_timers: []
 # The tnwks-ansible runners on homelab-wsl (group_vars/site_wsl02.yml). They

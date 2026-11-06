@@ -1,0 +1,30 @@
+---
+# UniFi's MongoDB (mongo-unifi-0). Not backed up: the controller's daily .unf
+# auto-backups in /config (policy unifi) are the supported restore path. The
+# policy only moves the PVC between sites (bin/site-failover "unifi") with the
+# controller stopped, so the copy is consistent, with a one-off snapshot
+# that's deleted after the restore.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: unifi-mongo
+  namespace: networking
+spec:
+  repository:
+    kind: ClusterRepository
+    name: s3
+  copyMethod: Direct
+  compression:
+    compressor: zstd
+  credentialProjection:
+    enabled: true
+  mover:
+    securityContext:
+      # The mongo image's user.
+      runAsUser: 999
+      runAsGroup: 999
+  retention:
+    keepLatest: 1
+  sources:
+    - pvc:
+        name: mongo-unifi-0
