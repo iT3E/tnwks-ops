@@ -17,6 +17,8 @@ resources:
   # MetalLB on homelab-wsl.
   - ../../../apps/kube-system/cilium/ks.yaml
   - ../../../apps/kube-system/cilium/config-ks.yaml
+  # BGP to the distro's FRR (role wsl_site_routing) and the shared VIP pool.
+  - ../../../apps/kube-system/cilium/bgp-ks.yaml
   # Storage: this cluster's node names (see the file).
   - ./local-path-provisioner-ks.yaml
   - ../../../apps/kube-system/metrics-server/ks.yaml

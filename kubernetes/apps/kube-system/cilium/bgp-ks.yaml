@@ -1,0 +1,23 @@
+---
+# Cilium's BGP peering with the site's distro (FRR on the Docker bridge
+# gateway), and the shared VIP pool. A cluster lists this next to ks.yaml once
+# it sets CILIUM_BGP_ENABLED "true" and the CILIUM_BGP_* settings, and its
+# distro runs role wsl_site_routing (docs/wsl/multi-site.md).
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cilium-bgp
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/kube-system/cilium/bgp
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  # The BGP CRDs come from the Cilium operator once bgpControlPlane is on.
+  dependsOn:
+    - name: cilium
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

@@ -1,0 +1,16 @@
+---
+# The shared VIPs: the same address in both sites' pools, announced over BGP
+# by whichever site runs the app (the router prefers homelab-wsl's path).
+# Only Services labelled tnwks.us/shared-vip get one, and only by asking for
+# it (spec.loadBalancerIP); every other LoadBalancer stays on the site's own
+# pool (cilium/config).
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: shared-vip
+spec:
+  blocks:
+    - cidr: "${SHARED_VIP_POOL}"
+  serviceSelector:
+    matchLabels:
+      tnwks.us/shared-vip: "true"

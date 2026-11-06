@@ -92,6 +92,12 @@ spec:
       mode: ${CILIUM_IPAM_MODE:=kubernetes}
       operator:
         clusterPoolIPv4PodCIDRList: ["${CLUSTER_CIDR}"]
+    # BGP to the site's distro (FRR), which passes pod CIDRs and shared VIPs
+    # on to the router (docs/wsl/multi-site.md, "BGP"). Peers and
+    # advertisements: ../bgp (cilium-bgp), listed by a cluster that sets
+    # CILIUM_BGP_ENABLED.
+    bgpControlPlane:
+      enabled: ${CILIUM_BGP_ENABLED:=false}
     # Both clusters use Talos kube-prism (localhost:7445) for pod->apiserver,
     # so no per-cluster KUBE_VIP_ADDR substitution is needed here.
     k8sServiceHost: localhost
