@@ -1,0 +1,29 @@
+---
+# The transcriber's clip audio (transcriber-audio). Not backed up: there is no
+# SnapshotSchedule (docs/apps/transcriber.md, "Storage"). The policy is only
+# for moving the PVC between sites: a switchover (scripts/site-failover.py)
+# takes a one-off Snapshot here, restores it on the other site, then deletes
+# it (deletionPolicy Delete). Models aren't copied; they download again.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: transcriber
+  namespace: production
+spec:
+  repository:
+    kind: ClusterRepository
+    name: s3
+  copyMethod: Direct
+  compression:
+    compressor: zstd
+  credentialProjection:
+    enabled: true
+  mover:
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+  retention:
+    keepLatest: 1
+  sources:
+    - pvc:
+        name: transcriber-audio

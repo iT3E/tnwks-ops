@@ -1,0 +1,9 @@
+---
+# kopiur policies of the apps deployed on homelab-wsl-02: the shared files,
+# so both sites write the same identities (each to its own repository).
+# Schedules are suspended here while homelab-wsl runs the app.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../apps/kopiur-system/kopiur/policies/mealie.yaml
+  - ../../../../apps/kopiur-system/kopiur/policies/transcriber.yaml

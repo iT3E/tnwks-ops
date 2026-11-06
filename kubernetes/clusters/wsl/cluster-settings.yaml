@@ -95,6 +95,8 @@ data:
   # The other site's CLUSTER_NAME: replica source for per-app CNPG clusters
   # (kubernetes/components/cnpg-standby).
   PEER_CLUSTER_NAME: "homelab-wsl-02"
+  # The other site's kopia repository prefix (kopiur/peer-repository).
+  PEER_KOPIUR_PREFIX: "kopiur-homelab-wsl-02/"
 
   # Ollama — runs as a native process on the WSL host (not in k8s), listening
   # on 0.0.0.0:11434. Pods reach it via the homelab-wsl docker bridge gateway

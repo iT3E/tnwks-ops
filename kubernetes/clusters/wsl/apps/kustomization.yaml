@@ -33,6 +33,8 @@ resources:
   # Backup tooling: the Roles Anywhere -> STS refresher for barman-cloud and
   # kopiur (docs/operations/backups.md).
   - ../../../apps/kopiur-system
+  # homelab-wsl-02's kopiur repository, read-only: PVCs coming back from it.
+  - ../../../apps/kopiur-system/kopiur/peer-repository-ks.yaml
   - ../../../apps/flux-system
   - ../../../apps/kube-system
   - ../../../apps/kube-system/flannel/ks.yaml

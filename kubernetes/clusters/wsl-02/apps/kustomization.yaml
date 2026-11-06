@@ -54,7 +54,7 @@ resources:
   - ./aws-backup-credentials-ks.yaml
   # kopiur: its own repository (KOPIUR_PREFIX) and homelab-wsl's, read-only.
   - ../../../apps/kopiur-system/kopiur/ks.yaml
-  - ./kopiur-standby-ks.yaml
+  - ../../../apps/kopiur-system/kopiur/peer-repository-ks.yaml
 # Parts of those shared ks.yaml files that don't run here (yet):
 #   - PrometheusRules: no kube-prometheus-stack on this cluster.
 #   - ingress-nginx (public): waits for this cluster's own cloudflared tunnel.
@@ -114,15 +114,17 @@ patches:
         namespace: flux-system
       spec:
         path: ./kubernetes/clusters/wsl-02/apps/monitoring-addons
-  # kopiur's snapshot policies are homelab-wsl's apps; they come here with
-  # the apps.
+  # kopiur's snapshot policies: only those of the apps deployed here
+  # (kopiur-policies/), their schedules suspended while the app runs on
+  # homelab-wsl (<APP>_BACKUP_SUSPEND).
   - patch: |-
-      $patch: delete
       apiVersion: kustomize.toolkit.fluxcd.io/v1
       kind: Kustomization
       metadata:
         name: kopiur-policies
         namespace: flux-system
+      spec:
+        path: ./kubernetes/clusters/wsl-02/apps/kopiur-policies
   # kopiur's PrometheusRule and ServiceMonitor need the Prometheus operator's
   # CRDs (kube-prometheus-stack), so it waits for them.
   - patch: |-

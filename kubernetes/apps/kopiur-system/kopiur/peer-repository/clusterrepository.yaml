@@ -1,14 +1,15 @@
 ---
-# homelab-wsl's kopia repository (kopiur/), read-only: restores of its
-# snapshots onto this cluster (the standby PVCs, the weekly drill, a
-# failover). Not "s3": kopiur names the maintenance owner after the
-# repository, and this one must never run maintenance or retention on
-# homelab-wsl's snapshots (adoption Ignore). The IAM role
-# (tnwks-rolesanywhere-backups-wsl-02) can't write kopiur/ anyway.
+# The other site's kopia repository, read-only: restores of its snapshots onto
+# this cluster (a switchover's PVC copy, the weekly drill). Named after that
+# site (PEER_CLUSTER_NAME), at its prefix (PEER_KOPIUR_PREFIX: kopiur/ for
+# homelab-wsl, kopiur-homelab-wsl-02/ for homelab-wsl-02). Not "s3": kopiur
+# names the maintenance owner after the repository, and this one must never
+# run maintenance or retention on the other site's snapshots (adoption
+# Ignore). homelab-wsl-02's IAM role can't write kopiur/ anyway.
 apiVersion: kopiur.home-operations.com/v1alpha1
 kind: ClusterRepository
 metadata:
-  name: homelab-wsl
+  name: ${PEER_CLUSTER_NAME}
 spec:
   mode: ReadOnly
   create:
@@ -22,7 +23,7 @@ spec:
   backend:
     s3:
       bucket: "${BACKUP_S3_BUCKET}"
-      prefix: kopiur/
+      prefix: ${PEER_KOPIUR_PREFIX}
       endpoint: s3.us-west-2.amazonaws.com
       region: us-west-2
       auth:

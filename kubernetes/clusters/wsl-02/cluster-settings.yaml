@@ -79,9 +79,12 @@ data:
   # The other site's CLUSTER_NAME: replica source for per-app CNPG clusters
   # (kubernetes/components/cnpg-standby).
   PEER_CLUSTER_NAME: "homelab-wsl"
+  # The other site's kopia repository prefix (kopiur/peer-repository).
+  PEER_KOPIUR_PREFIX: "kopiur/"
   # Warm standbys: deployed here at 0, their databases replicas of homelab-wsl's.
   # Failover scales them up (docs/wsl/multi-site.md).
   MEALIE_REPLICAS: "0"
+  MEALIE_BACKUP_SUSPEND: "true"
   MEALIE_HELM_DISABLE_WAIT: "true"
   TRANSCRIBER_REPLICAS: "0"
   TRANSCRIBER_HELM_DISABLE_WAIT: "true"
