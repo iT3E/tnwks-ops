@@ -1,3 +1,0 @@
-kind: Fixed
-body: task failover rolls an app back onto the old site when the PVC copy fails, and fails fast on a refused kopiur mover; Immich's movers run unprivileged.
-time: 2026-11-05T21:01:07.837568161-08:00

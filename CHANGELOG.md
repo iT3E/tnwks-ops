@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.187.1 - 2026-11-06
+
+### Fixed
+
+* task failover rolls an app back onto the old site when the PVC copy fails, and fails fast on a refused kopiur mover; Immich's movers run unprivileged.
+
 ## v1.187.0 - 2026-11-06
 
 ### Added
