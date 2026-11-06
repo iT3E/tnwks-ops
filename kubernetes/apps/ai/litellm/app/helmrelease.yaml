@@ -27,6 +27,8 @@ spec:
   values:
     controllers:
       litellm:
+        # Which site runs it (docs/wsl/multi-site.md, "Switching an app").
+        replicas: ${LITELLM_REPLICAS:=1}
         annotations:
           reloader.stakater.com/auto: "true"
         initContainers:

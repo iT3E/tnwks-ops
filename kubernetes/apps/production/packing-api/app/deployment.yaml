@@ -18,7 +18,8 @@ metadata:
     # Roll the pod when packing-api-secret (its Postgres login) rotates.
     reloader.stakater.com/auto: "true"
 spec:
-  replicas: 1
+  # Which site runs it (docs/wsl/multi-site.md, "Switching an app").
+  replicas: ${PACKING_API_REPLICAS:=1}
   selector:
     matchLabels:
       app.kubernetes.io/name: packing-api
