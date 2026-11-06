@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.169.0 - 2026-11-06
+
+### Added
+
+* task failover (bin/site-failover): planned switchover of an app between homelab-wsl and homelab-wsl-02, with site-overrides, kopiur PVC copy and CNPG demote/promote with the token.
+
 ## v1.168.0 - 2026-11-06
 
 ### Added

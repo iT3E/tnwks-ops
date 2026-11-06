@@ -1,3 +1,0 @@
-kind: Added
-body: 'task failover (bin/site-failover): planned switchover of an app between homelab-wsl and homelab-wsl-02, with site-overrides, kopiur PVC copy and CNPG demote/promote with the token.'
-time: 2026-11-05T17:38:30.89606915-08:00
