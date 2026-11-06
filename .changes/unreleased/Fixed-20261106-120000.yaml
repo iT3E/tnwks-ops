@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'The sites pages and the sites-builder runner mount their NFS share again on homelab-wsl without kube-proxy: nfs-server runs on its node''s host network and the mounts use that node''s address, because the kernel NFS client can''t reach a ClusterIP through Cilium''s kube-proxy replacement. The export now admits only the node subnet.'
+time: 2026-11-06T12:00:00.000000000-08:00
