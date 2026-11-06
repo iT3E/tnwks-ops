@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.160.1 - 2026-11-06
+
+### Fixed
+
+* Mealie now waits for its Postgres cluster to report Ready before it starts.
+
 ## v1.160.0 - 2026-11-06
 
 ### Changed
