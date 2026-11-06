@@ -1,5 +1,5 @@
 {
-  "_comment": "Apps bin/site-failover can move between homelab-wsl and homelab-wsl-02. prefix: the app's variable prefix in cluster-settings / site-overrides (<prefix>_REPLICAS, _PG_PRIMARY, _PG_PROMOTION_TOKEN, _BACKUP_SUSPEND). pvcs: copied with kopiur (policy on both sites); transfer_only: the snapshot is deleted after the restore (for a PVC that isn't backed up). docs/wsl/multi-site.md. lease: the app has a site lease (fencing). workloads: deployment/x or statefulset/x (default: deployments). postgres optional. A pvc with create {capacity, storageClass} is created by the restore when missing (a StatefulSet's).",
+  "_comment": "Apps bin/site-failover can move between homelab-wsl and homelab-wsl-02. prefix: the app's variable prefix in cluster-settings / site-overrides (<prefix>_REPLICAS, _PG_PRIMARY, _PG_PROMOTION_TOKEN, _BACKUP_SUSPEND). pvcs: copied with kopiur (policy on both sites); transfer_only: the snapshot is deleted after the restore (for a PVC that isn't backed up). docs/wsl/multi-site.md. lease: the app has a site lease (fencing). workloads: deployment/x or statefulset/x (default: deployments). postgres optional. A pvc with create {capacity, storageClass} is created by the restore when missing (a StatefulSet's). prebind: start the app once on the new site before copying, so local-path binds all its PVCs (incl. prebind_extra, shared ones not copied) on one node.",
   "mealie": {
     "prefix": "MEALIE",
     "namespace": "production",
@@ -261,22 +261,14 @@
         "policy": "media-qbittorrent",
         "uid": 568,
         "gid": 568,
-        "transfer_only": true,
-        "create": {
-          "capacity": "1Gi",
-          "storageClass": "local-path"
-        }
+        "transfer_only": true
       },
       {
         "name": "config-recyclarr-0",
         "policy": "media-recyclarr",
         "uid": 1000,
         "gid": 1000,
-        "transfer_only": true,
-        "create": {
-          "capacity": "1Gi",
-          "storageClass": "local-path"
-        }
+        "transfer_only": true
       }
     ],
     "check": {
@@ -287,6 +279,10 @@
         "-c",
         "wget -qO- http://localhost:8989/ping || curl -fsS http://localhost:8989/ping"
       ]
-    }
+    },
+    "prebind": true,
+    "prebind_extra": [
+      "cephfs-hdd-subvolume-qbit"
+    ]
   }
 }

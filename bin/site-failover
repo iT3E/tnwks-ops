@@ -353,6 +353,31 @@ def restore_target(site, app, pvc):
     return {"pvcRef": {"name": pvc["name"]}}
 
 
+def prebind(site, app, name):
+    """local-path binds a PVC to the node of its first consumer. Restore movers
+    land anywhere, so an app whose pods share a PVC (the media stack) ended up
+    with its PVCs on two nodes and pods that could never schedule (2026-11-06).
+    Start the app here briefly so the scheduler binds every PVC together (the
+    first pod pins the shared one, the rest follow it), then stop it: the
+    restores then run where the PVCs are, and their exact mirror replaces
+    whatever the app wrote meanwhile."""
+    log(f"{site.name}: prebinding {name}'s PVCs (start it once, then stop it)")
+    p = app["prefix"]
+    site.set_overrides(name, {f"{p}_REPLICAS": "1"})
+    site.reconcile(app["kustomizations"]["app"])
+
+    def bound():
+        out = site.kubectl("get", "pvc", "-n", app["namespace"], "-o", "json").stdout
+        phases = {i["metadata"]["name"]: i["status"].get("phase") for i in json.loads(out)["items"]}
+        want = [v["name"] for v in app["pvcs"]] + app.get("prebind_extra", [])
+        return all(phases.get(n) == "Bound" for n in want)
+    wait(f"{name}'s PVCs bound on {site.name}", bound, timeout=900)
+    site.set_overrides(name, {f"{p}_REPLICAS": "0"})
+    site.reconcile(app["kustomizations"]["app"])
+    wait(f"{name} stopped again on {site.name}", lambda: deployments_stopped(site, app), timeout=600)
+    log(f"{site.name}: {name}'s PVCs are bound; copying")
+
+
 def copy_pvc(old, new, app, pvc, stamp):
     ns = app["namespace"]
     snap = f"{pvc['policy']}-switchover-{stamp}"
@@ -453,6 +478,8 @@ def cmd_switchover(args):
 
     if not args.skip_pvcs:
         try:
+            if app.get("prebind"):
+                prebind(new, app, args.app)
             for pvc in app["pvcs"]:
                 copy_pvc(old, new, app, pvc, stamp)
         except RuntimeError as e:

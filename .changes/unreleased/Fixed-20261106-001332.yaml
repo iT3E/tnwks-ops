@@ -1,0 +1,3 @@
+kind: Fixed
+body: task failover can prebind an app's PVCs on the new site (start it once, then stop) so apps whose pods share a local-path PVC don't end up split across nodes; the media stack uses it.
+time: 2026-11-06T00:13:32.951102832-08:00
