@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.211.1 - 2026-11-06
+
+### Fixed
+
+* nfs-server reconciles again: the gdrive-sync PVC stays on local-path (ext4 on worker-1), as it was created, instead of a class patch Flux can't apply to a bound claim.
+
 ## v1.211.0 - 2026-11-06
 
 ### Added

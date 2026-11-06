@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'nfs-server reconciles again: the gdrive-sync PVC stays on local-path (ext4 on worker-1), as it was created, instead of a class patch Flux can''t apply to a bound claim.'
-time: 2026-11-06T18:15:00.000000000-08:00
