@@ -1,0 +1,56 @@
+---
+# Cilium on homelab-wsl, installed next to Flannel for an in-place move
+# (research note 2026-11-06-flannel-to-cilium-rehearsal). The shared
+# HelmRelease, plus:
+#   - its own pod range (cluster-pool IPAM, 10.46.0.0/16), so Flannel's
+#     10.42 pods and Cilium's pods coexist;
+#   - migration-only settings: no kube-proxy replacement (it broke NodePort
+#     and LB traffic to node-local Flannel pods), legacy host routing, no BPF
+#     masquerade, no policy enforcement, and Cilium doesn't write the CNI
+#     config until a node is listed in the CiliumNodeConfig (cilium-migration).
+#     A later PR drops these.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cilium
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/kube-system/cilium/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+  patches:
+    - target:
+        kind: HelmRelease
+        name: cilium
+      patch: |
+        apiVersion: helm.toolkit.fluxcd.io/v2
+        kind: HelmRelease
+        metadata:
+          name: cilium
+        spec:
+          values:
+            ipam:
+              mode: cluster-pool
+              operator:
+                clusterPoolIPv4PodCIDRList: ["10.46.0.0/16"]
+                clusterPoolIPv4MaskSize: 24
+            # Migration only:
+            ipv4NativeRoutingCIDR: 10.40.0.0/13
+            kubeProxyReplacement: false
+            kubeProxyReplacementHealthzBindAddr: ""
+            bpf:
+              masquerade: false
+              hostLegacyRouting: true
+            cni:
+              customConf: true
+              uninstall: false
+            policyEnforcementMode: never
+            operator:
+              unmanagedPodWatcher:
+                restart: false

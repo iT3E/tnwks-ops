@@ -42,6 +42,8 @@ resources:
   - ../../../apps/flux-system
   - ../../../apps/kube-system
   - ../../../apps/kube-system/flannel/ks.yaml
+  # Cilium next to Flannel while homelab-wsl moves to it (cilium-ks.yaml).
+  - ./cilium-ks.yaml
   - ../../../apps/kube-system/local-path-provisioner/ks.yaml
   - ../../../apps/media
   - ../../../apps/monitoring
