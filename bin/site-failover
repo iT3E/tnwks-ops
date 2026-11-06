@@ -425,7 +425,7 @@ def copy_pvc(old, new, app, pvc, stamp):
             "credentialProjection": {"enabled": True},
             # An exact mirror: the PVC may hold this site's older copy.
             "options": {"enableFileDeletion": True},
-            "mover": {"securityContext": {"runAsUser": pvc["uid"], "runAsGroup": pvc["gid"]}},
+            "mover": {"securityContext": {"runAsUser": pvc.get("restore_uid", pvc["uid"]), "runAsGroup": pvc.get("restore_uid", pvc["gid"])}},
         },
     }))
 
@@ -585,7 +585,7 @@ def promote(args, app, old, new):
                 "target": {"pvcRef": {"name": pvc["name"]}},
                 "credentialProjection": {"enabled": True},
                 "options": {"enableFileDeletion": True},
-                "mover": {"securityContext": {"runAsUser": pvc["uid"], "runAsGroup": pvc["gid"]}},
+                "mover": {"securityContext": {"runAsUser": pvc.get("restore_uid", pvc["uid"]), "runAsGroup": pvc.get("restore_uid", pvc["gid"])}},
             },
         }))
 
