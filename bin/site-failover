@@ -348,7 +348,9 @@ def restore_mover(pvc):
     # can't read or delete another user's private files (sonarr's Backups/,
     # written during the prebind). The namespace must allow privileged movers.
     if pvc.get("restore_privileged"):
-        return {"privilegedMode": True}
+        # privilegedMode never changes the UID: it adds the capabilities only
+        # when the mover already runs as root.
+        return {"privilegedMode": True, "securityContext": {"runAsUser": 0, "runAsGroup": 0}}
     return {"securityContext": {"runAsUser": pvc.get("restore_uid", pvc["uid"]), "runAsGroup": pvc.get("restore_uid", pvc["gid"])}}
 
 
