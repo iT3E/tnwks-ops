@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.208.0 - 2026-11-06
+
+### Added
+
+* Cilium Cluster Mesh between homelab-wsl and homelab-wsl-02: a shared Cilium CA, a clustermesh-apiserver (KVStoreMesh) on a LoadBalancer VIP at each site (10.5.0.210, 10.6.0.210), and native routing for both sites' pods over the routed network, so Services can be global across the sites.
+
 ## v1.207.0 - 2026-11-06
 
 ### Removed
