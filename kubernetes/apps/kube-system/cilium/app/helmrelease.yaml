@@ -83,7 +83,15 @@ spec:
             - hosts:
                 - *host
     ipam:
-      mode: kubernetes
+      # kubernetes: each node's pod CIDR comes from its Node object (Talos
+      # podSubnets). A cluster moved from Flannel in place keeps Cilium's own
+      # pool instead, so a rebuild (02-cni-bootstrap.yml renders these values)
+      # comes up the way it runs: CILIUM_IPAM_MODE "cluster-pool" in its
+      # cluster-settings, with CLUSTER_CIDR as the pool. The pool list is only
+      # rendered in cluster-pool mode.
+      mode: ${CILIUM_IPAM_MODE:=kubernetes}
+      operator:
+        clusterPoolIPv4PodCIDRList: ["${CLUSTER_CIDR}"]
     # Both clusters use Talos kube-prism (localhost:7445) for pod->apiserver,
     # so no per-cluster KUBE_VIP_ADDR substitution is needed here.
     k8sServiceHost: localhost

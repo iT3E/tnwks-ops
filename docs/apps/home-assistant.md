@@ -253,9 +253,13 @@ WSL forwards localhost, so a Windows browser can use `http://localhost:8123`.
    login. Use the HA login: SSO only works on the real hostnames, because
    Cognito has no `localhost` callback.
 3. **Proxy trust.** Settings > System > Network > HTTP server: turn on
-   *Trust X-Forwarded-For* and set *Trusted proxies* to the pod CIDR
-   (`10.42.0.0/16`, the cluster's `CLUSTER_CIDR`). Both ingress-nginx
-   controllers run in the pod network. Leave *Login attempts before ban* at
+   *Trust X-Forwarded-For* and set *Trusted proxies* to the pod CIDRs of
+   every site HA can run on: `10.42.0.0/16` (homelab-wsl today), `10.44.0.0/16`
+   (homelab-wsl-02, where a switchover brings this same config) and
+   `10.46.0.0/16` (homelab-wsl after its move to Cilium). Each is that
+   cluster's `CLUSTER_CIDR`; both ingress-nginx controllers run in the pod
+   network. A proxy outside the list gets HTTP 400, and with login-attempt
+   bans on it can get the ingress's address banned. Leave *Login attempts before ban* at
    unlimited (see [Access](#access)) and save. HA restarts with the new settings as a
    trial, and the trial already trusts the proxy. Open
    `https://hass.internal.tnwks.us` and **confirm the settings within 5
