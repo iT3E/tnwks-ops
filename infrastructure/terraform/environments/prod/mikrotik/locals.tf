@@ -931,6 +931,11 @@ locals {
           allowed_address = ["10.10.32.10/32"]
           comment         = "ARC scale set tnwks-ops-runner (wireproxy sidecar)"
         }
+        tnwks-ops-runner-wsl-02 = {
+          public_key      = "PdKrAZoUe0UgjIswaKOaIvLlXh1k811qVo/SJDiD6Bw="
+          allowed_address = ["10.10.32.11/32"]
+          comment         = "ARC scale set tnwks-ops-runner-wsl-02 (wireproxy sidecar)"
+        }
       }
     }
   }

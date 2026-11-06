@@ -1,0 +1,25 @@
+---
+# homelab-wsl-02's network-device Terraform runner: the shared HelmRelease,
+# registered as its own scale set (tnwks-ops-runner-wsl-02) with the label
+# workflows ask for (tnwks-ops-runner), so GitHub uses whichever site's runner
+# is up. Its wireproxy sidecar holds its own wg03 peer (secret.sops.yaml here).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: tools
+resources:
+  - ../../../../apps/tools/actions-runner-controller/ops-runner/app/helmrelease.yaml
+  - ./secret.sops.yaml
+  # The GitHub App the scale sets authenticate with (on homelab-wsl it ships
+  # with the sites-builder runner, which isn't deployed here).
+  - ../../../../apps/tools/actions-runner-controller/runner/app/secret.sops.yaml
+patches:
+  - target:
+      kind: HelmRelease
+      name: tnwks-ops-runner
+    patch: |-
+      - op: replace
+        path: /spec/values/runnerScaleSetName
+        value: tnwks-ops-runner-wsl-02
+      - op: add
+        path: /spec/values/scaleSetLabels
+        value: ["tnwks-ops-runner"]
