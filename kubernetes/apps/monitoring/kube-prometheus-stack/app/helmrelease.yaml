@@ -161,6 +161,9 @@ spec:
               match[]:
                 - 'cnpg_pg_stat_archiver_last_archived_wal_start_lsn'
                 - 'cnpg_pg_replication_in_recovery'
+                # UniFi (unpoller runs where the controller runs), so the
+                # dashboards on either site see the APs.
+                - '{__name__=~"unpoller_.*"}'
             static_configs:
               - targets:
                   - ${PEER_WINDOWS_HOST_ADDR}:9090

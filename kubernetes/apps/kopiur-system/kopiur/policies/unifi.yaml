@@ -40,4 +40,7 @@ spec:
   schedule:
     # Nightly, spread across 02:00-03:00 (H), after the 01:00 Postgres base backup.
     cron: "H 2 * * *"
+    # Only where UniFi runs (UNIFI_BACKUP_SUSPEND in the standby site's
+    # cluster-settings; a switchover flips it in site-overrides).
+    suspend: ${UNIFI_BACKUP_SUSPEND:=false}
     runOnCreate: true

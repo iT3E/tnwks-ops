@@ -47,6 +47,8 @@ spec:
   values:
     controllers:
       unifi:
+        # Which site runs it (docs/wsl/multi-site.md, "Switching an app").
+        replicas: ${UNIFI_REPLICAS:=1}
         type: statefulset
         annotations:
           reloader.stakater.com/auto: "true"

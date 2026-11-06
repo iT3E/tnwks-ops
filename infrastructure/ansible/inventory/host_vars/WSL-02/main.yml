@@ -46,6 +46,9 @@ lan_bridge_tcp_ports:
   - { port: 2222, wsl_port: 22, remote: [10.10.91.142] }
   # Prometheus federation for homelab-wsl (it watches this site too).
   - { port: 9090, remote: [10.10.91.142] }
+  # UniFi inform from the APs (VLAN 900 only), for when the controller runs
+  # here. socat listens on 18080, as on DESKTOP-HKE05KI.
+  - { port: 8080, wsl_port: 18080, remote: [10.10.90.0/24] }
 lan_bridge_replaced_rules:
   - WSL SSH Rule # tcp/2222 from any
   - WSL llama.cpp # tcp/50052 from any, unused

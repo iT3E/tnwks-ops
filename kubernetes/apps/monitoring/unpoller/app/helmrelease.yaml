@@ -18,6 +18,9 @@ spec:
   values:
     controllers:
       unpoller:
+        # Runs where the UniFi controller runs: it reads the controller's
+        # ClusterIP Service (UNIFI_REPLICAS, bin/site-failover "unifi").
+        replicas: ${UNIFI_REPLICAS:=1}
         containers:
           app:
             image:

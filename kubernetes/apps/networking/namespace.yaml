@@ -3,6 +3,12 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: networking
+  annotations:
+    # kopiur restore movers run as root here, so a switchover's restore keeps
+    # UniFi's file owners (abc in /config, mongo in /data/db) and can overwrite
+    # whatever the prebind start wrote (bin/site-failover, "unifi"). The
+    # namespace is privileged anyway.
+    kopiur.home-operations.com/privileged-movers: "true"
   labels:
     kustomize.toolkit.fluxcd.io/prune: disabled
     # MetalLB speaker (and similar L2/host-networked controllers) need

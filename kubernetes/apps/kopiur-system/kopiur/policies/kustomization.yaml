@@ -16,6 +16,7 @@ resources:
   - ./media-qbittorrent.yaml
   - ./media-recyclarr.yaml
   - ./unifi.yaml
+  - ./unifi-mongo.yaml
   - ./changedetection.yaml
   - ./firefly.yaml
   - ./finance-sync.yaml

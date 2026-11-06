@@ -274,8 +274,11 @@ locals {
       "10_10_60_35"  = "10.10.60.35"
       "10_10_60_100" = "10.10.60.100"
     }
+    # Both WSL hosts: the controller runs on one site at a time, and the
+    # router's `unifi` record names which (docs/network/unifi.md).
     unifi_controller = {
       "10_10_91_142" = "10.10.91.142"
+      "10_10_91_112" = "10.10.91.112"
     }
   }
 

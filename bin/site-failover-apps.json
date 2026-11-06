@@ -321,5 +321,47 @@
       "container": "app",
       "url": "http://localhost:8123/manifest.json"
     }
+  },
+  "unifi": {
+    "prefix": "UNIFI",
+    "namespace": "networking",
+    "kustomizations": {
+      "app": [
+        "unifi",
+        "unpoller"
+      ],
+      "backup": "kopiur-policies"
+    },
+    "workloads": [
+      "statefulset/unifi"
+    ],
+    "backup_schedule": true,
+    "pvcs": [
+      {
+        "name": "config-unifi-0",
+        "policy": "unifi",
+        "uid": 1000,
+        "gid": 1000,
+        "restore_privileged": true
+      },
+      {
+        "name": "mongo-unifi-0",
+        "policy": "unifi-mongo",
+        "uid": 999,
+        "gid": 999,
+        "transfer_only": true,
+        "restore_privileged": true
+      }
+    ],
+    "check": {
+      "workload": "statefulset/unifi",
+      "container": "app",
+      "command": [
+        "sh",
+        "-c",
+        "curl -fsk https://localhost:8443/status"
+      ]
+    },
+    "prebind": true
   }
 }

@@ -30,6 +30,8 @@ resources:
   - ./alertmanager-ks.yaml
   - ../../../apps/monitoring/kube-prometheus-stack/ks.yaml
   - ../../../apps/monitoring/node-exporter/ks.yaml
+  # Follows the UniFi controller (UNIFI_REPLICAS).
+  - ../../../apps/monitoring/unpoller/ks.yaml
   # Certificates: cert-manager with the Let's Encrypt DNS-01 issuers, and the
   # wildcard certificates the ingress controllers use (internal and public).
   - ../../../apps/cert-manager/namespace.yaml
@@ -38,6 +40,9 @@ resources:
   - ../../../apps/networking/ingress-nginx/ks.yaml
   # *.internal.tnwks.us on ${INGRESS_INTERNAL_ADDR} (10.6.0.200).
   - ../../../apps/networking/ingress-nginx-internal/ks.yaml
+  # UniFi controller: deployed here at 0 to move it (bin/site-failover
+  # "unifi"). The APs reach whichever site the router's `unifi` record names.
+  - ../../../apps/networking/unifi/ks.yaml
   # The CNPG operator and the barman-cloud plugin, for per-app clusters
   # (kubernetes/components/cnpg-cluster).
   - ../../../apps/databases/namespace.yaml

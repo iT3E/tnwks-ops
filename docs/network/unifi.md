@@ -112,6 +112,16 @@ AP (VLAN 900)
   -> networking/unifi-inform Service -> the controller pod
 ```
 
+- **Either WSL site can run the controller** (docs/wsl/multi-site.md). Both
+  deploy it, the standby at `UNIFI_REPLICAS: "0"`, with unpoller following
+  it. `bin/site-failover switchover unifi --to <site>` stops it, copies both
+  PVCs (`config` and the MongoDB data, owners kept) and starts it on the other
+  site. The router's `unifi` record then names that site's Windows host
+  (10.10.91.142 or 10.10.91.112); both are in the `unifi_controller` address
+  list, and both hosts bridge 8080 (homelab-wsl-02: `UNIFI_LB_ADDR`
+  10.6.0.206). Until the record moves, the APs show as disconnected but keep
+  serving clients. The API on the VIP is only reachable from the host of the
+  site that runs it.
 - **Discovery is just DNS.** A factory-reset UniFi device takes a DHCP lease
   and then sends its inform to `http://unifi:8080/inform`. The router's static
   record `unifi` (generated into `environments/prod/mikrotik/locals.tf` from the
