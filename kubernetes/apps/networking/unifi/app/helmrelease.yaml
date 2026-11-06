@@ -150,6 +150,12 @@ spec:
       app:
         controller: unifi
         primary: true
+        # Global across the WSL sites (Cilium Cluster Mesh): the controller runs
+        # on one site, and HA's UniFi integration, unpoller and CI keep using
+        # unifi.networking.svc on either. Local endpoints win when there are any.
+        annotations:
+          service.cilium.io/global: "true"
+          service.cilium.io/affinity: local
         ports:
           http:
             port: 8443

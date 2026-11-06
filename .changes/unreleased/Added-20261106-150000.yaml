@@ -1,0 +1,3 @@
+kind: Added
+body: 'The UniFi controller''s Service is global across the WSL sites (Cilium Cluster Mesh), so Home Assistant, unpoller and CI reach it on either site; the desktop''s .unf copy to Google Drive skips cleanly while the controller runs on the other site.'
+time: 2026-11-06T15:00:00.000000000-08:00
