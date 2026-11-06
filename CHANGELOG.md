@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.159.0 - 2026-11-06
+
+### Added
+
+* The MikroTik answers `playwright-mcp.internal.tnwks.us` with WSL-02 (10.10.91.112, TTL 5m), more specific than the `*.internal.tnwks.us` wildcard: step 2 of moving playwright-mcp to homelab-wsl-02. Names served by homelab-wsl-02 live in `environments/prod/mikrotik/dns-sites.tf`.
+
 ## v1.158.0 - 2026-11-06
 
 ### Changed
