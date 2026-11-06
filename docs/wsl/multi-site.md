@@ -420,8 +420,13 @@ task failover:clear APP=mealie                      # only once git matches
   It skips an app with `site-overrides` here (a switchover under way). It
   keeps the standby current and is the standing restore drill: a failure is
   `KubeJobFailed`, and no success for 8 days is `StandbyRestoreDrillStale`.
-- There's no `--promote`. An unplanned promote needs the fencing answer
-  below first.
+- **Unplanned: `--promote`.** For when the old site is dead. First set
+  `site_leases.<app>` to the dead site (a PR to `dns-sites.tf`); the tool
+  refuses until the router says so. Then run `task failover APP=<app>
+  TO=<site> -- --promote`. It never contacts the old site. It restores the
+  PVCs from the old site's newest kopiur snapshot (S3) and promotes without a
+  token, which loses whatever wasn't archived yet. The fencing section below
+  covers the return.
 
 ### Unplanned failure
 

@@ -1,0 +1,3 @@
+kind: Added
+body: 'Fencing for the warm apps: an app gate (waits while its site lease fences this site), a per-site database fence CronJob, and task failover --promote for an unplanned failover (refuses until the lease fences the dead site).'
+time: 2026-11-05T19:33:09.123119199-08:00
