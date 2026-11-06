@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.206.1 - 2026-11-06
+
+### Fixed
+
+* homelab-wsl runs without kube-proxy, now that Cilium's kube-proxy replacement handles Services there.
+
 ## v1.206.0 - 2026-11-06
 
 ### Added
