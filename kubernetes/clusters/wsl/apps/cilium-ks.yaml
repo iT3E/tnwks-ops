@@ -4,11 +4,10 @@
 # HelmRelease, plus:
 #   - its own pod range (cluster-pool IPAM, 10.46.0.0/16), so Flannel's
 #     10.42 pods and Cilium's pods coexist;
-#   - migration-only settings: no kube-proxy replacement (it broke NodePort
-#     and LB traffic to node-local Flannel pods), legacy host routing, no BPF
-#     masquerade, no policy enforcement, and Cilium doesn't write the CNI
-#     config until a node is listed in the CiliumNodeConfig (cilium-migration).
-#     A later PR drops these.
+#   - native routing for that range only. Every pod is on Cilium now, so the
+#     migration-only settings are gone and the shared datapath applies:
+#     kube-proxy replacement, BPF masquerade and host routing, policy
+#     enforcement.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -40,17 +39,4 @@ spec:
               operator:
                 clusterPoolIPv4PodCIDRList: ["10.46.0.0/16"]
                 clusterPoolIPv4MaskSize: 24
-            # Migration only:
-            ipv4NativeRoutingCIDR: 10.40.0.0/13
-            kubeProxyReplacement: false
-            kubeProxyReplacementHealthzBindAddr: ""
-            bpf:
-              masquerade: false
-              hostLegacyRouting: true
-            cni:
-              customConf: true
-              uninstall: false
-            policyEnforcementMode: never
-            operator:
-              unmanagedPodWatcher:
-                restart: false
+            ipv4NativeRoutingCIDR: 10.46.0.0/16

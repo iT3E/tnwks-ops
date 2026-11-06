@@ -1,0 +1,3 @@
+kind: Changed
+body: 'homelab-wsl runs entirely on Cilium''s datapath: kube-proxy replacement, BPF masquerade and host routing, and NetworkPolicy enforcement, now that every pod has a Cilium address. The migration node config is removed.'
+time: 2026-11-06T10:00:00.000000000-08:00
