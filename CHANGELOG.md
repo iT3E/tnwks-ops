@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.158.0 - 2026-11-06
+
+### Changed
+
+* Mealie is stopped on homelab-wsl while its database moves to its own CNPG cluster (step 1 of 2). Its replica count is a per-app site switch now (`MEALIE_REPLICAS`, default 1).
+
 ## v1.157.0 - 2026-11-06
 
 ### Added

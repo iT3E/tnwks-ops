@@ -1,3 +1,0 @@
-kind: Changed
-body: "Mealie is stopped on homelab-wsl while its database moves to its own CNPG cluster (step 1 of 2). Its replica count is a per-app site switch now (`MEALIE_REPLICAS`, default 1)."
-time: 2026-11-05T20:30:00.000000000-08:00
