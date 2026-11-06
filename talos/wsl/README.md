@@ -35,7 +35,7 @@ talosctl cluster destroy --name homelab-wsl
 
 ## Notes
 
-- CNI is set to none — installed by `02-cni-bootstrap.yml` (Flannel on WSL,
+- CNI is set to none — installed by `02-cni-bootstrap.yml` (Cilium on both WSL clusters,
   Cilium on MS-01)
 - The cluster runs on a dedicated Docker bridge network (`homelab-wsl`).
   `01-talos-bootstrap.yml` creates it before talosctl, with

@@ -7,19 +7,17 @@ holds infrastructure config, manifests, or playbooks.
 
 | Cluster         | Where                               | CNI                                         | Storage default                                                | LB                                           | Notes                                                                   |
 | --------------- | ----------------------------------- | ------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------- |
-| `homelab-wsl`   | Talos-in-Docker on the WSL2 desktop | **Flannel**                                 | `local-path`                                                   | MetalLB on the docker bridge (`10.5.0.0/24`) | USB passthrough via `usbipd-win` for Frigate/Coral + Z-Stick            |
+| `homelab-wsl`   | Talos-in-Docker on the WSL2 desktop | **Cilium** (since 2026-11-06, moved in place from Flannel; pods `10.46/16`, cluster ID 1) | `local-path`                                                   | MetalLB on the docker bridge (`10.5.0.0/24`) | USB passthrough via `usbipd-win` for Frigate/Coral + Z-Stick            |
 | `homelab-wsl-02` | Talos-in-Docker on the second WSL2 host (WSL-02) | **Cilium** (kube-proxy replacement, L2) | `local-path` (ext4 vhdx on C:) | Cilium LB IPAM + L2 on the docker bridge (`10.6.0.0/24`); pods `10.44/16`, cluster ID 2 | Being brought up: platform only so far (`talos/wsl-02/README.md`) |
 | `homelab-ms-01` | 3× MS-01 bare-metal Talos           | **Cilium** (kube-proxy replacement, L2/BGP) | `ceph-block` (Rook), `nfs-bulk` (democratic-csi → TerraMaster) | Cilium L2/BGP on VLAN 910 (`10.10.91.50–60`) | Public ingress via cloudflared; runs Rook Ceph, Loki/Thanos/Vector, NFD |
 
-`homelab-wsl` runs Flannel because Cilium's default `clean-cilium-state`
-requests `CAP_SYS_MODULE`, which the WSL2 kernel rejects in nested containers
-([cilium#13768](https://github.com/cilium/cilium/issues/13768)). Cilium doesn't
-need it: without it (Talos' own Cilium values, in the shared HelmRelease) it
-runs on Talos-in-Docker, and `homelab-wsl-02` uses it. On `homelab-wsl` the
-Flannel choice still drives the divergence from Cilium clusters (no
-`CiliumNetworkPolicy` ⇒ no `pod-gateway` ⇒ no qbittorrent/prowlarr there), and
-a NetworkPolicy in a shared app is enforced on `homelab-wsl-02` and ignored on
-`homelab-wsl`.
+Both WSL clusters run Cilium. Its default `clean-cilium-state` requests
+`CAP_SYS_MODULE`, which the WSL2 kernel rejects in nested containers
+([cilium#13768](https://github.com/cilium/cilium/issues/13768)), but Cilium
+doesn't need it: the shared HelmRelease uses Talos' own Cilium values.
+`homelab-wsl` ran Flannel until 2026-11-06 and moved in place (it keeps
+cluster-pool IPAM on `10.46.0.0/16`, and MetalLB for its LoadBalancer IPs).
+NetworkPolicies in shared apps are enforced on every cluster.
 
 ## Common commands
 
@@ -32,7 +30,7 @@ Per-cluster operations override `KUBECONFIG` to `~/.kube/config-homelab-{wsl,ms-
 # Bootstrap a cluster end-to-end (Talos → CNI → SOPS → Flux).
 # GITHUB_TOKEN must be exported (repo scope on the PAT).
 export GITHUB_TOKEN=$(op read 'op://Private/GitHub Flux Token/credential')
-task bootstrap:wsl     # talosctl cluster create docker + Flannel
+task bootstrap:wsl     # talosctl cluster create docker + Cilium
 task bootstrap:ms-01   # talosctl apply-config to MS-01 nodes + Cilium
 
 # Force Flux reconcile on a cluster
@@ -244,7 +242,7 @@ fragment; the `changelog` check skips it.
    `~/.kube/config-homelab-<cluster>`. On WSL, also augments worker-2 with
    USB device passthrough and a `/mnt/e/k8s-storage` bind mount via a
    Docker container recreate that preserves the original named volumes.
-2. `02-cni-bootstrap.yml` — installs Flannel (WSL) or Cilium (MS-01).
+2. `02-cni-bootstrap.yml` — installs Cilium (from each cluster's `CNI` setting).
 3. `03-sops-keys.yml` — generates `~/.config/sops/age/homelab-<cluster>.txt`
    and creates the `sops-age` Secret in `flux-system`. **Back this key up.**
 4. `04-flux-install.yml` — `flux bootstrap github` against the cluster's
