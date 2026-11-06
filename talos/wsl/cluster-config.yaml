@@ -29,11 +29,14 @@
 # v1alpha1 config"): recreate homelab-wsl with talosctl < 1.14, or move it to
 # the multi-document form of talos/wsl-02/patches/.
 #
-# kube-proxy still runs here next to Cilium's kube-proxy replacement (kept
-# through the Flannel move). Turning it off is a separate step: see
-# talos/wsl-02/patches/cluster.yaml for the key, then delete its DaemonSet.
+# No kube-proxy: Cilium replaces it (kube-proxy replacement, since the move
+# from Flannel on 2026-11-06). A running cluster gets this with `talosctl
+# patch mc --mode=no-reboot`, plus deleting the old DaemonSet, which Talos
+# stops managing but doesn't remove.
 
 cluster:
+  proxy:
+    disabled: true
   controllerManager:
     extraArgs:
       # Delete finished pods promptly. Graceful node shutdowns (every WSL

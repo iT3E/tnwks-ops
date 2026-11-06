@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'homelab-wsl runs without kube-proxy, now that Cilium''s kube-proxy replacement handles Services there.'
+time: 2026-11-06T11:30:00.000000000-08:00
