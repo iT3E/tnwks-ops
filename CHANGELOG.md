@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.170.0 - 2026-11-06
+
+### Changed
+
+* transcriber.internal.tnwks.us resolves to WSL-02: the transcriber runs on homelab-wsl-02.
+
 ## v1.169.0 - 2026-11-06
 
 ### Added
