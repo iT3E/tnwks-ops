@@ -67,8 +67,10 @@ spec:
                   secretKeyRef:
                     name: mealie-secret
                     key: POSTGRES_PASSWORD
+              # Its own CNPG cluster since 2026-11-05 (mealie/db); the shared
+              # cluster's `mealie` database is the rollback copy.
               - name: POSTGRES_SERVER
-                value: "postgres-rw.databases.svc.cluster.local"
+                value: "mealie-pg-rw.databases.svc.cluster.local"
               - name: POSTGRES_PORT
                 value: "5432"
               - name: POSTGRES_DB
