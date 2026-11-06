@@ -36,7 +36,12 @@ spec:
       service:
         annotations:
         loadBalancerIP: "${INGRESS_INTERNAL_ADDR}"
-        externalTrafficPolicy: Local
+        # Cilium's L2 announcements ignore externalTrafficPolicy: any node can
+        # win a Service's lease, and with Local a node without an ingress pod drops
+        # the traffic (homelab-wsl-02, 2026-11-06). So the WSL clusters use Cluster
+        # (LB_EXTERNAL_TRAFFIC_POLICY); clients there arrive through the LAN bridge
+        # or cloudflared anyway, so no real source address is lost.
+        externalTrafficPolicy: ${LB_EXTERNAL_TRAFFIC_POLICY:=Local}
       publishService:
         enabled: true
       # Without an explicit ingressClass + controllerValue, this controller

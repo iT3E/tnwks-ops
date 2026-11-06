@@ -33,7 +33,12 @@ spec:
       # `io.cilium/lb-ipam-ips` annotation; MetalLB ignores it. Using the
       # spec field keeps a single value working across both clusters.
       loadBalancerIP: "${METALLB_K8S_GATEWAY_ADDR}"
-      externalTrafficPolicy: Local
+      # Cilium's L2 announcements ignore externalTrafficPolicy: any node can
+      # win a Service's lease, and with Local a node without an ingress pod drops
+      # the traffic (homelab-wsl-02, 2026-11-06). So the WSL clusters use Cluster
+      # (LB_EXTERNAL_TRAFFIC_POLICY); clients there arrive through the LAN bridge
+      # or cloudflared anyway, so no real source address is lost.
+      externalTrafficPolicy: ${LB_EXTERNAL_TRAFFIC_POLICY:=Local}
     # Chart 4.x takes CoreDNS server blocks instead of domain/ttl/apex values.
     # This reproduces the Corefile chart 2.4.0 generated, so answers are the
     # same: names from Ingress hosts and LoadBalancer Services under
