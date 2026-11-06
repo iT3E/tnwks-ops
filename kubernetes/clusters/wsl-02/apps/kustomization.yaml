@@ -46,6 +46,7 @@ resources:
   # (MEALIE_REPLICAS) and its database a replica cluster (cnpg-standby).
   - ../../../apps/production/namespace.yaml
   - ../../../apps/production/mealie/ks.yaml
+  - ../../../apps/production/transcriber/ks.yaml
   # Backup credentials: certificate -> STS session for barman-cloud and kopiur
   # (role tnwks-rolesanywhere-backups-wsl-02: read the bucket, write only
   # homelab-wsl-02's prefixes).
@@ -60,6 +61,18 @@ resources:
 #   - cloudnative-pg-cluster: homelab-wsl's shared `postgres` cluster; apps
 #     get their own clusters here.
 patches:
+  # The transcriber's mosquitto and Frigate stay on homelab-wsl (reached over
+  # the LAN, FRIGATE_RTSP_URL / MQTT_BROKER_HOST), so it can't wait for them here.
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata:
+        name: transcriber
+        namespace: flux-system
+      spec:
+        dependsOn:
+          - name: transcriber-db
+          - name: kube-prometheus-stack
   - patch: |-
       $patch: delete
       apiVersion: kustomize.toolkit.fluxcd.io/v1

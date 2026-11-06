@@ -51,10 +51,13 @@ data:
   CNI: "cilium"
   CILIUM_VERSION: "1.19.4"
   CILIUM_L2_ANNOUNCEMENTS_ENABLED: "true"
-  # No Prometheus operator (ServiceMonitor CRD) or ingress on this cluster yet.
+  # Cilium's ServiceMonitor stays off: 02-cni-bootstrap.yml installs Cilium
+  # from these values before kube-prometheus-stack (and its CRD) exists.
   CILIUM_SERVICEMONITOR_ENABLED: "false"
   CILIUM_HUBBLE_UI_INGRESS_ENABLED: "false"
-  SERVICE_MONITOR_ENABLED: "false"
+  # kube-prometheus-stack runs here since 2026-11-05, so apps' ServiceMonitors
+  # can be created.
+  SERVICE_MONITOR_ENABLED: "true"
   # Backups: the shared bucket; this cluster's own kopia repository prefix
   # (write) next to homelab-wsl's kopiur/ (read-only, kopiur-standby).
   BACKUP_S3_BUCKET: "tnwks-homelab-backups-654654262098"
@@ -80,3 +83,12 @@ data:
   # Failover scales them up (docs/wsl/multi-site.md).
   MEALIE_REPLICAS: "0"
   MEALIE_HELM_DISABLE_WAIT: "true"
+  TRANSCRIBER_REPLICAS: "0"
+  TRANSCRIBER_HELM_DISABLE_WAIT: "true"
+  # What stays on homelab-wsl, over its LAN bridge (docs/wsl/lan-exposure.md):
+  # Frigate's go2rtc restream and LiteLLM (admitted only from WSL-02), MQTT,
+  # and oauth2-proxy (its sessions live in that site's Valkey).
+  FRIGATE_RTSP_URL: "rtsp://10.10.91.142:8554"
+  MQTT_BROKER_HOST: "10.10.91.142"
+  LITELLM_URL: "http://10.10.91.142:4000"
+  OAUTH2_PROXY_URL: "https://oauth2.internal.tnwks.us"
