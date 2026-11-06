@@ -235,6 +235,9 @@ spec:
           # 60s default idle timeout cut it.
           nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
           nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+          # Through the Service's ClusterIP, not the pod endpoints: on the site
+          # where the app is at 0, only Cilium knows the other site's backends. (Public: cloudflared is on homelab-wsl.)
+          nginx.ingress.kubernetes.io/service-upstream: "true"
         hosts:
           - host: &host hass.${SECRET_DOMAIN}
             paths:

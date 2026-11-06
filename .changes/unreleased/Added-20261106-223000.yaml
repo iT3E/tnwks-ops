@@ -1,0 +1,3 @@
+kind: Added
+body: 'Public names follow their apps between the WSL sites: Mealie''s Service is global, and Home Assistant''s and Mealie''s public Ingresses go through the Service, so cloudflared and the public ingress on homelab-wsl reach the app over Cluster Mesh when it runs on homelab-wsl-02.'
+time: 2026-11-06T22:30:00.000000000-08:00

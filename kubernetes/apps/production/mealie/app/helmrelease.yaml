@@ -149,6 +149,11 @@ spec:
     service:
       app:
         controller: mealie
+        # Global across the WSL sites (Cilium Cluster Mesh): the other site's
+        # ingress (the shared VIP) reaches this app wherever it runs.
+        annotations:
+          service.cilium.io/global: "true"
+          service.cilium.io/affinity: local
         ports:
           http:
             port: 9000
@@ -167,6 +172,9 @@ spec:
           hajimari.io/appName: Recipes
           hajimari.io/group: Home
           hajimari.io/icon: mdi:food
+          # Through the Service's ClusterIP, not the pod endpoints: on the site
+          # where the app is at 0, only Cilium knows the other site's backends. (Public: cloudflared is on homelab-wsl.)
+          nginx.ingress.kubernetes.io/service-upstream: "true"
         hosts:
           - host: &host "recipes.${SECRET_DOMAIN}"
             paths:
