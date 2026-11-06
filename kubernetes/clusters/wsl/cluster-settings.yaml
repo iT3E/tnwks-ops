@@ -63,6 +63,10 @@ data:
   FLOW_COLLECTOR_LB_ADDR: "10.5.0.204"
   VECTOR_LB_ADDR: "10.5.0.205"
   UNIFI_LB_ADDR: "10.5.0.206"
+  # Peer services: reached by homelab-wsl-02 through the LAN bridge
+  # (ports 8554 and 4000, admitted only from WSL-02).
+  FRIGATE_RTSP_LB_ADDR: "10.5.0.207"
+  LITELLM_LB_ADDR: "10.5.0.208"
   KUBE_VIP_ADDR: "127.0.0.1"
 
   # Cluster networking
