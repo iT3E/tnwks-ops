@@ -3,5 +3,8 @@
 self-hosted-runner:
   labels:
     - tnwks-ops-runner
+    # Site labels of the ops runners (kubernetes/apps/tools/actions-runner-controller/ops-runner).
+    - tnwks-ops-homelab-wsl
+    - tnwks-ops-homelab-wsl-02
     - sites-builder
     - openclaw-hooks
