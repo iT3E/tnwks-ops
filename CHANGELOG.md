@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.202.0 - 2026-11-06
+
+### Changed
+
+* homelab-wsl starts its move from Flannel to Cilium: Cilium runs next to Flannel in migration mode with its own pod range (10.46.0.0/16), and ingress-nginx trusts both pod ranges meanwhile. No pod moves until a node is enrolled.
+
 ## v1.201.0 - 2026-11-06
 
 ### Changed
