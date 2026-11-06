@@ -8,10 +8,6 @@ resources:
   - ./database.yaml
   - ./secret-plausible-role.sops.yaml
   - ./database-plausible.yaml
-  - ./secret-litellm-role.sops.yaml
-  - ./secret-things-api-role.sops.yaml
-  - ./secret-packing-api-role.sops.yaml
-  - ./secret-vaultwarden-role.sops.yaml
   - ./database-finance-sync.yaml
   - ./database-mealie.yaml
   - ./database-app.yaml
@@ -19,7 +15,6 @@ resources:
   - ./database-vantrip.yaml
   - ./database-things-api.yaml
   - ./database-home-assistant.yaml
-  - ./secret-grafana-role.sops.yaml
   - ./database-grafana.yaml
   - ./objectstore.yaml
   - ./scheduled-backup.yaml

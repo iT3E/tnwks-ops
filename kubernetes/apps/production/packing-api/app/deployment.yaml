@@ -51,7 +51,7 @@ spec:
                   name: packing-api-secret
                   key: POSTGRES_PASSWORD
             - name: POSTGRES_SERVER
-              value: "postgres-rw.databases.svc.cluster.local"
+              value: "packing-api-pg-rw.databases.svc.cluster.local"
             - name: POSTGRES_PORT
               value: "5432"
             - name: POSTGRES_DB

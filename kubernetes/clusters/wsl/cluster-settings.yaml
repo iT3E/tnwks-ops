@@ -123,10 +123,3 @@ data:
   TRANSCRIBER_REPLICAS: "0"
   TRANSCRIBER_PG_PRIMARY: "homelab-wsl-02"
   TRANSCRIBER_BACKUP_SUSPEND: "true"
-  # Stopped while their databases move to their own CNPG clusters (2026-11-05;
-  # removed again by the PR that moves them).
-  GRAFANA_REPLICAS: "0"
-  LITELLM_REPLICAS: "0"
-  VAULTWARDEN_REPLICAS: "0"
-  PACKING_API_REPLICAS: "0"
-  THINGS_API_REPLICAS: "0"

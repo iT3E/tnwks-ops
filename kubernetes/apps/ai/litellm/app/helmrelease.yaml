@@ -84,7 +84,7 @@ spec:
                     name: litellm-secret
                     key: DATABASE_PASSWORD
               - name: DATABASE_URL
-                value: "postgresql://litellm:$(DATABASE_PASSWORD)@postgres-rw.databases.svc.cluster.local:5432/litellm"
+                value: "postgresql://litellm:$(DATABASE_PASSWORD)@litellm-pg-rw.databases.svc.cluster.local:5432/litellm"
               - name: LITELLM_MASTER_KEY
                 valueFrom:
                   secretKeyRef:
