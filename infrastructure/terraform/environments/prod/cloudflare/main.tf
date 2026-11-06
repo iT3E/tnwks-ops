@@ -132,6 +132,18 @@ module "cf_domain_1" {
       type    = "CNAME"
       proxied = false
     },
+    # *.internal.tnwks.us exists only on the LAN (the router's static records). The router answers A for those
+    # names itself but forwards AAAA here, and NXDOMAIN made musl (Alpine) resolvers treat the whole name as
+    # missing. This wildcard makes the name exist publicly with no A/AAAA, so the answer is NODATA and the A record
+    # wins. It reveals nothing the *.internal.tnwks.us certificate doesn't. Last in the list: entries are keyed by
+    # position.
+    {
+      id      = "internal_nodata"
+      name    = "*.internal.tnwks.us"
+      value   = "\"LAN-only names; resolved by the home router\""
+      type    = "TXT"
+      proxied = false
+    },
   ]
 
   waf_custom_rules = [
