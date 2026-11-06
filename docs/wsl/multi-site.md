@@ -378,7 +378,7 @@ and it can't carry traffic before Stage B (below).
     renames it a `systemctl reload tnwks-site-routing` picks it up. Without
     the network, the bridge rules are left out and the rest applies.
 
-### Stages B and C: still open
+### Stages B and C
 
 - **Stage B, the Docker networks.** Until then nothing on the tunnel reaches
   a node: Docker 28's nat-mode bridge drops routed traffic into it (raw
@@ -392,13 +392,27 @@ and it can't carry traffic before Stage B (below).
   the new one (or be recreated): a planned outage per site. After the
   rename, reload `tnwks-site-routing` (or let the next apply do it).
 - **Stage C, Cilium's BGP control plane** toward FRR at the bridge gateway
-  (`10.5.0.1`, `10.6.0.1`): `CiliumBGPClusterConfig` with local AS
-  64601/64602 and peer AS 64611/64612, timers 9/3 and graceful restart
-  (120 s), advertising `PodCIDR` and the shared VIPs' `LoadBalancerIP`s from
-  `10.10.95.0/24`. Only then does the router learn pod CIDRs and VIPs, and
-  only then does the tunnel carry client traffic. Still open from the design:
-  BGP from inside Talos-in-Docker nodes, and the same LB address in both
-  clusters' pools.
+  (`10.5.0.1`, `10.6.0.1`). `bgpControlPlane.enabled` is
+  `CILIUM_BGP_ENABLED` in the shared HelmRelease; the peering is
+  `kubernetes/apps/kube-system/cilium/bgp` (Flux Kustomization
+  `cilium-bgp`, listed per cluster):
+  - `CiliumBGPClusterConfig` on every node: local AS `CILIUM_BGP_LOCAL_ASN`
+    (64601/64602), peer `CILIUM_BGP_PEER_ADDR` / `CILIUM_BGP_PEER_ASN`
+    (64611/64612).
+  - `CiliumBGPPeerConfig`: timers 9/3/5 like the router's, graceful restart
+    30 s (FRR is a helper, so an agent restart doesn't withdraw a VIP; a node
+    that really died keeps its routes in FRR that long).
+  - `CiliumBGPAdvertisement`: each node's `PodCIDR`, and the
+    `LoadBalancerIP` of Services labelled `tnwks.us/shared-vip: "true"`.
+  - `CiliumLoadBalancerIPPool` `shared-vip` (`SHARED_VIP_POOL`,
+    `10.10.95.0/24`), for those Services only, and only by asking for an
+    address: the same one in both clusters.
+
+  homelab-wsl-02 runs it first. homelab-wsl follows after its move to
+  Cilium. The router learns the pod CIDRs and VIPs from then on, but the
+  tunnel only carries client traffic after Stage B. No Service has a shared
+  VIP yet. Non-TCP traffic over the tunnel relies on PMTUD (MSS clamping
+  only covers TCP). Cilium's pod MTU stays 1500.
 - **Monitoring.** The tunnel's handshake, the BGP sessions and the misrouted
   counter have no alert yet.
 

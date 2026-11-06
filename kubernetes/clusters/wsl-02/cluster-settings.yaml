@@ -42,6 +42,13 @@ data:
   LB_RANGE: "10.6.0.200-10.6.0.220"
   CILIUM_LB_POOL_START: "10.6.0.200"
   CILIUM_LB_POOL_STOP: "10.6.0.220"
+  # BGP to the distro's FRR at the bridge gateway (docs/wsl/multi-site.md,
+  # "BGP": nodes AS 64602, distro AS 64612), and the shared VIP pool.
+  CILIUM_BGP_ENABLED: "true"
+  CILIUM_BGP_LOCAL_ASN: "64602"
+  CILIUM_BGP_PEER_ASN: "64612"
+  CILIUM_BGP_PEER_ADDR: "10.6.0.1"
+  SHARED_VIP_POOL: "10.10.95.0/24"
   INGRESS_INTERNAL_ADDR: "10.6.0.200"
   METALLB_K8S_GATEWAY_ADDR: "10.6.0.201"
   METALLB_INGRESS_ADDR: "10.6.0.202"

@@ -1,0 +1,62 @@
+---
+# Every node peers with its distro's FRR at the Docker bridge gateway
+# (CILIUM_BGP_PEER_ADDR). FRR accepts the nodes with a listen range on the
+# node subnet, takes only pod CIDRs and shared-VIP /32s, and sends nothing
+# back: the nodes reach the other site by their default route, the distro.
+apiVersion: cilium.io/v2
+kind: CiliumBGPClusterConfig
+metadata:
+  name: site
+spec:
+  bgpInstances:
+    - name: site
+      localASN: ${CILIUM_BGP_LOCAL_ASN}
+      peers:
+        - name: distro
+          peerASN: ${CILIUM_BGP_PEER_ASN}
+          peerAddress: "${CILIUM_BGP_PEER_ADDR}"
+          peerConfigRef:
+            name: distro
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPPeerConfig
+metadata:
+  name: distro
+spec:
+  # The router's timers to the distro, so a dead node goes as fast as a dead site.
+  timers:
+    holdTimeSeconds: 9
+    keepAliveTimeSeconds: 3
+    connectRetryTimeSeconds: 5
+  # FRR is a graceful-restart helper for the nodes, so an agent restart (any
+  # Cilium values change rolls them all) doesn't withdraw a VIP. Short: a
+  # node that really died keeps its routes in FRR this long.
+  gracefulRestart:
+    enabled: true
+    restartTimeSeconds: 30
+  families:
+    - afi: ipv4
+      safi: unicast
+      advertisements:
+        matchLabels:
+          advertise: site-bgp
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPAdvertisement
+metadata:
+  name: site
+  labels:
+    advertise: site-bgp
+spec:
+  advertisements:
+    # Each node's pod CIDR, so the other site reaches pods directly.
+    - advertisementType: PodCIDR
+    # Shared VIPs (shared-vip-pool.yaml): a /32 from each node that has a
+    # ready endpoint for the Service.
+    - advertisementType: Service
+      service:
+        addresses:
+          - LoadBalancerIP
+      selector:
+        matchLabels:
+          tnwks.us/shared-vip: "true"
