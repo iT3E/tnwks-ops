@@ -204,6 +204,9 @@ spec:
           # subrequest header chunk overflows nginx's default 4k buffer.
           nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
           nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+          # Through the Service's ClusterIP, not the pod endpoints: on the site
+          # where the app is at 0, only Cilium knows the other site's backends.
+          nginx.ingress.kubernetes.io/service-upstream: "true"
         hosts:
           - host: &host "unifi.${INTERNAL_DOMAIN}"
             paths:

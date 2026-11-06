@@ -197,6 +197,11 @@ spec:
     service:
       app:
         controller: home-assistant
+        # Global across the WSL sites (Cilium Cluster Mesh): the other site's
+        # ingress (the shared VIP) reaches this app wherever it runs.
+        annotations:
+          service.cilium.io/global: "true"
+          service.cilium.io/affinity: local
         ports:
           http:
             port: *port
@@ -246,6 +251,9 @@ spec:
         annotations:
           nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
           nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+          # Through the Service's ClusterIP, not the pod endpoints: on the site
+          # where the app is at 0, only Cilium knows the other site's backends.
+          nginx.ingress.kubernetes.io/service-upstream: "true"
         hosts:
           - host: &internalHost hass.${INTERNAL_DOMAIN}
             paths:
