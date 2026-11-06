@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.172.0 - 2026-11-06
+
+### Added
+
+* A weekly standby restore on both WSL sites: the other site's newest kopiur snapshot of each warm app's PVC into this site's copy, alerting when it fails or goes stale.
+
 ## v1.171.2 - 2026-11-06
 
 ### Fixed
