@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.181.0 - 2026-11-06
+
+### Added
+
+* Site leases on the router for the warm apps (<app>.lease.tnwks.local): the site fenced from writing an app after an unplanned failover, or none.
+
 ## v1.180.0 - 2026-11-06
 
 ### Changed
