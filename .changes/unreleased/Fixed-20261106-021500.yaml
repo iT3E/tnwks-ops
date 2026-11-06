@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Pod networks of every WSL site: qBittorrent''s auth whitelist covers homelab-wsl-02''s pods (and homelab-wsl''s coming Cilium range), the Cilium IPAM mode is a cluster setting so a cluster moved from Flannel rebuilds the way it runs, and the Home Assistant docs list every site''s pod CIDR for its trusted proxies.'
+time: 2026-11-06T02:15:00.000000000-08:00
