@@ -116,3 +116,6 @@ data:
   # Apps homelab-wsl-02 serves (docs/wsl/multi-site.md): off here, their names
   # resolve to WSL-02 (infrastructure/terraform/environments/prod/mikrotik/dns-sites.tf).
   PLAYWRIGHT_MCP_REPLICAS: "0"
+  # The transcriber, stopped while its database moves to its own CNPG cluster
+  # (2026-11-05; removed again by the PR that moves it).
+  TRANSCRIBER_REPLICAS: "0"
