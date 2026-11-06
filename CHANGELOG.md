@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.182.0 - 2026-11-06
+
+### Added
+
+* Fencing for the warm apps: an app gate (waits while its site lease fences this site), a per-site database fence CronJob, and task failover --promote for an unplanned failover (refuses until the lease fences the dead site).
+
 ## v1.181.0 - 2026-11-06
 
 ### Added
