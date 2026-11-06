@@ -25,20 +25,6 @@ spec:
       retries: 3
   uninstall:
     keepHistory: false
-  # The CA shared by the WSL clusters for Cluster Mesh (cilium/clustermesh,
-  # Kustomization cilium-clustermesh). Optional: a cluster without the Secret
-  # keeps the CA the chart generates.
-  valuesFrom:
-    - kind: Secret
-      name: cilium-clustermesh-ca
-      valuesKey: ca.crt
-      targetPath: tls.ca.cert
-      optional: true
-    - kind: Secret
-      name: cilium-clustermesh-ca
-      valuesKey: ca.key
-      targetPath: tls.ca.key
-      optional: true
   values:
     # Talos lets no pod load kernel modules, and the WSL2 kernel refuses
     # CAP_SYS_MODULE in nested containers (cilium#13768), so the agent and
@@ -143,7 +129,9 @@ spec:
     # Cluster Mesh, a range covering both sites' pods (10.44.0.0/14 holds
     # homelab-wsl-02's 10.44 and homelab-wsl's 10.46).
     ipv4NativeRoutingCIDR: ${CILIUM_NATIVE_ROUTING_CIDR}
-    # Cluster Mesh between the WSL sites (docs/wsl/multi-site.md): each
+    # Cluster Mesh between the WSL sites (docs/wsl/multi-site.md). The CA they
+    # share is the cilium-ca Secret itself (cilium/clustermesh), which the
+    # chart looks up when tls.ca.cert is unset. Each
     # cluster's clustermesh-apiserver (KVStoreMesh) on a LoadBalancer VIP of
     # its own node network, and the other site's to connect to. The other
     # site's nodes aren't on-link, so their pod CIDRs follow the default
