@@ -1,0 +1,3 @@
+kind: Changed
+body: The transcriber has its own Postgres cluster (transcriber-pg), imported from the shared one, which keeps its copy as the rollback.
+time: 2026-11-05T17:18:46.47738908-08:00
