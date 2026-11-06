@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Firefly''s internal login check uses the site''s oauth2-proxy URL, so homelab-wsl-02''s ingress (the shared VIP, or a switchover) serves it instead of failing with 500.'
-time: 2026-11-06T20:30:00.000000000-08:00

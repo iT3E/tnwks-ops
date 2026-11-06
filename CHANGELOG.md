@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.214.1 - 2026-11-06
+
+### Fixed
+
+* Firefly's internal login check uses the site's oauth2-proxy URL, so homelab-wsl-02's ingress (the shared VIP, or a switchover) serves it instead of failing with 500.
+
 ## v1.214.0 - 2026-11-06
 
 ### Added
