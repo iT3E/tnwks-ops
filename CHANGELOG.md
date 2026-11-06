@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.200.1 - 2026-11-06
+
+### Security
+
+* privacy-check fails on AI attribution (a tool's "generated with" line, its link, or a co-author trailer naming the vendor) in commit messages, PR titles and bodies, and comments, so the hooks and the required privacy check stop it before it is published.
+
 ## v1.200.0 - 2026-11-06
 
 ### Added
