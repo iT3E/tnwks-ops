@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Internal names resolve for musl (Alpine) clients too: a public wildcard TXT for *.internal.tnwks.us turns the AAAA answer the router forwards from NXDOMAIN into NODATA, so the router''s A record is used.'
-time: 2026-11-06T22:00:00.000000000-08:00
