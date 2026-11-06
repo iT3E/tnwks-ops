@@ -96,6 +96,13 @@ data:
   IMMICH_REPLICAS: "0"
   IMMICH_HELM_DISABLE_WAIT: "true"
   IMMICH_SYNC_SUSPEND: "true"
+  # Firefly and finance-sync: warm standbys (bin/site-failover "firefly").
+  FIREFLY_REPLICAS: "0"
+  FIREFLY_HELM_DISABLE_WAIT: "true"
+  FIREFLY_CRON_SUSPEND: "true"
+  FIREFLY_BACKUP_SUSPEND: "true"
+  FINANCE_SYNC_SUSPEND: "true"
+  FINANCE_SYNC_BACKUP_SUSPEND: "true"
   # Home Assistant stays on homelab-wsl: apps here reach it by name.
   HOME_ASSISTANT_URL: "https://hass.internal.tnwks.us"
   # What stays on homelab-wsl, over its LAN bridge (docs/wsl/lan-exposure.md):

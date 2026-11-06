@@ -1,35 +1,28 @@
 ---
-# finance-sync's own CNPG cluster, databases/finance-sync-pg, from
-# ../../../../components/cnpg-cluster (added by the finance-sync-db Kustomization).
+# finance-sync's own CNPG cluster, databases/finance-sync-pg: ../../../../components/cnpg-cluster
+# plus cnpg-standby (both added by the finance-sync-db Kustomization), the same
+# manifest on both sites. FINANCE_SYNC_PG_PRIMARY names the primary site; the
+# other runs a replica cluster from its WAL archive. It moves together with
+# Firefly's (bin/site-failover-apps.json, "firefly").
 #
-# First boot imports `finance_sync` from the shared cluster (CNPG initdb.import,
-# microservice) as the owner role: the shared cluster has superuser access
-# off, and finance_sync owns every object (including its `amazon` schema). bootstrap is only read when the
-# Cluster is created; the shared copy stays as the rollback.
+# Imported from the shared cluster on 2026-11-05 (#1781); that copy stays
+# there as the rollback. bootstrap is only read when a Cluster is created,
+# and a new one now restores from the peer's archive.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  # The owner role's password, the same on both sites.
   - ./secret-finance-sync-role.sops.yaml
 patches:
   - target:
       kind: Cluster
     patch: |-
+      # Which site is primary, and on the side being promoted only, the old
+      # primary's demotion token (docs/wsl/multi-site.md). The empty default
+      # carries its quotes (a bare empty value is null, which the CRD rejects).
       - op: add
-        path: /spec/bootstrap/initdb/import
-        value:
-          type: microservice
-          databases: [finance_sync]
-          source:
-            externalCluster: postgres
+        path: /spec/replica/primary
+        value: ${FINANCE_SYNC_PG_PRIMARY:=homelab-wsl}
       - op: add
-        path: /spec/externalClusters
-        value:
-          - name: postgres
-            connectionParameters:
-              host: postgres-rw.databases.svc.cluster.local
-              user: finance_sync
-              dbname: finance_sync
-              sslmode: require
-            password:
-              name: postgres-finance-sync
-              key: password
+        path: /spec/replica/promotionToken
+        value: ${FINANCE_SYNC_PG_PROMOTION_TOKEN:=""}

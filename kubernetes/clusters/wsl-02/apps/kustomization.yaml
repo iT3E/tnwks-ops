@@ -48,6 +48,9 @@ resources:
   - ../../../apps/production/mealie/ks.yaml
   - ../../../apps/production/transcriber/ks.yaml
   - ../../../apps/production/changedetection/ks.yaml
+  # Firefly and finance-sync: warm standby (databases replicas, app at 0).
+  - ../../../apps/production/firefly/ks.yaml
+  - ../../../apps/production/finance-sync/ks.yaml
   # Immich and the kitchen display, deployed at 0 to move here (IMMICH_REPLICAS).
   - ../../../apps/selfhosted/namespace.yaml
   - ../../../apps/selfhosted/immich/ks.yaml

@@ -76,7 +76,8 @@ spec:
         cronjob:
           schedule: 0 6 * * *
           timeZone: America/Los_Angeles
-          suspend: false
+          # Only where Firefly runs (FINANCE_SYNC_SUSPEND on the other site).
+          suspend: ${FINANCE_SYNC_SUSPEND:=false}
           concurrencyPolicy: Forbid
           backoffLimit: 0
           activeDeadlineSeconds: 3600
@@ -84,7 +85,45 @@ spec:
           successfulJobsHistory: 3
           failedJobsHistory: 3
         initContainers:
+          site-lease-gate:
+            # Fencing (docs/wsl/multi-site.md): wait while this site is fenced from
+            # writing Firefly and finance-sync (firefly.lease.tnwks.local names it), or
+            # while the lease can't be read. FIREFLY_LEASE_GATE=off skips it.
+            image:
+              repository: docker.io/library/busybox
+              tag: 1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+            command: ["sh", "-c"]
+            args:
+              - |
+                [ "$GATE" = off ] && { echo "lease gate off"; exit 0; }
+                while true; do
+                  t=$(nslookup -type=txt "$LEASE" 2>/dev/null | sed -n 's/.*text = "\(.*\)"/\1/p' | head -1)
+                  if [ -z "$t" ]; then echo "lease $LEASE unreadable; waiting"
+                  elif [ "$t" = "$SITE" ]; then echo "$SITE is fenced from writing firefly; waiting"
+                  else echo "lease $LEASE: $t; not fenced, starting"; exit 0; fi
+                  sleep 10
+                done
+            env:
+              LEASE: firefly.lease.tnwks.local.
+              SITE: ${CLUSTER_NAME}
+              GATE: ${FIREFLY_LEASE_GATE:=on}
+            securityContext:
+              runAsUser: 65534
+              runAsGroup: 65534
+              runAsNonRoot: true
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            resources:
+              requests:
+                cpu: 5m
+                memory: 8Mi
+              limits:
+                memory: 32Mi
           selfcheck:
+            # After the lease gate: a fenced site doesn't touch the database.
+            dependsOn: site-lease-gate
             image:
               repository: ghcr.io/it3e/tnwks-finance-sync
               tag: 0.2.0@sha256:663dfbbd0a474c22172adf8888971940ddaf4ef1f2a33d2429f1f41f39bf953e
@@ -142,7 +181,8 @@ spec:
         cronjob:
           schedule: 0 7 * * 1
           timeZone: America/Los_Angeles
-          suspend: false
+          # Only where Firefly runs (FINANCE_SYNC_SUSPEND on the other site).
+          suspend: ${FINANCE_SYNC_SUSPEND:=false}
           concurrencyPolicy: Forbid
           backoffLimit: 0
           activeDeadlineSeconds: 3600
@@ -150,7 +190,45 @@ spec:
           successfulJobsHistory: 3
           failedJobsHistory: 3
         initContainers:
+          site-lease-gate:
+            # Fencing (docs/wsl/multi-site.md): wait while this site is fenced from
+            # writing Firefly and finance-sync (firefly.lease.tnwks.local names it), or
+            # while the lease can't be read. FIREFLY_LEASE_GATE=off skips it.
+            image:
+              repository: docker.io/library/busybox
+              tag: 1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+            command: ["sh", "-c"]
+            args:
+              - |
+                [ "$GATE" = off ] && { echo "lease gate off"; exit 0; }
+                while true; do
+                  t=$(nslookup -type=txt "$LEASE" 2>/dev/null | sed -n 's/.*text = "\(.*\)"/\1/p' | head -1)
+                  if [ -z "$t" ]; then echo "lease $LEASE unreadable; waiting"
+                  elif [ "$t" = "$SITE" ]; then echo "$SITE is fenced from writing firefly; waiting"
+                  else echo "lease $LEASE: $t; not fenced, starting"; exit 0; fi
+                  sleep 10
+                done
+            env:
+              LEASE: firefly.lease.tnwks.local.
+              SITE: ${CLUSTER_NAME}
+              GATE: ${FIREFLY_LEASE_GATE:=on}
+            securityContext:
+              runAsUser: 65534
+              runAsGroup: 65534
+              runAsNonRoot: true
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            resources:
+              requests:
+                cpu: 5m
+                memory: 8Mi
+              limits:
+                memory: 32Mi
           selfcheck:
+            # After the lease gate: a fenced site doesn't touch the database.
+            dependsOn: site-lease-gate
             image:
               repository: ghcr.io/it3e/tnwks-finance-sync
               tag: 0.2.0@sha256:663dfbbd0a474c22172adf8888971940ddaf4ef1f2a33d2429f1f41f39bf953e

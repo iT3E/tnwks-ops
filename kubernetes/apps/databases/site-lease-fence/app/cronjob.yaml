@@ -46,7 +46,9 @@ spec:
                 - name: APPS
                   value: >-
                     [{"app": "mealie", "cluster": "mealie-pg"},
-                     {"app": "transcriber", "cluster": "transcriber-pg"}]
+                     {"app": "transcriber", "cluster": "transcriber-pg"},
+                     {"app": "firefly", "cluster": "firefly-pg"},
+                     {"app": "firefly", "cluster": "finance-sync-pg"}]
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true

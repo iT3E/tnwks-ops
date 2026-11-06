@@ -10,3 +10,5 @@ resources:
   - ../../../../apps/kopiur-system/kopiur/policies/changedetection.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/immich-library.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/immich-postgres.yaml
+  - ../../../../apps/kopiur-system/kopiur/policies/firefly.yaml
+  - ../../../../apps/kopiur-system/kopiur/policies/finance-sync.yaml
