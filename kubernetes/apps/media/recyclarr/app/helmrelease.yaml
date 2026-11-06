@@ -24,6 +24,8 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
     controllers:
       recyclarr:
+        # Which site runs it (docs/wsl/multi-site.md); the media apps move together.
+        replicas: ${MEDIA_REPLICAS:=1}
         type: statefulset
         annotations:
           reloader.stakater.com/auto: "true"

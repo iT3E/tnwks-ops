@@ -51,6 +51,8 @@ resources:
   # Firefly and finance-sync: warm standby (databases replicas, app at 0).
   - ../../../apps/production/firefly/ks.yaml
   - ../../../apps/production/finance-sync/ks.yaml
+  # The media stack, deployed at 0 to move here (MEDIA_REPLICAS).
+  - ../../../apps/media
   # Immich and the kitchen display, deployed at 0 to move here (IMMICH_REPLICAS).
   - ../../../apps/selfhosted/namespace.yaml
   - ../../../apps/selfhosted/immich/ks.yaml
@@ -79,6 +81,29 @@ resources:
 #   - cloudnative-pg-cluster: homelab-wsl's shared `postgres` cluster; apps
 #     get their own clusters here.
 patches:
+  # The media apps at 0 have unbound WaitForFirstConsumer PVCs, which Helm's
+  # wait (kstatus) never sees as ready.
+  - target:
+      kind: Kustomization
+      name: "sonarr|radarr|prowlarr|qbittorrent|recyclarr"
+    patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata:
+        name: not-used
+      spec:
+        patches:
+          - target:
+              kind: HelmRelease
+            patch: |-
+              - op: add
+                path: /spec/install
+                value:
+                  disableWait: true
+              - op: add
+                path: /spec/upgrade
+                value:
+                  disableWait: true
   # The transcriber's mosquitto and Frigate stay on homelab-wsl (reached over
   # the LAN, FRIGATE_RTSP_URL / MQTT_BROKER_HOST), so it can't wait for them here.
   - patch: |-

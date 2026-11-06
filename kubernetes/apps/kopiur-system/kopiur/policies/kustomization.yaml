@@ -10,6 +10,11 @@ resources:
   # Transfer only, no schedule (the files say why).
   - ./immich-library.yaml
   - ./immich-postgres.yaml
+  - ./media-sonarr.yaml
+  - ./media-radarr.yaml
+  - ./media-prowlarr.yaml
+  - ./media-qbittorrent.yaml
+  - ./media-recyclarr.yaml
   - ./unifi.yaml
   - ./changedetection.yaml
   - ./firefly.yaml

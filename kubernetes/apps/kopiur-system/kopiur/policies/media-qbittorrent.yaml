@@ -1,0 +1,28 @@
+---
+# qbittorrent's config (data-qbittorrent-0). Not backed up (docs/operations/backups.md,
+# "Deliberately not backed up": the media stack): no SnapshotSchedule. The
+# policy only moves the PVC between sites (bin/site-failover "media"), with a
+# one-off snapshot that's deleted after the restore.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: media-qbittorrent
+  namespace: media
+spec:
+  repository:
+    kind: ClusterRepository
+    name: s3
+  copyMethod: Direct
+  compression:
+    compressor: zstd
+  credentialProjection:
+    enabled: true
+  mover:
+    securityContext:
+      runAsUser: 568
+      runAsGroup: 568
+  retention:
+    keepLatest: 1
+  sources:
+    - pvc:
+        name: data-qbittorrent-0

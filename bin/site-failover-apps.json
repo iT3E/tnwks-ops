@@ -214,5 +214,79 @@
         "http://localhost:8080/health"
       ]
     }
+  },
+  "media": {
+    "prefix": "MEDIA",
+    "namespace": "media",
+    "kustomizations": {
+      "app": [
+        "sonarr",
+        "radarr",
+        "prowlarr",
+        "qbittorrent",
+        "recyclarr"
+      ]
+    },
+    "workloads": [
+      "deployment/sonarr",
+      "deployment/radarr",
+      "deployment/prowlarr",
+      "statefulset/qbittorrent",
+      "statefulset/recyclarr"
+    ],
+    "pvcs": [
+      {
+        "name": "sonarr-config",
+        "policy": "media-sonarr",
+        "uid": 1000,
+        "gid": 1000,
+        "transfer_only": true
+      },
+      {
+        "name": "radarr-config",
+        "policy": "media-radarr",
+        "uid": 1000,
+        "gid": 1000,
+        "transfer_only": true
+      },
+      {
+        "name": "prowlarr-config",
+        "policy": "media-prowlarr",
+        "uid": 1000,
+        "gid": 1000,
+        "transfer_only": true
+      },
+      {
+        "name": "data-qbittorrent-0",
+        "policy": "media-qbittorrent",
+        "uid": 568,
+        "gid": 568,
+        "transfer_only": true,
+        "create": {
+          "capacity": "1Gi",
+          "storageClass": "local-path"
+        }
+      },
+      {
+        "name": "config-recyclarr-0",
+        "policy": "media-recyclarr",
+        "uid": 1000,
+        "gid": 1000,
+        "transfer_only": true,
+        "create": {
+          "capacity": "1Gi",
+          "storageClass": "local-path"
+        }
+      }
+    ],
+    "check": {
+      "workload": "deploy/sonarr",
+      "container": "app",
+      "command": [
+        "sh",
+        "-c",
+        "wget -qO- http://localhost:8989/ping || curl -fsS http://localhost:8989/ping"
+      ]
+    }
   }
 }
