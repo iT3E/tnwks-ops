@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.189.0 - 2026-11-06
+
+### Added
+
+* Firefly and finance-sync have a warm standby on homelab-wsl-02 (both databases replicas, the app at 0, jobs and backups suspended there), fenced by the firefly site lease; task failover moves both databases together.
+
 ## v1.188.0 - 2026-11-06
 
 ### Added
