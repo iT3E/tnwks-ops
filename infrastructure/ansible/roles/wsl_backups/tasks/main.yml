@@ -66,6 +66,7 @@
     group: root
     mode: "0644"
   loop: "{{ wsl_backups_timers }}"
+  register: wsl_backups_timer_files
   notify: Reload systemd
 
 - name: Directory for the switch credentials
@@ -104,3 +105,7 @@
     enabled: true
     state: started
   loop: "{{ wsl_backups_timers }}"
+  # A check run doesn't write a new timer's unit, so systemd can't find it yet.
+  when: >-
+    not (ansible_check_mode and
+    (wsl_backups_timer_files.results | selectattr('item', 'equalto', item) | map(attribute='changed') | first))
