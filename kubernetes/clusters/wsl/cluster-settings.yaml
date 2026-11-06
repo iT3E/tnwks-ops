@@ -86,9 +86,6 @@ data:
   # The Windows computer name (the `instance` of its metrics), and the other
   # site's Windows host, scraped over the LAN (kube-prometheus-stack).
   WINDOWS_HOST_NAME: "DESKTOP-HKE05KI"
-  # Mealie stopped while its database moves to its own CNPG cluster
-  # (2026-11-05; removed again by the PR that moves it).
-  MEALIE_REPLICAS: "0"
   PEER_WINDOWS_HOST_ADDR: "10.10.91.112"
   PEER_WINDOWS_HOST_NAME: "WSL-02"
 

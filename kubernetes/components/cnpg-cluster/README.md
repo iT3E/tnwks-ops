@@ -137,7 +137,11 @@ A role Secret that belongs to the app alone can live in `db/` as
 One app at a time, with CNPG's `initdb.import` (`type: microservice`) from the
 shared `postgres` cluster: a patch in `db/kustomization.yaml` that adds the
 import to the component's `initdb`, plus the external cluster to read from.
-The shape (the superuser connection is unverified):
+Mealie was first (`kubernetes/apps/production/mealie/db/`). Stop the app first
+so the copy is consistent (an `${<APP>_REPLICAS:=1}` override, as Mealie did).
+Match the patch by kind: the Cluster is called `${CNPG_APP}-pg` until Flux
+substitutes, after the build. Connect as the app's owner role, since the shared
+cluster has superuser access off; check it owns every object first:
 
 ```yaml
 patches:
@@ -156,11 +160,12 @@ patches:
         value:
           - name: postgres
             connectionParameters:
-              host: postgres-rw.databases.svc
-              user: postgres
+              host: postgres-rw.databases.svc.cluster.local
+              user: mealie
               dbname: mealie
+              sslmode: require
             password:
-              name: postgres-superuser
+              name: postgres-mealie
               key: password
 ```
 
