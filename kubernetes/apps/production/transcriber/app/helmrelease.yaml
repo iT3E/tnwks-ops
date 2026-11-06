@@ -251,6 +251,11 @@ spec:
     service:
       app:
         controller: transcriber
+        # Global across the WSL sites (Cilium Cluster Mesh): the other site's
+        # ingress (the shared VIP) reaches this app wherever it runs.
+        annotations:
+          service.cilium.io/global: "true"
+          service.cilium.io/affinity: local
         ports:
           http:
             port: *metricsPort
@@ -258,6 +263,11 @@ spec:
             port: 8081
       frontend:
         controller: frontend
+        # Global across the WSL sites (Cilium Cluster Mesh): the other site's
+        # ingress (the shared VIP) reaches this app wherever it runs.
+        annotations:
+          service.cilium.io/global: "true"
+          service.cilium.io/affinity: local
         ports:
           http:
             port: *frontendPort
@@ -289,6 +299,9 @@ spec:
           # POST /api/days/<day>/summary waits on the LLM (seconds, up to the
           # transcriber's SUMMARY_TIMEOUT_S of 150); nginx's default is 60s.
           nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+          # Through the Service's ClusterIP, not the pod endpoints: on the site
+          # where the app is at 0, only Cilium knows the other site's backends.
+          nginx.ingress.kubernetes.io/service-upstream: "true"
         hosts:
           - host: &host "{{ .Release.Name }}.${CLUSTER_DOMAIN}"
             paths:

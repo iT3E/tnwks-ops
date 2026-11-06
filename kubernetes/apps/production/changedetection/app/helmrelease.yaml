@@ -65,12 +65,21 @@ spec:
     service:
       app:
         controller: changedetection
+        # Global across the WSL sites (Cilium Cluster Mesh): the other site's
+        # ingress (the shared VIP) reaches this app wherever it runs.
+        annotations:
+          service.cilium.io/global: "true"
+          service.cilium.io/affinity: local
         ports:
           http:
             port: *port
     ingress:
       internal:
         className: nginx-internal
+        annotations:
+          # Through the Service's ClusterIP, not the pod endpoints: on the site
+          # where the app is at 0, only Cilium knows the other site's backends.
+          nginx.ingress.kubernetes.io/service-upstream: "true"
         hosts:
           - host: &internalHost "changedetection.${INTERNAL_DOMAIN}"
             paths:
