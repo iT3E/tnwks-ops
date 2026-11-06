@@ -1,3 +1,0 @@
-kind: Added
-body: 'Ombi, Ombi-f and Wizarr can move between the WSL sites: replica toggles, global Services and Service-upstream public Ingresses (cloudflared reaches them over Cluster Mesh), transfer-only kopiur policies, site-failover entries, and homelab-wsl-02 deploying them at 0. The production namespace allows root kopiur movers (Wizarr''s root-owned database).'
-time: 2026-11-06T23:30:00.000000000-08:00

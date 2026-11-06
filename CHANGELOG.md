@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.219.0 - 2026-11-06
+
+### Added
+
+* Ombi, Ombi-f and Wizarr can move between the WSL sites: replica toggles, global Services and Service-upstream public Ingresses (cloudflared reaches them over Cluster Mesh), transfer-only kopiur policies, site-failover entries, and homelab-wsl-02 deploying them at 0. The production namespace allows root kopiur movers (Wizarr's root-owned database).
+
 ## v1.218.0 - 2026-11-06
 
 ### Added
