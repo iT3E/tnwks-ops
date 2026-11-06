@@ -1,8 +1,10 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 ## Names served by homelab-wsl-02 (apps moved there, docs/wsl/multi-site.md). Each is more specific than the
 ## internal.tnwks.us wildcard (match_subdomain, 10.10.91.142 = homelab-wsl; locals.tf, generated) and points at
-## WSL-02, whose LAN bridge forwards 80/443 to homelab-wsl-02's ingress-nginx-internal. Hand-written: locals.tf is
-## generated from the VyOS config. Short TTL, so a name moves back quickly.
+## WSL-02, whose LAN bridge forwards 80/443 to homelab-wsl-02's ingress-nginx-internal. match_subdomain = true on
+## purpose: RouterOS checks those entries before plain names, so a plain record under the wildcard never answers
+## (modules/mikrotik/dns.tf puts the most specific first). Hand-written: locals.tf is generated from the VyOS
+## config. Short TTL, so a name moves back quickly.
 ## ---------------------------------------------------------------------------------------------------------------------
 
 locals {
@@ -14,7 +16,7 @@ locals {
       address         = local.wsl02_lan_address
       type            = "A"
       ttl             = "5m"
-      match_subdomain = false
+      match_subdomain = true
       comment         = "homelab-wsl-02: playwright-mcp"
     }
   }
