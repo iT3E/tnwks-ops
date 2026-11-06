@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.192.0 - 2026-11-06
+
+### Added
+
+* The media stack (sonarr, radarr, prowlarr, qbittorrent, recyclarr) is deployed on homelab-wsl-02 at 0, ready to move there with task failover (configs copied by kopiur, transfer only).
+
 ## v1.191.1 - 2026-11-06
 
 ### Fixed
