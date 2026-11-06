@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.176.0 - 2026-11-06
+
+### Changed
+
+* litellm: prompt caching is on for every Claude model (`enable_anthropic_prompt_caching`), so requests without their own `cache_control` marks are cached too
+
 ## v1.175.0 - 2026-11-06
 
 ### Changed
