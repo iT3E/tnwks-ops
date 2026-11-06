@@ -63,16 +63,25 @@ resource "routeros_ip_dns_record" "static" {
   depends_on = [routeros_ip_dns.this]
 }
 
-# RouterOS answers from the first static entry that matches, in list order,
-# and a new entry goes to the end. An exact name added after a
-# match_subdomain wildcard that covers it (a site record under
-# *.internal.tnwks.us) never matches. Keep exact names above the wildcards.
-# The last ID stays where it is and the rest move above it, in this order.
+# Matching order (RouterOS DNS docs): "The list is ordered and checked from top
+# to bottom. Regular expressions are checked first, then the plain records."
+# match_subdomain entries are in the first group: a plain name under the
+# *.internal.tnwks.us wildcard never answers, wherever it sits (#1757 tried
+# ordering alone). So a name that overrides a wildcard must be match_subdomain
+# too, and sit above it. Order within each group: plain names, then subdomain
+# entries most specific (longest name) first. A new entry goes to the end of
+# the list; this moves the rest above the last ID, in this order.
+locals {
+  dns_static_subdomain_order = sort([
+    for k, r in var.dns.static_records : format("%03d %s", 255 - length(r.name), k) if r.match_subdomain
+  ])
+}
+
 resource "routeros_move_items" "dns_static" {
   resource_path = "/ip/dns/static"
   sequence = concat(
     [for k, r in var.dns.static_records : routeros_ip_dns_record.static[k].id if !r.match_subdomain],
-    [for k, r in var.dns.static_records : routeros_ip_dns_record.static[k].id if r.match_subdomain],
+    [for s in local.dns_static_subdomain_order : routeros_ip_dns_record.static[split(" ", s)[1]].id],
   )
 
   depends_on = [routeros_ip_dns_record.static]
