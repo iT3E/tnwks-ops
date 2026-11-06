@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.217.0 - 2026-11-06
+
+### Added
+
+* Public names follow their apps between the WSL sites: Mealie's Service is global, and Home Assistant's and Mealie's public Ingresses go through the Service, so cloudflared and the public ingress on homelab-wsl reach the app over Cluster Mesh when it runs on homelab-wsl-02.
+
 ## v1.216.1 - 2026-11-06
 
 ### Fixed
