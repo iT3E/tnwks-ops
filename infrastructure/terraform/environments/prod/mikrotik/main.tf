@@ -35,11 +35,13 @@ module "mikrotik" {
   vlans         = local.vlans
   static_routes = local.static_routes
 
-  address_lists = local.address_lists
+  # The WSL site tunnels' lists, zone pairs and input accepts are hand-written
+  # (site-tunnels.tf) and merged into the generated ones.
+  address_lists = merge(local.address_lists, local.site_address_lists)
   port_lists    = local.port_lists
-  zone_policies = local.zone_policies
+  zone_policies = merge(local.zone_policies, local.site_zone_policies)
 
-  input_rules = local.input_rules
+  input_rules = merge(local.input_rules, local.site_input_rules)
 
   # EdgeRouter Lite consolidation. zone-lan scopes router services (DNS, NTP,
   # DHCP) to internal VLANs so they can never be answered on the WAN, which is
@@ -79,12 +81,16 @@ module "mikrotik" {
   syslog      = local.syslog
 
   # WireGuard private keys are injected from SOPS, never committed. The rest of
-  # each listener (address, port, peers) is generated from the VyOS config.
+  # each listener (address, port, peers) is generated from the VyOS config, or
+  # for the WSL site tunnels written in site-tunnels.tf.
   wireguard_interfaces = {
-    for name, cfg in local.wireguard_interfaces : name => merge(cfg, {
+    for name, cfg in merge(local.wireguard_interfaces, local.site_wireguard_interfaces) : name => merge(cfg, {
       private_key = data.sops_file.secrets.data["wireguard_${name}_private_key"]
     })
   }
+
+  # eBGP with the WSL sites' distro FRR over the site tunnels (site-tunnels.tf).
+  bgp = local.site_bgp
 
   # VyOS interpolated the admin username from ${SSH_VYOS_USERNAME}, so it stays a
   # secret here too; only the public key material is generated into locals.tf.

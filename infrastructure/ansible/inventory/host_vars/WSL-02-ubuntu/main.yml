@@ -31,3 +31,9 @@ wsl_ci_authorized_keys:
   - key: "{{ wsl_ci_authorized_keys_runner }}"
     from: 172.25.16.1
     permit_open: 172.25.16.1:22
+
+# The distro's end of wg-site2, its site tunnel to sce-rtr01 (docs/wsl/multi-site.md,
+# "Network"): wsl_site_wireguard_private_key is in secrets.sops.yml next to
+# this file. Its public key, tunnel addresses and the router side are in
+# infrastructure/terraform/environments/prod/mikrotik/site-tunnels.tf. No role
+# reads it yet.

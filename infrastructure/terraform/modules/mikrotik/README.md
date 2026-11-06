@@ -21,6 +21,7 @@ One file per piece of infrastructure, matching the repo convention:
 | `wireguard.tf`   | `interfaces wireguard wg01/wg02`                          |
 | `dns.tf`         | the blocky/dnsdist/bind container stack + `service ntp`   |
 | `system.tf`      | `system host-name/time-zone/syslog/login`, `service ssh`  |
+| `bgp.tf`         | nothing: eBGP with the WSL sites (`var.bgp`, docs/wsl/multi-site.md) |
 
 ## Three things that do not translate one-to-one
 
