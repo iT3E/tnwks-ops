@@ -36,6 +36,11 @@
 #   share one 12-thread host with Frigate.
 # - Volumes use advancedMounts, not globalMounts: globalMounts would mount
 #   the transcriber's PVCs into the frontend pod as well.
+# - Portable between sites (docs/wsl/multi-site.md): which site runs it is
+#   TRANSCRIBER_REPLICAS, and what it talks to that stays on homelab-wsl
+#   (Frigate's restream, MQTT, LiteLLM, oauth2-proxy) comes from
+#   cluster-settings, defaulting to the in-cluster services. homelab-wsl-02
+#   reaches them over the LAN bridge (docs/wsl/lan-exposure.md).
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -50,12 +55,16 @@ spec:
         name: bjw-s
         namespace: flux-system
   install:
+    # A site running it at 0 has unbound WaitForFirstConsumer PVCs, which
+    # Helm's wait (kstatus) never sees as ready.
+    disableWait: ${TRANSCRIBER_HELM_DISABLE_WAIT:=false}
     remediation:
       retries: 3
   interval: 30m
   maxHistory: 2
   upgrade:
     cleanupOnFail: true
+    disableWait: ${TRANSCRIBER_HELM_DISABLE_WAIT:=false}
     remediation:
       retries: 3
   uninstall:
@@ -73,6 +82,7 @@ spec:
           type: RuntimeDefault
     controllers:
       transcriber:
+        replicas: ${TRANSCRIBER_REPLICAS:=1}
         strategy: Recreate
         annotations:
           reloader.stakater.com/auto: "true"
@@ -93,8 +103,9 @@ spec:
               CAMERAS: >-
                 frigate_loryta_fdoor=frigate_loryta_fdoor_hq,
                 frigate_reolink_south=frigate_reolink_south_lq
-              RTSP_BASE_URL: rtsp://frigate-app.production.svc.cluster.local:8554
-              MQTT_HOST: mosquitto.home-automation.svc.cluster.local
+              RTSP_BASE_URL: ${FRIGATE_RTSP_URL:=rtsp://frigate-app.production.svc.cluster.local:8554}
+              MQTT_HOST: ${MQTT_BROKER_HOST:=mosquitto.home-automation.svc.cluster.local}
+              LITELLM_URL: ${LITELLM_URL:=http://litellm.ai.svc.cluster.local:4000}
               AUDIO_RETENTION_DAYS: "90"
               WHISPER_MODEL: small.en
               THREADS: "4"
@@ -148,6 +159,7 @@ spec:
             env:
               TZ: ${TIMEZONE}
               WEB_PORT: "8081"
+              LITELLM_URL: ${LITELLM_URL:=http://litellm.ai.svc.cluster.local:4000}
             securityContext: *securityContext
             probes:
               liveness: &webProbe
@@ -170,7 +182,7 @@ spec:
               limits:
                 memory: 512Mi
       frontend:
-        replicas: 1
+        replicas: ${TRANSCRIBER_REPLICAS:=1}
         strategy: RollingUpdate
         containers:
           app:
@@ -228,7 +240,9 @@ spec:
       app:
         className: nginx-internal
         annotations:
-          nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local:80/oauth2/auth?allowed_groups=transcriber"
+          # OAUTH2_PROXY_URL: in-cluster on homelab-wsl; homelab-wsl-02 asks
+          # homelab-wsl's (its sessions live in that site's Valkey).
+          nginx.ingress.kubernetes.io/auth-url: "${OAUTH2_PROXY_URL:=http://oauth2-proxy.auth.svc.cluster.local:80}/oauth2/auth?allowed_groups=transcriber"
           nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${INTERNAL_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
           # Cognito-backed sessions are split across multiple cookies; the
           # subrequest header chunk overflows nginx's default 4k buffer.
