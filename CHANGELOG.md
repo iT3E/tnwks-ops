@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.199.2 - 2026-11-06
+
+### Fixed
+
+* Kitchen display: the to-do lists (routines, rewards, lists, notes) subscribe again by themselves after an HA restart, so the wall display no longer keeps the day before's checks when the first try after the restart is rejected; the AM/PM week grid shows the whole week (the history request had no end_time, so HA returned only Sunday).
+
 ## v1.199.1 - 2026-11-06
 
 ### Fixed

@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Kitchen display: the to-do lists (routines, rewards, lists, notes) subscribe again by themselves after an HA restart, so the wall display no longer keeps the day before''s checks when the first try after the restart is rejected; the AM/PM week grid shows the whole week (the history request had no end_time, so HA returned only Sunday).'
-time: 2026-11-06T08:05:00.000000000-08:00
