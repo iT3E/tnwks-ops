@@ -1,0 +1,3 @@
+kind: Added
+body: "The MikroTik answers `playwright-mcp.internal.tnwks.us` with WSL-02 (10.10.91.112, TTL 5m), more specific than the `*.internal.tnwks.us` wildcard: step 2 of moving playwright-mcp to homelab-wsl-02. Names served by homelab-wsl-02 live in `environments/prod/mikrotik/dns-sites.tf`."
+time: 2026-11-05T20:10:00.000000000-08:00

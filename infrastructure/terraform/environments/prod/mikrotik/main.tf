@@ -73,7 +73,7 @@ module "mikrotik" {
     interfaces = "ether1"
   }
 
-  dns    = local.dns
+  dns    = merge(local.dns, { static_records = merge(local.dns.static_records, local.site_dns_records) })
   ntp    = local.ntp
   syslog = local.syslog
 
