@@ -1,0 +1,31 @@
+---
+# MQTT on the shared VIP 10.10.95.11 (mqtt.internal.tnwks.us), homelab-wsl
+# first (docs/wsl/multi-site.md, "Shared VIPs"). Both WSL clusters hold and
+# announce it; global like the broker's own Service, so the VIP reaches the
+# broker on whichever site runs it. The per-site address (MQTT_LB_ADDR,
+# behind the desktop's LAN bridge on 1883) stays for clients configured
+# with it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosquitto-vip
+  namespace: home-automation
+  labels:
+    tnwks.us/shared-vip: "true"
+  annotations:
+    service.cilium.io/global: "true"
+    service.cilium.io/affinity: local
+spec:
+  type: LoadBalancer
+  loadBalancerIP: 10.10.95.11
+  externalTrafficPolicy: Cluster
+  # The chart's own Service selector.
+  selector:
+    app.kubernetes.io/component: mosquitto
+    app.kubernetes.io/instance: mosquitto
+    app.kubernetes.io/name: mosquitto
+  ports:
+    - name: mqtt
+      port: 1883
+      targetPort: 1883
+      protocol: TCP

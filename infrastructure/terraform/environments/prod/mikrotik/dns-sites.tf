@@ -36,6 +36,14 @@ locals {
       match_subdomain = true
       comment         = "shared VIP (homelab-wsl first): home-assistant"
     }
+    vip_mqtt = {
+      name            = "mqtt.internal.tnwks.us"
+      address         = "10.10.95.11"
+      type            = "A"
+      ttl             = "5m"
+      match_subdomain = true
+      comment         = "shared VIP (homelab-wsl first): mosquitto"
+    }
     vip_firefly = {
       name            = "firefly.internal.tnwks.us"
       address         = local.vip_wsl

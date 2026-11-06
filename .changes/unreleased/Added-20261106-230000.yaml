@@ -1,0 +1,3 @@
+kind: Added
+body: 'MQTT on a shared VIP: mqtt.internal.tnwks.us (10.10.95.11, homelab-wsl first) reaches the broker on whichever site runs it. homelab-wsl-02 deploys mosquitto at 0 as a standby, and the broker''s Services are global; the per-site address behind the desktop''s LAN bridge stays.'
+time: 2026-11-06T23:00:00.000000000-08:00

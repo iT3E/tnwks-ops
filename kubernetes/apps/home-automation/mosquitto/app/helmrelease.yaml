@@ -33,6 +33,10 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
     controllers:
       mosquitto:
+        # Which site runs the broker (homelab-wsl-02 keeps it at 0: a standby
+        # for when HA moves; retained messages are status flags their
+        # publishers resend, so nothing is copied).
+        replicas: ${MOSQUITTO_REPLICAS:=1}
         annotations:
           reloader.stakater.com/auto: "true"
         initContainers:
@@ -61,6 +65,12 @@ spec:
         controller: mosquitto
         type: LoadBalancer
         loadBalancerIP: "${MQTT_LB_ADDR}"
+        # Global across the WSL sites (Cluster Mesh): either site's address
+        # (and the shared VIP, cilium/shared-vip) reaches the broker wherever
+        # it runs; local endpoints win.
+        annotations:
+          service.cilium.io/global: "true"
+          service.cilium.io/affinity: local
         ports:
           http:
             port: 1883

@@ -10,6 +10,7 @@ resources:
   - ../../../../apps/home-automation/namespace.yaml
   - ../../../../apps/home-automation/home-assistant/ks.yaml
   - ../../../../apps/home-automation/mosquitto/ks.yaml
+  - ../../../../apps/home-automation/mosquitto/shared-vip-ks.yaml
   - ../../../../apps/home-automation/peloton-to-garmin/ks.yaml
   # zwave-js-ui: WSL-specific Flux Kustomization with patches to pin to
   # homelab-wsl-worker-2 and re-point the USB hostPath to /dev/ttyACM0.

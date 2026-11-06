@@ -127,6 +127,8 @@ data:
   # setting), until a target-state decision; homelab-wsl keeps copies at 0.
   # Home Assistant: warm standby here (bin/site-failover "home-assistant").
   HOME_ASSISTANT_REPLICAS: "0"
+  # The MQTT broker: a standby here, with HA (its Service is global).
+  MOSQUITTO_REPLICAS: "0"
   HOME_ASSISTANT_BACKUP_SUSPEND: "true"
   # The UniFi controller (and unpoller) run here since 2026-11-06
   # (bin/site-failover, then this setting); homelab-wsl keeps them at 0.

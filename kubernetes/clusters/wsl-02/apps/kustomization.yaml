@@ -66,6 +66,9 @@ resources:
   # USB here: a failover runs it without those integrations.
   - ../../../apps/home-automation/namespace.yaml
   - ../../../apps/home-automation/home-assistant/ks.yaml
+  # The MQTT broker at 0 (MOSQUITTO_REPLICAS), and MQTT on the shared VIP.
+  - ../../../apps/home-automation/mosquitto/ks.yaml
+  - ../../../apps/home-automation/mosquitto/shared-vip-ks.yaml
   # The media stack, deployed at 0 to move here (MEDIA_REPLICAS).
   - ../../../apps/media
   # Immich and the kitchen display, deployed at 0 to move here (IMMICH_REPLICAS).
