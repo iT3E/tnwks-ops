@@ -93,6 +93,10 @@ data:
   # LoadBalancer IPs otherwise stay with MetalLB; Cilium only hands out
   # shared-vip addresses, to Services labelled for them.
   CILIUM_BGP_ENABLED: "true"
+  # MetalLB keeps the LoadBalancer IPs here: Cilium's LB IPAM takes only
+  # Services with loadBalancerClass io.cilium/bgp-control-plane (the shared
+  # VIPs), which MetalLB ignores.
+  CILIUM_DEFAULT_LB_IPAM: "none"
   CILIUM_BGP_LOCAL_ASN: "64601"
   CILIUM_BGP_PEER_ASN: "64611"
   CILIUM_BGP_PEER_ADDR: "10.5.0.1"
