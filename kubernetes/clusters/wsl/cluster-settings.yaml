@@ -122,6 +122,3 @@ data:
   # database a replica of wsl-02's, the app at 0).
   TRANSCRIBER_REPLICAS: "0"
   TRANSCRIBER_PG_PRIMARY: "homelab-wsl-02"
-  # Firefly, stopped while its database (and finance-sync's) move to their own
-  # CNPG clusters (2026-11-05; removed again by the PR that moves them).
-  FIREFLY_REPLICAS: "0"
