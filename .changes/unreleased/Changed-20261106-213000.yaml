@@ -1,3 +1,0 @@
-kind: Changed
-body: 'Internal names on the shared VIPs: the apps deployed on both WSL sites resolve to 10.10.95.200 (homelab-wsl-02 first) or 10.10.95.10 (homelab-wsl first: Home Assistant, Firefly), so a site failure or a switchover moves their traffic with no DNS change. The mobile VPN may reach the shared VIPs.'
-time: 2026-11-06T21:30:00.000000000-08:00

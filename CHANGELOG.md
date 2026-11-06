@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.216.0 - 2026-11-06
+
+### Changed
+
+* Internal names on the shared VIPs: the apps deployed on both WSL sites resolve to 10.10.95.200 (homelab-wsl-02 first) or 10.10.95.10 (homelab-wsl first: Home Assistant, Firefly), so a site failure or a switchover moves their traffic with no DNS change. The mobile VPN may reach the shared VIPs.
+
 ## v1.215.0 - 2026-11-06
 
 ### Changed
