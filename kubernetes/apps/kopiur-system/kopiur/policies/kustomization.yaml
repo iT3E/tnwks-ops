@@ -18,5 +18,8 @@ resources:
   - ./unifi.yaml
   - ./unifi-mongo.yaml
   - ./changedetection.yaml
+  - ./ombi.yaml
+  - ./ombi-f.yaml
+  - ./wizarr.yaml
   - ./firefly.yaml
   - ./finance-sync.yaml

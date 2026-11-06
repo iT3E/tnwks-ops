@@ -363,5 +363,94 @@
       ]
     },
     "prebind": true
+  },
+  "ombi": {
+    "prefix": "OMBI",
+    "namespace": "production",
+    "kustomizations": {
+      "app": "ombi"
+    },
+    "workloads": [
+      "deployment/ombi"
+    ],
+    "pvcs": [
+      {
+        "name": "ombi-config",
+        "policy": "ombi",
+        "uid": 1000,
+        "gid": 1000,
+        "transfer_only": true
+      }
+    ],
+    "check": {
+      "workload": "deployment/ombi",
+      "container": "ombi",
+      "command": [
+        "sh",
+        "-c",
+        "wget -qO- http://localhost:3579/ >/dev/null || curl -fsS -o /dev/null http://localhost:3579/"
+      ]
+    }
+  },
+  "ombi-f": {
+    "prefix": "OMBI_F",
+    "namespace": "production",
+    "kustomizations": {
+      "app": "ombi-f"
+    },
+    "workloads": [
+      "deployment/ombi-f"
+    ],
+    "pvcs": [
+      {
+        "name": "ombi-f-config",
+        "policy": "ombi-f",
+        "uid": 1000,
+        "gid": 1000,
+        "transfer_only": true
+      }
+    ],
+    "check": {
+      "workload": "deployment/ombi-f",
+      "container": "ombi-f",
+      "command": [
+        "sh",
+        "-c",
+        "wget -qO- http://localhost:3579/ >/dev/null || curl -fsS -o /dev/null http://localhost:3579/"
+      ]
+    }
+  },
+  "wizarr": {
+    "prefix": "WIZARR",
+    "namespace": "production",
+    "kustomizations": {
+      "app": "wizarr"
+    },
+    "workloads": [
+      "statefulset/wizarr"
+    ],
+    "pvcs": [
+      {
+        "name": "config-wizarr-0",
+        "policy": "wizarr",
+        "uid": 0,
+        "gid": 0,
+        "transfer_only": true,
+        "restore_privileged": true,
+        "create": {
+          "capacity": "1Gi",
+          "storageClass": "local-path"
+        }
+      }
+    ],
+    "check": {
+      "workload": "statefulset/wizarr",
+      "container": "app",
+      "command": [
+        "sh",
+        "-c",
+        "wget -qO- http://localhost:5690/ >/dev/null || curl -fsS -o /dev/null http://localhost:5690/"
+      ]
+    }
   }
 }

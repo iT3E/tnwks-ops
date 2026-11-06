@@ -59,6 +59,10 @@ resources:
   - ../../../apps/production/mealie/ks.yaml
   - ../../../apps/production/transcriber/ks.yaml
   - ../../../apps/production/changedetection/ks.yaml
+  # Public request/invite apps: at 0 here until they move (bin/site-failover).
+  - ../../../apps/production/ombi/ks.yaml
+  - ../../../apps/production/ombi-f/ks.yaml
+  - ../../../apps/production/wizarr/ks.yaml
   # Firefly and finance-sync: warm standby (databases replicas, app at 0).
   - ../../../apps/production/firefly/ks.yaml
   - ../../../apps/production/finance-sync/ks.yaml

@@ -1,0 +1,28 @@
+---
+# ombi's config (ombi-config). Not backed up (docs/operations/backups.md): no
+# SnapshotSchedule. The policy only moves the PVC between sites
+# (bin/site-failover "ombi"), with a one-off snapshot that's deleted after
+# the restore.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: ombi
+  namespace: production
+spec:
+  repository:
+    kind: ClusterRepository
+    name: s3
+  copyMethod: Direct
+  compression:
+    compressor: zstd
+  credentialProjection:
+    enabled: true
+  mover:
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+  retention:
+    keepLatest: 1
+  sources:
+    - pvc:
+        name: ombi-config

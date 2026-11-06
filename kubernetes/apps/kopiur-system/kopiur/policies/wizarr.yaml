@@ -1,0 +1,31 @@
+---
+# wizarr's config (config-wizarr-0). Not backed up (docs/operations/backups.md): no
+# SnapshotSchedule. The policy only moves the PVC between sites
+# (bin/site-failover "wizarr"), with a one-off snapshot that's deleted after
+# the restore.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: wizarr
+  namespace: production
+spec:
+  repository:
+    kind: ClusterRepository
+    name: s3
+  copyMethod: Direct
+  compression:
+    compressor: zstd
+  credentialProjection:
+    enabled: true
+  # Wizarr runs as root and owns its database as root: the mover reads as
+  # root (namespace annotation privileged-movers).
+  mover:
+    privilegedMode: true
+    securityContext:
+      runAsUser: 0
+      runAsGroup: 0
+  retention:
+    keepLatest: 1
+  sources:
+    - pvc:
+        name: config-wizarr-0
