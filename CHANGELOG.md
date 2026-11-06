@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.205.0 - 2026-11-06
+
+### Changed
+
+* homelab-wsl runs on Cilium: Flannel is removed, its pod network is 10.46.0.0/16 (cluster-pool IPAM, kept for rebuilds through CILIUM_IPAM_MODE), and it uses the shared Cilium Kustomization like homelab-wsl-02. NetworkPolicies are enforced on every cluster now.
+
 ## v1.204.0 - 2026-11-06
 
 ### Changed
