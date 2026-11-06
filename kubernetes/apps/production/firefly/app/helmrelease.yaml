@@ -83,8 +83,10 @@ spec:
                 value: "lax"
               - name: DB_CONNECTION
                 value: "pgsql"
+              # Its own CNPG cluster since 2026-11-05 (firefly/db); the shared
+              # cluster's `firefly` database is the rollback copy.
               - name: DB_HOST
-                value: "postgres-rw.databases.svc.cluster.local"
+                value: "firefly-pg-rw.databases.svc.cluster.local"
               - name: DB_PORT
                 value: "5432"
               - name: DB_DATABASE
