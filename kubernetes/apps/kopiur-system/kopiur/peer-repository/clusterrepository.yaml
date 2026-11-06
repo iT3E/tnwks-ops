@@ -41,6 +41,7 @@ spec:
       - kopiur-system
       - home-automation
       - networking
+      - media
       - production
       - selfhosted
   credentialProjection:

@@ -100,6 +100,8 @@ data:
   FIREFLY_BACKUP_SUSPEND: "true"
   FINANCE_SYNC_SUSPEND: "true"
   FINANCE_SYNC_BACKUP_SUSPEND: "true"
+  # The media stack: deployed here at 0 to move it (bin/site-failover "media").
+  MEDIA_REPLICAS: "0"
   # Home Assistant stays on homelab-wsl: apps here reach it by name.
   HOME_ASSISTANT_URL: "https://hass.internal.tnwks.us"
   # What stays on homelab-wsl, over its LAN bridge (docs/wsl/lan-exposure.md):
