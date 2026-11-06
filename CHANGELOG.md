@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.198.0 - 2026-11-06
+
+### Added
+
+* Site routing, Stage A: each WSL distro gets its WireGuard site tunnel to the router (wg-quick), FRR 10.5 in a pinned container peering BGP over it (with a Cilium peer group ready for Stage C), and persistent forwarding, MSS clamping and connmark return routing (role wsl_site_routing, tag site-routing).
+
 ## v1.197.1 - 2026-11-06
 
 ### Fixed
