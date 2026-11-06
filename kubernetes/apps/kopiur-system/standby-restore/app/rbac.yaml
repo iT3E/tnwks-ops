@@ -1,0 +1,61 @@
+---
+# What the weekly standby restore needs: read the app's Deployment and PVC,
+# read site-overrides (skip during a switchover), and manage its own kopiur
+# Restores. Restores run in the apps' namespaces, so it's a ClusterRole.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: standby-restore
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: standby-restore
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get"]
+  - apiGroups: ["kopiur.home-operations.com"]
+    resources: ["restores"]
+    verbs: ["get", "list", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: standby-restore
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: standby-restore
+subjects:
+  - kind: ServiceAccount
+    name: standby-restore
+    namespace: kopiur-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: standby-restore
+  namespace: flux-system
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["site-overrides"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: standby-restore
+  namespace: flux-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: standby-restore
+subjects:
+  - kind: ServiceAccount
+    name: standby-restore
+    namespace: kopiur-system

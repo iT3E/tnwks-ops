@@ -1,0 +1,22 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: standby-restore
+spec:
+  groups:
+    - name: standby-restore
+      rules:
+        # Failed runs are KubeJobFailed. This catches the drill not running
+        # (or never succeeding since its last success).
+        - alert: StandbyRestoreDrillStale
+          expr: time() - kube_cronjob_status_last_successful_time{namespace="kopiur-system", cronjob="standby-restore"} > 8 * 86400
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "The weekly standby restore hasn't succeeded for 8 days."
+            description: >-
+              CronJob kopiur-system/standby-restore restores the other site's
+              newest snapshot of each warm app's PVC here. Check its last Job's
+              log and the Restores it left (label app.kubernetes.io/name=standby-restore).

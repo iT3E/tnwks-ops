@@ -35,6 +35,8 @@ resources:
   - ../../../apps/kopiur-system
   # homelab-wsl-02's kopiur repository, read-only: PVCs coming back from it.
   - ../../../apps/kopiur-system/kopiur/peer-repository-ks.yaml
+  # Weekly restore of the other site's newest snapshots into this site's standby PVCs.
+  - ../../../apps/kopiur-system/standby-restore/ks.yaml
   - ../../../apps/flux-system
   - ../../../apps/kube-system
   - ../../../apps/kube-system/flannel/ks.yaml
