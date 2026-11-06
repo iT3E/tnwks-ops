@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.203.0 - 2026-11-06
+
+### Changed
+
+* homelab-wsl's Cilium move: a CiliumNodeConfig lists the nodes Cilium takes over, each from its agent's next restart.
+
 ## v1.202.0 - 2026-11-06
 
 ### Changed
