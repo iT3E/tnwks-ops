@@ -178,9 +178,10 @@ flowchart LR
 - **Docker 28 drops routed traffic into a bridge network** unless the
   network's gateway mode is `routed` or `nat-unprotected`. The Talos
   network needs one of them, plus a masquerade exemption so traffic from
-  the nodes to the other site leaves with its real address. Whether
-  `talosctl cluster create docker` can set the option, or Ansible adds the
-  rules after it, is a spike item.
+  the nodes to the other site leaves with its real address. `routed` breaks
+  talosctl (no host port publishing), so it's `nat-unprotected` with
+  `enable_ip_masquerade=false` and a fixed bridge name, set when the network
+  is created (Stage B below); talosctl reuses a network made beforehand.
 - Cilium native routing, with `ipv4NativeRoutingCIDR` covering both pod
   ranges, so pod-to-pod traffic across sites isn't masqueraded. VXLAN would
   only need node routes, but it stacks a tunnel inside WireGuard; BGP is
@@ -375,8 +376,10 @@ and it can't carry traffic before Stage B (below).
     yet.
   - The bridge is looked up from the Docker network's name on every run
     (its `com.docker.network.bridge.name`, else `br-<id>`), so after Stage B
-    renames it a `systemctl reload tnwks-site-routing` picks it up. Without
-    the network, the bridge rules are left out and the rest applies.
+    renames it a `systemctl reload tnwks-site-routing` picks it up
+    (`recreate-network.sh` does it; an Ansible apply doesn't, since nothing
+    in the role changed). Without the network, the bridge rules are left
+    out and the rest applies.
 
 ### Stages B and C
 
@@ -386,11 +389,50 @@ and it can't carry traffic before Stage B (below).
   nodes' traffic to the other site to the distro's tunnel address, which
   the router's site-to-site policy doesn't allow. Stage B recreates each
   network as `nat-unprotected` with `enable_ip_masquerade=false` and a fixed
-  bridge name, and turns on `wsl_site_routing_masquerade` (the distro
-  masquerades the node subnet out of `eth0` only). A network can't be
-  changed in place, so the running Talos node containers have to move to
-  the new one (or be recreated): a planned outage per site. After the
-  rename, reload `tnwks-site-routing` (or let the next apply do it).
+  bridge name (`br-site1`, `br-site2`), and the distro masquerades the node
+  subnet out of `eth0` only (`wsl_site_routing_masquerade`, on in both
+  distros' host_vars; next to Docker's nat-mode MASQUERADE it changes
+  nothing, both rewrite to `eth0`'s address).
+  - Where it's set: `talos_clusters.<site>.docker_network`
+    (`inventory/group_vars/all/talos.yml`). `01-talos-bootstrap.yml` creates
+    the network with it when it's missing (labels `talos.owned` and
+    `talos.cluster.name`, explicit gateway), so a rebuild comes up right:
+    talosctl 1.13 and 1.14 both reuse it. An existing network is only
+    compared, and a difference is a warning
+    (`-e talos_docker_network_strict=true` makes it fail).
+  - Options are immutable, so a running cluster moves with
+    `talos/wsl/recreate-network.sh` (`task talos:network:wsl`, or on
+    WSL-02's distro the script itself). The containers aren't recreated:
+    `docker stop -t 120`, disconnect, rm, create with the same subnet,
+    gateway and labels plus the new options, `connect --ip <same address>`,
+    start, then `systemctl reload tnwks-site-routing` (the bridge name
+    changed) and a wait for the Talos and Kubernetes APIs. Volumes, binds,
+    restart policy and the published `127.0.0.1` ports (so talosconfig and
+    kubeconfig) stay as they are. Before anything goes down it checks the
+    options on a scratch network and refuses when a bind source is missing
+    (site 1's worker-2: `/dev/bus/usb`, the Z-Stick, E:). Docker would
+    otherwise start the node with an empty directory in its place.
+  - **About 90 s down per site** (rehearsed 2026-11-06 on a throwaway
+    cluster on WSL-02, 6 runs): Services go at once (Talos's graceful
+    shutdown takes about 30 s), the Kubernetes API is out about 45 s, the
+    Talos API 2-3 s, and the swap itself is under a second. After that,
+    each app needs its own start time. Deployment pods come back as new
+    pods. Order of the nodes doesn't matter.
+  - Order: the masquerade on first (merged and applied before the window;
+    without it the nodes have no internet egress after the swap and image
+    pulls fail), then site 2, then site 1. Per site:
+    `recreate-network.sh --dry-run <cluster> <bridge>`, then the run.
+    Afterwards, check the BGP sessions (`docker exec tnwks-frr vtysh -c
+    'show bgp summary'`). The router loses the node subnet while the bridge
+    is gone. On site 2, the Cilium sessions drop with the nodes and peer
+    again once the agents are back, after about a minute; graceful restart
+    is 30 s, so their routes are withdrawn first.
+  - Rollback: `recreate-network.sh --rollback <cluster>` recreates it with
+    only the MTU option, as talosctl made it (same 90 s). The masquerade can
+    stay on.
+  - With `nat-unprotected`, Docker accepts every port from any routed
+    interface: `TNWKS-SR-FWD` (tunnel to node subnet, pod range and VIP
+    pool only) and the router's policy are the only filters.
 - **Stage C, Cilium's BGP control plane** toward FRR at the bridge gateway
   (`10.5.0.1`, `10.6.0.1`). `bgpControlPlane.enabled` is
   `CILIUM_BGP_ENABLED` in the shared HelmRelease; the peering is
@@ -716,8 +758,6 @@ BGP session on the router added by a Terraform PR the owner approves:
 
 ## Open questions
 
-- Does `talosctl cluster create docker` accept Docker network options, or
-  does Ansible have to add the forwarding and masquerade rules?
 - Cilium's BGP control plane in Talos-in-Docker nodes: any capability it
   needs beyond the 2026-11-04 overrides?
 - The same address on both clusters' LB IPAM pools for shared services:

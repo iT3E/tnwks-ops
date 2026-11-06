@@ -54,7 +54,11 @@ wsl_site_routing_rule_priority: 1000
 
 # Stage B: when the Docker network stops masquerading (nat-unprotected,
 # enable_ip_masquerade=false), the distro masquerades the nodes' own egress
-# out of the uplink instead. Off until then: Docker still does it.
+# out of the uplink instead. Both sites turn it on ahead of the network swap
+# (host_vars): next to Docker's nat-mode MASQUERADE it changes nothing, both
+# rewrite to the uplink's address. After the swap (talos/wsl/recreate-network.sh)
+# `systemctl reload tnwks-site-routing` picks up the new bridge name; the
+# script does that.
 wsl_site_routing_masquerade: false
 
 # BGP. Timers: hold 9 s, keepalive 3 s, as the router's connections; a dead

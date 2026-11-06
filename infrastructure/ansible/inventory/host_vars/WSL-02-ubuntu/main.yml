@@ -53,6 +53,12 @@ wsl_site_routing_asn: 64612
 wsl_site_routing_cilium_asn: 64602
 wsl_site_routing_docker_network: homelab-wsl-02
 wsl_site_routing_node_subnet: 10.6.0.0/24
+# Stage B: the distro masquerades the node subnet out of eth0 (TNWKS-SR-NAT),
+# on before the Docker network goes nat-unprotected without masquerading.
+# Until then it overlaps Docker's own MASQUERADE, which rewrites to the same
+# eth0 address (rehearsed 2026-11-06: same result, open connections kept).
+# Only eth0: after Stage B, traffic into the tunnel keeps the node address.
+wsl_site_routing_masquerade: true
 wsl_site_routing_pod_cidr: 10.44.0.0/16
 # What the router sends this site: site 1's node subnet and pod CIDRs.
 wsl_site_routing_remote_prefixes:

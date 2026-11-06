@@ -41,3 +41,25 @@ tasks:
     cmds:
       - for: [homelab-wsl-controlplane-1, homelab-wsl-worker-1, homelab-wsl-worker-2]
         cmd: DRY_RUN=1 {{.ROOT_DIR}}/talos/wsl/roll-node.sh {{.ITEM}} ghcr.io/siderolabs/talos:{{.VERSION}} | sed -E 's/USERDATA=[^ ]+/USERDATA=<hidden>/'
+
+  # Stage B (docs/wsl/multi-site.md): move a cluster's node containers onto its
+  # Docker network recreated with talos_clusters' docker_network options. A
+  # planned outage of about 90 s. Run on that cluster's distro, e.g.
+  # `task talos:network:wsl -- --dry-run`, `-- --rollback`.
+  network:wsl:
+    desc: Stage B, homelab-wsl onto a nat-unprotected Docker network (about 90 s down; -- --dry-run | --rollback)
+    interactive: true
+    vars:
+      BRIDGE:
+        sh: yq -r .talos_clusters.wsl.docker_network.bridge_name {{.ANSIBLE_DIR}}/inventory/group_vars/all/talos.yml
+    cmds:
+      - "{{.ROOT_DIR}}/talos/wsl/recreate-network.sh {{.CLI_ARGS}} homelab-wsl {{.BRIDGE}}"
+
+  network:wsl-02:
+    desc: Stage B, homelab-wsl-02 onto a nat-unprotected Docker network (run on WSL-02's distro; -- --dry-run | --rollback)
+    interactive: true
+    vars:
+      BRIDGE:
+        sh: yq -r '.talos_clusters["wsl-02"].docker_network.bridge_name' {{.ANSIBLE_DIR}}/inventory/group_vars/all/talos.yml
+    cmds:
+      - "{{.ROOT_DIR}}/talos/wsl/recreate-network.sh {{.CLI_ARGS}} homelab-wsl-02 {{.BRIDGE}}"
