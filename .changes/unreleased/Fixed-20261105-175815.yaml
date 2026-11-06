@@ -1,0 +1,3 @@
+kind: Fixed
+body: task failover waits for the app to answer on the new site before it reports done (a Deployment can be Ready before the app listens).
+time: 2026-11-05T17:58:15.946679321-08:00
