@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.154.0 - 2026-11-06
+
+### Added
+
+* homelab-wsl-02 monitors itself: kube-prometheus-stack (the chart's Kubernetes rules plus the heartbeat, OOM, resource-pressure and site-override alerts) and its own Alertmanager to the same War Room. Alerts carry `cluster=<CLUSTER_NAME>` (was a fixed `homelab-wsl`). Its Watchdog pings healthchecks.io `homelab-wsl-02`, its delivery heartbeat the new `alert-delivery-wsl-02`. Windows host and app alerts stay on homelab-wsl, which scrapes both hosts.
+
 ## v1.153.0 - 2026-11-05
 
 ### Added
