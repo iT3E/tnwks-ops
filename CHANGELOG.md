@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.189.1 - 2026-11-06
+
+### Fixed
+
+* homelab-wsl-02's cluster-secrets has OAUTH2_PROXY_CLIENT_ID, which Firefly's logout link needs, so Firefly's standby builds there.
+
 ## v1.189.0 - 2026-11-06
 
 ### Added
