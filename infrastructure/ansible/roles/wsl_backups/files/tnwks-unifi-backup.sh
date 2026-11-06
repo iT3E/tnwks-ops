@@ -20,6 +20,14 @@ if ! mountpoint -q /mnt/g; then
 fi
 mkdir -p "$DEST"
 
+# The controller runs on one WSL site at a time (bin/site-failover "unifi").
+# When it's on the other site there is nothing to copy from here; its /config,
+# auto-backups included, is in that site's nightly kopiur snapshot.
+if [[ "$(kubectl -n networking get pod unifi-0 -o jsonpath='{.status.phase}' 2>/dev/null)" != Running ]]; then
+  echo "UniFi doesn't run on this site; nothing to copy (its .unf files are in the other site's kopiur snapshots)"
+  exit 0
+fi
+
 latest=$(kubectl -n networking exec unifi-0 -c app -- \
   sh -c 'ls -1t /config/data/backup/autobackup/*.unf 2>/dev/null | head -1')
 if [[ -z "$latest" ]]; then
