@@ -364,7 +364,8 @@ def copy_pvc(old, new, app, pvc, stamp):
                 raise RuntimeError(f"{old.name}: Snapshot {snap}: {c.get('reason')}: {c.get('message', '')[:300]}")
         return o if ph == "Succeeded" else None
 
-    o = wait(f"Snapshot {snap}", snapped)
+    # Big PVCs upload to S3 first (Immich's library is 2.5 GB): allow an hour.
+    o = wait(f"Snapshot {snap}", snapped, timeout=3600, every=15)
     ident = o["status"]["snapshot"]["identity"]
     sid = o["status"]["snapshot"]["kopiaSnapshotID"]
     log(f"{old.name}: snapshot {sid} of {ident}")
@@ -393,7 +394,7 @@ def copy_pvc(old, new, app, pvc, stamp):
             raise RuntimeError(f"{new.name}: Restore {rst} failed: {json.dumps(o['status'].get('failure', {}))[:300]} {o['status'].get('logTail', '')[-300:]}")
         return o if ph in ("Completed", "Succeeded") else None
 
-    o = wait(f"Restore {rst}", restored)
+    o = wait(f"Restore {rst}", restored, timeout=3600, every=15)
     log(f"{new.name}: restored {json.dumps(o['status'].get('progress', {}))}")
     if pvc.get("transfer_only"):
         log(f"{old.name}: transfer-only PVC: deleting Snapshot {snap} (and its kopia snapshot)")
