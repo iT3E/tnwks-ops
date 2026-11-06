@@ -23,6 +23,11 @@
 # skip, and a line that contains "privacy:allow" is skipped. Messages, PR
 # text and comments have no exceptions.
 #
+# AI attribution ("Generated with Claude Code", a Claude Co-Authored-By
+# trailer, the claude.com/claude-code link) is a hit too, in commit messages
+# and GitHub text (not files): the repo is public and nothing may tie it to
+# a tool or its account (AGENTS.md). Fixed patterns, no denylist needed.
+#
 # Hits print as "term #N: <where>". The matched text is never printed, since
 # CI logs on a public repo are public.
 set -euo pipefail
@@ -85,6 +90,21 @@ hits=0
 report() { echo "term #$1: $2"; hits=$((hits + 1)); }
 has() { grep -q -P -e "$1" <<<"$2"; }
 
+# AI attribution, wherever there's message or GitHub text.
+attribution='(?im)(generated (with|by) \[?claude|claude\.(com|ai)/claude-code|^\s*co-authored-by:.*(claude|anthropic)|noreply@anthropic\.com)'
+attr_report() { echo "AI attribution: $1"; hits=$((hits + 1)); }
+if [[ -n "${message}" ]] && has "${attribution}" "${input}"; then attr_report "commit message"; fi
+if [[ -n "${text_mode}" ]] && has "${attribution}" "${input}"; then attr_report "text"; fi
+if [[ -n "${PRIVACY_EXTRA_TEXT:-}" ]] && has "${attribution}" "${PRIVACY_EXTRA_TEXT}"; then
+  attr_report "PR title or body"
+fi
+if [[ -n "${range}" ]]; then
+  while IFS= read -r sha; do
+    attr_report "commit ${sha:0:12} (message)"
+  done < <(git log --format='%H%x09%B%x00' "${range}" |
+    perl -0 -ne 'BEGIN { $re = shift @ARGV } print substr($_, 0, 40), "\n" if /$re/' "${attribution}" || true)
+fi
+
 for i in "${!terms[@]}"; do
   n=$((i + 1))
   p="$(pattern "${terms[$i]}")"
@@ -130,7 +150,7 @@ for i in "${!terms[@]}"; do
 done
 
 if ((hits)); then
-  echo "privacy-check: ${hits} hit(s). Remove the term or move it to a SOPS secret." >&2
+  echo "privacy-check: ${hits} hit(s). Remove the term (or attribution line), or move a term to a SOPS secret." >&2
   exit 1
 fi
 echo "privacy-check: clean (${#terms[@]} terms)"
