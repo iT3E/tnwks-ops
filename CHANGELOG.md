@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.179.0 - 2026-11-06
+
+### Added
+
+* The transcriber's clip audio is backed up nightly by kopiur on the site that runs it, and restored weekly onto the standby.
+
 ## v1.178.1 - 2026-11-06
 
 ### Fixed
