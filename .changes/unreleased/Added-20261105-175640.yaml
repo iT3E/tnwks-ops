@@ -1,0 +1,3 @@
+kind: Added
+body: 'A weekly standby restore on both WSL sites: the other site''s newest kopiur snapshot of each warm app''s PVC into this site''s copy, alerting when it fails or goes stale.'
+time: 2026-11-05T17:56:40.996833554-08:00

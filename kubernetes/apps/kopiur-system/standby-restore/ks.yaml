@@ -1,0 +1,20 @@
+---
+# Weekly standby restore (the file in app/ says what it does). Both WSL sites.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: standby-restore
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: kopiur-standby-repository
+    - name: kube-prometheus-stack
+  path: ./kubernetes/apps/kopiur-system/standby-restore/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 3m

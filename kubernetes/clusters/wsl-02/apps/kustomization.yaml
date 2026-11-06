@@ -55,6 +55,8 @@ resources:
   # kopiur: its own repository (KOPIUR_PREFIX) and homelab-wsl's, read-only.
   - ../../../apps/kopiur-system/kopiur/ks.yaml
   - ../../../apps/kopiur-system/kopiur/peer-repository-ks.yaml
+  # Weekly restore of the other site's newest snapshots into this site's standby PVCs.
+  - ../../../apps/kopiur-system/standby-restore/ks.yaml
 # Parts of those shared ks.yaml files that don't run here (yet):
 #   - PrometheusRules: no kube-prometheus-stack on this cluster.
 #   - ingress-nginx (public): waits for this cluster's own cloudflared tunnel.

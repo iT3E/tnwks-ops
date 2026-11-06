@@ -1,0 +1,75 @@
+---
+# Weekly: the peer site's newest kopiur snapshot of each warm app's PVC,
+# restored into this site's copy wherever the app is off here (the script
+# says what it skips). Keeps the standby's PVCs current and is the standing
+# restore drill. A failed run raises KubeJobFailed; no success for 8 days
+# raises StandbyRestoreDrillStale. Mealie only so far: the transcriber's audio
+# has no snapshots to restore (transfer only).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: standby-restore
+spec:
+  # Sunday, after both sites' nightly kopiur runs (02:00-03:00).
+  schedule: "15 5 * * 0"
+  timeZone: "${TIMEZONE}"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 86400
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: standby-restore
+        spec:
+          serviceAccountName: standby-restore
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 65534
+            runAsGroup: 65534
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: restore
+              image: docker.io/library/python:3.15.2-slim-trixie@sha256:8c13a3f37a6a5b71498228e902c4b9f51c1f7900d49fabf71f9a650c6120e0d0
+              command: ["python3", "/app/restore_drill.py"]
+              env:
+                - name: PYTHONUNBUFFERED
+                  value: "1"
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+                # The other site's repository, read-only here
+                # (kopiur/peer-repository).
+                - name: PEER_REPOSITORY
+                  value: "${PEER_CLUSTER_NAME}"
+                # prefix: the app's variable prefix (site-overrides keys).
+                - name: ENTRIES
+                  value: >-
+                    [{"namespace": "production", "pvc": "mealie-config",
+                      "policy": "mealie", "deployment": "mealie",
+                      "prefix": "MEALIE", "uid": 1000, "gid": 1000}]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              volumeMounts:
+                - name: script
+                  mountPath: /app
+                  readOnly: true
+          volumes:
+            - name: script
+              configMap:
+                name: standby-restore-script

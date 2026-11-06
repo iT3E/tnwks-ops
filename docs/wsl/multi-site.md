@@ -414,6 +414,12 @@ task failover:clear APP=mealie                      # only once git matches
 - **Making a move permanent:** a PR to both `cluster-settings` with the
   same values (no token), then `task failover:clear`. Clearing first would
   put the app back on git's defaults.
+- **Weekly standby restore.** `kopiur-system/standby-restore` (a CronJob on
+  both sites, Sundays 05:15) restores the other site's newest snapshot of
+  each warm app's PVC into this site's copy, wherever the app is off here.
+  It skips an app with `site-overrides` here (a switchover under way). It
+  keeps the standby current and is the standing restore drill: a failure is
+  `KubeJobFailed`, and no success for 8 days is `StandbyRestoreDrillStale`.
 - There's no `--promote`. An unplanned promote needs the fencing answer
   below first.
 
