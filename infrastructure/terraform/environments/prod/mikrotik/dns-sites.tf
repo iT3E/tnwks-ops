@@ -10,6 +10,12 @@
 locals {
   wsl02_lan_address = "10.10.91.112"
 
+  # The shared VIPs of the internal ingress (docs/wsl/multi-site.md, site-tunnels.tf): announced by both sites over
+  # BGP, each preferred by the site that runs its apps, taken over by the other while it doesn't announce it. Either
+  # site's ingress serves every app deployed on both (global Services), so a switchover needs no DNS change.
+  vip_wsl    = "10.10.95.10"  # homelab-wsl first
+  vip_wsl_02 = "10.10.95.200" # homelab-wsl-02 first
+
   # Fencing leases (docs/wsl/multi-site.md, "Fencing"): per warm app, the site
   # fenced from writing it, or "none". Set it to the dead site BEFORE an
   # unplanned promote (bin/site-failover --promote refuses otherwise), and
@@ -22,69 +28,85 @@ locals {
   }
 
   site_dns_records = {
-    wsl02_playwright_mcp = {
-      name            = "playwright-mcp.internal.tnwks.us"
-      address         = local.wsl02_lan_address
+    vip_hass = {
+      name            = "hass.internal.tnwks.us"
+      address         = local.vip_wsl
       type            = "A"
       ttl             = "5m"
       match_subdomain = true
-      comment         = "homelab-wsl-02: playwright-mcp"
+      comment         = "shared VIP (homelab-wsl first): home-assistant"
+    }
+    vip_firefly = {
+      name            = "firefly.internal.tnwks.us"
+      address         = local.vip_wsl
+      type            = "A"
+      ttl             = "5m"
+      match_subdomain = true
+      comment         = "shared VIP (homelab-wsl first): firefly"
+    }
+    wsl02_playwright_mcp = {
+      name            = "playwright-mcp.internal.tnwks.us"
+      address         = local.vip_wsl_02
+      type            = "A"
+      ttl             = "5m"
+      match_subdomain = true
+      comment         = "shared VIP (homelab-wsl-02 first): playwright-mcp"
     }
     wsl02_transcriber = {
       name            = "transcriber.internal.tnwks.us"
-      address         = local.wsl02_lan_address
+      address         = local.vip_wsl_02
       type            = "A"
       ttl             = "5m"
       match_subdomain = true
-      comment         = "homelab-wsl-02: transcriber"
+      comment         = "shared VIP (homelab-wsl-02 first): transcriber"
     }
     wsl02_changedetection = {
       name            = "changedetection.internal.tnwks.us"
-      address         = local.wsl02_lan_address
+      address         = local.vip_wsl_02
       type            = "A"
       ttl             = "5m"
       match_subdomain = true
-      comment         = "homelab-wsl-02: changedetection"
+      comment         = "shared VIP (homelab-wsl-02 first): changedetection"
     }
     wsl02_immich = {
       name            = "immich.internal.tnwks.us"
-      address         = local.wsl02_lan_address
+      address         = local.vip_wsl_02
       type            = "A"
       ttl             = "5m"
       match_subdomain = true
-      comment         = "homelab-wsl-02: immich"
+      comment         = "shared VIP (homelab-wsl-02 first): immich"
     }
     wsl02_immichframe = {
       name            = "immichframe.internal.tnwks.us"
-      address         = local.wsl02_lan_address
+      address         = local.vip_wsl_02
       type            = "A"
       ttl             = "5m"
       match_subdomain = true
-      comment         = "homelab-wsl-02: immichframe"
+      comment         = "shared VIP (homelab-wsl-02 first): immichframe"
     }
     wsl02_kitchen_screensaver = {
       name            = "kitchen-screensaver.internal.tnwks.us"
-      address         = local.wsl02_lan_address
+      address         = local.vip_wsl_02
       type            = "A"
       ttl             = "5m"
       match_subdomain = true
-      comment         = "homelab-wsl-02: kitchen-screensaver"
+      comment         = "shared VIP (homelab-wsl-02 first): kitchen-screensaver"
     }
     wsl02_unifi = {
       name            = "unifi.internal.tnwks.us"
-      address         = local.wsl02_lan_address
+      address         = local.vip_wsl_02
       type            = "A"
       ttl             = "5m"
       match_subdomain = true
-      comment         = "homelab-wsl-02: unifi"
+      comment         = "shared VIP (homelab-wsl-02 first): unifi"
     }
     wsl02_qbittorrent = {
       name            = "qbittorrent.internal.tnwks.us"
-      address         = local.wsl02_lan_address
+      address         = local.vip_wsl_02
       type            = "A"
       ttl             = "5m"
       match_subdomain = true
-      comment         = "homelab-wsl-02: qbittorrent"
+      comment         = "shared VIP (homelab-wsl-02 first): qbittorrent"
     }
   }
 }
