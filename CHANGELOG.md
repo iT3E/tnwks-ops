@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.191.1 - 2026-11-06
+
+### Fixed
+
+* UniFi's Terraform workflows run only on homelab-wsl's ops runner (tnwks-ops-homelab-wsl), where the controller API is; each site's runner carries a site label.
+
 ## v1.191.0 - 2026-11-06
 
 ### Added
