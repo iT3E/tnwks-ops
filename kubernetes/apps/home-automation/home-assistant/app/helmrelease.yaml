@@ -100,6 +100,10 @@ spec:
               tag: 2026.10.4@sha256:81271a8bbe2a6019659e9d5cde98b884dd0d67fad6819bb4ab177dceb0c1c5e1
             command: ["/bin/bash", "/scripts/prepare-config.sh", "/config"]
             env:
+              # Every site's pod CIDR (each cluster's CLUSTER_CIDR): ingress-nginx
+              # runs in the pod network, and a switchover brings this same config
+              # to the other site. 10.46: homelab-wsl after its move to Cilium.
+              HTTP_TRUSTED_PROXIES: "10.42.0.0/16,10.44.0.0/16,10.46.0.0/16"
               # renovate: datasource=github-releases depName=christiaangoossens/hass-oidc-auth
               HASS_OIDC_AUTH_VERSION: v1.2.1
               # renovate: datasource=github-releases depName=blakeblackshear/frigate-hass-integration

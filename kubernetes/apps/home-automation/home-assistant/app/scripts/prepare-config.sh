@@ -15,6 +15,12 @@
 #
 # Each install records its version in a .tnwks-version file and is skipped
 # when that already matches, so a plain restart needs no network.
+#
+# HTTP_TRUSTED_PROXIES (comma-separated CIDRs): the reverse proxies HA trusts
+# for X-Forwarded-For. Since 2026.x HA keeps its HTTP settings in
+# .storage/http (YAML is imported once, then ignored), so this adds any
+# missing CIDR there before HA starts. It only adds: a proxy set in the UI
+# stays.
 set -euo pipefail
 
 config="${1:-/config}"
@@ -24,6 +30,41 @@ config="${1:-/config}"
 [[ -e "${config}/automations.yaml" ]] || echo "[]" >"${config}/automations.yaml"
 [[ -e "${config}/scripts.yaml" ]] || echo "{}" >"${config}/scripts.yaml"
 [[ -e "${config}/scenes.yaml" ]] || echo "[]" >"${config}/scenes.yaml"
+
+# Trusted proxies: every site's pod network, where ingress-nginx runs. HA
+# isn't running yet, so editing its store is safe; a fresh volume has no
+# store until HA's first start, and the next start fills it in.
+if [[ -n "${HTTP_TRUSTED_PROXIES:-}" && -f "${config}/.storage/http" ]]; then
+    python3 - "${config}/.storage/http" "${HTTP_TRUSTED_PROXIES}" <<'EOF'
+import json, os, sys, tempfile
+
+path, want = sys.argv[1], [c.strip() for c in sys.argv[2].split(",") if c.strip()]
+with open(path) as f:
+    store = json.load(f)
+changed = []
+for key in ("stable", "pending"):
+    conf = (store.get("data") or {}).get(key)
+    if not conf:
+        continue
+    have = conf.get("trusted_proxies") or []
+    missing = [c for c in want if c not in have]
+    if missing:
+        conf["trusted_proxies"] = have + missing
+        changed.append(f"{key}: +{','.join(missing)}")
+    if not conf.get("use_x_forwarded_for"):
+        conf["use_x_forwarded_for"] = True
+        changed.append(f"{key}: use_x_forwarded_for")
+if not changed:
+    print("trusted proxies: already set")
+    sys.exit(0)
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".http.")
+with os.fdopen(fd, "w") as f:
+    json.dump(store, f, indent=2)
+os.chmod(tmp, os.stat(path).st_mode & 0o777)
+os.replace(tmp, path)
+print("trusted proxies: " + "; ".join(changed))
+EOF
+fi
 
 # install <name> <version> <destination dir> <url> <subpath in archive>
 # Downloads <url> (.zip or .tar.gz), and replaces <destination dir> with the

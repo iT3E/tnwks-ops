@@ -252,18 +252,16 @@ WSL forwards localhost, so a Windows browser can use `http://localhost:8123`.
    again, the welcome screen offers *Login with tnwks* and a link to the HA
    login. Use the HA login: SSO only works on the real hostnames, because
    Cognito has no `localhost` callback.
-3. **Proxy trust.** Settings > System > Network > HTTP server: turn on
-   *Trust X-Forwarded-For* and set *Trusted proxies* to the pod CIDRs of
-   every site HA can run on: `10.42.0.0/16` (homelab-wsl today), `10.44.0.0/16`
-   (homelab-wsl-02, where a switchover brings this same config) and
-   `10.46.0.0/16` (homelab-wsl after its move to Cilium). Each is that
-   cluster's `CLUSTER_CIDR`; both ingress-nginx controllers run in the pod
-   network. A proxy outside the list gets HTTP 400, and with login-attempt
-   bans on it can get the ingress's address banned. Leave *Login attempts before ban* at
-   unlimited (see [Access](#access)) and save. HA restarts with the new settings as a
-   trial, and the trial already trusts the proxy. Open
-   `https://hass.internal.tnwks.us` and **confirm the settings within 5
-   minutes**, or HA reverts them. After that, both URLs work.
+3. **Proxy trust** is in git: the init container (`scripts/prepare-config.sh`,
+   `HTTP_TRUSTED_PROXIES` in `helmrelease.yaml`) turns on *Trust
+   X-Forwarded-For* and adds every site's pod CIDR (`10.42.0.0/16`,
+   `10.44.0.0/16`, `10.46.0.0/16`) to *Trusted proxies* in `.storage/http`
+   before HA starts. HA 2026.x keeps these settings in that store and ignores
+   YAML after a one-time import, so they can't live in `configuration.yaml`.
+   On a fresh volume the store appears at HA's first start, so it takes
+   effect from the second start (restart HA once). A proxy you add in the UI
+   stays: the script only adds. Leave *Login attempts before ban* at
+   unlimited (see [Access](#access)).
 4. **MFA on the owner account.** Profile > Security > Multi-factor
    authentication modules: enable *Authenticator app* (TOTP). The owner login is
    internet-facing, so do this before going further.
