@@ -284,5 +284,37 @@
     "prebind_extra": [
       "cephfs-hdd-subvolume-qbit"
     ]
+  },
+  "home-assistant": {
+    "prefix": "HOME_ASSISTANT",
+    "namespace": "home-automation",
+    "kustomizations": {
+      "db": "home-assistant-db",
+      "app": "home-assistant",
+      "backup": "kopiur-policies"
+    },
+    "postgres": "home-assistant-pg",
+    "lease": true,
+    "workloads": [
+      "statefulset/home-assistant"
+    ],
+    "backup_schedule": true,
+    "pvcs": [
+      {
+        "name": "config-home-assistant-0",
+        "policy": "home-assistant",
+        "uid": 568,
+        "gid": 568,
+        "create": {
+          "capacity": "5Gi",
+          "storageClass": "local-path"
+        }
+      }
+    ],
+    "check": {
+      "workload": "statefulset/home-assistant",
+      "container": "app",
+      "url": "http://localhost:8123/manifest.json"
+    }
   }
 }

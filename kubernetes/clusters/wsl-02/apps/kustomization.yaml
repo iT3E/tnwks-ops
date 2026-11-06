@@ -51,6 +51,10 @@ resources:
   # Firefly and finance-sync: warm standby (databases replicas, app at 0).
   - ../../../apps/production/firefly/ks.yaml
   - ../../../apps/production/finance-sync/ks.yaml
+  # Home Assistant: warm standby (database replica, the app at 0). No Z-Wave or
+  # USB here: a failover runs it without those integrations.
+  - ../../../apps/home-automation/namespace.yaml
+  - ../../../apps/home-automation/home-assistant/ks.yaml
   # The media stack, deployed at 0 to move here (MEDIA_REPLICAS).
   - ../../../apps/media
   # Immich and the kitchen display, deployed at 0 to move here (IMMICH_REPLICAS).
