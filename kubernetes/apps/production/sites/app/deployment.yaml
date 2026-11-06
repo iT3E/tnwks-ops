@@ -55,10 +55,10 @@ spec:
       volumes:
         - name: sites
           nfs:
-            # nfs-server (ganesha) fixed ClusterIP — referenced by IP, not DNS,
-            # because the kubelet-level NFS mount uses the node resolver, which
-            # can't resolve cluster service names. See the Service manifest.
-            server: 10.43.255.254
+            # nfs-server (ganesha) on worker-1's own address (host network): this
+            # is a kernel NFS mount, which can't reach a ClusterIP without
+            # kube-proxy. See the nfs-server Deployment.
+            server: 10.5.0.3
             path: /export
             readOnly: true
         - name: nginx-config

@@ -31,7 +31,14 @@ data:
       # Pseudo path clients mount: nfs:<ip>:/export
       Pseudo = /export;
       Path = /export;
-      Access_Type = RW;
+      # Only the nodes: every client is a kubelet mount from a node address.
+      # The server is on the node network, which the site tunnel can route
+      # to, so nothing else may mount it.
+      Access_Type = None;
+      CLIENT {
+        Clients = 10.5.0.0/24;
+        Access_Type = RW;
+      }
       Squash = No_Root_Squash;
       # NFSv4 doesn't use the transport-level Sec by default; allow sys auth.
       SecType = sys;

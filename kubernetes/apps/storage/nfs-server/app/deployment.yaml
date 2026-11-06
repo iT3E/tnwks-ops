@@ -22,6 +22,17 @@ spec:
       labels:
         app.kubernetes.io/name: nfs-server
     spec:
+      # Host network: the `nfs:` volumes are mounted by the node kernel's NFS
+      # client, and Cilium's kube-proxy replacement doesn't translate a
+      # ClusterIP for in-kernel clients (only kube-proxy's iptables did). So
+      # the server listens on its node's own address, 10.5.0.3:2049, and the
+      # mounts use that. Only 2049 (NFSv4 over TCP, no rpcbind).
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      # The data PVC (local-path) already binds it to worker-1; pinned here too
+      # because the consumers mount this node's IP.
+      nodeSelector:
+        kubernetes.io/hostname: homelab-wsl-worker-1
       containers:
         - name: nfs-server
           # Userspace NFS-Ganesha (vfs FSAL) from the kubernetes-sigs
