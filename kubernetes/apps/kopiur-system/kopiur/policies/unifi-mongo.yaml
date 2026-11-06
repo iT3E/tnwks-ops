@@ -23,6 +23,17 @@ spec:
       # The mongo image's user.
       runAsUser: 999
       runAsGroup: 999
+  # mongosh's logs (the probes write them as root, mode 600, under the
+  # mongo user's HOME, which was /data/db) aren't database files, and the
+  # mover can't read them. kopiur's default rules, plus that directory.
+  files:
+    ignoreRules:
+      - /lost+found
+      - System Volume Information
+      - $RECYCLE.BIN
+      - "@eaDir"
+      - .snapshot
+      - /.mongodb
   retention:
     keepLatest: 1
   sources:
