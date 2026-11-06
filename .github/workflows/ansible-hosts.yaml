@@ -113,10 +113,22 @@ jobs:
       # The controller play builds the libusb shim with mingw-w64 and unpacks
       # the pinned downloads. Done here, where apt works; the runner gets the
       # result and the play finds everything in place (creates:, checksums).
+      # The controller cache (the Coral libusb shim built with mingw-w64, the
+      # pinned Windows downloads) only changes with the three roles that fill
+      # it and the play. Restored from the Actions cache, a run needs neither
+      # the 115 MB of compilers nor GitHub's Ubuntu mirror, whose downloads
+      # stalled whole runs on 2026-11-06.
+      - name: Restore the controller cache
+        id: controller-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/tnwks-ops
+          key: controller-cache-${{ hashFiles('infrastructure/ansible/playbooks/windows-host.yml', 'infrastructure/ansible/roles/windows_coral_detector/**', 'infrastructure/ansible/roles/windows_monitoring/**', 'infrastructure/ansible/roles/windows_usb_attach/**') }}
+
       - name: Controller tools
-        # GitHub's Ubuntu mirror sometimes stalls a download until the job's
-        # 20-minute limit (three times on 2026-11-06). Each attempt is time-boxed
-        # and retried, with fresh package lists after a failure.
+        if: steps.controller-cache.outputs.cache-hit != 'true'
+        # Each attempt is time-boxed. After a stall the retries go to
+        # archive.ubuntu.com instead of GitHub's Azure mirror.
         timeout-minutes: 10
         run: |
           apt_opts=(-o Acquire::http::Timeout=30 -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60)
@@ -125,13 +137,23 @@ jobs:
                 gcc-mingw-w64-x86-64 p7zip-full unzip; then
               exit 0
             fi
-            echo "::warning::apt-get install attempt ${attempt} failed or stalled; refreshing package lists"
+            echo "::warning::apt-get install attempt ${attempt} failed or stalled; switching to archive.ubuntu.com"
+            sudo sed -i 's#http://azure.archive.ubuntu.com/ubuntu#http://archive.ubuntu.com/ubuntu#g' \
+              /etc/apt/apt-mirrors.txt /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
             sudo timeout 150 apt-get "${apt_opts[@]}" update || true
           done
           exit 1
 
       - name: Controller cache
+        if: steps.controller-cache.outputs.cache-hit != 'true'
         run: uv run --locked ansible-playbook playbooks/windows-host.yml --limit localhost
+
+      - name: Save the controller cache
+        if: steps.controller-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/tnwks-ops
+          key: ${{ steps.controller-cache.outputs.cache-primary-key }}
 
       - name: Upload the controller cache
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
