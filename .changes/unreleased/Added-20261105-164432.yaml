@@ -1,3 +1,0 @@
-kind: Added
-body: 'Mealie has a warm standby on homelab-wsl-02: its Postgres is a replica cluster of homelab-wsl''s (WAL from S3, kubernetes/components/cnpg-standby), and Mealie is deployed there at 0 replicas.'
-time: 2026-11-05T16:44:32.550859682-08:00

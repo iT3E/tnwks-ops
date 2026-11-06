@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.162.0 - 2026-11-06
+
+### Added
+
+* Mealie has a warm standby on homelab-wsl-02: its Postgres is a replica cluster of homelab-wsl's (WAL from S3, kubernetes/components/cnpg-standby), and Mealie is deployed there at 0 replicas.
+
 ## v1.161.0 - 2026-11-06
 
 ### Changed
