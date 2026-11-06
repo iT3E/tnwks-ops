@@ -1,118 +1,235 @@
 ---
-# Person alerts from Frigate: night alerts to both adults' phones, plus
-# normal pushes to them while they're away and in a weekday window.
+# Person alerts from Frigate, set separately for each adult.
 #
 # Frigate groups activity into review items and publishes every change to one
 # on frigate/reviews (type new / update / end). A review is an "alert" when it
 # contains a label from review.alerts.labels — person, with the default
-# Frigate config. This pushes one notification per review, the first time it
-# becomes a person alert, on a watched camera, to whoever should get it:
-#   - Night (night window, "Night person alerts" on): both adults' phones,
-#     as below.
-#     Night wins: while it applies, the normal alerts stay quiet, so nobody
-#     gets the same review twice.
-#   - Away ("Away person alerts" on, any time of day): a normal push to
-#     adult1's phone while adult1 is away from home, and to adult2's phone as
-#     well when both adults are away. adult2 away alone sends nothing.
-#   - Weekday ("Weekday person alerts" on, on the days picked in
-#     input_text.weekday_person_alerts_days, between the weekday start and end
-#     times): a normal push to adult1's phone, home or not. A window that ends
-#     earlier than it starts runs overnight, and its after-midnight part
-#     belongs to the day it started on.
-#   A review that matches both away and weekday still sends one push per
-#   phone. Every push goes to named phones (the phones variable), so a new
-#   or renamed phone needs updating there. Other Companion app devices, like
-#   the kitchen wall tablet, never get alerts.
+# Frigate config. The first time a review on a watched camera becomes a person
+# alert, each adult's phone gets at most one push, decided only by that
+# adult's own settings (the "Person alerts" box for them on the Security
+# dashboard's Alerts view):
+#   - Night: on, and now inside their night window (every night; a window
+#     that ends earlier than it starts runs overnight). With "Ring through Do
+#     Not Disturb" on, it's a critical push for critical_cameras.
+#   - Away: "When I'm away" (any time they're away from home) or "When
+#     everyone's away" (only while every adult in `phones` is away). A normal
+#     push.
+#   - Schedule: on, today is one of their days, and now inside their schedule
+#     window, home or not. A window that runs overnight belongs to the day it
+#     started on. A normal push.
+#   Night wins over away and schedule for the same phone, so nobody gets the
+#   same review twice. The push says which rule sent it.
+#
+# One template, `person_alert_plan` below, works out every adult's tier right
+# now (critical / night / normal / quiet) and why. The automations render the
+# same template (a YAML anchor) at the moment the review arrives, and
+# sensor.person_alerts shows its result to the dashboard, so the "Right now"
+# line on each box is exactly what an alert would do.
 #
 # Delivery is the Companion app's native push. mobile_app's legacy notify
 # platform registers one service per device (notify.mobile_app_<device>);
-# each alert calls the service of each phone it goes to. Don't use the base
-# notify.notify: it sends to every device with the app, which includes the
-# kitchen wall tablet, so it rang the tablet's alarm stream at night until
-# 2026-11-03. A phone with a stale registration fails only its own call. The
-# night alerts have two tiers (the
-# away and weekday alerts are always the normal one, with no in-app
-# notification):
-#   - normal: time-sensitive (iOS; gets through Focus, not Do Not Disturb or
-#     mute), high-priority on Android.
-#   - critical, for critical_cameras while "Critical night alerts" is on:
-#     breaks through Do Not Disturb and silent mode. iOS critical alerts need
-#     a one-time permission; Android plays on the alarm stream, which rings
-#     through silent/vibrate and through DND wherever DND allows alarms (the
-#     Android default). See docs/apps/home-assistant.md.
+# each alert calls the service of each phone it goes to (the `phones` map).
+# Don't use the base notify.notify: it sends to every device with the app,
+# which includes the kitchen wall tablet, so it rang the tablet's alarm stream
+# at night until 2026-11-03. A phone with a stale registration fails only its
+# own call. A new adult needs a phone in `phones` and their own set of helpers
+# (copy an adult's block below), and a box on the Alerts view.
+#   - normal (away, schedule): high priority on Android, held back by Do Not
+#     Disturb. iOS: active.
+#   - night: the same, plus time-sensitive on iOS (gets through Focus, not DND
+#     or mute).
+#   - critical: breaks through Do Not Disturb and silent mode. iOS critical
+#     alerts need a one-time permission; Android plays on the alarm stream,
+#     which rings through silent/vibrate and through DND wherever DND allows
+#     alarms (the Android default). See docs/apps/home-assistant.md.
 #
-# Each review gets one notification, updated in place (same tag):
+# Each review gets one notification per phone, updated in place (same tag):
 #   1. When it first becomes a person alert: the snapshot, rung per tier.
 #   2. When Frigate ends the review: silently swapped for the review's
 #      animated preview (Android animates GIFs in the shade from Android 14;
 #      iOS shows it when expanded). It goes on a low-importance channel and as
 #      a passive interruption, so it never rings, even if the first one was
-#      already dismissed.
+#      already dismissed. Recipients are worked out again at the end.
 # Tapping either one (or "Play clip") opens the Security dashboard on that
 # camera's latest review, playing the clip through HA, which works away from
 # home. "Open in Frigate" opens the exact review in Frigate's UI, but only on
-# the LAN. The phone loads the images from HA, through whichever URL the app is
-# on (the Frigate integration's notification proxy serves them).
+# the LAN. A night alert also leaves an in-app HA notification, one per camera.
 #
-# The switches and the windows are helpers, flipped and set from the Security
-# dashboard's Alerts view. They have no `initial` on purpose: HA restores each
-# one's last value (.storage/core.restore_state, saved at shutdown and every
-# 15 minutes), so a restart or a config deploy keeps what was set there. Only
-# a helper with nothing to restore (a new helper, or a lost /config volume)
-# starts at HA's default: off, and 00:00 for a time. Set it on the dashboard
-# once. Don't add `initial` back: it overrides the restored value on every
-# restart.
+# The settings are helpers, set from the Alerts view. They have no `initial`
+# on purpose: HA restores each one's last value (.storage/core.restore_state,
+# saved at shutdown and every 15 minutes), so a restart or a config deploy
+# keeps what was set there. Only a helper with nothing to restore (a new
+# helper, or a lost /config volume) starts at HA's default: off, 00:00, the
+# first option, no days. Set it on the dashboard once. Don't add `initial`:
+# it overrides the restored value on every restart.
 
 input_boolean:
-  night_person_alerts:
-    name: Night person alerts
-    icon: mdi:shield-moon
-  night_person_alerts_critical:
-    name: Critical night alerts
+  person_alerts_adult1_night:
+    name: Adult 1 night alerts
+    icon: mdi:weather-night
+  person_alerts_adult1_night_critical:
+    name: Adult 1 night alerts ring through DND
     icon: mdi:alarm-light
-  away_person_alerts:
-    name: Away person alerts
-    icon: mdi:home-export-outline
-  weekday_person_alerts:
-    name: Weekday person alerts
+  person_alerts_adult1_schedule:
+    name: Adult 1 scheduled alerts
+    icon: mdi:calendar-clock
+  person_alerts_adult2_night:
+    name: Adult 2 night alerts
+    icon: mdi:weather-night
+  person_alerts_adult2_night_critical:
+    name: Adult 2 night alerts ring through DND
+    icon: mdi:alarm-light
+  person_alerts_adult2_schedule:
+    name: Adult 2 scheduled alerts
     icon: mdi:calendar-clock
 
 input_datetime:
-  night_person_alerts_start:
-    name: Night alerts start
+  person_alerts_adult1_night_start:
+    name: Adult 1 night alerts from
     has_date: false
     has_time: true
-  night_person_alerts_end:
-    name: Night alerts end
+  person_alerts_adult1_night_end:
+    name: Adult 1 night alerts to
     has_date: false
     has_time: true
-  weekday_person_alerts_start:
-    name: Weekday alerts start
+  person_alerts_adult1_schedule_start:
+    name: Adult 1 scheduled alerts from
     has_date: false
     has_time: true
-  weekday_person_alerts_end:
-    name: Weekday alerts end
+  person_alerts_adult1_schedule_end:
+    name: Adult 1 scheduled alerts to
+    has_date: false
+    has_time: true
+  person_alerts_adult2_night_start:
+    name: Adult 2 night alerts from
+    has_date: false
+    has_time: true
+  person_alerts_adult2_night_end:
+    name: Adult 2 night alerts to
+    has_date: false
+    has_time: true
+  person_alerts_adult2_schedule_start:
+    name: Adult 2 scheduled alerts from
+    has_date: false
+    has_time: true
+  person_alerts_adult2_schedule_end:
+    name: Adult 2 scheduled alerts to
     has_date: false
     has_time: true
 
-# The weekday window's days: a comma list of three-letter days, Monday first
-# ("mon,tue,wed"), set by the day buttons of the Security dashboard's
-# schedule card (www/tnwks-security/alert-schedule-card.js). Restored across
-# restarts like the other helpers; nothing to restore means no days.
+# Away alerts. The template compares these exact strings, and the dashboard
+# card shows its own labels for them, so change all three together.
+input_select:
+  person_alerts_adult1_away:
+    name: Adult 1 away alerts
+    icon: mdi:home-export-outline
+    options: &away_options
+      - "Off"
+      - "When I'm away"
+      - "When everyone's away"
+  person_alerts_adult2_away:
+    name: Adult 2 away alerts
+    icon: mdi:home-export-outline
+    options: *away_options
+
+# Schedule days: a comma list of three-letter days, Monday first
+# ("mon,tue,wed"), set by the day buttons on the dashboard
+# (www/tnwks-security/person-alerts-card.js). Nothing restored means no days.
 input_text:
-  weekday_person_alerts_days:
-    name: Weekday alerts days
+  person_alerts_adult1_schedule_days:
+    name: Adult 1 scheduled alerts days
     icon: mdi:calendar-week
     max: 27
-    pattern: "^((mon|tue|wed|thu|fri|sat|sun)(,|$))*$"
+    pattern: &days_pattern "^((mon|tue|wed|thu|fri|sat|sun)(,|$))*$"
+  person_alerts_adult2_schedule_days:
+    name: Adult 2 scheduled alerts days
+    icon: mdi:calendar-week
+    max: 27
+    pattern: *days_pattern
+
+template:
+  - variables:
+      # Legacy mobile_app notify service per adult (notify.<value>). Every
+      # adult here needs the person_alerts_<adult>_* helpers above.
+      phones: &phones
+        person.adult1: mobile_app_pixel_8_pro
+        person.adult2: mobile_app_pixel_9a
+    sensor:
+      - name: Person alerts
+        unique_id: person_alerts_plan
+        icon: mdi:cctv
+        # How many phones a person alert would reach right now.
+        state: >-
+          {{ (this.attributes.plan | default([]))
+             | rejectattr('tier', 'eq', 'quiet') | list | count }}
+        attributes:
+          # One entry per adult: person, phone, tier (critical / night /
+          # normal / quiet), why ("Night", "Away", "Schedule", joined with
+          # " + "), and which rules apply now (night, away, schedule).
+          # Re-rendered whenever a helper or a person changes, and every
+          # minute for the windows. The automations render this same template
+          # when a review arrives instead of reading the sensor.
+          plan: &person_alert_plan >-
+            {%- set not_away = ['home', 'unknown', 'unavailable'] -%}
+            {%- set names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] -%}
+            {%- set t = now().strftime('%H:%M:%S') -%}
+            {%- set today = names[now().weekday()] -%}
+            {%- set yesterday = names[(now().weekday() - 1) % 7] -%}
+            {#- A window that ends earlier than it starts runs overnight; its
+                after-midnight part belongs to the day it started on. Equal
+                times or a missing helper never match. -#}
+            {%- macro open(start, end, days) -%}
+            {%- if start | length != 8 or end | length != 8 or start == end -%}
+            False
+            {%- elif start < end -%}
+            {{ today in days and start <= t < end }}
+            {%- else -%}
+            {{ (today in days and t >= start) or (yesterday in days and t < end) }}
+            {%- endif -%}
+            {%- endmacro -%}
+            {#- A person reading unknown/unavailable (just after a restart)
+                doesn't count as away. -#}
+            {%- set ns = namespace(away=[], out=[]) -%}
+            {%- for p in phones -%}
+            {%- if states(p) not in not_away -%}
+            {%- set ns.away = ns.away + [p] -%}
+            {%- endif -%}
+            {%- endfor -%}
+            {%- set everyone_away = ns.away | count == phones | count -%}
+            {%- for p, phone in phones.items() -%}
+            {%- set k = 'person_alerts_' ~ p.split('.')[1] -%}
+            {%- set night = is_state('input_boolean.' ~ k ~ '_night', 'on')
+                and open(states('input_datetime.' ~ k ~ '_night_start'),
+                         states('input_datetime.' ~ k ~ '_night_end'),
+                         names) | trim == 'True' -%}
+            {%- set mode = states('input_select.' ~ k ~ '_away') -%}
+            {%- set away = (mode == "When I'm away" and p in ns.away)
+                or (mode == "When everyone's away" and everyone_away) -%}
+            {%- set days = states('input_text.' ~ k ~ '_schedule_days')
+                | lower | replace(' ', '') -%}
+            {%- set schedule = is_state('input_boolean.' ~ k ~ '_schedule', 'on')
+                and open(states('input_datetime.' ~ k ~ '_schedule_start'),
+                         states('input_datetime.' ~ k ~ '_schedule_end'),
+                         days.split(',')) | trim == 'True' -%}
+            {%- set critical = night
+                and is_state('input_boolean.' ~ k ~ '_night_critical', 'on') -%}
+            {%- set tier = 'critical' if critical else 'night' if night
+                else 'normal' if (away or schedule) else 'quiet' -%}
+            {%- set why = (['Night'] if night else [])
+                + (['Away'] if away else [])
+                + (['Schedule'] if schedule else []) -%}
+            {%- set ns.out = ns.out + [{'person': p, 'phone': phone,
+                'tier': tier, 'why': why | join(' + '), 'night': night,
+                'away': away, 'schedule': schedule}] -%}
+            {%- endfor -%}
+            {{ ns.out }}
 
 automation:
-  - id: frigate_night_person_alert
-    alias: "Security: person at night"
+  - id: frigate_person_alert
+    alias: "Security: person alert"
     description: >-
-      Companion app push when Frigate raises a person alert on a watched
-      camera between the night alerts start and end times; critical cameras
-      (currently all of them) break through Do Not Disturb.
+      Companion app push to each adult whose own night, away or schedule
+      settings apply when Frigate raises a person alert on a watched camera.
     mode: parallel
     max: 10
     # Every frigate/reviews message is a run; keep enough to debug a night.
@@ -136,14 +253,11 @@ automation:
         - frigate_wyze_groom
         - frigate_wyze_rroom
         - frigate_wyze_baby
-      # For now every watched camera is critical. To tier them, replace this
-      # with an explicit list; the rest then send normal pushes.
+      # For now every watched camera can ring through DND. To tier them,
+      # replace this with an explicit list; night alerts from the rest are
+      # time-sensitive pushes instead.
       critical_cameras: "{{ watched_cameras }}"
-      # Legacy mobile_app notify service per adult (notify.<value>). The
-      # night alerts go to all of them.
-      phones:
-        person.adult1: mobile_app_pixel_8_pro
-        person.adult2: mobile_app_pixel_9a
+      phones: *phones
       # Browser-facing Frigate UI, for the notification's button.
       frigate_ui: !env_var FRIGATE_UI_URL
       review: "{{ trigger.payload_json }}"
@@ -155,9 +269,6 @@ automation:
       # A review lists the tracked-object events in it; the first one's
       # snapshot is the alert image.
       event_id: "{{ review.after.data.detections | first | default('') }}"
-      critical: >-
-        {{ camera in critical_cameras
-           and is_state('input_boolean.night_person_alerts_critical', 'on') }}
       # The camera card on the Security dashboard takes actions from the URL:
       # select this camera, then show its latest review (this one, unless a
       # newer review on the same camera has arrived since).
@@ -171,16 +282,19 @@ automation:
         - action: URI
           title: Open in Frigate
           uri: "{{ frigate_ui }}/review?id={{ review.after.id }}"
+      # Everyone's settings, right now (same template as sensor.person_alerts).
+      plan: *person_alert_plan
+      # The phones to send to, with the tier for this camera; empty means
+      # nobody should get it.
+      recipients: >-
+        {% set ns = namespace(r=[]) %}
+        {% for x in plan if x.tier != 'quiet' %}
+          {% set tier = 'night' if x.tier == 'critical'
+                        and camera not in critical_cameras else x.tier %}
+          {% set ns.r = ns.r + [{'phone': x.phone, 'tier': tier, 'why': x.why}] %}
+        {% endfor %}
+        {{ ns.r }}
     conditions:
-      - &alerts_on
-        condition: state
-        entity_id: input_boolean.night_person_alerts
-        state: "on"
-      # Spans midnight: after 23:00 OR before 06:00.
-      - &in_window
-        condition: time
-        after: input_datetime.night_person_alerts_start
-        before: input_datetime.night_person_alerts_end
       - &watched
         condition: template
         value_template: "{{ camera in watched_cameras and event_id != '' }}"
@@ -188,8 +302,7 @@ automation:
       # alert — a new review, or an update that adds the person or upgrades
       # the review from detection to alert. Later updates and the end message
       # for the same review stay quiet.
-      - &first_person_alert
-        condition: template
+      - condition: template
         value_template: >-
           {% set after = review.after %}
           {% set before = review.before %}
@@ -199,25 +312,36 @@ automation:
              and not (review.type == 'update'
                       and before.severity == 'alert'
                       and 'person' in before.data.objects) }}
+      - &has_recipients
+        condition: template
+        value_template: "{{ recipients | count > 0 }}"
     actions:
-      # In-app record too, one per camera (a newer alert replaces it).
-      - action: persistent_notification.create
-        data:
-          notification_id: "frigate_person_{{ camera }}"
-          title: "Person at {{ camera_name }}"
-          message: >-
-            {{ started }} —
-            [play clip]({{ clip_path }}) ·
-            [open in Frigate]({{ frigate_ui }}/review?id={{ review.after.id }})
+      # In-app record for night alerts, one per camera (a newer alert
+      # replaces it).
+      - if:
+          - condition: template
+            value_template: >-
+              {{ recipients | selectattr('tier', 'in', ['night', 'critical'])
+                 | list | count > 0 }}
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: "frigate_person_{{ camera }}"
+              title: "Person at {{ camera_name }}"
+              message: >-
+                {{ started }} —
+                [play clip]({{ clip_path }}) ·
+                [open in Frigate]({{ frigate_ui }}/review?id={{ review.after.id }})
       - repeat:
-          for_each: "{{ phones.values() | list }}"
+          for_each: "{{ recipients }}"
           sequence:
             # A phone with a stale registration shouldn't fail the run.
             - continue_on_error: true
-              action: "notify.{{ repeat.item }}"
+              action: "notify.{{ repeat.item.phone }}"
               data:
                 title: "Person at {{ camera_name }}"
-                message: "{{ started }}"
+                # Says which of the phone owner's rules sent it.
+                message: "{{ started }} · {{ repeat.item.why }}"
                 data:
                   image: "/api/frigate/notifications/{{ event_id }}/snapshot.jpg"
                   # Tap (iOS: url, Android: clickAction).
@@ -228,19 +352,25 @@ automation:
                   actions: "{{ buttons }}"
                   # iOS
                   push: >-
-                    {{ {'sound': {'name': 'default', 'critical': 1, 'volume': 1.0}}
-                       if critical else {'interruption-level': 'time-sensitive'} }}
+                    {% if repeat.item.tier == 'critical' %}
+                      {{ {'sound': {'name': 'default', 'critical': 1, 'volume': 1.0}} }}
+                    {% elif repeat.item.tier == 'night' %}
+                      {{ {'interruption-level': 'time-sensitive'} }}
+                    {% else %}
+                      {{ {'interruption-level': 'active'} }}
+                    {% endif %}
                   # Android: deliver immediately even to an idle phone;
                   # critical ones ring on the alarm stream.
                   ttl: 0
                   priority: high
-                  channel: "{{ 'alarm_stream' if critical else 'Security alerts' }}"
+                  channel: >-
+                    {{ 'alarm_stream' if repeat.item.tier == 'critical' else 'Security alerts' }}
 
-  - id: frigate_night_person_alert_preview
-    alias: "Security: person at night (preview)"
+  - id: frigate_person_alert_preview
+    alias: "Security: person alert (preview)"
     description: >-
-      When a person-alert review ends, silently swaps its notification's
-      snapshot for the review's animated preview.
+      When a person-alert review ends, silently swaps each phone's
+      notification snapshot for the review's animated preview.
     mode: parallel
     max: 10
     trace:
@@ -248,149 +378,10 @@ automation:
     triggers:
       - trigger: mqtt
         topic: frigate/reviews
+    # Recipients are worked out again at the end; someone whose rules stopped
+    # applying in between keeps the snapshot.
     variables: *alert_variables
     conditions:
-      - *alerts_on
-      - *in_window
-      - *watched
-      - condition: template
-        value_template: >-
-          {{ review.type == 'end'
-             and review.after.severity == 'alert'
-             and 'person' in review.after.data.objects }}
-    actions:
-      - repeat:
-          for_each: "{{ phones.values() | list }}"
-          sequence:
-            - continue_on_error: true
-              action: "notify.{{ repeat.item }}"
-              data:
-                title: "Person at {{ camera_name }}"
-                message: "{{ started }}"
-                data:
-                  image: "/api/frigate/notifications/{{ review.after.id }}/review_preview.gif"
-                  url: "{{ clip_path }}"
-                  clickAction: "{{ clip_path }}"
-                  # Same tag: replaces the alert instead of adding a second one.
-                  tag: "{{ tag }}"
-                  group: frigate-person
-                  actions: "{{ buttons }}"
-                  # Never ring for the update. iOS: passive. Android:
-                  # alert_once for the in-place replace, plus a low-importance
-                  # channel so a repost (if the alert was already dismissed)
-                  # stays silent too.
-                  push: &preview_push
-                    interruption-level: passive
-                  alert_once: true
-                  channel: Security previews
-                  importance: low
-
-  - id: frigate_person_alert_normal
-    alias: "Security: person while away or weekday"
-    description: >-
-      Normal Companion app push when Frigate raises a person alert outside
-      the night alerts: to adult1 while away (adult2 too when both are away),
-      and to adult1 in the weekday window.
-    mode: parallel
-    max: 10
-    trace:
-      stored_traces: 50
-    triggers:
-      - trigger: mqtt
-        topic: frigate/reviews
-    variables: &normal_variables
-      <<: *alert_variables
-      # The notify services to send to; empty means nobody should get it.
-      # A person reading unknown/unavailable (just after a restart) doesn't
-      # count as away.
-      recipients: >-
-        {% set not_away = ['home', 'unknown', 'unavailable'] %}
-        {% set a1_away = states('person.adult1') not in not_away %}
-        {% set a2_away = states('person.adult2') not in not_away %}
-        {% set away = is_state('input_boolean.away_person_alerts', 'on') %}
-        {% set t = now().strftime('%H:%M:%S') %}
-        {% set start = states('input_datetime.weekday_person_alerts_start') %}
-        {% set end = states('input_datetime.weekday_person_alerts_end') %}
-        {% set names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] %}
-        {% set days = states('input_text.weekday_person_alerts_days')
-                      | lower | replace(' ', '') %}
-        {% set days = days.split(',') %}
-        {% set today = names[now().weekday()] %}
-        {% set yesterday = names[(now().weekday() - 1) % 7] %}
-        {% if start <= end %}
-          {% set in_window = today in days and start <= t < end %}
-        {% else %}
-          {% set in_window = (today in days and t >= start)
-                             or (yesterday in days and t < end) %}
-        {% endif %}
-        {% set weekday = is_state('input_boolean.weekday_person_alerts', 'on')
-           and in_window %}
-        {% set r = [] %}
-        {% if (away and a1_away) or weekday %}
-          {% set r = r + [phones['person.adult1']] %}
-        {% endif %}
-        {% if away and a1_away and a2_away %}
-          {% set r = r + [phones['person.adult2']] %}
-        {% endif %}
-        {{ r }}
-    conditions:
-      # Quiet only while the night alerts apply (switch on AND in the
-      # window). A `not` condition passes when none of its conditions are
-      # true, so the pair needs wrapping in an `and`; listing both directly
-      # under `not` would also silence these whenever the window is open
-      # with the night alerts switched off.
-      - &not_night
-        condition: not
-        conditions:
-          - condition: and
-            conditions:
-              - *alerts_on
-              - *in_window
-      - *watched
-      - *first_person_alert
-      - &has_recipients
-        condition: template
-        value_template: "{{ recipients | count > 0 }}"
-    actions:
-      - repeat:
-          for_each: "{{ recipients }}"
-          sequence:
-            # A phone with a stale registration shouldn't fail the run.
-            - continue_on_error: true
-              action: "notify.{{ repeat.item }}"
-              data:
-                title: "Person at {{ camera_name }}"
-                message: "{{ started }}"
-                data:
-                  image: "/api/frigate/notifications/{{ event_id }}/snapshot.jpg"
-                  url: "{{ clip_path }}"
-                  clickAction: "{{ clip_path }}"
-                  tag: "{{ tag }}"
-                  group: frigate-person
-                  actions: "{{ buttons }}"
-                  # A normal notification: sounds per the phone's settings,
-                  # held back by Do Not Disturb. Delivered promptly.
-                  ttl: 0
-                  priority: high
-                  channel: Security alerts
-
-  - id: frigate_person_alert_normal_preview
-    alias: "Security: person while away or weekday (preview)"
-    description: >-
-      When a person-alert review ends, silently swaps the away/weekday
-      notification's snapshot for the review's animated preview.
-    mode: parallel
-    max: 10
-    trace:
-      stored_traces: 50
-    triggers:
-      - trigger: mqtt
-        topic: frigate/reviews
-    # Recipients are worked out again at the end; someone who got home in
-    # between keeps the snapshot.
-    variables: *normal_variables
-    conditions:
-      - *not_night
       - *watched
       - condition: template
         value_template: >-
@@ -403,18 +394,24 @@ automation:
           for_each: "{{ recipients }}"
           sequence:
             - continue_on_error: true
-              action: "notify.{{ repeat.item }}"
+              action: "notify.{{ repeat.item.phone }}"
               data:
                 title: "Person at {{ camera_name }}"
-                message: "{{ started }}"
+                message: "{{ started }} · {{ repeat.item.why }}"
                 data:
                   image: "/api/frigate/notifications/{{ review.after.id }}/review_preview.gif"
                   url: "{{ clip_path }}"
                   clickAction: "{{ clip_path }}"
+                  # Same tag: replaces the alert instead of adding a second one.
                   tag: "{{ tag }}"
                   group: frigate-person
                   actions: "{{ buttons }}"
-                  push: *preview_push
+                  # Never ring for the update. iOS: passive. Android:
+                  # alert_once for the in-place replace, plus a low-importance
+                  # channel so a repost (if the alert was already dismissed)
+                  # stays silent too.
+                  push:
+                    interruption-level: passive
                   alert_once: true
                   channel: Security previews
                   importance: low
