@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.12.1";
+const VERSION = "1.12.2";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -1628,6 +1628,105 @@ KM.idleMs = 5 * 60000;
 
 // -------------------------------------------------------------- routines
 
+// ------------------------------------------------------ live to-do lists
+
+// A live copy of one to-do list (todo/item/subscribe) that survives HA
+// restarts. home-assistant-js-websocket sends a subscription again after a
+// reconnect, but when HA rejects it (right after a restart the list's entity
+// can still be loading) the error is dropped and the copy goes quietly stale.
+// That froze the wall display's routines on 2026-11-06: HA restarted at 00:26,
+// the display kept the day before's checks through the midnight reset, and an
+// uncheck snapped back after 10 s because HA had it unchecked already.
+// So a feed subscribes without the library's resubscribe, starts over itself
+// on every reconnect ("ready"), retries every 5 s while HA rejects it, and
+// starts over when the entity's state (a to-do list's open count) and the
+// copy disagree for more than 30 s.
+class TodoFeed {
+  static live = new Set();
+  static _conns = new WeakSet();
+  /** Called on every hass update (KitchenCard's hass setter), whatever page is showing. */
+  static checkAll(hass) {
+    const conn = hass?.connection;
+    if (conn?.addEventListener && !TodoFeed._conns.has(conn)) {
+      TodoFeed._conns.add(conn);
+      conn.addEventListener("ready", () => {
+        for (const f of TodoFeed.live) if (f._conn === conn) f.restart("reconnected");
+      });
+    }
+    for (const f of TodoFeed.live) f._check(hass);
+  }
+  constructor(entity, onItems) {
+    this.entity = entity;
+    this.onItems = onItems;
+    this.items = null;
+    this._conn = null;
+    this._unsub = null;
+    this._retry = null;
+    this._off = 0;
+  }
+  get running() {
+    return !!(this._unsub || this._retry);
+  }
+  sync(hass) {
+    const conn = hass?.connection;
+    if (!conn?.subscribeMessage || !hass.states?.[this.entity]) return;
+    if (this._conn && this._conn !== conn) this.close();
+    this._conn = conn;
+    TodoFeed.live.add(this);
+    if (!this.running) this._start();
+  }
+  _start() {
+    this._retry = null;
+    const p = this._conn
+      .subscribeMessage(
+        (m) => {
+          this.items = m.items || [];
+          this._off = 0;
+          this.onItems(this.items);
+        },
+        { type: "todo/item/subscribe", entity_id: this.entity },
+        { resubscribe: false },
+      );
+    this._unsub = p;
+    p.catch(() => {
+      if (this._unsub !== p) return;
+      this._unsub = null;
+      if (TodoFeed.live.has(this)) this._retry = setTimeout(() => this._start(), 5000);
+    });
+  }
+  restart(why) {
+    if (!this._conn) return;
+    if (why) console.info(`tnwks kitchen cards: ${this.entity} ${why}; subscribing again`);
+    this._drop();
+    this._off = 0;
+    this._start();
+  }
+  _drop() {
+    this._unsub?.then((u) => u && u()).catch(() => {});
+    this._unsub = null;
+    clearTimeout(this._retry);
+    this._retry = null;
+  }
+  _check(hass) {
+    if (hass?.connection !== this._conn || !this.items || !this._unsub) return;
+    const st = hass.states?.[this.entity]?.state;
+    if (st == null || !/^\d+$/.test(st)) return;
+    const open = this.items.filter((i) => i.status === "needs_action").length;
+    if (open === Number(st)) {
+      this._off = 0;
+    } else if (!this._off) {
+      this._off = Date.now();
+    } else if (Date.now() - this._off > 30000) {
+      this.restart(`shows ${open} open, HA says ${st}`);
+    }
+  }
+  close() {
+    this._drop();
+    TodoFeed.live.delete(this);
+    this._conn = null;
+  }
+}
+
 // Routines live in a Local To-do list (todo.kitchen_routines, UI-owned), one
 // item per routine, so the family can add and edit them on the display. The
 // item's summary is the routine's name, its status is "done today", and its
@@ -1653,25 +1752,19 @@ function parseRoutine(i, index) {
 const Routines = {
   items: null,
   pending: new Map(),
-  _sub: null,
+  feed: new TodoFeed(ROUTINES, (items) => {
+    Routines.items = items.map(parseRoutine).filter(Boolean);
+    for (const r of Routines.items) {
+      const p = Routines.pending.get(r.uid);
+      if (p && (p.done === r.done || Date.now() - p.t > 10000)) Routines.pending.delete(r.uid);
+    }
+    Routines._notify();
+  }),
   active(hass) {
     return !!hass?.states?.[ROUTINES];
   },
   sync(hass) {
-    if (this._sub || !this.active(hass)) return;
-    this._sub = hass.connection
-      .subscribeMessage((msg) => {
-        this.items = (msg.items || []).map(parseRoutine).filter(Boolean);
-        for (const r of this.items) {
-          const p = this.pending.get(r.uid);
-          if (p && (p.done === r.done || Date.now() - p.t > 10000)) this.pending.delete(r.uid);
-        }
-        this._notify();
-      }, { type: "todo/item/subscribe", entity_id: ROUTINES })
-      .catch(() => {
-        this._sub = null;
-        return null;
-      });
+    if (this.active(hass)) this.feed.sync(hass);
   },
   _notify() {
     window.dispatchEvent(new Event("kitchen-routines"));
@@ -2071,6 +2164,7 @@ class KitchenCard extends HTMLElement {
   set hass(h) {
     syncFamily(h);
     watchVersion(h);
+    TodoFeed.checkAll(h);
     Theme.apply(h);
     const first = !this._hass;
     this._hass = h;
@@ -2809,7 +2903,8 @@ function weekHistory(hass, member) {
   const start = startOfWeek();
   const ids = [`counter.stars_${member}`, `binary_sensor.${member}_routines_am_done`, `binary_sensor.${member}_routines_pm_done`];
   const p = hass
-    .callApi("GET", `history/period/${start.toISOString()}?filter_entity_id=${ids.join(",")}&minimal_response&no_attributes`)
+    // Without end_time HA returns only the first day (start + 24 h), so the grid only ever showed Sunday.
+    .callApi("GET", `history/period/${start.toISOString()}?end_time=${encodeURIComponent(addDays(start, 7).toISOString())}&filter_entity_id=${ids.join(",")}&minimal_response&no_attributes`)
     .then((res) => {
       const by = {};
       for (const series of res) if (series.length) by[series[0].entity_id] = series;
@@ -3068,21 +3163,23 @@ class TodoCard extends KitchenCard {
     this._sub();
   }
   connected() {
-    if (this._hass && !this._unsub) this._sub();
+    if (this._hass) this._sub();
   }
   disconnected() {
-    this._unsub?.then((u) => u && u()).catch(() => {});
-    this._unsub = null;
+    this._feed?.close();
+    this._feed = null;
   }
   _sub() {
     const e = this.config?.entity;
-    if (!e || !this._hass.states[e] || this._unsub) return;
-    this._unsub = this._hass.connection
-      .subscribeMessage((m) => {
-        this._items = (m.items || []).filter((i) => i.status === "needs_action");
+    if (!e || !this._hass.states[e]) return;
+    if (this._feed?.entity !== e) {
+      this._feed?.close();
+      this._feed = new TodoFeed(e, (items) => {
+        this._items = items.filter((i) => i.status === "needs_action");
         this._queue();
-      }, { type: "todo/item/subscribe", entity_id: e })
-      .catch(() => null);
+      });
+    }
+    this._feed.sync(this._hass);
   }
   action(a, d) {
     if (a === "complete") {
@@ -3108,26 +3205,22 @@ class TodoCard extends KitchenCard {
 class TodoSubs {
   constructor(onChange) {
     this.items = {};
-    this.unsubs = {};
+    this.feeds = {};
     this.onChange = onChange;
   }
   sync(hass, entities) {
     for (const e of entities) {
-      if (this.unsubs[e] || !hass.states[e]) continue;
-      this.unsubs[e] = hass.connection
-        .subscribeMessage((m) => {
-          this.items[e] = m.items || [];
-          this.onChange();
-        }, { type: "todo/item/subscribe", entity_id: e })
-        .catch(() => {
-          delete this.unsubs[e];
-          return null;
-        });
+      if (!hass.states[e]) continue;
+      this.feeds[e] ||= new TodoFeed(e, (items) => {
+        this.items[e] = items;
+        this.onChange();
+      });
+      this.feeds[e].sync(hass);
     }
   }
   close() {
-    for (const u of Object.values(this.unsubs)) u?.then((f) => f && f()).catch(() => {});
-    this.unsubs = {};
+    for (const f of Object.values(this.feeds)) f.close();
+    this.feeds = {};
   }
 }
 
@@ -3978,25 +4071,20 @@ function managerName(hass, id) {
 
 /** A live copy of one to-do list (todo/item/subscribe); changes re-render every card like the routines do. */
 function todoStore(entity, parse) {
-  return {
+  const store = {
     items: null,
-    _sub: null,
     active(hass) {
       return !!hass?.states?.[entity];
     },
     sync(hass) {
-      if (this._sub || !this.active(hass)) return;
-      this._sub = hass.connection
-        .subscribeMessage((msg) => {
-          this.items = (msg.items || []).map(parse).filter(Boolean);
-          window.dispatchEvent(new Event("kitchen-routines"));
-        }, { type: "todo/item/subscribe", entity_id: entity })
-        .catch(() => {
-          this._sub = null;
-          return null;
-        });
+      if (this.active(hass)) this.feed.sync(hass);
     },
   };
+  store.feed = new TodoFeed(entity, (items) => {
+    store.items = items.map(parse).filter(Boolean);
+    window.dispatchEvent(new Event("kitchen-routines"));
+  });
+  return store;
 }
 const jsonDesc = (i) => {
   try {

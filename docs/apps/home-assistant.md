@@ -411,6 +411,19 @@ the week grid are built from it. Until 2026-10-31 the routines were
 `input_boolean`s in that package; they were moved into the list with their
 state.
 
+The cards keep a live copy of each to-do list (`todo/item/subscribe`, the
+`TodoFeed` class in `kitchen-cards.js`). After an HA restart the websocket
+library sends the subscription again, but if HA rejects it because the list's
+entity is still loading, the error is dropped and the copy stops updating.
+That froze the wall display's routines on 2026-11-06: the midnight reset ran,
+HA restarted at 00:26, and the display kept the day before's checks (an
+uncheck snapped back after 10 s, since HA had it unchecked already). Since
+cards 1.12.2 a feed subscribes again by itself on every reconnect, retries
+every 5 s while HA rejects it, and starts over when the list entity's state
+(its open count) and the copy disagree for more than 30 s. The browser
+console logs `<entity> reconnected; subscribing again` or `<entity> shows N
+open, HA says M; subscribing again` when that happens.
+
 **Rewards** (the Rewards tab, `config/packages/kitchen_rewards.yaml`): the
 kids spend their stars on rewards the parents set up. A kid taps their name,
 then a reward they have the stars for, and confirms; the stars come off
