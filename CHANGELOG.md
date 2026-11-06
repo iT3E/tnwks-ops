@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.199.0 - 2026-11-06
+
+### Added
+
+* Cilium BGP on homelab-wsl-02: every node peers with its distro's FRR and announces its pod CIDR (and, later, shared VIPs from a new `shared-vip` pool), so the router learns the site's pods. The control plane is off by default (`CILIUM_BGP_ENABLED`); homelab-ms-01 is unchanged.
+
 ## v1.198.0 - 2026-11-06
 
 ### Added
