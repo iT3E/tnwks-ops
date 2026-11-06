@@ -176,10 +176,6 @@ def deployments_ready(site, app):
     return True
 
 
-def walfile(lsn_sql, site, pod):
-    return site.psql(pod, f"select pg_walfile_name({lsn_sql})")
-
-
 # --- commands -------------------------------------------------------------
 def cmd_status(args):
     app = load_app(args.app)
@@ -206,9 +202,17 @@ def preflight(old, new, app):
     for s, st in ((old, po), (new, pn)):
         if st["phase"] != "Cluster in healthy state":
             die(f"{s.name}: {app['postgres']} is {st['phase']!r}")
+    # The replica replays the old site's archive (WAL-only for now), so it
+    # should have reached the start of the last archived segment. The promotion
+    # waits for the token's LSN anyway; this only catches a stuck replica early.
     archived = old.psql(po["pod"], "select last_archived_wal from pg_stat_archiver")
-    replayed = walfile("pg_last_wal_replay_lsn()", new, pn["pod"])
-    log(f"WAL: {old.name} last archived {archived}, {new.name} replaying {replayed}")
+    replayed = new.psql(pn["pod"], "select pg_last_wal_replay_lsn()")
+    log(f"WAL: {old.name} last archived {archived}, {new.name} replayed to {replayed}")
+    if archived and replayed and len(archived) >= 24:
+        seg_start = (int(archived[8:16], 16) << 32) | (int(archived[16:24], 16) * 0x1000000)
+        hi, lo = replayed.split("/")
+        if ((int(hi, 16) << 32) | int(lo, 16)) < seg_start:
+            die(f"{new.name} hasn't replayed {archived} yet; wait for it (or check the replica)")
     if app["pvcs"]:
         repo = new.kubectl("get", "clusterrepository.kopiur.home-operations.com", old.name, "-o", "json", check=False)
         if repo.returncode != 0:
