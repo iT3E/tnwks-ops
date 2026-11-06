@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.209.1 - 2026-11-06
+
+### Fixed
+
+* UniFi's MongoDB volume can be copied between sites: the probes' mongosh logs no longer land in the database volume (HOME=/tmp), and the transfer snapshot skips the old ones, which the mover couldn't read.
+
 ## v1.209.0 - 2026-11-06
 
 ### Added

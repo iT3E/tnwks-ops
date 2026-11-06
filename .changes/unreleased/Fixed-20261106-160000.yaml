@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'UniFi''s MongoDB volume can be copied between sites: the probes'' mongosh logs no longer land in the database volume (HOME=/tmp), and the transfer snapshot skips the old ones, which the mover couldn''t read.'
-time: 2026-11-06T16:00:00.000000000-08:00
