@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.210.0 - 2026-11-06
+
+### Changed
+
+* The UniFi controller runs on homelab-wsl-02: the router's `unifi` record (the APs' inform host) and `unifi.internal.tnwks.us` point at WSL-02, and homelab-wsl keeps the controller and unpoller at 0. Home Assistant reaches it over Cluster Mesh.
+
 ## v1.209.1 - 2026-11-06
 
 ### Fixed
