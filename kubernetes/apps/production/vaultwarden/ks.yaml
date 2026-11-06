@@ -1,10 +1,50 @@
 ---
+# vaultwarden's own Postgres (kubernetes/components/cnpg-cluster).
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: vaultwarden-db
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/production/vaultwarden/db
+  components:
+    - ../../../../components/cnpg-cluster
+  dependsOn:
+    - name: cloudnative-pg-plugin-barman-cloud
+    - name: aws-backup-credentials
+  # The owner role's Secret ships with it (db/).
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  prune: true
+  # The Cluster's Ready condition gates the app; kstatus alone calls a
+  # Cluster with no status yet Current (components/cnpg-cluster/README.md).
+  wait: true
+  healthCheckExprs:
+    - apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      current: status.conditions.exists(e, e.type == 'Ready' && e.status == 'True')
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  interval: 30m
+  retryInterval: 1m
+  timeout: 15m
+  postBuild:
+    substitute:
+      CNPG_APP: vaultwarden
+      CNPG_DATABASE: bitwarden
+      CNPG_SIZE: 1Gi
+---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
   name: vaultwarden
   namespace: flux-system
 spec:
+  dependsOn:
+    - name: vaultwarden-db
   path: ./kubernetes/apps/production/vaultwarden/app
   prune: true
   sourceRef:
