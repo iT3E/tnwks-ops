@@ -1,0 +1,3 @@
+kind: Changed
+body: 'litellm: prompt caching is on for every Claude model (`enable_anthropic_prompt_caching`), so requests without their own `cache_control` marks are cached too'
+time: 2026-11-05T19:05:00.000000-08:00
