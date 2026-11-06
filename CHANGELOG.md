@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.188.0 - 2026-11-06
+
+### Added
+
+* A site lease for Firefly (and finance-sync) on the router, ahead of its standby on homelab-wsl-02.
+
 ## v1.187.1 - 2026-11-06
 
 ### Fixed
