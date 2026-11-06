@@ -1,15 +1,46 @@
 ---
-# The internal ingress on the shared VIP (docs/wsl/multi-site.md): the same
-# address on both WSL clusters, from the shared-vip pool, announced over BGP
-# by every node (Cilium -> the distro's FRR -> the router). The router sends
-# it to homelab-wsl while homelab-wsl announces it (local preference 100 vs
-# 50), and to homelab-wsl-02 within the BGP hold time (9 s) when it doesn't.
+# The internal ingress on the shared VIPs (docs/wsl/multi-site.md): the same
+# two addresses on both WSL clusters, from the shared-vip pool, announced over
+# BGP by every node (Cilium -> the distro's FRR -> the router). Each VIP is
+# preferred by one site and taken over by the other while that site doesn't
+# announce it (BGP hold time 9 s; the router's halves of 10.10.95.0/24,
+# site-tunnels.tf):
+#   10.10.95.10   homelab-wsl first     names of apps that run there (HA, Firefly)
+#   10.10.95.200  homelab-wsl-02 first  names of apps that run there
+# Either site's ingress serves every app deployed on both (global Services).
 # Next to the per-site LoadBalancer (INGRESS_INTERNAL_ADDR), which the LAN
 # bridge uses.
 apiVersion: v1
 kind: Service
 metadata:
-  name: ingress-nginx-internal-shared
+  name: ingress-nginx-internal-vip-wsl
+  namespace: networking
+  labels:
+    tnwks.us/shared-vip: "true"
+spec:
+  type: LoadBalancer
+  loadBalancerIP: 10.10.95.10
+  # Any node may receive it (BGP ECMP across the nodes), so forward to a
+  # controller pod wherever it runs.
+  externalTrafficPolicy: Cluster
+  selector:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/instance: ingress-nginx-internal
+    app.kubernetes.io/name: ingress-nginx
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: https
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingress-nginx-internal-vip-wsl-02
   namespace: networking
   labels:
     tnwks.us/shared-vip: "true"
