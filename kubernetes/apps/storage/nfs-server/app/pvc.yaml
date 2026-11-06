@@ -11,3 +11,21 @@ spec:
   resources:
     requests:
       storage: 10Gi
+---
+# The /gdrive-sync export: a drop box for backups that end up in the
+# desktop's Google Drive (G:\My Drive\Backup\nfs-gdrive-sync). Writers are the
+# cluster nodes (squashed to one uid); the desktop distro reads it and copies
+# to the Drive (role wsl_backups, tnwks-gdrive-sync). Nothing here can reach
+# the Drive itself.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-gdrive-sync
+  namespace: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: "${STORAGE_CLASS_DEFAULT}"
+  resources:
+    requests:
+      storage: 2Gi

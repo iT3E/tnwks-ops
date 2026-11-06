@@ -1,0 +1,3 @@
+kind: Added
+body: 'A least-privilege path into Google Drive: nfs-server exports /gdrive-sync (cluster nodes write, squashed to one uid; the desktop only reads), UniFi''s .unf lands there from whichever site runs the controller, and the desktop''s tnwks-gdrive-sync copies new files into G:\My Drive\Backup\nfs-gdrive-sync, mounting only that folder and only inside its own unit. It replaces tnwks-unifi-backup.'
+time: 2026-11-06T17:30:00.000000000-08:00

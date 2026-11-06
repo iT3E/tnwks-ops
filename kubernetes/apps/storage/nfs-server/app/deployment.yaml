@@ -33,6 +33,19 @@ spec:
       # because the consumers mount this node's IP.
       nodeSelector:
         kubernetes.io/hostname: homelab-wsl-worker-1
+      initContainers:
+        # The gdrive-sync export's root belongs to the squash uid (1000) and
+        # nobody else: every client is mapped to it (configmap.yaml).
+        - name: gdrive-sync-perms
+          image: docker.io/library/busybox:1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+          command: ["sh", "-c", "chown 1000:1000 /gdrive-sync && chmod 0700 /gdrive-sync"]
+          securityContext:
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN", "FOWNER"]
+          volumeMounts:
+            - name: gdrive-sync
+              mountPath: /gdrive-sync
       containers:
         - name: nfs-server
           # Userspace NFS-Ganesha (vfs FSAL) from the kubernetes-sigs
@@ -67,6 +80,8 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /export
+            - name: gdrive-sync
+              mountPath: /gdrive-sync
             - name: config
               mountPath: /etc/ganesha
               readOnly: true
@@ -80,6 +95,9 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: nfs-server-data
+        - name: gdrive-sync
+          persistentVolumeClaim:
+            claimName: nfs-gdrive-sync
         - name: config
           configMap:
             name: nfs-ganesha-config

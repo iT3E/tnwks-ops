@@ -1,9 +1,43 @@
 ---
 # ArubaOS 7.4 only takes password logins, which ssh does through sshpass.
-- name: Install sshpass
+# nfs-common: tnwks-gdrive-sync's NFSv4 client. From the existing package
+# lists: refreshing them fails on these hosts.
+- name: Install sshpass and the NFS client
   ansible.builtin.apt:
-    name: sshpass
+    name: [sshpass, nfs-common]
     state: present
+    install_recommends: false
+
+# NFSv4 needs no rpcbind; keep it from listening on 111.
+- name: No rpcbind
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+    masked: true
+  loop: [rpcbind.service, rpcbind.socket]
+  failed_when: false
+
+- name: Retired backup timers
+  ansible.builtin.systemd:
+    name: "{{ item }}.timer"
+    state: stopped
+    enabled: false
+  loop: "{{ wsl_backups_retired }}"
+  failed_when: false
+
+- name: Retired backup units
+  ansible.builtin.file:
+    path: /etc/systemd/system/{{ item.0 }}.{{ item.1 }}
+    state: absent
+  loop: "{{ wsl_backups_retired | product(['timer', 'service']) | list }}"
+  notify: Reload systemd
+
+- name: Retired backup scripts
+  ansible.builtin.file:
+    path: /usr/local/bin/{{ item }}
+    state: absent
+  loop: "{{ wsl_backups_retired }}"
 
 - name: Backup scripts
   ansible.builtin.copy:

@@ -50,6 +50,38 @@ data:
       }
     }
 
+    # Backups on their way to the desktop's Google Drive (pvc nfs-gdrive-sync).
+    # Least privilege: the Drive itself is never exported (the desktop copies
+    # from here, docs/operations/backups.md); only the six cluster nodes may
+    # write, the desktop distro (10.5.0.1, the Docker bridge gateway) may only
+    # read, and every client is squashed to uid/gid 1000, the owner of the
+    # 0700 export root. A kubelet mount comes from its node's address.
+    EXPORT {
+      Export_Id = 2;
+      Pseudo = /gdrive-sync;
+      Path = /gdrive-sync;
+      Access_Type = None;
+      Squash = All_Squash;
+      Anonymous_Uid = 1000;
+      Anonymous_Gid = 1000;
+      SecType = sys;
+      Protocols = 4;
+      Transports = TCP;
+      CLIENT {
+        Clients = 10.5.0.1;
+        Access_Type = RO;
+      }
+      CLIENT {
+        # homelab-wsl's and homelab-wsl-02's nodes (the latter over the site
+        # tunnels).
+        Clients = 10.5.0.2, 10.5.0.3, 10.5.0.4, 10.6.0.2, 10.6.0.3, 10.6.0.4;
+        Access_Type = RW;
+      }
+      FSAL {
+        Name = VFS;
+      }
+    }
+
     LOG {
       Default_Log_Level = WARN;
     }

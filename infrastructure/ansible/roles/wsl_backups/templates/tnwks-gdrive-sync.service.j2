@@ -1,0 +1,20 @@
+[Unit]
+Description=Copy the gdrive-sync NFS export to Google Drive (G:\My Drive\Backup\nfs-gdrive-sync)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Root for the two mounts only, and both stay inside this unit: a private
+# mount namespace, a read-only system and home, writes only under the
+# mounts, no other capabilities.
+PrivateMounts=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/run/tnwks-gdrive-sync
+RuntimeDirectory=tnwks-gdrive-sync
+RuntimeDirectoryMode=0700
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_DAC_OVERRIDE CAP_CHOWN CAP_FOWNER
+ExecStart=/usr/local/bin/tnwks-gdrive-sync
