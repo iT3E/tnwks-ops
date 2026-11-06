@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.199.1 - 2026-11-06
+
+### Fixed
+
+* homelab-wsl-02 runs without kube-proxy: Talos kept deploying it next to Cilium's kube-proxy replacement, because deleting the KubeProxyConfig document doesn't disable it; the patch now also sets cluster.proxy.disabled.
+
 ## v1.199.0 - 2026-11-06
 
 ### Added
