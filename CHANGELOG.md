@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.186.0 - 2026-11-06
+
+### Changed
+
+* changedetection runs on homelab-wsl-02 (moved with task failover); its name resolves to WSL-02.
+
 ## v1.185.0 - 2026-11-06
 
 ### Added
