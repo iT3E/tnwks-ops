@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'homelab-wsl-02''s internal sites answer again: Cilium''s L2 announcements ignore externalTrafficPolicy, and after the agents restarted, the ingress VIP''s lease went to a node without an ingress pod, which dropped the traffic. Ingress and k8s-gateway use externalTrafficPolicy Cluster on both WSL clusters.'
+time: 2026-11-06T14:20:00.000000000-08:00

@@ -71,6 +71,9 @@ data:
   CNI: "cilium"
   CILIUM_VERSION: "1.19.4"
   CILIUM_L2_ANNOUNCEMENTS_ENABLED: "true"
+  # L2 announcements ignore externalTrafficPolicy, so ingress and
+  # k8s-gateway use Cluster here (any node forwards to a pod).
+  LB_EXTERNAL_TRAFFIC_POLICY: "Cluster"
   # Cilium's ServiceMonitor stays off: 02-cni-bootstrap.yml installs Cilium
   # from these values before kube-prometheus-stack (and its CRD) exists.
   CILIUM_SERVICEMONITOR_ENABLED: "false"

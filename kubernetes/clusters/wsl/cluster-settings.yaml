@@ -62,6 +62,9 @@ data:
   CILIUM_LB_POOL_START: "10.5.0.200"
   CILIUM_LB_POOL_STOP: "10.5.0.220"
   CILIUM_L2_ANNOUNCEMENTS_ENABLED: "true"
+  # L2 announcements ignore externalTrafficPolicy, so ingress and
+  # k8s-gateway use Cluster here (any node forwards to a pod).
+  LB_EXTERNAL_TRAFFIC_POLICY: "Cluster"
   METALLB_K8S_GATEWAY_ADDR: "10.5.0.201"
   METALLB_INGRESS_ADDR: "10.5.0.202"
   INGRESS_INTERNAL_ADDR: "10.5.0.200"
