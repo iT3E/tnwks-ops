@@ -3,7 +3,10 @@
 # by whichever site runs the app (the router prefers homelab-wsl's path).
 # Only Services labelled tnwks.us/shared-vip get one, and only by asking for
 # it (spec.loadBalancerIP); every other LoadBalancer stays on the site's own
-# pool (cilium/config).
+# pool (cilium/config, or MetalLB on homelab-wsl). On homelab-wsl the Service
+# also needs `loadBalancerClass: io.cilium/bgp-control-plane`: Cilium's LB
+# IPAM takes only classed Services there (CILIUM_DEFAULT_LB_IPAM "none"), and
+# MetalLB leaves classed Services alone.
 apiVersion: cilium.io/v2
 kind: CiliumLoadBalancerIPPool
 metadata:

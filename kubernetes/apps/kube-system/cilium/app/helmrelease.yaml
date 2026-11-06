@@ -98,6 +98,14 @@ spec:
     # CILIUM_BGP_ENABLED.
     bgpControlPlane:
       enabled: ${CILIUM_BGP_ENABLED:=false}
+    # Which LoadBalancer Services Cilium's LB IPAM takes when they set no
+    # loadBalancerClass. "lbipam" (default): all of them. "none": only those
+    # that ask for a Cilium class (io.cilium/bgp-control-plane). For a cluster
+    # where MetalLB hands out the LoadBalancer IPs (homelab-wsl): otherwise,
+    # once any Cilium pool exists, LB IPAM marks MetalLB's Services "no pool"
+    # and clears their status while MetalLB writes it back, hundreds of
+    # writes a second (2026-11-06).
+    defaultLBServiceIPAM: ${CILIUM_DEFAULT_LB_IPAM:=lbipam}
     # Both clusters use Talos kube-prism (localhost:7445) for pod->apiserver,
     # so no per-cluster KUBE_VIP_ADDR substitution is needed here.
     k8sServiceHost: localhost
