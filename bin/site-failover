@@ -342,6 +342,18 @@ def preflight_pvcs(new, old, app):
             die(f"{new.name}: ClusterRepository {old.name} not Ready")
 
 
+def restore_mover(pvc):
+    # restore_privileged: kopiur's privilegedMode (root with the file
+    # capabilities). A mover that's only uid 0 has every capability dropped and
+    # can't read or delete another user's private files (sonarr's Backups/,
+    # written during the prebind). The namespace must allow privileged movers.
+    if pvc.get("restore_privileged"):
+        # privilegedMode never changes the UID: it adds the capabilities only
+        # when the mover already runs as root.
+        return {"privilegedMode": True, "securityContext": {"runAsUser": 0, "runAsGroup": 0}}
+    return {"securityContext": {"runAsUser": pvc.get("restore_uid", pvc["uid"]), "runAsGroup": pvc.get("restore_uid", pvc["gid"])}}
+
+
 def restore_target(site, app, pvc):
     # A StatefulSet's PVC doesn't exist until its pod does: kopiur creates it
     # (same name), and the StatefulSet adopts it when it scales up.
@@ -425,7 +437,7 @@ def copy_pvc(old, new, app, pvc, stamp):
             "credentialProjection": {"enabled": True},
             # An exact mirror: the PVC may hold this site's older copy.
             "options": {"enableFileDeletion": True},
-            "mover": {"securityContext": {"runAsUser": pvc.get("restore_uid", pvc["uid"]), "runAsGroup": pvc.get("restore_uid", pvc["gid"])}},
+            "mover": restore_mover(pvc),
         },
     }))
 
@@ -585,7 +597,7 @@ def promote(args, app, old, new):
                 "target": {"pvcRef": {"name": pvc["name"]}},
                 "credentialProjection": {"enabled": True},
                 "options": {"enableFileDeletion": True},
-                "mover": {"securityContext": {"runAsUser": pvc.get("restore_uid", pvc["uid"]), "runAsGroup": pvc.get("restore_uid", pvc["gid"])}},
+                "mover": restore_mover(pvc),
             },
         }))
 

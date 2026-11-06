@@ -1,0 +1,3 @@
+kind: Fixed
+body: The media stack's switchover restores with kopiur's privileged mode (a plain uid-0 mover has no capabilities and can't read other users' private files).
+time: 2026-11-06T00:39:29.658673179-08:00
