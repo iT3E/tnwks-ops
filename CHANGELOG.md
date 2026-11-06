@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.173.0 - 2026-11-06
+
+### Changed
+
+* The disaster-recovery doc covers moving an app between the two WSL sites, with the first drills' RTO and RPO.
+
 ## v1.172.1 - 2026-11-06
 
 ### Fixed
