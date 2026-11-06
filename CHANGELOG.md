@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.192.1 - 2026-11-06
+
+### Fixed
+
+* task failover can prebind an app's PVCs on the new site (start it once, then stop) so apps whose pods share a local-path PVC don't end up split across nodes; the media stack uses it.
+
 ## v1.192.0 - 2026-11-06
 
 ### Added
