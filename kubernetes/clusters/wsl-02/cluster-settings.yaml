@@ -100,8 +100,8 @@ data:
   FIREFLY_BACKUP_SUSPEND: "true"
   FINANCE_SYNC_SUSPEND: "true"
   FINANCE_SYNC_BACKUP_SUSPEND: "true"
-  # The media stack: deployed here at 0 to move it (bin/site-failover "media").
-  MEDIA_REPLICAS: "0"
+  # The media stack runs here since 2026-11-06 (bin/site-failover, then this
+  # setting), until a target-state decision; homelab-wsl keeps copies at 0.
   # Home Assistant: warm standby here (bin/site-failover "home-assistant").
   HOME_ASSISTANT_REPLICAS: "0"
   HOME_ASSISTANT_BACKUP_SUSPEND: "true"

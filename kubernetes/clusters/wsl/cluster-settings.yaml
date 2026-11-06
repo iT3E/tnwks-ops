@@ -130,3 +130,5 @@ data:
   # 2026-11-05; here at 0, the hourly sync suspended.
   IMMICH_REPLICAS: "0"
   IMMICH_SYNC_SUSPEND: "true"
+  # The media stack: on homelab-wsl-02 since 2026-11-06; here at 0.
+  MEDIA_REPLICAS: "0"
