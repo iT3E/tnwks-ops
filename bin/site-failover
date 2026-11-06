@@ -54,6 +54,9 @@ import time
 from pathlib import Path
 
 SITES = ("homelab-wsl", "homelab-wsl-02")
+# Each site's top-level Flux Kustomization: it applies cluster-settings, the
+# values an app falls back to once its overrides are gone.
+TOP_KS = {"homelab-wsl": "cluster-apps", "homelab-wsl-02": "cluster-apps-wsl-02"}
 REMOTE_PATH = "/opt/tnwks-tools/bin"
 APPS_FILE = Path(__file__).with_name("site-failover-apps.json")
 
@@ -593,6 +596,12 @@ def cmd_clear(args):
         log(f"{s.name}: clearing {sorted(ov)}; the app returns to git's values there")
         if not args.yes and input("Type the app name to go on: ").strip() != args.app:
             die("aborted")
+        # git's cluster-settings first: the PR that made the move permanent may
+        # not be applied on this site yet, and without it the app would fall
+        # back to the defaults (2026-11-05: Immich started on the old site).
+        log(f"{s.name}: applying git's cluster-settings before clearing")
+        s.run(["flux", "reconcile", "source", "git", "flux-system", "-n", "flux-system"], check=False, timeout=600)
+        s.reconcile(TOP_KS[s.name], timeout="10m")
         s.set_overrides(args.app, {})
         if app.get("postgres"):
             s.reconcile(app["kustomizations"]["db"])
