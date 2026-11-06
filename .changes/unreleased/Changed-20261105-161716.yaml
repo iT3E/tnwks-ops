@@ -1,3 +1,0 @@
-kind: Changed
-body: Mealie has its own Postgres cluster (mealie-pg), imported from the shared one, which keeps its copy as the rollback.
-time: 2026-11-05T16:17:16.220710492-08:00
