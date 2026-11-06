@@ -36,5 +36,13 @@ locals {
       match_subdomain = true
       comment         = "homelab-wsl-02: transcriber"
     }
+    wsl02_changedetection = {
+      name            = "changedetection.internal.tnwks.us"
+      address         = local.wsl02_lan_address
+      type            = "A"
+      ttl             = "5m"
+      match_subdomain = true
+      comment         = "homelab-wsl-02: changedetection"
+    }
   }
 }
