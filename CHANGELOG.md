@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.166.0 - 2026-11-06
+
+### Changed
+
+* The transcriber has its own Postgres cluster (transcriber-pg), imported from the shared one, which keeps its copy as the rollback.
+
 ## v1.165.0 - 2026-11-06
 
 ### Changed
