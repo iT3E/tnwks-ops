@@ -37,7 +37,12 @@ talosctl cluster destroy --name homelab-wsl
 
 - CNI is set to none — installed by `02-cni-bootstrap.yml` (Flannel on WSL,
   Cilium on MS-01)
-- The cluster runs on a dedicated Docker bridge network (`homelab-wsl`)
+- The cluster runs on a dedicated Docker bridge network (`homelab-wsl`).
+  `01-talos-bootstrap.yml` creates it before talosctl, with
+  `talos_clusters.wsl.docker_network` (nat-unprotected, no masquerading,
+  bridge `br-site1`); an existing network is only compared. Moving the
+  running nodes onto a recreated one is `task talos:network:wsl`
+  (`recreate-network.sh`, about 90 s down; docs/wsl/multi-site.md, "Stage B")
 - Two StorageClasses:
   - `local-path` (default) — Talos node container's overlay (C:)
   - `local-path-bulk` — pinned to worker-2 → Windows E: at

@@ -1,0 +1,80 @@
+---
+# The Talos-in-Docker cluster's network, before `talosctl cluster create
+# docker` (01-talos-bootstrap.yml). Expects `cluster_name` and `talos_cluster`
+# (talos_clusters.<target>: subnet and docker_network).
+#
+# Created only when it's missing. talosctl then reuses it, because the name,
+# the talos.* labels and the subnet match, so the options below survive the
+# create. A network that exists is never changed here: Docker network options
+# are immutable, and recreating one under running node containers is a
+# planned outage, talos/wsl/recreate-network.sh (docs/wsl/multi-site.md,
+# "Stage B"). A difference is a warning, or a failure with
+# -e talos_docker_network_strict=true.
+
+- name: Docker network {{ cluster_name }}, as it is
+  ansible.builtin.command: docker network inspect {{ cluster_name }}
+  register: talos_net_inspect
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Docker network {{ cluster_name }}, as it should be
+  ansible.builtin.set_fact:
+    talos_net_options:
+      com.docker.network.driver.mtu: "{{ talos_cluster.docker_network.mtu | string }}"
+      com.docker.network.bridge.name: "{{ talos_cluster.docker_network.bridge_name }}"
+      com.docker.network.bridge.gateway_mode_ipv4: "{{ talos_cluster.docker_network.gateway_mode_ipv4 }}"
+      com.docker.network.bridge.enable_ip_masquerade: "{{ talos_cluster.docker_network.enable_ip_masquerade | bool | lower }}"
+    talos_net_actual: "{{ (talos_net_inspect.stdout | from_json)[0] if talos_net_inspect.rc == 0 else {} }}"
+
+- name: The bridge name fits a Linux interface name
+  ansible.builtin.assert:
+    that:
+      - talos_cluster.docker_network.bridge_name | length <= 15
+    fail_msg: "docker_network.bridge_name {{ talos_cluster.docker_network.bridge_name }} is longer than 15 characters"
+    quiet: true
+
+- name: Create Docker network {{ cluster_name }}
+  ansible.builtin.command:
+    argv: >-
+      {{
+        ['docker', 'network', 'create', '--driver', 'bridge',
+         '--subnet', talos_cluster.subnet, '--gateway', talos_cluster.docker_network.gateway,
+         '--label', 'talos.owned=true', '--label', 'talos.cluster.name=' ~ cluster_name]
+        + (talos_net_options | dict2items | map(attribute='key')
+           | zip(talos_net_options | dict2items | map(attribute='value'))
+           | map('join', '=') | map('regex_replace', '^', '--opt=') | list)
+        + [cluster_name]
+      }}
+  when: talos_net_inspect.rc != 0
+  changed_when: true
+
+- name: Docker network {{ cluster_name }} differs from talos_clusters
+  vars:
+    actual_options: "{{ talos_net_actual.Options | default({}, true) }}"
+    actual_ipam: "{{ (talos_net_actual.IPAM.Config | default([{}], true))[0] }}"
+    differs: >-
+      {{
+        actual_options != talos_net_options
+        or actual_ipam.Subnet | default('') != talos_cluster.subnet
+        or actual_ipam.Gateway | default(talos_cluster.docker_network.gateway) != talos_cluster.docker_network.gateway
+      }}
+  when:
+    - talos_net_inspect.rc == 0
+    - differs | bool
+  block:
+    - name: Warn about Docker network {{ cluster_name }}
+      ansible.builtin.debug:
+        msg: |
+          WARNING: Docker network {{ cluster_name }} doesn't match talos_clusters.
+            has:  {{ actual_options | to_json }} {{ actual_ipam | to_json }}
+            want: {{ talos_net_options | to_json }} subnet {{ talos_cluster.subnet }} gateway {{ talos_cluster.docker_network.gateway }}
+          Left as it is: options can't change in place. Moving the running
+          nodes onto a new network is a planned outage of about 90 s:
+          talos/wsl/recreate-network.sh {{ cluster_name }} {{ talos_cluster.docker_network.bridge_name }}
+          (docs/wsl/multi-site.md, "Stage B").
+
+    - name: Fail on the difference (talos_docker_network_strict)
+      ansible.builtin.fail:
+        msg: Docker network {{ cluster_name }} differs from talos_clusters (see the warning above).
+      when: talos_docker_network_strict | default(false) | bool

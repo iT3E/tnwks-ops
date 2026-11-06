@@ -55,6 +55,13 @@
       changed_when: false
       when: docker_cluster
 
+    # The network first, with talos_clusters' options (nat-unprotected, no
+    # masquerade, a fixed bridge name); talosctl reuses it. An existing one is
+    # only compared: a difference warns and points at the Stage B runbook.
+    - name: The cluster's Docker network
+      ansible.builtin.include_tasks: tasks/talos-docker-network.yml
+      when: docker_cluster
+
     # Resource sizing notes (host has 64GiB RAM; WSL VM gets 40GiB via .wslconfig):
     #   * 4 CPU / 4 GiB on the CP — etcd + apiserver + flux-system pods that
     #     don't tolerate the worker taint comfortably fit here.

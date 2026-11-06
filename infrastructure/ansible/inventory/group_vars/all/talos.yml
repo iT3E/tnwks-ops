@@ -7,6 +7,18 @@ talos_clusters:
   # that distro: 01-talos-bootstrap.yml reads the fields below. Sizing notes
   # are in that playbook.
   #   subnet / controlplane_ip  the Docker network and the control plane on it
+  #   docker_network            that network's options. 01-talos-bootstrap.yml
+  #                             creates it with them when it's missing (talosctl
+  #                             then reuses it), and only warns when an existing
+  #                             one differs: options are immutable, so changing
+  #                             them is talos/wsl/recreate-network.sh, a planned
+  #                             outage (docs/wsl/multi-site.md, "Stage B").
+  #                             nat-unprotected without masquerading lets routed
+  #                             traffic (the site tunnel) reach the nodes with
+  #                             real addresses; the distro masquerades only what
+  #                             leaves by eth0 (wsl_site_routing_masquerade).
+  #                             bridge_name: at most 15 characters (a Linux
+  #                             interface name).
   #   config_patches            --config-patch (all nodes), relative to talos/<target>/
   #   controlplane_patches      --config-patch-controlplanes
   #   worker2_augment           rebuild worker-2 with the USB devices and E:
@@ -16,6 +28,12 @@ talos_clusters:
     provisioner: docker
     subnet: 10.5.0.0/24
     controlplane_ip: 10.5.0.2
+    docker_network:
+      gateway: 10.5.0.1
+      mtu: 1500
+      bridge_name: br-site1
+      gateway_mode_ipv4: nat-unprotected
+      enable_ip_masquerade: false
     workers: 2
     cpus_controlplanes: "4.0"
     cpus_workers: "4.0"
@@ -31,6 +49,12 @@ talos_clusters:
     provisioner: docker
     subnet: 10.6.0.0/24
     controlplane_ip: 10.6.0.2
+    docker_network:
+      gateway: 10.6.0.1
+      mtu: 1500
+      bridge_name: br-site2
+      gateway_mode_ipv4: nat-unprotected
+      enable_ip_masquerade: false
     workers: 2
     cpus_controlplanes: "4.0"
     cpus_workers: "4.0"
