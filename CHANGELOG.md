@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.205.1 - 2026-11-06
+
+### Fixed
+
+* The Weave GitOps dashboard is reachable again on homelab-wsl: Flux's NetworkPolicies, now enforced by Cilium, only admit traffic from inside flux-system, so a policy lets the ingress controllers (and Prometheus, for metrics) in.
+
 ## v1.205.0 - 2026-11-06
 
 ### Changed
