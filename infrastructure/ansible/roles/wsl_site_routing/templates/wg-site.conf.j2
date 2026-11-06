@@ -1,0 +1,23 @@
+# Managed by tnwks-ops (role wsl_site_routing): {{ wsl_site_routing_interface }}, this site's
+# tunnel to sce-rtr01 (docs/wsl/multi-site.md). Router side:
+# infrastructure/terraform/environments/prod/mikrotik/site-tunnels.tf.
+#
+# Table = off: wg-quick adds no routes. FRR installs the other site's from
+# BGP, and connmark return routing (tnwks-site-routing) sends replies to
+# tunnel connections back through it. AllowedIPs is everything, because LAN
+# clients' sources are arbitrary; the router's side does the restricting.
+# The private key is in its own file (0600), set by the first PostUp, so this
+# one has no secret in it.
+[Interface]
+Address = {{ wsl_site_routing_address }}
+MTU = {{ wsl_site_routing_mtu }}
+Table = off
+PostUp = wg set %i private-key /etc/wireguard/%i.key
+PostUp = /usr/local/bin/tnwks-site-routing route
+
+[Peer]
+# sce-rtr01, {{ wsl_site_routing_interface }}
+PublicKey = {{ wsl_site_routing_router_public_key }}
+Endpoint = {{ wsl_site_routing_router_endpoint }}
+AllowedIPs = 0.0.0.0/0
+PersistentKeepalive = {{ wsl_site_routing_keepalive }}

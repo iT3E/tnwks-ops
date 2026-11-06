@@ -1,0 +1,245 @@
+---
+# wsl_site_routing: the site tunnel, FRR and the forwarding rules that make
+# the distro its site's border router (Stage A, docs/wsl/multi-site.md).
+# Variables in defaults/main.yml; each site's in host_vars/<distro>/main.yml.
+#
+# Order matters on a first apply: the script and its unit before the tunnel
+# (the tunnel's PostUp calls the script), the FRR image before its config
+# (the config is validated with the image's vtysh).
+
+- name: Per-site settings are present
+  ansible.builtin.assert:
+    that:
+      - wsl_site_routing_interface is match('^wg-site[0-9]+$')
+      - wsl_site_routing_address | default('') is match('^[0-9.]+/30$')
+      - wsl_site_routing_router_address | default('') | length > 0
+      - wsl_site_routing_router_endpoint | default('') | length > 0
+      - wsl_site_routing_router_public_key | default('') | length == 44
+      - wsl_site_routing_asn | default(0) | int > 0
+      - wsl_site_routing_cilium_asn | default(0) | int > 0
+      - wsl_site_routing_docker_network | default('') | length > 0
+      - wsl_site_routing_node_subnet | default('') | length > 0
+      - wsl_site_routing_pod_cidr | default('') | length > 0
+      - wsl_site_routing_remote_prefixes | default([]) | length > 0
+      - wsl_site_wireguard_private_key is defined
+    fail_msg: wsl_site_routing needs its per-site settings (roles/wsl_site_routing/defaults/main.yml) and wsl_site_wireguard_private_key
+    quiet: true
+
+# wg and wg-quick. The WSL kernel has the wireguard module. From the cache
+# as it is: no apt update (it fails on DESKTOP-HKE05KI), and the package is
+# in noble's release pocket. No recommends: they're iptables/nftables.
+- name: wireguard-tools
+  ansible.builtin.apt:
+    name: wireguard-tools
+    state: present
+    install_recommends: false
+  register: wsl_site_routing_wg_pkg
+
+# --- Forwarding, MSS clamping, connmark ----------------------------------------
+
+- name: Forwarding sysctls persist
+  ansible.builtin.template:
+    src: sysctl.conf.j2
+    dest: /etc/sysctl.d/90-tnwks-site-routing.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: tnwks-site-routing script
+  ansible.builtin.copy:
+    src: tnwks-site-routing.sh
+    dest: /usr/local/bin/tnwks-site-routing
+    owner: root
+    group: root
+    mode: "0755"
+  register: wsl_site_routing_script
+
+- name: tnwks-site-routing settings
+  ansible.builtin.template:
+    src: tnwks-site-routing.env.j2
+    dest: /etc/default/tnwks-site-routing
+    owner: root
+    group: root
+    mode: "0644"
+  register: wsl_site_routing_env
+
+- name: tnwks-site-routing unit
+  ansible.builtin.copy:
+    src: tnwks-site-routing.service
+    dest: /etc/systemd/system/tnwks-site-routing.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: wsl_site_routing_unit
+  notify: Reload systemd
+
+# --- WireGuard -------------------------------------------------------------------
+
+- name: /etc/wireguard
+  ansible.builtin.file:
+    path: /etc/wireguard
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# Its own file, so the interface config has no secret in it (and its diff can
+# be shown). Never logged or diffed.
+- name: Site tunnel private key
+  ansible.builtin.copy:
+    content: "{{ wsl_site_wireguard_private_key }}\n"
+    dest: /etc/wireguard/{{ wsl_site_routing_interface }}.key
+    owner: root
+    group: root
+    mode: "0600"
+  register: wsl_site_routing_wg_key
+  no_log: true
+  diff: false
+
+- name: Site tunnel config
+  ansible.builtin.template:
+    src: wg-site.conf.j2
+    dest: /etc/wireguard/{{ wsl_site_routing_interface }}.conf
+    owner: root
+    group: root
+    mode: "0600"
+  register: wsl_site_routing_wg_conf
+
+# --- FRR ---------------------------------------------------------------------------
+
+# Pulled here rather than by the unit's `docker run`, so a first boot doesn't
+# wait on quay.io, and so the config below can be checked with its vtysh.
+- name: FRR image
+  ansible.builtin.shell: |
+    set -euo pipefail
+    img='{{ wsl_site_routing_frr_image }}'
+    if docker image inspect "$img" >/dev/null 2>&1; then
+      exit 0
+    fi
+    if [ -n "{{ ansible_check_mode | ternary('1', '') }}" ]; then
+      echo "would pull $img"
+    else
+      docker pull -q "$img" >/dev/null
+      echo "pulled $img"
+    fi
+  args:
+    executable: /bin/bash
+  register: wsl_site_routing_frr_pull
+  changed_when: wsl_site_routing_frr_pull.stdout | length > 0
+  check_mode: false
+
+- name: FRR config directory
+  ansible.builtin.file:
+    path: "{{ wsl_site_routing_frr_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: FRR daemons
+  ansible.builtin.template:
+    src: daemons.j2
+    dest: "{{ wsl_site_routing_frr_config_dir }}/daemons"
+    owner: root
+    group: root
+    mode: "0644"
+  register: wsl_site_routing_frr_daemons
+
+- name: FRR vtysh.conf
+  ansible.builtin.copy:
+    src: vtysh.conf
+    dest: "{{ wsl_site_routing_frr_config_dir }}/vtysh.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  register: wsl_site_routing_frr_vtysh
+
+# Checked with the pinned image's vtysh before it replaces the old one.
+- name: FRR config
+  ansible.builtin.template:
+    src: frr.conf.j2
+    dest: "{{ wsl_site_routing_frr_config_dir }}/frr.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: >-
+      docker run --rm --network none -v %s:/tmp/frr.conf:ro
+      {{ wsl_site_routing_frr_image }} vtysh --dryrun --inputfile /tmp/frr.conf
+  register: wsl_site_routing_frr_conf
+
+- name: tnwks-frr unit
+  ansible.builtin.template:
+    src: tnwks-frr.service.j2
+    dest: /etc/systemd/system/tnwks-frr.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: wsl_site_routing_frr_unit
+  notify: Reload systemd
+
+- name: Flush the systemd reload before starting units
+  ansible.builtin.meta: flush_handlers
+
+# --- Services ----------------------------------------------------------------------
+# Check mode on a distro without them yet: the units (and wg-quick@, from
+# wireguard-tools) aren't there, so they're checked from the next run on.
+
+- name: tnwks-site-routing runs at boot
+  ansible.builtin.systemd:
+    name: tnwks-site-routing.service
+    enabled: true
+    state: started
+  register: wsl_site_routing_started
+  when: not (ansible_check_mode and wsl_site_routing_unit is changed)
+
+# The script rebuilds its own chains in place: a reload, no gap in the rules.
+# A changed unit restarts.
+- name: tnwks-site-routing picks up a change
+  ansible.builtin.systemd:
+    name: tnwks-site-routing.service
+    state: "{{ (wsl_site_routing_unit is changed) | ternary('restarted', 'reloaded') }}"
+  when:
+    - wsl_site_routing_script is changed or wsl_site_routing_env is changed or wsl_site_routing_unit is changed
+    - wsl_site_routing_started is not changed
+    - not (ansible_check_mode and wsl_site_routing_unit is changed)
+
+- name: Site tunnel runs at boot
+  ansible.builtin.systemd:
+    name: wg-quick@{{ wsl_site_routing_interface }}.service
+    enabled: true
+    state: started
+  register: wsl_site_routing_wg_started
+  when: not (ansible_check_mode and wsl_site_routing_wg_pkg is changed)
+
+# Restarting drops the tunnel for a moment, and with it the BGP session
+# (site 2 takes the VIPs meanwhile).
+- name: Site tunnel picks up a change
+  ansible.builtin.systemd:
+    name: wg-quick@{{ wsl_site_routing_interface }}.service
+    state: restarted
+  when:
+    - wsl_site_routing_wg_conf is changed or wsl_site_routing_wg_key is changed
+    - wsl_site_routing_wg_started is not changed
+    - not (ansible_check_mode and wsl_site_routing_wg_pkg is changed)
+
+- name: tnwks-frr runs at boot
+  ansible.builtin.systemd:
+    name: tnwks-frr.service
+    enabled: true
+    state: started
+  register: wsl_site_routing_frr_started
+  when: not (ansible_check_mode and wsl_site_routing_frr_unit is changed)
+
+# A restart sends NOTIFICATION: the router moves the VIPs to the other site
+# at once and back once the session is up again (spike: 0 failed requests).
+- name: tnwks-frr picks up a change
+  ansible.builtin.systemd:
+    name: tnwks-frr.service
+    state: restarted
+  when:
+    - >-
+      wsl_site_routing_frr_conf is changed or wsl_site_routing_frr_daemons is changed or
+      wsl_site_routing_frr_vtysh is changed or wsl_site_routing_frr_unit is changed or
+      wsl_site_routing_frr_pull is changed
+    - wsl_site_routing_frr_started is not changed
+    - not (ansible_check_mode and wsl_site_routing_frr_unit is changed)

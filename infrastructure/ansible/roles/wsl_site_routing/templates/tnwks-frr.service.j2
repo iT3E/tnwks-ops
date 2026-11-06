@@ -1,0 +1,29 @@
+# Managed by tnwks-ops (role wsl_site_routing).
+[Unit]
+Description=tnwks FRR: BGP to sce-rtr01 over {{ wsl_site_routing_interface }} and to the site's Cilium nodes
+# Host network: zebra installs the routes it learns in the distro's own
+# tables. Restarted with dockerd (Requires), and by systemd if it exits.
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStartPre=-/usr/bin/docker rm -f tnwks-frr
+# The image's entrypoint is tini (PID 1 reaps the daemons and forwards the
+# stop to watchfrr), so no --init. /etc/frr read-only: the config is git's.
+ExecStart=/usr/bin/docker run --rm --name tnwks-frr \
+  --network host \
+  --cap-add NET_ADMIN --cap-add NET_RAW --cap-add SYS_ADMIN \
+  --log-opt max-size=10m --log-opt max-file=2 \
+  -v {{ wsl_site_routing_frr_config_dir }}:/etc/frr:ro \
+  {{ wsl_site_routing_frr_image }}
+# watchfrr stops the daemons; bgpd sends NOTIFICATION, so the router fails
+# the VIPs over at once instead of after the hold time.
+ExecStop=/usr/bin/docker stop --time 20 tnwks-frr
+Restart=always
+RestartSec=5
+TimeoutStopSec=40
+
+[Install]
+WantedBy=multi-user.target

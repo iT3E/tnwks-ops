@@ -1,0 +1,77 @@
+---
+# wsl_site_routing: the distro as its site's border router, Stage A of the
+# routed network between the WSL sites and sce-rtr01 (docs/wsl/multi-site.md,
+# "Stage A on the distros"). Three pieces, all in the distro's root namespace:
+#
+#   wg-quick@wg-site<N>          the site tunnel to the router
+#   tnwks-frr.service            FRR in a pinned container, BGP to the router
+#                                (and, from Stage C, to the Cilium nodes)
+#   tnwks-site-routing.service   forwarding, MSS clamping, connmark return
+#                                routing and the tunnel's forward filter
+#
+# Off unless the host sets wsl_site_routing_enabled and the per-site values
+# below (host_vars/<distro>/main.yml). The router side is Terraform:
+# infrastructure/terraform/environments/prod/mikrotik/site-tunnels.tf and
+# modules/mikrotik/bgp.tf. The prefixes here have to match what it accepts.
+wsl_site_routing_enabled: false
+
+# --- Per site (host_vars) -----------------------------------------------------
+# wsl_site_routing_interface:          wg-site1
+# wsl_site_routing_address:            10.10.33.2/30   the distro's tunnel address
+# wsl_site_routing_router_address:     10.10.33.1      the router's, the BGP neighbor
+# wsl_site_routing_router_endpoint:    10.10.91.1:51823
+# wsl_site_routing_router_public_key:  the module's wireguard_public_keys output
+# wsl_site_routing_asn:                64611           this distro's FRR
+# wsl_site_routing_cilium_asn:         64601           this site's Cilium nodes
+# wsl_site_routing_docker_network:     homelab-wsl     the Talos nodes' network
+# wsl_site_routing_node_subnet:        10.5.0.0/24
+# wsl_site_routing_pod_cidr:           10.42.0.0/16
+# wsl_site_routing_remote_prefixes:    what the router sends: the other site's
+#                                      node subnet and pod CIDRs
+# The private key is wsl_site_wireguard_private_key (secrets.sops.yml).
+
+# --- Shared --------------------------------------------------------------------
+wsl_site_routing_router_asn: 64600
+# Shared service addresses: both clusters' Cilium LB IPAM, /32s only (the
+# router rejects anything shorter, so local preference decides per VIP).
+wsl_site_routing_vip_pool: 10.10.95.0/24
+wsl_site_routing_mtu: 1420
+# MSS for TCP through the tunnel: MTU 1420 less 40 bytes of IPv4 and TCP header.
+wsl_site_routing_mss: 1380
+wsl_site_routing_keepalive: 25
+# The uplink the tunnel's UDP and the nodes' own egress leave by.
+wsl_site_routing_uplink: eth0
+
+# Connmark return routing: a connection that arrives on the tunnel gets this
+# bit, its replies from the Docker bridge get it back as a packet mark, and
+# the rule sends marked packets to the table, whose default route is the
+# tunnel. One bit, clear of Docker's and WireGuard's marks (wg-quick uses
+# 0xca6c only with Table = auto), and of Cilium's (those are inside the node
+# containers' namespaces anyway).
+wsl_site_routing_mark: "0x10000"
+wsl_site_routing_table: 200
+wsl_site_routing_rule_priority: 1000
+
+# Stage B: when the Docker network stops masquerading (nat-unprotected,
+# enable_ip_masquerade=false), the distro masquerades the nodes' own egress
+# out of the uplink instead. Off until then: Docker still does it.
+wsl_site_routing_masquerade: false
+
+# BGP. Timers: hold 9 s, keepalive 3 s, as the router's connections; a dead
+# site is withdrawn in under 10 s. Graceful restart stays FRR's default,
+# helper only: a restarting FRR has no forwarding state to preserve, and the
+# router withdraws at once (spike 2026-11-06).
+wsl_site_routing_bgp_keepalive: 3
+wsl_site_routing_bgp_hold: 9
+wsl_site_routing_bgp_connect: 5
+# The Cilium peer group (Stage C): ECMP across nodes announcing the same VIP,
+# and a session limit on what one node may send.
+wsl_site_routing_cilium_maximum_paths: 8
+wsl_site_routing_cilium_maximum_prefix: 512
+
+# FRR from FRR's own image (Alpine): Ubuntu noble ships 8.4, and FRR's apt
+# repository would need an apt update, which fails on DESKTOP-HKE05KI. Pinned
+# by digest (the multi-arch index); bump both together. The image's
+# entrypoint is tini, so bgpd and friends are reaped and signals reach watchfrr.
+wsl_site_routing_frr_image: quay.io/frrouting/frr:10.5.0@sha256:fc7f887ab4d8da06f481a4f8d59afded88b3c5823f03610a7e808f7eba45eeea
+wsl_site_routing_frr_config_dir: /etc/tnwks-frr

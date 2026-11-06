@@ -97,7 +97,10 @@ re-pinning.
    (`ansible_user`). A role's list left empty skips the role on that host
    (`coral_detector_devices`, `udp_relays`, `usb_attach_bound_devices`;
    distro: `wsl_lan_bridge_instances`, `wsl_usb_attach_devices`,
-   `wsl_backups_timers`). The watchdog takes `wsl_watchdog_args`
+   `wsl_backups_timers`; the site tunnel and FRR take `wsl_site_routing_enabled`
+   and the per-site settings in `roles/wsl_site_routing/defaults/main.yml`,
+   [multi-site.md](../wsl/multi-site.md#stage-a-the-distros-as-border-routers)).
+   The watchdog takes `wsl_watchdog_args`
    (`-SkipGateway -SkipUsb` without the OpenClaw gateway or the Z-Stick), the
    compaction task `vhdx_compact_vhdx` (the distro's disk). A host where
    nothing else keeps a `wsl.exe` client open needs `wsl_keepalive_enabled`
