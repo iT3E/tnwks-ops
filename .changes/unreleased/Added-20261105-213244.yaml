@@ -1,3 +1,0 @@
-kind: Added
-body: 'mikrotik: WireGuard site tunnels (wg-site1, wg-site2), their firewall zones and eBGP with the WSL sites'' distro FRR, for the multi-site routed network (docs/wsl/multi-site.md)'
-time: 2026-11-05T21:32:44.664898519-08:00

@@ -3,6 +3,13 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.193.0 - 2026-11-06
+
+### Added
+
+* mikrotik: WireGuard site tunnels (wg-site1, wg-site2), their firewall zones and eBGP with the WSL sites' distro FRR, for the multi-site routed network (docs/wsl/multi-site.md)
+* A site lease for Home Assistant on the router, ahead of its standby on homelab-wsl-02.
+
 ## v1.192.1 - 2026-11-06
 
 ### Fixed
