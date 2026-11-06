@@ -41,3 +41,11 @@ data:
 
     litellm_settings:
       drop_params: true
+      # Prompt caching for every Claude model (Anthropic, Bedrock, Vertex,
+      # Azure AI): LiteLLM marks the system prompt and the last turn as cache
+      # points, so a repeated prefix within 5 minutes is read back at a tenth
+      # of the input price. It stands down when the client sends its own
+      # cache_control. A write costs 1.25x input, so a one-off call that
+      # nothing reuses pays 25% more on its prompt; there is no per-request
+      # or per-key off switch while this is on.
+      enable_anthropic_prompt_caching: true

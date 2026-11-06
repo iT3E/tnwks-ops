@@ -10,6 +10,29 @@ is the cnpg `litellm` database.
 | `gemma3:12b`, `llama3.1:8b`, `qwen3:8b` | Ollama on the WSL host's GPU (`OLLAMA_BASE_URL`) |
 | `claude-sonnet` | Bedrock, `us.anthropic.claude-sonnet-5-5` (Converse API, us-east-1) |
 
+## Prompt caching
+
+Claude only caches the parts of a prompt marked with `cache_control`, and
+most clients mark nothing. So `litellm_settings.enable_anthropic_prompt_caching`
+is on: for every Claude model (Anthropic, Bedrock, Vertex AI, Azure AI),
+LiteLLM marks the system prompt and the last turn. A repeated prefix within
+5 minutes is read back at a tenth of the input price, and a growing
+conversation only writes its new turns. Other providers are untouched
+(OpenAI and Gemini cache on their own; Ollama has nothing to cache).
+
+- A client that sends its own `cache_control` keeps its own marks; the
+  defaults stand down.
+- A cache write costs 1.25x the input price, so a one-off call that nothing
+  reuses within 5 minutes pays 25% more on its prompt.
+- There is no off switch per request or per key while the global flag is on
+  (a key's `enable_prompt_caching` can only turn it on). Opting a model out
+  means turning the flag off and opting the others in per key.
+- The cache is per AWS account, shared by every key on these credentials.
+
+Check it in the spend logs (`/spend/logs?summarize=false`):
+`metadata.usage_object` has `cache_creation_input_tokens` (writes) and
+`cache_read_input_tokens` (reads) per request.
+
 ## Bedrock credentials
 
 Bedrock is in its own AWS account, outside Terraform by design. LiteLLM
