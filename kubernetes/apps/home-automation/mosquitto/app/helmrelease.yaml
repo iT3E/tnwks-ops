@@ -14,10 +14,14 @@ spec:
         kind: HelmRepository
         name: bjw-s
         namespace: flux-system
+  # A standby at 0 (homelab-wsl-02) has a PVC that stays Pending until a pod
+  # needs it, which Helm's wait would never see Ready.
   install:
+    disableWait: ${MOSQUITTO_HELM_DISABLE_WAIT:=false}
     remediation:
       retries: 3
   upgrade:
+    disableWait: ${MOSQUITTO_HELM_DISABLE_WAIT:=false}
     cleanupOnFail: true
     remediation:
       retries: 3
