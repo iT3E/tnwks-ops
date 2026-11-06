@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.209.0 - 2026-11-06
+
+### Added
+
+* The UniFi controller's Service is global across the WSL sites (Cilium Cluster Mesh), so Home Assistant, unpoller and CI reach it on either site; the desktop's .unf copy to Google Drive skips cleanly while the controller runs on the other site.
+
 ## v1.208.1 - 2026-11-06
 
 ### Fixed
