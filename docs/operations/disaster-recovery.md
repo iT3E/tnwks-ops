@@ -126,7 +126,7 @@ The house stays online (tier 1 is independent). To rebuild:
 6. UniFi: restore the newest `.unf` from Drive. The APs reconnect on their own
    once the router's `unifi` DNS record points at the new desktop.
 7. Reinstall the desktop timers: `task wsl-host:lan-bridge`,
-   `task wsl-host:unifi-backup`, `task wsl-host:aruba-backup`,
+   `task wsl-host:backups` (the Drive copy and the switch config),
    `task wsl-host:windows-drift-check`. The Windows host itself comes back
    with `task wsl-host:sshd` and `task wsl-host:windows-apply`
    ([windows-ansible.md](../wsl/windows-ansible.md)).
