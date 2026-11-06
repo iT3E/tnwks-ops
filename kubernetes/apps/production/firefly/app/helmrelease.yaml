@@ -288,6 +288,11 @@ spec:
     service:
       app:
         controller: firefly
+        # Global across the WSL sites (Cilium Cluster Mesh): the other site's
+        # ingress (the shared VIP) reaches this app wherever it runs.
+        annotations:
+          service.cilium.io/global: "true"
+          service.cilium.io/affinity: local
         ports:
           http:
             port: 8080
@@ -356,6 +361,9 @@ spec:
           nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-Email"
           nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
           nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+          # Through the Service's ClusterIP, not the pod endpoints: on the site
+          # where the app is at 0, only Cilium knows the other site's backends.
+          nginx.ingress.kubernetes.io/service-upstream: "true"
         hosts:
           - host: &host "firefly.internal.${SECRET_DOMAIN}"
             paths:
@@ -379,6 +387,9 @@ spec:
             proxy_set_header X-Auth-Request-Email "";
             proxy_set_header X-Auth-Request-User "";
             proxy_set_header X-Auth-Request-Groups "";
+          # Through the Service's ClusterIP, not the pod endpoints: on the site
+          # where the app is at 0, only Cilium knows the other site's backends.
+          nginx.ingress.kubernetes.io/service-upstream: "true"
         hosts:
           - host: *host
             paths:
