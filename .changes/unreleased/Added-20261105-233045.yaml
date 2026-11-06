@@ -1,3 +1,0 @@
-kind: Added
-body: A second network-device Terraform runner on homelab-wsl-02 (tnwks-ops-runner-wsl-02, label tnwks-ops-runner) with its own pod-contained wg03 WireGuard peer, so router and EdgeOS workflows run while homelab-wsl is down.
-time: 2026-11-05T23:30:45.669655569-08:00

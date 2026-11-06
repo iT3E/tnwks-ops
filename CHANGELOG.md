@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.191.0 - 2026-11-06
+
+### Added
+
+* A second network-device Terraform runner on homelab-wsl-02 (tnwks-ops-runner-wsl-02, label tnwks-ops-runner) with its own pod-contained wg03 WireGuard peer, so router and EdgeOS workflows run while homelab-wsl is down.
+
 ## v1.190.1 - 2026-11-06
 
 ### Fixed
