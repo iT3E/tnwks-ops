@@ -1,0 +1,3 @@
+kind: Added
+body: 'The first shared VIP: both WSL clusters'' internal ingress on 10.10.95.200, announced over BGP, with the router preferring homelab-wsl and failing over to homelab-wsl-02. DNS doesn''t use it yet.'
+time: 2026-11-06T19:00:00.000000000-08:00
