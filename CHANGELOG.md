@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.197.0 - 2026-11-06
+
+### Added
+
+* The UniFi controller can move between the WSL sites: homelab-wsl-02 deploys it (and unpoller) at 0 with its own inform VIP and LAN bridge, the router admits the APs to either host, `bin/site-failover` copies both of its volumes, and UniFi metrics are federated to the other site.
+
 ## v1.196.1 - 2026-11-06
 
 ### Fixed
