@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.201.0 - 2026-11-06
+
+### Changed
+
+* Home Assistant's trusted proxies are in git: the init container adds every WSL site's pod CIDR (10.42, 10.44, 10.46) to HA's HTTP settings store before it starts, so a switchover to homelab-wsl-02, or homelab-wsl's move to Cilium, keeps the ingress trusted with no UI step.
+
 ## v1.200.2 - 2026-11-06
 
 ### Fixed
