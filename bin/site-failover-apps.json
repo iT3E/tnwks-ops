@@ -143,5 +143,76 @@
         "http://localhost:2283/api/server/ping"
       ]
     }
+  },
+  "firefly": {
+    "prefix": "FIREFLY",
+    "namespace": "production",
+    "kustomizations": {
+      "db": [
+        "firefly-db",
+        "finance-sync-db"
+      ],
+      "app": [
+        "firefly",
+        "finance-sync"
+      ],
+      "backup": "kopiur-policies"
+    },
+    "postgres": [
+      {
+        "cluster": "firefly-pg",
+        "prefix": "FIREFLY"
+      },
+      {
+        "cluster": "finance-sync-pg",
+        "prefix": "FINANCE_SYNC"
+      }
+    ],
+    "lease": true,
+    "workloads": [
+      "deployment/firefly"
+    ],
+    "backup_schedule": true,
+    "toggles": {
+      "FIREFLY_CRON_SUSPEND": [
+        "true",
+        "false"
+      ],
+      "FINANCE_SYNC_SUSPEND": [
+        "true",
+        "false"
+      ],
+      "FINANCE_SYNC_BACKUP_SUSPEND": [
+        "true",
+        "false"
+      ]
+    },
+    "pvcs": [
+      {
+        "name": "firefly-upload",
+        "policy": "firefly",
+        "uid": 33,
+        "gid": 33
+      },
+      {
+        "name": "finance-sync-state",
+        "policy": "finance-sync",
+        "uid": 1000,
+        "gid": 1000
+      }
+    ],
+    "check": {
+      "workload": "deploy/firefly",
+      "container": "app",
+      "command": [
+        "curl",
+        "-fsS",
+        "-o",
+        "/dev/null",
+        "-w",
+        "%{http_code}",
+        "http://localhost:8080/health"
+      ]
+    }
   }
 }

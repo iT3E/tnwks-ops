@@ -202,10 +202,22 @@ def load_app(name):
     return apps[name]
 
 
-def pg_state(site, app):
+def pg_list(app):
+    """The app's Postgres clusters as [(cluster, variable prefix)]. "postgres" is a
+    cluster name (prefix = the app's) or a list of {cluster, prefix} that switch together."""
+    pg = app.get("postgres")
+    if not pg:
+        return []
+    if isinstance(pg, str):
+        return [(pg, app["prefix"])]
+    return [(d["cluster"], d["prefix"]) for d in pg]
+
+
+def pg_state(site, app, cluster=None):
     if not app.get("postgres"):
         return None
-    c = site.get("cluster.postgresql.cnpg.io", app["postgres"], "databases", check=False)
+    cluster = cluster or pg_list(app)[0][0]
+    c = site.get("cluster.postgresql.cnpg.io", cluster, "databases", check=False)
     if not c:
         return None
     st = c.get("status", {})
@@ -258,8 +270,8 @@ def cmd_status(args):
     app = load_app(args.app)
     p = app["prefix"]
     for s in map(Site, SITES):
-        ov = {k: v for k, v in s.overrides().items() if k.startswith(p + "_")}
-        pg = (pg_state(s, app) or {}) if app.get("postgres") else None
+        ov = {k: v for k, v in s.overrides().items() if k.split("_")[0] in {pp.split("_")[0] for pp in [p] + [x for _, x in pg_list(app)]}}
+        pgs = [(cl, pg_state(s, app, cl) or {}) for cl, _ in pg_list(app)]
         deps = []
         for w in workloads(app):
             kind, d = w.split("/", 1)
@@ -267,8 +279,8 @@ def cmd_status(args):
             deps.append(f"{d}={o['status'].get('readyReplicas', 0)}/{o['spec'].get('replicas')}" if o else f"{d}=absent")
         print(f"{s.name}:")
         print(f"  overrides: {ov or '{}'}")
-        if pg is not None:
-            print(f"  postgres:  {pg.get('phase')} primary={pg.get('primary')} in_recovery={pg.get('in_recovery')} pod={pg.get('pod')}")
+        for cl, pg in pgs:
+            print(f"  {cl}:  {pg.get('phase')} primary={pg.get('primary')} in_recovery={pg.get('in_recovery')} pod={pg.get('pod')}")
         print(f"  app:       {' '.join(deps)}")
 
 
@@ -289,30 +301,32 @@ def check_lease(app_name, old, new, promote):
 
 
 def preflight(old, new, app):
-    if not app.get("postgres"):
-        preflight_pvcs(new, old, app)
-        return None, None
-    po, pn = pg_state(old, app), pg_state(new, app)
+    for cl, _ in pg_list(app):
+        preflight_pg(old, new, app, cl)
+    preflight_pvcs(new, old, app)
+    return None, None
+
+
+def preflight_pg(old, new, app, cl):
+    po, pn = pg_state(old, app, cl), pg_state(new, app, cl)
     if not po or not pn:
-        die(f"{app['postgres']} missing on {'old' if not po else 'new'} site")
+        die(f"{cl} missing on {'old' if not po else 'new'} site")
     if po["in_recovery"] or pn["in_recovery"] is False:
-        die(f"expected {old.name} primary and {new.name} replica; got old in_recovery={po['in_recovery']}, new in_recovery={pn['in_recovery']}")
+        die(f"{cl}: expected {old.name} primary and {new.name} replica; got old in_recovery={po['in_recovery']}, new in_recovery={pn['in_recovery']}")
     for s, st in ((old, po), (new, pn)):
         if st["phase"] != "Cluster in healthy state":
-            die(f"{s.name}: {app['postgres']} is {st['phase']!r}")
+            die(f"{s.name}: {cl} is {st['phase']!r}")
     # The replica replays the old site's archive (WAL-only for now), so it
     # should have reached the start of the last archived segment. The promotion
     # waits for the token's LSN anyway; this only catches a stuck replica early.
     archived = old.psql(po["pod"], "select last_archived_wal from pg_stat_archiver")
     replayed = new.psql(pn["pod"], "select pg_last_wal_replay_lsn()")
-    log(f"WAL: {old.name} last archived {archived}, {new.name} replayed to {replayed}")
+    log(f"{cl} WAL: {old.name} last archived {archived}, {new.name} replayed to {replayed}")
     if archived and replayed and len(archived) >= 24:
         seg_start = (int(archived[8:16], 16) << 32) | (int(archived[16:24], 16) * 0x1000000)
         hi, lo = replayed.split("/")
         if ((int(hi, 16) << 32) | int(lo, 16)) < seg_start:
-            die(f"{new.name} hasn't replayed {archived} yet; wait for it (or check the replica)")
-    preflight_pvcs(new, old, app)
-    return po, pn
+            die(f"{new.name} hasn't replayed {archived} of {cl} yet; wait for it (or check the replica)")
 
 
 def preflight_pvcs(new, old, app):
@@ -458,23 +472,28 @@ def cmd_switchover(args):
     if app.get("backup_schedule"):
         new_ov[f"{p}_BACKUP_SUSPEND"] = "false"
     new_ov.update({k: v[1] for k, v in app.get("toggles", {}).items()})
-    if app.get("postgres"):
-        old_ov[f"{p}_PG_PRIMARY"] = new.name
+    if pg_list(app):
+        # Demote every cluster on the old site, then promote each on the new
+        # one with its own token.
+        for cl, pp in pg_list(app):
+            old_ov[f"{pp}_PG_PRIMARY"] = new.name
         old.set_overrides(args.app, old_ov)
         old.reconcile(app["kustomizations"]["db"])
-        token = wait(f"demotion token on {old.name}", lambda: (pg_state(old, app) or {}).get("demotion_token"), timeout=600)
-        try:
-            info = json.loads(base64.b64decode(token))
-            log(f"{old.name}: demoted; token LSN {info.get('latestCheckpointREDOLocation') or info}")
-        except Exception:
-            log(f"{old.name}: demoted")
-        new_ov.update({f"{p}_PG_PRIMARY": new.name, f"{p}_PG_PROMOTION_TOKEN": token})
+        for cl, pp in pg_list(app):
+            token = wait(f"{cl} demotion token on {old.name}", lambda cl=cl: (pg_state(old, app, cl) or {}).get("demotion_token"), timeout=600)
+            try:
+                info = json.loads(base64.b64decode(token))
+                log(f"{old.name}: {cl} demoted; token LSN {info.get('latestCheckpointREDOLocation') or info}")
+            except Exception:
+                log(f"{old.name}: {cl} demoted")
+            new_ov.update({f"{pp}_PG_PRIMARY": new.name, f"{pp}_PG_PROMOTION_TOKEN": token})
         new.set_overrides(args.app, new_ov)
         new.reconcile(app["kustomizations"]["db"])
-        wait(f"{app['postgres']} primary on {new.name}",
-             lambda: (lambda s: s and not s["in_recovery"] and s["phase"] == "Cluster in healthy state")(pg_state(new, app)),
-             timeout=900)
-        log(f"{new.name}: {app['postgres']} is primary")
+        for cl, pp in pg_list(app):
+            wait(f"{cl} primary on {new.name}",
+                 lambda cl=cl: (lambda s: s and not s["in_recovery"] and s["phase"] == "Cluster in healthy state")(pg_state(new, app, cl)),
+                 timeout=900)
+            log(f"{new.name}: {cl} is primary")
     else:
         new.set_overrides(args.app, new_ov)
     t_promoted = time.time()
@@ -495,9 +514,9 @@ def cmd_switchover(args):
         log(f"{new.name}: check {chk['url']}: {status}")
     t_ready = time.time()
 
-    if app.get("postgres"):
-        pn2 = pg_state(old, app) or {}
-        log(f"{old.name}: {app['postgres']} now in_recovery={pn2.get('in_recovery')} (follows {new.name})")
+    for cl, _ in pg_list(app):
+        pn2 = pg_state(old, app, cl) or {}
+        log(f"{old.name}: {cl} now in_recovery={pn2.get('in_recovery')} (follows {new.name})")
     print(json.dumps({
         "app": args.app, "from": old.name, "to": new.name,
         "downtime_s": round(t_ready - t_stopped),
@@ -510,11 +529,12 @@ def cmd_switchover(args):
 
 def promote(args, app, old, new):
     p = app["prefix"]
-    pn = pg_state(new, app)
-    if not pn or not pn["in_recovery"]:
-        die(f"{new.name}: {app['postgres']} isn't a replica here ({pn})")
-    replayed = new.psql(pn["pod"], "select pg_last_wal_replay_lsn(), now() - pg_last_xact_replay_timestamp()")
-    log(f"{new.name}: replica replayed to {replayed} (writes after that on {old.name} are lost)")
+    for cl, _ in pg_list(app):
+        pn = pg_state(new, app, cl)
+        if not pn or not pn["in_recovery"]:
+            die(f"{new.name}: {cl} isn't a replica here ({pn})")
+        replayed = new.psql(pn["pod"], "select pg_last_wal_replay_lsn(), now() - pg_last_xact_replay_timestamp()")
+        log(f"{new.name}: {cl} replayed to {replayed} (writes after that on {old.name} are lost)")
     if not args.yes and input(f"Promote {args.app} on {new.name} WITHOUT a token ({old.name} must be dead). Type the app name: ").strip() != args.app:
         die("aborted")
     t0 = time.time()
@@ -545,19 +565,22 @@ def promote(args, app, old, new):
                 die(f"{new.name}: Restore {rst} failed: {json.dumps(o['status'].get('failure', {}))[:300]}")
             return ph in ("Completed", "Succeeded")
         wait(f"Restore {rst}", restored)
-    new_ov = {f"{p}_PG_PRIMARY": new.name, f"{p}_REPLICAS": "1"}
+    new_ov = {f"{p}_REPLICAS": "1"}
+    new_ov.update({f"{pp}_PG_PRIMARY": new.name for _, pp in pg_list(app)})
     if app.get("backup_schedule"):
         new_ov[f"{p}_BACKUP_SUSPEND"] = "false"
+    new_ov.update({k: v[1] for k, v in app.get("toggles", {}).items()})
     new.set_overrides(args.app, new_ov)
     new.reconcile(app["kustomizations"]["db"])
-    wait(f"{app['postgres']} primary on {new.name}",
-         lambda: (lambda s: s and not s["in_recovery"] and s["phase"] == "Cluster in healthy state")(pg_state(new, app)),
-         timeout=900)
+    for cl, _ in pg_list(app):
+        wait(f"{cl} primary on {new.name}",
+             lambda cl=cl: (lambda s: s and not s["in_recovery"] and s["phase"] == "Cluster in healthy state")(pg_state(new, app, cl)),
+             timeout=900)
     new.reconcile(app["kustomizations"]["app"])
     reconcile_backup(new, app)
     wait(f"{args.app} ready on {new.name}", lambda: deployments_ready(new, app), timeout=1200)
     log(f"{new.name}: {args.app} promoted and running after {round(time.time() - t0)} s. {old.name} stays fenced: "
-        f"rebuild its {app['postgres']} as a replica, then set the lease back to \"none\" (docs/wsl/multi-site.md).")
+        f"rebuild its {', '.join(cl for cl, _ in pg_list(app))} as replicas, then set the lease back to \"none\" (docs/wsl/multi-site.md).")
 
 
 def cmd_clear(args):

@@ -44,4 +44,7 @@ spec:
   schedule:
     # Nightly, spread across 02:00-03:00 (H), after the 01:00 Postgres base backup.
     cron: "H 2 * * *"
+    # Only where Firefly runs (FINANCE_SYNC_BACKUP_SUSPEND on the standby site; a switchover
+    # flips it in site-overrides).
+    suspend: ${FINANCE_SYNC_BACKUP_SUSPEND:=false}
     runOnCreate: true
