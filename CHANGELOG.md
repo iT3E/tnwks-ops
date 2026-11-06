@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.195.0 - 2026-11-06
+
+### Changed
+
+* The media stack runs on homelab-wsl-02 (moved with task failover) until a target-state decision; qbittorrent's internal name resolves to WSL-02.
+
 ## v1.194.3 - 2026-11-06
 
 ### Fixed

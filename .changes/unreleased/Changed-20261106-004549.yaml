@@ -1,3 +1,0 @@
-kind: Changed
-body: The media stack runs on homelab-wsl-02 (moved with task failover) until a target-state decision; qbittorrent's internal name resolves to WSL-02.
-time: 2026-11-06T00:45:49.910992676-08:00
