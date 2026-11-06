@@ -1,7 +1,7 @@
 # Exposing WSL cluster services to the LAN
 
 The `homelab-wsl` cluster runs as Talos-in-Docker inside WSL2 on the Windows
-desktop (`10.10.91.142`, VLAN 910). MetalLB advertises VIPs on the docker
+desktop (`10.10.91.142`, VLAN 910). Cilium (LB IPAM + L2 announcements; MetalLB until 2026-11-06) advertises VIPs on the docker
 bridge `10.5.0.0/24`, which only the WSL distro can reach. LAN traffic gets to
 them through a chain of forwarders on the desktop:
 
@@ -9,7 +9,7 @@ them through a chain of forwarders on the desktop:
 LAN device
   -> router DNS: *.internal.tnwks.us -> 10.10.91.142 (the Windows host)
   -> Windows: netsh portproxy (TCP) or tnwks-udp-relay (UDP) -> <wsl-ip>:port
-  -> WSL: socat (tnwks-lan-bridge@<name>) -> MetalLB VIP:port
+  -> WSL: socat (tnwks-lan-bridge@<name>) -> LoadBalancer VIP:port
   -> the cluster Service
 ```
 
@@ -23,7 +23,7 @@ Why each hop exists:
   inbound LAN traffic. `netsh interface portproxy` forwards TCP to the WSL
   VM's address; it is TCP-only, so UDP services get a small relay
   (`Start-TnwksUdpRelay.ps1`), one Scheduled Task per port.
-- **socat in WSL:** MetalLB VIPs live on the docker bridge, so a user-space
+- **socat in WSL:** the LoadBalancer VIPs live on the docker bridge, so a user-space
   bridge on the WSL host forwards from its eth0 to the VIP.
 
 The WSL VM gets a new address on every WSL restart and Windows reboot. The

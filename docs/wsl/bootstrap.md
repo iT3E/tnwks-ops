@@ -97,8 +97,10 @@ at a time, pods recycled; research note
 
 Every cluster runs Cilium with kube-proxy replacement, so `NetworkPolicy`
 (and `CiliumNetworkPolicy`) is enforced everywhere, and Hubble is available.
-`homelab-wsl` still gets its LoadBalancer IPs from MetalLB, and still runs
-kube-proxy next to Cilium until it's turned off in Talos.
+Both get their LoadBalancer IPs from Cilium LB IPAM + L2 announcements
+(MetalLB left `homelab-wsl` on 2026-11-06), and neither runs kube-proxy. A
+kernel NFS mount can't reach a ClusterIP without kube-proxy: mount a node
+address instead (nfs-server).
 | L2/BGP LB | ✗ (no LB on WSL anyway) | ✓ |
 
 ### Apps excluded from WSL because of this

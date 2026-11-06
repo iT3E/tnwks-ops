@@ -1,0 +1,3 @@
+kind: Removed
+body: 'MetalLB is gone from homelab-wsl: Cilium LB IPAM and L2 announcements hand out and answer for its LoadBalancer IPs (the same 10.5.0.200-220 range and addresses), as on homelab-wsl-02. Shared VIPs no longer need a loadBalancerClass there.'
+time: 2026-11-06T13:00:00.000000000-08:00
