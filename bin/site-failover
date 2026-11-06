@@ -176,6 +176,14 @@ def deployments_ready(site, app):
     return True
 
 
+def reconcile_backup(site, app):
+    # The backup schedule (<P>_BACKUP_SUSPEND) lives in another Kustomization
+    # (kopiur-policies); without this it follows the override only at its
+    # next interval.
+    if app.get("backup_schedule") and app["kustomizations"].get("backup"):
+        site.reconcile(app["kustomizations"]["backup"], timeout="5m")
+
+
 # --- commands -------------------------------------------------------------
 def cmd_status(args):
     app = load_app(args.app)
@@ -301,6 +309,7 @@ def cmd_switchover(args):
         old_ov[f"{p}_BACKUP_SUSPEND"] = "true"
     old.set_overrides(args.app, old_ov)
     old.reconcile(app["kustomizations"]["app"])
+    reconcile_backup(old, app)
     wait(f"{args.app} stopped on {old.name}", lambda: deployments_stopped(old, app))
     t_stopped = time.time()
     log(f"{old.name}: {args.app} stopped")
@@ -331,15 +340,21 @@ def cmd_switchover(args):
     t_promoted = time.time()
     log(f"{new.name}: {app['postgres']} is primary")
     new.reconcile(app["kustomizations"]["app"])
+    reconcile_backup(new, app)
     wait(f"{args.app} ready on {new.name}", lambda: deployments_ready(new, app), timeout=1200)
-    t_ready = time.time()
 
+    # Ready isn't serving: Mealie has no readiness probe, so its Deployment is
+    # Ready seconds before the app listens. Downtime ends when this answers.
     chk = app.get("check")
     if chk:
-        p_ = new.kubectl("exec", "-n", app["namespace"], f"deploy/{chk['deployment']}", "-c", chk["container"], "--",
-                         "python3", "-c", f"import urllib.request;print(urllib.request.urlopen({chk['url']!r},timeout=10).status)",
-                         check=False)
-        log(f"{new.name}: check {chk['url']}: {p_.stdout.strip() or p_.stderr.strip()[-200:]}")
+        def answers():
+            p_ = new.kubectl("exec", "-n", app["namespace"], f"deploy/{chk['deployment']}", "-c", chk["container"], "--",
+                             "python3", "-c", f"import urllib.request;print(urllib.request.urlopen({chk['url']!r},timeout=10).status)",
+                             check=False)
+            return p_.stdout.strip() if p_.returncode == 0 else None
+        status = wait(f"{chk['url']} on {new.name}", answers, timeout=600, every=5)
+        log(f"{new.name}: check {chk['url']}: {status}")
+    t_ready = time.time()
 
     pn2 = pg_state(old, app) or {}
     log(f"{old.name}: {app['postgres']} now in_recovery={pn2.get('in_recovery')} (follows {new.name})")
@@ -365,6 +380,7 @@ def cmd_clear(args):
         s.set_overrides(args.app, {})
         s.reconcile(app["kustomizations"]["db"])
         s.reconcile(app["kustomizations"]["app"])
+        reconcile_backup(s, app)
 
 
 def main():

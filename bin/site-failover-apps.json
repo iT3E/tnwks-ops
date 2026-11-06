@@ -3,7 +3,11 @@
   "mealie": {
     "prefix": "MEALIE",
     "namespace": "production",
-    "kustomizations": { "db": "mealie-db", "app": "mealie" },
+    "kustomizations": {
+      "db": "mealie-db",
+      "app": "mealie",
+      "backup": "kopiur-policies"
+    },
     "postgres": "mealie-pg",
     "deployments": ["mealie"],
     "backup_schedule": true,
