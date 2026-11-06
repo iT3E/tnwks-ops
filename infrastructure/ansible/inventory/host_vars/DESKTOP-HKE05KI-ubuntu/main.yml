@@ -34,7 +34,8 @@ wsl_site_routing_node_subnet: 10.5.0.0/24
 # eth0 address (rehearsed 2026-11-06: same result, open connections kept).
 # Only eth0: after Stage B, traffic into the tunnel keeps the node address.
 wsl_site_routing_masquerade: true
-wsl_site_routing_pod_cidr: 10.42.0.0/16
+# Cilium's cluster-pool range since homelab-wsl left Flannel (2026-11-06).
+wsl_site_routing_pod_cidr: 10.46.0.0/16
 # What the router sends this site: site 2's node subnet and pod CIDRs.
 wsl_site_routing_remote_prefixes:
   - prefix: 10.6.0.0/24

@@ -63,5 +63,5 @@ wsl_site_routing_pod_cidr: 10.44.0.0/16
 # What the router sends this site: site 1's node subnet and pod CIDRs.
 wsl_site_routing_remote_prefixes:
   - prefix: 10.5.0.0/24
-  - prefix: 10.42.0.0/16
+  - prefix: 10.46.0.0/16
     le: 24
