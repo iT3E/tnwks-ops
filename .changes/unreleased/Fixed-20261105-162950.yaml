@@ -1,3 +1,0 @@
-kind: Fixed
-body: Site DNS records under *.internal.tnwks.us (playwright-mcp on WSL-02) now answer instead of the wildcard.
-time: 2026-11-05T16:29:50.181840615-08:00

@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.160.3 - 2026-11-06
+
+### Fixed
+
+* Site DNS records under *.internal.tnwks.us (playwright-mcp on WSL-02) now answer instead of the wildcard.
+
 ## v1.160.2 - 2026-11-06
 
 ### Fixed
