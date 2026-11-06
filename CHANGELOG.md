@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.213.0 - 2026-11-06
+
+### Added
+
+* The apps that run on homelab-wsl-02 (transcriber, changedetection, Immich, immichframe, the kitchen screensaver, qBittorrent, playwright-mcp) have global Services, and their internal Ingresses go through the Service, so either site's ingress, and so the shared VIP, serves them over Cluster Mesh.
+
 ## v1.212.0 - 2026-11-06
 
 ### Added
