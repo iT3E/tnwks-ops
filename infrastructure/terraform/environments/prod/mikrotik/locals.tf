@@ -757,11 +757,15 @@ locals {
         comment = "bind db.tnwks.local"
         address = "10.10.140.140"
       }
+      # The APs' inform host: whichever WSL site runs the UniFi controller
+      # (homelab-wsl-02 since 2026-11-06; docs/network/unifi.md). Short TTL
+      # so a move back takes effect quickly.
       unifi = {
         name    = "unifi"
         type    = "A"
         comment = "bind db.unifi"
-        address = "10.10.91.142"
+        address = "10.10.91.112"
+        ttl     = "5m"
       }
       sce_rtr01_tnwks_local = {
         name    = "sce-rtr01.tnwks.local"
