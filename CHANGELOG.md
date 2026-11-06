@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.156.0 - 2026-11-06
+
+### Changed
+
+* Home Assistant person alerts are set per adult: each adult has their own box on the Security dashboard's Alerts view (night window with ring-through-DND, away mode, day/time schedule) with a plain-words "Right now" line, decided by one shared template; the push text names the rule that sent it.
+
 ## v1.155.0 - 2026-11-06
 
 ### Changed
