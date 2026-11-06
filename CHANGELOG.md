@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.184.0 - 2026-11-06
+
+### Changed
+
+* Grafana, LiteLLM, Vaultwarden, packing-api and the things API have their own Postgres clusters, imported from the shared one, which keeps its copies as the rollback.
+
 ## v1.183.0 - 2026-11-06
 
 ### Changed
