@@ -1,3 +1,0 @@
-kind: Added
-body: Home Assistant has a warm standby on homelab-wsl-02 (its recorder database a replica, the app at 0, backups suspended there), fenced by the home-assistant site lease.
-time: 2026-11-06T00:18:47.642431904-08:00

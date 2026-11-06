@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.194.0 - 2026-11-06
+
+### Added
+
+* Home Assistant has a warm standby on homelab-wsl-02 (its recorder database a replica, the app at 0, backups suspended there), fenced by the home-assistant site lease.
+
 ## v1.193.0 - 2026-11-06
 
 ### Added
