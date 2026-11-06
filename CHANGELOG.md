@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.197.1 - 2026-11-06
+
+### Fixed
+
+* Ansible Hosts: the controller-tools apt step is time-boxed and retried, so a stalled download on GitHub's Ubuntu mirror no longer runs the plan job into its 20-minute limit.
+
 ## v1.197.0 - 2026-11-06
 
 ### Added
