@@ -8,3 +8,5 @@ resources:
   - ../../../../apps/kopiur-system/kopiur/policies/mealie.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/transcriber.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/changedetection.yaml
+  - ../../../../apps/kopiur-system/kopiur/policies/immich-library.yaml
+  - ../../../../apps/kopiur-system/kopiur/policies/immich-postgres.yaml

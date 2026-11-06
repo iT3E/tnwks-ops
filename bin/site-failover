@@ -105,6 +105,10 @@ class Site:
         return json.loads(p.stdout)
 
     def reconcile(self, ks, timeout="15m"):
+        if isinstance(ks, list):
+            for k in ks:
+                self.reconcile(k, timeout)
+            return
         log(f"{self.name}: flux reconcile ks {ks}")
         p = self.run(["flux", "reconcile", "ks", ks, "-n", "flux-system", f"--timeout={timeout}"], check=False, timeout=1200)
         if p.returncode != 0:
@@ -326,7 +330,8 @@ def restore_target(site, app, pvc):
     # (same name), and the StatefulSet adopts it when it scales up.
     if pvc.get("create") and not site.get("persistentvolumeclaim", pvc["name"], app["namespace"], check=False):
         c = pvc["create"]
-        return {"pvc": {"name": pvc["name"], "capacity": c["capacity"], "storageClassName": c["storageClass"],
+        sc = c["storageClass"][site.name] if isinstance(c["storageClass"], dict) else c["storageClass"]
+        return {"pvc": {"name": pvc["name"], "capacity": c["capacity"], "storageClassName": sc,
                         "accessModes": ["ReadWriteOnce"]}}
     return {"pvcRef": {"name": pvc["name"]}}
 
@@ -413,6 +418,8 @@ def cmd_switchover(args):
     old_ov = {f"{p}_REPLICAS": "0"}
     if app.get("backup_schedule"):
         old_ov[f"{p}_BACKUP_SUSPEND"] = "true"
+    # toggles: {VAR: [value where the app is off, value where it runs]}
+    old_ov.update({k: v[0] for k, v in app.get("toggles", {}).items()})
     old.set_overrides(args.app, old_ov)
     old.reconcile(app["kustomizations"]["app"])
     reconcile_backup(old, app)
@@ -428,6 +435,7 @@ def cmd_switchover(args):
     new_ov = {f"{p}_REPLICAS": "1"}
     if app.get("backup_schedule"):
         new_ov[f"{p}_BACKUP_SUSPEND"] = "false"
+    new_ov.update({k: v[1] for k, v in app.get("toggles", {}).items()})
     if app.get("postgres"):
         old_ov[f"{p}_PG_PRIMARY"] = new.name
         old.set_overrides(args.app, old_ov)
@@ -457,9 +465,9 @@ def cmd_switchover(args):
     chk = app.get("check")
     if chk:
         def answers():
+            cmd = chk.get("command") or ["python3", "-c", f"import urllib.request;print(urllib.request.urlopen({chk['url']!r},timeout=10).status)"]
             p_ = new.kubectl("exec", "-n", app["namespace"], chk.get("workload") or f"deploy/{chk['deployment']}", "-c", chk["container"], "--",
-                             "python3", "-c", f"import urllib.request;print(urllib.request.urlopen({chk['url']!r},timeout=10).status)",
-                             check=False)
+                             *cmd, check=False)
             return p_.stdout.strip() if p_.returncode == 0 else None
         status = wait(f"{chk['url']} on {new.name}", answers, timeout=600, every=5)
         log(f"{new.name}: check {chk['url']}: {status}")

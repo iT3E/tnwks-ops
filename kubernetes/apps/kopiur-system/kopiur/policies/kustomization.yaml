@@ -7,6 +7,9 @@ resources:
   - ./home-assistant.yaml
   - ./mealie.yaml
   - ./transcriber.yaml
+  # Transfer only, no schedule (the files say why).
+  - ./immich-library.yaml
+  - ./immich-postgres.yaml
   - ./unifi.yaml
   - ./changedetection.yaml
   - ./firefly.yaml

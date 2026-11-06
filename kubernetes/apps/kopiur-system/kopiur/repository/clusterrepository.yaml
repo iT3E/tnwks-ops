@@ -37,6 +37,7 @@ spec:
       - home-automation
       - networking
       - production
+      - selfhosted
   credentialProjection:
     allowed: true
   identityDefaults:

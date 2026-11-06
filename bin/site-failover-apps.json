@@ -85,5 +85,63 @@
       "container": "app",
       "url": "http://localhost:5000/"
     }
+  },
+  "immich": {
+    "prefix": "IMMICH",
+    "namespace": "selfhosted",
+    "kustomizations": {
+      "app": [
+        "immich",
+        "immich-sync",
+        "immichframe",
+        "kitchen-screensaver"
+      ]
+    },
+    "workloads": [
+      "deployment/immich-server",
+      "deployment/immich-machine-learning",
+      "deployment/immich-valkey",
+      "statefulset/immich-postgres",
+      "deployment/immichframe",
+      "deployment/kitchen-screensaver"
+    ],
+    "toggles": {
+      "IMMICH_SYNC_SUSPEND": [
+        "true",
+        "false"
+      ]
+    },
+    "pvcs": [
+      {
+        "name": "immich-library",
+        "policy": "immich-library",
+        "uid": 0,
+        "gid": 0,
+        "transfer_only": true
+      },
+      {
+        "name": "data-immich-postgres-0",
+        "policy": "immich-postgres",
+        "uid": 0,
+        "gid": 0,
+        "transfer_only": true,
+        "create": {
+          "capacity": "10Gi",
+          "storageClass": {
+            "homelab-wsl": "local-path-ext4",
+            "homelab-wsl-02": "local-path"
+          }
+        }
+      }
+    ],
+    "check": {
+      "workload": "deploy/immich-server",
+      "container": "app",
+      "command": [
+        "curl",
+        "-fsS",
+        "http://localhost:2283/api/server/ping"
+      ]
+    }
   }
 }

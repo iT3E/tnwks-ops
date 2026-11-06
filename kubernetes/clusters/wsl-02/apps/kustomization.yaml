@@ -48,6 +48,11 @@ resources:
   - ../../../apps/production/mealie/ks.yaml
   - ../../../apps/production/transcriber/ks.yaml
   - ../../../apps/production/changedetection/ks.yaml
+  # Immich and the kitchen display, deployed at 0 to move here (IMMICH_REPLICAS).
+  - ../../../apps/selfhosted/namespace.yaml
+  - ../../../apps/selfhosted/immich/ks.yaml
+  - ../../../apps/selfhosted/immichframe/ks.yaml
+  - ../../../apps/selfhosted/kitchen-screensaver/ks.yaml
   # Backup credentials: certificate -> STS session for barman-cloud and kopiur
   # (role tnwks-rolesanywhere-backups-wsl-02: read the bucket, write only
   # homelab-wsl-02's prefixes).
