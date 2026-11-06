@@ -1,0 +1,3 @@
+kind: Changed
+body: 'homelab-wsl runs on Cilium: Flannel is removed, its pod network is 10.46.0.0/16 (cluster-pool IPAM, kept for rebuilds through CILIUM_IPAM_MODE), and it uses the shared Cilium Kustomization like homelab-wsl-02. NetworkPolicies are enforced on every cluster now.'
+time: 2026-11-06T10:45:00.000000000-08:00

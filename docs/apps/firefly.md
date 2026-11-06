@@ -44,8 +44,8 @@ login's email.
   and in again.
 - Break-glass: set `AUTHENTICATION_GUARD` back to `web` for password login.
 - Residual risk, shared with Grafana's auth proxy: a pod that talks to the
-  Firefly Service directly can send the header itself. Flannel does not
-  enforce NetworkPolicy, so nothing in the cluster blocks that today.
+  Firefly Service directly can send the header itself. Cilium enforces
+  NetworkPolicy, but no policy restricts Firefly's ingress yet.
 
 ## The Passport keypair: read this before touching the secret
 

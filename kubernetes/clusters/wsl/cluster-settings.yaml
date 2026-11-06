@@ -73,26 +73,25 @@ data:
   KUBE_VIP_ADDR: "127.0.0.1"
 
   # Cluster networking
-  CLUSTER_CIDR: "10.42.0.0/16"
+  # Cilium's cluster-pool range since the in-place move from Flannel
+  # (2026-11-06). Talos' podSubnets (talos/wsl/cluster-config.yaml) still say
+  # 10.42: they only feed the Node objects' podCIDR, which cluster-pool IPAM
+  # doesn't use.
+  CLUSTER_CIDR: "10.46.0.0/16"
   SERVICE_CIDR: "10.43.0.0/16"
 
-  # CNI — homelab-wsl uses Flannel. The Cilium HelmRelease is filtered out of
-  # this apps overlay (docs/wsl/bootstrap.md: Cilium's default CAP_SYS_MODULE
-  # request; homelab-wsl-02 runs Cilium without it).
-  CNI: "flannel"
-  FLANNEL_VERSION: "v0.28.4"
-  # Flannel -> Cilium in place (2026-11-06; research note
-  # 2026-11-06-flannel-to-cilium-rehearsal). Cilium runs next to Flannel in
-  # migration mode (clusters/wsl/apps/cilium-ks.yaml) with its own pod range,
-  # 10.46.0.0/16; CLUSTER_CIDR stays 10.42 until Flannel goes.
+  # CNI: Cilium since 2026-11-06, moved in place from Flannel (research note
+  # 2026-11-06-flannel-to-cilium-rehearsal). Read by 02-cni-bootstrap.yml and
+  # the Cilium HelmRelease. It keeps Cilium's own IPAM pool (CLUSTER_CIDR),
+  # so a rebuild comes up the way it runs.
+  CNI: "cilium"
   CILIUM_VERSION: "1.19.4"
   CILIUM_CLUSTER_ID: "1"
+  CILIUM_IPAM_MODE: "cluster-pool"
   # Off like homelab-wsl-02: 02-cni-bootstrap.yml installs Cilium before the
   # ServiceMonitor CRD exists.
   CILIUM_SERVICEMONITOR_ENABLED: "false"
   CILIUM_HUBBLE_UI_INGRESS_ENABLED: "false"
-  # ingress-nginx also trusts Cilium's range during the migration.
-  CLUSTER_CIDR_EXTRA: ",10.46.0.0/16"
 
   # ServiceMonitor / PodMonitor toggle. Set to "false" until
   # kube-prometheus-stack has reconciled and installed the

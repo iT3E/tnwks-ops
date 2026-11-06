@@ -2,9 +2,8 @@
 # WSL cluster apps: shared namespaces, with trimmed overlays for any
 # namespace that excludes apps not viable on Docker-mode Talos.
 #
-# CNI: Flannel (chosen when Cilium's default CAP_SYS_MODULE request kept it
-# off Talos-in-Docker; homelab-wsl-02 runs Cilium without it). MS-01 uses
-# Cilium.
+# CNI: Cilium, like every cluster (moved in place from Flannel on
+# 2026-11-06; cluster-pool IPAM on 10.46.0.0/16 from cluster-settings).
 #
 # Trimmed (per-namespace overlay below):
 #   - home-automation  (zwave-js-ui kept, USB passthrough required)
@@ -41,9 +40,8 @@ resources:
   - ../../../apps/databases/site-lease-fence/ks.yaml
   - ../../../apps/flux-system
   - ../../../apps/kube-system
-  - ../../../apps/kube-system/flannel/ks.yaml
-  # Cilium next to Flannel while homelab-wsl moves to it (cilium-ks.yaml).
-  - ./cilium-ks.yaml
+  # CNI: Cilium (shared HelmRelease; IPAM mode and pool from cluster-settings).
+  - ../../../apps/kube-system/cilium/ks.yaml
   - ../../../apps/kube-system/local-path-provisioner/ks.yaml
   - ../../../apps/media
   - ../../../apps/monitoring

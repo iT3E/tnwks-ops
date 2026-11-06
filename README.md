@@ -111,9 +111,8 @@ The WSL cluster has no LoadBalancer controller — Services are reached via
 `kubectl port-forward` or NodePort.
 
 CNI: [Cilium](https://cilium.io) on MS-01 (also providing L2/BGP for
-LoadBalancer IPs — MetalLB has been removed). On WSL, [Flannel](https://github.com/flannel-io/flannel)
-because Cilium can't run on Talos-in-Docker on WSL2 — see
-[docs/wsl/bootstrap.md](docs/wsl/bootstrap.md#why-flannel-on-wsl-instead-of-cilium).
+LoadBalancer IPs — MetalLB has been removed). The WSL clusters run Cilium too, on Talos-in-Docker — see
+[docs/wsl/bootstrap.md](docs/wsl/bootstrap.md).
 [cloudflared](https://github.com/cloudflare/cloudflared) provides the public
 ingress tunnel into the MS-01 cluster.
 

@@ -49,9 +49,9 @@ This runs four Ansible playbooks in sequence:
 1. **`01-talos-bootstrap.yml`** — `talosctl cluster create docker`
    (1 controlplane + 2 workers); fetches kubeconfig to `~/.kube/config-homelab-wsl`.
    Talos ships with no CNI, so nodes will register as `NotReady`.
-2. **`02-cni-bootstrap.yml`** — `helm install` Flannel on WSL (or Cilium
-   on MS-01). The CNI choice is read from
-   `kubernetes/clusters/wsl/cluster-settings.yaml` (`CNI: flannel`). After
+2. **`02-cni-bootstrap.yml`** — `helm install` Cilium. The CNI choice and
+   its values are read from `kubernetes/clusters/wsl/cluster-settings.yaml`
+   (`CNI: cilium`, `CILIUM_IPAM_MODE: cluster-pool`). After
    this step, nodes go `Ready` and pods can be scheduled.
 3. **`03-sops-keys.yml`** — generates an age key at
    `~/.config/sops/age/homelab-wsl.txt` and creates the `sops-age` Secret.
@@ -64,7 +64,7 @@ This runs four Ansible playbooks in sequence:
 After step 4, **everything is GitOps**. Push to the tracked branch and
 Flux reconciles.
 
-## Why Flannel on `homelab-wsl` (and Cilium on `homelab-wsl-02`)
+## Cilium on Talos-in-Docker (and why `homelab-wsl` used to run Flannel)
 
 `homelab-wsl` runs Flannel because Cilium, with its default values, could
 not start on Talos-in-Docker on WSL2. That turned out to be avoidable: the
@@ -72,9 +72,11 @@ blocker is a capability Cilium asks for, not one it needs. Talos' Cilium
 guide drops it (pods can't load kernel modules on Talos anyway), and so does
 the shared HelmRelease now (`securityContext.capabilities`,
 `cgroup.autoMount.enabled: false`). `homelab-wsl-02` runs Cilium that way,
-tested on 2026-11-05 (`talos/wsl-02/README.md`). `homelab-wsl` stays on
-Flannel for now: swapping the CNI under a running cluster re-networks every
-pod. What blocked the default values:
+tested on 2026-11-05 (`talos/wsl-02/README.md`). `homelab-wsl` moved from
+Flannel to Cilium in place on 2026-11-06 (Cilium next to Flannel, one node
+at a time, pods recycled; research note
+2026-11-06-flannel-to-cilium-rehearsal), keeping cluster-pool IPAM on
+`10.46.0.0/16`. What blocked the default values:
 
 - Cilium's `clean-cilium-state` init container requests `CAP_SYS_MODULE`
   (along with `CAP_SYS_ADMIN`, `CAP_NET_ADMIN`, `CAP_SYS_RESOURCE`).
@@ -91,15 +93,12 @@ pod. What blocked the default values:
   workaround (custom WSL2 kernel) addresses different runtime issues
   (iptables/conntrack modules), not the cap-apply error at startup.
 
-### Implications of the split
+### Since the move
 
-| Capability | WSL (Flannel) | MS-01 (Cilium) |
-|---|---|---|
-| Pod networking | ✓ | ✓ |
-| Service routing | ✓ (via kube-proxy) | ✓ (Cilium replaces kube-proxy) |
-| `NetworkPolicy` enforcement | ✗ Flannel doesn't enforce | ✓ |
-| `CiliumNetworkPolicy` | ✗ CRD absent | ✓ |
-| Hubble flow logs / UI | ✗ | ✓ |
+Every cluster runs Cilium with kube-proxy replacement, so `NetworkPolicy`
+(and `CiliumNetworkPolicy`) is enforced everywhere, and Hubble is available.
+`homelab-wsl` still gets its LoadBalancer IPs from MetalLB, and still runs
+kube-proxy next to Cilium until it's turned off in Talos.
 | L2/BGP LB | ✗ (no LB on WSL anyway) | ✓ |
 
 ### Apps excluded from WSL because of this

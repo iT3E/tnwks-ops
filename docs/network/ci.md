@@ -48,7 +48,7 @@ tells it to inside the LAN. The controls:
 3. **The runner can reach the router's REST API and nothing else on the
    LAN.** No forwarding from `vpn-ci`, and the tunnel's `AllowedIPs` is the
    router's `wg03` address. Inside the WSL cluster it is an ordinary pod
-   (Flannel enforces no NetworkPolicy), which is how it reaches the UniFi
+   (no NetworkPolicy selects it), which is how it reaches the UniFi
    controller's Service.
 4. **Narrow secrets.** The CI age key decrypts only the secrets of the roots
    the runner applies (MikroTik, EdgeOS, UniFi, healthchecks.io, Cloudflare).

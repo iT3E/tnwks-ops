@@ -59,7 +59,7 @@ flowchart TB
 
     subgraph a["DESKTOP-HKE05KI · 10.10.91.142 · wired"]
         subgraph ad["WSL distro · border router (FRR)"]
-            subgraph ac["homelab-wsl · id 1 · Cilium<br/>nodes 10.5.0.0/24 · pods 10.42.0.0/16"]
+            subgraph ac["homelab-wsl · id 1 · Cilium<br/>nodes 10.5.0.0/24 · pods 10.46.0.0/16"]
                 aapps["apps · ingress · clustermesh-apiserver"]
             end
         end
@@ -101,7 +101,7 @@ changing them later means rebuilding the cluster.
 | --- | --- | --- |
 | Cluster ID | 1 | 2 |
 | Docker bridge (nodes) | `10.5.0.0/24` | `10.6.0.0/24` |
-| Pods | `10.42.0.0/16` | `10.44.0.0/16` |
+| Pods | `10.46.0.0/16` (Cilium cluster-pool; `10.42` under Flannel until 2026-11-06) | `10.44.0.0/16` |
 | Services | `10.43.0.0/16` | `10.45.0.0/16` |
 | BGP ASN (Cilium nodes) | 64601 | 64602 |
 | BGP ASN (distro FRR) | 64611 | 64612 |
@@ -212,7 +212,7 @@ sequenceDiagram
     R-->>C: reply
 ```
 
-Pod to pod across sites: pod `10.42.x` to its node, the Docker bridge, the
+Pod to pod across sites: pod `10.46.x` to its node, the Docker bridge, the
 distro, `wg-site1`, the router, `wg-site2`, wsl-02's distro, its node, pod
 `10.44.x`. No NAT anywhere on the way.
 
@@ -712,18 +712,16 @@ fenced from writing it, or `none`.
 
 ## Getting wsl-01 onto Cilium
 
-wsl-02 starts on Cilium with all of the above from its first bootstrap.
-wsl-01 runs Flannel, and there's no mesh until it moves:
-
-1. Fail the warm apps, Frigate and mosquitto over to wsl-02. Until the
-   mesh exists that's a switchover with DNS changed by hand (or the old
-   LAN bridge pointed at wsl-02).
-2. Migrate wsl-01 node by node with Cilium's documented Flannel migration
-   (Cilium alongside Flannel on a separate overlay, then one node at a
-   time). Rebuilding the cluster is the fallback. Its `local-path`
-   volumes are tied to the node containers, which is why migrating in
-   place comes first.
-3. Join the mesh, move the apps back.
+Done on 2026-11-06, in place, with no app moved away: Cilium installed next
+to Flannel in migration mode on its own pod range (`10.46.0.0/16`), each
+node enrolled by a `CiliumNodeConfig` and an agent restart, every pod
+recycled clients first (cloudflared and ingress, then coredns, then the
+rest, Home Assistant last), then the full datapath (kube-proxy replacement,
+BPF masquerade, policy enforcement) and Flannel removed. Rehearsed first on a
+copy of the cluster (research note 2026-11-06-flannel-to-cilium-rehearsal).
+After the switch to kube-proxy replacement, processes holding DNS or API
+connections from before it (ingress-nginx's resolver, reflector) needed a
+restart.
 
 ## Risks
 
