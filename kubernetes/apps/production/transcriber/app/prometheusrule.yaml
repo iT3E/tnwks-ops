@@ -11,7 +11,10 @@ spec:
     - name: transcriber
       rules:
         - alert: TranscriberDown
-          expr: absent(up{namespace="production", service="transcriber-app"} == 1)
+          # Only where it's meant to run: a site with it at 0 has no target.
+          expr: >-
+            absent(up{namespace="production", service="transcriber-app"} == 1)
+            and on() (kube_deployment_spec_replicas{namespace="production", deployment="transcriber"} > 0)
           for: 15m
           labels:
             severity: warning

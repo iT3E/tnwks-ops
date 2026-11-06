@@ -1,0 +1,3 @@
+kind: Changed
+body: The transcriber's replicas, upstream endpoints (Frigate RTSP, MQTT, LiteLLM, oauth2-proxy) and Helm wait come from cluster-settings, so another site can run it; TranscriberDown only fires where it's meant to run.
+time: 2026-11-05T17:14:35.84668615-08:00
