@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.196.1 - 2026-11-06
+
+### Fixed
+
+* Pod networks of every WSL site: qBittorrent's auth whitelist covers homelab-wsl-02's pods (and homelab-wsl's coming Cilium range), the Cilium IPAM mode is a cluster setting so a cluster moved from Flannel rebuilds the way it runs, and the Home Assistant docs list every site's pod CIDR for its trusted proxies.
+
 ## v1.196.0 - 2026-11-06
 
 ### Added
