@@ -91,11 +91,8 @@ data:
   TRANSCRIBER_PG_PRIMARY: "homelab-wsl-02"
   # changedetection runs here since 2026-11-05 (bin/site-failover, then this
   # setting); homelab-wsl keeps its copy at 0.
-  # Immich, immichframe and kitchen-screensaver: deployed here at 0 to move
-  # them (bin/site-failover); the library and Postgres come over with it.
-  IMMICH_REPLICAS: "0"
-  IMMICH_HELM_DISABLE_WAIT: "true"
-  IMMICH_SYNC_SUSPEND: "true"
+  # Immich, immichframe and kitchen-screensaver run here since 2026-11-05
+  # (bin/site-failover, then this setting); homelab-wsl keeps copies at 0.
   # Firefly and finance-sync: warm standbys (bin/site-failover "firefly").
   FIREFLY_REPLICAS: "0"
   FIREFLY_HELM_DISABLE_WAIT: "true"

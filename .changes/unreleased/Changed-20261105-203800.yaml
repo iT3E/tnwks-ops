@@ -1,0 +1,3 @@
+kind: Changed
+body: Immich, immichframe and kitchen-screensaver run on homelab-wsl-02 (moved with task failover); their names resolve to WSL-02.
+time: 2026-11-05T20:38:00.73446697-08:00

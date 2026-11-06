@@ -126,3 +126,7 @@ data:
   # changedetection: on homelab-wsl-02 since 2026-11-05; here at 0.
   CHANGEDETECTION_REPLICAS: "0"
   CHANGEDETECTION_BACKUP_SUSPEND: "true"
+  # Immich, immichframe and kitchen-screensaver: on homelab-wsl-02 since
+  # 2026-11-05; here at 0, the hourly sync suspended.
+  IMMICH_REPLICAS: "0"
+  IMMICH_SYNC_SUSPEND: "true"
