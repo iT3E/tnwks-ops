@@ -1,3 +1,0 @@
-kind: Fixed
-body: Exact router DNS names (like a site record under *.internal.tnwks.us) now answer ahead of the wildcards that cover them.
-time: 2026-11-05T16:19:49.746663296-08:00

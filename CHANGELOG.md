@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.160.2 - 2026-11-06
+
+### Fixed
+
+* Exact router DNS names (like a site record under *.internal.tnwks.us) now answer ahead of the wildcards that cover them.
+
 ## v1.160.1 - 2026-11-06
 
 ### Fixed
