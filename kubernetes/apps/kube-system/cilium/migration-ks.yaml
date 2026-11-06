@@ -1,0 +1,22 @@
+---
+# Flannel -> Cilium in place: which nodes Cilium takes over (the
+# CiliumNodeConfig). Listed only by the cluster that is moving (homelab-wsl),
+# and removed once every pod runs on Cilium.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cilium-migration
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/kube-system/cilium/migration
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  # The CRD comes from the Cilium operator once it runs.
+  dependsOn:
+    - name: cilium
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

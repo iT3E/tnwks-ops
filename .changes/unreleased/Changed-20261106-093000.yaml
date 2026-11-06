@@ -1,0 +1,3 @@
+kind: Changed
+body: 'homelab-wsl''s Cilium move: a CiliumNodeConfig lists the nodes Cilium takes over, each from its agent''s next restart.'
+time: 2026-11-06T09:30:00.000000000-08:00

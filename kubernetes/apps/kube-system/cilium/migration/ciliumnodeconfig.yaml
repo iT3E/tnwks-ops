@@ -1,0 +1,24 @@
+---
+# Read when a node's Cilium agent starts: from then on Cilium writes that
+# node's CNI config (ahead of Flannel's) and new pods there get Cilium
+# addresses. Inert until the agent restarts, one node at a time, worker-2
+# (Home Assistant, Z-Wave, Frigate) last.
+apiVersion: cilium.io/v2
+kind: CiliumNodeConfig
+metadata:
+  name: cilium-migration
+  namespace: kube-system
+spec:
+  nodeSelector:
+    matchExpressions:
+      - key: kubernetes.io/hostname
+        operator: In
+        values:
+          - homelab-wsl-worker-1
+          - homelab-wsl-controlplane-1
+          - homelab-wsl-worker-2
+  defaults:
+    write-cni-conf-when-ready: /host/etc/cni/net.d/05-cilium.conflist
+    custom-cni-conf: "false"
+    cni-chaining-mode: "none"
+    cni-exclusive: "true"
