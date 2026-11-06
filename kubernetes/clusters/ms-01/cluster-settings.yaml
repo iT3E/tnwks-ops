@@ -44,6 +44,8 @@ data:
 
   # Cluster networking
   CLUSTER_CIDR: "10.42.0.0/16"
+  # Cilium native routing: this cluster's pods only (no Cluster Mesh here).
+  CILIUM_NATIVE_ROUTING_CIDR: "10.42.0.0/16"
   SERVICE_CIDR: "10.43.0.0/16"
 
   # CNI — Cilium with kube-proxy replacement, Hubble UI exposed via internal

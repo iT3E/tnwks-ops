@@ -1,0 +1,64 @@
+# The Cilium CA both WSL clusters share, so their Cluster Mesh certificates
+# (and Hubble's) chain to one root. Base64 PEM: the chart's tls.ca.cert/key
+# take it that way (the Cilium HelmRelease's valuesFrom).
+apiVersion: v1
+kind: Secret
+metadata:
+    name: cilium-clustermesh-ca
+    namespace: kube-system
+type: Opaque
+stringData:
+    ca.crt: ENC[AES256_GCM,data:XiwszoawsGfitLBNlE7MHnw+OoembvptMxcdF8BZIyUDqk3gd3arWl3PN4jAGOpa4LF+Tk/iiZHGYtyfmHrkh+3aAVaVruLSh6NTKTZNEZks27np4TRZXL4KIlEouMGFY4XyEywLekEItJAZeWefrN0QdLdZM1sd3jxYMk2hUuVjx+ITF0q/ApkbpwwqFBCNF31as0yB5fZwM8U0i70bycruNMbKK7Sc+bxuJivwD8k43r1Yzgl34fti6Rzt8hZ/kjKKfywAyvbCrdW/lsjoqTK/rXZr1clF3mstWu3scdMAe5GExcvjR4ToFF+z2BlKYQKO6EhxHa11guC+YQaYAjsR8/5SHa7uYHBeUa7+aVnxUnetMxRMGtzPXuD2ENNYui18LR+sKtuqiy+yxWVtjEdKacou3DvGhX9HlAo351vIGZOK4+B6T+Kqs5QdJhJiSPXf4ZasT0utsA3J+rBJYf/M6pWCTu3YW65238GG7DOD9UElHd7fxXD+5tc8IntA5vgF7rwS4skYvsHQUASarJO3+fDUiwOtCCwvNwtbC+D92oaNfUgBS3DpY5GZfNBUOGO/CHXBUX35gId5wqWwb7p0Ai1JNjRI75mJEtO98MopDY+CFWF7iRrWjm8m6fsa4LqBCiU4cDjt/f7Y43XFYY0ldbwHDyVXVxYrXDKWdV9QymOlFUw9oVVe++Os7eNQeTPWJCc6nP3TlmhQkKQKNLBS1v65WfgfMCWJ0VpBmkMvi4lZcvOvPD1cCrhR4SBxvxVUS49PZjLChuZF8p8u8HFCFxU+SJJ/mM2oBLTHxJjinhsAdsgyDpn/q1uy0VjazyO3uWo6txuxFlTsjAomWhVO3cvJ+jIz9l7BhVxNbowlGuITIOi4slLhAWN66nMD1DIgyTS35EoP/7H9EtizbsnfaP5GLqzHdCveP70YEwVPAA/W3PwlRTHemQd3mMpsKD1sbrHWrGOI5VN8x7xTk0pokCvszTwk2P6uqxe13qsfGg3V3CGoIQHaq6zj8HwMowHVgGmn7xFi+dWY+K2I6btzghIpRt6whchBrCRUZQtVOcAB2QF2k3MzIm+FosQx4L4u++xSII0JuHsNAcMdyA==,iv:0bTTdMTy7FzcxnTcn2PB8jjSl4cOkbpiCLN/gK/KFn8=,tag:dK61TjY+xCHBWGx1vQ+blQ==,type:str]
+    ca.key: ENC[AES256_GCM,data:P1bUxOH7OJyod1pXzcIgsKVu84xAhAa+R8eqSZdnTxYdZU9hYb6hGN17mKPGiJLvCyZVl+KQ6jiA4Y0zaPaRDzHEqtVUgjZA5WH8rR/aPTYQe767FiDuRTvTk7rf8aQe46YlI0UetH907ii+sDJ46CQjEUAJtIreMB25L+qBPIDm4aqiMEMw3Z55d6eAzSjpgfABcNi1NENPrKpzpaLX1i+8AvT/k7I/kRL8nI221dO+KJ5QupiGgnEKmQkJzSTvH4a9kzd1J389XlA4BoSBACpJ+TYlx9JWMVAkxAO2yLTeJ+D+CCld1rgoo9i527s3aUSjBxasrG5KnQRXMZdASqv/vmPWf/NYiVPzJJh91fc9+ltN31jaJiSJ9fzipgEBX6LoNEn4DLtTqv5wHnZaPKLfEhbWY+W8u2zz4hGw3Crm3ft2,iv:asAaNkvXk/BroNmdomHa2xF1ozUXYEmsyDPGTGYrsQY=,tag:RoJa9jzODDCnQvgTViERyg==,type:str]
+sops:
+    kms:
+        - arn: arn:aws:kms:us-west-2:654654220436:key/mrk-74c4597ebffd41d38a852228e13d76cc
+          role: arn:aws:iam::654654220436:role/iam-role-sops
+          created_at: "2026-11-06T19:57:27Z"
+          enc: AQICAHhNDAK0Is+rGNAlNYnav2FEvs37O7WQwrCmqkcTMDWNIQE/jO2rqZI7CAkLc3rg8NOgAAAAfjB8BgkqhkiG9w0BBwagbzBtAgEAMGgGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQMrDzwUXy6BciS8pNoAgEQgDsGc+zsgRGeEB1P/pVf7gP3ri/MNpl2M9Doj9x6W4NP3z0XX03SEWoSyOeAUDr9S/JJAdjgHFZUCDeG+g==
+          aws_profile: ""
+    gcp_kms: []
+    azure_kv: []
+    hc_vault: []
+    age:
+        - recipient: age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBFbGRrL0VoQXk3dmJzODNE
+            UGFRY05aQ0FUWU9yWlRxN1RKWVFwZzJEdFRjCjFpMWVFRmI1aTBCUVcyKzBCUS9z
+            R1NtTWh5ZnpyWjE5SnJuVGlOTmJJMkEKLS0tIHJlOEZWeWk3VWQ1Sk14czZseEN5
+            b3QyeGFJbk9XWW14b0k4QVFkc1VYdEEKL6IZlzvKzwmAxGgfES2F12q7vO9hVjlB
+            JTvejzQF4wiQ1R0Fqsi8VfspWLK95U+gm5LRRVlZfoA3qCMiVABmcA==
+            -----END AGE ENCRYPTED FILE-----
+        - recipient: age12uckcdwv9p2s75ae3h20wgn70taatdzzl44n9x6vr8h9qurzkaqqkhphz7
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBkTHZwYldQVVBPd1FwTk84
+            K1B2Z0IxeW9yYXE1ekFVcWRNOWpGOXBVUXhVCnkvcU15NWNZcG5haVhackZsd0gr
+            U3YweFh0QmNLY2ZRbndiQWpFMlcvTTAKLS0tIHdRc1c4WDErcXhlTUQxK2hvNU9w
+            NFVSQjE4YStqeXFnMXdYZmtFa3dGczQK6nv0W53ExL3MEQ+OwlcX9qG+K3LuxBvT
+            IJrHMcWELerfMPPvEQ6Qi2nhuTaooTO4jdX2ZPraAqDub3OvipeR5Q==
+            -----END AGE ENCRYPTED FILE-----
+        - recipient: age1hmmuna95ktwl9sf9j56wjjukyf22ukdyjd8c47nlf5fjgyeyk5rsmhtyjx
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBpQjFPcnBIRTZCVVdzWnl4
+            RFVPUXViYTJNcExGVXc4S01NWXB6QndwMDMwCkgzZUZQakYzYTdPcE52WkExMjdy
+            UGZoTUFKbkxXdVFsYlFZR2tnU0tBaTgKLS0tIDg4UHYyS21tMWJKTnZHK25nZG9S
+            NDMwcmI0Qmt2cGx4Q3F3Nm9QQjNLaVkKgrs1ji5fAimDN8LGq4iwfln4VsoaFFjL
+            xLEwDb9wRGTkVSJvW2zCkALUF80uNr2sIAzci06hUYjEvaSIeQJGMA==
+            -----END AGE ENCRYPTED FILE-----
+        - recipient: age1p6nksz7jrqlq8jm0qcvxwgaw8dup334tjp7y59w5pydkp8mnw9ssvtay53
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBFMUNtNEJVZ21sOTR6bTdv
+            UU1lWXJoa3NHOVhyYXd1WS9RY0FGZmxPRVVJCitEQytkaktZay9IbytPcXJncEc1
+            czlWQWgxNXYwZVFLWlRvZmJlZ3BtVW8KLS0tIHh1SWxOcmVkbzFxYk5pSE9iQmJS
+            KzRBU0FHaytZTXptVU42WC9GOFdZWW8Kt7d1D38z3d2sIR+MuyuYHwYXDulybcmH
+            KsomMkCBsETyF9BfhhGAqrJ8GL0hWjzXKH3mx5XhTeKHzZkWpdol7g==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-11-06T19:57:28Z"
+    mac: ENC[AES256_GCM,data:VSO2KDaYySXlbbzJWPoicBd4krrvGFgyO/5GsDZTzv7N7G2SK3A4i1s2l2bkjNJHjDtd6mP69yCt2t2XoSFC2KlBKKwqr8Z931oXAPeZ2po4biPZfYYXh885aqNjQj/sh5rk3V/Z4khz1bxJQHQveNVZwqmp1b96gGT4njsQh8E=,iv:UqGgfkwqGNGCv+I702EPOg4uCeiCoHZ4UkHfXRt9wMY=,tag:XxSg3AHdinyNXOt/veq6pg==,type:str]
+    pgp: []
+    encrypted_regex: ^(data|stringData)$
+    version: 3.7.3

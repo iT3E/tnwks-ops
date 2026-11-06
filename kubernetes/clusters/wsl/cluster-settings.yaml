@@ -99,6 +99,14 @@ data:
   # LoadBalancer IPs otherwise stay with MetalLB; Cilium only hands out
   # shared-vip addresses, to Services labelled for them.
   CILIUM_BGP_ENABLED: "true"
+  # Cluster Mesh with homelab-wsl-02 (docs/wsl/multi-site.md): this cluster's
+  # clustermesh-apiserver VIP, the peer's, and native routing for both sites'
+  # pods (10.44.0.0/14 covers 10.44 and 10.46).
+  CILIUM_CLUSTERMESH_ENABLED: "true"
+  CLUSTERMESH_APISERVER_IP: "10.5.0.210"
+  CLUSTERMESH_PEER_NAME: "homelab-wsl-02"
+  CLUSTERMESH_PEER_IP: "10.6.0.210"
+  CILIUM_NATIVE_ROUTING_CIDR: "10.44.0.0/14"
   CILIUM_BGP_LOCAL_ASN: "64601"
   CILIUM_BGP_PEER_ASN: "64611"
   CILIUM_BGP_PEER_ADDR: "10.5.0.1"

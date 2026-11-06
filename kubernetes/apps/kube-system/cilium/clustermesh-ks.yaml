@@ -1,0 +1,23 @@
+---
+# The shared Cilium CA for Cluster Mesh (docs/wsl/multi-site.md). Listed by
+# both WSL clusters; the Cilium HelmRelease reads it through an optional
+# valuesFrom, so a cluster without it (homelab-ms-01) keeps its own CA.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cilium-clustermesh
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/kube-system/cilium/clustermesh
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  wait: true
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
