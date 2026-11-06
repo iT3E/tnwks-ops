@@ -1,0 +1,41 @@
+{
+  "_comment": "Apps bin/site-failover can move between homelab-wsl and homelab-wsl-02. prefix: the app's variable prefix in cluster-settings / site-overrides (<prefix>_REPLICAS, _PG_PRIMARY, _PG_PROMOTION_TOKEN, _BACKUP_SUSPEND). pvcs: copied with kopiur (policy on both sites); transfer_only: the snapshot is deleted after the restore (the PVC isn't backed up). docs/wsl/multi-site.md.",
+  "mealie": {
+    "prefix": "MEALIE",
+    "namespace": "production",
+    "kustomizations": { "db": "mealie-db", "app": "mealie" },
+    "postgres": "mealie-pg",
+    "deployments": ["mealie"],
+    "backup_schedule": true,
+    "pvcs": [
+      { "name": "mealie-config", "policy": "mealie", "uid": 1000, "gid": 1000 }
+    ],
+    "check": {
+      "deployment": "mealie",
+      "container": "app",
+      "url": "http://localhost:9000/api/app/about"
+    }
+  },
+  "transcriber": {
+    "prefix": "TRANSCRIBER",
+    "namespace": "production",
+    "kustomizations": { "db": "transcriber-db", "app": "transcriber" },
+    "postgres": "transcriber-pg",
+    "deployments": ["transcriber", "transcriber-frontend"],
+    "backup_schedule": false,
+    "pvcs": [
+      {
+        "name": "transcriber-audio",
+        "policy": "transcriber",
+        "uid": 1000,
+        "gid": 1000,
+        "transfer_only": true
+      }
+    ],
+    "check": {
+      "deployment": "transcriber",
+      "container": "web",
+      "url": "http://localhost:8081/api/healthz"
+    }
+  }
+}

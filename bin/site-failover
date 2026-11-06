@@ -1,0 +1,387 @@
+#!/usr/bin/env python3
+"""Move an app between the WSL sites: a planned switchover (docs/wsl/multi-site.md).
+
+    site-failover status APP
+    site-failover switchover APP --to SITE [--yes] [--skip-pvcs]
+    site-failover clear APP [--yes]
+
+What a switchover does, old site -> new site, through each site's
+`flux-system/site-overrides` ConfigMap (Flux's last substituteFrom source; git
+stays the default and Flux is still the only thing that applies manifests):
+
+  1. preflight: both Postgres clusters healthy, old primary, new replica,
+     WAL replay caught up to the old site's archive; peer repo Ready
+  2. old: <P>_REPLICAS=0 (and the backup schedule suspended); wait until the
+     app's pods are gone
+  3. each PVC: one-off kopiur Snapshot on the old site, Restore on the new
+     site from the old site's repository (read-only peer ClusterRepository)
+  4. old: <P>_PG_PRIMARY=new; wait for the demotion token
+  5. new: <P>_PG_PRIMARY=new + <P>_PG_PROMOTION_TOKEN + <P>_REPLICAS=1 (+
+     schedule on); wait for the primary, then the app
+  6. check the app from inside its pod; print the timings (RTO, RPO)
+
+Each app's keys are written with their own server-side-apply field manager
+(site-failover-<app>), so apps don't overwrite each other's overrides. `clear`
+removes an app's keys (and the ConfigMap once it's empty): run it only after
+git says the same thing (a PR to cluster-settings), or the app falls back to
+git's defaults. There is no unplanned promote here: see the doc ("Unplanned
+failure"), it needs a fencing answer first.
+
+Reaching the sites: kubectl and flux run locally with
+~/.kube/config-<site>, or, when FAILOVER_SSH_<SITE> is set (site name upper
+case, '-' -> '_', e.g. FAILOVER_SSH_HOMELAB_WSL_02="user@host -p 2222"), on
+that host over SSH with its ~/.kube/config-<site>.
+"""
+import argparse
+import base64
+import json
+import os
+import shlex
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+SITES = ("homelab-wsl", "homelab-wsl-02")
+REMOTE_PATH = "/opt/tnwks-tools/bin"
+APPS_FILE = Path(__file__).with_name("site-failover-apps.json")
+
+
+def log(msg):
+    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def die(msg):
+    log(f"ERROR: {msg}")
+    sys.exit(1)
+
+
+class Site:
+    def __init__(self, name):
+        self.name = name
+        env = "FAILOVER_SSH_" + name.upper().replace("-", "_")
+        self.ssh = shlex.split(os.environ[env]) if os.environ.get(env) else None
+        self.kubeconfig = os.environ.get(
+            "FAILOVER_KUBECONFIG_" + name.upper().replace("-", "_"),
+            f"~/.kube/config-{name}",
+        )
+
+    def run(self, argv, stdin=None, check=True, timeout=900):
+        if self.ssh:
+            remote = (
+                f"export PATH=$PATH:{REMOTE_PATH} KUBECONFIG={self.kubeconfig}; "
+                + " ".join(shlex.quote(a) for a in argv)
+            )
+            cmd = ["ssh", "-o", "BatchMode=yes", *self.ssh, remote]
+            env = None
+        else:
+            cmd = argv
+            env = dict(os.environ, KUBECONFIG=os.path.expanduser(self.kubeconfig))
+        p = subprocess.run(cmd, input=stdin, capture_output=True, text=True, env=env, timeout=timeout)
+        if check and p.returncode != 0:
+            die(f"{self.name}: {' '.join(argv)}: {p.stderr.strip() or p.stdout.strip()}")
+        return p
+
+    def kubectl(self, *args, **kw):
+        return self.run(["kubectl", *args], **kw)
+
+    def get(self, kind, name, ns, check=True):
+        p = self.kubectl("get", kind, name, "-n", ns, "-o", "json", check=False)
+        if p.returncode != 0:
+            if check:
+                die(f"{self.name}: {kind} {ns}/{name}: {p.stderr.strip()}")
+            return None
+        return json.loads(p.stdout)
+
+    def reconcile(self, ks, timeout="15m"):
+        log(f"{self.name}: flux reconcile ks {ks}")
+        p = self.run(["flux", "reconcile", "ks", ks, "-n", "flux-system", f"--timeout={timeout}"], check=False, timeout=1200)
+        if p.returncode != 0:
+            log(f"{self.name}: reconcile {ks} didn't finish cleanly ({p.stderr.strip()[-200:]}); carrying on and checking state")
+
+    def psql(self, pod, sql, db="postgres"):
+        p = self.kubectl("exec", "-n", "databases", pod, "-c", "postgres", "--", "psql", "-d", db, "-tAc", sql, check=False)
+        return p.stdout.strip() if p.returncode == 0 else None
+
+    # --- site-overrides ---------------------------------------------------
+    def overrides(self):
+        cm = self.get("configmap", "site-overrides", "flux-system", check=False)
+        return (cm or {}).get("data") or {}
+
+    def set_overrides(self, app, data):
+        cm = {
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": {"name": "site-overrides", "namespace": "flux-system"},
+            "data": data,
+        }
+        log(f"{self.name}: site-overrides[{app}] = {data}")
+        self.kubectl(
+            "apply", "--server-side", f"--field-manager=site-failover-{app}", "--force-conflicts", "-f", "-",
+            stdin=json.dumps(cm),
+        )
+        if not self.overrides() and self.get("configmap", "site-overrides", "flux-system", check=False):
+            log(f"{self.name}: site-overrides is empty; deleting it")
+            self.kubectl("delete", "configmap", "site-overrides", "-n", "flux-system", "--ignore-not-found")
+
+
+def wait(what, fn, timeout=900, every=10):
+    start = time.time()
+    while time.time() - start < timeout:
+        v = fn()
+        if v:
+            return v
+        time.sleep(every)
+    die(f"timed out after {timeout}s waiting for {what}")
+
+
+def load_app(name):
+    apps = json.loads(APPS_FILE.read_text())
+    if name not in apps or name.startswith("_"):
+        die(f"unknown app {name!r}; known: {', '.join(k for k in apps if not k.startswith('_'))}")
+    return apps[name]
+
+
+def pg_state(site, app):
+    c = site.get("cluster.postgresql.cnpg.io", app["postgres"], "databases", check=False)
+    if not c:
+        return None
+    st = c.get("status", {})
+    pod = st.get("currentPrimary") or st.get("targetPrimary")
+    rec = site.psql(pod, "select pg_is_in_recovery()") if pod else None
+    return {
+        "phase": st.get("phase"),
+        "pod": pod,
+        "in_recovery": rec == "t",
+        "primary": c["spec"].get("replica", {}).get("primary"),
+        "demotion_token": st.get("demotionToken"),
+    }
+
+
+def deployments_stopped(site, app):
+    for d in app["deployments"]:
+        o = site.get("deployment", d, app["namespace"], check=False)
+        if o and (o["spec"].get("replicas", 1) != 0 or o.get("status", {}).get("replicas", 0) != 0):
+            return False
+    return True
+
+
+def deployments_ready(site, app):
+    for d in app["deployments"]:
+        o = site.get("deployment", d, app["namespace"], check=False)
+        if not o or o["spec"].get("replicas", 0) < 1:
+            return False
+        if o.get("status", {}).get("readyReplicas", 0) < o["spec"]["replicas"]:
+            return False
+    return True
+
+
+def walfile(lsn_sql, site, pod):
+    return site.psql(pod, f"select pg_walfile_name({lsn_sql})")
+
+
+# --- commands -------------------------------------------------------------
+def cmd_status(args):
+    app = load_app(args.app)
+    p = app["prefix"]
+    for s in map(Site, SITES):
+        ov = {k: v for k, v in s.overrides().items() if k.startswith(p + "_")}
+        pg = pg_state(s, app) or {}
+        deps = []
+        for d in app["deployments"]:
+            o = s.get("deployment", d, app["namespace"], check=False)
+            deps.append(f"{d}={o['status'].get('readyReplicas', 0)}/{o['spec'].get('replicas')}" if o else f"{d}=absent")
+        print(f"{s.name}:")
+        print(f"  overrides: {ov or '{}'}")
+        print(f"  postgres:  {pg.get('phase')} primary={pg.get('primary')} in_recovery={pg.get('in_recovery')} pod={pg.get('pod')}")
+        print(f"  app:       {' '.join(deps)}")
+
+
+def preflight(old, new, app):
+    po, pn = pg_state(old, app), pg_state(new, app)
+    if not po or not pn:
+        die(f"{app['postgres']} missing on {'old' if not po else 'new'} site")
+    if po["in_recovery"] or pn["in_recovery"] is False:
+        die(f"expected {old.name} primary and {new.name} replica; got old in_recovery={po['in_recovery']}, new in_recovery={pn['in_recovery']}")
+    for s, st in ((old, po), (new, pn)):
+        if st["phase"] != "Cluster in healthy state":
+            die(f"{s.name}: {app['postgres']} is {st['phase']!r}")
+    archived = old.psql(po["pod"], "select last_archived_wal from pg_stat_archiver")
+    replayed = walfile("pg_last_wal_replay_lsn()", new, pn["pod"])
+    log(f"WAL: {old.name} last archived {archived}, {new.name} replaying {replayed}")
+    if app["pvcs"]:
+        repo = new.kubectl("get", "clusterrepository.kopiur.home-operations.com", old.name, "-o", "json", check=False)
+        if repo.returncode != 0:
+            die(f"{new.name}: no ClusterRepository {old.name} (kopiur peer repository)")
+        conds = {c["type"]: c["status"] for c in json.loads(repo.stdout).get("status", {}).get("conditions", [])}
+        if conds.get("Ready") != "True":
+            die(f"{new.name}: ClusterRepository {old.name} not Ready")
+    return po, pn
+
+
+def copy_pvc(old, new, app, pvc, stamp):
+    ns = app["namespace"]
+    snap = f"{pvc['policy']}-switchover-{stamp}"
+    log(f"{old.name}: Snapshot {ns}/{snap} (policy {pvc['policy']})")
+    old.kubectl("create", "-f", "-", stdin=json.dumps({
+        "apiVersion": "kopiur.home-operations.com/v1alpha1",
+        "kind": "Snapshot",
+        "metadata": {"name": snap, "namespace": ns},
+        "spec": {
+            "policyRef": {"name": pvc["policy"]},
+            "description": f"site-failover {app['prefix'].lower()} -> {new.name}",
+            "deletionPolicy": "Delete",
+        },
+    }))
+
+    def snapped():
+        o = old.get("snapshot.kopiur.home-operations.com", snap, ns)
+        ph = o.get("status", {}).get("phase")
+        if ph == "Failed":
+            die(f"{old.name}: Snapshot {snap} failed: {o['status'].get('logTail', '')[-300:]}")
+        return o if ph == "Succeeded" else None
+
+    o = wait(f"Snapshot {snap}", snapped)
+    ident = o["status"]["snapshot"]["identity"]
+    sid = o["status"]["snapshot"]["kopiaSnapshotID"]
+    log(f"{old.name}: snapshot {sid} of {ident}")
+
+    rst = f"{pvc['name']}-switchover-{stamp}"
+    log(f"{new.name}: Restore {ns}/{rst} into PVC {pvc['name']} from repository {old.name}")
+    new.kubectl("create", "-f", "-", stdin=json.dumps({
+        "apiVersion": "kopiur.home-operations.com/v1alpha1",
+        "kind": "Restore",
+        "metadata": {"name": rst, "namespace": ns},
+        "spec": {
+            "repository": {"kind": "ClusterRepository", "name": old.name},
+            "source": {"identity": {**ident, "snapshotID": sid}},
+            "target": {"pvcRef": {"name": pvc["name"]}},
+            "credentialProjection": {"enabled": True},
+            # An exact mirror: the PVC may hold this site's older copy.
+            "options": {"enableFileDeletion": True},
+            "mover": {"securityContext": {"runAsUser": pvc["uid"], "runAsGroup": pvc["gid"]}},
+        },
+    }))
+
+    def restored():
+        o = new.get("restore.kopiur.home-operations.com", rst, ns)
+        ph = o.get("status", {}).get("phase")
+        if ph == "Failed":
+            die(f"{new.name}: Restore {rst} failed: {json.dumps(o['status'].get('failure', {}))[:300]} {o['status'].get('logTail', '')[-300:]}")
+        return o if ph in ("Completed", "Succeeded") else None
+
+    o = wait(f"Restore {rst}", restored)
+    log(f"{new.name}: restored {json.dumps(o['status'].get('progress', {}))}")
+    if pvc.get("transfer_only"):
+        log(f"{old.name}: transfer-only PVC: deleting Snapshot {snap} (and its kopia snapshot)")
+        old.kubectl("delete", "snapshot.kopiur.home-operations.com", snap, "-n", ns, "--wait=false")
+
+
+def cmd_switchover(args):
+    app = load_app(args.app)
+    p = app["prefix"]
+    if args.to not in SITES:
+        die(f"--to must be one of {SITES}")
+    new = Site(args.to)
+    old = Site(next(s for s in SITES if s != args.to))
+    log(f"switchover {args.app}: {old.name} -> {new.name}")
+    po, pn = preflight(old, new, app)
+    if not args.yes:
+        if input(f"{args.app} stops on {old.name} and starts on {new.name}. Type the app name to go on: ").strip() != args.app:
+            die("aborted")
+    t0 = time.time()
+    stamp = time.strftime("%Y%m%d%H%M%S")
+
+    old_ov = {f"{p}_REPLICAS": "0"}
+    if app.get("backup_schedule"):
+        old_ov[f"{p}_BACKUP_SUSPEND"] = "true"
+    old.set_overrides(args.app, old_ov)
+    old.reconcile(app["kustomizations"]["app"])
+    wait(f"{args.app} stopped on {old.name}", lambda: deployments_stopped(old, app))
+    t_stopped = time.time()
+    log(f"{old.name}: {args.app} stopped")
+
+    if not args.skip_pvcs:
+        for pvc in app["pvcs"]:
+            copy_pvc(old, new, app, pvc, stamp)
+    t_pvcs = time.time()
+
+    old_ov[f"{p}_PG_PRIMARY"] = new.name
+    old.set_overrides(args.app, old_ov)
+    old.reconcile(app["kustomizations"]["db"])
+    token = wait(f"demotion token on {old.name}", lambda: (pg_state(old, app) or {}).get("demotion_token"), timeout=600)
+    try:
+        info = json.loads(base64.b64decode(token))
+        log(f"{old.name}: demoted; token LSN {info.get('latestCheckpointREDOLocation') or info}")
+    except Exception:
+        log(f"{old.name}: demoted")
+
+    new_ov = {f"{p}_PG_PRIMARY": new.name, f"{p}_PG_PROMOTION_TOKEN": token, f"{p}_REPLICAS": "1"}
+    if app.get("backup_schedule"):
+        new_ov[f"{p}_BACKUP_SUSPEND"] = "false"
+    new.set_overrides(args.app, new_ov)
+    new.reconcile(app["kustomizations"]["db"])
+    wait(f"{app['postgres']} primary on {new.name}",
+         lambda: (lambda s: s and not s["in_recovery"] and s["phase"] == "Cluster in healthy state")(pg_state(new, app)),
+         timeout=900)
+    t_promoted = time.time()
+    log(f"{new.name}: {app['postgres']} is primary")
+    new.reconcile(app["kustomizations"]["app"])
+    wait(f"{args.app} ready on {new.name}", lambda: deployments_ready(new, app), timeout=1200)
+    t_ready = time.time()
+
+    chk = app.get("check")
+    if chk:
+        p_ = new.kubectl("exec", "-n", app["namespace"], f"deploy/{chk['deployment']}", "-c", chk["container"], "--",
+                         "python3", "-c", f"import urllib.request;print(urllib.request.urlopen({chk['url']!r},timeout=10).status)",
+                         check=False)
+        log(f"{new.name}: check {chk['url']}: {p_.stdout.strip() or p_.stderr.strip()[-200:]}")
+
+    pn2 = pg_state(old, app) or {}
+    log(f"{old.name}: {app['postgres']} now in_recovery={pn2.get('in_recovery')} (follows {new.name})")
+    print(json.dumps({
+        "app": args.app, "from": old.name, "to": new.name,
+        "downtime_s": round(t_ready - t_stopped),
+        "stop_s": round(t_stopped - t0), "pvc_copy_s": round(t_pvcs - t_stopped),
+        "db_switch_s": round(t_promoted - t_pvcs), "app_start_s": round(t_ready - t_promoted),
+        "rpo": "0 (promotion token: replayed to the demoted primary's last LSN)",
+    }, indent=2))
+    log("done. To make it permanent: a PR to both cluster-settings, then `site-failover clear`.")
+
+
+def cmd_clear(args):
+    app = load_app(args.app)
+    for s in map(Site, SITES):
+        ov = {k: v for k, v in s.overrides().items() if k.startswith(app["prefix"] + "_")}
+        if not ov:
+            continue
+        log(f"{s.name}: clearing {sorted(ov)}; the app returns to git's values there")
+        if not args.yes and input("Type the app name to go on: ").strip() != args.app:
+            die("aborted")
+        s.set_overrides(args.app, {})
+        s.reconcile(app["kustomizations"]["db"])
+        s.reconcile(app["kustomizations"]["app"])
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("status")
+    s.add_argument("app")
+    s.set_defaults(fn=cmd_status)
+    s = sub.add_parser("switchover")
+    s.add_argument("app")
+    s.add_argument("--to", required=True)
+    s.add_argument("--yes", action="store_true")
+    s.add_argument("--skip-pvcs", action="store_true", help="don't copy PVCs (the new site's copy is current)")
+    s.set_defaults(fn=cmd_switchover)
+    s = sub.add_parser("clear")
+    s.add_argument("app")
+    s.add_argument("--yes", action="store_true")
+    s.set_defaults(fn=cmd_clear)
+    a = ap.parse_args()
+    a.fn(a)
+
+
+if __name__ == "__main__":
+    main()
