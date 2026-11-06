@@ -1,36 +1,24 @@
 ---
-# Mealie's own CNPG cluster, databases/mealie-pg, from the component
-# (kubernetes/components/cnpg-cluster, added by the mealie-db Kustomization).
+# Mealie's own CNPG cluster, databases/mealie-pg: ../../../../components/cnpg-cluster
+# plus cnpg-standby (both added by the mealie-db Kustomization). homelab-wsl is
+# the primary; homelab-wsl-02 runs a replica cluster from its WAL archive.
 #
-# First boot imports `mealie` from the shared cluster (CNPG initdb.import,
-# microservice). bootstrap is only read when the Cluster is created, so the
-# import stays harmless afterwards; the shared copy stays as the rollback.
+# Imported from the shared cluster's `mealie` database on 2026-11-05 (#1756);
+# that copy stays there as the rollback. The import patch is gone: bootstrap
+# is only read when a Cluster is created, and a new one now restores from the
+# peer's archive (cnpg-standby).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+resources:
+  # The owner role's password, the same on both sites (a replica gets the
+  # role itself from the primary's WAL).
+  - ./secret-mealie-role.sops.yaml
 patches:
   - target:
       kind: Cluster
-      # The component names it ${CNPG_APP}-pg and Flux substitutes after the
-      # build, so match by kind (this path has one Cluster).
     patch: |-
+      # Which site is primary. Failover writes MEALIE_PG_PRIMARY to both sites'
+      # site-overrides (docs/wsl/multi-site.md).
       - op: add
-        path: /spec/bootstrap/initdb/import
-        value:
-          type: microservice
-          databases: [mealie]
-          source:
-            externalCluster: postgres
-      - op: add
-        path: /spec/externalClusters
-        value:
-          - name: postgres
-            connectionParameters:
-              host: postgres-rw.databases.svc.cluster.local
-              # The owner, not postgres: the shared cluster has superuser
-              # access off, and mealie owns every object in the database.
-              user: mealie
-              dbname: mealie
-              sslmode: require
-            password:
-              name: postgres-mealie
-              key: password
+        path: /spec/replica/primary
+        value: ${MEALIE_PG_PRIMARY:=homelab-wsl}

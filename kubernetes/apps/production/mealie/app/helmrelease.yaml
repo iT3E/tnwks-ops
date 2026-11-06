@@ -14,12 +14,17 @@ spec:
         namespace: flux-system
   install:
     createNamespace: true
+    # A standby site runs Mealie at 0 replicas, so its WaitForFirstConsumer
+    # config PVC stays unbound until a restore or a failover mounts it, and
+    # Helm's wait (kstatus: PVC not Bound = in progress) would never finish.
+    disableWait: ${MEALIE_HELM_DISABLE_WAIT:=false}
     remediation:
       retries: 3
   interval: 30m
   maxHistory: 2
   upgrade:
     cleanupOnFail: true
+    disableWait: ${MEALIE_HELM_DISABLE_WAIT:=false}
     remediation:
       retries: 3
   uninstall:
