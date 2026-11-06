@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.165.0 - 2026-11-06
+
+### Changed
+
+* The transcriber is stopped while its database moves to its own CNPG cluster.
+
 ## v1.164.0 - 2026-11-06
 
 ### Changed
