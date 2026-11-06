@@ -68,6 +68,11 @@ resources:
   - ../../../apps/kopiur-system/standby-restore/ks.yaml
   # Fence a warm app's Postgres when its site lease names this site.
   - ../../../apps/databases/site-lease-fence/ks.yaml
+  # CI: the network-device Terraform runner (wg03 sidecar), so those
+  # workflows run while homelab-wsl is down.
+  - ../../../apps/tools/namespace.yaml
+  - ../../../apps/tools/actions-runner-controller/controller/ks.yaml
+  - ./ops-runner-ks.yaml
 # Parts of those shared ks.yaml files that don't run here (yet):
 #   - PrometheusRules: no kube-prometheus-stack on this cluster.
 #   - ingress-nginx (public): waits for this cluster's own cloudflared tunnel.

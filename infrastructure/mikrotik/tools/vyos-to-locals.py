@@ -372,6 +372,13 @@ EXTRA_WIREGUARD = {
                 "allowed_address": ["10.10.32.10/32"],
                 "comment": "ARC scale set tnwks-ops-runner (wireproxy sidecar)",
             },
+            # homelab-wsl-02's runner (tnwks-ops-runner-wsl-02): its own key, so
+            # both sites' runners can hold the tunnel at once.
+            "tnwks-ops-runner-wsl-02": {
+                "public_key": "PdKrAZoUe0UgjIswaKOaIvLlXh1k811qVo/SJDiD6Bw=",
+                "allowed_address": ["10.10.32.11/32"],
+                "comment": "ARC scale set tnwks-ops-runner-wsl-02 (wireproxy sidecar)",
+            },
         },
     },
 }

@@ -1,0 +1,24 @@
+---
+# The ops runner on homelab-wsl-02 (ops-runner/kustomization.yaml says how it
+# differs from homelab-wsl's).
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: tnwks-ops-runner
+  namespace: flux-system
+spec:
+  path: ./kubernetes/clusters/wsl-02/apps/ops-runner
+  dependsOn:
+    - name: actions-runner-controller
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
