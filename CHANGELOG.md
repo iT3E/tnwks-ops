@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.207.0 - 2026-11-06
+
+### Removed
+
+* MetalLB is gone from homelab-wsl: Cilium LB IPAM and L2 announcements hand out and answer for its LoadBalancer IPs (the same 10.5.0.200-220 range and addresses), as on homelab-wsl-02. Shared VIPs no longer need a loadBalancerClass there.
+
 ## v1.206.3 - 2026-11-06
 
 ### Fixed
