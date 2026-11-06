@@ -1,0 +1,3 @@
+kind: Changed
+body: The transcriber is stopped while its database moves to its own CNPG cluster.
+time: 2026-11-05T17:15:27.942791597-08:00
