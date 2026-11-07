@@ -106,7 +106,9 @@ class MiniWebSocket:
         if self.secure:
             import ssl
 
-            sock = ssl.create_default_context().wrap_socket(sock, server_hostname=host)
+            context = ssl.create_default_context()
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            sock = context.wrap_socket(sock, server_hostname=host)
         self.sock = sock
         self.buf = b""
         key = base64.b64encode(os.urandom(16)).decode()

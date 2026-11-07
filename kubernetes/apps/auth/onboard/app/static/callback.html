@@ -32,10 +32,14 @@
         const expectedState = sessionStorage.getItem("onboard.pkce_state");
 
         function showError(message) {
-          card.innerHTML = `
-            <div class="error">${message}</div>
-            <a class="cta" href="/">Try again</a>
-          `;
+          const detail = document.createElement("div");
+          detail.className = "error";
+          detail.textContent = message;
+          const retry = document.createElement("a");
+          retry.className = "cta";
+          retry.href = "/";
+          retry.textContent = "Try again";
+          card.replaceChildren(detail, retry);
         }
 
         if (error) {

@@ -24,9 +24,12 @@ task edgeos:plan            # DEVICE=ep-r6 by default
 task edgeos:apply
 ```
 
-- **plan** prints what would be deleted and set (secret values masked), then
+- **plan** prints deletion and addition counts without configuration values, then
   stages exactly those lines in a candidate session on the device and
   discards it, so EdgeOS validates the change without committing anything.
+  Review intended changes in the public `config.sh` diff. Live values and SSH
+  error output stay out of logs because they can contain retired credentials
+  that the current SOPS file cannot mask.
 - **apply** stages the same lines, schedules `commit-confirm` (5 minutes) and
   commits; then a new SSH login confirms and saves. If the change cuts the
   device off, the confirm never arrives and the device reboots into its saved,
