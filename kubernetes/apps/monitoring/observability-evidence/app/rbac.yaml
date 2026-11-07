@@ -26,13 +26,13 @@ rules:
   - apiGroups: [postgresql.cnpg.io]
     resources: [clusters, backups]
     verbs: [list]
-  # Recovery evidence: the fence CronJob's last success, and the standby
-  # restore drills' Restores.
+  # Recovery evidence: the fence CronJob's last success, the standby
+  # restore drills' Restores, and which policy and schedule back up each PVC.
   - apiGroups: [batch]
     resources: [cronjobs]
     verbs: [list]
   - apiGroups: [kopiur.home-operations.com]
-    resources: [restores]
+    resources: [restores, snapshotpolicies, snapshotschedules]
     verbs: [list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

@@ -36,6 +36,7 @@
       "pvcs": [
         "mealie-config"
       ],
+      "objectives": {},
       "probe": {
         "url": "http://mealie.production.svc.cluster.local:9000/api/app/about",
         "expect": "\"version\""
@@ -61,6 +62,7 @@
       "pvcs": [
         "transcriber-audio"
       ],
+      "objectives": {},
       "probe": {
         "url": "http://transcriber-app.production.svc.cluster.local:8081/api/healthz",
         "expect": "\"ok\":true"
@@ -83,6 +85,7 @@
       "pvcs": [
         "config-changedetection-0"
       ],
+      "objectives": {},
       "probe": {
         "url": "http://changedetection.production.svc.cluster.local:5000/",
         "expect": "<html"
@@ -108,6 +111,7 @@
       "tier": "movable",
       "fencing_required": false,
       "pvcs": [],
+      "objectives": {},
       "probe": {
         "url": "http://immich-server.selfhosted.svc.cluster.local:2283/api/server/ping",
         "expect": "pong"
@@ -134,6 +138,7 @@
         "firefly-upload",
         "finance-sync-state"
       ],
+      "objectives": {},
       "probe": {
         "url": "http://firefly.production.svc.cluster.local:8080/health",
         "expect": "OK"
@@ -158,6 +163,7 @@
       "tier": "movable",
       "fencing_required": false,
       "pvcs": [],
+      "objectives": {},
       "probe": {
         "url": "http://sonarr.media.svc.cluster.local:8989/ping",
         "expect": "OK"
@@ -182,6 +188,7 @@
       "pvcs": [
         "config-home-assistant-0"
       ],
+      "objectives": {},
       "probe": {
         "url": "http://home-assistant.home-automation.svc.cluster.local:8123/manifest.json",
         "expect": "Home Assistant"
@@ -204,6 +211,7 @@
       "pvcs": [
         "config-unifi-0"
       ],
+      "objectives": {},
       "probe": {
         "url": "https://unifi.networking.svc.cluster.local:8443/status",
         "expect": "\"up\":true"
@@ -224,6 +232,7 @@
       "tier": "movable",
       "fencing_required": false,
       "pvcs": [],
+      "objectives": {},
       "probe": {
         "url": "http://ombi.production.svc.cluster.local:3579/",
         "expect": "<html"
@@ -244,6 +253,7 @@
       "tier": "movable",
       "fencing_required": false,
       "pvcs": [],
+      "objectives": {},
       "probe": {
         "url": "http://ombi-f.production.svc.cluster.local:3579/",
         "expect": "<html"
@@ -264,6 +274,7 @@
       "tier": "movable",
       "fencing_required": false,
       "pvcs": [],
+      "objectives": {},
       "probe": {
         "url": "http://wizarr.production.svc.cluster.local:5690/",
         "expect": "<html"
@@ -284,6 +295,7 @@
       "tier": "movable",
       "fencing_required": false,
       "pvcs": [],
+      "objectives": {},
       "probe": {
         "url": "http://jellyfin.production.svc.cluster.local:8096/health",
         "expect": "Healthy"
@@ -306,6 +318,7 @@
       "tier": "movable",
       "fencing_required": false,
       "pvcs": [],
+      "objectives": {},
       "probe": {
         "url": "http://plausible.selfhosted.svc.cluster.local:8000/api/health",
         "expect": "\"postgres\":\"ok\""
@@ -328,6 +341,7 @@
       "tier": "warm",
       "fencing_required": true,
       "pvcs": [],
+      "objectives": {},
       "probe": {
         "url": "http://grafana.monitoring.svc.cluster.local/api/health",
         "expect": "\"database\": \"ok\""
@@ -462,6 +476,10 @@
       "source": "transcriber-db"
     }
   ],
+  "objectives": {
+    "rpo": 108000,
+    "rto": 3600
+  },
   "vips": [
     {
       "address": "10.10.95.10",

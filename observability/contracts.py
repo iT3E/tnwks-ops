@@ -36,6 +36,7 @@ PRODUCERS = {
     "thanos_": "Thanos component metrics",
     "pyrra_": "Pyrra SLO rules (kubernetes/apps/monitoring/pyrra/app/slos.yaml)",
     "garage_": "Garage admin metrics (WSL-02 archive)",
+    "kopiur_": "Kopiur controller (PVC backups and restores)",
     "ALERTS": "local Prometheus alert rules (current state)",
     "up": "Prometheus scrape status",
 }
@@ -53,7 +54,8 @@ def metric_names(expression):
     text = re.sub(r'"(?:\\.|[^"\\])*"', '""', expression)
     text = re.sub(r'\b(?:by|without|on|ignoring|group_left|group_right)\s*\([^)]*\)', '', text)
     text = re.sub(r'\{[^}]*\}', '', text)
-    ignored = {"and", "or", "unless", "bool", "by", "without", "on", "ignoring", "offset"}
+    ignored = {"and", "or", "unless", "bool", "by", "without", "on", "ignoring", "offset",
+               "group_left", "group_right"}
     return sorted({match[1] for match in re.finditer(r'(?<![\w:$])([A-Za-z_:][\w:]*)(?![\w:])', text)
                    if match[1] not in ignored and not text[match.end():].lstrip().startswith('(')})
 

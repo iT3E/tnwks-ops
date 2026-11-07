@@ -1151,6 +1151,181 @@
   },
   {
     "dashboard": "tnwks-data",
+    "tab": "Objectives",
+    "panel": "Recovery point by app",
+    "query": "max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:app_rpo_state"
+    ],
+    "sources": [
+      {
+        "metric": "barman_cloud_cloudnative_pg_io_last_available_backup_timestamp",
+        "producer": "CNPG Barman Cloud plugin",
+        "availability": "configured"
+      },
+      {
+        "metric": "cnpg_pg_replication_in_recovery",
+        "producer": "CloudNativePG PostgreSQL exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_app_backup_scheduled",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_app_recovery_objective_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_expected_database_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "kopiur_policy_last_backup_success_timestamp_seconds",
+        "producer": "Kopiur controller (PVC backups and restores)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/backups.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Objectives",
+    "panel": "Backup age by app",
+    "query": "max by (k8s_cluster, app) (homelab:app_backup_age_seconds{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:app_backup_age_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "barman_cloud_cloudnative_pg_io_last_available_backup_timestamp",
+        "producer": "CNPG Barman Cloud plugin",
+        "availability": "configured"
+      },
+      {
+        "metric": "cnpg_pg_replication_in_recovery",
+        "producer": "CloudNativePG PostgreSQL exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_app_backup_scheduled",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_expected_database_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "kopiur_policy_last_backup_success_timestamp_seconds",
+        "producer": "Kopiur controller (PVC backups and restores)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/backups.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Objectives",
+    "panel": "Restore time by app",
+    "query": "max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:app_rto_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_app_recovery_objective_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_restore_last_duration_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/backups.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Objectives",
+    "panel": "Last drill duration",
+    "query": "max by (k8s_cluster, app) (homelab_restore_last_duration_seconds{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_restore_last_duration_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_restore_last_duration_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/backups.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Objectives",
+    "panel": "PVCs without a backup schedule",
+    "query": "max by (app, pvc) (homelab_app_backup_scheduled{k8s_cluster=~\"$cluster\"}) == 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_app_backup_scheduled"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_app_backup_scheduled",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Every PVC is scheduled on a site",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/backups.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-data",
     "tab": "Storage",
     "panel": "Windows disk free",
     "query": "windows_logical_disk_free_bytes{k8s_cluster=~\"$cluster\",volume=~\"C:|E:\"}",

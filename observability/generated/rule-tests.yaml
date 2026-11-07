@@ -504,3 +504,99 @@ tests:
     exp_samples:
     - labels: homelab:recovery_state{k8s_cluster="one",app="test"}
       value: 3
+- name: an app's backup age is its oldest piece, and a piece without evidence is Unknown
+  interval: 1m
+  input_series:
+  - series: homelab_app_backup_scheduled{k8s_cluster="one",observer_cluster="one",namespace="apps",app="fresh",pvc="data",policy="fresh"}
+    values: 1+0x10
+  - series: kopiur_policy_last_backup_success_timestamp_seconds{k8s_cluster="one",namespace="apps",policy="fresh"}
+    values: 200+0x10
+  - series: homelab_expected_database_info{k8s_cluster="one",namespace="databases",db_cluster="fresh-pg",app="fresh"}
+    values: 1+0x10
+  - series: cnpg_pg_replication_in_recovery{k8s_cluster="one",namespace="databases",pod="fresh-pg-1"}
+    values: 0+0x10
+  - series: barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{k8s_cluster="one",namespace="databases",pod="fresh-pg-1"}
+    values: 100+0x10
+  - series: homelab_app_recovery_objective_seconds{k8s_cluster="one",observer_cluster="one",app="fresh",objective="rpo"}
+    values: 1000+0x10
+  - series: homelab_app_backup_scheduled{k8s_cluster="one",observer_cluster="one",namespace="apps",app="stale",pvc="data",policy="stale"}
+    values: 1+0x10
+  - series: kopiur_policy_last_backup_success_timestamp_seconds{k8s_cluster="one",namespace="apps",policy="stale"}
+    values: 0+0x10
+  - series: homelab_app_recovery_objective_seconds{k8s_cluster="one",observer_cluster="one",app="stale",objective="rpo"}
+    values: 60+0x10
+  - series: homelab_app_backup_scheduled{k8s_cluster="one",observer_cluster="one",namespace="apps",app="partial",pvc="a",policy="partial-a"}
+    values: 1+0x10
+  - series: homelab_app_backup_scheduled{k8s_cluster="one",observer_cluster="one",namespace="apps",app="partial",pvc="b",policy="partial-b"}
+    values: 1+0x10
+  - series: kopiur_policy_last_backup_success_timestamp_seconds{k8s_cluster="one",namespace="apps",policy="partial-a"}
+    values: 250+0x10
+  - series: homelab_app_recovery_objective_seconds{k8s_cluster="one",observer_cluster="one",app="partial",objective="rpo"}
+    values: 1000+0x10
+  - series: homelab_app_backup_scheduled{k8s_cluster="one",observer_cluster="one",namespace="apps",app="standby",pvc="data",policy="standby"}
+    values: 0+0x10
+  - series: homelab_app_recovery_objective_seconds{k8s_cluster="one",observer_cluster="one",app="standby",objective="rpo"}
+    values: 1000+0x10
+  promql_expr_test:
+  - expr: homelab:app_backup_age_seconds
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:app_backup_age_seconds{k8s_cluster="one",app="fresh"}
+      value: 200
+    - labels: homelab:app_backup_age_seconds{k8s_cluster="one",app="partial"}
+      value: 50
+    - labels: homelab:app_backup_age_seconds{k8s_cluster="one",app="stale"}
+      value: 300
+  - expr: homelab:app_rpo_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:app_rpo_state{k8s_cluster="one",app="fresh"}
+      value: 1
+    - labels: homelab:app_rpo_state{k8s_cluster="one",app="partial"}
+      value: 0
+    - labels: homelab:app_rpo_state{k8s_cluster="one",app="stale"}
+      value: 3
+- name: a primary without backup evidence is Unknown; a replica's missing backup isn't counted
+  interval: 1m
+  input_series:
+  - series: homelab_expected_database_info{k8s_cluster="one",namespace="databases",db_cluster="app-pg",app="app"}
+    values: 1+0x10
+  - series: cnpg_pg_replication_in_recovery{k8s_cluster="one",namespace="databases",pod="app-pg-1"}
+    values: 0+0x10
+  - series: homelab_expected_database_info{k8s_cluster="two",namespace="databases",db_cluster="app-pg",app="app"}
+    values: 1+0x10
+  - series: cnpg_pg_replication_in_recovery{k8s_cluster="two",namespace="databases",pod="app-pg-1"}
+    values: 1+0x10
+  - series: homelab_app_recovery_objective_seconds{k8s_cluster="one",app="app",objective="rpo"}
+    values: 1000+0x10
+  - series: homelab_app_recovery_objective_seconds{k8s_cluster="two",app="app",objective="rpo"}
+    values: 1000+0x10
+  promql_expr_test:
+  - expr: homelab:app_rpo_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:app_rpo_state{k8s_cluster="one",app="app"}
+      value: 0
+- name: 'restore time: within, past, and Unknown without a drill'
+  interval: 1m
+  input_series:
+  - series: homelab_restore_last_duration_seconds{k8s_cluster="one",observer_cluster="one",app="quick"}
+    values: 30+0x10
+  - series: homelab_app_recovery_objective_seconds{k8s_cluster="one",observer_cluster="one",app="quick",objective="rto"}
+    values: 3600+0x10
+  - series: homelab_restore_last_duration_seconds{k8s_cluster="one",observer_cluster="one",app="slow"}
+    values: 7200+0x10
+  - series: homelab_app_recovery_objective_seconds{k8s_cluster="one",observer_cluster="one",app="slow",objective="rto"}
+    values: 3600+0x10
+  - series: homelab_app_recovery_objective_seconds{k8s_cluster="one",observer_cluster="one",app="untested",objective="rto"}
+    values: 3600+0x10
+  promql_expr_test:
+  - expr: homelab:app_rto_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:app_rto_state{k8s_cluster="one",app="quick"}
+      value: 1
+    - labels: homelab:app_rto_state{k8s_cluster="one",app="slow"}
+      value: 3
+    - labels: homelab:app_rto_state{k8s_cluster="one",app="untested"}
+      value: 0

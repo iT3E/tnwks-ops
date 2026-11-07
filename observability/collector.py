@@ -125,6 +125,26 @@ class Collector:
                 metrics.add("homelab_expected_ingress_info", 1, k8s_cluster=site["cluster"],
                             name=name["name"], vip=name["vip"], observer_cluster=self.cluster)
 
+        # A recovery point needs data to back up: catalogue apps with PVCs or
+        # databases, and every expected database's app. A restore time needs a
+        # drill, which covers warm apps' PVCs.
+        defaults = self.inventory.get("objectives", {})
+        rpo = {}
+        for app in self.inventory["apps"]:
+            objectives = {**defaults, **app.get("objectives", {})}
+            for cluster in app["clusters"]:
+                if "rpo" in objectives and (app.get("pvcs") or app.get("databases")):
+                    rpo[(app["name"], cluster)] = objectives["rpo"]
+                if "rto" in objectives and app.get("pvcs") and app.get("tier") == "warm":
+                    metrics.add("homelab_app_recovery_objective_seconds", objectives["rto"], app=app["name"],
+                                objective="rto", k8s_cluster=cluster, observer_cluster=self.cluster)
+        for database in self.expected_databases():
+            if "rpo" in defaults:
+                rpo.setdefault((database["app"], database["cluster"]), defaults["rpo"])
+        for (name, cluster), seconds in sorted(rpo.items()):
+            metrics.add("homelab_app_recovery_objective_seconds", seconds, app=name,
+                        objective="rpo", k8s_cluster=cluster, observer_cluster=self.cluster)
+
         for database in self.expected_databases():
             metrics.add("homelab_expected_database_info", 1, app=database["app"],
                         namespace=database["namespace"], db_cluster=database["name"],
@@ -137,6 +157,7 @@ class Collector:
             "databases": self.databases,
             "services": self.services,
             "recovery": self.recovery,
+            "backups": self.backups,
         }
         successes = []
         for name, function in sections.items():
@@ -281,14 +302,22 @@ class Collector:
                     pvc = obj["metadata"].get("labels", {}).get("tnwks.us/pvc")
                     created = timestamp(obj["metadata"].get("creationTimestamp"))
                     if pvc in app["pvcs"] and created and created > newest.get(pvc, (0, ""))[0]:
-                        newest[pvc] = (created, obj.get("status", {}).get("phase", ""))
+                        ready = next((x for x in obj.get("status", {}).get("conditions", [])
+                                      if x.get("type") == "Ready" and x.get("status") == "True"), {})
+                        newest[pvc] = (created, obj.get("status", {}).get("phase", ""),
+                                       timestamp(ready.get("lastTransitionTime")))
                 if len(newest) == len(app["pvcs"]):
                     ok = all(phase in ("Completed", "Succeeded") and 0 <= now - created <= 8 * 86400
-                             for created, phase in newest.values())
+                             for created, phase, _ in newest.values())
                     state("restore", 1 if ok else 3)
                     if ok:
                         metrics.add("homelab_restore_last_success_timestamp_seconds",
-                                    min(created for created, _ in newest.values()), **scope)
+                                    min(created for created, _, _ in newest.values()), **scope)
+                        # The drill's restore time: creation to Ready, the slowest
+                        # PVC. Unknown unless every PVC reports when it finished.
+                        if all(done and done >= created for created, _, done in newest.values()):
+                            metrics.add("homelab_restore_last_duration_seconds",
+                                        max(done - created for created, _, done in newest.values()), **scope)
 
             if fence_ok and 0 <= now - fence_ok:
                 metrics.add("homelab_fence_job_last_success_timestamp_seconds", fence_ok, **scope)
@@ -305,6 +334,32 @@ class Collector:
                 # Otherwise no positive fence evidence: the CronJob can succeed even
                 # when every DNS lookup failed, and a current TXT answer can't
                 # backfill the other site's attestation.
+
+    def backups(self, metrics: Metrics, labels: dict):
+        """Which Kopiur policy backs up each app's PVC on this site, and whether a
+        running schedule uses it (1) or none does (0: suspended on a standby, or
+        never scheduled). The rules join it with Kopiur's last success per policy,
+        so an app's backup age is its oldest scheduled PVC, not its freshest."""
+        by_namespace: dict[str, list] = {}
+        for app in self.inventory["apps"]:
+            if app.get("pvcs") and self.cluster in app["clusters"]:
+                by_namespace.setdefault(app["namespace"], []).append(app)
+        for namespace, apps in by_namespace.items():
+            base = f"/apis/kopiur.home-operations.com/v1alpha1/namespaces/{namespace}"
+            policies = self.api.get(f"{base}/snapshotpolicies").get("items", [])
+            running = {obj.get("spec", {}).get("policyRef", {}).get("name")
+                       for obj in self.api.get(f"{base}/snapshotschedules").get("items", [])
+                       if not obj.get("spec", {}).get("schedule", {}).get("suspend", False)}
+            by_pvc = {}
+            for policy in policies:
+                for source in policy.get("spec", {}).get("sources", []):
+                    if (source.get("pvc") or {}).get("name"):
+                        by_pvc[source["pvc"]["name"]] = policy["metadata"]["name"]
+            for app in apps:
+                for pvc in app["pvcs"]:
+                    policy = by_pvc.get(pvc)
+                    metrics.add("homelab_app_backup_scheduled", int(policy in running), app=app["name"],
+                                namespace=namespace, pvc=pvc, policy=policy or "none", **labels)
 
     def flux(self, metrics: Metrics, labels: dict):
         for group, version, plural, kind in [

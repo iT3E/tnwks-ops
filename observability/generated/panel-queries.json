@@ -321,6 +321,46 @@
   },
   {
     "dashboard": "tnwks-data",
+    "tab": "Objectives",
+    "title": "Recovery point by app",
+    "expr": "max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Objectives",
+    "title": "Backup age by app",
+    "expr": "max by (k8s_cluster, app) (homelab:app_backup_age_seconds{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Objectives",
+    "title": "Restore time by app",
+    "expr": "max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Objectives",
+    "title": "Last drill duration",
+    "expr": "max by (k8s_cluster, app) (homelab_restore_last_duration_seconds{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Objectives",
+    "title": "PVCs without a backup schedule",
+    "expr": "max by (app, pvc) (homelab_app_backup_scheduled{k8s_cluster=~\"$cluster\"}) == 0",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
     "tab": "Storage",
     "title": "Windows disk free",
     "expr": "windows_logical_disk_free_bytes{k8s_cluster=~\"$cluster\",volume=~\"C:|E:\"}",
