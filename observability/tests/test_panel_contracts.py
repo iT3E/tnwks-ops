@@ -4,11 +4,11 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from audit_sources import summarize
 from contracts import metric_names, panel_contracts, source_contract
 from conventions import dashboard_link
 from dashboards import catalogue, legend, resource
 from rules import records
-from audit_sources import summarize
 
 
 def test_source_index_distinguishes_labels_functions_and_real_metric_selectors():

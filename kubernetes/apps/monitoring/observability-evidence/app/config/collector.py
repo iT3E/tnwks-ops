@@ -15,19 +15,21 @@ import ssl
 import struct
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def timestamp(value: str | None) -> float | None:
     if not value:
         return None
     try:
-        return dt.datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        return dt.datetime.fromisoformat(value).timestamp()
     except ValueError:
         return None
 
@@ -40,7 +42,7 @@ class Metrics:
     def __init__(self):
         self.lines: list[str] = []
 
-    def add(self, metric_name: str, value: float | int | None, **labels):
+    def add(self, metric_name: str, value: float | None, **labels):
         if value is None or not math.isfinite(float(value)):
             return
         suffix = ",".join(f'{key}="{quote(val)}"' for key, val in sorted(labels.items()))
@@ -173,7 +175,7 @@ class Collector:
                 function(section, labels)
             except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError):
                 # Do not print the response body, token, resource contents or error URL.
-                logging.warning("evidence collection failed: %s", name)
+                logger.warning("evidence collection failed: %s", name)
                 successes.append(False)
                 metrics.add("homelab_collection_success", 0, collector=name, **labels)
             else:
@@ -285,7 +287,7 @@ class Collector:
         for app in warm:
             scope = dict(labels, app=app["name"])
 
-            def state(prerequisite, value):
+            def state(prerequisite, value, scope=scope):
                 metrics.add("homelab_recovery_prerequisite_state", value, prerequisite=prerequisite, **scope)
 
             dbs = [clusters.get(name) for name in app.get("databases", [])]
@@ -623,16 +625,18 @@ def ingress_probe(host: str, vip: str, timeout: float = 3, port: int = 443,
         result["dns"] = addresses == [vip]
         context = context or ssl.create_default_context()
         context.minimum_version = ssl.TLSVersion.TLSv1_2
-        with socket.create_connection((addresses[0], port), timeout=timeout) as raw:
-            with context.wrap_socket(raw, server_hostname=host) as tls:
-                result["expiry"] = ssl.cert_time_to_seconds(tls.getpeercert()["notAfter"])
-                connection = http.client.HTTPConnection(host, timeout=timeout)
-                connection.sock = tls
-                connection.request("GET", "/", headers={"User-Agent": "observability-evidence"})
-                response = connection.getresponse()
-                result["status"] = response.status
-                result["served_by"] = response.getheader(SITE_HEADER)
-                response.close()
+        with (
+            socket.create_connection((addresses[0], port), timeout=timeout) as raw,
+            context.wrap_socket(raw, server_hostname=host) as tls,
+        ):
+            result["expiry"] = ssl.cert_time_to_seconds(tls.getpeercert()["notAfter"])
+            connection = http.client.HTTPConnection(host, timeout=timeout)
+            connection.sock = tls
+            connection.request("GET", "/", headers={"User-Agent": "observability-evidence"})
+            response = connection.getresponse()
+            result["status"] = response.status
+            result["served_by"] = response.getheader(SITE_HEADER)
+            response.close()
         result["ok"] = result["dns"] and result["status"] < 500 and result["status"] != 404
     except (OSError, ValueError, IndexError, KeyError, http.client.HTTPException):
         pass

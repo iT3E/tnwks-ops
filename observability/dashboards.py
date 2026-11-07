@@ -10,13 +10,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
-from grafana_foundation_sdk.builders import dashboardv2 as dashboard
 from grafana_foundation_sdk.builders import common as common_builder
+from grafana_foundation_sdk.builders import dashboardv2 as dashboard
 from grafana_foundation_sdk.builders import prometheus, stat, table, text, timeseries
 from grafana_foundation_sdk.cog.encoder import JSONEncoder
 from grafana_foundation_sdk.models import common
-from grafana_foundation_sdk.models import prometheus as prom_model
 from grafana_foundation_sdk.models import dashboardv2 as model
+from grafana_foundation_sdk.models import prometheus as prom_model
+
 from conventions import OBSERVATION_BUDGET_SECONDS, dashboard_link, runbook_path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -117,7 +118,7 @@ def legend(panel: Panel) -> str:
         return panel.legend
     match = re.search(r"\bby \(([^)]*)\)", panel.expr)
     labels = [label.strip() for label in match[1].split(",")] if match else ["k8s_cluster", "app", "instance"]
-    return " ".join("{{%s}}" % label for label in labels if label not in ("", "le"))
+    return " ".join(f"{{{{{label}}}}}" for label in labels if label not in ("", "le"))
 
 
 def selector(name: str, extra: str = "") -> str:

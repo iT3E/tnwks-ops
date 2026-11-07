@@ -4,8 +4,8 @@ import json
 import re
 from pathlib import Path
 
-from dashboards import catalogue
 from conventions import OBSERVATION_BUDGET_SECONDS, runbook_path
+from dashboards import catalogue
 from rules import records
 
 ROOT = Path(__file__).resolve().parents[1]

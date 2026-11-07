@@ -25,7 +25,7 @@ def main():
     def get(path, params=None):
         if params:
             path += "?" + urllib.parse.urlencode(params)
-        proc = subprocess.run(["kubectl", "--kubeconfig", args.kubeconfig, "get", "--raw", base + path],
+        proc = subprocess.run(["kubectl", "--kubeconfig", args.kubeconfig, "get", "--raw", base + path], check=False,
                               capture_output=True, text=True, timeout=30)
         if proc.returncode:
             raise SystemExit("Archive verification transport failed; private upstream details suppressed")
@@ -53,7 +53,7 @@ def main():
         raise SystemExit("Store filtering was not enforced; sidecars may have answered")
 
     def iso(milliseconds):
-        return datetime.datetime.fromtimestamp(milliseconds / 1000, datetime.timezone.utc).isoformat()
+        return datetime.datetime.fromtimestamp(milliseconds / 1000, datetime.UTC).isoformat()
 
     print(json.dumps({"verified_sites": sorted(observed), "strict_store_only_query": True,
                       "negative_store_filter_control": "empty",

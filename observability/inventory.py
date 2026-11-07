@@ -1,10 +1,10 @@
 """Build bounded observability inventory from the existing failover catalogue."""
 
-from pathlib import Path
 import json
 import re
 import shutil
 import subprocess
+from pathlib import Path
 
 import yaml
 
@@ -93,7 +93,7 @@ def shared_vips():
     text = SITE_RECORDS.read_text()
     vips = {}
     for local, cluster in (("vip_wsl", "homelab-wsl"), ("vip_wsl_02", "homelab-wsl-02")):
-        address = re.search(rf'^\s*{local}\s*=\s*"([0-9.]+)"', text, re.M)[1]
+        address = re.search(rf'^\s*{local}\s*=\s*"([0-9.]+)"', text, re.MULTILINE)[1]
         vips[local] = {"address": address, "preferred": cluster}
     names = [{"name": host.split(".")[0], "host": host, "vip": vips[local]["address"]}
              for host, local in re.findall(

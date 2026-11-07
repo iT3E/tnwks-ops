@@ -7,6 +7,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -42,7 +43,7 @@ def main():
             try:
                 try:
                     page.get_by_text(board.title, exact=True).filter(visible=True).first.wait_for(timeout=45000)
-                except Exception:
+                except PlaywrightTimeoutError:
                     # The first cold load in the 1-CPU container can stall on the
                     # loading spinner with nothing pending and no error. One reload,
                     # recorded; a board that fails twice fails the check.

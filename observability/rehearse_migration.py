@@ -51,7 +51,7 @@ def main():
 
     def sql(statement):
         result = subprocess.run(["docker", "exec", "-i", database, "psql", "-U", "postgres",
-                                 "-d", "grafana", "-At", "-v", "ON_ERROR_STOP=1"],
+                                 "-d", "grafana", "-At", "-v", "ON_ERROR_STOP=1"], check=False,
                                 input=statement, capture_output=True, text=True)
         assert result.returncode == 0, "Local database check failed; private details suppressed"
         return result.stdout.strip()
@@ -70,7 +70,7 @@ def main():
     def api(path):
         # An internal Docker network intentionally blocks published-port ingress.
         result = subprocess.run(["docker", "exec", grafana, "wget", "-qO-",
-                                 "http://127.0.0.1:3000" + path], capture_output=True)
+                                 "http://127.0.0.1:3000" + path], check=False, capture_output=True)
         assert result.returncode == 0, "Disposable Grafana API is not ready"
         return json.loads(result.stdout)
 
@@ -119,7 +119,7 @@ def main():
             public = subprocess.check_output(["age-keygen", "-y", str(args.identity)],
                                              text=True).splitlines()
             recipients = [arg for key in public if key.startswith("age1") for arg in ["-r", key]]
-            logs = subprocess.run(["docker", "logs", grafana], capture_output=True)
+            logs = subprocess.run(["docker", "logs", grafana], check=False, capture_output=True)
             destination = Path(__file__).parent / ".cache/private/migration-failure.log.age"
             destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             with os.fdopen(os.open(destination, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600), "wb") as output:
@@ -140,12 +140,12 @@ def main():
                POSTGRES, "-c", "shared_buffers=32MB", "-c", "max_connections=30", process_env=db_env)
 
         def ready():
-            assert subprocess.run(["docker", "exec", database, "pg_isready", "-h", "127.0.0.1", "-U", "postgres"],
+            assert subprocess.run(["docker", "exec", database, "pg_isready", "-h", "127.0.0.1", "-U", "postgres"], check=False,
                                   capture_output=True).returncode == 0
 
         eventually(ready)
         result = subprocess.run(["docker", "exec", "-i", database, "psql", "-U", "postgres",
-                                 "-v", "ON_ERROR_STOP=1"], input=(
+                                 "-v", "ON_ERROR_STOP=1"], check=False, input=(
             f"CREATE ROLE grafana LOGIN NOSUPERUSER NOCREATEDB PASSWORD '{password}';\n"),
             text=True, capture_output=True)
         assert result.returncode == 0, "Local database role creation failed"
@@ -173,8 +173,8 @@ def main():
               f"{before['users']} users preserved")
     finally:
         for name in [grafana, database]:
-            subprocess.run(["docker", "rm", "-f", name], capture_output=True)
-        subprocess.run(["docker", "network", "rm", network], capture_output=True)
+            subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True)
+        subprocess.run(["docker", "network", "rm", network], check=False, capture_output=True)
 
 
 if __name__ == "__main__":

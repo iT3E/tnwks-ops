@@ -155,8 +155,8 @@ def main():
             eventually(verify_prune)
             print(f"PASS: Grafana v2 UIDs, tab layouts, folders, five datasources, {len(references)} pinned reference dashboards, file deletion and preview toggles {toggles}")
         finally:
-            subprocess.run(["docker", "rm", "-f", name], capture_output=True)
-            subprocess.run(["docker", "rm", "-f", renderer], capture_output=True)
+            subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True)
+            subprocess.run(["docker", "rm", "-f", renderer], check=False, capture_output=True)
             fixture.shutdown()
             fixture.server_close()
             thread.join()
