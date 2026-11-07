@@ -25,7 +25,7 @@ def main():
     remediation = release["spec"]["upgrade"]["remediation"]
     assert remediation["retries"] == 0 and not remediation["remediateLastFailure"]
     params = {"STORAGE_CLASS_DEFAULT": "local-path", "INTERNAL_DOMAIN": "example.invalid",
-              "OAUTH2_PROXY_CLIENT_ID": "fixture"}
+              "OAUTH2_PROXY_CLIENT_ID": "fixture", "CLUSTER_NAME": "homelab-wsl"}
     values = re.sub(r"\$\{([A-Z_0-9]+)(?::=([^}]+))?\}",
                     lambda match: match[2] if match[2] is not None else params[match[1]],
                     yaml.safe_dump(release["spec"]["values"]))
@@ -54,6 +54,10 @@ def main():
     assert not any(c["name"] == "download-dashboards" for c in grafana.get("initContainers", []))
     assert sum(m["name"].startswith("dashboards-") for m in app["volumeMounts"]) == 4
     assert grafana["securityContext"]["fsGroup"] == 472
+    # Warm app (docs/wsl/multi-site.md): the lease gate's env must reach the pod
+    # as strings; a bare on/off substitution would be a YAML boolean.
+    gate = next(c for c in grafana["initContainers"] if c["name"] == "site-lease-gate")
+    assert all(isinstance(item["value"], str) for item in gate["env"]), gate["env"]
     print("PASS: maintained Grafana chart, pinned images, renderer authentication/concurrency, "
           "writable search index, stable reference mounts and forward-only migration policy")
 
