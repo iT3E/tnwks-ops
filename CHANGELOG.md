@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.15.0 - 2026-11-07
+
+### Added
+
+* Map every generated dashboard panel to evidence sources, freshness and runbooks, add read-only source auditing, and preserve incident time and multiple sites in diagnosis links.
+
 ## v2.14.1 - 2026-11-07
 
 ### Fixed

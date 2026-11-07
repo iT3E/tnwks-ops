@@ -1,4 +1,0 @@
----
-kind: Added
-body: Map every generated dashboard panel to evidence sources, freshness and runbooks, add read-only source auditing, and preserve incident time and multiple sites in diagnosis links.
-time: 2026-11-07T10:58:00Z
