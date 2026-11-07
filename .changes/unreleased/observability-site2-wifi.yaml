@@ -1,0 +1,4 @@
+---
+kind: Added
+body: The Wi-Fi & LAN board measures site 2's Wi-Fi dependency, with each site host's uplink rate and traffic and the site 2 host's signal, access point and association uptime.
+time: 2026-11-07T17:49:00Z

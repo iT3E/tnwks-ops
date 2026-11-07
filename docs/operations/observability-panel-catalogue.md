@@ -80,6 +80,10 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-wifi / Access points / Wi-Fi collector failures | `unpoller_prometheus_refresh_failures_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/unifi.md) |
 | tnwks-wifi / Site dependency / Peer path success | `homelab_peer_probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-wifi / Site dependency / Peer path duration | `homelab_peer_probe_duration_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wifi / Site dependency / Site host uplinks | `windows_net_current_bandwidth_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wifi / Site dependency / Site host uplink traffic | `windows_net_bytes_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wifi / Site dependency / Site 2 Wi-Fi signal | `unpoller_client_radio_signal_db` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wifi / Site dependency / Site 2 Wi-Fi association | `unpoller_client_uptime_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-kubernetes / Reconciliation / Flux resource readiness | `homelab_flux_resource_ready` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/cluster-upgrades.md) |
 | tnwks-kubernetes / Reconciliation / Suspended resources | `homelab_flux_resource_suspended` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/cluster-upgrades.md) |
 | tnwks-kubernetes / Reconciliation / Reconcile failures | `controller_runtime_reconcile_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/cluster-upgrades.md) |

@@ -592,6 +592,38 @@
     "kiosk": false
   },
   {
+    "dashboard": "tnwks-wifi",
+    "tab": "Site dependency",
+    "title": "Site host uplinks",
+    "expr": "label_replace(max by (k8s_cluster, instance, nic) (windows_net_current_bandwidth_bytes{k8s_cluster=~\"$cluster\"} > 0) * 8, \"host\", \"$1\", \"instance\", \"(.+)\")",
+    "unit": "bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi",
+    "tab": "Site dependency",
+    "title": "Site host uplink traffic",
+    "expr": "sum by (k8s_cluster, instance, nic) (rate(windows_net_bytes_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) > 0",
+    "unit": "Bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi",
+    "tab": "Site dependency",
+    "title": "Site 2 Wi-Fi signal",
+    "expr": "max by (ap_name, channel) (unpoller_client_radio_signal_db{k8s_cluster=~\"$cluster\",source_site=\"\",name=\"WSL-02\"})",
+    "unit": "dBm",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi",
+    "tab": "Site dependency",
+    "title": "Site 2 Wi-Fi association",
+    "expr": "max by (ap_name) (unpoller_client_uptime_seconds{k8s_cluster=~\"$cluster\",source_site=\"\",name=\"WSL-02\"})",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
     "dashboard": "tnwks-kubernetes",
     "tab": "Reconciliation",
     "title": "Flux resource readiness",

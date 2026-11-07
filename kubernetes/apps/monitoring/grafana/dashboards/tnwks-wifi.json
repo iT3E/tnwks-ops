@@ -507,6 +507,394 @@
           },
           "description": "Bounded transport probe duration; one sample does not measure line-rate Wi-Fi performance.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "id": 7,
+          "title": "Site host uplinks",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "label_replace(max by (k8s_cluster, instance, nic) (windows_net_current_bandwidth_bytes{k8s_cluster=~\"$cluster\"} > 0) * 8, \"host\", \"$1\", \"instance\", \"(.+)\")",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bps",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Each site's Windows host NICs with a link, at their negotiated rate (windows_exporter). Site 2's host reaches the router over Wi-Fi only, so its link rate changes with the radio.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "id": 8,
+          "title": "Site host uplink traffic",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (k8s_cluster, instance, nic) (rate(windows_net_bytes_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) > 0",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "Bps",
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/IV0hu1m7z/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-server=${__field.labels.instance:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Traffic through each host NIC in use: everything the site sends or receives, the site tunnel included.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "id": 9,
+          "title": "Site 2 Wi-Fi signal",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (ap_name, channel) (unpoller_client_radio_signal_db{k8s_cluster=~\"$cluster\",source_site=\"\",name=\"WSL-02\"})",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "dBm",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The site 2 host's signal at its access point, as UniFi reports it (either site's poller). A change of AP or channel starts a new line.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-9": {
+        "kind": "Panel",
+        "spec": {
+          "id": 10,
+          "title": "Site 2 Wi-Fi association",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (ap_name) (unpoller_client_uptime_seconds{k8s_cluster=~\"$cluster\",source_site=\"\",name=\"WSL-02\"})",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "How long the site 2 host has been associated. A drop to zero is a reconnect or roam, which interrupts the site's tunnel and BGP sessions.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
       }
     },
     "layout": {
@@ -590,6 +978,42 @@
                         "element": {
                           "kind": "ElementReference",
                           "name": "panel-5"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-6"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-7"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-8"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-9"
                         }
                       }
                     }
