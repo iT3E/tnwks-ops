@@ -1,3 +1,0 @@
-kind: Added
-body: 'MQTT evidence: each site logs in to mosquitto as a new observability user and reads the connected-client count, for the Home Automation board.'
-time: 2026-11-07T12:45:00-08:00

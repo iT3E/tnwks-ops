@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.14.0 - 2026-11-07
+
+### Added
+
+* MQTT evidence: each site logs in to mosquitto as a new observability user and reads the connected-client count, for the Home Automation board.
+
 ## v2.13.1 - 2026-11-07
 
 ### Fixed
