@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.35.0 - 2026-11-07
+
+### Added
+
+* A House systems section on Home Assistant's Home dashboard shows the household six plain states (Internet, Wi-Fi, Automation, Cameras, Apps, Monitoring) from new per-site homelab:house_state rules, and the Monitoring tab (the operator Grafana) is now admin-only.
+
 ## v2.34.0 - 2026-11-07
 
 ### Added
