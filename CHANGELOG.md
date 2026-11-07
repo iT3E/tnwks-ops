@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.220.1 - 2026-11-07
+
+### Fixed
+
+* site-failover clear and status only touch an app's own override keys when prefixes nest: clearing ombi no longer clears ombi-f's OMBI_F_REPLICAS.
+
 ## v1.220.0 - 2026-11-07
 
 ### Changed
