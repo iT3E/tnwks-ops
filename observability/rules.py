@@ -205,10 +205,18 @@ def network_records():
                 f' - (max by (k8s_cluster) ({nodes}) == bool 1)')
     # Tagged apart first: `or` would drop KVStoreMesh's series, whose labels
     # match the agents'.
-    mesh = ('3 - 2 * (min by (k8s_cluster) ('
-            'label_replace(cilium_clustermesh_remote_cluster_readiness_status{source_site=""}, "reader", "agent", "", "")'
-            ' or label_replace(cilium_kvstoremesh_remote_cluster_readiness_status{source_site=""}, "reader", "kvstoremesh", "", "")'
-            ') == bool 1)')
+    ready = ('(min by (k8s_cluster) ('
+             'label_replace(cilium_clustermesh_remote_cluster_readiness_status{source_site=""}, "reader", "agent", "", "")'
+             ' or label_replace(cilium_kvstoremesh_remote_cluster_readiness_status{source_site=""}, "reader", "kvstoremesh", "", "")'
+             ') == bool 1)')
+    # Readiness is the control plane only. In the partition drill (2026-11-07)
+    # site 2 reached site 1's clustermesh-apiserver around its downed tunnel
+    # (eth0, the LAN, the router) and stayed ready while pod traffic between
+    # the sites failed. So the site's own probe of its peer (pod to pod,
+    # across the mesh) must pass too; without one, readiness alone decides.
+    probe = ('min by (k8s_cluster) (label_replace(homelab_peer_probe_success{source_site=""},'
+             ' "k8s_cluster", "$1", "observer_cluster", "(.+)"))')
+    mesh = f"3 - 2 * (({ready} * on (k8s_cluster) {probe}) or {ready})"
     expected = "max by (k8s_cluster) (homelab_expected_site_info)"
     hops = (("tunnel", tunnel), ("router-bgp", router_bgp), ("node-bgp", node_bgp), ("mesh", mesh))
     known = " or ".join(hop(n, e) for n, e in hops)
@@ -418,6 +426,22 @@ def fixtures():
                  # The agents see the peer, KVStoreMesh doesn't: failed, not averaged.
                  {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="mesh"}', "value": 3},
                  {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="mesh"}', "value": 0},
+             ]},
+         ]},
+        {"name": "mesh hop: ready but the peer probe fails is Failed; no probe falls back to readiness", "interval": "1m",
+         "input_series": [
+             {"series": 'homelab_expected_site_info{k8s_cluster="homelab-wsl"}', "values": "1+0x10"},
+             {"series": 'homelab_expected_site_info{k8s_cluster="homelab-wsl-02"}', "values": "1+0x10"},
+             # Both sites' control planes ready.
+             *[{"series": f'cilium_{kind}_remote_cluster_readiness_status{{k8s_cluster="{site}",target_cluster="x"}}', "values": "1+0x10"}
+               for site in ("homelab-wsl", "homelab-wsl-02") for kind in ("clustermesh", "kvstoremesh")],
+             # Site 2's probe of site 1 fails (partitioned, pod traffic down);
+             # site 1 has no probe series at all.
+             {"series": 'homelab_peer_probe_success{k8s_cluster="homelab-wsl",observer_cluster="homelab-wsl-02"}', "values": "0+0x10"},
+         ], "promql_expr_test": [
+             {"expr": 'homelab:network_path_state{hop="mesh"}', "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="mesh"}', "value": 1},
+                 {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="mesh"}', "value": 3},
              ]},
          ]},
         {"name": "shared VIPs follow the preferred site's session, else the other's", "interval": "1m",
