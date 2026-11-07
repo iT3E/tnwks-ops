@@ -3,6 +3,8 @@
 from pathlib import Path
 import yaml
 
+from inventory import inventory
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -32,7 +34,48 @@ def records():
             f' or ((({ready} < {desired}) > 0) * 0 + 2)'
             f' or (({ready} < {desired}) * 0 + 3)'
             ' or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))'),
+        **network_records(),
         "homelab:service_state": '(3 - 2 * min by (k8s_cluster, app) (probe_success{observability_target="service"} and (time() - timestamp(probe_success{observability_target="service"})) < 180)) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))',
+    }
+
+
+def network_records():
+    """Per-site network path, by hop: 1 healthy, 2 degraded, 3 failed, 0 Unknown.
+
+    tunnel: the router's WireGuard peer for the site's distro handshook within
+    180 s (WireGuard rekeys every 2 min while traffic flows). router-bgp: the
+    router's session with the distro's FRR is established; with the router
+    observed but the session missing, it's down (RouterOS lists only live
+    sessions). node-bgp: the Cilium agents' sessions with the distro, all
+    (healthy), some (degraded) or none (failed). The router is observed by
+    homelab-wsl's mktxp only, so homelab-wsl-02's rules leave those Unknown and
+    the dashboards keep the real answer.
+    """
+    sites = inventory()["sites"]
+
+    def per_site(expr, site):
+        return f'label_replace({expr}, "k8s_cluster", "{site["cluster"]}", "", "")'
+
+    def hop(name, expr):
+        return f'label_replace({expr}, "hop", "{name}", "", "")'
+
+    router_up = "max(mktxp_system_uptime)"
+    tunnel = " or ".join(per_site(
+        f'3 - 2 * (min(mktxp_last_handshake{{interface="{s["tunnel"]}"}}) < bool 180)', s) for s in sites)
+    router_bgp = " or ".join(per_site(
+        f'(3 - 2 * max(mktxp_bgp_established{{name=~"{s["router_peer"]}(-[0-9]+)?"}}))'
+        f' or (0 * {router_up} + 3)', s) for s in sites)
+    nodes = 'cilium_bgp_control_plane_session_state{source_site=""}'
+    node_bgp = (f'3 - (min by (k8s_cluster) ({nodes}) == bool 1)'
+                f' - (max by (k8s_cluster) ({nodes}) == bool 1)')
+    expected = "max by (k8s_cluster) (homelab_expected_site_info)"
+    known = " or ".join(hop(n, e) for n, e in (("tunnel", tunnel), ("router-bgp", router_bgp), ("node-bgp", node_bgp)))
+    unknown = " or ".join(hop(n, f"0 * {expected}") for n in ("tunnel", "router-bgp", "node-bgp"))
+    prefixes = " or ".join(per_site(
+        f'sum(mktxp_bgp_prefix_count{{name=~"{s["router_peer"]}(-[0-9]+)?"}})', s) for s in sites)
+    return {
+        "homelab:network_path_state": f"({known}) or on (k8s_cluster, hop) ({unknown})",
+        "homelab:router_bgp_prefixes": prefixes,
     }
 
 
@@ -104,6 +147,35 @@ def fixtures():
          ], "promql_expr_test": [
              {"expr": "homelab:archive_state", "eval_time": "4m", "exp_samples": [
                  {"labels": 'homelab:archive_state{k8s_cluster="one"}', "value": 0}]},
+         ]},
+        {"name": "network path by hop: stale tunnel, missing router session, partial node sessions", "interval": "1m",
+         "input_series": [
+             {"series": 'homelab_expected_site_info{k8s_cluster="homelab-wsl"}', "values": "1+0x10"},
+             {"series": 'homelab_expected_site_info{k8s_cluster="homelab-wsl-02"}', "values": "1+0x10"},
+             {"series": 'mktxp_system_uptime{k8s_cluster="homelab-wsl"}', "values": "100+60x10"},
+             {"series": 'mktxp_last_handshake{interface="wg-site1"}', "values": "30+0x10"},
+             {"series": 'mktxp_last_handshake{interface="wg-site2"}', "values": "400+0x10"},
+             {"series": 'mktxp_bgp_established{name="wsl-site1-1"}', "values": "1+0x10"},
+             {"series": 'cilium_bgp_control_plane_session_state{k8s_cluster="homelab-wsl",node="a"}', "values": "1+0x10"},
+             {"series": 'cilium_bgp_control_plane_session_state{k8s_cluster="homelab-wsl",node="b"}', "values": "0+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:network_path_state", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="tunnel"}', "value": 1},
+                 {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="tunnel"}', "value": 3},
+                 {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="router-bgp"}', "value": 1},
+                 {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="router-bgp"}', "value": 3},
+                 {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="node-bgp"}', "value": 2},
+                 {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="node-bgp"}', "value": 0},
+             ]},
+         ]},
+        {"name": "an unobserved router leaves the router hops Unknown", "interval": "1m",
+         "input_series": [
+             {"series": 'homelab_expected_site_info{k8s_cluster="homelab-wsl"}', "values": "1+0x10"},
+         ], "promql_expr_test": [
+             {"expr": 'homelab:network_path_state{hop=~"tunnel|router-bgp"}', "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="tunnel"}', "value": 0},
+                 {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="router-bgp"}', "value": 0},
+             ]},
          ]},
         {"name": "duplicate observations of one prerequisite are not four prerequisites", "interval": "1m",
          "input_series": [

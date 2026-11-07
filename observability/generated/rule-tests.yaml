@@ -61,6 +61,54 @@ tests:
     exp_samples:
     - labels: homelab:archive_state{k8s_cluster="one"}
       value: 0
+- name: 'network path by hop: stale tunnel, missing router session, partial node sessions'
+  interval: 1m
+  input_series:
+  - series: homelab_expected_site_info{k8s_cluster="homelab-wsl"}
+    values: 1+0x10
+  - series: homelab_expected_site_info{k8s_cluster="homelab-wsl-02"}
+    values: 1+0x10
+  - series: mktxp_system_uptime{k8s_cluster="homelab-wsl"}
+    values: 100+60x10
+  - series: mktxp_last_handshake{interface="wg-site1"}
+    values: 30+0x10
+  - series: mktxp_last_handshake{interface="wg-site2"}
+    values: 400+0x10
+  - series: mktxp_bgp_established{name="wsl-site1-1"}
+    values: 1+0x10
+  - series: cilium_bgp_control_plane_session_state{k8s_cluster="homelab-wsl",node="a"}
+    values: 1+0x10
+  - series: cilium_bgp_control_plane_session_state{k8s_cluster="homelab-wsl",node="b"}
+    values: 0+0x10
+  promql_expr_test:
+  - expr: homelab:network_path_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:network_path_state{k8s_cluster="homelab-wsl",hop="tunnel"}
+      value: 1
+    - labels: homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="tunnel"}
+      value: 3
+    - labels: homelab:network_path_state{k8s_cluster="homelab-wsl",hop="router-bgp"}
+      value: 1
+    - labels: homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="router-bgp"}
+      value: 3
+    - labels: homelab:network_path_state{k8s_cluster="homelab-wsl",hop="node-bgp"}
+      value: 2
+    - labels: homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="node-bgp"}
+      value: 0
+- name: an unobserved router leaves the router hops Unknown
+  interval: 1m
+  input_series:
+  - series: homelab_expected_site_info{k8s_cluster="homelab-wsl"}
+    values: 1+0x10
+  promql_expr_test:
+  - expr: homelab:network_path_state{hop=~"tunnel|router-bgp"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:network_path_state{k8s_cluster="homelab-wsl",hop="tunnel"}
+      value: 0
+    - labels: homelab:network_path_state{k8s_cluster="homelab-wsl",hop="router-bgp"}
+      value: 0
 - name: duplicate observations of one prerequisite are not four prerequisites
   interval: 1m
   input_series:

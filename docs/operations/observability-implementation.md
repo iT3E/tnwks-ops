@@ -159,6 +159,22 @@ are on both sites already.
 - **Replaced** the separate `grafana-02` instance (SQLite, local login), which
   didn't match the other apps' multi-site setup.
 
+## Network path evidence
+
+`homelab:network_path_state{k8s_cluster, hop}` gives each site's path to the router
+by hop: 1 healthy, 2 degraded, 3 failed, 0 Unknown.
+
+| hop | Source | Healthy when |
+| --- | --- | --- |
+| `tunnel` | mktxp, the router's WireGuard peer (`wg-site1`, `wg-site2`) | handshake within 180 s |
+| `router-bgp` | mktxp BGP sessions (`wsl-site1`, `wsl-site2`) | established; Failed when the router is observed but the session is gone |
+| `node-bgp` | Cilium agents' sessions with the distro's FRR | all nodes (some: Degraded) |
+
+`homelab:router_bgp_prefixes` counts the routes the router accepted from each site.
+Only homelab-wsl's mktxp observes the router, so homelab-wsl-02's own rules leave
+the router hops Unknown, and the dashboards keep the real answer. The router-side
+names come from `observability/inventory.py` (sites), matching `site-tunnels.tf`.
+
 ## Following rollout work
 
 1. Validate backlog behavior and certificate renewal for the global query path.
