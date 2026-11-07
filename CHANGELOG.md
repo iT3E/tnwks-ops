@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.1.1 - 2026-11-07
+
+### Fixed
+
+* Copy Garage credentials into an owner-only runtime volume so its strict permission check works with Kubernetes fsGroup.
+
 ## v2.1.0 - 2026-11-07
 
 ### Added
