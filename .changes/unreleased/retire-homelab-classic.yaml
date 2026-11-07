@@ -1,0 +1,4 @@
+---
+kind: Removed
+body: Retire the Homelab (classic) board, the last one pinned to a single Windows host; its panels are on the generated boards and the Windows Exporter board.
+time: 2026-11-07T19:15:00Z
