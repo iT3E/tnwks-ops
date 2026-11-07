@@ -592,7 +592,7 @@
               }
             }
           },
-          "description": "Readiness remains Unknown until storage/fencing/restore/capacity evidence exists. This page does not promise all services fit or fail over.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Per warm app: could this site take it over (database, backup, restore drill, fence)? Not applicable where the app runs. Unknown until every prerequisite has evidence. This page does not promise all services fit or fail over.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       }
     },

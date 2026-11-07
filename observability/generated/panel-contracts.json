@@ -199,6 +199,11 @@
         "metric": "homelab_recovery_prerequisite_state",
         "producer": "read-only evidence collector",
         "availability": "configured"
+      },
+      {
+        "metric": "homelab_workload_desired_replicas",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
       }
     ],
     "observation_budget_seconds": 180,
@@ -682,6 +687,11 @@
       },
       {
         "metric": "homelab_recovery_prerequisite_state",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_workload_desired_replicas",
         "producer": "read-only evidence collector",
         "availability": "configured"
       }
@@ -1342,6 +1352,11 @@
       },
       {
         "metric": "homelab_restore_last_duration_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_workload_desired_replicas",
         "producer": "read-only evidence collector",
         "availability": "configured"
       }
@@ -3629,6 +3644,11 @@
       },
       {
         "metric": "homelab_recovery_prerequisite_state",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_workload_desired_replicas",
         "producer": "read-only evidence collector",
         "availability": "configured"
       }

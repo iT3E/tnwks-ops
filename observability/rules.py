@@ -29,7 +29,8 @@ def records():
         "homelab:database_connections": f'sum by ({db}) (label_replace(cnpg_backends_total{{source_site=""}}, "db_cluster", "$1", "pod", "(.+)-[0-9]+"))',
         "homelab:database_backup_age_seconds": f'time() - max by ({db}) (label_replace(barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{{source_site=""}}, "db_cluster", "$1", "pod", "(.+)-[0-9]+"))',
         "homelab:database_backup_state": f'((homelab:database_backup_age_seconds >= bool 0) * (homelab:database_backup_age_seconds <= bool 108000) + 3 * (homelab:database_backup_age_seconds > bool 108000)) or on ({db}) (0 * {expected_db})',
-        "homelab:recovery_state": '(3 * max by (k8s_cluster, app) (' + fresh('homelab_recovery_prerequisite_state') + ' == 3) / 3) or on (k8s_cluster, app) ((count by (k8s_cluster, app) (max by (k8s_cluster, app, prerequisite) (' + fresh('homelab_recovery_prerequisite_state{prerequisite=~"database|backup|restore|fence"}') + ') == 1) == 4) / 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info{tier="warm"}))',
+        # Where the app runs, nobody needs to take it over: Not applicable (5).
+        "homelab:recovery_state": f'(0 * ({desired} > 0) + 5) and on (k8s_cluster, app) (max by (k8s_cluster, app) (homelab_expected_workload_info{{tier="warm"}})) or on (k8s_cluster, app) ' + '(3 * max by (k8s_cluster, app) (' + fresh('homelab_recovery_prerequisite_state') + ' == 3) / 3) or on (k8s_cluster, app) ((count by (k8s_cluster, app) (max by (k8s_cluster, app, prerequisite) (' + fresh('homelab_recovery_prerequisite_state{prerequisite=~"database|backup|restore|fence"}') + ') == 1) == 4) / 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info{tier="warm"}))',
         "homelab:local_history_seconds": 'time() - min by (k8s_cluster) (prometheus_tsdb_lowest_timestamp_seconds)',
         # Share of the SLO window this site's Prometheus holds: below 1, every
         # SLO's availability covers only that much of its window.
@@ -154,6 +155,8 @@ def objective_records(fresh):
     gap = (f"max by (k8s_cluster, app) ({scheduled} unless on (k8s_cluster, app, pvc) homelab:app_pvc_backup_age_seconds)"
            f" or max by (k8s_cluster, app) ({primaries} unless on ({db}) (homelab:database_backup_age_seconds >= 0))")
     drill = f"max by (k8s_cluster, app) ({fresh('homelab_restore_last_duration_seconds')})"
+    running = (f"sum by (k8s_cluster, app) (max by (k8s_cluster, app, kind, workload) "
+               f"({fresh('homelab_workload_desired_replicas')}))")
     return {
         "homelab:app_pvc_backup_age_seconds": (
             "((time() - max by (k8s_cluster, namespace, policy) (kopiur_policy_last_backup_success_timestamp_seconds)) >= 0)"
@@ -166,9 +169,11 @@ def objective_records(fresh):
             f"(0 * ({gap})) or ((homelab:app_backup_age_seconds <= bool on (k8s_cluster, app) {target('rpo')})"
             f" + 3 * (homelab:app_backup_age_seconds > bool on (k8s_cluster, app) {target('rpo')}))"),
         # The last successful standby restore drill against the restore objective;
-        # Unknown until a drill reports how long it took.
+        # Unknown until a drill reports how long it took. The drill restores into
+        # the standby, so where the app runs it's Not applicable (5).
         "homelab:app_rto_state": (
-            f"(({drill} <= bool on (k8s_cluster, app) {target('rto')}) + 3 * ({drill} > bool on (k8s_cluster, app) {target('rto')}))"
+            f"(0 * ({running} > 0) + 5) and on (k8s_cluster, app) {target('rto')}"
+            f" or on (k8s_cluster, app) (({drill} <= bool on (k8s_cluster, app) {target('rto')}) + 3 * ({drill} > bool on (k8s_cluster, app) {target('rto')}))"
             f" or on (k8s_cluster, app) (0 * {target('rto')})"),
     }
 
@@ -375,6 +380,18 @@ def fixtures():
          ], "promql_expr_test": [
              {"expr": "homelab:site_state", "eval_time": "5m", "exp_samples": [
                  {"labels": 'homelab:site_state{k8s_cluster="one"}', "value": 0}]},
+         ]},
+        {"name": "recovery: Not applicable where the warm app runs; a parked site still needs evidence", "interval": "1m",
+         "input_series": [
+             *[{"series": f'homelab_expected_workload_info{{k8s_cluster="{site}",app="test",tier="warm"}}', "values": "1+0x10"}
+               for site in ("one", "two")],
+             {"series": 'homelab_workload_desired_replicas{k8s_cluster="one",app="test",kind="deployment",workload="test"}', "values": "1+0x10"},
+             {"series": 'homelab_workload_desired_replicas{k8s_cluster="two",app="test",kind="deployment",workload="test"}', "values": "0+0x10"},
+             {"series": 'homelab_recovery_prerequisite_state{k8s_cluster="two",app="test",prerequisite="backup"}', "values": "3+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:recovery_state", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:recovery_state{k8s_cluster="one",app="test"}', "value": 5},
+                 {"labels": 'homelab:recovery_state{k8s_cluster="two",app="test"}', "value": 3}]},
          ]},
         {"name": "absent fencing or restore evidence cannot certify readiness", "interval": "1m",
          "input_series": [
@@ -751,18 +768,22 @@ def objective_fixtures():
              {"expr": "homelab:app_rpo_state", "eval_time": "5m", "exp_samples": [
                  {"labels": 'homelab:app_rpo_state{k8s_cluster="one",app="app"}', "value": 0}]},
          ]},
-        {"name": "restore time: within, past, and Unknown without a drill", "interval": "1m",
+        {"name": "restore time: within, past, Unknown without a drill, Not applicable where the app runs", "interval": "1m",
          "input_series": [
              {"series": 'homelab_restore_last_duration_seconds{k8s_cluster="one",observer_cluster="one",app="quick"}', "values": "30+0x10"},
              {"series": objective % ("quick", "rto"), "values": "3600+0x10"},
              {"series": 'homelab_restore_last_duration_seconds{k8s_cluster="one",observer_cluster="one",app="slow"}', "values": "7200+0x10"},
              {"series": objective % ("slow", "rto"), "values": "3600+0x10"},
              {"series": objective % ("untested", "rto"), "values": "3600+0x10"},
+             {"series": objective % ("active", "rto"), "values": "3600+0x10"},
+             {"series": 'homelab_workload_desired_replicas{k8s_cluster="one",app="active",kind="deployment",workload="active"}', "values": "1+0x10"},
+             {"series": 'homelab_workload_desired_replicas{k8s_cluster="one",app="untested",kind="deployment",workload="untested"}', "values": "0+0x10"},
          ], "promql_expr_test": [
              {"expr": "homelab:app_rto_state", "eval_time": "5m", "exp_samples": [
                  {"labels": 'homelab:app_rto_state{k8s_cluster="one",app="quick"}', "value": 1},
                  {"labels": 'homelab:app_rto_state{k8s_cluster="one",app="slow"}', "value": 3},
-                 {"labels": 'homelab:app_rto_state{k8s_cluster="one",app="untested"}', "value": 0}]},
+                 {"labels": 'homelab:app_rto_state{k8s_cluster="one",app="untested"}', "value": 0},
+                 {"labels": 'homelab:app_rto_state{k8s_cluster="one",app="active"}', "value": 5}]},
          ]},
     ]
 

@@ -1589,7 +1589,7 @@
               }
             }
           },
-          "description": "Per warm app with PVCs: did its last standby restore drill write the data back within the restore time objective (1 h)? Unknown until a drill reports how long it took. This is the data restore, not the whole failover.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Per warm app with PVCs: did its last standby restore drill write the data back within the restore time objective (1 h)? Measured on the standby; Not applicable where the app runs. Unknown until a drill reports how long it took. This is the data restore, not the whole failover.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-14": {
