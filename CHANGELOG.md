@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.32.1 - 2026-11-07
+
+### Fixed
+
+* `site-failover` no longer lets its SSH calls drain stdin, which made the switchover prompt read EOF when the answer was piped in, and an unreachable site now fails loudly instead of reading as an app that isn't deployed.
+
 ## v2.32.0 - 2026-11-07
 
 ### Changed

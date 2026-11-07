@@ -1,4 +1,0 @@
----
-kind: Fixed
-body: "`site-failover` no longer lets its SSH calls drain stdin, which made the switchover prompt read EOF when the answer was piped in, and an unreachable site now fails loudly instead of reading as an app that isn't deployed."
-time: 2026-11-07T18:22:37Z
