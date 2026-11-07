@@ -5,7 +5,9 @@
   pod, instance, ...), plus runbook, dashboard and graph links, so a grouped
   "FIRING:2" no longer shows two identical lines. The dashboard link opens on
   the incident: from an hour before it started to now, or to 15 minutes after
-  it resolved.
+  it resolved. An alert without a dashboard_url (the charts' own rules) links
+  to the Alerts board for the site that raised it, at Grafana's address next
+  to Alertmanager's external URL.
 
   Flux events (flux-system/addons/alerts) carry their error text in the
   `message` annotation, so that is the last fallback for the alert line.
@@ -23,11 +25,17 @@
 • {{ with $a.Annotations.description }}{{ . }}{{ else }}{{ with $a.Annotations.summary }}{{ . }}{{ else }}{{ with $a.Annotations.message }}{{ . }}{{ end }}{{ end }}{{ end }}
 {{ template "telegram.labels" $a }}
 {{- if $a.Annotations.runbook_url }} <a href="{{ $a.Annotations.runbook_url }}">runbook</a>{{ end }}
-{{- with $a.Annotations.dashboard_url }} <a href="{{ . }}&from={{ ($a.StartsAt.Add -3600000000000).UnixMilli }}&to={{ if eq $a.Status "resolved" }}{{ ($a.EndsAt.Add 900000000000).UnixMilli }}{{ else }}now{{ end }}">dashboard</a>{{ end }}{{ if $a.GeneratorURL }} <a href="{{ $a.GeneratorURL }}">graph</a>{{ end }}
+{{- if $a.Annotations.dashboard_url }} <a href="{{ $a.Annotations.dashboard_url }}{{ template "telegram.range" $a }}">dashboard</a>
+{{- else if and $a.Labels.cluster (match "^https://alertmanager\\." $.ExternalURL) }} <a href="{{ reReplaceAll "^https://alertmanager\\." "https://grafana." $.ExternalURL }}/d/tnwks-alerts?var-cluster={{ $a.Labels.cluster }}{{ template "telegram.range" $a }}">alerts</a>{{ end }}{{ if $a.GeneratorURL }} <a href="{{ $a.GeneratorURL }}">graph</a>{{ end }}
 {{ end }}{{ end -}}
 {{ if gt (len .Alerts) 8 }}
 …and {{ len .Alerts | printf "%d" }} total, see Alertmanager.
 {{- end }}
+{{- end }}
+
+{{/* The incident's time range: an hour before it started, to now or 15 minutes after it resolved. */}}
+{{ define "telegram.range" -}}
+&from={{ (.StartsAt.Add -3600000000000).UnixMilli }}&to={{ if eq .Status "resolved" }}{{ (.EndsAt.Add 900000000000).UnixMilli }}{{ else }}now{{ end }}
 {{- end }}
 
 {{/* Distinguishing labels only. rule_group paths are trimmed to the group name. */}}

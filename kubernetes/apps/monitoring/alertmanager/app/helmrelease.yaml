@@ -37,6 +37,13 @@ spec:
             image:
               repository: quay.io/prometheus/alertmanager
               tag: v0.34.2
+            # The image's own two arguments, plus the URL people reach it on:
+            # notifications link back to it, and telegram.tmpl derives
+            # Grafana's address from it for alerts without a dashboard_url.
+            args:
+              - --config.file=/etc/alertmanager/alertmanager.yml
+              - --storage.path=/alertmanager
+              - --web.external-url=https://alertmanager.${INTERNAL_DOMAIN}
             resources:
               requests:
                 cpu: 11m
