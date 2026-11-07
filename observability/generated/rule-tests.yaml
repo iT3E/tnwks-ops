@@ -235,6 +235,10 @@ tests:
     values: 100+60x10
   - series: mktxp_bgp_established{name="wsl-site2-1"}
     values: 1+0x10
+  - series: mktxp_bgp_prefix_count{name="wsl-site1-1"}
+    values: 7+0x10
+  - series: mktxp_bgp_prefix_count{name="wsl-site2-1"}
+    values: 7+0x10
   promql_expr_test:
   - expr: homelab:shared_vip_route
     eval_time: 5m
@@ -247,6 +251,31 @@ tests:
       value: 0
     - labels: homelab:shared_vip_route{k8s_cluster="homelab-wsl-02",vip="10.10.95.200"}
       value: 1
+- name: 'shared VIPs: a site whose session is up but sends no prefixes carries nothing'
+  interval: 1m
+  input_series:
+  - series: mktxp_system_uptime{k8s_cluster="homelab-wsl"}
+    values: 100+60x10
+  - series: mktxp_bgp_established{name="wsl-site1-1"}
+    values: 1+0x10
+  - series: mktxp_bgp_established{name="wsl-site2-1"}
+    values: 1+0x10
+  - series: mktxp_bgp_prefix_count{name="wsl-site1-1"}
+    values: 7+0x10
+  - series: mktxp_bgp_prefix_count{name="wsl-site2-1"}
+    values: 0+0x10
+  promql_expr_test:
+  - expr: homelab:shared_vip_route
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:shared_vip_route{k8s_cluster="homelab-wsl",vip="10.10.95.10"}
+      value: 1
+    - labels: homelab:shared_vip_route{k8s_cluster="homelab-wsl-02",vip="10.10.95.10"}
+      value: 0
+    - labels: homelab:shared_vip_route{k8s_cluster="homelab-wsl",vip="10.10.95.200"}
+      value: 1
+    - labels: homelab:shared_vip_route{k8s_cluster="homelab-wsl-02",vip="10.10.95.200"}
+      value: 0
 - name: 'ingress names: passing, failing, unobserved'
   interval: 1m
   input_series:
