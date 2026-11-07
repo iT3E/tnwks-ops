@@ -20,6 +20,13 @@ ansible_ssh_common_args: >-
 
 # Not on this host (yet): no Coral, no Z-Stick, no UDP relays (no cluster to
 # relay to). An empty list skips the role (playbooks/windows-host.yml).
+# The VM clock. On hyperv_clocksource_tsc_page this host's monotonic clock ran
+# ~13% slow (23.2 s of wall time per 20 s of uptime) while Windows stepped
+# wall time forward, so every process's start time drifted and
+# AlertmanagerClusterCrashlooping fired; every timer in the cluster ran slow.
+# The MSR reference counter keeps time (20.00 s per 20.00 s, 2026-11-06,
+# switched live first). It isn't vDSO-backed, so clock reads cost a VM exit.
+wsl_clocksource: hyperv_clocksource_msr
 coral_detector_devices: []
 usb_attach_bound_devices: []
 udp_relays: []
