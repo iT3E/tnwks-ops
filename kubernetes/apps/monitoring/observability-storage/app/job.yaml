@@ -1,0 +1,81 @@
+---
+# Bump the Job name when changing the test: a completed old Pod cannot certify
+# a changed definition. No deadline while waiting for the host mount/PVC.
+# The root hostPath has no `type`: Talos' kubelet has its own /var/lib/rancher,
+# so a type check there would never see the real directory.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: observability-storage-check-v1
+spec:
+  backoffLimit: 4
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: observability-storage-check
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      nodeSelector:
+        kubernetes.io/hostname: homelab-wsl-worker-1
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 2000
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: verify
+          image: docker.io/library/python:3.15-alpine@sha256:a0f2e268f2ce8f3709611a90054ec6a8ae31f6251f5896b8648b9bb99835e30a
+          command: [python, -c]
+          args:
+            - |
+              import json, os, pathlib, uuid
+              data, root = pathlib.Path('/data'), pathlib.Path('/volume-root')
+              uuid.UUID((root / '.tnwks-observability-id').read_text().strip())
+              assert os.stat(data).st_dev == os.stat(root).st_dev, 'PVC is on a different filesystem'
+              stat = os.statvfs(data)
+              capacity = stat.f_blocks * stat.f_frsize
+              assert 18 * 1024**3 < capacity < 21 * 1024**3, 'Unexpected filesystem capacity'
+              mounts = pathlib.Path('/proc/self/mountinfo').read_text().splitlines()
+              kind = next(line.split(' - ', 1)[1].split()[0] for line in mounts if line.split()[4] == '/data')
+              assert kind == 'ext4', 'PVC is not on native ext4'
+              proof = data / '.fsync-permission-check'
+              with proof.open('wb') as output:
+                  output.write(b'\0' * 65536)
+                  output.flush()
+                  os.fsync(output.fileno())
+              proof.unlink()
+              descriptor = os.open(data, os.O_RDONLY | os.O_DIRECTORY)
+              try:
+                  os.fsync(descriptor)
+              finally:
+                  os.close(descriptor)
+              print(json.dumps({'native_ext4': True, 'capacity_gib': round(capacity / 1024**3, 2),
+                                'uid': os.getuid(), 'gid': os.getgid(), 'fsync': True}))
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: root
+              mountPath: /volume-root
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: observability-storage-check
+        - name: root
+          hostPath:
+            path: /var/lib/rancher/k3s/storage/observability

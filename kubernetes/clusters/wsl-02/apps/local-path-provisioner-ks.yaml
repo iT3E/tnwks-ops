@@ -28,6 +28,9 @@ spec:
         kind: HelmRelease
         name: local-path-provisioner
       patch: |-
+        # The monitoring VHDX on C: belongs to site 1 only.
+        - op: remove
+          path: /spec/values/storageClassConfigs/local-path-observability
         - op: replace
           path: /spec/values/storageClassConfigs/local-path/nodePathMap
           value:
