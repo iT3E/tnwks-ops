@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.17.0 - 2026-11-07
+
+### Added
+
+* Deploy Pyrra on both sites with probe-based SLOs (Internet, Home Assistant's name, shared-VIP names, MQTT) over 14-day windows that fit local retention, and show their availability, error budget and window coverage on the Observability board.
+
+### Changed
+
+* Telegram alerts link to their dashboard scoped to the incident, from an hour before the alert started to now while it fires, or to 15 minutes after it resolved.
+
 ## v2.16.0 - 2026-11-07
 
 ### Added

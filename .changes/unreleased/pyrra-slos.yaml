@@ -1,4 +1,0 @@
----
-kind: Added
-body: Deploy Pyrra on both sites with probe-based SLOs (Internet, Home Assistant's name, shared-VIP names, MQTT) over 14-day windows that fit local retention, and show their availability, error budget and window coverage on the Observability board.
-time: 2026-11-07T14:45:00Z
