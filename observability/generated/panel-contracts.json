@@ -1471,31 +1471,6 @@
   },
   {
     "dashboard": "tnwks-network",
-    "tab": "Paths",
-    "panel": "Router interface errors",
-    "query": "sum by (k8s_cluster, routerboard_name, name) (rate(mktxp_interface_rx_error_total{k8s_cluster=~\"$cluster\"}[5m]))",
-    "unit": "ops",
-    "query_mode": "range",
-    "inputs": [
-      "mktxp_interface_rx_error_total"
-    ],
-    "sources": [
-      {
-        "metric": "mktxp_interface_rx_error_total",
-        "producer": "router MKTXP exporter",
-        "availability": "configured"
-      }
-    ],
-    "observation_budget_seconds": 180,
-    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
-    "scope": "selected sites; explicitly described shared sources may span sites",
-    "missing": "Unknown \u2014 missing evidence",
-    "query_error": "Grafana query error; never a healthy empty response",
-    "runbook": "docs/network/architecture.md",
-    "owner": "homelab operator"
-  },
-  {
-    "dashboard": "tnwks-network",
     "tab": "BGP and mesh",
     "panel": "Path by hop",
     "query": "max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})",
@@ -1743,6 +1718,417 @@
       {
         "metric": "cilium_kvstoremesh_remote_cluster_failures",
         "producer": "Cilium agent metrics",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "panel": "Router uptime",
+    "query": "max by (routerboard_name, version) (mktxp_system_uptime)",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "mktxp_system_uptime"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_system_uptime",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "panel": "Router CPU",
+    "query": "max by (routerboard_name) (mktxp_system_cpu_load)",
+    "unit": "percent",
+    "query_mode": "range",
+    "inputs": [
+      "mktxp_system_cpu_load"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_system_cpu_load",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "panel": "Router memory used",
+    "query": "1 - max by (routerboard_name) (mktxp_system_free_memory) / max by (routerboard_name) (mktxp_system_total_memory)",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "mktxp_system_free_memory",
+      "mktxp_system_total_memory"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_system_free_memory",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_system_total_memory",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "panel": "Router temperature",
+    "query": "max by (routerboard_name) (mktxp_system_cpu_temperature)",
+    "unit": "celsius",
+    "query_mode": "range",
+    "inputs": [
+      "mktxp_system_cpu_temperature"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_system_cpu_temperature",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "panel": "Router storage used",
+    "query": "1 - max by (routerboard_name) (mktxp_system_free_hdd_space) / max by (routerboard_name) (mktxp_system_total_hdd_space)",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "mktxp_system_free_hdd_space",
+      "mktxp_system_total_hdd_space"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_system_free_hdd_space",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_system_total_hdd_space",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "panel": "Interface receive",
+    "query": "sum by (name) (rate(mktxp_interface_rx_byte_total{name!=\"lo\"}[5m]))",
+    "unit": "Bps",
+    "query_mode": "range",
+    "inputs": [
+      "mktxp_interface_rx_byte_total"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_interface_rx_byte_total",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "panel": "Interface transmit",
+    "query": "sum by (name) (rate(mktxp_interface_tx_byte_total{name!=\"lo\"}[5m]))",
+    "unit": "Bps",
+    "query_mode": "range",
+    "inputs": [
+      "mktxp_interface_tx_byte_total"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_interface_tx_byte_total",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "panel": "Interface errors",
+    "query": "sum by (name) (rate(mktxp_interface_rx_error_total[5m])) + sum by (name) (rate(mktxp_interface_tx_error_total[5m]))",
+    "unit": "ops",
+    "query_mode": "range",
+    "inputs": [
+      "mktxp_interface_rx_error_total",
+      "mktxp_interface_tx_error_total"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_interface_rx_error_total",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_interface_tx_error_total",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "panel": "Interface drops",
+    "query": "sum by (name) (rate(mktxp_interface_rx_drop_total[5m])) + sum by (name) (rate(mktxp_interface_tx_drop_total[5m]))",
+    "unit": "ops",
+    "query_mode": "range",
+    "inputs": [
+      "mktxp_interface_rx_drop_total",
+      "mktxp_interface_tx_drop_total"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_interface_rx_drop_total",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_interface_tx_drop_total",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "panel": "Interface link",
+    "query": "max by (name) (mktxp_interface_running) and on (name) (max by (name) (mktxp_interface_disabled) == 0)",
+    "unit": "bool",
+    "query_mode": "instant",
+    "inputs": [
+      "mktxp_interface_disabled",
+      "mktxp_interface_running"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_interface_disabled",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_interface_running",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "panel": "Address pool use",
+    "query": "max by (pool) (mktxp_ip_pool_used) / max by (pool) (mktxp_ip_pool_total)",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "mktxp_ip_pool_total",
+      "mktxp_ip_pool_used"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_ip_pool_total",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_ip_pool_used",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "panel": "Tracked connections",
+    "query": "max by (routerboard_name) (mktxp_ip_connections_total)",
+    "unit": "short",
+    "query_mode": "range",
+    "inputs": [
+      "mktxp_ip_connections_total"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_ip_connections_total",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "panel": "Routes by protocol",
+    "query": "max by (protocol) (mktxp_routes_protocol_count)",
+    "unit": "short",
+    "query_mode": "range",
+    "inputs": [
+      "mktxp_routes_protocol_count"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_routes_protocol_count",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "panel": "Firewall drop rules",
+    "query": "sum by (name) (rate(mktxp_firewall_filter_total{name=~\".*[|] drop [|].*\"}[5m]))",
+    "unit": "Bps",
+    "query_mode": "range",
+    "inputs": [
+      "mktxp_firewall_filter_total"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_firewall_filter_total",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "panel": "Firmware upgrade",
+    "query": "max by (routerboard_name, current_firmware, upgrade_firmware) (mktxp_routerboard_firmware_upgrade_available)",
+    "unit": "bool",
+    "query_mode": "instant",
+    "inputs": [
+      "mktxp_routerboard_firmware_upgrade_available"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_routerboard_firmware_upgrade_available",
+        "producer": "router MKTXP exporter",
         "availability": "configured"
       }
     ],
@@ -2709,6 +3095,131 @@
       {
         "metric": "homelab_ingress_cert_expiry_timestamp_seconds",
         "producer": "read-only evidence collector",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/access.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Analytics",
+    "panel": "Analytics health",
+    "query": "max by (k8s_cluster, component) (plausible_health{k8s_cluster=~\"$cluster\"})",
+    "unit": "bool",
+    "query_mode": "instant",
+    "inputs": [
+      "plausible_health"
+    ],
+    "sources": [
+      {
+        "metric": "plausible_health",
+        "producer": "Plausible exporter (its stats and health API)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/access.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Analytics",
+    "panel": "Visitors today",
+    "query": "max by (k8s_cluster, site_id) (plausible_visitors{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "query_mode": "range",
+    "inputs": [
+      "plausible_visitors"
+    ],
+    "sources": [
+      {
+        "metric": "plausible_visitors",
+        "producer": "Plausible exporter (its stats and health API)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/access.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Analytics",
+    "panel": "Page views today",
+    "query": "max by (k8s_cluster, site_id) (plausible_pageviews{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "query_mode": "range",
+    "inputs": [
+      "plausible_pageviews"
+    ],
+    "sources": [
+      {
+        "metric": "plausible_pageviews",
+        "producer": "Plausible exporter (its stats and health API)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/access.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Analytics",
+    "panel": "Bounce rate today",
+    "query": "max by (k8s_cluster, site_id) (plausible_bounce_rate{k8s_cluster=~\"$cluster\"})",
+    "unit": "percent",
+    "query_mode": "range",
+    "inputs": [
+      "plausible_bounce_rate"
+    ],
+    "sources": [
+      {
+        "metric": "plausible_bounce_rate",
+        "producer": "Plausible exporter (its stats and health API)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/access.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Analytics",
+    "panel": "Visit duration today",
+    "query": "max by (k8s_cluster, site_id) (plausible_visit_duration{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "query_mode": "range",
+    "inputs": [
+      "plausible_visit_duration"
+    ],
+    "sources": [
+      {
+        "metric": "plausible_visit_duration",
+        "producer": "Plausible exporter (its stats and health API)",
         "availability": "configured"
       }
     ],

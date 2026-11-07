@@ -1,16 +1,5 @@
 [
   {
-    "provider": "network",
-    "file": "mikrotik-mktxp.json",
-    "grafana_com_id": 13679,
-    "revision": 32,
-    "uid": "gxf3edrffkw",
-    "source": "https://grafana.com/api/dashboards/13679/revisions/32/download",
-    "attribution": "https://grafana.com/grafana/dashboards/13679/",
-    "license": "Not stated on grafana.com. The publisher's exporter (github.com/akpw/mktxp) is GPL-2.0 but doesn't ship this board; owner decision pending",
-    "sha256": "3f72f9fed0fb54463fee0f45bd79fcb9636a2a4116d9c9ccbe16e210b4e9bd25"
-  },
-  {
     "provider": "unpoller",
     "file": "clients.json",
     "grafana_com_id": 11315,
@@ -45,25 +34,14 @@
   },
   {
     "provider": "nginx",
-    "file": "nginx-ingress.json",
-    "grafana_com_id": 14314,
-    "revision": 2,
-    "uid": "k8s-nginx-ingress-prometheus-ng",
-    "source": "https://grafana.com/api/dashboards/14314/revisions/2/download",
-    "attribution": "https://grafana.com/grafana/dashboards/14314/",
-    "license": "Not stated on grafana.com, which links no publisher repository; owner decision pending",
-    "sha256": "f4611a8cdef92ff8338bfddd197b7806336c8b87e776c49f70be62c9e2a1cac2"
-  },
-  {
-    "provider": "plausible",
-    "file": "plausible-analytics.json",
-    "grafana_com_id": 22200,
-    "revision": 1,
-    "uid": "ee2fgirjz1hxcc",
-    "source": "https://grafana.com/api/dashboards/22200/revisions/1/download",
-    "attribution": "https://grafana.com/grafana/dashboards/22200/",
-    "license": "Not stated on grafana.com, which links no publisher repository; owner decision pending",
-    "sha256": "fb55a12c0ae0f725001fd7a8a1264d0e7d99aa7c353b5dcb941cf95503679f83"
+    "file": "nginx.json",
+    "grafana_com_id": null,
+    "revision": "ingress-nginx controller-v1.15.1",
+    "uid": "nginx",
+    "source": "https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.15.1/deploy/grafana/dashboards/nginx.json",
+    "attribution": "https://github.com/kubernetes/ingress-nginx/tree/controller-v1.15.1/deploy/grafana/dashboards",
+    "license": "Apache-2.0, from the publisher's repository (kubernetes/ingress-nginx)",
+    "sha256": "bde34d97540dd79603c5825f3af89f84421519a8247c267d6f5f3dd7690786f4"
   },
   {
     "provider": "alertmanager",

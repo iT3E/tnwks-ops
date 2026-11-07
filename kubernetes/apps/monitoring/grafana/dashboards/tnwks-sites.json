@@ -60,7 +60,7 @@
                       "spec": {
                         "expr": "count(max by (k8s_cluster) (homelab_expected_site_info{k8s_cluster=~\"$cluster\"}))",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}}",
                         "range": false
                       },
                       "datasource": {
@@ -140,7 +140,7 @@
                       "spec": {
                         "expr": "count(max by (k8s_cluster) (homelab:site_reporting{k8s_cluster=~\"$cluster\"}) == 1) or vector(0)",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}}",
                         "range": false
                       },
                       "datasource": {
@@ -221,7 +221,7 @@
                         "expr": "max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}}",
                         "range": false
                       },
                       "datasource": {
@@ -491,7 +491,7 @@
                       "spec": {
                         "expr": "sum by (k8s_cluster) (kube_node_status_condition{k8s_cluster=~\"$cluster\",condition=\"Ready\",status=\"true\"})",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}}",
                         "range": true
                       },
                       "datasource": {
@@ -684,7 +684,7 @@
                         "expr": "max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{app}}",
                         "range": false
                       },
                       "datasource": {
@@ -851,7 +851,7 @@
                         "expr": "max by (k8s_cluster, app, tier, kind, workload) (homelab_expected_workload_info{k8s_cluster=~\"$cluster\"})",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{tier}} {{kind}} {{workload}}",
                         "range": false
                       },
                       "datasource": {
@@ -1431,7 +1431,7 @@
                         "expr": "max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{app}}",
                         "range": false
                       },
                       "datasource": {
@@ -2178,7 +2178,7 @@
                         "expr": "max by (k8s_cluster, app) (changes(homelab:service_state{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{app}}",
                         "range": false
                       },
                       "datasource": {
@@ -2294,7 +2294,7 @@
                         "expr": "max by (k8s_cluster, vip) (changes(homelab:shared_vip_route{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{vip}}",
                         "range": false
                       },
                       "datasource": {
@@ -2410,7 +2410,7 @@
                         "expr": "max by (k8s_cluster, app, workload) (max_over_time(homelab_workload_transition_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{workload}}",
                         "range": false
                       },
                       "datasource": {

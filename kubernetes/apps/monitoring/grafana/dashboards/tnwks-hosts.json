@@ -333,7 +333,7 @@
                         "expr": "sum by (k8s_cluster, app) (homelab_workload_desired_replicas{k8s_cluster=~\"$cluster\"})",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{app}}",
                         "range": false
                       },
                       "datasource": {
@@ -449,7 +449,7 @@
                         "expr": "max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{app}}",
                         "range": false
                       },
                       "datasource": {

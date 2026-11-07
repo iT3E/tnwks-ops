@@ -401,14 +401,6 @@
   },
   {
     "dashboard": "tnwks-network",
-    "tab": "Paths",
-    "title": "Router interface errors",
-    "expr": "sum by (k8s_cluster, routerboard_name, name) (rate(mktxp_interface_rx_error_total{k8s_cluster=~\"$cluster\"}[5m]))",
-    "unit": "ops",
-    "kiosk": false
-  },
-  {
-    "dashboard": "tnwks-network",
     "tab": "BGP and mesh",
     "title": "Path by hop",
     "expr": "max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})",
@@ -469,6 +461,126 @@
     "title": "Mesh remote failures",
     "expr": "max by (k8s_cluster, target_cluster) (cilium_kvstoremesh_remote_cluster_failures{k8s_cluster=~\"$cluster\"})",
     "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "title": "Router uptime",
+    "expr": "max by (routerboard_name, version) (mktxp_system_uptime)",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "title": "Router CPU",
+    "expr": "max by (routerboard_name) (mktxp_system_cpu_load)",
+    "unit": "percent",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "title": "Router memory used",
+    "expr": "1 - max by (routerboard_name) (mktxp_system_free_memory) / max by (routerboard_name) (mktxp_system_total_memory)",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "title": "Router temperature",
+    "expr": "max by (routerboard_name) (mktxp_system_cpu_temperature)",
+    "unit": "celsius",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "title": "Router storage used",
+    "expr": "1 - max by (routerboard_name) (mktxp_system_free_hdd_space) / max by (routerboard_name) (mktxp_system_total_hdd_space)",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "title": "Interface receive",
+    "expr": "sum by (name) (rate(mktxp_interface_rx_byte_total{name!=\"lo\"}[5m]))",
+    "unit": "Bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "title": "Interface transmit",
+    "expr": "sum by (name) (rate(mktxp_interface_tx_byte_total{name!=\"lo\"}[5m]))",
+    "unit": "Bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "title": "Interface errors",
+    "expr": "sum by (name) (rate(mktxp_interface_rx_error_total[5m])) + sum by (name) (rate(mktxp_interface_tx_error_total[5m]))",
+    "unit": "ops",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "title": "Interface drops",
+    "expr": "sum by (name) (rate(mktxp_interface_rx_drop_total[5m])) + sum by (name) (rate(mktxp_interface_tx_drop_total[5m]))",
+    "unit": "ops",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "title": "Interface link",
+    "expr": "max by (name) (mktxp_interface_running) and on (name) (max by (name) (mktxp_interface_disabled) == 0)",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "title": "Address pool use",
+    "expr": "max by (pool) (mktxp_ip_pool_used) / max by (pool) (mktxp_ip_pool_total)",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "title": "Tracked connections",
+    "expr": "max by (routerboard_name) (mktxp_ip_connections_total)",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "title": "Routes by protocol",
+    "expr": "max by (protocol) (mktxp_routes_protocol_count)",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "title": "Firewall drop rules",
+    "expr": "sum by (name) (rate(mktxp_firewall_filter_total{name=~\".*[|] drop [|].*\"}[5m]))",
+    "unit": "Bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Router",
+    "title": "Firmware upgrade",
+    "expr": "max by (routerboard_name, current_firmware, upgrade_firmware) (mktxp_routerboard_firmware_upgrade_available)",
+    "unit": "bool",
     "kiosk": false
   },
   {
@@ -756,6 +868,46 @@
     "tab": "Shared-VIP names",
     "title": "Name certificate remaining",
     "expr": "max by (k8s_cluster, name) (homelab:ingress_cert_remaining_seconds{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Analytics",
+    "title": "Analytics health",
+    "expr": "max by (k8s_cluster, component) (plausible_health{k8s_cluster=~\"$cluster\"})",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Analytics",
+    "title": "Visitors today",
+    "expr": "max by (k8s_cluster, site_id) (plausible_visitors{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Analytics",
+    "title": "Page views today",
+    "expr": "max by (k8s_cluster, site_id) (plausible_pageviews{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Analytics",
+    "title": "Bounce rate today",
+    "expr": "max by (k8s_cluster, site_id) (plausible_bounce_rate{k8s_cluster=~\"$cluster\"})",
+    "unit": "percent",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Analytics",
+    "title": "Visit duration today",
+    "expr": "max by (k8s_cluster, site_id) (plausible_visit_duration{k8s_cluster=~\"$cluster\"})",
     "unit": "s",
     "kiosk": false
   },

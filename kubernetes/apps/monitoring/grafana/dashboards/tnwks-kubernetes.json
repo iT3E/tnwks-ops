@@ -292,7 +292,7 @@
                       "spec": {
                         "expr": "sum by (k8s_cluster, controller) (rate(controller_runtime_reconcile_total{k8s_cluster=~\"$cluster\",result=\"error\"}[5m]))",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{controller}}",
                         "range": true
                       },
                       "datasource": {
@@ -368,7 +368,7 @@
                       "spec": {
                         "expr": "sum by (k8s_cluster, app) (max by (k8s_cluster, app, kind, workload) (homelab_workload_desired_replicas{k8s_cluster=~\"$cluster\"})) - sum by (k8s_cluster, app) (max by (k8s_cluster, app, kind, workload) (homelab_workload_ready_replicas{k8s_cluster=~\"$cluster\"}))",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{app}}",
                         "range": true
                       },
                       "datasource": {
@@ -444,7 +444,7 @@
                       "spec": {
                         "expr": "1 - avg by (k8s_cluster, instance, kubernetes_node) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{instance}} {{kubernetes_node}}",
                         "range": true
                       },
                       "datasource": {
@@ -605,7 +605,7 @@
                         "expr": "max by (k8s_cluster, resource, revision) (max_over_time(homelab_flux_source_revision_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{resource}} {{revision}}",
                         "range": false
                       },
                       "datasource": {
@@ -721,7 +721,7 @@
                         "expr": "max by (k8s_cluster, resource, chart_version, app_version, release_status) (max_over_time(homelab_flux_release_deployed_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{resource}} {{chart_version}} {{app_version}} {{release_status}}",
                         "range": false
                       },
                       "datasource": {
@@ -837,7 +837,7 @@
                         "expr": "label_replace(max by (k8s_cluster, kind, resource, ready) (max_over_time(homelab_flux_ready_transition_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from, \"flux_kind\", \"$1\", \"kind\", \"(.+)\")",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{kind}} {{resource}} {{ready}}",
                         "range": false
                       },
                       "datasource": {
@@ -953,7 +953,7 @@
                         "expr": "min by (k8s_cluster, node, os_image, kubelet_version, kernel_version) (min_over_time(timestamp(kube_node_info{k8s_cluster=~\"$cluster\"})[$__range:5m])) * 1000",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{node}} {{os_image}} {{kubelet_version}} {{kernel_version}}",
                         "range": false
                       },
                       "datasource": {

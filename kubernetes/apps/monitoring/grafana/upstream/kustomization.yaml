@@ -6,15 +6,9 @@ configMapGenerator:
 - name: grafana-upstream-alertmanager
   files:
   - alertmanager-overview.json
-- name: grafana-upstream-network
-  files:
-  - mikrotik-mktxp.json
 - name: grafana-upstream-nginx
   files:
-  - nginx-ingress.json
-- name: grafana-upstream-plausible
-  files:
-  - plausible-analytics.json
+  - nginx.json
 - name: grafana-upstream-unpoller
   files:
   - clients.json

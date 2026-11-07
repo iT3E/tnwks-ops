@@ -60,7 +60,7 @@
                       "spec": {
                         "expr": "count(max by (k8s_cluster) (homelab_expected_site_info{k8s_cluster=~\"$cluster\"}))",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}}",
                         "range": false
                       },
                       "datasource": {
@@ -140,7 +140,7 @@
                       "spec": {
                         "expr": "count(max by (k8s_cluster) (homelab:site_reporting{k8s_cluster=~\"$cluster\"}) == 1) or vector(0)",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}}",
                         "range": false
                       },
                       "datasource": {
@@ -221,7 +221,7 @@
                         "expr": "max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}}",
                         "range": false
                       },
                       "datasource": {
@@ -492,7 +492,7 @@
                         "expr": "sort_desc(max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"}) != 4 != 1)",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{app}}",
                         "range": false
                       },
                       "datasource": {
@@ -663,7 +663,7 @@
                         "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",severity!=\"none\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{cluster}} {{alertname}} {{severity}}",
                         "range": false
                       },
                       "datasource": {
@@ -783,7 +783,7 @@
                         "expr": "max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{app}}",
                         "range": false
                       },
                       "datasource": {
@@ -1068,7 +1068,7 @@
                       "spec": {
                         "expr": "max by (k8s_cluster, app) (changes(homelab:service_state{k8s_cluster=~\"$cluster\"}[1h]))",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{app}}",
                         "range": true
                       },
                       "datasource": {

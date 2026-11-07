@@ -37,6 +37,7 @@ PRODUCERS = {
     "pyrra_": "Pyrra SLO rules (kubernetes/apps/monitoring/pyrra/app/slos.yaml)",
     "garage_": "Garage admin metrics (WSL-02 archive)",
     "kopiur_": "Kopiur controller (PVC backups and restores)",
+    "plausible_": "Plausible exporter (its stats and health API)",
     "ALERTS": "local Prometheus alert rules (current state)",
     "up": "Prometheus scrape status",
 }

@@ -57,7 +57,7 @@ One provider owns each UID:
 | Provider | Boards | Retire one by |
 | --- | --- | --- |
 | sidecar (`grafana_dashboard` ConfigMaps) | generated `tnwks-*` boards, chart mixins | moving it to a mounted provider, then removing its file |
-| `network`, `unpoller`, `nginx`, `plausible`, `alertmanager` (mounted) | pinned references (`upstream/catalogue.json`) | removing its catalogue entry |
+| `unpoller`, `nginx`, `alertmanager` (mounted) | pinned, licensed references (`upstream/catalogue.json`) | removing its catalogue entry |
 | `legacy`, `windows` (mounted) | kept hand-made boards in `grafana/app/dashboard/` | removing its file |
 
 The sidecar writes into an emptyDir after Grafana starts. With deletion on,
@@ -79,7 +79,7 @@ time). `home` is the generated Homelab board. The hand-made board it replaced,
 Homelab (classic), pinned one Windows host by name and was retired by removing
 its file from the `legacy` provider. Its panels live on, without a pinned host,
 on Kubernetes & GitOps, Hosts & Capacity (with the Windows Exporter board's
-`server` variable), Internet and the MikroTik board. Grafana 13 accepts the v2 file in
+`server` variable), Internet and Network & Routing's Router tab. Grafana 13 accepts the v2 file in
 `default_home_dashboard_path` and redirects to `/d/default-home-dashboard/`, tabs
 intact. Home Assistant's Monitoring tab frames that home page, so it follows.
 
@@ -95,10 +95,16 @@ Both sites report on both sites, so the global view returns some series twice;
 `IDENTITY` in `dashboards.py` reduces those with `max`, which keeps the worst state
 and lets a real answer replace an observer's Unknown.
 
+A timeseries names its series by the labels its query keeps, from the first
+`by (...)` (`legend()` in `dashboards.py`), else by site, app and instance. Until
+2026-11-07 every panel used the fallback, so about twenty (HTTP requests by
+ingress, Cilium drops by reason, notifications by integration, ...) showed
+several series under one site name.
+
 Every hop keeps the incident's time range. Homelab's panels link to their domain
 board with the selected sites and datasource (L1 → domain). Domain panels with an
 entity board link to it on the clicked series or row instead: an ingress to the
-NGINX board, a router to MikroTik, a node to the mixin's Node (Pods), a Windows
+NGINX board (ingress-nginx's own), a node to the mixin's Node (Pods), a Windows
 host to its exporter board, an access point to Home Wi-Fi (domain → entity).
 Telegram alerts open their `dashboard_url` from an hour before the alert started
 to now, or to 15 minutes after it resolved. Every alert that reaches a person has
@@ -155,9 +161,11 @@ database and extracted provisioning never existed as plaintext host files.
 The maintained Grafana 14.4 chart is separately rendered and checksum-verified.
 The renderer rejects unauthenticated requests, and a real Grafana 13 callback
 produces a PNG with its shared token. Rendering is capped at one concurrent
-request; its 768Mi limit is peak headroom, not idle consumption. The six reference
-exports retain their existing providers/UIDs and are provisioned from git rather
-than downloaded during pod startup.
+request; its 768Mi limit is peak headroom, not idle consumption. The reference
+boards are provisioned from git rather than downloaded during pod startup, and
+only under a license their publisher states (`grafana/upstream/README.md`).
+Removing the `network` and `plausible` providers on 2026-11-07 retired the
+unlicensed MikroTik and Plausible boards; their panels are generated now.
 
 ## Site 1 Prometheus volume
 

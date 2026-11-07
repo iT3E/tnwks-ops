@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -52,8 +53,7 @@ NO_ALERTS = "None"
 NO_EVENTS = "None in range"
 # Entity boards (pinned upstream, chart mixins and the kept classic boards),
 # opened on the clicked series: domain -> entity.
-NGINX = ("k8s-nginx-ingress-prometheus-ng", {"ingress": "ingress"})
-ROUTER = ("gxf3edrffkw", {"node": "routerboard_name"})
+NGINX = ("nginx", {"ingress": "ingress"})
 NODE = ("200ac8fdbfbb74b39aff88118e4d1c2c", {"cluster": "k8s_cluster", "node": "kubernetes_node"})
 WINDOWS = ("IV0hu1m7z", {"server": "instance"})
 ACCESS_POINT = ("home-wifi", {"ap": "name"})
@@ -88,7 +88,8 @@ class Panel:
     # A board UID (keeps the selected sites), or (UID, {variable: label}) to open
     # an entity board on the clicked series or row.
     link: str | tuple[str, dict[str, str]] | None = None
-    legend: str = "{{k8s_cluster}} {{app}} {{instance}}"
+    # Empty: the labels of the query's first aggregation (see legend()).
+    legend: str = ""
     empty: str = "Unknown — missing evidence"
 
 
@@ -107,6 +108,16 @@ class Board:
 def p(title: str, expr: str, unit: str, explanation: str, kind="timeseries", link=None,
       empty="Unknown — missing evidence"):
     return Panel(title, expr, unit, explanation, kind, link, empty=empty)
+
+
+def legend(panel: Panel) -> str:
+    """A series is named by the labels its query keeps: the first `by (...)`,
+    else the site, app and instance. A bucket bound (le) never names a series."""
+    if panel.legend:
+        return panel.legend
+    match = re.search(r"\bby \(([^)]*)\)", panel.expr)
+    labels = [label.strip() for label in match[1].split(",")] if match else ["k8s_cluster", "app", "instance"]
+    return " ".join("{{%s}}" % label for label in labels if label not in ("", "le"))
 
 
 def selector(name: str, extra: str = "") -> str:
@@ -300,8 +311,6 @@ def catalogue() -> list[Board]:
                 # The router, seen by homelab-wsl's mktxp: not scoped to $cluster.
                 p("Site tunnel traffic", 'sum by (interface) (rate(mktxp_peer_rx_total{interface=~"wg-site[0-9]+"}[5m]))', "Bps",
                   "Received on the router's WireGuard interface for each site's distro. Missing series mean the router isn't observed, not an idle tunnel."),
-                p("Router interface errors", f'sum by (k8s_cluster, routerboard_name, name) (rate({metric("mktxp_interface_rx_error_total")}[5m]))', "ops",
-                  "Router receive errors by interface. Telemetry enables are integrated after the network migration release.", link=ROUTER),
             ],
             "BGP and mesh": [
                 p("Path by hop", metric("homelab:network_path_state"), "state",
@@ -321,10 +330,46 @@ def catalogue() -> list[Board]:
                 p("Mesh remote failures", f'max by (k8s_cluster, target_cluster) ({selector("cilium_kvstoremesh_remote_cluster_failures")})', "short",
                   "KVStoreMesh connection failures to the other cluster since its last restart."),
             ],
+            # The router itself, from mktxp (it replaces the MikroTik reference board).
+            "Router": [
+                p("Router uptime", 'max by (routerboard_name, version) (mktxp_system_uptime)', "s",
+                  "Time since the router last booted, with its RouterOS version. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed.", "table"),
+                p("Router CPU", 'max by (routerboard_name) (mktxp_system_cpu_load)', "percent",
+                  "CPU load across the router's cores, as RouterOS reports it. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed."),
+                p("Router memory used", '1 - max by (routerboard_name) (mktxp_system_free_memory) / max by (routerboard_name) (mktxp_system_total_memory)', "percentunit",
+                  "Share of the router's memory in use. The DNS adlists live in memory, so a jump after a list update is expected. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed."),
+                p("Router temperature", 'max by (routerboard_name) (mktxp_system_cpu_temperature)', "celsius",
+                  "CPU temperature. The RB5009 is fanless, so this follows the room. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed."),
+                p("Router storage used", '1 - max by (routerboard_name) (mktxp_system_free_hdd_space) / max by (routerboard_name) (mktxp_system_total_hdd_space)', "percentunit",
+                  "Share of the router's flash in use (RouterOS packages, files and backups). Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed."),
+                p("Interface receive", 'sum by (name) (rate(mktxp_interface_rx_byte_total{name!="lo"}[5m]))', "Bps",
+                  "Bytes received per router interface: physical ports, bridge VLANs and WireGuard tunnels. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed."),
+                p("Interface transmit", 'sum by (name) (rate(mktxp_interface_tx_byte_total{name!="lo"}[5m]))', "Bps",
+                  "Bytes sent per router interface. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed."),
+                p("Interface errors", 'sum by (name) (rate(mktxp_interface_rx_error_total[5m])) + sum by (name) (rate(mktxp_interface_tx_error_total[5m]))', "ops",
+                  "Receive and transmit errors per interface. Errors on a copper port usually mean a cable or a duplex mismatch. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed."),
+                p("Interface drops", 'sum by (name) (rate(mktxp_interface_rx_drop_total[5m])) + sum by (name) (rate(mktxp_interface_tx_drop_total[5m]))', "ops",
+                  "Packets dropped per interface, received or sent: queues full or the frame refused. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed."),
+                p("Interface link", 'max by (name) (mktxp_interface_running) and on (name) (max by (name) (mktxp_interface_disabled) == 0)', "bool",
+                  "Whether each enabled interface is running. A port with nothing plugged in is false here, which is only a problem for a port that should be in use. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed.",
+                  "table"),
+                p("Address pool use", 'max by (pool) (mktxp_ip_pool_used) / max by (pool) (mktxp_ip_pool_total)', "percentunit",
+                  "Share of each DHCP address pool leased. A full pool refuses new clients on that VLAN. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed.",
+                  "table"),
+                p("Tracked connections", 'max by (routerboard_name) (mktxp_ip_connections_total)', "short",
+                  "Entries in the router's connection-tracking table. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed."),
+                p("Routes by protocol", 'max by (protocol) (mktxp_routes_protocol_count)', "short",
+                  "Routes in the router's table by origin. The BGP ones come from the sites' FRR; BGP and mesh splits them by site. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed."),
+                p("Firewall drop rules", 'sum by (name) (rate(mktxp_firewall_filter_total{name=~".*[|] drop [|].*"}[5m]))', "Bps",
+                  "Traffic matched by each filter rule that drops, in bytes per second as mktxp counts it. The rule name is its chain, action and Terraform comment. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed."),
+                p("Firmware upgrade", 'max by (routerboard_name, current_firmware, upgrade_firmware) (mktxp_routerboard_firmware_upgrade_available)', "bool",
+                  "Whether the RouterBOOT firmware is behind the installed RouterOS. It's upgraded from the router, followed by a reboot. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed.",
+                  "table"),
+            ],
             "History": [
                 p("Router BGP session resets", f'max by (k8s_cluster, routerboard_name, name) (resets({selector("mktxp_bgp_uptime")}[$__range])) > 0', "short",
                   "Times each of the router's BGP sessions restarted in the range: its uptime went back. A session that dropped and came back between scrapes still counts. Only site 1 observes the router.",
-                  "table", ROUTER, empty=NO_EVENTS),
+                  "table", empty=NO_EVENTS),
                 p("Cilium BGP session changes", changes("cilium_bgp_control_plane_session_state", "node"), "short",
                   "State changes of each node's Cilium BGP session with its distro's FRR in the range. Sampled at each scrape, so a shorter flap can be missed.",
                   "table", empty=NO_EVENTS),
@@ -441,6 +486,21 @@ def catalogue() -> list[Board]:
                   "The site each ingress said served the request (its X-Homelab-Site header). It matches the observer's site, because each site's pods reach their own ingress.", "table"),
                 p("Name certificate remaining", metric("homelab:ingress_cert_remaining_seconds"), "s",
                   "Certificate the client saw for each name, per site. Under 14 days alerts; cert-manager renews at 30.", "table"),
+            ],
+            # Plausible's own numbers, from its exporter (they replace the Plausible
+            # reference board). Its site IDs are domains: they appear only at runtime.
+            "Analytics": [
+                p("Analytics health", f'max by (k8s_cluster, component) ({selector("plausible_health")})', "bool",
+                  "Plausible's health API per component (Postgres, ClickHouse, sessions, the sites cache), polled by its exporter. The Plausible probe on User paths is the independent check.",
+                  "table"),
+                p("Visitors today", f'max by (k8s_cluster, site_id) ({selector("plausible_visitors")})', "short",
+                  "Unique visitors per tracked site so far today (Plausible's day period, in the site's time zone). It resets at midnight, so read it as a running count."),
+                p("Page views today", f'max by (k8s_cluster, site_id) ({selector("plausible_pageviews")})', "short",
+                  "Page views per tracked site so far today."),
+                p("Bounce rate today", f'max by (k8s_cluster, site_id) ({selector("plausible_bounce_rate")})', "percent",
+                  "Share of today's visits that viewed one page, per tracked site. Zero with no visits."),
+                p("Visit duration today", f'max by (k8s_cluster, site_id) ({selector("plausible_visit_duration")})', "s",
+                  "Average visit duration today, per tracked site. Zero with no visits."),
             ],
             "Dependencies": [
                 p("Certificate validity remaining", f'max by (k8s_cluster, name) ({metric("certmanager_certificate_expiration_timestamp_seconds")}) - time()', "s",
@@ -655,7 +715,7 @@ def resource(board: Board) -> dict:
         for panel in panels:
             count += 1
             key = f"panel-{count}"
-            query = (prometheus.Query().expr(panel.expr).legend_format(panel.legend)
+            query = (prometheus.Query().expr(panel.expr).legend_format(legend(panel))
                      .datasource(dashboard.Dashboardv2DataQueryKindDatasource().name(datasource)))
             if panel.kind in ("stat", "table"):
                 query.instant()
