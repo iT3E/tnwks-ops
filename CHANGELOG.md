@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.38.2 - 2026-11-07
+
+### Fixed
+
+* The Network board's mesh hop also needs the site's own probe of its peer to pass. In the partition drill, site 2's clustermesh control plane reached site 1 around the downed tunnel and read ready while pod traffic between the sites failed.
+
 ## v2.38.1 - 2026-11-07
 
 ### Security
