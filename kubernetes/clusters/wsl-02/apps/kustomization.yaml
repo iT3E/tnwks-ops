@@ -24,6 +24,9 @@ resources:
   # Storage: this cluster's node names (see the file).
   - ./local-path-provisioner-ks.yaml
   - ../../../apps/kube-system/metrics-server/ks.yaml
+  # Restarts workloads annotated reloader.stakater.com/auto when their
+  # ConfigMaps or Secrets change (the evidence collector, mosquitto, Grafana).
+  - ../../../apps/kube-system/reloader/ks.yaml
   # Apps (one at a time, docs/wsl/multi-site.md). playwright-mcp: stateless,
   # the pilot of moving an app to homelab-wsl-02.
   - ../../../apps/ai/namespace.yaml
