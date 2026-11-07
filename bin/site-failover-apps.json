@@ -487,5 +487,40 @@
     "prebind_extra": [
       "cephfs-hdd-subvolume"
     ]
+  },
+  "plausible": {
+    "prefix": "PLAUSIBLE",
+    "namespace": "selfhosted",
+    "kustomizations": {
+      "db": "plausible-db",
+      "app": "plausible"
+    },
+    "postgres": "plausible-pg",
+    "workloads": [
+      "statefulset/plausible"
+    ],
+    "pvcs": [
+      {
+        "name": "clickhouse-data-plausible-0",
+        "policy": "plausible-clickhouse",
+        "uid": 101,
+        "gid": 101,
+        "transfer_only": true,
+        "restore_privileged": true,
+        "create": {
+          "capacity": "5Gi",
+          "storageClass": "local-path"
+        }
+      }
+    ],
+    "check": {
+      "workload": "statefulset/plausible",
+      "container": "clickhouse",
+      "command": [
+        "sh",
+        "-c",
+        "wget -qO- \"http://$(hostname -i):8000/api/health\""
+      ]
+    }
   }
 }

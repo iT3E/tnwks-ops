@@ -24,3 +24,4 @@ resources:
   - ../../../../apps/kopiur-system/kopiur/policies/ombi-f.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/wizarr.yaml
   - ../../../../apps/kopiur-system/kopiur/policies/jellyfin.yaml
+  - ../../../../apps/kopiur-system/kopiur/policies/plausible-clickhouse.yaml
