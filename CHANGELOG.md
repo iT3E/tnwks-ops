@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.35.1 - 2026-11-07
+
+### Fixed
+
+* The household view reads Unknown, not Failed, for Wi-Fi or cameras when their exporter stops reporting (UniFi Poller on a lost site), as the site-loss drill showed.
+
 ## v2.35.0 - 2026-11-07
 
 ### Added
