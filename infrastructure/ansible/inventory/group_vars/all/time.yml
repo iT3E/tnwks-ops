@@ -1,0 +1,5 @@
+---
+# The router's NTP server (modules/mikrotik/dns.tf, synced from the pool). Its
+# Force-NTP rule redirects any :123 to it anyway; naming it makes the hosts
+# report the real source. windows_time (Windows) and wsl_time (the distro).
+ntp_server: 10.10.91.1

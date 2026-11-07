@@ -10,9 +10,11 @@
 wslconfig_path: 'C:\Users\{{ windows_desktop_user }}\.wslconfig'
 wslconfig_write: false
 # The VM's clocksource (.wslconfig kernelCommandLine). hyperv_clocksource_tsc_page
-# fixed the desktop's slow clock on 2026-09-24; on WSL-02 (i7-12700K) the TSC
-# page itself runs ~13% slow and host_vars pick hyperv_clocksource_msr. Check:
-# over 20 s, `date` and /proc/uptime should advance alike.
+# fixed the desktop's slow clock on 2026-09-24. WSL-02's VM clock runs ~10-13%
+# slow on both Hyper-V clocksources (TSC page and MSR, 2026-11-06) while its
+# Windows clock keeps time: a host problem (its 2023 BIOS is the lead), so it
+# keeps the default. Check: over 30 s, `date` and /proc/uptime should advance
+# alike.
 wsl_clocksource: hyperv_clocksource_tsc_page
 
 # NIC and power settings. Changing an adapter's advanced properties restarts

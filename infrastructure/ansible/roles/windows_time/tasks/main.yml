@@ -1,0 +1,27 @@
+---
+# Windows Time: running, started at boot, and syncing from the router only
+# (0x8: client mode). Both sites' Windows hosts had it stopped or on the
+# local CMOS clock (2026-11-06), 1-2 s off. The WSL VM takes its wall time from
+# Windows (Hyper-V time sync), so this is the cluster's time too.
+- name: Windows Time syncs from the router
+  ansible.windows.win_powershell:
+    parameters:
+      Peer: "{{ ntp_server }},0x8"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Peer)
+      $Ansible.Changed = $false
+      $p = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\W32Time\Parameters'
+      $svc = Get-Service w32time
+      $todo = @()
+      if ("$($svc.StartType)" -ne 'Automatic') { $todo += "start type $($svc.StartType) -> Automatic" }
+      if ("$($svc.Status)" -ne 'Running') { $todo += "service $($svc.Status) -> Running" }
+      if ($p.NtpServer -ne $Peer -or $p.Type -ne 'NTP') { $todo += "source $($p.Type) $($p.NtpServer) -> NTP $Peer" }
+      if ($todo -and -not $Ansible.CheckMode) {
+          Set-Service w32time -StartupType Automatic
+          if ((Get-Service w32time).Status -ne 'Running') { Start-Service w32time }
+          w32tm /config /manualpeerlist:"$Peer" /syncfromflags:manual /update | Out-Null
+          w32tm /resync /rediscover | Out-Null
+      }
+      $Ansible.Changed = [bool]$todo
+      $todo

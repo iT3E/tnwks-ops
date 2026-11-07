@@ -33,6 +33,8 @@
     # The tnwks-ansible runners' key (CI reaches the distro over SSH).
     - role: wsl_ci_access
       tags: [ci-access]
+    - role: wsl_time
+      tags: [time]
     # Exposes *.internal.tnwks.us services to the LAN with the Windows-side
     # portproxy (docs/wsl/lan-exposure.md).
     - role: wsl_lan_bridge
