@@ -1,3 +1,0 @@
-kind: Fixed
-body: Point grafana-02 at site 2 directly, since requests to the shared VIP reached site 1 and got a 404.
-time: 2026-11-07T01:40:00-08:00

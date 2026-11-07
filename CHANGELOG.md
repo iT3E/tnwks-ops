@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.9.1 - 2026-11-07
+
+### Fixed
+
+* Point grafana-02 at site 2 directly, since requests to the shared VIP reached site 1 and got a 404.
+
 ## v2.9.0 - 2026-11-07
 
 ### Added
