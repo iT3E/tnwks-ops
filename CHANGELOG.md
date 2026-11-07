@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.1.0 - 2026-11-07
+
+### Added
+
+* Deploy a private Garage object store on WSL-02 and read-only evidence collectors on both sites, prepare the Grafana database upgrade backup, and add generated dashboards and bounded Thanos components with offline failure tests.
+
 ## v2.0.4 - 2026-11-07
 
 ### Fixed
