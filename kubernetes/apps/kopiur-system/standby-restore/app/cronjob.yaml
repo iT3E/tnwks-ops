@@ -8,6 +8,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: standby-restore
+  namespace: kopiur-system
 spec:
   # Sunday, after both sites' nightly kopiur runs (02:00-03:00).
   schedule: "15 5 * * 0"
