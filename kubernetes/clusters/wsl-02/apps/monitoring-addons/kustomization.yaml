@@ -7,6 +7,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: monitoring
 resources:
+  - ../../../../apps/monitoring/kube-prometheus-stack/addons/alerts/alertmanager.yaml
   - ../../../../apps/monitoring/kube-prometheus-stack/addons/alerts/heartbeats.yaml
   - ../../../../apps/monitoring/kube-prometheus-stack/addons/alerts/oomkilled.yaml
   - ../../../../apps/monitoring/kube-prometheus-stack/addons/alerts/resource-pressure.yaml
