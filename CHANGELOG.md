@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.2.0 - 2026-11-07
+
+### Changed
+
+* Upgrade Grafana to 13.3 with an authenticated bounded renderer, preserve existing dashboard and datasource identities, and provision pinned reference exports from git.
+
 ## v2.1.2 - 2026-11-07
 
 ### Fixed
