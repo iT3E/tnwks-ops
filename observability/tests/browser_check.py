@@ -23,6 +23,7 @@ def main():
     http_errors = []
     console = []
     results = []
+    retries = []
     with sync_playwright() as p:
         executable = os.environ.get("CHROMIUM_EXECUTABLE")
         browser = p.chromium.launch(headless=True, executable_path=executable,
@@ -39,7 +40,15 @@ def main():
                 continue
             page.goto(f"{base}/d/{board.uid}/view?var-datasource=prometheus-global", wait_until="networkidle")
             try:
-                page.get_by_text(board.title, exact=True).filter(visible=True).first.wait_for(timeout=45000)
+                try:
+                    page.get_by_text(board.title, exact=True).filter(visible=True).first.wait_for(timeout=45000)
+                except Exception:
+                    # The first cold load in the 1-CPU container can stall on the
+                    # loading spinner with nothing pending and no error. One reload,
+                    # recorded; a board that fails twice fails the check.
+                    retries.append(board.uid)
+                    page.reload(wait_until="networkidle")
+                    page.get_by_text(board.title, exact=True).filter(visible=True).first.wait_for(timeout=45000)
             except Exception:
                 (out / "failed-page.html").write_text(page.content())
                 (out / "failed-state.json").write_text(json.dumps(page.evaluate(
@@ -119,9 +128,10 @@ def main():
                                 "selected": params["var-ap"]}
         browser.close()
     (out / "browser-results.json").write_text(json.dumps({"dashboards": results, "navigation": navigation,
-        "page_errors": errors}, indent=2) + "\n")
+        "page_errors": errors, "reloaded": retries}, indent=2) + "\n")
     assert not errors, errors
-    print(f"Rendered {len(results)} operator dashboards and the pinned references in Grafana; screenshots and evidence: {out}")
+    print(f"Rendered {len(results)} operator dashboards and the pinned references in Grafana; screenshots and evidence: {out}"
+          + (f" (reloaded once: {', '.join(retries)})" if retries else ""))
 
 
 if __name__ == "__main__":
