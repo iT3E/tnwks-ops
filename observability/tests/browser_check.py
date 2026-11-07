@@ -56,6 +56,15 @@ def main():
                 button.click()
                 page.wait_for_timeout(150)
             results.append({"dashboard": board.uid, "title": board.title, "tabs": list(board.tabs)})
+        reference_path = Path(__file__).resolve().parents[2] / "kubernetes/apps/monitoring/grafana/upstream"
+        for reference in json.loads((reference_path / "catalogue.json").read_text()):
+            title = json.loads((reference_path / reference["file"]).read_text())["title"]
+            page.goto(f"{base}/d/{reference['uid']}", wait_until="domcontentloaded")
+            page.get_by_text(title, exact=True).filter(visible=True).first.wait_for(timeout=45000)
+            page.wait_for_timeout(500)
+            body = page.locator("body").inner_text()
+            for bad in ["Visualization plugin not found", "Panel plugin not found", "An unexpected error happened", "Data source was not found"]:
+                assert bad not in body, (reference["uid"], bad)
         page.goto(f"{base}/d/home?var-datasource=prometheus-global", wait_until="domcontentloaded")
         page.get_by_text("Expected sites", exact=True).filter(visible=True).wait_for(timeout=45000)
         evidence = page.get_by_test_id("data-testid Panel header Site evidence")
@@ -72,7 +81,7 @@ def main():
         browser.close()
     (out / "browser-results.json").write_text(json.dumps({"dashboards": results, "page_errors": errors}, indent=2) + "\n")
     assert not errors, errors
-    print(f"Rendered {len(results)} operator dashboards in Grafana; screenshots and evidence: {out}")
+    print(f"Rendered {len(results)} operator dashboards and six pinned references in Grafana; screenshots and evidence: {out}")
 
 
 if __name__ == "__main__":

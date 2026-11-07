@@ -34,7 +34,7 @@ uv run --project observability ruff check observability
 uv run --project observability pytest observability/tests -q
 uv run --project observability python observability/validate.py
 uv run --project observability python observability/rehearse_archive.py
-uv run --project observability python observability/rehearse_grafana.py --browser
+uv run --project observability python observability/rehearse_grafana.py --browser --renderer
 ```
 
 Generation/validation needs `kustomize` or `kubectl kustomize`; neither contacts a
@@ -60,3 +60,11 @@ Talos bind and permissions remain a separately validated migration.
 The Grafana 13.3 browser gate is `tests/browser_check.py`. It must pass against a
 disposable upgraded Grafana before production activation; API import alone does
 not validate tab navigation, panel rendering, responsive layout or DB migration.
+
+`rehearse_migration.py` additionally exercises a private encrypted database dump
+and provisioning archive: baseline, Grafana 13 migration, pod recreation, and
+restoration of the original backup to Grafana 12. Supply `--database-dump`,
+`--provisioning-archive` and `--identity`; never commit the fixtures. It uses an
+internal Docker network, tmpfs data/configuration and no active alert execution.
+Failure logs are encrypted under `.cache/private/`. The ordinary CI rehearsal
+uses synthetic metrics and the six checksum-verified upstream exports.

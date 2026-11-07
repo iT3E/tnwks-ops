@@ -12,6 +12,7 @@ resources:
   - ./emberstack.yaml
   - ./flannel.yaml
   - ./grafana.yaml
+  - ./grafana-community.yaml
   - ./hajimari.yaml
   - ./ingress-nginx.yaml
   - ./jetstack.yaml

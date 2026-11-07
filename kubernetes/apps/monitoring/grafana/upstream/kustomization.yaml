@@ -1,0 +1,23 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+configMapGenerator:
+- name: grafana-upstream-network
+  files:
+  - mikrotik-mktxp.json
+- name: grafana-upstream-nginx
+  files:
+  - nginx-ingress.json
+- name: grafana-upstream-plausible
+  files:
+  - plausible-analytics.json
+- name: grafana-upstream-unpoller
+  files:
+  - clients.json
+  - usw.json
+  - uap.json
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled

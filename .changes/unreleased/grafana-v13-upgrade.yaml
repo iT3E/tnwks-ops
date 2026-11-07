@@ -1,0 +1,3 @@
+kind: Changed
+body: Upgrade Grafana to 13.3 with an authenticated bounded renderer, preserve existing dashboard and datasource identities, and provision pinned reference exports from git.
+time: 2026-11-06T22:40:00-08:00

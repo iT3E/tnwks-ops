@@ -1,7 +1,7 @@
 # Observability implementation
 
-Branch: `feat/observability-platform`, based on v2.0.4. Deployment is authorized
-through PRs and Flux. Source preparation and rollout are separate milestones.
+Deployment is authorized through PRs and Flux. Source preparation and rollout
+are separate milestones; work is isolated in git worktrees.
 
 ## First rollout
 
@@ -17,6 +17,16 @@ separate client/server certificates. Metadata and data use fsync; automatic
 metadata snapshots retain the two most recent copies through Garage's native
 retention. The 256Gi data / 8Gi metadata claims are retained on Helm uninstall.
 There is one archive copy, not an independent application backup.
+
+Live verification (2026-11-07): PRs [1876](https://github.com/iT3E/tnwks-ops/pull/1876),
+[1878](https://github.com/iT3E/tnwks-ops/pull/1878) and
+[1881](https://github.com/iT3E/tnwks-ops/pull/1881) deployed through main and Flux.
+Both collectors report success for all four source sections. Garage's two
+containers are ready with the original claims retained. Both sites verify the
+archive certificate and authenticated bucket HEAD (200); anonymous listing is
+rejected (403). `grafana-before-v13` completed. Garage uses a Recreate Deployment
+and a private memory-backed credential copy: fsGroup-readable Secret projections
+cannot satisfy Garage's strict owner-only mode check directly.
 
 The collector lists workload/Flux/CNPG state, retains declared inventory and emits
 bounded freshness/probe evidence. Its service account cannot read Secrets or
@@ -47,6 +57,21 @@ upgrade and its database recovery rehearsal pass.
 
 Synthetic tests do not establish production query peaks, compactor scratch size,
 SSD flush durability under host power loss, or complete application recovery.
+
+The private Grafana PostgreSQL rehearsal also restored the real encrypted backup
+as the non-superuser application role (PostgreSQL 18.6, locale C). It preserved
+33 dashboard UIDs, four datasource identities, three users and their password
+hashes through 12.3.1 → 13.3.0 and recreation against the migrated database. A
+fresh restoration of the original backup then reproduced the Grafana 12 baseline.
+The clone used an internal Docker network with alert execution disabled; fixtures,
+database and extracted provisioning never existed as plaintext host files.
+
+The maintained Grafana 14.4 chart is separately rendered and checksum-verified.
+The renderer rejects unauthenticated requests, and a real Grafana 13 callback
+produces a PNG with its shared token. Rendering is capped at one concurrent
+request; its 768Mi limit is peak headroom, not idle consumption. The six reference
+exports retain their existing providers/UIDs and are provisioned from git rather
+than downloaded during pod startup.
 
 ## Following rollout work
 

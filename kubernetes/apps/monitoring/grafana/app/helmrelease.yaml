@@ -9,10 +9,10 @@ spec:
   chart:
     spec:
       chart: grafana
-      version: 10.5.15
+      version: 14.4.0
       sourceRef:
         kind: HelmRepository
-        name: grafana
+        name: grafana-community
         namespace: flux-system
   maxHistory: 2
   install:
@@ -22,7 +22,10 @@ spec:
   upgrade:
     cleanupOnFail: true
     remediation:
-      retries: 3
+      # Schema migration is forward-only; never automatically start v12 on
+      # a database already migrated by v13. Recovery requires the DB backup.
+      remediateLastFailure: false
+      retries: 0
   uninstall:
     keepHistory: false
   dependsOn:
@@ -31,6 +34,10 @@ spec:
     - name: ingress-nginx
       namespace: networking
   values:
+    image:
+      repository: grafana/grafana
+      tag: 13.3.0
+      sha: 488984b716c0862639f91a698adbe2862677a5a07bad42da5f03f3030883b205
     # Which site runs it (docs/wsl/multi-site.md, "Switching an app").
     replicas: ${GRAFANA_REPLICAS:=1}
     deploymentStrategy:
@@ -93,6 +100,7 @@ spec:
           - access: proxy
             isDefault: true
             name: Prometheus
+            uid: PBFA97CFB590B2093
             type: prometheus
             url: http://kube-prometheus-stack-prometheus.monitoring:9090
           - access: proxy
@@ -123,61 +131,17 @@ spec:
           - name: Alertmanager
             orgId: 1
 
-    dashboards:
-      network:
-        # Ref: https://grafana.com/grafana/dashboards/13679 (RouterOS, via mktxp)
-        mikrotik-mktxp:
-          gnetId: 13679
-          revision: 32
-          datasource:
-            - name: "DS_PROMETHEUS"
-              value: Prometheus
-
-      unpoller:
-        # Ref: https://grafana.com/grafana/dashboards/11315
-        clients:
-          gnetId: 11315
-          revision: 9
-          datasource:
-            - name: "DS_PROMETHEUS"
-              value: Prometheus
-        # Ref: https://grafana.com/grafana/dashboards/11312
-        usw:
-          gnetId: 11312
-          revision: 9
-          datasource:
-            - name: "DS_PROMETHEUS"
-              value: Prometheus
-        # Ref: https://grafana.com/grafana/dashboards/11314
-        uap:
-          gnetId: 11314
-          revision: 10
-          datasource:
-            - name: "DS_PROMETHEUS"
-              value: Prometheus
-      nginx:
-      # Ref: https://grafana.com/grafana/dashboards/14314-kubernetes-nginx-ingress-controller-nextgen-devops-nirvana/
-        nginx-ingress:
-          gnetId: 14314
-          revision: 2
-          datasource:
-            - name: "DS_PROMETHEUS"
-              value: Prometheus
-
-      plausible:
-        # Ref: https://grafana.com/grafana/dashboards/22200-plausible-analytics/
-        plausible-analytics:
-          gnetId: 22200
-          revision: 1
-          datasource:
-            - name: "DS_PROMETHEUS"
-              value: Prometheus
+    # Same providers, folders, filenames and UIDs; no startup downloads.
+    # Exact revisions and source hashes are in ../upstream/catalogue.json.
+    dashboardsConfigMaps:
+      network: grafana-upstream-network
+      unpoller: grafana-upstream-unpoller
+      nginx: grafana-upstream-nginx
+      plausible: grafana-upstream-plausible
 
     # Grafana's own data (users, preferences, alert state, UI-made
-    # dashboards) lives in Postgres on the CNPG cluster, like HA's and
-    # Mealie's. Metrics stay in Prometheus/Loki/Tempo. The old SQLite file is
-    # still on the PVC (data/grafana.db) as a rollback: drop this section and
-    # Grafana goes back to it.
+    # dashboards) lives in Postgres on the CNPG cluster. A Grafana 13 rollback
+    # requires restoring grafana-before-v13; the old SQLite file is stale.
     envFromSecrets:
       - name: grafana-database
     grafana.ini:
@@ -205,7 +169,7 @@ spec:
       news:
         news_feed_enabled: false
       panels:
-        disable_sanitize_html: true
+        disable_sanitize_html: false
       paths:
         data: /var/lib/grafana/data
         logs: /var/log/grafana
@@ -268,14 +232,25 @@ spec:
 
     imageRenderer:
       enabled: true
+      existingSecret: grafana-renderer-auth
+      image:
+        tag: v5.12.10
+        sha: a7970b826f6e477461e02bf5463d92634e9ad27d525e4e50296978a2e592d2d7
+        pullPolicy: IfNotPresent
+      env:
+        SERVER_ADDR: "0.0.0.0:8081"
+        RATE_LIMIT_MAX_LIMIT: "1"
+        RATE_LIMIT_MIN_LIMIT: "1"
+        RATE_LIMIT_MAX_AVAILABLE: "536870912"
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          memory: 768Mi
 
     plugins:
-      - natel-discrete-panel
-      - pr0ps-trackmap-panel
-      - grafana-piechart-panel
-      - vonage-status-panel
-      - grafana-worldmap-panel
-      - grafana-clock-panel
+      - grafana-clock-panel@3.2.5
 
     podAnnotations:
       # Not the grafana ConfigMap: the chart's checksum/* annotations already
@@ -296,10 +271,10 @@ spec:
       # workingset_refault_file in the hundreds of millions and memory.max hit
       # 16M times. Give it real headroom so its working set stays resident.
       limits:
-        memory: 768M
+        memory: 1Gi
       requests:
         cpu: 23m
-        memory: 256M
+        memory: 384Mi
 
     serviceMonitor:
       enabled: true
