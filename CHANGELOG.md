@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.30.0 - 2026-11-07
+
+### Added
+
+* The Wi-Fi & LAN board measures site 2's Wi-Fi dependency, with each site host's uplink rate and traffic and the site 2 host's signal, access point and association uptime.
+
 ## v2.29.0 - 2026-11-07
 
 ### Added
