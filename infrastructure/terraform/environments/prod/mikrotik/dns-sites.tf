@@ -108,6 +108,14 @@ locals {
       match_subdomain = true
       comment         = "shared VIP (homelab-wsl-02 first): unifi"
     }
+    wsl02_jellyfin = {
+      name            = "jellyfin.internal.tnwks.us"
+      address         = local.vip_wsl_02
+      type            = "A"
+      ttl             = "5m"
+      match_subdomain = true
+      comment         = "shared VIP (homelab-wsl-02 first): jellyfin"
+    }
     wsl02_qbittorrent = {
       name            = "qbittorrent.internal.tnwks.us"
       address         = local.vip_wsl_02
