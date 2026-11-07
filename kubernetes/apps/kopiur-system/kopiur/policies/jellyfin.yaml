@@ -1,0 +1,29 @@
+---
+# Jellyfin's config (jellyfin-config). Not backed up (docs/operations/backups.md):
+# no SnapshotSchedule. The policy only moves the PVC between sites
+# (bin/site-failover "jellyfin"), with a one-off snapshot that's deleted after
+# the restore. The media library (cephfs-hdd-subvolume, the desktop's E:)
+# doesn't move.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: jellyfin
+  namespace: production
+spec:
+  repository:
+    kind: ClusterRepository
+    name: s3
+  copyMethod: Direct
+  compression:
+    compressor: zstd
+  credentialProjection:
+    enabled: true
+  mover:
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+  retention:
+    keepLatest: 1
+  sources:
+    - pvc:
+        name: jellyfin-config

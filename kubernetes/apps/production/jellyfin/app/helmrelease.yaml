@@ -16,11 +16,15 @@ spec:
         name: bjw-s
         namespace: flux-system
   maxHistory: 3
+  # A standby at 0 (homelab-wsl-02) has PVCs that stay Pending until a pod
+  # needs them, which Helm's wait would never see Ready.
   install:
     createNamespace: true
+    disableWait: ${JELLYFIN_HELM_DISABLE_WAIT:=false}
     remediation:
       retries: 3
   upgrade:
+    disableWait: ${JELLYFIN_HELM_DISABLE_WAIT:=false}
     cleanupOnFail: true
     remediation:
       retries: 3
@@ -43,6 +47,8 @@ spec:
         supplementalGroups: [44, 109, 10000]
     controllers:
       jellyfin:
+        # Which site runs it (docs/wsl/multi-site.md, "Switching an app").
+        replicas: ${JELLYFIN_REPLICAS:=1}
         type: statefulset
         containers:
           app:
@@ -59,6 +65,12 @@ spec:
     service:
       app:
         controller: jellyfin
+        # Global across the WSL sites (Cilium Cluster Mesh): the public ingress
+        # (cloudflared, on homelab-wsl) and either internal ingress reach it
+        # wherever it runs.
+        annotations:
+          service.cilium.io/global: "true"
+          service.cilium.io/affinity: local
         ports:
           http:
             port: 8096
@@ -79,6 +91,9 @@ spec:
       app:
         className: nginx
         annotations:
+          # Through the Service's ClusterIP: on the site where it's at 0, only
+          # Cilium knows the other site's backends.
+          nginx.ingress.kubernetes.io/service-upstream: "true"
           hajimari.io/icon: simple-icons:jellyfin
         hosts:
           - host: &host "jellyfin.${SECRET_DOMAIN}"
@@ -93,6 +108,10 @@ spec:
               - *host
       internal:
         className: nginx-internal
+        annotations:
+          # Through the Service's ClusterIP: on the site where it's at 0, only
+          # Cilium knows the other site's backends.
+          nginx.ingress.kubernetes.io/service-upstream: "true"
         hosts:
           - host: &internalHost "jellyfin.${INTERNAL_DOMAIN}"
             paths:

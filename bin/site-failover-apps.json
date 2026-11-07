@@ -454,5 +454,38 @@
         "curl -fsS -o /dev/null http://localhost:5690/ || wget -qO /dev/null http://localhost:5690/"
       ]
     }
+  },
+  "jellyfin": {
+    "prefix": "JELLYFIN",
+    "namespace": "production",
+    "kustomizations": {
+      "app": "jellyfin"
+    },
+    "workloads": [
+      "statefulset/jellyfin"
+    ],
+    "pvcs": [
+      {
+        "name": "jellyfin-config",
+        "policy": "jellyfin",
+        "uid": 1000,
+        "gid": 1000,
+        "transfer_only": true,
+        "restore_privileged": true
+      }
+    ],
+    "check": {
+      "workload": "statefulset/jellyfin",
+      "container": "app",
+      "command": [
+        "sh",
+        "-c",
+        "curl -fsS -o /dev/null http://localhost:8096/health"
+      ]
+    },
+    "prebind": true,
+    "prebind_extra": [
+      "cephfs-hdd-subvolume"
+    ]
   }
 }

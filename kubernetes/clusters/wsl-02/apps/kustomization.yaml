@@ -63,6 +63,8 @@ resources:
   - ../../../apps/production/ombi/ks.yaml
   - ../../../apps/production/ombi-f/ks.yaml
   - ../../../apps/production/wizarr/ks.yaml
+  # Jellyfin: at 0 here until it moves; its library here is an empty bulk volume.
+  - ../../../apps/production/jellyfin/ks.yaml
   # Firefly and finance-sync: warm standby (databases replicas, app at 0).
   - ../../../apps/production/firefly/ks.yaml
   - ../../../apps/production/finance-sync/ks.yaml
