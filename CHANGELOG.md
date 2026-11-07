@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.11.0 - 2026-11-07
+
+### Added
+
+* Network board: per-site path state by hop (WireGuard tunnel, router BGP, Cilium node BGP) and routes received per site, with router BGP sessions from mktxp.
+
 ## v2.10.0 - 2026-11-07
 
 ### Changed
