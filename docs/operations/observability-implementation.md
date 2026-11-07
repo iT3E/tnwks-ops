@@ -227,6 +227,7 @@ by hop: 1 healthy, 2 degraded, 3 failed, 0 Unknown.
 | `tunnel` | mktxp, the router's WireGuard peer (`wg-site1`, `wg-site2`) | handshake within 180 s |
 | `router-bgp` | mktxp BGP sessions (`wsl-site1`, `wsl-site2`) | established; Failed when the router is observed but the session is gone |
 | `node-bgp` | Cilium agents' sessions with the distro's FRR | all nodes (some: Degraded) |
+| `mesh` | Cilium agents' and KVStoreMesh's remote-cluster readiness, and the site's own probe of its peer (`homelab_peer_probe_success`) | all ready and the probe passes (no probe: readiness alone). Readiness alone isn't enough: in the partition drill, site 2's control plane reached site 1 around the downed tunnel while pod traffic failed |
 
 `homelab:router_bgp_prefixes` counts the routes the router accepted from each site.
 Only homelab-wsl's mktxp observes the router, so homelab-wsl-02's own rules leave

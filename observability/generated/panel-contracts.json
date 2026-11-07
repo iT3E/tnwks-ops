@@ -896,6 +896,11 @@
         "availability": "configured"
       },
       {
+        "metric": "homelab_peer_probe_success",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
         "metric": "mktxp_bgp_established",
         "producer": "router MKTXP exporter",
         "availability": "configured"
@@ -1506,6 +1511,11 @@
         "availability": "configured"
       },
       {
+        "metric": "homelab_peer_probe_success",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
         "metric": "mktxp_bgp_established",
         "producer": "router MKTXP exporter",
         "availability": "configured"
@@ -1557,6 +1567,11 @@
       },
       {
         "metric": "homelab_expected_site_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_peer_probe_success",
         "producer": "read-only evidence collector",
         "availability": "configured"
       },
@@ -2228,6 +2243,11 @@
       },
       {
         "metric": "homelab_expected_site_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_peer_probe_success",
         "producer": "read-only evidence collector",
         "availability": "configured"
       },
