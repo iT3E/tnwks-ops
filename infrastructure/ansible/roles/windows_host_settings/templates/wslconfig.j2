@@ -19,7 +19,7 @@ swap=8GB
 # ~11% slow (60s timer = 67s real) with Windows stepping wall time forward every
 # few seconds. That made Prometheus log missed rule evaluations on every group
 # and slowed every timer in the cluster. Appended to WSL's default kernel args.
-kernelCommandLine = clocksource=hyperv_clocksource_tsc_page
+kernelCommandLine = clocksource={{ wsl_clocksource }}
 # Run `wsl --shutdown` from PowerShell after editing for changes to apply.
 # Managed by tnwks-ops (Ansible role windows_host_settings): edit the template
 # there. Its check reports drift; it writes this file only when asked.

@@ -9,6 +9,11 @@
 # host-settings -e wslconfig_write=true`, then plan a `wsl --shutdown`.
 wslconfig_path: 'C:\Users\{{ windows_desktop_user }}\.wslconfig'
 wslconfig_write: false
+# The VM's clocksource (.wslconfig kernelCommandLine). hyperv_clocksource_tsc_page
+# fixed the desktop's slow clock on 2026-09-24; on WSL-02 (i7-12700K) the TSC
+# page itself runs ~13% slow and host_vars pick hyperv_clocksource_msr. Check:
+# over 20 s, `date` and /proc/uptime should advance alike.
+wsl_clocksource: hyperv_clocksource_tsc_page
 
 # NIC and power settings. Changing an adapter's advanced properties restarts
 # the adapter, which drops every camera stream for seconds (and once left the
