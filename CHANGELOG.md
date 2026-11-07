@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.2.1 - 2026-11-07
+
+### Fixed
+
+* Correct the Grafana backup health expression and compile all Flux health gates with lifecycle fixtures before deployment.
+
 ## v2.2.0 - 2026-11-07
 
 ### Changed
