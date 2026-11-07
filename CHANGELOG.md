@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.37.0 - 2026-11-07
+
+### Added
+
+* The weekly standby restore covers Home Assistant too. It reads StatefulSets as well as Deployments, and creates a StatefulSet's PVC on the standby when it isn't there yet, as site-failover does. All four warm apps with PVCs now get restore evidence and an RTO.
+
 ## v2.36.2 - 2026-11-07
 
 ### Fixed
