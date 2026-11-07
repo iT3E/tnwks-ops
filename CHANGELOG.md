@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.36.0 - 2026-11-07
+
+### Added
+
+* Pyrra's burn-rate alerts are on for the four SLOs (Internet, Home Assistant's path, shared-VIP names, MQTT). Their longest window is 2 days, so they don't wait for a full 14-day window.
+
 ## v2.35.3 - 2026-11-07
 
 ### Fixed

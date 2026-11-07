@@ -1,4 +1,0 @@
----
-kind: Added
-body: Pyrra's burn-rate alerts are on for the four SLOs (Internet, Home Assistant's path, shared-VIP names, MQTT). Their longest window is 2 days, so they don't wait for a full 14-day window.
-time: 2026-11-07T19:45:00Z
