@@ -72,6 +72,16 @@ spec:
         globalMounts:
           - path: /config
             readOnly: true
+      # Only the CA certificate, to verify the archive. Never the client key.
+      ca:
+        type: secret
+        name: observability-store-client
+        items:
+          - key: ca.crt
+            path: ca.crt
+        globalMounts:
+          - path: /tls
+            readOnly: true
     serviceMonitor:
       app:
         enabled: true

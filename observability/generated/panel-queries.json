@@ -34,8 +34,8 @@
   {
     "dashboard": "home",
     "tab": "Now",
-    "title": "Service paths",
-    "expr": "max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})",
+    "title": "Workloads needing attention",
+    "expr": "sort_desc(max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"}) != 4 != 1)",
     "unit": "state",
     "kiosk": false
   },
@@ -43,7 +43,7 @@
     "dashboard": "home",
     "tab": "Now",
     "title": "Current firing alerts",
-    "expr": "ALERTS{cluster=~\"$cluster\",alertstate=\"firing\"}",
+    "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",severity!=\"none\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
     "unit": "short",
     "kiosk": false
   },
@@ -133,6 +133,14 @@
     "title": "Cross-site observation",
     "expr": "homelab_peer_probe_success{k8s_cluster=~\"$cluster\"}",
     "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Placement",
+    "title": "Workload state",
+    "expr": "max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
     "kiosk": false
   },
   {
@@ -507,7 +515,7 @@
     "dashboard": "tnwks-apps",
     "tab": "Dependencies",
     "title": "Certificate validity remaining",
-    "expr": "certmanager_certificate_expiration_timestamp_seconds{k8s_cluster=~\"$cluster\"} - time()",
+    "expr": "max by (k8s_cluster, name) (certmanager_certificate_expiration_timestamp_seconds{k8s_cluster=~\"$cluster\"}) - time()",
     "unit": "s",
     "kiosk": false
   },
@@ -715,7 +723,7 @@
     "dashboard": "tnwks-alerts",
     "tab": "Current",
     "title": "Firing now",
-    "expr": "ALERTS{cluster=~\"$cluster\",alertstate=\"firing\"}",
+    "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",severity!=\"none\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
     "unit": "short",
     "kiosk": false
   },
@@ -723,7 +731,7 @@
     "dashboard": "tnwks-alerts",
     "tab": "Current",
     "title": "Pending now",
-    "expr": "ALERTS{cluster=~\"$cluster\",alertstate=\"pending\"}",
+    "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"pending\",severity!=\"none\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
     "unit": "short",
     "kiosk": false
   },

@@ -245,11 +245,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -372,11 +375,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -553,11 +559,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -620,6 +629,150 @@
         "kind": "Panel",
         "spec": {
           "id": 8,
+          "title": "Workload state",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "State"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#8e8e8e"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#299c46"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#d44a3a"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#5794f2"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#8e8e8e"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#b877d9"
+                        }
+                      }
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Per app and site, from replica counts: ready, degraded, failed, or a deliberate standby at zero replicas. A site that stops reporting shows Unknown."
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "id": 9,
           "title": "Declared placement",
           "links": [],
           "data": {
@@ -659,11 +812,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -722,10 +878,10 @@
           "description": "Expected app/site/tier inventory independent of discovery. Standbys and hardware-pinned applications remain visible."
         }
       },
-      "panel-8": {
+      "panel-9": {
         "kind": "Panel",
         "spec": {
-          "id": 9,
+          "id": 10,
           "title": "Desired replicas",
           "links": [],
           "data": {
@@ -765,11 +921,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -828,10 +987,10 @@
           "description": "Effective workload desired replicas from the local Kubernetes API, separate from git's default placement."
         }
       },
-      "panel-9": {
+      "panel-10": {
         "kind": "Panel",
         "spec": {
-          "id": 10,
+          "id": 11,
           "title": "Ready replicas",
           "links": [],
           "data": {
@@ -871,11 +1030,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -934,10 +1096,10 @@
           "description": "Observed readiness. Ready replicas do not prove the global ingress is serving this site."
         }
       },
-      "panel-10": {
+      "panel-11": {
         "kind": "Panel",
         "spec": {
-          "id": 11,
+          "id": 12,
           "title": "Runtime overrides present",
           "links": [],
           "data": {
@@ -977,11 +1139,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -1040,10 +1205,10 @@
           "description": "Presence of flux-system/site-overrides. Raw contents and secret-like values are never exposed."
         }
       },
-      "panel-11": {
+      "panel-12": {
         "kind": "Panel",
         "spec": {
-          "id": 12,
+          "id": 13,
           "title": "Override creation age",
           "links": [],
           "data": {
@@ -1083,11 +1248,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -1146,10 +1314,10 @@
           "description": "Age of creation, not last modification. Consult structured operation events for when a particular override changed."
         }
       },
-      "panel-12": {
+      "panel-13": {
         "kind": "Panel",
         "spec": {
-          "id": 13,
+          "id": 14,
           "title": "Readiness evidence",
           "links": [],
           "data": {
@@ -1189,11 +1357,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -1287,10 +1458,10 @@
           "description": "Unknown is retained whenever fencing, backup or restore evidence is absent. This is not a safe-to-promote guarantee."
         }
       },
-      "panel-13": {
+      "panel-14": {
         "kind": "Panel",
         "spec": {
-          "id": 14,
+          "id": 15,
           "title": "Fencing evidence age",
           "links": [],
           "data": {
@@ -1330,11 +1501,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -1393,10 +1567,10 @@
           "description": "Present only for verified fence evidence. DNS ownership alone cannot establish that the former primary is unable to write."
         }
       },
-      "panel-14": {
+      "panel-15": {
         "kind": "Panel",
         "spec": {
-          "id": 15,
+          "id": 16,
           "title": "Last restore evidence",
           "links": [],
           "data": {
@@ -1436,11 +1610,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -1637,6 +1814,15 @@
                           "name": "panel-11"
                         }
                       }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-12"
+                        }
+                      }
                     }
                   ],
                   "maxColumnCount": 3,
@@ -1660,15 +1846,6 @@
                       "spec": {
                         "element": {
                           "kind": "ElementReference",
-                          "name": "panel-12"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
                           "name": "panel-13"
                         }
                       }
@@ -1679,6 +1856,15 @@
                         "element": {
                           "kind": "ElementReference",
                           "name": "panel-14"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-15"
                         }
                       }
                     }

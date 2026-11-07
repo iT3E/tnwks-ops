@@ -8,6 +8,8 @@ spec:
   dependsOn:
     - name: kube-prometheus-stack
     - name: cloudnative-pg-app
+    # The collector mounts the CA from a Secret it issues.
+    - name: observability-pki
   path: ./kubernetes/apps/monitoring/observability-evidence/app
   prune: true
   sourceRef:
