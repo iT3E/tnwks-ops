@@ -117,6 +117,46 @@ hidden from the sidebar (`frontend/update_panel` `show_in_sidebar: false`,
 and `lovelace/dashboards/update` for Map). They still work by URL. A user can
 still pick their own default under Profile.
 
+### Energy
+
+The built-in Energy dashboard's sources and device breakdown are UI-owned
+(Settings > Dashboards > Energy, or `energy/get_prefs` / `energy/save_prefs`
+over HA's websocket API). [Home Assistant 2026.11](https://www.home-assistant.io/blog/2026/11/04/release-202611/)
+adds a **Home consumption** source, so Sense can supply the measured house total without a grid meter.
+Configure it with:
+
+| Setting                                    | Entity                            |
+| ------------------------------------------ | --------------------------------- |
+| Home consumption: energy (`stat_energy_to`) | `sensor.sense_264601_daily_energy` |
+| Home consumption: power (`stat_rate`)       | `sensor.sense_264601_energy`       |
+
+Keep both existing SolarEdge inverter statistics as solar sources. They are
+hourly, delayed energy statistics, not live power sensors. Sense's solar,
+grid import and grid export entities currently report zero; they are not
+usable measurements. Do not use whole-house consumption as grid import:
+adding solar to that would count solar consumption twice. Without measured
+grid flows, import/export, solar self-consumption and costs remain unknown.
+
+Move the whole-house Sense meter out of **Individual devices** when adding
+the Home consumption source. Remove `included_in_stat` references to that
+old device from the appliance entries, so appliances sit directly under the
+home total. Each appliance should have one energy sensor and its matching
+power sensor; use daily Sense energy counters, not daily plus weekly/monthly
+counters for the same device. For EV charging, prefer the Tesla Wall
+Connector's lifetime energy and total power sensors over Sense's estimated
+Electric Vehicle device, so the same charging is not counted twice.
+
+The existing Sense devices also include AC units, a washer, oven, stove top,
+pool pump and smaller loads. Add valid energy/power pairs to **Individual
+devices** to include them in the usage graphs and live power breakdown.
+Only add devices with recorded energy statistics. Leave unavailable sensors
+and unmeasured gas, water, batteries and tariffs unconfigured.
+
+After saving, `energy/validate` should return no issues, and the distribution
+card's Home value should follow Sense's whole-house energy statistics for the
+selected period. The live Home value uses the Sense power sensor. No pod
+restart is needed for energy preference changes.
+
 ### Robot vacuum
 
 A Roborock S5 (`roborock.vacuum.s5`) on the Mi Home app, at the DHCP lease
