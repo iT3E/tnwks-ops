@@ -428,8 +428,9 @@ Pyrra rules once their windows are full.
 
 Each app has a recovery point objective (RPO) and, if it's warm with PVCs, a
 restore time objective (RTO), in `observability/inventory.py` (`OBJECTIVES`,
-overridden per app in `APP_OBJECTIVES`). Both are provisional: 30 h, a daily
-backup plus slack, and 1 h.
+overridden per app in `APP_OBJECTIVES`): 30 h, a daily backup plus slack, and
+1 h. They were set on 2026-11-07, with the choice delegated by the owner: every
+app shares the daily schedule and the weekly drill, so no app overrides them yet.
 
 - **Recovery point.** `homelab:app_backup_age_seconds` is the age of the app's
   oldest newest-backup over every PVC with a running Kopiur schedule on the site
@@ -457,11 +458,12 @@ Access, recovery, review and drills are in
 1. The household Grafana and its aggregate-only backend: revoke the old kiosk
    operator access, test every datasource API, and define fresh domain evidence
    before any household status can be Healthy.
-2. Owner-set per-app recovery objectives in place of the provisional
-   defaults, and Pyrra burn alerts once the 14-day windows are covered. 28-day
+2. Pyrra burn alerts once the 14-day windows are covered (about 2026-11-21;
+   the probes' history starts 2026-11-07, after the Prometheus restarts). 28-day
    alerting would need a history-aware evaluator (Thanos Ruler); the 28-day
    view doesn't.
-3. The distros' FRR view of BGP and an off-site client vantage.
+3. The distros' FRR view of BGP. The off-site vantage is healthchecks.io
+   ([`external-monitoring.md`](external-monitoring.md)), by the owner's decision.
 
 Unsupported evidence remains Unknown. Existing MS-01 manifests and AWS
 application backup destinations remain separate from this metrics archive.

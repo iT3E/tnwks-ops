@@ -1306,7 +1306,7 @@
               }
             }
           },
-          "description": "Per app and site: is its oldest newest-backup, over every scheduled PVC and every primary database, within its recovery point objective (inventory.py OBJECTIVES, provisionally 30 h)? Unknown when a piece has no backup evidence. A site where nothing is scheduled, like a standby, has no row.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Per app and site: is its oldest newest-backup, over every scheduled PVC and every primary database, within its recovery point objective (inventory.py OBJECTIVES: 30 h, a daily backup plus slack)? Unknown when a piece has no backup evidence. A site where nothing is scheduled, like a standby, has no row.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-12": {
@@ -1589,7 +1589,7 @@
               }
             }
           },
-          "description": "Per warm app with PVCs: did its last standby restore drill write the data back within the restore time objective (provisionally 1 h)? Unknown until a drill reports how long it took. This is the data restore, not the whole failover.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Per warm app with PVCs: did its last standby restore drill write the data back within the restore time objective (1 h)? Unknown until a drill reports how long it took. This is the data restore, not the whole failover.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-14": {
