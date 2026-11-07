@@ -461,7 +461,8 @@ uses Home Assistant on the wall displays, so it needs no second Grafana.
   (`house_records()` in `rules.py`) is recorded on each site's Prometheus from
   what that site serves: its Internet probe; the APs or cameras that worked at
   some point in the last day against those working now (something off for a
-  whole day drops out, so a disabled camera doesn't count); Home Assistant where
+  whole day drops out, so a disabled camera doesn't count, and an exporter that
+  stops reporting leaves no row, so it reads Unknown); Home Assistant where
   it's active; the worst of the apps active there; whether its own collector
   reports. A site has no row for something it has no part in.
 - **Home Assistant combines the sites**
