@@ -1,0 +1,29 @@
+---
+# Replaces kube-prometheus-stack's AlertmanagerClusterCrashlooping (turned off
+# in its HelmRelease, defaultRules.disabled). That rule counts changes of
+# process_start_time_seconds, which a process derives from the kernel's boot
+# time. WSL-02's VM clock runs slow and is corrected every few seconds, so its
+# boot time creeps forward and every process there seemed to restart about
+# once a minute: a false critical on homelab-wsl-02 from 2026-11-07 19:29Z.
+# kube-state-metrics' restart counter comes from the kubelet, not the clock.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alertmanager-alerts
+spec:
+  groups:
+    - name: alertmanager
+      rules:
+        - alert: AlertmanagerCrashlooping
+          expr: increase(kube_pod_container_status_restarts_total{namespace="monitoring", container="alertmanager"}[10m]) > 4
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $externalLabels.cluster }}"
+            summary: "Alertmanager {{ $labels.pod }} restarted 5 or more times in 10 minutes."
+            description: >-
+              Alerts may not reach Telegram while it restarts. Check the pod's
+              previous logs (kubectl -n monitoring logs {{ $labels.pod }}
+              -c alertmanager --previous) and its configuration reload status
+              on the Observability board's Alertmanager tab.

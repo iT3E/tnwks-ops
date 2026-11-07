@@ -1,0 +1,4 @@
+---
+kind: Fixed
+body: The Alertmanager crashloop alert counts restarts from kube-state-metrics instead of process start-time changes. WSL-02's drifting clock made every process there look like it restarted once a minute, so the chart's rule fired a false critical on homelab-wsl-02.
+time: 2026-11-07T21:35:00Z
