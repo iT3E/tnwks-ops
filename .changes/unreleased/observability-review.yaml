@@ -1,0 +1,4 @@
+---
+kind: Changed
+body: State values on the observability boards use colored cells and backgrounds for readable contrast, Unready workloads sums per app instead of one line per collector restart, and the first review of performance, accessibility and privacy is recorded.
+time: 2026-11-07T17:31:00Z
