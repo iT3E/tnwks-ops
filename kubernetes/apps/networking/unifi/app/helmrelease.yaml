@@ -119,7 +119,7 @@ spec:
           mongo:
             image:
               repository: docker.io/library/mongo
-              tag: 8.0.34
+              tag: 9.0.4
             env:
               # The probes' mongosh writes its logs under $HOME/.mongodb; the
               # image's HOME is /data/db, the database volume. Keep them out.
