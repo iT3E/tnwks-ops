@@ -1,15 +1,15 @@
 ---
-# WSL-02 only; never select this singleton from both clusters.
+# WSL-02 only: the Store and the singleton Compactor sit beside the sole archive.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: thanos-metrics-compactor
+  name: thanos-metrics-archive
   namespace: flux-system
 spec:
   dependsOn:
     - name: observability-pki
     - name: observability-garage
-  path: ./kubernetes/apps/monitoring/thanos-metrics/compactor
+  path: ./kubernetes/apps/monitoring/thanos-metrics/archive
   prune: true
   sourceRef:
     kind: GitRepository
@@ -17,3 +17,7 @@ spec:
   interval: 30m
   retryInterval: 1m
   timeout: 10m
+  postBuild:
+    substitute:
+      OBSERVABILITY_STORAGE_CLASS: local-path
+      OBSERVABILITY_ARCHIVE_NODE: homelab-wsl-02-worker-1

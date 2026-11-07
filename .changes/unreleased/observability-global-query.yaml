@@ -1,0 +1,3 @@
+kind: Added
+body: Label every series with its site and add a partial-tolerant Thanos global view, with block upload to the WSL-02 archive and live evidence rules on both sites.
+time: 2026-11-07T00:40:00-08:00

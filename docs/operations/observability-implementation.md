@@ -33,10 +33,22 @@ bounded freshness/probe evidence. Its service account cannot read Secrets or
 mutate resources. The inventory derives from the existing failover catalogue and
 each cluster's rendered Flux graph; retired databases do not remain expected.
 
-The first rollout intentionally defers the new recording/alert rules until scrape
-label normalization and primary/standby backup policy are in place. It also keeps
-the generated dashboards outside the live provisioning set until the Grafana
-upgrade and its database recovery rehearsal pass.
+The first rollout deferred the recording/alert rules until scrape label
+normalization and primary/standby backup policy were in place, and kept the
+generated dashboards out of provisioning until the Grafana upgrade passed.
+
+## Global query rollout
+
+Every target now carries `k8s_cluster`. Each Prometheus runs a Thanos sidecar:
+mutual-TLS StoreAPI over the mesh, and block upload to Garage. Uploads do not wait
+for persistent storage, so the archive starts filling on site 1's emptyDir and a
+restart there only risks the unshipped 2h head. Site 2's Prometheus moves to a
+40Gi local-path claim with 15d retention. Site 1 stays at 2d until its native
+volume exists.
+
+Query answers partially by default rather than erroring on a lost site. Store and
+Compactor run only beside the archive. The recording rules are live on both sites;
+the backup alert fires only for a site's own primaries.
 
 ## Validation evidence
 
@@ -75,17 +87,12 @@ than downloaded during pod startup.
 
 ## Following rollout work
 
-1. Prepare the dedicated 64Gi C: ext4 monitoring mount on site 1, fail-closed
-   startup/bind behavior, a dedicated storage class and real pod UID permissions.
-   Migrate Prometheus to persistent 15d local storage without placing that growth
-   on E:. Keep local metrics and alert evaluation independent of the archive.
-2. Normalize source/observer/database labels, preserve peer federation provenance,
-   add sidecars and per-site Query/Store, and one bounded WSL-02 compactor. Validate
-   cross-site endpoints, backlog behavior and certificate renewal.
-3. Rehearse the existing Grafana Postgres schema migration and database restore;
-   upgrade the maintained chart/image and renderer authentication. Add the second
-   independent Grafana, preserve legacy URLs, and cut over `home` without duplicate
-   provisioning sources. Finish upstream dashboard vendoring and navigation.
+1. Activate the generated dashboards and cut over `home` without duplicate
+   provisioning sources; validate them against live data on both sites.
+2. Give site 1 persistent 15d Prometheus storage without placing that growth on E:,
+   keeping local metrics and alert evaluation independent of the archive.
+3. Add the second independent Grafana and preserve legacy URLs. Validate backlog
+   behavior and certificate renewal for the global query path.
 4. Deploy the isolated household Grafana and aggregate-only backend, revoke old
    kiosk operator access/sessions and test all datasource APIs. Define fresh domain
    evidence before any household status can be healthy.

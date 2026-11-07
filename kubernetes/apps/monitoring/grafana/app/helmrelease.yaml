@@ -103,6 +103,37 @@ spec:
             uid: PBFA97CFB590B2093
             type: prometheus
             url: http://kube-prometheus-stack-prometheus.monitoring:9090
+          # Dashboards default to Global. Local and the per-site entries answer
+          # when Thanos does not; each site's Prometheus is a mesh global Service.
+          - access: proxy
+            name: Global
+            uid: prometheus-global
+            type: prometheus
+            url: http://thanos-query.monitoring.svc.cluster.local:10902
+            jsonData:
+              prometheusType: Thanos
+              timeInterval: 1m
+          - access: proxy
+            name: Local
+            uid: prometheus-local
+            type: prometheus
+            url: http://kube-prometheus-stack-prometheus.monitoring:9090
+            jsonData:
+              timeInterval: 1m
+          - access: proxy
+            name: Site 1
+            uid: prometheus-wsl
+            type: prometheus
+            url: http://prometheus-homelab-wsl.monitoring.svc.cluster.local:9090
+            jsonData:
+              timeInterval: 1m
+          - access: proxy
+            name: Site 2
+            uid: prometheus-wsl-02
+            type: prometheus
+            url: http://prometheus-homelab-wsl-02.monitoring.svc.cluster.local:9090
+            jsonData:
+              timeInterval: 1m
           - access: proxy
             name: Loki
             type: loki

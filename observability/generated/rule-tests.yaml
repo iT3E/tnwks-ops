@@ -80,6 +80,31 @@ tests:
     exp_samples:
     - labels: homelab:recovery_state{k8s_cluster="one",app="test"}
       value: 0
+- name: only a local primary without backup evidence alerts
+  interval: 1m
+  input_series:
+  - series: homelab_expected_database_info{k8s_cluster="one",namespace="databases",db_cluster="missing-pg"}
+    values: 1+0x40
+  - series: homelab_expected_database_info{k8s_cluster="one",namespace="databases",db_cluster="replica-pg"}
+    values: 1+0x40
+  - series: homelab_expected_database_info{k8s_cluster="two",namespace="databases",db_cluster="peer-pg"}
+    values: 1+0x40
+  - series: cnpg_pg_replication_in_recovery{k8s_cluster="one",namespace="databases",pod="replica-pg-1"}
+    values: 1+0x40
+  alert_rule_test:
+  - alertname: ObservabilityExpectedDatabaseBackupMissing
+    eval_time: 35m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: one
+        namespace: databases
+        db_cluster: missing-pg
+      exp_annotations:
+        summary: Expected database has no backup evidence
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-data?var-cluster=one
+        description: No Barman plugin timestamp is available for this expected database. Another database's fresh
+          backup cannot satisfy its recovery requirement.
 - name: future backup evidence is unknown and peer federation is not counted twice
   interval: 1m
   input_series:

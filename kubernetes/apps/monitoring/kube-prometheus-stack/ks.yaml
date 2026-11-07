@@ -14,6 +14,8 @@ spec:
   wait: true
   dependsOn:
     - name: alertmanager
+    # The sidecar mounts its certificate and object store Secrets.
+    - name: observability-pki
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization

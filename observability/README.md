@@ -3,7 +3,7 @@
 This directory owns the dashboard definitions, evidence exporter, query isolation
 boundary and offline acceptance tests. Cluster activation is tracked in
 [`observability-implementation.md`](../docs/operations/observability-implementation.md).
-The initial rollout selects evidence collectors and the shared PKI on both WSL sites, with Garage only on WSL-02. Dashboard and Thanos activation follows their separate migration checks.
+Both WSL sites select the evidence collectors, shared PKI, recording rules and Thanos Query; Garage, Thanos Store and the Compactor run only on WSL-02. Dashboard activation follows its own checks.
 
 `dashboards.py` uses the pinned official Grafana Foundation SDK to generate stable
 v2 resources: 12 operator dashboards and one household dashboard. `inventory.py`
@@ -20,12 +20,23 @@ this isolation. Its dedicated household Grafana and identity cutover are still
 required before the kiosk can use it.
 
 `thanos_manifests.py` generates bounded Query, Store and singleton Compactor
-workloads. Query keeps the expected endpoints even during failed health checks
-and refuses partial responses. Direct local Prometheus remains the independent
-fallback. Store has explicit cache, request and concurrency limits. Compaction
-uses one worker, 35d raw retention and no downsampling. Garage is pinned to an
-explicit archive-node hostname and uses 256Gi data / 8Gi metadata claims. Its S3
-listener is pod-local; a TLS proxy provides the cross-site endpoint.
+workloads. Query runs per site and keeps the expected endpoints even during
+failed health checks. It answers partially by default, with a warning Grafana
+shows: losing a site must not error every panel, and the evidence rules turn the
+gap into Unknown. `partial_response=false` still fails closed, and direct
+per-site Prometheus remains the independent fallback. Store and Compactor sit
+beside the archive on WSL-02, because a Store on site 1 could not read a Garage
+that is down either. Store has explicit cache, request and concurrency limits.
+Compaction uses one worker, 35d raw retention and no downsampling. Garage is
+pinned to an explicit archive-node hostname and uses 256Gi data / 8Gi metadata
+claims. Its S3 listener is pod-local; a TLS proxy provides the cross-site endpoint.
+
+Every series carries `k8s_cluster`, the site it describes: a default Prometheus
+scrape class sets it on monitors and probes, and `additionalScrapeConfigs` set it
+per target, so a Windows host keeps its own site whichever Prometheus scrapes it.
+Do not make it an external label: the Thanos sidecar lets external labels
+override series labels, which would rewrite those per-target values. Rules that
+aggregate must keep it in their `by` clause or their dashboards go blank.
 
 ```bash
 uv sync --project observability --locked --python 3.13
