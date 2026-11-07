@@ -164,6 +164,26 @@ spec:
               path: /var/lib/grafana/dashboards/plausible
             orgId: 1
             type: file
+          # The kept hand-made boards, mounted rather than sidecar-loaded: their
+          # files exist when Grafana starts, so deletion is safe here and
+          # removing a file retires its board (observability-implementation.md,
+          # "Dashboard ownership"). One provider owns each UID.
+          - name: legacy
+            disableDeletion: false
+            editable: true
+            folder: ""
+            options:
+              path: /var/lib/grafana/dashboards/legacy
+            orgId: 1
+            type: file
+          - name: windows
+            disableDeletion: false
+            editable: true
+            folder: "Windows"
+            options:
+              path: /var/lib/grafana/dashboards/windows
+            orgId: 1
+            type: file
           # The kube-prometheus mixin's board, which this stack's chart renders
           # only with its own Alertmanager. Its UID replaces the empty UI-made
           # "Alertmanager / Overview" (provisioning takes over a matching UID).
@@ -256,6 +276,8 @@ spec:
       nginx: grafana-upstream-nginx
       plausible: grafana-upstream-plausible
       alertmanager: grafana-upstream-alertmanager
+      legacy: grafana-dashboard
+      windows: grafana-dashboard-windows
 
     # Grafana's own data (users, preferences, alert state, UI-made
     # dashboards) lives in Postgres on the CNPG cluster. A Grafana 13 rollback
@@ -415,6 +437,9 @@ spec:
         label: grafana_dashboard
         folderAnnotation: grafana_folder
         searchNamespace: ALL
+        # The sidecar writes into an emptyDir after Grafana starts; with
+        # deletion on, every sidecar board would be deleted and re-created on
+        # each restart. To retire one, move it to a mounted provider first.
         provider:
           disableDelete: true
           foldersFromFilesStructure: true
