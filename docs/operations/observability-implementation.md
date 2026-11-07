@@ -74,9 +74,12 @@ pinned Grafana with a persistent database:
 
 `validate_grafana.py` asserts this split.
 
-The generated boards are provisioned on site 1, the only Grafana so far. `home` is
-now the generated Homelab board, and the previous board stays as Homelab (classic)
-under its own UID until it has no remaining use. Grafana 13 accepts the v2 file in
+The generated boards are provisioned on both sites (Grafana runs on one at a
+time). `home` is the generated Homelab board. The hand-made board it replaced,
+Homelab (classic), pinned one Windows host by name and was retired by removing
+its file from the `legacy` provider. Its panels live on, without a pinned host,
+on Kubernetes & GitOps, Hosts & Capacity (with the Windows Exporter board's
+`server` variable), Internet and the MikroTik board. Grafana 13 accepts the v2 file in
 `default_home_dashboard_path` and redirects to `/d/default-home-dashboard/`, tabs
 intact. Home Assistant's Monitoring tab frames that home page, so it follows.
 
