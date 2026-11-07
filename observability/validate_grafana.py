@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import json
 import re
 import subprocess
 import tempfile
@@ -52,7 +53,9 @@ def main():
     search = next(m for m in app["volumeMounts"] if m["name"] == "search")
     assert env["GF_UNIFIED_STORAGE_INDEX_PATH"]["value"].startswith(search["mountPath"] + "/")
     assert not any(c["name"] == "download-dashboards" for c in grafana.get("initContainers", []))
-    assert sum(m["name"].startswith("dashboards-") for m in app["volumeMounts"]) == 4
+    # One mounted ConfigMap per pinned reference provider (upstream/catalogue.json).
+    catalogue = json.loads((ROOT / "kubernetes/apps/monitoring/grafana/upstream/catalogue.json").read_text())
+    assert sum(m["name"].startswith("dashboards-") for m in app["volumeMounts"]) == len({e["provider"] for e in catalogue})
     assert grafana["securityContext"]["fsGroup"] == 472
     # Warm app (docs/wsl/multi-site.md): the lease gate's env must reach the pod
     # as strings; a bare on/off substitution would be a YAML boolean.

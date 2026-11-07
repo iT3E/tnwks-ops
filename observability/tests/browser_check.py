@@ -121,7 +121,7 @@ def main():
     (out / "browser-results.json").write_text(json.dumps({"dashboards": results, "navigation": navigation,
         "page_errors": errors}, indent=2) + "\n")
     assert not errors, errors
-    print(f"Rendered {len(results)} operator dashboards and six pinned references in Grafana; screenshots and evidence: {out}")
+    print(f"Rendered {len(results)} operator dashboards and the pinned references in Grafana; screenshots and evidence: {out}")
 
 
 if __name__ == "__main__":
