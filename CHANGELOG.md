@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.38.5 - 2026-11-07
+
+### Fixed
+
+* observability: recovery readiness and restore time show Not applicable, not Unknown, on the site that runs the app
+
 ## v2.38.4 - 2026-11-07
 
 ### Fixed
