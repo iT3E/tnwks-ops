@@ -202,6 +202,15 @@ evidence is left out, so `homelab:recovery_state` stays Unknown.
 `homelab_fence_last_verified_timestamp_seconds` feed the Sites & Failover board.
 Restore stays Unknown on a standby until the first Sunday drill (05:15).
 
+## MQTT evidence
+
+Each site's collector logs in to mosquitto through its global Service as user
+`observability` (`secret-mqtt.sops.yaml`, the same entry in mosquitto's password
+file). It reads the retained `$SYS/broker/clients/connected`, and subscribes to
+nothing else. `homelab:mqtt_state` is whether the broker accepted that login, and
+`homelab_mqtt_clients_connected` is the client count. Delivery between clients
+isn't measured.
+
 ## Following rollout work
 
 1. Validate backlog behavior and certificate renewal for the global query path.

@@ -169,6 +169,45 @@ def test_recovery_prerequisites_from_evidence_only(small_inventory, monkeypatch)
     assert 'prerequisite="fence"' not in out
 
 
+def test_mqtt_probe_logs_in_and_reads_the_sys_client_count():
+    import socket
+    import threading
+    import collector
+
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    seen = {}
+
+    def broker(accept: bool):
+        conn, _ = server.accept()
+        with conn:
+            kind, body = collector._mqtt_read(conn)
+            seen["connect"] = (kind, b"MQTT" in body, b"secret" in body)
+            conn.sendall(bytes([0x20, 2, 0, 0 if accept else 5]))
+            if not accept:
+                return
+            kind, body = collector._mqtt_read(conn)
+            seen["subscribe"] = body[4:].rstrip(b"\x00").decode()
+            conn.sendall(bytes([0x90, 3, 0, 1, 0]))
+            topic = b"$SYS/broker/clients/connected"
+            conn.sendall(collector._mqtt_packet(0x31, len(topic).to_bytes(2, "big") + topic + b"7"))
+            collector._mqtt_read(conn)  # DISCONNECT
+
+    port = server.getsockname()[1]
+    thread = threading.Thread(target=broker, args=(True,))
+    thread.start()
+    assert collector.mqtt_probe("127.0.0.1", "observability", "secret", port=port)[:2] == (True, 7)
+    thread.join()
+    assert seen["connect"] == (0x10, True, True)
+    assert seen["subscribe"] == "$SYS/broker/clients/connected"
+    thread = threading.Thread(target=broker, args=(False,))
+    thread.start()
+    assert collector.mqtt_probe("127.0.0.1", "observability", "wrong", port=port)[:2] == (False, None)
+    thread.join()
+    server.close()
+
+
 def test_failed_collection_retains_old_success_time_without_cached_healthy_samples(small_inventory):
     api = FakeApi()
     now = [1000]

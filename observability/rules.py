@@ -25,6 +25,9 @@ def records():
         "homelab:local_history_seconds": 'time() - min by (k8s_cluster) (prometheus_tsdb_lowest_timestamp_seconds)',
         "homelab:unuploaded_block_age_seconds": 'time() - max by (k8s_cluster) (thanos_objstore_bucket_last_successful_upload_time{job=~".*thanos-discovery"} > 0)',
         "homelab:archive_state": '(3 - 2 * min by (k8s_cluster) (probe_success{observability_target="archive"} and (time() - timestamp(probe_success{observability_target="archive"})) < 180)) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_observer_info))',
+        # The broker accepted the collector's login (MQTT), from each site. A
+        # global Service: either site's check reaches the broker wherever it runs.
+        "homelab:mqtt_state": '(3 - 2 * min by (k8s_cluster) (probe_success{observability_target="mqtt"} and (time() - timestamp(probe_success{observability_target="mqtt"})) < 180)) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_observer_info))',
         "homelab:internet_state": '(3 - 2 * min by (k8s_cluster) (probe_success{observability_target="internet"} and (time() - timestamp(probe_success{observability_target="internet"})) < 180)) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_observer_info))',
         # Replica evidence, not an end-to-end path: 1 healthy, 2 degraded, 3 failed,
         # 4 standby (desired 0, the normal state of an app on the other site).
