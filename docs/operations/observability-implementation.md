@@ -313,6 +313,18 @@ OCIRepository and HelmRepository with its Ready condition and suspension, which
 is what the custom-resource config would add. HelmCharts are left out: a
 HelmRelease's Ready covers its chart.
 
+## Databases outside CloudNativePG
+
+MongoDB (UniFi), Immich's Postgres, Plausible's ClickHouse and the two Valkeys
+have no exporter. `observability/inventory.py` (`OTHER_DATABASES`) lists them,
+and `homelab:other_database_state` reads their workloads from kube-state-metrics:
+Healthy when every desired replica is ready, Standby at zero replicas, Failed
+otherwise, Unknown when the site doesn't report the workload. Ready means the
+pod passes its readiness checks. ClickHouse has none, so Plausible's content
+probe requires both `"postgres":"ok"` and `"clickhouse":"ok"` from its health
+endpoint. The Databases & Backups board shows the states and the database
+containers' restarts. A probe can require several strings; each must appear.
+
 ## Event history
 
 Failover, Flux, upgrade and network events are kept as Prometheus series, so

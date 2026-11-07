@@ -97,6 +97,22 @@ spec:
         + 3 * (max by (k8s_cluster, app) ((homelab_restore_last_duration_seconds and (time() - timestamp(homelab_restore_last_duration_seconds)
         < 180))) > bool on (k8s_cluster, app) max by (k8s_cluster, app) (homelab_app_recovery_objective_seconds{objective="rto"})))
         or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_app_recovery_objective_seconds{objective="rto"}))
+    - record: homelab:other_database_state
+      expr: (max by (k8s_cluster, namespace, workload, engine, app) (homelab_expected_other_database_info) * 0 +
+        4) and on (k8s_cluster, namespace, workload) (max by (k8s_cluster, namespace, workload) (label_replace(kube_statefulset_replicas,
+        "workload", "$1", "statefulset", "(.+)") or label_replace(kube_deployment_spec_replicas, "workload", "$1",
+        "deployment", "(.+)")) == 0) or (max by (k8s_cluster, namespace, workload, engine, app) (homelab_expected_other_database_info)
+        * 0 + 1) and on (k8s_cluster, namespace, workload) ((max by (k8s_cluster, namespace, workload) (label_replace(kube_statefulset_status_replicas_ready,
+        "workload", "$1", "statefulset", "(.+)") or label_replace(kube_deployment_status_replicas_available, "workload",
+        "$1", "deployment", "(.+)")) >= max by (k8s_cluster, namespace, workload) (label_replace(kube_statefulset_replicas,
+        "workload", "$1", "statefulset", "(.+)") or label_replace(kube_deployment_spec_replicas, "workload", "$1",
+        "deployment", "(.+)"))) > 0) or (max by (k8s_cluster, namespace, workload, engine, app) (homelab_expected_other_database_info)
+        * 0 + 3) and on (k8s_cluster, namespace, workload) (max by (k8s_cluster, namespace, workload) (label_replace(kube_statefulset_status_replicas_ready,
+        "workload", "$1", "statefulset", "(.+)") or label_replace(kube_deployment_status_replicas_available, "workload",
+        "$1", "deployment", "(.+)")) < max by (k8s_cluster, namespace, workload) (label_replace(kube_statefulset_replicas,
+        "workload", "$1", "statefulset", "(.+)") or label_replace(kube_deployment_spec_replicas, "workload", "$1",
+        "deployment", "(.+)"))) or (max by (k8s_cluster, namespace, workload, engine, app) (homelab_expected_other_database_info)
+        * 0)
     - record: homelab:network_path_state
       expr: (label_replace(label_replace(3 - 2 * (min(mktxp_last_handshake{interface="wg-site1"}) < bool 180), "k8s_cluster",
         "homelab-wsl", "", "") or label_replace(3 - 2 * (min(mktxp_last_handshake{interface="wg-site2"}) < bool

@@ -56,6 +56,7 @@ def records():
             f' or (({ready} < {desired}) * 0 + 3)'
             ' or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))'),
         **objective_records(fresh),
+        **other_database_records(),
         **network_records(),
         # Each site's collector reaches the shared-VIP names the way a client does
         # (router DNS, verified TLS, the ingress routing the host). A pod reaches
@@ -65,6 +66,27 @@ def records():
         # Content probe from the site that runs the app; Standby (4) where it's
         # deliberately at zero; Unknown where neither is observed.
         "homelab:service_state": '(3 - 2 * min by (k8s_cluster, app) (probe_success{observability_target="service"} and (time() - timestamp(probe_success{observability_target="service"})) < 180)) or on (k8s_cluster, app) (homelab:workload_state == 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))',
+    }
+
+
+def other_database_records():
+    """Databases outside CNPG, from their workload's readiness: 1 every desired
+    replica ready, 3 not, 4 a deliberate standby (desired 0), 0 unobserved."""
+    key = "k8s_cluster, namespace, workload"
+    expected = f"max by ({key}, engine, app) (homelab_expected_other_database_info)"
+
+    def per_workload(sts, deploy):
+        return (f'max by ({key}) (label_replace({sts}, "workload", "$1", "statefulset", "(.+)")'
+                f' or label_replace({deploy}, "workload", "$1", "deployment", "(.+)"))')
+
+    desired = per_workload("kube_statefulset_replicas", "kube_deployment_spec_replicas")
+    ready = per_workload("kube_statefulset_status_replicas_ready", "kube_deployment_status_replicas_available")
+    return {
+        "homelab:other_database_state": (
+            f"({expected} * 0 + 4) and on ({key}) ({desired} == 0)"
+            f" or ({expected} * 0 + 1) and on ({key}) (({ready} >= {desired}) > 0)"
+            f" or ({expected} * 0 + 3) and on ({key}) ({ready} < {desired})"
+            f" or ({expected} * 0)"),
     }
 
 
@@ -494,7 +516,31 @@ def fixtures():
                  {"labels": 'homelab:recovery_state{k8s_cluster="one",app="test"}', "value": 3}]},
          ]},
         *objective_fixtures(),
+        *other_database_fixtures(),
     ]}
+
+
+def other_database_fixtures():
+    info = 'homelab_expected_other_database_info{k8s_cluster="one",observer_cluster="one",namespace="db",workload="%s",kind="%s",engine="e",app="a"}'
+    return [
+        {"name": "other databases: ready, failed, standby, unobserved", "interval": "1m",
+         "input_series": [
+             {"series": info % ("ok", "statefulset"), "values": "1+0x10"},
+             {"series": 'kube_statefulset_replicas{k8s_cluster="one",namespace="db",statefulset="ok"}', "values": "1+0x10"},
+             {"series": 'kube_statefulset_status_replicas_ready{k8s_cluster="one",namespace="db",statefulset="ok"}', "values": "1+0x10"},
+             {"series": info % ("down", "deployment"), "values": "1+0x10"},
+             {"series": 'kube_deployment_spec_replicas{k8s_cluster="one",namespace="db",deployment="down"}', "values": "1+0x10"},
+             {"series": 'kube_deployment_status_replicas_available{k8s_cluster="one",namespace="db",deployment="down"}', "values": "0+0x10"},
+             {"series": info % ("standby", "statefulset"), "values": "1+0x10"},
+             {"series": 'kube_statefulset_replicas{k8s_cluster="one",namespace="db",statefulset="standby"}', "values": "0+0x10"},
+             {"series": 'kube_statefulset_status_replicas_ready{k8s_cluster="one",namespace="db",statefulset="standby"}', "values": "0+0x10"},
+             {"series": info % ("missing", "statefulset"), "values": "1+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:other_database_state", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:other_database_state{k8s_cluster="one",namespace="db",workload="%s",engine="e",app="a"}' % w, "value": v}
+                 for w, v in (("down", 3), ("missing", 0), ("ok", 1), ("standby", 4))]},
+         ]},
+    ]
 
 
 def objective_fixtures():

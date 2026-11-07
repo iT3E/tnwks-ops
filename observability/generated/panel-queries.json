@@ -289,6 +289,22 @@
   },
   {
     "dashboard": "tnwks-data",
+    "tab": "Other databases",
+    "title": "Database state",
+    "expr": "max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Other databases",
+    "title": "Database container restarts",
+    "expr": "sum by (k8s_cluster, pod, container) (increase(kube_pod_container_status_restarts_total{k8s_cluster=~\"$cluster\",container=~\"mongo|clickhouse\"}[1h]) or increase(kube_pod_container_status_restarts_total{k8s_cluster=~\"$cluster\",pod=~\"immich-postgres-[0-9]+|valkey-.+|immich-valkey-.+\"}[1h]))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
     "tab": "Backups",
     "title": "Base backup age",
     "expr": "homelab:database_backup_age_seconds{k8s_cluster=~\"$cluster\"}",

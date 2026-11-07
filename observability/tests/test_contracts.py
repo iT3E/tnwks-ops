@@ -493,3 +493,34 @@ def test_backup_schedules_and_drill_duration_per_app(small_inventory):
     assert 'homelab_app_recovery_objective_seconds{app="other",k8s_cluster="one",objective="rpo",observer_cluster="one"} 108000' in out
     # The slowest PVC: five minutes.
     assert 'homelab_restore_last_duration_seconds{app="test",k8s_cluster="one",observer_cluster="one"} 300' in out
+
+
+def test_probe_needs_every_expected_string_and_other_databases_are_expected(small_inventory, monkeypatch):
+    import collector
+
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, size):
+            return b'{"postgres":"ok","clickhouse":"down"}'
+
+    monkeypatch.setattr(collector.urllib.request, "urlopen", lambda *a, **k: Response())
+    assert collector.content_probe("http://x/api/health", '"postgres":"ok"')[0]
+    assert not collector.content_probe("http://x/api/health", ['"postgres":"ok"', '"clickhouse":"ok"'])[0]
+    small_inventory["other_databases"] = [{"namespace": "db", "kind": "statefulset", "workload": "mongo",
+                                           "engine": "mongodb", "app": "test"}]
+    small_inventory["other_databases"].append({"namespace": "cache", "kind": "deployment", "workload": "valkey",
+                                               "engine": "valkey", "app": "valkey", "clusters": ["one"]})
+    out = Collector(FakeApi(), small_inventory, "one", clock=lambda: 1000).collect().decode()
+    for site in ("one", "two"):
+        assert (f'homelab_expected_other_database_info{{app="test",engine="mongodb",k8s_cluster="{site}",kind="statefulset",'
+                f'namespace="db",observer_cluster="one",workload="mongo"}} 1') in out
+    # Expected only where it's deployed, so the other site doesn't read Unknown forever.
+    assert 'k8s_cluster="one",kind="deployment",namespace="cache"' in out
+    assert 'k8s_cluster="two",kind="deployment",namespace="cache"' not in out

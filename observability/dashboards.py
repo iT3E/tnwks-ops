@@ -36,6 +36,7 @@ IDENTITY = {
     "homelab:shared_vip_route": ("vip",),
     "homelab:database_backup_state": ("namespace", "db_cluster"),
     "homelab:app_rpo_state": ("app",),
+    "homelab:other_database_state": ("workload", "engine"),
     "homelab:app_rto_state": ("app",),
     "homelab:app_backup_age_seconds": ("app",),
     "homelab_expected_database_info": ("namespace", "db_cluster", "app"),
@@ -229,6 +230,13 @@ def catalogue() -> list[Board]:
                   "Observed database connections; compare against the configured limit and wait/transaction evidence."),
                 p("Replay timestamp lag", metric("homelab:database_replay_lag_seconds"), "s",
                   "Replay timestamp lag can grow on idle databases. It is not by itself an RPO or a measure of unarchived writes."),
+            ],
+            "Other databases": [
+                p("Database state", metric("homelab:other_database_state"), "state",
+                  "Databases outside CloudNativePG (MongoDB for UniFi, Immich's Postgres, Plausible's ClickHouse, Valkey), which have no exporter: Healthy when every desired replica of the workload is ready, Standby at zero replicas, Unknown when the site doesn't report it. Ready means the pod passes its readiness checks; ClickHouse has none, so the Plausible service probe, which needs ClickHouse to answer, is its query evidence.",
+                  "table"),
+                p("Database container restarts", f'sum by (k8s_cluster, pod, container) (increase({selector("kube_pod_container_status_restarts_total", 'container=~"mongo|clickhouse"')}[1h]) or increase({selector("kube_pod_container_status_restarts_total", 'pod=~"immich-postgres-[0-9]+|valkey-.+|immich-valkey-.+"')}[1h]))', "short",
+                  "Restarts in the last hour of the database containers, from kube-state-metrics. A crash loop can pass readiness between restarts."),
             ],
             "Backups": [
                 p("Base backup age", metric("homelab:database_backup_age_seconds"), "s",

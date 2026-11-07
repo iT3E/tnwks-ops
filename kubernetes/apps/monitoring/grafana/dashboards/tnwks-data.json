@@ -428,6 +428,249 @@
         "kind": "Panel",
         "spec": {
           "id": 6,
+          "title": "Database state",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "State"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#c4302b"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#2f6bd0"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#6b6b6b"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#8a4fb5"
+                        }
+                      }
+                    }
+                  ],
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "State"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background",
+                          "mode": "basic"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Databases outside CloudNativePG (MongoDB for UniFi, Immich's Postgres, Plausible's ClickHouse, Valkey), which have no exporter: Healthy when every desired replica of the workload is ready, Standby at zero replicas, Unknown when the site doesn't report it. Ready means the pod passes its readiness checks; ClickHouse has none, so the Plausible service probe, which needs ClickHouse to answer, is its query evidence.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "id": 7,
+          "title": "Database container restarts",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (k8s_cluster, pod, container) (increase(kube_pod_container_status_restarts_total{k8s_cluster=~\"$cluster\",container=~\"mongo|clickhouse\"}[1h]) or increase(kube_pod_container_status_restarts_total{k8s_cluster=~\"$cluster\",pod=~\"immich-postgres-[0-9]+|valkey-.+|immich-valkey-.+\"}[1h]))",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Restarts in the last hour of the database containers, from kube-state-metrics. A crash loop can pass readiness between restarts.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "id": 8,
           "title": "Base backup age",
           "links": [],
           "data": {
@@ -540,10 +783,10 @@
           "description": "Barman plugin's last successful base backup per database. The warning threshold is 30h; a missing metric is separately reported as missing coverage.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-6": {
+      "panel-8": {
         "kind": "Panel",
         "spec": {
-          "id": 7,
+          "id": 9,
           "title": "Backup coverage",
           "links": [],
           "data": {
@@ -707,10 +950,10 @@
           "description": "Expected database left join observed Barman evidence. Missing series cannot be hidden by another database's fresh backup.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-7": {
+      "panel-9": {
         "kind": "Panel",
         "spec": {
-          "id": 8,
+          "id": 10,
           "title": "WAL failures",
           "links": [],
           "data": {
@@ -783,10 +1026,10 @@
           "description": "Failed WAL archiving attempts in the selected window. Idle WAL age alone is not a failure.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-8": {
+      "panel-10": {
         "kind": "Panel",
         "spec": {
-          "id": 9,
+          "id": 11,
           "title": "Weekly PVC drill age",
           "links": [],
           "data": {
@@ -899,10 +1142,10 @@
           "description": "The existing weekly job covers its configured PVC entries only. This does not certify every app or a database restore.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-9": {
+      "panel-11": {
         "kind": "Panel",
         "spec": {
-          "id": 10,
+          "id": 12,
           "title": "Recovery point by app",
           "links": [],
           "data": {
@@ -1066,10 +1309,10 @@
           "description": "Per app and site: is its oldest newest-backup, over every scheduled PVC and every primary database, within its recovery point objective (inventory.py OBJECTIVES, provisionally 30 h)? Unknown when a piece has no backup evidence. A site where nothing is scheduled, like a standby, has no row.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-10": {
+      "panel-12": {
         "kind": "Panel",
         "spec": {
-          "id": 11,
+          "id": 13,
           "title": "Backup age by app",
           "links": [],
           "data": {
@@ -1182,10 +1425,10 @@
           "description": "The oldest piece's backup age per app and site: the data an unplanned restore would lose, at most.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-11": {
+      "panel-13": {
         "kind": "Panel",
         "spec": {
-          "id": 12,
+          "id": 14,
           "title": "Restore time by app",
           "links": [],
           "data": {
@@ -1349,10 +1592,10 @@
           "description": "Per warm app with PVCs: did its last standby restore drill write the data back within the restore time objective (provisionally 1 h)? Unknown until a drill reports how long it took. This is the data restore, not the whole failover.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-12": {
+      "panel-14": {
         "kind": "Panel",
         "spec": {
-          "id": 13,
+          "id": 15,
           "title": "Last drill duration",
           "links": [],
           "data": {
@@ -1465,10 +1708,10 @@
           "description": "From each Restore's creation to its Ready condition, the slowest PVC of the app's last successful drill.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-13": {
+      "panel-15": {
         "kind": "Panel",
         "spec": {
-          "id": 14,
+          "id": 16,
           "title": "PVCs without a backup schedule",
           "links": [],
           "data": {
@@ -1581,10 +1824,10 @@
           "description": "PVCs the failover catalogue moves that no site has a running backup schedule for: a suspended schedule, or no SnapshotPolicy covering the PVC. Their recovery point is unbounded.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-14": {
+      "panel-16": {
         "kind": "Panel",
         "spec": {
-          "id": 15,
+          "id": 17,
           "title": "Windows disk free",
           "links": [],
           "data": {
@@ -1754,7 +1997,24 @@
                           "name": "panel-6"
                         }
                       }
-                    },
+                    }
+                  ],
+                  "maxColumnCount": 3,
+                  "fillScreen": false
+                }
+              },
+              "title": "Other databases"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "AutoGridLayout",
+                "spec": {
+                  "columnWidthMode": "narrow",
+                  "rowHeightMode": "standard",
+                  "items": [
                     {
                       "kind": "AutoGridLayoutItem",
                       "spec": {
@@ -1770,6 +2030,24 @@
                         "element": {
                           "kind": "ElementReference",
                           "name": "panel-8"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-9"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-10"
                         }
                       }
                     }
@@ -1790,24 +2068,6 @@
                   "columnWidthMode": "narrow",
                   "rowHeightMode": "standard",
                   "items": [
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-9"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-10"
-                        }
-                      }
-                    },
                     {
                       "kind": "AutoGridLayoutItem",
                       "spec": {
@@ -1834,6 +2094,24 @@
                           "name": "panel-13"
                         }
                       }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-14"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-15"
+                        }
+                      }
                     }
                   ],
                   "maxColumnCount": 3,
@@ -1857,7 +2135,7 @@
                       "spec": {
                         "element": {
                           "kind": "ElementReference",
-                          "name": "panel-14"
+                          "name": "panel-16"
                         }
                       }
                     }
