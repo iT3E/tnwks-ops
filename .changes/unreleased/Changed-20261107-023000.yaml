@@ -1,3 +1,0 @@
-kind: Changed
-body: 'Plausible gets its own CNPG cluster (databases/plausible-pg), imported from the shared cluster, the last app to leave it; its owner-role Secret moves next to it.'
-time: 2026-11-07T02:30:00.000000000-08:00

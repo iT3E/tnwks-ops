@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.223.0 - 2026-11-07
+
+### Changed
+
+* Plausible gets its own CNPG cluster (databases/plausible-pg), imported from the shared cluster, the last app to leave it; its owner-role Secret moves next to it.
+
 ## v1.222.0 - 2026-11-07
 
 ### Changed
