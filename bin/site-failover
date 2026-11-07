@@ -564,7 +564,8 @@ def cmd_switchover(args):
             cmd = chk.get("command") or ["python3", "-c", f"import urllib.request;print(urllib.request.urlopen({chk['url']!r},timeout=10).status)"]
             p_ = new.kubectl("exec", "-n", app["namespace"], chk.get("workload") or f"deploy/{chk['deployment']}", "-c", chk["container"], "--",
                              *cmd, check=False)
-            return p_.stdout.strip() if p_.returncode == 0 else None
+            # Exit 0 is the answer; a check that prints nothing still passed.
+            return (p_.stdout.strip() or "ok") if p_.returncode == 0 else None
         what = chk.get("url") or " ".join(chk.get("command", []))
         status = wait(f"{what} on {new.name}", answers, timeout=600, every=5)
         log(f"{new.name}: check {what}: {status}")

@@ -389,7 +389,7 @@
       "command": [
         "sh",
         "-c",
-        "wget -qO- http://localhost:3579/ >/dev/null || curl -fsS -o /dev/null http://localhost:3579/"
+        "curl -fsS -o /dev/null http://localhost:3579/"
       ]
     }
   },
@@ -418,7 +418,7 @@
       "command": [
         "sh",
         "-c",
-        "wget -qO- http://localhost:3579/ >/dev/null || curl -fsS -o /dev/null http://localhost:3579/"
+        "curl -fsS -o /dev/null http://localhost:3579/"
       ]
     }
   },
@@ -451,7 +451,7 @@
       "command": [
         "sh",
         "-c",
-        "wget -qO- http://localhost:5690/ >/dev/null || curl -fsS -o /dev/null http://localhost:5690/"
+        "curl -fsS -o /dev/null http://localhost:5690/ || wget -qO /dev/null http://localhost:5690/"
       ]
     }
   }
