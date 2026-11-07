@@ -1,0 +1,8 @@
+---
+# Pyrra's ServiceLevelObjective CRD, unmodified from
+# https://github.com/pyrra-dev/pyrra/blob/v0.10.2/examples/kubernetes/manifests/setup/pyrra-slo-CustomResourceDefinition.yaml
+# (sha256 3fffa41fd0e5c0935048a775f0d534cae9732fa45293e90c1218bf80453bb930). Upgrade it with the image in ../app/helmrelease.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./servicelevelobjectives.yaml

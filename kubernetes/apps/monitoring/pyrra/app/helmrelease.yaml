@@ -1,0 +1,111 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: pyrra
+  namespace: monitoring
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  values:
+    serviceAccount:
+      create: false
+      name: pyrra
+    defaultPodOptions:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+    controllers:
+      # Turns ./slos.yaml into PrometheusRules for this site's Prometheus, with
+      # generic pyrra_* series for Grafana, and serves them to the UI.
+      operator:
+        pod:
+          automountServiceAccountToken: true
+        containers:
+          app:
+            image: &image
+              repository: ghcr.io/pyrra-dev/pyrra
+              tag: v0.10.2@sha256:98e6674a7206bc38710bdce0c170772423e0229607224a2840a1680c28a337a8
+            args: [kubernetes, --generic-rules]
+            securityContext: &securityContext
+              readOnlyRootFilesystem: true
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: [ALL]
+            resources:
+              requests:
+                cpu: 5m
+                memory: 32Mi
+              limits:
+                memory: 128Mi
+      # The UI, on this site's own Prometheus: the rules it reads are local.
+      ui:
+        containers:
+          app:
+            image: *image
+            args:
+              - api
+              - --prometheus-url=http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+              - --api-url=http://pyrra-operator.monitoring.svc.cluster.local:9444
+            securityContext: *securityContext
+            resources:
+              requests:
+                cpu: 5m
+                memory: 32Mi
+              limits:
+                memory: 128Mi
+    service:
+      operator:
+        controller: operator
+        ports:
+          http:
+            port: 9444
+          metrics:
+            port: 8080
+      ui:
+        controller: ui
+        ports:
+          http:
+            port: 9099
+    serviceMonitor:
+      operator:
+        enabled: true
+        serviceName: pyrra-operator
+        endpoints:
+          - port: metrics
+            interval: 1m
+    ingress:
+      ui:
+        className: nginx-internal
+        annotations:
+          hajimari.io/appName: Pyrra
+          hajimari.io/group: Monitoring
+          hajimari.io/icon: mdi:target
+          nginx.ingress.kubernetes.io/auth-url: "${OAUTH2_PROXY_URL:=http://oauth2-proxy.auth.svc.cluster.local:80}/oauth2/auth"
+          nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${INTERNAL_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
+          # Cognito-backed sessions are split across multiple cookies; the
+          # subrequest header chunk overflows nginx's default 4k buffer.
+          nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+          nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+        hosts:
+          - host: &host "pyrra.${INTERNAL_DOMAIN}"
+            paths:
+              - path: /
+                pathType: Prefix
+                service:
+                  identifier: ui
+                  port: http
+        tls:
+          - hosts:
+              - *host

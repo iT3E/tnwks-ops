@@ -1,0 +1,38 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: pyrra-crds
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/monitoring/pyrra/crds
+  # Removing the CRD would delete every SLO with it.
+  prune: false
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+---
+# SLOs (docs/operations/observability-implementation.md, "Objectives"): Flux
+# owns Pyrra and the ServiceLevelObjectives; Pyrra's operator owns the
+# PrometheusRules it generates from them.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: pyrra
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: pyrra-crds
+    - name: kube-prometheus-stack
+    - name: ingress-nginx-internal
+  path: ./kubernetes/apps/monitoring/pyrra/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

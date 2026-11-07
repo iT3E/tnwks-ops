@@ -283,6 +283,25 @@ else the other. It's inferred from the router's live BGP sessions and the
 declared local preference, not read from the router's route table. The WSL-01
 host reaching site 1 on `10.10.95.200` is this design, not a misroute.
 
+## Objectives
+
+Pyrra runs on both sites (`monitoring/pyrra`). Flux owns it and the
+ServiceLevelObjectives in `app/slos.yaml`; its operator owns the PrometheusRules
+it generates from them, with generic `pyrra_*` series for Grafana. The first
+SLOs are probe-based (`bool_gauge`): the Internet path, Home Assistant's name, all
+shared-VIP names, and the MQTT broker. Each is per site, labelled with it
+(`pyrra.dev/k8s_cluster`), since each Prometheus holds only its own collector's
+probes.
+
+The rules run on each site's own Prometheus, which keeps 15 d, so the windows are
+14 d. A 28 d window there would quietly cover only part of itself; it needs a
+history-aware evaluator over the archive (Thanos Ruler) first.
+`homelab:slo_window_coverage_ratio` is the share of the window a site's
+Prometheus holds, shown beside the availabilities on the Observability board's
+Objectives tab, so an incomplete window reads as incomplete. Targets are
+provisional and burn-rate alerts are off until a full window gives a baseline.
+The Pyrra UI is `pyrra.<internal domain>`, on site 1's local Prometheus.
+
 ## Following rollout work
 
 1. Validate backlog behavior and certificate renewal for the global query path.

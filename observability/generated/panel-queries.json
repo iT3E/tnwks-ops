@@ -785,6 +785,30 @@
   },
   {
     "dashboard": "tnwks-observability",
+    "tab": "Objectives",
+    "title": "SLO window coverage",
+    "expr": "homelab:slo_window_coverage_ratio{k8s_cluster=~\"$cluster\"}",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Objectives",
+    "title": "SLO availability",
+    "expr": "max by (k8s_cluster, slo) (pyrra_availability{k8s_cluster=~\"$cluster\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Objectives",
+    "title": "Error budget left",
+    "expr": "max by (k8s_cluster, slo) (1 - (1 - pyrra_availability{k8s_cluster=~\"$cluster\"}) / (1 - pyrra_objective{k8s_cluster=~\"$cluster\"}))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
     "tab": "Archive and delivery",
     "title": "Archive state",
     "expr": "homelab:archive_state{k8s_cluster=~\"$cluster\"}",

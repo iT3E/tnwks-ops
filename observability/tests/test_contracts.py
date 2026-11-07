@@ -367,6 +367,23 @@ def test_ingress_probe_checks_dns_tls_routing_and_reads_the_serving_site(tmp_pat
     server.shutdown()
 
 
+def test_slos_fit_local_history_and_pyrra_generic_rules():
+    import yaml
+    from rules import SLO_WINDOW_SECONDS
+
+    path = Path(__file__).resolve().parents[2] / "kubernetes/apps/monitoring/pyrra/app/slos.yaml"
+    slos = [doc for doc in yaml.safe_load_all(path.read_text()) if doc]
+    assert slos
+    for slo in slos:
+        spec, labels = slo["spec"], slo["metadata"]["labels"]
+        # Evaluated on each site's 15 d Prometheus: the window must fit inside it.
+        assert spec["window"] == f"{SLO_WINDOW_SECONDS // 86400}d"
+        assert labels["pyrra.dev/k8s_cluster"] == "${CLUSTER_NAME}"  # the site on every pyrra_* series
+        indicator = next(iter(spec["indicator"].values()))
+        assert not indicator.get("grouping")  # generic rules refuse grouping
+        assert spec["alerting"]["disabled"] is True  # until a full-window baseline
+
+
 def test_failed_collection_retains_old_success_time_without_cached_healthy_samples(small_inventory):
     api = FakeApi()
     now = [1000]
