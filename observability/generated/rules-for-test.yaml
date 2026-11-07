@@ -6,7 +6,8 @@ groups:
   - record: homelab:site_reporting
     expr: (max by (k8s_cluster) (homelab_collection_success{collector="workloads"}) == bool 1) * on (k8s_cluster)
       (time() - max by (k8s_cluster) (homelab_collection_last_success_timestamp_seconds{collector="workloads"})
-      < bool 180)
+      < bool 180) * on (k8s_cluster) (time() - max by (k8s_cluster) (homelab_collection_last_success_timestamp_seconds{collector="workloads"})
+      >= bool 0)
   - record: homelab:site_state
     expr: (homelab:site_reporting == 1) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_expected_site_info))
   - record: homelab:database_in_recovery
@@ -26,9 +27,10 @@ groups:
       + 3 * (homelab:database_backup_age_seconds > bool 108000)) or on (k8s_cluster, namespace, db_cluster) (0 *
       max by (k8s_cluster, namespace, db_cluster) (homelab_expected_database_info))
   - record: homelab:recovery_state
-    expr: (3 * max by (k8s_cluster, app) (homelab_recovery_prerequisite_state == 3) / 3) or on (k8s_cluster, app)
-      ((count by (k8s_cluster, app) (max by (k8s_cluster, app, prerequisite) (homelab_recovery_prerequisite_state{prerequisite=~"database|backup|restore|fence"})
-      == 1) == 4) / 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info{tier="warm"}))
+    expr: (3 * max by (k8s_cluster, app) ((homelab_recovery_prerequisite_state and (time() - timestamp(homelab_recovery_prerequisite_state)
+      < 180)) == 3) / 3) or on (k8s_cluster, app) ((count by (k8s_cluster, app) (max by (k8s_cluster, app, prerequisite)
+      ((homelab_recovery_prerequisite_state{prerequisite=~"database|backup|restore|fence"} and (time() - timestamp(homelab_recovery_prerequisite_state{prerequisite=~"database|backup|restore|fence"})
+      < 180))) == 1) == 4) / 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info{tier="warm"}))
   - record: homelab:local_history_seconds
     expr: time() - min by (k8s_cluster) (prometheus_tsdb_lowest_timestamp_seconds)
   - record: homelab:unuploaded_block_age_seconds
@@ -44,11 +46,18 @@ groups:
     expr: (3 - 2 * min by (k8s_cluster) (probe_success{observability_target="internet"} and (time() - timestamp(probe_success{observability_target="internet"}))
       < 180)) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_observer_info))
   - record: homelab:workload_state
-    expr: (sum by (k8s_cluster, app) (homelab_workload_desired_replicas) == 0) + 4 or (((sum by (k8s_cluster, app)
-      (homelab_workload_ready_replicas) >= sum by (k8s_cluster, app) (homelab_workload_desired_replicas)) * 0) +
-      1) or (((sum by (k8s_cluster, app) (homelab_workload_ready_replicas) < sum by (k8s_cluster, app) (homelab_workload_desired_replicas))
-      > 0) * 0 + 2) or ((sum by (k8s_cluster, app) (homelab_workload_ready_replicas) < sum by (k8s_cluster, app)
-      (homelab_workload_desired_replicas)) * 0 + 3) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))
+    expr: 0 * max by (k8s_cluster, app) (homelab_workload_present == 0) or (sum by (k8s_cluster, app) (max by (k8s_cluster,
+      app, kind, workload) ((homelab_workload_desired_replicas and (time() - timestamp(homelab_workload_desired_replicas)
+      < 180)))) == 0) + 4 or (((sum by (k8s_cluster, app) (max by (k8s_cluster, app, kind, workload) ((homelab_workload_ready_replicas
+      and (time() - timestamp(homelab_workload_ready_replicas) < 180)))) >= sum by (k8s_cluster, app) (max by (k8s_cluster,
+      app, kind, workload) ((homelab_workload_desired_replicas and (time() - timestamp(homelab_workload_desired_replicas)
+      < 180))))) * 0) + 1) or (((sum by (k8s_cluster, app) (max by (k8s_cluster, app, kind, workload) ((homelab_workload_ready_replicas
+      and (time() - timestamp(homelab_workload_ready_replicas) < 180)))) < sum by (k8s_cluster, app) (max by (k8s_cluster,
+      app, kind, workload) ((homelab_workload_desired_replicas and (time() - timestamp(homelab_workload_desired_replicas)
+      < 180))))) > 0) * 0 + 2) or ((sum by (k8s_cluster, app) (max by (k8s_cluster, app, kind, workload) ((homelab_workload_ready_replicas
+      and (time() - timestamp(homelab_workload_ready_replicas) < 180)))) < sum by (k8s_cluster, app) (max by (k8s_cluster,
+      app, kind, workload) ((homelab_workload_desired_replicas and (time() - timestamp(homelab_workload_desired_replicas)
+      < 180))))) * 0 + 3) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))
   - record: homelab:network_path_state
     expr: (label_replace(label_replace(3 - 2 * (min(mktxp_last_handshake{interface="wg-site1"}) < bool 180), "k8s_cluster",
       "homelab-wsl", "", "") or label_replace(3 - 2 * (min(mktxp_last_handshake{interface="wg-site2"}) < bool 180),

@@ -57,10 +57,10 @@ def main():
             target = base / "reference" / entry["provider"] / entry["file"]
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / "kubernetes/apps/monitoring/grafana/upstream" / entry["file"], target)
-        for name, folder in folders.items():
-            provider["providers"].append({"name": name, "folder": folder, "orgId": 1,
+        for provider_name, folder in folders.items():
+            provider["providers"].append({"name": provider_name, "folder": folder, "orgId": 1,
                 "type": "file", "disableDeletion": False,
-                "options": {"path": "/etc/reference/" + name}})
+                "options": {"path": "/etc/reference/" + provider_name}})
         (provisioning / "dashboards/provider.yaml").write_text(yaml.safe_dump(provider))
         sources = {"apiVersion": 1, "datasources": [
             {"name": title, "uid": uid, "type": "prometheus", "access": "proxy", "editable": False,
@@ -71,6 +71,7 @@ def main():
                                ("Prometheus", "PBFA97CFB590B2093")]]}
         (provisioning / "datasources/prometheus.yaml").write_text(yaml.safe_dump(sources))
         env = {"GF_SERVER_HTTP_ADDR": "127.0.0.1", "GF_SERVER_HTTP_PORT": "13401",
+            "GF_SERVER_ROOT_URL": url + "/",
             "GF_AUTH_ANONYMOUS_ENABLED": "true", "GF_AUTH_ANONYMOUS_ORG_ROLE": "Viewer",
             "GF_ANALYTICS_REPORTING_ENABLED": "false", "GF_ANALYTICS_CHECK_FOR_UPDATES": "false",
             "GF_PLUGINS_PREINSTALL_DISABLED": "true", "GF_SECURITY_ADMIN_PASSWORD": secrets.token_hex(32)}

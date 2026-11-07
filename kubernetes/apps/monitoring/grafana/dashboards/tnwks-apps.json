@@ -181,7 +181,7 @@
               }
             }
           },
-          "description": "End-to-end content-aware probe evidence. An auth redirect alone cannot certify the application behind it."
+          "description": "Content probe to the in-cluster Service on its active site. This bypasses client DNS, ingress and sign-in; those paths need separate evidence."
         }
       },
       "panel-2": {

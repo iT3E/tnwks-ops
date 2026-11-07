@@ -68,8 +68,8 @@ and lets a real answer replace an observer's Unknown.
 | Database backup | Barman timestamps against expected databases | Real |
 | Workload | Replica counts; desired 0 is Standby, not Failed | Real |
 | Archive, Internet | Collector reachability probes; any HTTP answer proves the path | Real |
-| Service path | `probe_success{observability_target="service"}` | Unknown: no content probes yet |
-| Recovery | `homelab_recovery_prerequisite_state` | Unknown: nothing emits fencing or restore evidence yet |
+| Service backend | `probe_success{observability_target="service"}` | Active site's Service content; client DNS, TLS, ingress and sign-in need separate probes |
+| Recovery | `homelab_recovery_prerequisite_state` | Database/backup/restore evidence; no positive per-app former-primary fence attestation yet |
 
 A row is not evidence: a panel can return data and still be Unknown for every row.
 Check the values when judging coverage, not just whether a query returns.
@@ -194,13 +194,27 @@ evidence is left out, so `homelab:recovery_state` stays Unknown.
 | prerequisite | Met when |
 | --- | --- |
 | `database` | every one of the app's Postgres clusters on this site is healthy (primary or replica) |
-| `backup` | each has a completed base backup on this site within 30 h |
-| `restore` | the weekly standby restore last restored each of its PVCs here within 8 days. Also met where the app runs, and for an app with no PVCs to copy (Grafana) |
-| `fence` | `site-lease-fence` succeeded within 10 min and the app's lease doesn't name this site. An unreadable lease is no evidence |
+| `backup` | each has a completed base backup on this site within 30 h; future timestamps fail |
+| `restore` | the latest restore of every required PVC on this site completed within 8 days; running workloads do not substitute for a drill. No copied PVCs (Grafana) satisfies only this prerequisite |
+| `fence` | a lease naming this site explicitly blocks promotion. A positive former-primary fence attestation is not produced yet, so an unblocked lease leaves this prerequisite Unknown |
 
-`homelab_restore_last_success_timestamp_seconds` and
-`homelab_fence_last_verified_timestamp_seconds` feed the Sites & Failover board.
-Restore stays Unknown on a standby until the first Sunday drill (05:15).
+`homelab_restore_last_success_timestamp_seconds` feeds the Sites & Failover board.
+Restore remains Unknown until a completed drill covers every required PVC. Its
+age is conservatively measured from the restore object's creation. The absence of
+copied PVCs does not prove a PostgreSQL database restore or an application RTO.
+
+`homelab_fence_job_last_success_timestamp_seconds` reports only fleet Job liveness.
+The fence Job exits successfully even when a lease cannot be read; it is not an
+app-specific attestation. `homelab_lease_authority_reachable` reports whether the
+current DNS answer is recognized, and `homelab_site_lease_blocks_local` reports its
+local restriction. Neither certifies that a former primary cannot write.
+`homelab_fence_last_verified_timestamp_seconds` is deliberately absent until an
+owning mechanism produces that proof. Recovery cannot be Healthy without it.
+
+Recovery prerequisite and workload samples expire after 180 seconds. Workload
+counts deduplicate overlapping collector pods; a missing component leaves its app
+Unknown even if another component is ready. The overview header counts distinct
+selected sites and does not color a single selected reporting site as degraded.
 
 ## MQTT evidence
 

@@ -100,11 +100,13 @@ def metric(name: str, extra: str = "") -> str:
 
 
 def coverage() -> list[Panel]:
+    expected = f'count(max by (k8s_cluster) ({selector("homelab_expected_site_info")}))'
+    reporting = f'count(max by (k8s_cluster) ({selector("homelab:site_reporting")}) == 1) or vector(0)'
     return [
-        p("Expected sites", 'count(max by (k8s_cluster) (homelab_expected_site_info))',
+        p("Expected sites", expected,
           "short", "Declared inventory survives the disappearance of a source. This is expected scope, not health.", "stat"),
-        p("Reporting sites", 'count(homelab:site_reporting == 1) or vector(0)', "short",
-          "A reporting site has fresh, successful evidence collection. Compare with expected sites; partial results never certify fleet health.", "stat"),
+        p("Reporting sites", reporting, "short",
+          "Distinct selected sites with fresh, successful evidence. Duplicate observations count once. Compare with Expected sites; partial results never certify fleet health.", "stat"),
         p("Site evidence", f'max by (k8s_cluster) ({metric("homelab:site_state")})', "coverage",
           "Measured site evidence, including explicit Unknown when an expected site stops reporting. Independent site probes distinguish unreachable from unobserved.", "table", "tnwks-sites"),
         p("Evidence age", f'time() - {metric("homelab_observer_last_success_timestamp_seconds")}', "s",
@@ -165,6 +167,12 @@ def catalogue() -> list[Board]:
                   "Unknown is retained whenever fencing, backup or restore evidence is absent. This is not a safe-to-promote guarantee.", "table"),
                 p("Fencing evidence age", f'time() - {metric("homelab_fence_last_verified_timestamp_seconds")}', "s",
                   "Present only for verified fence evidence. DNS ownership alone cannot establish that the former primary is unable to write.", "table"),
+                p("Fence job age", f'time() - {metric("homelab_fence_job_last_success_timestamp_seconds")}', "s",
+                  "Last successful fleet fence Job. It may succeed with unreadable leases, so this never establishes per-app fencing.", "table"),
+                p("Lease authority reachable", metric("homelab_lease_authority_reachable"), "bool",
+                  "The current TXT lookup returned a recognized site or none. Reachability does not prove a former primary was fenced.", "table"),
+                p("Lease blocks this site", metric("homelab_site_lease_blocks_local"), "bool",
+                  "One means the lease prohibits this site from serving the app. Zero alone cannot authorize promotion.", "table"),
                 p("Last restore evidence", f'time() - {metric("homelab_restore_last_success_timestamp_seconds")}', "s",
                   "Per-app restore evidence, not one successful fleet CronJob. Missing per-app results remain Unknown.", "table"),
             ],
@@ -279,7 +287,7 @@ def catalogue() -> list[Board]:
               "Can users reach a usable application, and where is the request path failing?", {
             "User paths": [
                 p("Application probe state", metric("homelab:service_state"), "state",
-                  "End-to-end content-aware probe evidence. An auth redirect alone cannot certify the application behind it.", "table"),
+                  "Content probe to the in-cluster Service on its active site. This bypasses client DNS, ingress and sign-in; those paths need separate evidence.", "table"),
                 p("HTTP requests", f'sum by (k8s_cluster, ingress) (rate({metric("nginx_ingress_controller_requests")}[$__rate_interval]))', "reqps",
                   "Rate counters before aggregation. Use the same scope when comparing the error numerator and total denominator."),
                 p("HTTP 5xx fraction", f'sum by (k8s_cluster, ingress) (rate({metric("nginx_ingress_controller_requests", "status=~\"5..\"")}[$__rate_interval])) / sum by (k8s_cluster, ingress) (rate({metric("nginx_ingress_controller_requests")}[$__rate_interval]))', "percentunit",
@@ -410,13 +418,6 @@ def visualization(panel: Panel):
         viz.reduce_options(common_builder.ReduceDataOptions().calcs(["lastNotNull"]).values(False))
         if panel.unit not in ("state", "coverage"):
             viz.color_scheme(dashboard.FieldColor().mode(model.FieldColorModeId.FIXED).fixed_color("#5794f2"))
-        if panel.title == "Reporting sites":
-            viz.color_scheme(dashboard.FieldColor().mode(model.FieldColorModeId.THRESHOLDS))
-            viz.thresholds(dashboard.ThresholdsConfig().mode(model.ThresholdsMode.ABSOLUTE).steps([
-                model.Threshold(value=None, color="#d44a3a"),
-                model.Threshold(value=1, color="#e5ac0e"),
-                model.Threshold(value=len(CLUSTERS), color="#299c46"),
-            ]))
     if panel.kind == "timeseries":
         viz.legend(common_builder.VizLegendOptions().display_mode(common.LegendDisplayMode.TABLE)
                    .placement(common.LegendPlacement.BOTTOM).calcs(["lastNotNull", "max"]))

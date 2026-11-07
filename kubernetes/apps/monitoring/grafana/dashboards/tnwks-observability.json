@@ -58,7 +58,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "count(max by (k8s_cluster) (homelab_expected_site_info))",
+                        "expr": "count(max by (k8s_cluster) (homelab_expected_site_info{k8s_cluster=~\"$cluster\"}))",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": false
@@ -131,7 +131,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "count(homelab:site_reporting == 1) or vector(0)",
+                        "expr": "count(max by (k8s_cluster) (homelab:site_reporting{k8s_cluster=~\"$cluster\"}) == 1) or vector(0)",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": false
@@ -173,25 +173,9 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "value": null,
-                        "color": "#d44a3a"
-                      },
-                      {
-                        "value": 1,
-                        "color": "#e5ac0e"
-                      },
-                      {
-                        "value": 2,
-                        "color": "#299c46"
-                      }
-                    ]
-                  },
                   "color": {
-                    "mode": "thresholds"
+                    "mode": "fixed",
+                    "fixedColor": "#5794f2"
                   },
                   "noValue": "Unknown — missing evidence"
                 },
@@ -199,7 +183,7 @@
               }
             }
           },
-          "description": "A reporting site has fresh, successful evidence collection. Compare with expected sites; partial results never certify fleet health."
+          "description": "Distinct selected sites with fresh, successful evidence. Duplicate observations count once. Compare with Expected sites; partial results never certify fleet health."
         }
       },
       "panel-3": {
