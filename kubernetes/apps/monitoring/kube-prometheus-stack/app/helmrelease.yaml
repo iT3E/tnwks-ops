@@ -18,6 +18,12 @@ spec:
         namespace: flux-system
       interval: 30m
   values:
+    defaultRules:
+      disabled:
+        # Counts process_start_time_seconds changes, which WSL-02's drifting
+        # clock produces without any restart. Replaced by AlertmanagerCrashlooping
+        # (addons/alerts/alertmanager.yaml), from kube-state-metrics' restarts.
+        AlertmanagerClusterCrashlooping: true
     crds:
       enabled: true
       # Helm itself never upgrades CRDs. Chart 60+ ships an opt-in

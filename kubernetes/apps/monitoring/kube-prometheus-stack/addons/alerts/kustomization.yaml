@@ -13,5 +13,6 @@ resources:
   - ./frigate.yaml
   - ./coral-detector.yaml
   - ./heartbeats.yaml
+  - ./alertmanager.yaml
   - ./wifi.yaml
   - ./site-overrides.yaml
