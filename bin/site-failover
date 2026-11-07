@@ -91,7 +91,10 @@ class Site:
         else:
             cmd = argv
             env = dict(os.environ, KUBECONFIG=os.path.expanduser(self.kubeconfig))
-        p = subprocess.run(cmd, input=stdin, capture_output=True, text=True, env=env, timeout=timeout)
+        # Without input, nothing may read this process's stdin: ssh would drain
+        # it, and the confirmation prompt after it would read EOF.
+        feed = {"input": stdin} if stdin is not None else {"stdin": subprocess.DEVNULL}
+        p = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=timeout, **feed)
         if check and p.returncode != 0:
             die(f"{self.name}: {' '.join(argv)}: {p.stderr.strip() or p.stdout.strip()}")
         return p
@@ -102,8 +105,10 @@ class Site:
     def get(self, kind, name, ns, check=True):
         p = self.kubectl("get", kind, name, "-n", ns, "-o", "json", check=False)
         if p.returncode != 0:
-            if check:
-                die(f"{self.name}: {kind} {ns}/{name}: {p.stderr.strip()}")
+            # Only a missing object is "absent": an unreachable site (SSH,
+            # kubeconfig, API) must not read as an app that isn't deployed.
+            if check or "NotFound" not in p.stderr:
+                die(f"{self.name}: {kind} {ns}/{name}: {p.stderr.strip() or p.stdout.strip()}")
             return None
         return json.loads(p.stdout)
 
