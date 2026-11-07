@@ -5,7 +5,7 @@ The desired configuration is infrastructure/edgeos/<device>/config.sh: the
 device's `show configuration commands` output, one `set` line each, with
 secrets as ${name} placeholders filled from <device>/secrets.sops.yaml.
 
-  plan   diff live vs repo (secret values masked), then stage the changes in a
+  plan   count live vs repo changes (no configuration values logged), then stage them in a
          candidate session on the device and DISCARD them, so EdgeOS itself
          validates every line without committing anything. Exit 2 on changes.
   apply  session A stages the changes, schedules commit-confirm (the device
@@ -62,7 +62,7 @@ def load_device(name: str) -> tuple[dict, dict, list[str]]:
         [SOPS, "-d", "--output-type", "json", str(d / "secrets.sops.yaml")],
         capture_output=True, text=True)
     if out.returncode != 0:
-        die("cannot decrypt %s/secrets.sops.yaml: %s" % (name, out.stderr.strip()[-300:]))
+        die("cannot decrypt %s/secrets.sops.yaml (exit %d)" % (name, out.returncode))
     secrets = {k: v for k, v in json.loads(out.stdout).items() if k != "sops"}
     lines = []
     for raw in (d / "config.sh").read_text().splitlines():
@@ -93,9 +93,13 @@ def ssh(device: dict, secrets: dict, remote: str, stdin: str | None = None) -> s
             cmd = ["sshpass", "-e", "ssh", *opts, *PASSWORD_OPTS]
             env["SSHPASS"] = secrets["ssh_password"]
         cmd += ["%s@%s" % (secrets["ssh_user"], host), remote]
-        out = subprocess.run(cmd, input=stdin, capture_output=True, text=True, env=env, timeout=300)
+        try:
+            out = subprocess.run(cmd, input=stdin, capture_output=True, text=True, env=env, timeout=300)
+        except (subprocess.TimeoutExpired, OSError):
+            # Exceptions can include the login or command and captured output.
+            die("ssh transport failed or timed out; remote output withheld")
     if out.returncode != 0:
-        die("ssh to %s:%d failed (%d): %s" % (host, port, out.returncode, out.stderr.strip()[-500:]))
+        die("ssh to %s:%d failed (exit %d); remote output withheld" % (host, port, out.returncode))
     return out.stdout
 
 
@@ -115,14 +119,6 @@ def diff(live: list[str], desired: list[str]) -> tuple[list[str], list[str]]:
     deletes = sorted((l for l in live if tokens(l) not in want_set), key=lambda l: -len(tokens(l)))
     sets = [l for l in desired if tokens(l) not in live_set]
     return deletes, sets
-
-
-def mask(line: str, secrets: dict) -> str:
-    for k, v in secrets.items():
-        if k.startswith("ssh_") or not isinstance(v, str) or len(v) < 4:
-            continue
-        line = line.replace(v, "${%s}" % k)
-    return line
 
 
 def stage_script(deletes: list[str], sets: list[str]) -> str:
@@ -150,10 +146,8 @@ def main() -> int:
     deletes, sets = diff(live, desired)
 
     print("%s (%s): %d to delete, %d to set" % (args.device, device["host"], len(deletes), len(sets)))
-    for l in deletes:
-        print("  - " + mask(l, secrets)[4:])
-    for l in sets:
-        print("  + " + mask(l, secrets)[4:])
+    # Live values may include retired credentials absent from SOPS. Report
+    # counts only; even best-effort masking cannot make a live diff public.
     if not deletes and not sets:
         print("No changes. The device matches the repo.")
         return 0

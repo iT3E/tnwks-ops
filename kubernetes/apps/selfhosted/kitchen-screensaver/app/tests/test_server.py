@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import socket
+import ssl
 import struct
 import sys
 import tempfile
@@ -14,6 +15,7 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
+from unittest.mock import patch
 from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -314,6 +316,20 @@ class FakeHAWebSocket(threading.Thread):
 
 
 class WebSocket(unittest.TestCase):
+    def test_secure_connection_requires_modern_tls_and_verifies_peer(self):
+        # Intercept only the socket wrapping: inspect the actual default
+        # context at the point it would initiate a TLS handshake.
+        observed = []
+
+        def wrap(context, sock, *, server_hostname):
+            observed.append((context.minimum_version, context.check_hostname, context.verify_mode, server_hostname))
+            raise ConnectionAbortedError("stop before network handshake")
+
+        with patch.object(server.socket, "create_connection"), patch.object(ssl.SSLContext, "wrap_socket", wrap):
+            with self.assertRaises(ConnectionAbortedError):
+                server.MiniWebSocket("wss://ha.example.org/api/websocket")
+        self.assertEqual(observed, [(ssl.TLSVersion.TLSv1_2, True, ssl.CERT_REQUIRED, "ha.example.org")])
+
     def test_forecast(self):
         fake = FakeHAWebSocket()
         fake.start()

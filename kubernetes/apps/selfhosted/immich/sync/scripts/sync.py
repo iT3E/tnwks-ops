@@ -104,10 +104,12 @@ def _redact(url: str) -> str:
     the photos, so only their host is kept; elsewhere the query goes."""
     parts = urlsplit(url)
     host = parts.hostname or ""
-    if host == "photos.app.goo.gl" or host.endswith("googleusercontent.com") or (
+    if host in ("photos.app.goo.gl", "googleusercontent.com") or host.endswith(".googleusercontent.com") or (
             host == "photos.google.com" and "/share/" in parts.path):
         return f"{parts.scheme}://{host}/(redacted)"
-    return f"{parts.scheme}://{parts.netloc}{parts.path}"
+    # Userinfo can contain credentials, even on a non-Google URL.
+    authority = parts.netloc.rsplit("@", 1)[-1]
+    return f"{parts.scheme}://{authority}{parts.path}"
 
 
 # ----------------------------------------------------------- Home Assistant

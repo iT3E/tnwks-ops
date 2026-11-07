@@ -47,6 +47,10 @@ from array import array
 from bisect import bisect_right
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+# Kubernetes supplies status.podIP. Standalone runs listen only on loopback.
+BIND_ADDRESS = os.environ.get("BIND_ADDRESS", "127.0.0.1")
+if ipaddress.ip_address(BIND_ADDRESS).is_unspecified:
+    raise ValueError("BIND_ADDRESS must identify one interface")
 LISTEN_PORT = int(os.environ.get("FLOW_PORT", "2055"))
 METRICS_PORT = int(os.environ.get("METRICS_PORT", "9300"))
 LAN_NETS = [ipaddress.ip_network(n.strip()) for n in os.environ.get(
@@ -522,7 +526,7 @@ def handle_packet(data, now):
 def flow_loop():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 << 20)
-    sock.bind(("0.0.0.0", LISTEN_PORT))
+    sock.bind((BIND_ADDRESS, LISTEN_PORT))
     log(f"listening for NetFlow/IPFIX on udp/{LISTEN_PORT}")
     while True:
         data, _ = sock.recvfrom(65535)
@@ -611,7 +615,7 @@ def main():
     threading.Thread(target=asn_loop, daemon=True, name="asn").start()
     threading.Thread(target=flow_loop, daemon=True, name="flows").start()
     log(f"metrics on :{METRICS_PORT}/metrics, LAN nets {', '.join(map(str, LAN_NETS))}")
-    ThreadingHTTPServer(("0.0.0.0", METRICS_PORT), Handler).serve_forever()
+    ThreadingHTTPServer((BIND_ADDRESS, METRICS_PORT), Handler).serve_forever()
 
 
 if __name__ == "__main__":

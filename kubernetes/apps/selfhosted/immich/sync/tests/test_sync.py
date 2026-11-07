@@ -394,6 +394,18 @@ class SyncTests(unittest.TestCase):
 
 
 class HttpTests(unittest.TestCase):
+    def test_redaction_matches_complete_google_hostnames(self):
+        for host in ("googleusercontent.com", "lh3.googleusercontent.com", "LH3.GOOGLEUSERCONTENT.COM"):
+            with self.subTest(host=host):
+                self.assertEqual(sync._redact(f"https://{host}/SECRET?token=SECRET"),
+                                 f"https://{host.lower()}/(redacted)")
+        for host in ("evilgoogleusercontent.com", "googleusercontent.com.example.org", "example.org"):
+            with self.subTest(host=host):
+                self.assertEqual(sync._redact(f"https://{host}/public?url=googleusercontent.com"),
+                                 f"https://{host}/public")
+        self.assertEqual(sync._redact("https://user:SECRET@example.org:8443/api?token=SECRET"),
+                         "https://example.org:8443/api")
+
     def test_retry_after(self):
         self.assertEqual(sync._retry_after("7"), 7.0)
         self.assertIsNone(sync._retry_after("Wed, 21 Oct 2026 07:28:00 GMT"))

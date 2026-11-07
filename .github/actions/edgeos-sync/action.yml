@@ -2,9 +2,9 @@
 name: EdgeOS sync
 description: >-
   Plan or apply every device under infrastructure/edgeos on the
-  tnwks-ops-runner scale set, through the runner's wireproxy forwards. Secret
-  values are masked in the tool's output; the config itself is public in
-  config.sh.
+  tnwks-ops-runner scale set, through the runner's wireproxy forwards. The tool
+  reports change counts without configuration values; review config.sh for
+  the intended changes.
 inputs:
   mode:
     description: "plan or apply"

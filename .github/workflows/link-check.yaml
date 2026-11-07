@@ -6,13 +6,20 @@ on:
   schedule:
     - cron: "0 0 * * 0"
 
+permissions: {}
+
 jobs:
   link-check:
     name: Link Check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Link Checker
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
@@ -27,6 +34,11 @@ jobs:
           state: open
           labels: |
             broken-links
+
+      - name: Check the public issue body for private terms
+        env:
+          PRIVACY_TERMS: ${{ secrets.PRIVACY_TERMS }}
+        run: bin/privacy-check --text < ./lychee/out.md
 
       - name: Update Issue
         uses: peter-evans/create-issue-from-file@fca9117c27cdc29c6c4db3b86c48e4115a786710 # v6.0.0
