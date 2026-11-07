@@ -133,6 +133,25 @@ def changes(name: str, by: str) -> str:
     return f'max by (k8s_cluster, {by}) (changes({selector(name)}[$__range])) > 0'
 
 
+LONG_WINDOW_SECONDS = 28 * 86400
+
+
+def slo_indicators() -> list[tuple[str, str]]:
+    """(name, bool_gauge selector) for each Pyrra SLO, from the deployed definitions."""
+    docs = yaml.safe_load_all((ROOT / "kubernetes/apps/monitoring/pyrra/app/slos.yaml").read_text())
+    return [(doc["metadata"]["name"], doc["spec"]["indicator"]["bool_gauge"]["metric"])
+            for doc in docs if doc and doc.get("kind") == "ServiceLevelObjective"]
+
+
+def per_slo(template: str) -> str:
+    """One series per site and SLO: the template on its selector scoped to $cluster, labelled slo."""
+    parts = []
+    for name, metric_selector in slo_indicators():
+        scoped = metric_selector.replace("{", "{" + SCOPE + ",", 1)
+        parts.append(f'label_replace({template.format(sel=scoped)}, "slo", "{name}", "", "")')
+    return " or ".join(parts)
+
+
 def coverage() -> list[Panel]:
     expected = f'count(max by (k8s_cluster) ({selector("homelab_expected_site_info")}))'
     reporting = f'count(max by (k8s_cluster) ({selector("homelab:site_reporting")}) == 1) or vector(0)'
@@ -491,6 +510,14 @@ def catalogue() -> list[Board]:
                   "How much of the 14 d SLO window each site's Prometheus holds. Below 100%, every availability on this tab covers only that share of its window: incomplete, not wrong.", "stat"),
                 p("SLO availability", f'max by (k8s_cluster, slo) ({selector("pyrra_availability")})', "percentunit",
                   "Good probe intervals over all of them in the window, per SLO and site (Pyrra, from slos.yaml). Targets are provisional until a full window exists; the Pyrra UI has burn rates.", "table"),
+                # The same indicators over 28 days, at query time: through the Global
+                # datasource the archive (35 d) supplies what local retention lacks.
+                p("28-day availability", per_slo("avg by (k8s_cluster) (avg_over_time({sel}[28d]))"), "percentunit",
+                  "Each SLO's indicator averaged over 28 days at query time, against the same targets as the 14-day Pyrra objectives. With the Global datasource the archive supplies the older weeks; read it with 28-day window coverage.",
+                  "table"),
+                p("28-day window coverage", per_slo(f"clamp_max((time() - min by (k8s_cluster) (min_over_time(timestamp({{sel}})[28d:1h]))) / {LONG_WINDOW_SECONDS}, 1)"), "percentunit",
+                  "How much of the 28 days the chosen datasource holds for each indicator, from its earliest sample (hourly resolution). Below 100% the 28-day availability covers only that share; Local can't exceed 15 days.",
+                  "table"),
                 p("Error budget left", f'max by (k8s_cluster, slo) (1 - (1 - {selector("pyrra_availability")}) / (1 - {selector("pyrra_objective")}))', "percentunit",
                   "Share of the allowed failures not yet used in the window. Negative means the objective is missed. Read with SLO window coverage.", "table"),
             ],

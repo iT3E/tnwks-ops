@@ -407,6 +407,15 @@ Objectives tab, so an incomplete window reads as incomplete. Targets are
 provisional and burn-rate alerts are off until a full window gives a baseline.
 The Pyrra UI is `pyrra.<internal domain>`, on site 1's local Prometheus.
 
+The 28-day view needs no evaluator over the archive: the Objectives tab computes
+each SLO's indicator over 28 days at query time (`avg_over_time(...[28d])`, from
+the same `slos.yaml` definitions), next to its 28-day window coverage, the share
+of the window the chosen datasource holds from the indicator's earliest sample.
+Through the Global datasource the archive supplies the weeks local retention
+lacks; Local can't cover more than 15 days, and the coverage says so. It's a
+comparison, not an alerting objective: burn-rate alerts stay on the 14-day
+Pyrra rules once their windows are full.
+
 ### Recovery objectives per app
 
 Each app has a recovery point objective (RPO) and, if it's warm with PVCs, a
@@ -440,11 +449,10 @@ Access, recovery, review and drills are in
 1. The household Grafana and its aggregate-only backend: revoke the old kiosk
    operator access, test every datasource API, and define fresh domain evidence
    before any household status can be Healthy.
-2. 28-day objectives over the archive. A local 28-day recording on 15-day
-   retention is invalid, so it needs a history-aware evaluator such as Thanos
-   Ruler. Also owner-set per-app recovery objectives in place of the
-   provisional defaults, and Pyrra burn alerts once the 14-day windows are
-   covered.
+2. Owner-set per-app recovery objectives in place of the provisional
+   defaults, and Pyrra burn alerts once the 14-day windows are covered. 28-day
+   alerting would need a history-aware evaluator (Thanos Ruler); the 28-day
+   view doesn't.
 3. The distros' FRR view of BGP and an off-site client vantage.
 
 Unsupported evidence remains Unknown. Existing MS-01 manifests and AWS

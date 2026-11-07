@@ -1207,6 +1207,238 @@
         "kind": "Panel",
         "spec": {
           "id": 14,
+          "title": "28-day availability",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "label_replace(avg by (k8s_cluster) (avg_over_time(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"internet\"}[28d])), \"slo\", \"internet\", \"\", \"\") or label_replace(avg by (k8s_cluster) (avg_over_time(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"ingress\",name=\"hass\"}[28d])), \"slo\", \"home-assistant-path\", \"\", \"\") or label_replace(avg by (k8s_cluster) (avg_over_time(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"ingress\"}[28d])), \"slo\", \"shared-vip-names\", \"\", \"\") or label_replace(avg by (k8s_cluster) (avg_over_time(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"mqtt\"}[28d])), \"slo\", \"mqtt-broker\", \"\", \"\")",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Each SLO's indicator averaged over 28 days at query time, against the same targets as the 14-day Pyrra objectives. With the Global datasource the archive supplies the older weeks; read it with 28-day window coverage.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-14": {
+        "kind": "Panel",
+        "spec": {
+          "id": 15,
+          "title": "28-day window coverage",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "label_replace(clamp_max((time() - min by (k8s_cluster) (min_over_time(timestamp(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"internet\"})[28d:1h]))) / 2419200, 1), \"slo\", \"internet\", \"\", \"\") or label_replace(clamp_max((time() - min by (k8s_cluster) (min_over_time(timestamp(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"ingress\",name=\"hass\"})[28d:1h]))) / 2419200, 1), \"slo\", \"home-assistant-path\", \"\", \"\") or label_replace(clamp_max((time() - min by (k8s_cluster) (min_over_time(timestamp(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"ingress\"})[28d:1h]))) / 2419200, 1), \"slo\", \"shared-vip-names\", \"\", \"\") or label_replace(clamp_max((time() - min by (k8s_cluster) (min_over_time(timestamp(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"mqtt\"})[28d:1h]))) / 2419200, 1), \"slo\", \"mqtt-broker\", \"\", \"\")",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "How much of the 28 days the chosen datasource holds for each indicator, from its earliest sample (hourly resolution). Below 100% the 28-day availability covers only that share; Local can't exceed 15 days.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-15": {
+        "kind": "Panel",
+        "spec": {
+          "id": 16,
           "title": "Error budget left",
           "links": [],
           "data": {
@@ -1319,10 +1551,10 @@
           "description": "Share of the allowed failures not yet used in the window. Negative means the objective is missed. Read with SLO window coverage.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-14": {
+      "panel-16": {
         "kind": "Panel",
         "spec": {
-          "id": 15,
+          "id": 17,
           "title": "Archive state",
           "links": [],
           "data": {
@@ -1430,10 +1662,10 @@
           "description": "Local Garage on WSL-02 only. A loss of this endpoint makes archive history unavailable without invalidating retained local data.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-15": {
+      "panel-17": {
         "kind": "Panel",
         "spec": {
-          "id": 16,
+          "id": 18,
           "title": "Archive lag",
           "links": [],
           "data": {
@@ -1506,10 +1738,10 @@
           "description": "Age of the newest sample the archive holds for each site, from the Compactor's block index. 1-3 h is normal (Prometheus cuts 2 h blocks once its head spans 3 h); over 4 h alerts.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-16": {
+      "panel-18": {
         "kind": "Panel",
         "spec": {
-          "id": 17,
+          "id": 19,
           "title": "Archive history",
           "links": [],
           "data": {
@@ -1582,10 +1814,10 @@
           "description": "How far back the archive can answer for each site. Retention is 35 d; Pyrra's 28 d windows are incomplete until this passes 28 d.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-17": {
+      "panel-19": {
         "kind": "Panel",
         "spec": {
-          "id": 18,
+          "id": 20,
           "title": "Archive free space",
           "links": [],
           "data": {
@@ -1658,10 +1890,10 @@
           "description": "Garage's data volume on WSL-02, shared with that node. Under 10% alerts.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-18": {
+      "panel-20": {
         "kind": "Panel",
         "spec": {
-          "id": 19,
+          "id": 21,
           "title": "Time since last upload",
           "links": [],
           "data": {
@@ -1734,10 +1966,10 @@
           "description": "Since each site's sidecar last uploaded a block. Climbs to about 2 h between blocks and resets; Archive lag is the one to read.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-19": {
+      "panel-21": {
         "kind": "Panel",
         "spec": {
-          "id": 20,
+          "id": 22,
           "title": "Notification failures",
           "links": [],
           "data": {
@@ -1983,6 +2215,24 @@
                           "name": "panel-13"
                         }
                       }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-14"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-15"
+                        }
+                      }
                     }
                   ],
                   "maxColumnCount": 3,
@@ -2001,24 +2251,6 @@
                   "columnWidthMode": "narrow",
                   "rowHeightMode": "standard",
                   "items": [
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-14"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-15"
-                        }
-                      }
-                    },
                     {
                       "kind": "AutoGridLayoutItem",
                       "spec": {
@@ -2052,6 +2284,24 @@
                         "element": {
                           "kind": "ElementReference",
                           "name": "panel-19"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-20"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-21"
                         }
                       }
                     }
