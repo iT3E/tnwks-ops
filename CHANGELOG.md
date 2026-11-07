@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.36.1 - 2026-11-07
+
+### Fixed
+
+* The weekly standby restore can read site-overrides again. The kustomization's namespace had moved its flux-system Role into kopiur-system, so every run failed with a 403 before restoring anything.
+
 ## v2.36.0 - 2026-11-07
 
 ### Added
