@@ -1,4 +1,0 @@
----
-kind: Added
-body: Probe every shared-VIP name from both sites the way a client does (router DNS, verified TLS, ingress routing), record the certificate expiry and the serving site from a new X-Homelab-Site header, and show which site the router sends each shared VIP to.
-time: 2026-11-07T13:10:00Z

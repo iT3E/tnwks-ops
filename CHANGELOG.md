@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.16.0 - 2026-11-07
+
+### Added
+
+* Report the metrics archive's lag, history depth, size and free space per site from the Compactor's block index, and alert when it falls over 4 hours behind or runs low on space.
+* Probe every shared-VIP name from both sites the way a client does (router DNS, verified TLS, ingress routing), record the certificate expiry and the serving site from a new X-Homelab-Site header, and show which site the router sends each shared VIP to.
+* Scrape the Cilium mesh API and KVStoreMesh on both sites, add a mesh hop to the network path state, and report OCIRepository and HelmRepository readiness alongside the other Flux resources.
+* The site-lease fence attests each warm app it checked (lease, result, time), and a standby's fence prerequisite is met only by a fresh attestation from the other site, read over the mesh.
+* Give Grafana's Alertmanager datasource a fixed UID, add an Alertmanager tab to the Alerts board (alerts held, silences, configuration reload, notifications), and remove the Angular panel plugins Grafana 13 can't load from each site's volume.
+
 ## v2.15.0 - 2026-11-07
 
 ### Added

@@ -1,4 +1,0 @@
----
-kind: Added
-body: Give Grafana's Alertmanager datasource a fixed UID, add an Alertmanager tab to the Alerts board (alerts held, silences, configuration reload, notifications), and remove the Angular panel plugins Grafana 13 can't load from each site's volume.
-time: 2026-11-07T14:10:00Z

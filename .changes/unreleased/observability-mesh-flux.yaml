@@ -1,4 +1,0 @@
----
-kind: Added
-body: Scrape the Cilium mesh API and KVStoreMesh on both sites, add a mesh hop to the network path state, and report OCIRepository and HelmRepository readiness alongside the other Flux resources.
-time: 2026-11-07T13:30:00Z

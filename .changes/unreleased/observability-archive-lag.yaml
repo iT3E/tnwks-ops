@@ -1,4 +1,0 @@
----
-kind: Added
-body: Report the metrics archive's lag, history depth, size and free space per site from the Compactor's block index, and alert when it falls over 4 hours behind or runs low on space.
-time: 2026-11-07T12:45:00Z

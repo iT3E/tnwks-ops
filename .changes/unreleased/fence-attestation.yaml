@@ -1,4 +1,0 @@
----
-kind: Added
-body: The site-lease fence attests each warm app it checked (lease, result, time), and a standby's fence prerequisite is met only by a fresh attestation from the other site, read over the mesh.
-time: 2026-11-07T13:50:00Z
