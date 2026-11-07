@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import json
+import re
 import shutil
 import subprocess
 
@@ -59,6 +60,24 @@ PROBES = {
 }
 
 
+SITE_RECORDS = ROOT / "infrastructure/terraform/environments/prod/mikrotik/dns-sites.tf"
+
+
+def shared_vips():
+    """The shared ingress VIPs, each with the site the router prefers, and every
+    name on them, from the router's site records (dns-sites.tf)."""
+    text = SITE_RECORDS.read_text()
+    vips = {}
+    for local, cluster in (("vip_wsl", "homelab-wsl"), ("vip_wsl_02", "homelab-wsl-02")):
+        address = re.search(rf'^\s*{local}\s*=\s*"([0-9.]+)"', text, re.M)[1]
+        vips[local] = {"address": address, "preferred": cluster}
+    names = [{"name": host.split(".")[0], "host": host, "vip": vips[local]["address"]}
+             for host, local in re.findall(
+                 r'name\s*=\s*"([^"]+)"\s*\n\s*address\s*=\s*local\.(vip_wsl(?:_02)?)\b', text)]
+    assert {n["vip"] for n in names} == {v["address"] for v in vips.values()}, "a shared VIP has no names"
+    return list(vips.values()), sorted(names, key=lambda n: n["name"])
+
+
 def inventory():
     source = json.loads((ROOT / "bin/site-failover-apps.json").read_text())
     sites = [
@@ -88,7 +107,9 @@ def inventory():
         if name in PROBES:
             url, expect = PROBES[name]
             apps[-1]["probe"] = {"url": url, "expect": expect}
-    return {"version": 1, "sites": sites, "apps": apps, "databases": databases(sites)}
+    vips, ingress = shared_vips()
+    return {"version": 1, "sites": sites, "apps": apps, "databases": databases(sites),
+            "vips": vips, "ingress": ingress}
 
 
 if __name__ == "__main__":

@@ -48,6 +48,7 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-network / Paths / Site tunnel traffic | `mktxp_peer_rx_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / Paths / Router interface errors | `mktxp_interface_rx_error_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / BGP and mesh / Path by hop | `cilium_bgp_control_plane_session_state`<br>`homelab_expected_site_info`<br>`mktxp_bgp_established`<br>`mktxp_last_handshake`<br>`mktxp_system_uptime` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / BGP and mesh / Shared VIP routes | `cilium_bgp_control_plane_session_state`<br>`homelab_expected_site_info`<br>`mktxp_bgp_established`<br>`mktxp_last_handshake`<br>`mktxp_system_uptime` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / BGP and mesh / Routes received per site | `mktxp_bgp_prefix_count` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / BGP and mesh / Cilium drops | `cilium_drop_count_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / BGP and mesh / Mesh connectivity | `cilium_clustermesh_remote_cluster_readiness_status` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
@@ -73,6 +74,9 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-apps / User paths / HTTP requests | `nginx_ingress_controller_requests` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-apps / User paths / HTTP 5xx fraction | `nginx_ingress_controller_requests` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-apps / User paths / HTTP p95 duration | `nginx_ingress_controller_request_duration_seconds_bucket` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
+| tnwks-apps / Shared-VIP names / Name state by site | `homelab_expected_ingress_info`<br>`probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
+| tnwks-apps / Shared-VIP names / Served by | `homelab_ingress_served_by_info` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
+| tnwks-apps / Shared-VIP names / Name certificate remaining | `homelab_ingress_cert_expiry_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-apps / Dependencies / Certificate validity remaining | `certmanager_certificate_expiration_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-apps / Dependencies / Tunnel connections | `cloudflared_tunnel_ha_connections` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-home / Cameras / Recording input | `frigate_camera_fps` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/home-assistant.md) |

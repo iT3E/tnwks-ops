@@ -50,6 +50,11 @@ def records():
             f' or (({ready} < {desired}) * 0 + 3)'
             ' or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))'),
         **network_records(),
+        # Each site's collector reaches the shared-VIP names the way a client does
+        # (router DNS, verified TLS, the ingress routing the host). A pod reaches
+        # its own site's ingress for either VIP, so this is per site, by name.
+        "homelab:ingress_state": '(3 - 2 * min by (k8s_cluster, name) (probe_success{observability_target="ingress"} and (time() - timestamp(probe_success{observability_target="ingress"})) < 180)) or on (k8s_cluster, name) (0 * max by (k8s_cluster, name) (homelab_expected_ingress_info))',
+        "homelab:ingress_cert_remaining_seconds": 'min by (k8s_cluster, name) (homelab_ingress_cert_expiry_timestamp_seconds) - time()',
         # Content probe from the site that runs the app; Standby (4) where it's
         # deliberately at zero; Unknown where neither is observed.
         "homelab:service_state": '(3 - 2 * min by (k8s_cluster, app) (probe_success{observability_target="service"} and (time() - timestamp(probe_success{observability_target="service"})) < 180)) or on (k8s_cluster, app) (homelab:workload_state == 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))',
@@ -88,11 +93,24 @@ def network_records():
     expected = "max by (k8s_cluster) (homelab_expected_site_info)"
     known = " or ".join(hop(n, e) for n, e in (("tunnel", tunnel), ("router-bgp", router_bgp), ("node-bgp", node_bgp)))
     unknown = " or ".join(hop(n, f"0 * {expected}") for n in ("tunnel", "router-bgp", "node-bgp"))
+    # Which site the router sends each shared VIP to: its preferred site while
+    # that site's session is up, else the other one while its session is up.
+    # Inferred from live sessions and the declared local preference (100/50),
+    # not read from the router's route table. 1 routed, 0 not, absent Unknown.
+    session = 'min(homelab:network_path_state{{hop="router-bgp",k8s_cluster="{}"}} > 0)'
+    routes = []
+    for vip in inventory()["vips"]:
+        first = vip["preferred"]
+        other = next(s["cluster"] for s in sites if s["cluster"] != first)
+        for site, expr in ((first, f"{session.format(first)} == bool 1"),
+                           (other, f"({session.format(other)} == bool 1) * ({session.format(first)} != bool 1)")):
+            routes.append(f'label_replace(label_replace({expr}, "k8s_cluster", "{site}", "", ""), "vip", "{vip["address"]}", "", "")')
     prefixes = " or ".join(per_site(
         f'sum(mktxp_bgp_prefix_count{{name=~"{s["router_peer"]}(-[0-9]+)?"}})', s) for s in sites)
     return {
         "homelab:network_path_state": f"({known}) or on (k8s_cluster, hop) ({unknown})",
         "homelab:router_bgp_prefixes": prefixes,
+        "homelab:shared_vip_route": " or ".join(routes),
     }
 
 
@@ -119,6 +137,16 @@ def rule_resource():
          "annotations": {"summary": "The WSL-02 metrics archive is unavailable",
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster }}',
                          "description": "Local metrics and alerts remain available. Restore archive uploads before retained local blocks expire."}},
+        {"alert": "ObservabilityIngressNameFailing", "expr": 'homelab:ingress_state == 3',
+         "for": "15m", "labels": {"severity": "warning"},
+         "annotations": {"summary": "A shared-VIP name fails from {{ $labels.k8s_cluster }}: {{ $labels.name }}",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": "That site's collector couldn't use the name as a client would: the router's DNS answer, the certificate, or the site's ingress routing the host. homelab_ingress_dns_match and homelab_ingress_http_status say which."}},
+        {"alert": "ObservabilityIngressCertificateExpiring", "expr": 'homelab:ingress_cert_remaining_seconds < 14 * 86400',
+         "for": "1h", "labels": {"severity": "warning"},
+         "annotations": {"summary": "The certificate for {{ $labels.name }} on {{ $labels.k8s_cluster }} expires within 14 days",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": "cert-manager renews at 30 days left. Check that site's Certificate and its ACME challenge."}},
         {"alert": "ObservabilityArchiveBehind", "expr": 'homelab:archive_lag_seconds > 14400',
          "for": "30m", "labels": {"severity": "warning"},
          "annotations": {"summary": "The metrics archive's newest data for a site is over 4 hours old",
@@ -256,6 +284,32 @@ def fixtures():
                  {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="router-bgp"}', "value": 3},
                  {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="node-bgp"}', "value": 2},
                  {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="node-bgp"}', "value": 0},
+             ]},
+         ]},
+        {"name": "shared VIPs follow the preferred site's session, else the other's", "interval": "1m",
+         "input_series": [
+             {"series": 'mktxp_system_uptime{k8s_cluster="homelab-wsl"}', "values": "100+60x10"},
+             {"series": 'mktxp_bgp_established{name="wsl-site2-1"}', "values": "1+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:shared_vip_route", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl",vip="10.10.95.10"}', "value": 0},
+                 {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl-02",vip="10.10.95.10"}', "value": 1},
+                 {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl",vip="10.10.95.200"}', "value": 0},
+                 {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl-02",vip="10.10.95.200"}', "value": 1},
+             ]},
+         ]},
+        {"name": "ingress names: passing, failing, unobserved", "interval": "1m",
+         "input_series": [
+             *[{"series": f'homelab_expected_ingress_info{{k8s_cluster="{site}",name="{name}"}}', "values": "1+0x10"}
+               for site in ("one", "two") for name in ("a", "b")],
+             {"series": 'probe_success{k8s_cluster="one",name="a",observability_target="ingress"}', "values": "1+0x10"},
+             {"series": 'probe_success{k8s_cluster="one",name="b",observability_target="ingress"}', "values": "0+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:ingress_state", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:ingress_state{k8s_cluster="one",name="a"}', "value": 1},
+                 {"labels": 'homelab:ingress_state{k8s_cluster="one",name="b"}', "value": 3},
+                 {"labels": 'homelab:ingress_state{k8s_cluster="two",name="a"}', "value": 0},
+                 {"labels": 'homelab:ingress_state{k8s_cluster="two",name="b"}', "value": 0},
              ]},
          ]},
         {"name": "an unobserved router leaves the router hops Unknown", "interval": "1m",

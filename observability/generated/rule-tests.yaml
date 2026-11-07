@@ -220,6 +220,52 @@ tests:
       value: 2
     - labels: homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="node-bgp"}
       value: 0
+- name: shared VIPs follow the preferred site's session, else the other's
+  interval: 1m
+  input_series:
+  - series: mktxp_system_uptime{k8s_cluster="homelab-wsl"}
+    values: 100+60x10
+  - series: mktxp_bgp_established{name="wsl-site2-1"}
+    values: 1+0x10
+  promql_expr_test:
+  - expr: homelab:shared_vip_route
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:shared_vip_route{k8s_cluster="homelab-wsl",vip="10.10.95.10"}
+      value: 0
+    - labels: homelab:shared_vip_route{k8s_cluster="homelab-wsl-02",vip="10.10.95.10"}
+      value: 1
+    - labels: homelab:shared_vip_route{k8s_cluster="homelab-wsl",vip="10.10.95.200"}
+      value: 0
+    - labels: homelab:shared_vip_route{k8s_cluster="homelab-wsl-02",vip="10.10.95.200"}
+      value: 1
+- name: 'ingress names: passing, failing, unobserved'
+  interval: 1m
+  input_series:
+  - series: homelab_expected_ingress_info{k8s_cluster="one",name="a"}
+    values: 1+0x10
+  - series: homelab_expected_ingress_info{k8s_cluster="one",name="b"}
+    values: 1+0x10
+  - series: homelab_expected_ingress_info{k8s_cluster="two",name="a"}
+    values: 1+0x10
+  - series: homelab_expected_ingress_info{k8s_cluster="two",name="b"}
+    values: 1+0x10
+  - series: probe_success{k8s_cluster="one",name="a",observability_target="ingress"}
+    values: 1+0x10
+  - series: probe_success{k8s_cluster="one",name="b",observability_target="ingress"}
+    values: 0+0x10
+  promql_expr_test:
+  - expr: homelab:ingress_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:ingress_state{k8s_cluster="one",name="a"}
+      value: 1
+    - labels: homelab:ingress_state{k8s_cluster="one",name="b"}
+      value: 3
+    - labels: homelab:ingress_state{k8s_cluster="two",name="a"}
+      value: 0
+    - labels: homelab:ingress_state{k8s_cluster="two",name="b"}
+      value: 0
 - name: an unobserved router leaves the router hops Unknown
   interval: 1m
   input_series:

@@ -461,5 +461,82 @@
       "cluster": "homelab-wsl-02",
       "source": "transcriber-db"
     }
+  ],
+  "vips": [
+    {
+      "address": "10.10.95.10",
+      "preferred": "homelab-wsl"
+    },
+    {
+      "address": "10.10.95.200",
+      "preferred": "homelab-wsl-02"
+    }
+  ],
+  "ingress": [
+    {
+      "name": "changedetection",
+      "host": "changedetection.internal.tnwks.us",
+      "vip": "10.10.95.200"
+    },
+    {
+      "name": "firefly",
+      "host": "firefly.internal.tnwks.us",
+      "vip": "10.10.95.10"
+    },
+    {
+      "name": "grafana",
+      "host": "grafana.internal.tnwks.us",
+      "vip": "10.10.95.10"
+    },
+    {
+      "name": "grafana-embed",
+      "host": "grafana-embed.internal.tnwks.us",
+      "vip": "10.10.95.10"
+    },
+    {
+      "name": "hass",
+      "host": "hass.internal.tnwks.us",
+      "vip": "10.10.95.10"
+    },
+    {
+      "name": "immich",
+      "host": "immich.internal.tnwks.us",
+      "vip": "10.10.95.200"
+    },
+    {
+      "name": "immichframe",
+      "host": "immichframe.internal.tnwks.us",
+      "vip": "10.10.95.200"
+    },
+    {
+      "name": "jellyfin",
+      "host": "jellyfin.internal.tnwks.us",
+      "vip": "10.10.95.200"
+    },
+    {
+      "name": "kitchen-screensaver",
+      "host": "kitchen-screensaver.internal.tnwks.us",
+      "vip": "10.10.95.200"
+    },
+    {
+      "name": "playwright-mcp",
+      "host": "playwright-mcp.internal.tnwks.us",
+      "vip": "10.10.95.200"
+    },
+    {
+      "name": "qbittorrent",
+      "host": "qbittorrent.internal.tnwks.us",
+      "vip": "10.10.95.200"
+    },
+    {
+      "name": "transcriber",
+      "host": "transcriber.internal.tnwks.us",
+      "vip": "10.10.95.200"
+    },
+    {
+      "name": "unifi",
+      "host": "unifi.internal.tnwks.us",
+      "vip": "10.10.95.200"
+    }
   ]
 }

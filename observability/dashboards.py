@@ -31,6 +31,9 @@ IDENTITY = {
     "homelab:workload_state": ("app",),
     "homelab:recovery_state": ("app",),
     "homelab:network_path_state": ("hop",),
+    "homelab:ingress_state": ("name",),
+    "homelab:ingress_cert_remaining_seconds": ("name",),
+    "homelab:shared_vip_route": ("vip",),
     "homelab:database_backup_state": ("namespace", "db_cluster"),
     "homelab_expected_database_info": ("namespace", "db_cluster", "app"),
     "homelab_expected_workload_info": ("app", "tier", "kind", "workload"),
@@ -219,6 +222,8 @@ def catalogue() -> list[Board]:
             "BGP and mesh": [
                 p("Path by hop", metric("homelab:network_path_state"), "state",
                   "Per site: the WireGuard tunnel to the router (handshake within 180 s), the router's BGP session with the distro's FRR, and the Cilium agents' sessions with the distro. Unknown when the router or the agents aren't observed.", "table"),
+                p("Shared VIP routes", metric("homelab:shared_vip_route"), "bool",
+                  "Which site the router sends each shared VIP to (1): the preferred site while its BGP session is up, else the other. Inferred from the router's live sessions and the declared local preference, not read from its route table. A client behind a site (its pods, the WSL host) reaches that site's own ingress either way.", "table"),
                 p("Routes received per site", 'max by (k8s_cluster) (homelab:router_bgp_prefixes{k8s_cluster=~"$cluster"})', "short",
                   "Prefixes the router accepted from each site's FRR (its node, pod and shared-VIP routes). Zero with an established session means the site announces nothing.", "stat"),
                 p("Cilium drops", f'sum by (k8s_cluster, reason) (rate({metric("cilium_drop_count_total")}[5m]))', "pps",
@@ -295,6 +300,14 @@ def catalogue() -> list[Board]:
                   "Weighted errors/requests. No traffic is not a perfect availability measurement; independent synthetic evidence remains necessary."),
                 p("HTTP p95 duration", f'histogram_quantile(0.95, sum by (k8s_cluster, ingress, le) (rate({metric("nginx_ingress_controller_request_duration_seconds_bucket")}[$__rate_interval])))', "s",
                   "Buckets combined before calculating the percentile. Never average per-pod percentiles."),
+            ],
+            "Shared-VIP names": [
+                p("Name state by site", metric("homelab:ingress_state"), "state",
+                  "Each site's collector uses every shared-VIP name as a client would: the router's DNS answer must be the name's VIP, TLS must verify, and that site's ingress must route the host (any answer but a 404 or 5xx). A pod reaches its own site's ingress for either VIP, so this is each site's readiness to serve the name.", "table"),
+                p("Served by", f'max by (k8s_cluster, name, served_cluster) ({selector("homelab_ingress_served_by_info")})', "short",
+                  "The site each ingress said served the request (its X-Homelab-Site header). It matches the observer's site, because each site's pods reach their own ingress.", "table"),
+                p("Name certificate remaining", metric("homelab:ingress_cert_remaining_seconds"), "s",
+                  "Certificate the client saw for each name, per site. Under 14 days alerts; cert-manager renews at 30.", "table"),
             ],
             "Dependencies": [
                 p("Certificate validity remaining", f'max by (k8s_cluster, name) ({metric("certmanager_certificate_expiration_timestamp_seconds")}) - time()', "s",

@@ -241,6 +241,26 @@ no failures), the Compactor synced them with nothing to compact and not halted,
 and a range query restricted to the Store (`storeMatch[]`) returned site 2's
 08:00-09:00Z data from the archive alone. Garage had 964 of 1081 GB free.
 
+## Ingress and shared-VIP evidence
+
+Each site's collector uses every name on the shared VIPs (`dns-sites.tf`) as a
+client would: the router's DNS answer must be that name's VIP (A only; the
+router answers AAAA with NXDOMAIN, which musl treats as no such name), TLS must
+verify against the system CAs, and a `GET /` must be routed: any answer but the
+default backend's 404 or a 5xx (an app's own 400, or a sign-in's 302 or 401,
+still proves the path). `homelab:ingress_state` is per site and name, with the DNS
+match, HTTP status and certificate expiry beside it. Each site's internal
+ingress adds an `X-Homelab-Site` header naming itself, read into
+`homelab_ingress_served_by_info`.
+
+A pod, like the WSL host, reaches its own site's ingress for either VIP (each
+distro prefers its own cluster's announcement), so these probes show each
+site's readiness to serve every name, not the LAN client's route. That route is
+`homelab:shared_vip_route`: the preferred site while its router session is up,
+else the other. It's inferred from the router's live BGP sessions and the
+declared local preference, not read from the router's route table. The WSL-01
+host reaching site 1 on `10.10.95.200` is this design, not a misroute.
+
 ## Following rollout work
 
 1. Validate backlog behavior and certificate renewal for the global query path.

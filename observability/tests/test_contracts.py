@@ -269,6 +269,63 @@ def test_archive_index_summarizes_blocks_per_source_site(tmp_path):
     assert collector.archive_index((tmp_path / "missing.json").as_uri()) is None
 
 
+def test_ingress_probe_checks_dns_tls_routing_and_reads_the_serving_site(tmp_path):
+    import shutil
+    import ssl
+    import subprocess
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    import collector
+
+    if not shutil.which("openssl"):
+        pytest.skip("openssl not installed")
+    key, cert = tmp_path / "key.pem", tmp_path / "cert.pem"
+    subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2",
+                    "-subj", "/CN=app.test", "-addext", "subjectAltName=DNS:app.test",
+                    "-keyout", key, "-out", cert], check=True, capture_output=True)
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            known = self.headers["Host"] == "app.test"
+            self.send_response(302 if known else 404)
+            self.send_header(collector.SITE_HEADER, "site-b")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, *_):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    server_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    server_context.load_cert_chain(cert, key)
+    server.socket = server_context.wrap_socket(server.socket, server_side=True)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    client = ssl.create_default_context(cafile=str(cert))
+    port = server.server_address[1]
+
+    def probe(host="app.test", answer=("127.0.0.1",), vip="127.0.0.1", context=client):
+        return collector.ingress_probe(host, vip, port=port, context=context, resolve=lambda _: answer)
+
+    result = probe()
+    assert (result["ok"], result["dns"], result["status"], result["served_by"]) == (True, True, 302, "site-b")
+    assert result["expiry"] > 0
+    assert probe(vip="10.0.0.1")["ok"] is False  # the router answered another address
+    assert probe(context=ssl.create_default_context())["ok"] is False  # untrusted certificate
+    status = {"code": 404}
+
+    def default_backend(self):
+        self.send_response(status["code"])
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+    Handler.do_GET = default_backend
+    assert probe()["ok"] is False
+    status["code"] = 503
+    assert probe()["ok"] is False
+    status["code"] = 400  # the app's own answer still proves the route
+    assert probe()["ok"] is True
+    server.shutdown()
+
+
 def test_failed_collection_retains_old_success_time_without_cached_healthy_samples(small_inventory):
     api = FakeApi()
     now = [1000]

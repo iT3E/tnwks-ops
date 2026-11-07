@@ -338,6 +338,14 @@
   {
     "dashboard": "tnwks-network",
     "tab": "BGP and mesh",
+    "title": "Shared VIP routes",
+    "expr": "max by (k8s_cluster, vip) (homelab:shared_vip_route{k8s_cluster=~\"$cluster\"})",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
     "title": "Routes received per site",
     "expr": "max by (k8s_cluster) (homelab:router_bgp_prefixes{k8s_cluster=~\"$cluster\"})",
     "unit": "short",
@@ -532,6 +540,30 @@
     "tab": "User paths",
     "title": "HTTP p95 duration",
     "expr": "histogram_quantile(0.95, sum by (k8s_cluster, ingress, le) (rate(nginx_ingress_controller_request_duration_seconds_bucket{k8s_cluster=~\"$cluster\"}[$__rate_interval])))",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Shared-VIP names",
+    "title": "Name state by site",
+    "expr": "max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Shared-VIP names",
+    "title": "Served by",
+    "expr": "max by (k8s_cluster, name, served_cluster) (homelab_ingress_served_by_info{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Shared-VIP names",
+    "title": "Name certificate remaining",
+    "expr": "max by (k8s_cluster, name) (homelab:ingress_cert_remaining_seconds{k8s_cluster=~\"$cluster\"})",
     "unit": "s",
     "kiosk": false
   },

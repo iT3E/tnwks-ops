@@ -1172,6 +1172,51 @@
   {
     "dashboard": "tnwks-network",
     "tab": "BGP and mesh",
+    "panel": "Shared VIP routes",
+    "query": "max by (k8s_cluster, vip) (homelab:shared_vip_route{k8s_cluster=~\"$cluster\"})",
+    "unit": "bool",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:shared_vip_route"
+    ],
+    "sources": [
+      {
+        "metric": "cilium_bgp_control_plane_session_state",
+        "producer": "Cilium agent metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_expected_site_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_bgp_established",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_last_handshake",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_system_uptime",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
     "panel": "Routes received per site",
     "query": "max by (k8s_cluster) (homelab:router_bgp_prefixes{k8s_cluster=~\"$cluster\"})",
     "unit": "short",
@@ -1814,6 +1859,86 @@
       {
         "metric": "nginx_ingress_controller_request_duration_seconds_bucket",
         "producer": "ingress-nginx controller",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/access.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Shared-VIP names",
+    "panel": "Name state by site",
+    "query": "max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ingress_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_expected_ingress_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "probe_success",
+        "producer": "evidence collector probes",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/access.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Shared-VIP names",
+    "panel": "Served by",
+    "query": "max by (k8s_cluster, name, served_cluster) (homelab_ingress_served_by_info{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_ingress_served_by_info"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_ingress_served_by_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/access.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Shared-VIP names",
+    "panel": "Name certificate remaining",
+    "query": "max by (k8s_cluster, name) (homelab:ingress_cert_remaining_seconds{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:ingress_cert_remaining_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_ingress_cert_expiry_timestamp_seconds",
+        "producer": "read-only evidence collector",
         "availability": "configured"
       }
     ],
