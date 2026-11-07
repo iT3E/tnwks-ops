@@ -57,7 +57,7 @@ One provider owns each UID:
 | Provider | Boards | Retire one by |
 | --- | --- | --- |
 | sidecar (`grafana_dashboard` ConfigMaps) | generated `tnwks-*` boards, chart mixins | moving it to a mounted provider, then removing its file |
-| `unpoller`, `nginx`, `alertmanager` (mounted) | pinned, licensed references (`upstream/catalogue.json`) | removing its catalogue entry |
+| `unpoller`, `nginx`, `alertmanager` (mounted) | pinned references (`upstream/catalogue.json`) | removing its catalogue entry |
 | `legacy`, `windows` (mounted) | kept hand-made boards in `grafana/app/dashboard/` | removing its file |
 
 The sidecar writes into an emptyDir after Grafana starts. With deletion on,
@@ -162,10 +162,10 @@ The maintained Grafana 14.4 chart is separately rendered and checksum-verified.
 The renderer rejects unauthenticated requests, and a real Grafana 13 callback
 produces a PNG with its shared token. Rendering is capped at one concurrent
 request; its 768Mi limit is peak headroom, not idle consumption. The reference
-boards are provisioned from git rather than downloaded during pod startup, and
-only under a license their publisher states (`grafana/upstream/README.md`).
-Removing the `network` and `plausible` providers on 2026-11-07 retired the
-unlicensed MikroTik and Plausible boards; their panels are generated now.
+boards are provisioned from git rather than downloaded during pod startup
+(`grafana/upstream/README.md`). Removing the `network` and `plausible` providers
+on 2026-11-07 retired the MikroTik and Plausible boards; their panels are
+generated now.
 
 ## Site 1 Prometheus volume
 

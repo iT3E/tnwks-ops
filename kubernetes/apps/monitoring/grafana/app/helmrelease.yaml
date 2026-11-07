@@ -252,8 +252,8 @@ spec:
           - name: Alertmanager
             orgId: 1
 
-    # Pinned, licensed references; no startup downloads. Exact revisions,
-    # licenses and source hashes are in ../upstream/catalogue.json.
+    # Pinned references; no startup downloads. Exact revisions and source
+    # hashes are in ../upstream/catalogue.json.
     dashboardsConfigMaps:
       unpoller: grafana-upstream-unpoller
       nginx: grafana-upstream-nginx
