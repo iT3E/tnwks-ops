@@ -1,0 +1,56 @@
+{
+  "watches": [
+    {
+      "id": "unifi-mongodb",
+      "title": "Recheck UniFi MongoDB compatibility",
+      "action": "Check the deployed UniFi version against the documented MongoDB support range. If the pending release is supported, approve its dashboard entry, validate the upgrade and backup path, and retain critical-upgrade approval for a database major.",
+      "review_interval_days": 90,
+      "sources": [
+        {
+          "name": "UniFi documented MongoDB support",
+          "kind": "unifi-support",
+          "url": "https://raw.githubusercontent.com/linuxserver/docker-unifi-network-application/master/README.md",
+          "sha256": "d840f17e401530ec432633c47c68599a1bafeeb614618e0977d1caff5d87b510"
+        },
+        {
+          "name": "Deployed UniFi image",
+          "kind": "unifi-image",
+          "path": "kubernetes/apps/networking/unifi/app/helmrelease.yaml",
+          "sha256": "d82bdc4f024be6282c0e7652ff1e9eedbf1cc19c85ab048cbbef4072c1f5fde9"
+        }
+      ],
+      "last_reviewed": "2026-11-07",
+      "review_after": "2027-02-05"
+    },
+    {
+      "id": "coral-numpy",
+      "title": "Recheck Windows Coral runtime and NumPy compatibility",
+      "action": "Check for a Windows Edge TPU runtime that supports a maintained Python version and the NumPy 2 ABI. Test actual delegate loading and inference before changing requirements.in and its generated lock together. Python 3.9 is already end-of-life; review this existing security debt even if upstream is unchanged. A different detector backend remains an alternative.",
+      "review_interval_days": 30,
+      "sources": [
+        {
+          "name": "Official Coral Python runtime releases and Windows assets",
+          "kind": "coral-releases",
+          "url": "https://api.github.com/repos/google-coral/pycoral/releases?per_page=100",
+          "sha256": "5e8598c7bf405987483b7a8c500ea6577daf80c3361ac8ec6de39429264725f1"
+        },
+        {
+          "name": "Official Edge TPU runtime releases and assets",
+          "kind": "coral-releases",
+          "url": "https://api.github.com/repos/google-coral/libedgetpu/releases?per_page=100",
+          "sha256": "468983317628f89738628bfe4f395f78d063724450e90c20ecb58c375bda3cc5"
+        },
+        {
+          "name": "Configured Coral backend, Python, and TFLite runtime",
+          "kind": "coral-runtime",
+          "defaults": "infrastructure/ansible/roles/windows_coral_detector/defaults/main.yml",
+          "requirements": "infrastructure/ansible/roles/windows_coral_detector/files/coral-detector/requirements.in",
+          "inventory": "infrastructure/ansible/inventory/host_vars",
+          "sha256": "4d35f894be957575ed761e828011357ae6f4641d4037138129bac7529c37e32a"
+        }
+      ],
+      "last_reviewed": "2026-11-07",
+      "review_after": "2026-12-07"
+    }
+  ]
+}
