@@ -62,6 +62,30 @@ WSL-02, which has that cluster's kubeconfig
    ([`observability-panel-catalogue.md`](observability-panel-catalogue.md))
    against the boards. Remove panels nobody used.
 
+6. Time every panel query (performance), and check contrast and what each
+   panel can reveal (accessibility, privacy), as in the record below.
+
+**Review record, 2026-11-07:**
+
+- **Performance.** Every one of the 129 operator panel queries, as Grafana
+  issues it for the default 6-hour view (all sites, Global datasource), returns
+  from site 1's Thanos Query in under 0.5 s; the slowest is HTTP p95 duration
+  (0.42 s, 32 series). Summed per board, the heaviest is Observability at 1.7 s,
+  and Grafana runs a board's queries in parallel. Unready workloads plotted 334
+  series over 6 h for 48 workloads, because each collector restart starts new
+  series; it now sums per app and site.
+- **Accessibility.** State and coverage values always show a word (Healthy,
+  Failed, Unknown…), so no state depends on color. As colored text they failed
+  WCAG AA on the light theme (Degraded 2.0:1, the others 3.0-4.3:1) and Failed
+  was 4.0:1 on the dark one. State cells and stats now use a colored background,
+  with a darker palette: Grafana writes white text on it at 5.1-5.5:1, and black
+  on Degraded's amber at 10.2:1. Each cell keeps at least 3:1 against the dark
+  page.
+- **Privacy.** Operator panels aggregate cameras, Home Assistant entities and
+  MQTT clients to counts, and the Wi-Fi panels name only access points. The
+  pinned UniFi reference boards list client devices: acceptable on the signed-in
+  operator Grafana, never on a household board.
+
 **After an incident:**
 
 1. Did an alert fire, and did its link open the right board, scoped to the

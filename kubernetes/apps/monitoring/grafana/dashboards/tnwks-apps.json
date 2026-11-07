@@ -141,11 +141,11 @@
                       "options": {
                         "0": {
                           "text": "Unknown",
-                          "color": "#8e8e8e"
+                          "color": "#6b6b6b"
                         },
                         "1": {
                           "text": "Healthy",
-                          "color": "#299c46"
+                          "color": "#1a7f37"
                         },
                         "2": {
                           "text": "Degraded",
@@ -153,19 +153,19 @@
                         },
                         "3": {
                           "text": "Failed",
-                          "color": "#d44a3a"
+                          "color": "#c4302b"
                         },
                         "4": {
                           "text": "Standby",
-                          "color": "#5794f2"
+                          "color": "#2f6bd0"
                         },
                         "5": {
                           "text": "Not applicable",
-                          "color": "#8e8e8e"
+                          "color": "#6b6b6b"
                         },
                         "6": {
                           "text": "Maintenance",
-                          "color": "#b877d9"
+                          "color": "#8a4fb5"
                         }
                       }
                     }
@@ -184,7 +184,23 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "State"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background",
+                          "mode": "basic"
+                        }
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -532,11 +548,11 @@
                       "options": {
                         "0": {
                           "text": "Unknown",
-                          "color": "#8e8e8e"
+                          "color": "#6b6b6b"
                         },
                         "1": {
                           "text": "Healthy",
-                          "color": "#299c46"
+                          "color": "#1a7f37"
                         },
                         "2": {
                           "text": "Degraded",
@@ -544,19 +560,19 @@
                         },
                         "3": {
                           "text": "Failed",
-                          "color": "#d44a3a"
+                          "color": "#c4302b"
                         },
                         "4": {
                           "text": "Standby",
-                          "color": "#5794f2"
+                          "color": "#2f6bd0"
                         },
                         "5": {
                           "text": "Not applicable",
-                          "color": "#8e8e8e"
+                          "color": "#6b6b6b"
                         },
                         "6": {
                           "text": "Maintenance",
-                          "color": "#b877d9"
+                          "color": "#8a4fb5"
                         }
                       }
                     }
@@ -575,7 +591,23 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "State"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background",
+                          "mode": "basic"
+                        }
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },

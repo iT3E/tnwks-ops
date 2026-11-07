@@ -603,7 +603,7 @@
     "dashboard": "tnwks-kubernetes",
     "tab": "Workloads",
     "title": "Unready workloads",
-    "expr": "homelab_workload_desired_replicas{k8s_cluster=~\"$cluster\"} - homelab_workload_ready_replicas{k8s_cluster=~\"$cluster\"}",
+    "expr": "sum by (k8s_cluster, app) (max by (k8s_cluster, app, kind, workload) (homelab_workload_desired_replicas{k8s_cluster=~\"$cluster\"})) - sum by (k8s_cluster, app) (max by (k8s_cluster, app, kind, workload) (homelab_workload_ready_replicas{k8s_cluster=~\"$cluster\"}))",
     "unit": "short",
     "kiosk": false
   },

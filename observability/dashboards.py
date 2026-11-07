@@ -64,13 +64,13 @@ def alerts(state: str) -> str:
     return ('label_replace(max by (cluster, alertname, severity) '
             f'({selector}), "k8s_cluster", "$1", "cluster", "(.+)")')
 STATE = {
-    "0": model.ValueMappingResult(text="Unknown", color="#8e8e8e"),
-    "1": model.ValueMappingResult(text="Healthy", color="#299c46"),
+    "0": model.ValueMappingResult(text="Unknown", color="#6b6b6b"),
+    "1": model.ValueMappingResult(text="Healthy", color="#1a7f37"),
     "2": model.ValueMappingResult(text="Degraded", color="#e5ac0e"),
-    "3": model.ValueMappingResult(text="Failed", color="#d44a3a"),
-    "4": model.ValueMappingResult(text="Standby", color="#5794f2"),
-    "5": model.ValueMappingResult(text="Not applicable", color="#8e8e8e"),
-    "6": model.ValueMappingResult(text="Maintenance", color="#b877d9"),
+    "3": model.ValueMappingResult(text="Failed", color="#c4302b"),
+    "4": model.ValueMappingResult(text="Standby", color="#2f6bd0"),
+    "5": model.ValueMappingResult(text="Not applicable", color="#6b6b6b"),
+    "6": model.ValueMappingResult(text="Maintenance", color="#8a4fb5"),
 }
 
 
@@ -352,7 +352,9 @@ def catalogue() -> list[Board]:
                   "Controller process metrics supplement the CR Ready state; controller PodMonitor access needs explicit network-policy integration."),
             ],
             "Workloads": [
-                p("Unready workloads", f'{metric("homelab_workload_desired_replicas")} - {metric("homelab_workload_ready_replicas")}', "short",
+                p("Unready workloads", " - ".join(
+                    f'sum by (k8s_cluster, app) (max by (k8s_cluster, app, kind, workload) ({selector(name)}))'
+                    for name in ("homelab_workload_desired_replicas", "homelab_workload_ready_replicas")), "short",
                   "Effective desired minus Ready per tracked app/site. A zero-replica standby is not a failed application."),
                 p("Node CPU utilization", f'1 - avg by (k8s_cluster, instance, kubernetes_node) (rate({metric("node_cpu_seconds_total", "mode=\"idle\"")}[$__rate_interval]))', "percentunit",
                   "CPU busy fraction per nested node view. Do not sum shared WSL kernel capacity as independent physical nodes.", link=NODE),
@@ -534,11 +536,20 @@ def visualization(panel: Panel, runbook: str | None = None):
         viz.mappings([model.ValueMap(options=STATE)])
     if panel.unit == "coverage":
         viz.mappings([model.ValueMap(options={
-            "0": model.ValueMappingResult(text="Unknown", color="#8e8e8e"),
-            "1": model.ValueMappingResult(text="Reporting", color="#5794f2"),
+            "0": model.ValueMappingResult(text="Unknown", color="#6b6b6b"),
+            "1": model.ValueMappingResult(text="Reporting", color="#2f6bd0"),
         })])
     if panel.kind == "table":
         viz.min_width(70)
+    # Colored text failed WCAG contrast for most states on the light theme
+    # (Degraded 2.0:1). State cells and stats are colored backgrounds instead:
+    # Grafana writes white text on the dark ones (5.1-5.5:1, the STATE palette)
+    # and black on amber (10.2:1). The word carries the state, never the color.
+    if panel.kind == "table" and panel.unit in ("state", "coverage"):
+        viz.override_by_name("State", [model.DynamicConfigValue(
+            id_val="custom.cellOptions", value={"type": "color-background", "mode": "basic"})])
+    if panel.kind == "stat" and panel.unit in ("state", "coverage"):
+        viz.color_mode(common.BigValueColorMode.BACKGROUND)
     if panel.kind == "stat":
         viz.reduce_options(common_builder.ReduceDataOptions().calcs(["lastNotNull"]).values(False))
         if panel.unit not in ("state", "coverage"):
