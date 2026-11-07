@@ -1,4 +1,0 @@
----
-kind: Added
-body: 28-day availability for each SLO over the metrics archive, with the share of the window each datasource covers, on the Observability board's Objectives tab.
-time: 2026-11-07T17:58:00Z

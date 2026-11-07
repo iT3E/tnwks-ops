@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.31.0 - 2026-11-07
+
+### Added
+
+* 28-day availability for each SLO over the metrics archive, with the share of the window each datasource covers, on the Observability board's Objectives tab.
+
 ## v2.30.0 - 2026-11-07
 
 ### Added
