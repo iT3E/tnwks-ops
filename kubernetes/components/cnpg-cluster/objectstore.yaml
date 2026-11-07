@@ -35,11 +35,15 @@ spec:
     data:
       compression: gzip
       jobs: 2
-  # The barman-cloud sidecar in each instance pod (about 60 MiB idle).
+  # The barman-cloud sidecar in each instance pod: about 60 MiB idle, but a
+  # base backup's upload peaks well above that. At 256Mi it was OOMKilled
+  # mid-backup on homelab-wsl-02, and the Backup failed with "rpc error:
+  # Unavailable ... EOF" (home-assistant-pg and grafana-pg, 2026-11-07). The
+  # request stays small; only the ceiling is raised.
   instanceSidecarConfiguration:
     resources:
       requests:
         cpu: 5m
         memory: ${CNPG_SIDECAR_MEMORY_REQUEST:=64Mi}
       limits:
-        memory: ${CNPG_SIDECAR_MEMORY_LIMIT:=256Mi}
+        memory: ${CNPG_SIDECAR_MEMORY_LIMIT:=512Mi}

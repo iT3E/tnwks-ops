@@ -1,0 +1,4 @@
+---
+kind: Fixed
+body: CNPG's barman-cloud sidecar gets a 512Mi memory limit (was 256Mi). Base backups on homelab-wsl-02 OOMKilled it mid-upload, and the Backup failed with an rpc EOF.
+time: 2026-11-07T20:45:00Z
