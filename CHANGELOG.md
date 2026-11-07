@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.3.0 - 2026-11-07
+
+### Added
+
+* Label every series with its site and add a partial-tolerant Thanos global view, with block upload to the WSL-02 archive and live evidence rules on both sites.
+
 ## v2.2.1 - 2026-11-07
 
 ### Fixed
