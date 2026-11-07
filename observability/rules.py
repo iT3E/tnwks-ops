@@ -81,11 +81,13 @@ def house_records():
     def domain(expr, name):
         return f'label_replace({expr}, "domain", "{name}", "", "")'
 
-    def share(now, day):
+    def share(now, day, source):
         # All of what worked at some point in the last day is working: 1; some
         # of it: 2; none of it: 3. Something off for a whole day drops out.
-        return (f"(({now}) >= bool ({day})) + 2 * (({now}) < bool ({day})) "
-                f"or (0 * ({day}) + 3)")
+        # Only while the source reports at all: a blind exporter (UniFi Poller
+        # on a lost site, say) leaves no row, which reads Unknown, not Failed.
+        return (f"((({now}) >= bool ({day})) + 2 * (({now}) < bool ({day})) "
+                f"or (0 * ({day}) + 3)) and on () ({source})")
 
     cameras_now = "count(frigate_camera_fps > 0)"
     cameras_day = "count(max_over_time(frigate_camera_fps[1d]) > 0)"
@@ -101,9 +103,9 @@ def house_records():
                                     " or (0 * max(homelab_observer_info) + 1)"),
         "homelab:house_state": " or ".join([
             domain(f"max(homelab:internet_state {own})", "internet"),
-            domain(share(aps_now, aps_day), "wifi"),
+            domain(share(aps_now, aps_day, "count(unpoller_device_uptime_seconds)"), "wifi"),
             domain(f'max(homelab:service_state{{app="home-assistant"}} != 4 {own})', "automation"),
-            domain(share(cameras_now, cameras_day), "cameras"),
+            domain(share(cameras_now, cameras_day, "count(frigate_camera_fps)"), "cameras"),
             domain("(homelab:house_apps_rank == bool 4) * 3 + (homelab:house_apps_rank == bool 3) * 2"
                    " + (homelab:house_apps_rank == bool 1)", "apps"),
             domain(f"3 - 2 * max(homelab:site_reporting {own})", "monitoring"),
@@ -603,7 +605,8 @@ def house_fixtures():
              own,
              {"series": 'probe_success{k8s_cluster="one",observability_target="internet"}', "values": "0+0x10"},
              {"series": 'frigate_camera_fps{camera="a"}', "values": "5 5 0 0 0 0 0 0 0 0 0"},
-             {"series": 'unpoller_device_uptime_seconds{name="ap1"}', "values": "100 160 _ _ _ _ _ _ _ _ _"},
+             # The AP is reported, and down.
+             {"series": 'unpoller_device_uptime_seconds{name="ap1"}', "values": "100 160 0 0 0 0 0 0 0 0 0"},
              {"series": 'homelab_collection_success{k8s_cluster="one",collector="workloads"}', "values": "0+0x10"},
              {"series": 'homelab_collection_last_success_timestamp_seconds{k8s_cluster="one",collector="workloads"}', "values": "0+0x10"},
          ], "promql_expr_test": [
@@ -611,6 +614,16 @@ def house_fixtures():
              {"expr": "homelab:house_state", "eval_time": "10m", "exp_samples": [
                  state("apps", 1), state("cameras", 3), state("internet", 3), state("monitoring", 3),
                  state("wifi", 3)]},
+         ]},
+        {"name": "household view: a blind source is Unknown, not Failed", "interval": "1m",
+         "input_series": [
+             own,
+             # Both exporters stop reporting: the site that runs UniFi Poller is
+             # lost, Frigate's scrape fails. What they watch may be fine.
+             {"series": 'frigate_camera_fps{camera="a"}', "values": "5 5 _ _ _ _ _ _ _ _ _"},
+             {"series": 'unpoller_device_uptime_seconds{name="ap1",source_site="two"}', "values": "100 160 _ _ _ _ _ _ _ _ _"},
+         ], "promql_expr_test": [
+             {"expr": 'homelab:house_state{domain=~"wifi|cameras"}', "eval_time": "10m", "exp_samples": []},
          ]},
     ]
 

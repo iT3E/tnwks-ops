@@ -696,7 +696,7 @@ tests:
   - series: frigate_camera_fps{camera="a"}
     values: 5 5 0 0 0 0 0 0 0 0 0
   - series: unpoller_device_uptime_seconds{name="ap1"}
-    values: 100 160 _ _ _ _ _ _ _ _ _
+    values: 100 160 0 0 0 0 0 0 0 0 0
   - series: homelab_collection_success{k8s_cluster="one",collector="workloads"}
     values: 0+0x10
   - series: homelab_collection_last_success_timestamp_seconds{k8s_cluster="one",collector="workloads"}
@@ -715,3 +715,15 @@ tests:
       value: 3
     - labels: homelab:house_state{domain="wifi"}
       value: 3
+- name: 'household view: a blind source is Unknown, not Failed'
+  interval: 1m
+  input_series:
+  - *id001
+  - series: frigate_camera_fps{camera="a"}
+    values: 5 5 _ _ _ _ _ _ _ _ _
+  - series: unpoller_device_uptime_seconds{name="ap1",source_site="two"}
+    values: 100 160 _ _ _ _ _ _ _ _ _
+  promql_expr_test:
+  - expr: homelab:house_state{domain=~"wifi|cameras"}
+    eval_time: 10m
+    exp_samples: []
