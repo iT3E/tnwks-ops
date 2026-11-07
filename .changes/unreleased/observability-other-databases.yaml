@@ -1,4 +1,0 @@
----
-kind: Added
-body: Databases outside CloudNativePG (MongoDB, Immich's Postgres, ClickHouse, Valkey) on the Databases & Backups board, from their workloads' readiness and restarts, and Plausible's probe now requires ClickHouse to answer.
-time: 2026-11-07T17:44:00Z

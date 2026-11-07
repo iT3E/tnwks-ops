@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.29.0 - 2026-11-07
+
+### Added
+
+* Databases outside CloudNativePG (MongoDB, Immich's Postgres, ClickHouse, Valkey) on the Databases & Backups board, from their workloads' readiness and restarts, and Plausible's probe now requires ClickHouse to answer.
+
 ## v2.28.0 - 2026-11-07
 
 ### Changed
