@@ -252,6 +252,10 @@
                   "unit": "reqps",
                   "links": [
                     {
+                      "title": "Diagnose",
+                      "url": "/d/k8s-nginx-ingress-prometheus-ng/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-ingress=${__field.labels.ingress:percentencode}"
+                    },
+                    {
                       "title": "Runbook",
                       "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
                       "targetBlank": true
@@ -328,6 +332,10 @@
                   "unit": "percentunit",
                   "links": [
                     {
+                      "title": "Diagnose",
+                      "url": "/d/k8s-nginx-ingress-prometheus-ng/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-ingress=${__field.labels.ingress:percentencode}"
+                    },
+                    {
                       "title": "Runbook",
                       "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
                       "targetBlank": true
@@ -403,6 +411,10 @@
                 "defaults": {
                   "unit": "s",
                   "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/k8s-nginx-ingress-prometheus-ng/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-ingress=${__field.labels.ingress:percentencode}"
+                    },
                     {
                       "title": "Runbook",
                       "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",

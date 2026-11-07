@@ -103,6 +103,20 @@ def main():
         page.get_by_role("tab", name="Sites", exact=True).wait_for(timeout=15000)
         navigation = {"journey": "home to sites", "incident_time_preserved": True,
                       "selected_sites": params["var-cluster"]}
+        # Domain -> entity: the clicked row selects the entity board's variable.
+        page.goto(f"{base}/d/tnwks-wifi/view?{query}", wait_until="domcontentloaded")
+        panel = page.get_by_test_id("data-testid Panel header AP uptime")
+        # The row's value opens its links; Grafana's filter actions overlay the name cell.
+        panel.get_by_text("AP Test Room", exact=True).wait_for(timeout=15000)
+        panel.get_by_text("1 day", exact=True).click(timeout=15000)
+        diagnose = page.get_by_role("link", name="Diagnose", exact=True)
+        target = urllib.parse.urlparse(diagnose.get_attribute("href"))
+        params = urllib.parse.parse_qs(target.query)
+        assert target.path == "/d/home-wifi/view", target
+        assert params["from"] == [str(incident_from)] and params["to"] == [str(incident_to)]
+        assert params["var-ap"] == ["AP Test Room"], params
+        navigation["entity"] = {"journey": "wi-fi to access point", "incident_time_preserved": True,
+                                "selected": params["var-ap"]}
         browser.close()
     (out / "browser-results.json").write_text(json.dumps({"dashboards": results, "navigation": navigation,
         "page_errors": errors}, indent=2) + "\n")

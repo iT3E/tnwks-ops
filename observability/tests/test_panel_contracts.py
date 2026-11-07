@@ -50,6 +50,26 @@ def test_operator_links_preserve_multiple_sites_and_time_without_exposing_operat
                 assert "180s" in spec["description"]
 
 
+def test_entity_links_open_the_clicked_series_and_keep_the_incident_time():
+    assert dashboard_link("home-wifi", {"ap": "name"}, table=True) == (
+        '/d/home-wifi/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}'
+        '&var-ap=${__data.fields.name:percentencode}')
+    assert dashboard_link("k8s-nginx-ingress-prometheus-ng", {"ingress": "ingress"}).endswith(
+        '&var-ingress=${__field.labels.ingress:percentencode}')
+    targets = {}
+    for board in catalogue():
+        for panels in board.tabs.values():
+            for panel in panels:
+                if isinstance(panel.link, tuple):
+                    uid, entity = panel.link
+                    targets.setdefault(uid, set()).add(panel.title)
+                    # Every entity label must survive the panel's own aggregation.
+                    for label in entity.values():
+                        assert label in panel.expr or "by (" not in panel.expr, (panel.title, label)
+    assert set(targets) == {"k8s-nginx-ingress-prometheus-ng", "gxf3edrffkw", "200ac8fdbfbb74b39aff88118e4d1c2c",
+                            "IV0hu1m7z", "home-wifi"}
+
+
 def test_live_audit_drops_private_labels_and_preserves_partial_query_failure():
     response = {"status": "success", "warnings": ["private upstream error"], "data": {"result": [
         {"metric": {"k8s_cluster": "homelab-wsl", "private_identifier": "redacted"}, "value": [1, "3"]},

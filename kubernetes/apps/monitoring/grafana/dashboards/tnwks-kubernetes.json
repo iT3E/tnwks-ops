@@ -442,7 +442,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))",
+                        "expr": "1 - avg by (k8s_cluster, instance, kubernetes_node) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))",
                         "instant": false,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": true
@@ -484,6 +484,10 @@
                 "defaults": {
                   "unit": "percentunit",
                   "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/200ac8fdbfbb74b39aff88118e4d1c2c/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-cluster=${__field.labels.k8s_cluster:percentencode}&var-node=${__field.labels.kubernetes_node:percentencode}"
+                    },
                     {
                       "title": "Runbook",
                       "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
@@ -560,6 +564,10 @@
                 "defaults": {
                   "unit": "bytes",
                   "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/200ac8fdbfbb74b39aff88118e4d1c2c/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-cluster=${__field.labels.k8s_cluster:percentencode}&var-node=${__field.labels.kubernetes_node:percentencode}"
+                    },
                     {
                       "title": "Runbook",
                       "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",

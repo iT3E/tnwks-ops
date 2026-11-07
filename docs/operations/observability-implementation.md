@@ -60,6 +60,15 @@ Both sites report on both sites, so the global view returns some series twice;
 `IDENTITY` in `dashboards.py` reduces those with `max`, which keeps the worst state
 and lets a real answer replace an observer's Unknown.
 
+Every hop keeps the incident's time range. Homelab's panels link to their domain
+board with the selected sites and datasource (L1 → domain). Domain panels with an
+entity board link to it on the clicked series or row instead: an ingress to the
+NGINX board, a router to MikroTik, a node to the mixin's Node (Pods), a Windows
+host to its exporter board, an access point to Home Wi-Fi (domain → entity).
+Telegram alerts open their `dashboard_url` from an hour before the alert started
+to now, or to 15 minutes after it resolved. `tests/browser_check.py` clicks both
+hops in a disposable Grafana and checks the target, time range and selection.
+
 ## What the state panels are based on
 
 | State | Source | Today |

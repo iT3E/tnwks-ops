@@ -138,7 +138,7 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/home-wifi/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                      "url": "/d/home-wifi/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-ap=${__data.fields.name:percentencode}"
                     },
                     {
                       "title": "Runbook",
@@ -256,6 +256,10 @@
                 "defaults": {
                   "unit": "Mbits",
                   "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/home-wifi/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-ap=${__data.fields.name:percentencode}"
+                    },
                     {
                       "title": "Runbook",
                       "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",

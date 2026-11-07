@@ -28,8 +28,18 @@ def runbook_path(domain, panel=None):
     return PANEL_RUNBOOKS.get(panel, RUNBOOKS[domain])
 
 
-def dashboard_link(uid):
-    # A full UID/slug route also works on cold navigation in the pinned browser.
-    # Grafana canonicalizes the placeholder slug; the UID remains authoritative.
-    return (f'/d/{uid}/view?from=${{__from}}&to=${{__to}}'
-            '&${cluster:queryparam}&var-datasource=${datasource:percentencode}')
+def dashboard_link(uid, entity=None, table=False):
+    """A drilldown that keeps the incident's time range and datasource.
+
+    Without entity it keeps the selected sites (L1 -> domain). With entity, a
+    {target variable: series label} map, it opens the entity board on the clicked
+    series or row instead (domain -> entity): a table row's fields, a series'
+    labels. A full UID/slug route also works on cold navigation in the pinned
+    browser; Grafana canonicalizes the placeholder slug.
+    """
+    base = f'/d/{uid}/view?from=${{__from}}&to=${{__to}}'
+    if not entity:
+        return base + '&${cluster:queryparam}&var-datasource=${datasource:percentencode}'
+    field = "__data.fields.{}" if table else "__field.labels.{}"
+    return base + "&var-datasource=${datasource:percentencode}" + "".join(
+        f"&var-{var}=${{{field.format(label)}:percentencode}}" for var, label in entity.items())

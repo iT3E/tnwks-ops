@@ -1103,7 +1103,7 @@
     "dashboard": "tnwks-network",
     "tab": "Paths",
     "panel": "Router interface errors",
-    "query": "sum by (k8s_cluster, name) (rate(mktxp_interface_rx_error_total{k8s_cluster=~\"$cluster\"}[5m]))",
+    "query": "sum by (k8s_cluster, routerboard_name, name) (rate(mktxp_interface_rx_error_total{k8s_cluster=~\"$cluster\"}[5m]))",
     "unit": "ops",
     "query_mode": "range",
     "inputs": [
@@ -1799,7 +1799,7 @@
     "dashboard": "tnwks-kubernetes",
     "tab": "Workloads",
     "panel": "Node CPU utilization",
-    "query": "1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))",
+    "query": "1 - avg by (k8s_cluster, instance, kubernetes_node) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))",
     "unit": "percentunit",
     "query_mode": "range",
     "inputs": [
