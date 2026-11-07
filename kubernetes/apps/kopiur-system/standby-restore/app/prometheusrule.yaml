@@ -9,9 +9,15 @@ spec:
     - name: standby-restore
       rules:
         # Failed runs are KubeJobFailed. This catches the drill not running
-        # (or never succeeding since its last success).
+        # (or never succeeding since its last success). kube-state-metrics has
+        # no last-success series until the first success, so a drill that has
+        # never succeeded counts from the CronJob's creation.
         - alert: StandbyRestoreDrillStale
-          expr: time() - kube_cronjob_status_last_successful_time{namespace="kopiur-system", cronjob="standby-restore"} > 8 * 86400
+          expr: >-
+            (time() - kube_cronjob_status_last_successful_time{namespace="kopiur-system", cronjob="standby-restore"} > 8 * 86400)
+            or
+            ((time() - kube_cronjob_created{namespace="kopiur-system", cronjob="standby-restore"} > 8 * 86400)
+              unless on (namespace, cronjob) kube_cronjob_status_last_successful_time{namespace="kopiur-system", cronjob="standby-restore"})
           for: 1h
           labels:
             severity: warning
