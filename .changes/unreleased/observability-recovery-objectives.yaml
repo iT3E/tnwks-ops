@@ -1,4 +1,0 @@
----
-kind: Added
-body: Per-app recovery point and restore time objectives on the Databases & Backups board, from each app's scheduled PVC backups, primary databases and standby restore drills.
-time: 2026-11-07T14:29:00Z

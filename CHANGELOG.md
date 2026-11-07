@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.27.0 - 2026-11-07
+
+### Added
+
+* Per-app recovery point and restore time objectives on the Databases & Backups board, from each app's scheduled PVC backups, primary databases and standby restore drills.
+
 ## v2.26.0 - 2026-11-07
 
 ### Added
