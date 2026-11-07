@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.226.0 - 2026-11-07
+
+### Changed
+
+* Plausible runs on homelab-wsl-02 with its Postgres primary there; homelab-wsl keeps a standby (database replica, app at 0), and analytics.tnwks.us reaches it through cloudflared over Cluster Mesh.
+
 ## v1.225.0 - 2026-11-07
 
 ### Removed
