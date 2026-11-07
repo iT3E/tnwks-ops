@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.219.1 - 2026-11-07
+
+### Fixed
+
+* Ombi and Ombi-f can move: homelab-wsl-02 has the SECRET_PREFIX cluster secret Ombi-f's HelmRelease needs, and their restores run as root so they can write into the chart-created PVC. site-failover gains --no-rollback (fix forward: a failed copy leaves the app stopped instead of moving it back) and refuses before stopping anything when a target PVC is missing.
+
 ## v1.219.0 - 2026-11-06
 
 ### Added

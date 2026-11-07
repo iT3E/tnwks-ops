@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Ombi and Ombi-f can move: homelab-wsl-02 has the SECRET_PREFIX cluster secret Ombi-f''s HelmRelease needs, and their restores run as root so they can write into the chart-created PVC. site-failover gains --no-rollback (fix forward: a failed copy leaves the app stopped instead of moving it back) and refuses before stopping anything when a target PVC is missing.'
-time: 2026-11-07T00:00:00.000000000-08:00
