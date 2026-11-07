@@ -427,3 +427,80 @@ tests:
     exp_samples:
     - labels: homelab:database_in_recovery{k8s_cluster="one",namespace="databases",db_cluster="app-pg"}
       value: 0
+- name: an idle database is not a failed one
+  interval: 1m
+  input_series:
+  - series: homelab_expected_database_info{k8s_cluster="one",namespace="databases",db_cluster="idle-pg"}
+    values: 1+0x40
+  - series: cnpg_backends_total{k8s_cluster="one",namespace="databases",pod="idle-pg-1"}
+    values: 0+0x40
+  - series: cnpg_pg_replication_in_recovery{k8s_cluster="one",namespace="databases",pod="idle-pg-1"}
+    values: 0+0x40
+  - series: barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{k8s_cluster="one",namespace="databases",pod="idle-pg-1"}
+    values: 100+0x40
+  promql_expr_test:
+  - expr: homelab:database_connections
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:database_connections{k8s_cluster="one",namespace="databases",db_cluster="idle-pg"}
+      value: 0
+  - expr: homelab:database_backup_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:database_backup_state{k8s_cluster="one",namespace="databases",db_cluster="idle-pg"}
+      value: 1
+  alert_rule_test:
+  - alertname: ObservabilityExpectedDatabaseBackupMissing
+    eval_time: 35m
+    exp_alerts: []
+- name: 'no traffic is not an outage: the probe decides'
+  interval: 1m
+  input_series:
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="quiet"}
+    values: 1+0x10
+  - series: probe_success{k8s_cluster="one",app="quiet",observability_target="service"}
+    values: 1+0x10
+  promql_expr_test:
+  - expr: homelab:service_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:service_state{k8s_cluster="one",app="quiet"}
+      value: 1
+- name: an expiring credential alerts before cert-manager's renewal is missed
+  interval: 5m
+  input_series:
+  - series: homelab_ingress_cert_expiry_timestamp_seconds{k8s_cluster="one",name="soon"}
+    values: 864000+0x20
+  - series: homelab_ingress_cert_expiry_timestamp_seconds{k8s_cluster="one",name="later"}
+    values: 3456000+0x20
+  alert_rule_test:
+  - alertname: ObservabilityIngressCertificateExpiring
+    eval_time: 70m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: one
+        name: soon
+      exp_annotations:
+        summary: The certificate for soon on one expires within 14 days
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster=one
+        description: cert-manager renews at 30 days left. Check that site's Certificate and its ACME challenge.
+- name: a failed restore drill fails recovery even with everything else ready
+  interval: 1m
+  input_series:
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="test",tier="warm"}
+    values: 1+0x10
+  - series: homelab_recovery_prerequisite_state{k8s_cluster="one",app="test",prerequisite="database"}
+    values: 1+0x10
+  - series: homelab_recovery_prerequisite_state{k8s_cluster="one",app="test",prerequisite="backup"}
+    values: 1+0x10
+  - series: homelab_recovery_prerequisite_state{k8s_cluster="one",app="test",prerequisite="fence"}
+    values: 1+0x10
+  - series: homelab_recovery_prerequisite_state{k8s_cluster="one",app="test",prerequisite="restore"}
+    values: 3+0x10
+  promql_expr_test:
+  - expr: homelab:recovery_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:recovery_state{k8s_cluster="one",app="test"}
+      value: 3
