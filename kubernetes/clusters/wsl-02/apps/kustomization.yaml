@@ -40,6 +40,9 @@ resources:
   - ./alertmanager-ks.yaml
   - ../../../apps/monitoring/kube-prometheus-stack/ks.yaml
   - ../../../apps/monitoring/node-exporter/ks.yaml
+  # Its own Grafana, so losing site 1 doesn't lose the dashboards (patched below).
+  - ../../../apps/monitoring/grafana/ks.yaml
+  - ../../../apps/monitoring/grafana/dashboards-ks.yaml
   # Follows the UniFi controller (UNIFI_REPLICAS).
   - ../../../apps/monitoring/unpoller/ks.yaml
   # Certificates: cert-manager with the Let's Encrypt DNS-01 issuers, and the
@@ -113,6 +116,94 @@ resources:
 #   - cloudnative-pg-cluster: the shared `postgres` cluster (retired on
 #     homelab-wsl too); apps have their own clusters.
 patches:
+  # Grafana here depends on nothing that lives on homelab-wsl: SQLite on a local
+  # claim instead of the CNPG database, the local login form instead of
+  # oauth2-proxy, and its own name (grafana-02, dns-sites.tf). auth.proxy is off,
+  # or anyone could sign in by sending the header oauth2-proxy normally sets.
+  # No kiosk JWT and no renderer: those serve the kitchen display and alert
+  # images, which stay with homelab-wsl.
+  - patch: |-
+      $patch: delete
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata:
+        name: grafana-db
+        namespace: flux-system
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata:
+        name: grafana
+        namespace: flux-system
+      spec:
+        dependsOn:
+          - name: local-path-provisioner
+        patches:
+          - patch: |-
+              $patch: delete
+              apiVersion: networking.k8s.io/v1
+              kind: Ingress
+              metadata:
+                name: grafana-embed
+                namespace: monitoring
+          - patch: |-
+              $patch: delete
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: grafana-database
+                namespace: monitoring
+          - target:
+              kind: HelmRelease
+              name: grafana
+            patch: |-
+              - op: replace
+                path: /spec/dependsOn
+                value:
+                  - name: local-path-provisioner
+                    namespace: kube-system
+                  - name: ingress-nginx-internal
+                    namespace: networking
+              - op: remove
+                path: /spec/values/envFromSecrets
+              - op: replace
+                path: /spec/values/grafana.ini/database
+                value:
+                  type: sqlite3
+              - op: replace
+                path: /spec/values/grafana.ini/auth.proxy
+                value:
+                  enabled: false
+              - op: replace
+                path: /spec/values/grafana.ini/auth.jwt
+                value:
+                  enabled: false
+              - op: remove
+                path: /spec/values/grafana.ini/auth/signout_redirect_url
+              - op: replace
+                path: /spec/values/grafana.ini/server/root_url
+                value: https://grafana-02.${INTERNAL_DOMAIN}
+              - op: replace
+                path: /spec/values/env/GF_SERVER_ROOT_URL
+                value: https://grafana-02.${INTERNAL_DOMAIN}
+              - op: replace
+                path: /spec/values/imageRenderer/enabled
+                value: false
+              - op: remove
+                path: /spec/values/ingress/annotations/nginx.ingress.kubernetes.io~1auth-url
+              - op: remove
+                path: /spec/values/ingress/annotations/nginx.ingress.kubernetes.io~1auth-signin
+              - op: remove
+                path: /spec/values/ingress/annotations/nginx.ingress.kubernetes.io~1auth-response-headers
+              - op: replace
+                path: /spec/values/ingress/hosts
+                value:
+                  - grafana-02.${INTERNAL_DOMAIN}
+              - op: replace
+                path: /spec/values/ingress/tls
+                value:
+                  - hosts:
+                      - grafana-02.${INTERNAL_DOMAIN}
   # The media apps at 0 have unbound WaitForFirstConsumer PVCs, which Helm's
   # wait (kstatus) never sees as ready.
   - target:

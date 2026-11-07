@@ -140,10 +140,26 @@ forever; leave the type off.
   `chattr -i` it first. A new worker gets a new volume, and the task finds it.
 - **Reclaim:** the class is `Retain`. Deleting the PVC leaves the data on the disk.
 
+## Site 2 Grafana
+
+`grafana-02.<internal domain>` is a second Grafana on homelab-wsl-02 with the same
+boards, datasource UIDs and global view, so losing site 1 doesn't lose the
+dashboards. It depends on nothing that lives on site 1: SQLite on a local claim
+instead of the CNPG database, and the local login form with the admin account in
+`grafana-admin-secret` instead of oauth2-proxy. `auth.proxy` is off there, or any
+client could sign in by sending the header oauth2-proxy normally sets.
+
+- **Not shared:** users, preferences and UI-made dashboards live in each site's
+  own database. Provisioned boards are identical.
+- **No kiosk or renderer:** the kitchen display's JWT login and the image renderer
+  stay with site 1.
+- **Logs:** site 2 has no Loki, so its Loki datasource errors. Metrics are complete.
+- **DNS:** `dns-sites.tf` points the name at site 2's shared VIP. With site 2 down,
+  site 1's ingress answers it with a 404, since it has no such host.
+
 ## Following rollout work
 
-1. Add the second independent Grafana and preserve legacy URLs. Validate backlog
-   behavior and certificate renewal for the global query path.
+1. Validate backlog behavior and certificate renewal for the global query path.
 2. Deploy the isolated household Grafana and aggregate-only backend, revoke old
    kiosk operator access/sessions and test all datasource APIs. Define fresh domain
    evidence before any household status can be healthy.
