@@ -9,6 +9,12 @@ metadata:
   namespace: databases
   annotations:
     kyverno.io/ignore: "true"
+    # A rolling restart of every instance when it changes (what
+    # `kubectl cnpg restart` sets), from git: bump CNPG_ROLLOUT in
+    # cluster-settings. Needed when something injected at pod creation
+    # changes, such as the barman-cloud sidecar's resources in the
+    # ObjectStore. The prefix keeps the value a string through substitution.
+    kubectl.kubernetes.io/restartedAt: "rollout-${CNPG_ROLLOUT:=1}"
   labels:
     app.kubernetes.io/name: ${CNPG_APP}-pg
     app.kubernetes.io/instance: ${CNPG_APP}-pg

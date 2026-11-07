@@ -1,0 +1,4 @@
+---
+kind: Added
+body: CNPG clusters can be rolled from git. Bumping CNPG_ROLLOUT in cluster-settings sets each Cluster's restartedAt annotation, as kubectl cnpg restart does. Its first value rolls every instance once, which gives the running barman-cloud sidecars their 512Mi limit.
+time: 2026-11-07T21:05:00Z
