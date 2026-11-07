@@ -19,8 +19,9 @@ from versions import CADDY, GARAGE, PROMETHEUS, THANOS
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def docker(*args):
-    return subprocess.run(["docker", *args], check=True, capture_output=True, text=True).stdout
+def docker(*args, process_env=None):
+    return subprocess.run(["docker", *args], check=True, capture_output=True,
+                          text=True, env=process_env).stdout
 
 
 def eventually(function, timeout=30):
@@ -57,7 +58,6 @@ def main():
         (base / "garage.toml").write_text(config)
         access = (base / "secrets/access-key").read_text()
         secret = (base / "secrets/secret-key").read_text()
-        (base / "env").write_text(f"GARAGE_DEFAULT_BUCKET=homelab-metrics\nGARAGE_DEFAULT_ACCESS_KEY={access}\nGARAGE_DEFAULT_SECRET_KEY={secret}\n")
         subprocess.run(["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt",
             "ec_paramgen_curve:prime256v1", "-nodes", "-days", "1", "-subj", "/CN=archive-fixture",
             "-addext", "subjectAltName=IP:127.0.0.1", "-keyout", str(base / "fixture.key"),
@@ -75,15 +75,18 @@ def main():
         # verified HTTPS and mutual TLS for StoreAPI; all credentials are disposable.
         for file in (base / "secrets").iterdir():
             file.chmod(0o600)
-        (base / "env").chmod(0o600)
         (base / "objstore.yaml").chmod(0o600)
         started = []
 
         def run(role, image, args, mounts=(), writable=()):
             cmd = ["run", "-d", "--name", names[role], "--network", "host", "--read-only",
                    "--memory", "768m", "--cpus", "1", "--user", user]
+            process_env = None
             if role == "garage":
-                cmd += ["--env-file", str(base / "env")]
+                cmd += ["-e", "GARAGE_DEFAULT_BUCKET=homelab-metrics",
+                        "-e", "GARAGE_DEFAULT_ACCESS_KEY", "-e", "GARAGE_DEFAULT_SECRET_KEY"]
+                process_env = dict(os.environ, GARAGE_DEFAULT_ACCESS_KEY=access,
+                                   GARAGE_DEFAULT_SECRET_KEY=secret)
             for src, dst in mounts:
                 cmd += ["--mount", f"type=bind,src={base / src},dst={dst},readonly"]
             for src, dst in writable:
@@ -93,7 +96,7 @@ def main():
             if role == "tls":
                 cmd += ["--tmpfs", f"/tmp:uid={os.getuid()},gid={os.getgid()}",
                         "-e", "XDG_DATA_HOME=/tmp/data", "-e", "XDG_CONFIG_HOME=/tmp/config"]
-            docker(*cmd, image, *args)
+            docker(*cmd, image, *args, process_env=process_env)
             started.append(names[role])
 
         try:
