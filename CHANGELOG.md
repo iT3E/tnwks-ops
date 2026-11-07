@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.38.4 - 2026-11-07
+
+### Fixed
+
+* homelab-wsl-02 gets AlertmanagerCrashlooping too. Its addon alerts are listed one by one, so it had lost the chart's rule without gaining the replacement.
+
 ## v2.38.3 - 2026-11-07
 
 ### Fixed
