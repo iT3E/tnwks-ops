@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.22.0 - 2026-11-07
+
+### Changed
+
+* The kept hand-made Grafana boards are mounted by their own providers instead of the sidecar, so each UID has one owner and removing a board's file retires it.
+
 ## v2.21.0 - 2026-11-07
 
 ### Changed

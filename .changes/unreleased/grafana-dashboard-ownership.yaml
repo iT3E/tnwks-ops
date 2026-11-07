@@ -1,4 +1,0 @@
----
-kind: Changed
-body: The kept hand-made Grafana boards are mounted by their own providers instead of the sidecar, so each UID has one owner and removing a board's file retires it.
-time: 2026-11-07T18:30:00Z
