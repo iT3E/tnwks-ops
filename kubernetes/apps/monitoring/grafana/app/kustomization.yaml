@@ -5,8 +5,10 @@ namespace: monitoring
 resources:
   - ./secret.sops.yaml
   - ./secret-database.sops.yaml
+  - ./secret-renderer.sops.yaml
   - ./helmrelease.yaml
   - ./dashboard
+  - ../upstream
   - ./ingress-embed.yaml
 configMapGenerator:
   # Public key for the kiosk JWT (auth.jwt in helmrelease.yaml). The private

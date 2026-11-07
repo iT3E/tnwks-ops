@@ -164,3 +164,23 @@ rebuild. Its tiny fixture cannot size production compaction or prove host-power-
 durability. The 28d SLO evaluation path still needs a complete-history evaluator;
 if Pyrra requires a Thanos Ruler, add its budget rather than evaluate 28d on a 15d
 local Prometheus and call it complete.
+
+### Initial deployment measurements
+
+After the first rollout, with the archive initialized but no metric blocks yet
+ingested, `kubectl top` reported:
+
+| Component | Site | Resident working set | CPU sample |
+| --- | --- | ---: | ---: |
+| Evidence collector | 1 | 23 MiB | 3m |
+| Evidence collector | 2 | 20 MiB | 1m |
+| Garage + Caddy | 2 | 19 MiB combined | 1m combined |
+
+These are idle point samples, not loaded sizing results. The larger planning
+allowances remain appropriate until real uploads, queries and compaction have
+been observed. The Grafana upgrade allows 1Gi for the main process and 768Mi for
+the renderer, with one render at a time and a 512Mi browser admission budget.
+Rendering is an occasional peak; neither ceiling represents idle allocation.
+The private migration rehearsal uses temporary RAM-backed PostgreSQL/Grafana
+data and leaves encrypted fixtures only; downloaded test images also occupy the
+workstation's Docker image cache and must not be confused with archive growth.

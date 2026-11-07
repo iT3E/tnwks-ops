@@ -10,6 +10,7 @@ from dashboards import generated
 from inventory import inventory
 from thanos_manifests import generated_platform
 from rules import fixtures, rule_resource
+from vendor import generated_upstream
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -17,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def artifacts():
     files = generated()
     files.update(generated_platform())
+    files.update(generated_upstream())
     inv = json.dumps(inventory(), indent=2) + "\n"
     files[ROOT / "observability/generated/inventory.json"] = inv
     app = ROOT / "kubernetes/apps/monitoring/observability-evidence/app/config"
