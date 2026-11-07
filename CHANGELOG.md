@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.38.3 - 2026-11-07
+
+### Fixed
+
+* The Alertmanager crashloop alert counts restarts from kube-state-metrics instead of process start-time changes. WSL-02's drifting clock made every process there look like it restarted once a minute, so the chart's rule fired a false critical on homelab-wsl-02.
+
 ## v2.38.2 - 2026-11-07
 
 ### Fixed
