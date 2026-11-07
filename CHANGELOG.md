@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.220.0 - 2026-11-07
+
+### Changed
+
+* Ombi, Ombi-f and Wizarr run on homelab-wsl-02; homelab-wsl keeps them at 0, and their public names reach them through cloudflared over Cluster Mesh. site-failover's app check passes on exit 0 even when the command prints nothing.
+
 ## v1.219.1 - 2026-11-07
 
 ### Fixed

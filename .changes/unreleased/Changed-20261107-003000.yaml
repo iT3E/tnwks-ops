@@ -1,3 +1,0 @@
-kind: Changed
-body: 'Ombi, Ombi-f and Wizarr run on homelab-wsl-02; homelab-wsl keeps them at 0, and their public names reach them through cloudflared over Cluster Mesh. site-failover''s app check passes on exit 0 even when the command prints nothing.'
-time: 2026-11-07T00:30:00.000000000-08:00
