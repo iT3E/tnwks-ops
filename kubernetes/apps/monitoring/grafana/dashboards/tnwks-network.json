@@ -153,7 +153,7 @@
         "kind": "Panel",
         "spec": {
           "id": 3,
-          "title": "WireGuard received",
+          "title": "Site tunnel traffic",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -167,7 +167,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "rate(mktxp_wireguard_peer_rx_bytes{k8s_cluster=~\"$cluster\"}[5m])",
+                        "expr": "sum by (interface) (rate(mktxp_peer_rx_total{interface=~\"wg-site[0-9]+\"}[5m]))",
                         "instant": false,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": true
@@ -215,7 +215,7 @@
               }
             }
           },
-          "description": "WireGuard peer traffic where supported by the pinned exporter. Missing metrics indicate telemetry coverage, not a quiet healthy tunnel."
+          "description": "Received on the router's WireGuard interface for each site's distro. Missing series mean the router isn't observed, not an idle tunnel."
         }
       },
       "panel-3": {
@@ -291,7 +291,7 @@
         "kind": "Panel",
         "spec": {
           "id": 5,
-          "title": "BGP sessions",
+          "title": "Path by hop",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -305,7 +305,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "homelab_bgp_session_established{k8s_cluster=~\"$cluster\"}",
+                        "expr": "max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
@@ -354,7 +354,7 @@
                         "db_cluster": "Database",
                         "app": "App",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "Value": "State"
                       }
                     }
                   }
@@ -381,7 +381,42 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "bool",
+                  "unit": "short",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#8e8e8e"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#299c46"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#d44a3a"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#5794f2"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#8e8e8e"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#b877d9"
+                        }
+                      }
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -393,14 +428,14 @@
               }
             }
           },
-          "description": "Normalized router/FRR/Cilium session evidence. Unimplemented or stale adapters show Unknown rather than invented healthy sessions."
+          "description": "Per site: the WireGuard tunnel to the router (handshake within 180 s), the router's BGP session with the distro's FRR, and the Cilium agents' sessions with the distro. Unknown when the router or the agents aren't observed."
         }
       },
       "panel-5": {
         "kind": "Panel",
         "spec": {
           "id": 6,
-          "title": "Expected route observed",
+          "title": "Routes received per site",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -414,8 +449,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "homelab_route_observed{k8s_cluster=~\"$cluster\"}",
-                        "format": "table",
+                        "expr": "max by (k8s_cluster) (homelab:router_bgp_prefixes{k8s_cluster=~\"$cluster\"})",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": false
@@ -429,80 +463,45 @@
                   }
                 }
               ],
-              "transformations": [
-                {
-                  "kind": "Transformation",
-                  "group": "organize",
-                  "spec": {
-                    "options": {
-                      "excludeByName": {
-                        "__name__": true,
-                        "Time": true,
-                        "__replica__": true,
-                        "alertstate": true,
-                        "cluster": true,
-                        "container": true,
-                        "endpoint": true,
-                        "instance": true,
-                        "job": true,
-                        "kind": true,
-                        "namespace": true,
-                        "observer_cluster": true,
-                        "pod": true,
-                        "prometheus": true,
-                        "service": true
-                      },
-                      "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
-                      },
-                      "renameByName": {
-                        "k8s_cluster": "Site",
-                        "db_cluster": "Database",
-                        "app": "App",
-                        "observer_cluster": "Observer",
-                        "Value": "Value"
-                      }
-                    }
-                  }
-                }
-              ],
+              "transformations": [],
               "queryOptions": {}
             }
           },
           "vizConfig": {
             "kind": "VizConfig",
-            "group": "table",
+            "group": "stat",
             "version": "",
             "spec": {
               "options": {
-                "frameIndex": 0,
-                "showHeader": true,
-                "showTypeIcons": false,
-                "footer": {
-                  "show": false,
-                  "reducer": [],
-                  "countRows": false
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
                 },
-                "cellHeight": "sm"
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "bool",
-                  "noValue": "Unknown — missing evidence",
-                  "custom": {
-                    "align": "auto",
-                    "inspect": false,
-                    "minWidth": 70
-                  }
+                  "unit": "short",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "#5794f2"
+                  },
+                  "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Expected VIP/pod routes checked against observed selected routes. Session state cannot substitute for this evidence."
+          "description": "Prefixes the router accepted from each site's FRR (its node, pod and shared-VIP routes). Zero with an established session means the site announces nothing."
         }
       },
       "panel-6": {

@@ -290,8 +290,8 @@
   {
     "dashboard": "tnwks-network",
     "tab": "Paths",
-    "title": "WireGuard received",
-    "expr": "rate(mktxp_wireguard_peer_rx_bytes{k8s_cluster=~\"$cluster\"}[5m])",
+    "title": "Site tunnel traffic",
+    "expr": "sum by (interface) (rate(mktxp_peer_rx_total{interface=~\"wg-site[0-9]+\"}[5m]))",
     "unit": "Bps",
     "kiosk": false
   },
@@ -306,17 +306,17 @@
   {
     "dashboard": "tnwks-network",
     "tab": "BGP and mesh",
-    "title": "BGP sessions",
-    "expr": "homelab_bgp_session_established{k8s_cluster=~\"$cluster\"}",
-    "unit": "bool",
+    "title": "Path by hop",
+    "expr": "max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
     "kiosk": false
   },
   {
     "dashboard": "tnwks-network",
     "tab": "BGP and mesh",
-    "title": "Expected route observed",
-    "expr": "homelab_route_observed{k8s_cluster=~\"$cluster\"}",
-    "unit": "bool",
+    "title": "Routes received per site",
+    "expr": "max by (k8s_cluster) (homelab:router_bgp_prefixes{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
     "kiosk": false
   },
   {

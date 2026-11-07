@@ -1,0 +1,3 @@
+kind: Added
+body: 'Network board: per-site path state by hop (WireGuard tunnel, router BGP, Cilium node BGP) and routes received per site, with router BGP sessions from mktxp.'
+time: 2026-11-07T11:20:00-08:00

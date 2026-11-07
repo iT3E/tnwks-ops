@@ -40,8 +40,12 @@ def databases(sites):
 def inventory():
     source = json.loads((ROOT / "bin/site-failover-apps.json").read_text())
     sites = [
-        {"id": "wsl", "cluster": "homelab-wsl", "probe_url": "http://prometheus-homelab-wsl.monitoring.svc.cluster.local:9090/-/ready"},
-        {"id": "wsl-02", "cluster": "homelab-wsl-02", "probe_url": "http://prometheus-homelab-wsl-02.monitoring.svc.cluster.local:9090/-/ready"},
+        # router_peer / tunnel: the site's BGP connection and WireGuard interface on
+        # the router (infrastructure/terraform/environments/prod/mikrotik/site-tunnels.tf).
+        {"id": "wsl", "cluster": "homelab-wsl", "probe_url": "http://prometheus-homelab-wsl.monitoring.svc.cluster.local:9090/-/ready",
+         "router_peer": "wsl-site1", "tunnel": "wg-site1"},
+        {"id": "wsl-02", "cluster": "homelab-wsl-02", "probe_url": "http://prometheus-homelab-wsl-02.monitoring.svc.cluster.local:9090/-/ready",
+         "router_peer": "wsl-site2", "tunnel": "wg-site2"},
     ]
     apps = []
     for name, spec in source.items():
