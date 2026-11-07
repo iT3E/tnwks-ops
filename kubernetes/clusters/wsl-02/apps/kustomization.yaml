@@ -138,6 +138,8 @@ patches:
       spec:
         dependsOn:
           - name: local-path-provisioner
+        # Flux patches before the app's namespace transformer: match each
+        # object as its file has it (the Secret sets a namespace, the Ingress not).
         patches:
           - patch: |-
               $patch: delete
@@ -145,7 +147,6 @@ patches:
               kind: Ingress
               metadata:
                 name: grafana-embed
-                namespace: monitoring
           - patch: |-
               $patch: delete
               apiVersion: v1
