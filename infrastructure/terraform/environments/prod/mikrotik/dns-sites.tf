@@ -124,14 +124,15 @@ locals {
       match_subdomain = true
       comment         = "shared VIP (homelab-wsl-02 first): qbittorrent"
     }
-    # Site 2's own Grafana. grafana.internal.tnwks.us stays with homelab-wsl.
+    # Site 2's own Grafana (grafana.internal.tnwks.us stays with homelab-wsl). Its
+    # LAN address, not a shared VIP: the name must reach site 2's ingress only.
     wsl02_grafana = {
       name            = "grafana-02.internal.tnwks.us"
-      address         = local.vip_wsl_02
+      address         = local.wsl02_lan_address
       type            = "A"
       ttl             = "5m"
       match_subdomain = true
-      comment         = "shared VIP (homelab-wsl-02 first): grafana-02"
+      comment         = "homelab-wsl-02 only: grafana-02"
     }
   }
 }
