@@ -44,6 +44,9 @@ Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md)
 | [`operations/disaster-recovery.md`](operations/disaster-recovery.md) | BCP: priorities, single points of failure, keys and the off-site kit, recovery scenarios, drills |
 | [`operations/backups.md`](operations/backups.md) | Backups: what, where, why (S3 via barman-cloud and kopiur, Drive for UniFi and the switch), credentials, restores |
 | [`operations/external-monitoring.md`](operations/external-monitoring.md) | Off-site heartbeats (healthchecks.io): power, WAN and "cluster didn't come back" alerts |
+| [`operations/observability-implementation.md`](operations/observability-implementation.md) | Observability as built: evidence collector, rules, generated boards, archive, objectives, dashboard ownership |
+| [`operations/observability-operations.md`](operations/observability-operations.md) | Observability in use: access per site, recovery, quarterly and after-incident review, resilience drills |
+| [`operations/observability-panel-catalogue.md`](operations/observability-panel-catalogue.md) | Every operator panel: its sources, observation budget and runbook |
 | [`operations/sops.md`](operations/sops.md) | Secrets: recipients, editing, re-keying |
 | [`operations/ansible.md`](operations/ansible.md) | Ansible: the pinned controller, the one inventory, running playbooks, adding a host |
 | [`operations/windows-patching.md`](operations/windows-patching.md) | Windows Update on the WSL hosts (design): brakes, approval in git, armed windows, failover before patching, pre and post checks |
