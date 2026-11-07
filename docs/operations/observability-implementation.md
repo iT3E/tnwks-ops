@@ -225,6 +225,22 @@ nothing else. `homelab:mqtt_state` is whether the broker accepted that login, an
 `homelab_mqtt_clients_connected` is the client count. Delivery between clients
 isn't measured.
 
+## Archive evidence
+
+Each site's collector reads the Compactor's block index through the global
+`observability-compactor` Service and reports, per source site, the newest and
+oldest archived sample, block count and bytes. `homelab:archive_lag_seconds` is
+how old the newest archived data is: 1-3 h is normal, because Prometheus cuts a
+2 h block once its head spans 3 h, and `ObservabilityArchiveBehind` fires past
+4 h. `homelab:archive_history_seconds` is how far back the archive answers, and
+`homelab:archive_free_ratio` is Garage's free space (`ObservabilityArchiveSpaceLow`
+under 10%). A Store or Compactor that's merely running proves none of this.
+
+First verified 2026-11-07: both sidecars uploaded (site 1 one block, site 2 two,
+no failures), the Compactor synced them with nothing to compact and not halted,
+and a range query restricted to the Store (`storeMatch[]`) returned site 2's
+08:00-09:00Z data from the archive alone. Garage had 964 of 1081 GB free.
+
 ## Following rollout work
 
 1. Validate backlog behavior and certificate renewal for the global query path.

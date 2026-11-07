@@ -2503,7 +2503,87 @@
   {
     "dashboard": "tnwks-observability",
     "tab": "Archive and delivery",
-    "panel": "Unuploaded block age",
+    "panel": "Archive lag",
+    "query": "homelab:archive_lag_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "query_mode": "range",
+    "inputs": [
+      "homelab:archive_lag_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_archive_newest_sample_timestamp_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/observability-implementation.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Archive and delivery",
+    "panel": "Archive history",
+    "query": "homelab:archive_history_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "query_mode": "range",
+    "inputs": [
+      "homelab:archive_history_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_archive_oldest_sample_timestamp_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/observability-implementation.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Archive and delivery",
+    "panel": "Archive free space",
+    "query": "homelab:archive_free_ratio{k8s_cluster=~\"$cluster\"}",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "homelab:archive_free_ratio"
+    ],
+    "sources": [
+      {
+        "metric": "garage_local_disk_avail",
+        "producer": "Garage admin metrics (WSL-02 archive)",
+        "availability": "configured"
+      },
+      {
+        "metric": "garage_local_disk_total",
+        "producer": "Garage admin metrics (WSL-02 archive)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/observability-implementation.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Archive and delivery",
+    "panel": "Time since last upload",
     "query": "homelab:unuploaded_block_age_seconds{k8s_cluster=~\"$cluster\"}",
     "unit": "s",
     "query_mode": "range",

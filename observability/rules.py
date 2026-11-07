@@ -27,6 +27,13 @@ def records():
         "homelab:database_backup_state": f'((homelab:database_backup_age_seconds >= bool 0) * (homelab:database_backup_age_seconds <= bool 108000) + 3 * (homelab:database_backup_age_seconds > bool 108000)) or on ({db}) (0 * {expected_db})',
         "homelab:recovery_state": '(3 * max by (k8s_cluster, app) (' + fresh('homelab_recovery_prerequisite_state') + ' == 3) / 3) or on (k8s_cluster, app) ((count by (k8s_cluster, app) (max by (k8s_cluster, app, prerequisite) (' + fresh('homelab_recovery_prerequisite_state{prerequisite=~"database|backup|restore|fence"}') + ') == 1) == 4) / 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info{tier="warm"}))',
         "homelab:local_history_seconds": 'time() - min by (k8s_cluster) (prometheus_tsdb_lowest_timestamp_seconds)',
+        # How far behind the archive is: the newest sample it holds for each
+        # site. Prometheus cuts 2 h blocks once its head spans 3 h, so 1-3 h is
+        # normal; more means uploads, the bucket or the Compactor's sync stalled.
+        "homelab:archive_lag_seconds": 'time() - max by (k8s_cluster) (' + fresh('homelab_archive_newest_sample_timestamp_seconds') + ')',
+        # History the archive can answer for, per site (Pyrra's 28-35 d windows).
+        "homelab:archive_history_seconds": 'time() - min by (k8s_cluster) (' + fresh('homelab_archive_oldest_sample_timestamp_seconds') + ')',
+        "homelab:archive_free_ratio": 'min by (k8s_cluster) (garage_local_disk_avail{volume="data"} / garage_local_disk_total{volume="data"})',
         "homelab:unuploaded_block_age_seconds": 'time() - max by (k8s_cluster) (thanos_objstore_bucket_last_successful_upload_time{job=~".*thanos-discovery"} > 0)',
         "homelab:archive_state": '(3 - 2 * min by (k8s_cluster) (probe_success{observability_target="archive"} and (time() - timestamp(probe_success{observability_target="archive"})) < 180)) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_observer_info))',
         # The broker accepted the collector's login (MQTT), from each site. A
@@ -112,6 +119,16 @@ def rule_resource():
          "annotations": {"summary": "The WSL-02 metrics archive is unavailable",
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster }}',
                          "description": "Local metrics and alerts remain available. Restore archive uploads before retained local blocks expire."}},
+        {"alert": "ObservabilityArchiveBehind", "expr": 'homelab:archive_lag_seconds > 14400',
+         "for": "30m", "labels": {"severity": "warning"},
+         "annotations": {"summary": "The metrics archive's newest data for a site is over 4 hours old",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": "Normal is 1-3 hours. Check that site's Thanos sidecar uploads (thanos_shipper_upload_failures_total) and the Compactor's bucket sync."}},
+        {"alert": "ObservabilityArchiveSpaceLow", "expr": 'homelab:archive_free_ratio < 0.1',
+         "for": "1h", "labels": {"severity": "warning"},
+         "annotations": {"summary": "The metrics archive has under 10% free space",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": "Garage shares its disk with the WSL-02 node. Shorten the Compactor's retention or free space before uploads fail."}},
     ]
     return {"apiVersion": "monitoring.coreos.com/v1", "kind": "PrometheusRule",
             "metadata": {"name": "homelab-observability", "namespace": "monitoring"},
@@ -209,6 +226,17 @@ def fixtures():
          ], "promql_expr_test": [
              {"expr": "homelab:archive_state", "eval_time": "4m", "exp_samples": [
                  {"labels": 'homelab:archive_state{k8s_cluster="one"}', "value": 0}]},
+         ]},
+        {"name": "archive lag is per source site, and Unknown once the index goes stale", "interval": "1m",
+         "input_series": [
+             {"series": 'homelab_archive_newest_sample_timestamp_seconds{k8s_cluster="one",observer_cluster="a"}', "values": "0+0x2"},
+             {"series": 'homelab_archive_newest_sample_timestamp_seconds{k8s_cluster="one",observer_cluster="b"}', "values": "-60+0x2"},
+         ], "promql_expr_test": [
+             # Two observers report the same archive; lag is per source site and
+             # goes absent (Unknown) once the index stops being read.
+             {"expr": "homelab:archive_lag_seconds", "eval_time": "2m", "exp_samples": [
+                 {"labels": 'homelab:archive_lag_seconds{k8s_cluster="one"}', "value": 120}]},
+             {"expr": "homelab:archive_lag_seconds", "eval_time": "6m", "exp_samples": []},
          ]},
         {"name": "network path by hop: stale tunnel, missing router session, partial node sessions", "interval": "1m",
          "input_series": [

@@ -169,6 +169,22 @@ tests:
     exp_samples:
     - labels: homelab:archive_state{k8s_cluster="one"}
       value: 0
+- name: archive lag is per source site, and Unknown once the index goes stale
+  interval: 1m
+  input_series:
+  - series: homelab_archive_newest_sample_timestamp_seconds{k8s_cluster="one",observer_cluster="a"}
+    values: 0+0x2
+  - series: homelab_archive_newest_sample_timestamp_seconds{k8s_cluster="one",observer_cluster="b"}
+    values: -60+0x2
+  promql_expr_test:
+  - expr: homelab:archive_lag_seconds
+    eval_time: 2m
+    exp_samples:
+    - labels: homelab:archive_lag_seconds{k8s_cluster="one"}
+      value: 120
+  - expr: homelab:archive_lag_seconds
+    eval_time: 6m
+    exp_samples: []
 - name: 'network path by hop: stale tunnel, missing router session, partial node sessions'
   interval: 1m
   input_series:

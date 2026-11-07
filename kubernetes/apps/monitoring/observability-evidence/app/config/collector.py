@@ -338,6 +338,30 @@ PATHS = {
     "internet": "http://1.1.1.1/",
 }
 CA_FILE = "/tls/ca.crt"
+# The archive's block index, as the Compactor last synced it from the bucket.
+ARCHIVE_INDEX = "http://observability-compactor.monitoring.svc.cluster.local:10902/api/v1/blocks"
+
+
+def archive_index(url: str = ARCHIVE_INDEX, timeout: float = 5) -> dict[str, dict] | None:
+    """Per source cluster: newest archived sample, oldest archived sample, block
+    count and bytes, from the Compactor's block list. None if it can't be read.
+    Each block carries the external `cluster` label of the Prometheus that made it."""
+    try:
+        with urllib.request.build_opener(NoRedirect()).open(url, timeout=timeout) as response:
+            blocks = json.load(response)["data"]["blocks"]
+    except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError):
+        return None
+    sites: dict[str, dict] = {}
+    for block in blocks:
+        cluster = (block.get("thanos") or {}).get("labels", {}).get("cluster")
+        if not cluster:
+            continue
+        site = sites.setdefault(cluster, {"newest": 0.0, "oldest": float("inf"), "blocks": 0, "bytes": 0})
+        site["newest"] = max(site["newest"], block["maxTime"] / 1000)
+        site["oldest"] = min(site["oldest"], block["minTime"] / 1000)
+        site["blocks"] += 1
+        site["bytes"] += sum(f.get("size_bytes", 0) for f in block["thanos"].get("files", []))
+    return sites
 
 
 def path_probe(url: str, timeout: float = 3) -> tuple[bool, float]:
@@ -524,6 +548,14 @@ def main():
                     if clients is not None:
                         peers.add("homelab_mqtt_clients_connected", clients,
                                   observer_cluster=args.cluster, k8s_cluster=args.cluster)
+                index = archive_index()
+                if index is not None:
+                    for cluster, site in sorted(index.items()):
+                        scope = {"observer_cluster": args.cluster, "k8s_cluster": cluster}
+                        peers.add("homelab_archive_newest_sample_timestamp_seconds", site["newest"], **scope)
+                        peers.add("homelab_archive_oldest_sample_timestamp_seconds", site["oldest"], **scope)
+                        peers.add("homelab_archive_blocks", site["blocks"], **scope)
+                        peers.add("homelab_archive_bytes", site["bytes"], **scope)
                 for target, url in PATHS.items():
                     ok, duration = path_probe(url)
                     labels = {"observer_cluster": args.cluster, "k8s_cluster": args.cluster,

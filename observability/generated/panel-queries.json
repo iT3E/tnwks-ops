@@ -738,7 +738,31 @@
   {
     "dashboard": "tnwks-observability",
     "tab": "Archive and delivery",
-    "title": "Unuploaded block age",
+    "title": "Archive lag",
+    "expr": "homelab:archive_lag_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Archive and delivery",
+    "title": "Archive history",
+    "expr": "homelab:archive_history_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Archive and delivery",
+    "title": "Archive free space",
+    "expr": "homelab:archive_free_ratio{k8s_cluster=~\"$cluster\"}",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Archive and delivery",
+    "title": "Time since last upload",
     "expr": "homelab:unuploaded_block_age_seconds{k8s_cluster=~\"$cluster\"}",
     "unit": "s",
     "kiosk": false

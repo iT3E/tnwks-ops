@@ -252,6 +252,23 @@ def test_mqtt_probe_logs_in_and_reads_the_sys_client_count():
     server.close()
 
 
+def test_archive_index_summarizes_blocks_per_source_site(tmp_path):
+    import collector
+
+    def block(cluster, lo, hi, size):
+        return {"minTime": lo * 1000, "maxTime": hi * 1000,
+                "thanos": {"labels": {"cluster": cluster}, "files": [{"size_bytes": size}, {}]}}
+
+    index = tmp_path / "blocks.json"
+    index.write_text(json.dumps({"status": "success", "data": {"blocks": [
+        block("one", 100, 200, 5), block("one", 200, 400, 7), block("two", 50, 90, 1),
+        {"minTime": 0, "maxTime": 999000, "thanos": {"labels": {}}}]}}))
+    assert collector.archive_index(index.as_uri()) == {
+        "one": {"newest": 400, "oldest": 100, "blocks": 2, "bytes": 12},
+        "two": {"newest": 90, "oldest": 50, "blocks": 1, "bytes": 1}}
+    assert collector.archive_index((tmp_path / "missing.json").as_uri()) is None
+
+
 def test_failed_collection_retains_old_success_time_without_cached_healthy_samples(small_inventory):
     api = FakeApi()
     now = [1000]

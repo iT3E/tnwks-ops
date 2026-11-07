@@ -34,6 +34,7 @@ PRODUCERS = {
     "prometheus_": "Prometheus self-monitoring",
     "alertmanager_": "Alertmanager self-monitoring",
     "thanos_": "Thanos component metrics",
+    "garage_": "Garage admin metrics (WSL-02 archive)",
     "ALERTS": "local Prometheus alert rules (current state)",
     "up": "Prometheus scrape status",
 }

@@ -39,6 +39,14 @@ spec:
         < 180))) == 1) == 4) / 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info{tier="warm"}))
     - record: homelab:local_history_seconds
       expr: time() - min by (k8s_cluster) (prometheus_tsdb_lowest_timestamp_seconds)
+    - record: homelab:archive_lag_seconds
+      expr: time() - max by (k8s_cluster) ((homelab_archive_newest_sample_timestamp_seconds and (time() - timestamp(homelab_archive_newest_sample_timestamp_seconds)
+        < 180)))
+    - record: homelab:archive_history_seconds
+      expr: time() - min by (k8s_cluster) ((homelab_archive_oldest_sample_timestamp_seconds and (time() - timestamp(homelab_archive_oldest_sample_timestamp_seconds)
+        < 180)))
+    - record: homelab:archive_free_ratio
+      expr: min by (k8s_cluster) (garage_local_disk_avail{volume="data"} / garage_local_disk_total{volume="data"})
     - record: homelab:unuploaded_block_age_seconds
       expr: time() - max by (k8s_cluster) (thanos_objstore_bucket_last_successful_upload_time{job=~".*thanos-discovery"}
         > 0)
@@ -118,3 +126,25 @@ spec:
           }}
         description: Local metrics and alerts remain available. Restore archive uploads before retained local blocks
           expire.
+    - alert: ObservabilityArchiveBehind
+      expr: homelab:archive_lag_seconds > 14400
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: The metrics archive's newest data for a site is over 4 hours old
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster
+          }}
+        description: Normal is 1-3 hours. Check that site's Thanos sidecar uploads (thanos_shipper_upload_failures_total)
+          and the Compactor's bucket sync.
+    - alert: ObservabilityArchiveSpaceLow
+      expr: homelab:archive_free_ratio < 0.1
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: The metrics archive has under 10% free space
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster
+          }}
+        description: Garage shares its disk with the WSL-02 node. Shorten the Compactor's retention or free space
+          before uploads fail.

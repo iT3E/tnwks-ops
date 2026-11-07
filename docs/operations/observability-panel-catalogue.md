@@ -98,7 +98,10 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-observability / Cost / Retained blocks | `prometheus_tsdb_storage_blocks_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Cost / Rule evaluation failures | `prometheus_rule_evaluation_failures_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Archive and delivery / Archive state | `homelab_observer_info`<br>`probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
-| tnwks-observability / Archive and delivery / Unuploaded block age | `thanos_objstore_bucket_last_successful_upload_time` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
+| tnwks-observability / Archive and delivery / Archive lag | `homelab_archive_newest_sample_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
+| tnwks-observability / Archive and delivery / Archive history | `homelab_archive_oldest_sample_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
+| tnwks-observability / Archive and delivery / Archive free space | `garage_local_disk_avail`<br>`garage_local_disk_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
+| tnwks-observability / Archive and delivery / Time since last upload | `thanos_objstore_bucket_last_successful_upload_time` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Archive and delivery / Notification failures | `alertmanager_notifications_failed_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/external-monitoring.md) |
 | tnwks-alerts / Current / Firing now | `ALERTS` | 180s | None | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-alerts / Current / Pending now | `ALERTS` | 180s | None | [Runbook](../../docs/operations/observability-implementation.md) |
