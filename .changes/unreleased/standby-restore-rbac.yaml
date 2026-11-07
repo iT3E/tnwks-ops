@@ -1,0 +1,4 @@
+---
+kind: Fixed
+body: The weekly standby restore can read site-overrides again. The kustomization's namespace had moved its flux-system Role into kopiur-system, so every run failed with a 403 before restoring anything.
+time: 2026-11-07T19:55:00Z
