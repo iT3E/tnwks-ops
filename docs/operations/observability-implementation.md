@@ -391,9 +391,12 @@ ingress adds an `X-Homelab-Site` header naming itself, read into
 A pod, like the WSL host, reaches its own site's ingress for either VIP (each
 distro prefers its own cluster's announcement), so these probes show each
 site's readiness to serve every name, not the LAN client's route. That route is
-`homelab:shared_vip_route`: the preferred site while its router session is up,
-else the other. It's inferred from the router's live BGP sessions and the
-declared local preference, not read from the router's route table. The WSL-01
+`homelab:shared_vip_route`: the preferred site while it carries routes, else
+the other. A site carries routes while its router session is up and it sends the
+router at least one prefix: with a site's nodes down, its distro's FRR keeps the
+session up and announces nothing. It's inferred from the router's live BGP
+sessions, prefix counts and the declared local preference, not read from the
+router's route table. The WSL-01
 host reaching site 1 on `10.10.95.200` is this design, not a misroute.
 
 ## Objectives

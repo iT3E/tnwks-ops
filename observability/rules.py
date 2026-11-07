@@ -213,16 +213,25 @@ def network_records():
     known = " or ".join(hop(n, e) for n, e in hops)
     unknown = " or ".join(hop(n, f"0 * {expected}") for n, _ in hops)
     # Which site the router sends each shared VIP to: its preferred site while
-    # that site's session is up, else the other one while its session is up.
-    # Inferred from live sessions and the declared local preference (100/50),
-    # not read from the router's route table. 1 routed, 0 not, absent Unknown.
+    # that site carries routes, else the other one while it does. A site
+    # carries routes while its session is up and it sends the router at least
+    # one prefix: the distro's FRR keeps the session up with the site's nodes
+    # down, and announces nothing (site-loss drill, 2026-11-07). Inferred from
+    # those and the declared local preference (100/50), not read from the
+    # router's route table. 1 routed, 0 not, absent Unknown.
     session = 'min(homelab:network_path_state{{hop="router-bgp",k8s_cluster="{}"}} > 0)'
+    sent = 'sum(mktxp_bgp_prefix_count{{name=~"{}(-[0-9]+)?"}})'
+    peer = {s["cluster"]: s["router_peer"] for s in sites}
+
+    def carries(site):
+        return f"(({session.format(site)} == bool 1) * ({sent.format(peer[site])} > bool 0))"
+
     routes = []
     for vip in inventory()["vips"]:
         first = vip["preferred"]
         other = next(s["cluster"] for s in sites if s["cluster"] != first)
-        for site, expr in ((first, f"{session.format(first)} == bool 1"),
-                           (other, f"({session.format(other)} == bool 1) * ({session.format(first)} != bool 1)")):
+        for site, expr in ((first, carries(first)),
+                           (other, f"{carries(other)} * ({carries(first)} != bool 1)")):
             routes.append(f'label_replace(label_replace({expr}, "k8s_cluster", "{site}", "", ""), "vip", "{vip["address"]}", "", "")')
     prefixes = " or ".join(per_site(
         f'sum(mktxp_bgp_prefix_count{{name=~"{s["router_peer"]}(-[0-9]+)?"}})', s) for s in sites)
@@ -414,12 +423,30 @@ def fixtures():
          "input_series": [
              {"series": 'mktxp_system_uptime{k8s_cluster="homelab-wsl"}', "values": "100+60x10"},
              {"series": 'mktxp_bgp_established{name="wsl-site2-1"}', "values": "1+0x10"},
+             {"series": 'mktxp_bgp_prefix_count{name="wsl-site1-1"}', "values": "7+0x10"},
+             {"series": 'mktxp_bgp_prefix_count{name="wsl-site2-1"}', "values": "7+0x10"},
          ], "promql_expr_test": [
              {"expr": "homelab:shared_vip_route", "eval_time": "5m", "exp_samples": [
                  {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl",vip="10.10.95.10"}', "value": 0},
                  {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl-02",vip="10.10.95.10"}', "value": 1},
                  {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl",vip="10.10.95.200"}', "value": 0},
                  {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl-02",vip="10.10.95.200"}', "value": 1},
+             ]},
+         ]},
+        {"name": "shared VIPs: a site whose session is up but sends no prefixes carries nothing", "interval": "1m",
+         "input_series": [
+             {"series": 'mktxp_system_uptime{k8s_cluster="homelab-wsl"}', "values": "100+60x10"},
+             {"series": 'mktxp_bgp_established{name="wsl-site1-1"}', "values": "1+0x10"},
+             {"series": 'mktxp_bgp_established{name="wsl-site2-1"}', "values": "1+0x10"},
+             {"series": 'mktxp_bgp_prefix_count{name="wsl-site1-1"}', "values": "7+0x10"},
+             # Site 2's nodes are down; its distro FRR still holds the session.
+             {"series": 'mktxp_bgp_prefix_count{name="wsl-site2-1"}', "values": "0+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:shared_vip_route", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl",vip="10.10.95.10"}', "value": 1},
+                 {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl-02",vip="10.10.95.10"}', "value": 0},
+                 {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl",vip="10.10.95.200"}', "value": 1},
+                 {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl-02",vip="10.10.95.200"}', "value": 0},
              ]},
          ]},
         {"name": "ingress names: passing, failing, unobserved", "interval": "1m",

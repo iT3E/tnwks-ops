@@ -134,13 +134,17 @@ spec:
         "", "") or label_replace(sum(mktxp_bgp_prefix_count{name=~"wsl-site2(-[0-9]+)?"}), "k8s_cluster", "homelab-wsl-02",
         "", "")
     - record: homelab:shared_vip_route
-      expr: label_replace(label_replace(min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl"}
-        > 0) == bool 1, "k8s_cluster", "homelab-wsl", "", ""), "vip", "10.10.95.10", "", "") or label_replace(label_replace((min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl-02"}
-        > 0) == bool 1) * (min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl"} > 0) != bool
-        1), "k8s_cluster", "homelab-wsl-02", "", ""), "vip", "10.10.95.10", "", "") or label_replace(label_replace(min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl-02"}
-        > 0) == bool 1, "k8s_cluster", "homelab-wsl-02", "", ""), "vip", "10.10.95.200", "", "") or label_replace(label_replace((min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl"}
-        > 0) == bool 1) * (min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl-02"} > 0) !=
-        bool 1), "k8s_cluster", "homelab-wsl", "", ""), "vip", "10.10.95.200", "", "")
+      expr: label_replace(label_replace(((min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl"}
+        > 0) == bool 1) * (sum(mktxp_bgp_prefix_count{name=~"wsl-site1(-[0-9]+)?"}) > bool 0)), "k8s_cluster", "homelab-wsl",
+        "", ""), "vip", "10.10.95.10", "", "") or label_replace(label_replace(((min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl-02"}
+        > 0) == bool 1) * (sum(mktxp_bgp_prefix_count{name=~"wsl-site2(-[0-9]+)?"}) > bool 0)) * (((min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl"}
+        > 0) == bool 1) * (sum(mktxp_bgp_prefix_count{name=~"wsl-site1(-[0-9]+)?"}) > bool 0)) != bool 1), "k8s_cluster",
+        "homelab-wsl-02", "", ""), "vip", "10.10.95.10", "", "") or label_replace(label_replace(((min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl-02"}
+        > 0) == bool 1) * (sum(mktxp_bgp_prefix_count{name=~"wsl-site2(-[0-9]+)?"}) > bool 0)), "k8s_cluster", "homelab-wsl-02",
+        "", ""), "vip", "10.10.95.200", "", "") or label_replace(label_replace(((min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl"}
+        > 0) == bool 1) * (sum(mktxp_bgp_prefix_count{name=~"wsl-site1(-[0-9]+)?"}) > bool 0)) * (((min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl-02"}
+        > 0) == bool 1) * (sum(mktxp_bgp_prefix_count{name=~"wsl-site2(-[0-9]+)?"}) > bool 0)) != bool 1), "k8s_cluster",
+        "homelab-wsl", "", ""), "vip", "10.10.95.200", "", "")
     - record: homelab:ingress_state
       expr: (3 - 2 * min by (k8s_cluster, name) (probe_success{observability_target="ingress"} and (time() - timestamp(probe_success{observability_target="ingress"}))
         < 180)) or on (k8s_cluster, name) (0 * max by (k8s_cluster, name) (homelab_expected_ingress_info))
