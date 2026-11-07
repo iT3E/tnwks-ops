@@ -1,4 +1,0 @@
----
-kind: Fixed
-body: Shared VIP routes put a VIP on a site only while that site sends the router prefixes, not just while its BGP session is up (the site-loss drill left 10.10.95.200 on a down site). Both drills are recorded.
-time: 2026-11-07T19:25:00Z

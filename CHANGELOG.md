@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.35.2 - 2026-11-07
+
+### Fixed
+
+* Shared VIP routes put a VIP on a site only while that site sends the router prefixes, not just while its BGP session is up (the site-loss drill left 10.10.95.200 on a down site). Both drills are recorded.
+
 ## v2.35.1 - 2026-11-07
 
 ### Fixed
