@@ -1,0 +1,30 @@
+---
+# Plausible's ClickHouse data (clickhouse-data-plausible-0, ~0.5 GB). Not backed
+# up: no SnapshotSchedule. The policy only moves the PVC between sites
+# (bin/site-failover "plausible", the app stopped), with a one-off snapshot
+# that's deleted after the restore. ClickHouse owns its files as uid 101, so
+# the mover reads as root (namespace annotation privileged-movers).
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: plausible-clickhouse
+  namespace: selfhosted
+spec:
+  repository:
+    kind: ClusterRepository
+    name: s3
+  copyMethod: Direct
+  compression:
+    compressor: zstd
+  credentialProjection:
+    enabled: true
+  mover:
+    privilegedMode: true
+    securityContext:
+      runAsUser: 0
+      runAsGroup: 0
+  retention:
+    keepLatest: 1
+  sources:
+    - pvc:
+        name: clickhouse-data-plausible-0

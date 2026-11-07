@@ -65,6 +65,8 @@ resources:
   - ../../../apps/production/wizarr/ks.yaml
   # Jellyfin: at 0 here until it moves; its library here is an empty bulk volume.
   - ../../../apps/production/jellyfin/ks.yaml
+  # Plausible: its Postgres as a replica of homelab-wsl's, the app at 0.
+  - ../../../apps/selfhosted/plausible/ks.yaml
   # Firefly and finance-sync: warm standby (databases replicas, app at 0).
   - ../../../apps/production/firefly/ks.yaml
   - ../../../apps/production/finance-sync/ks.yaml
@@ -225,6 +227,17 @@ patches:
       metadata:
         name: ingress-nginx
         namespace: flux-system
+  # Plausible is reached through cloudflared on homelab-wsl, whose ingress has
+  # oauth2-proxy; this site has no oauth2-proxy to wait for.
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata:
+        name: plausible
+        namespace: flux-system
+      spec:
+        dependsOn:
+          - name: plausible-db
   - patch: |-
       $patch: delete
       apiVersion: kustomize.toolkit.fluxcd.io/v1

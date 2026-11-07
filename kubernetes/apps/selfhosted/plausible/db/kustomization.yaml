@@ -1,36 +1,28 @@
 ---
-# plausible's own CNPG cluster, databases/plausible-pg, from
-# ../../../../components/cnpg-cluster (added by the plausible-db Kustomization).
+# plausible's own CNPG cluster, databases/plausible-pg: ../../../../components/cnpg-cluster
+# plus cnpg-standby (both added by the plausible-db Kustomization). homelab-wsl
+# is the primary; homelab-wsl-02 runs a replica cluster from its WAL archive.
 #
-# First boot imports `plausible` from the shared cluster (CNPG initdb.import,
-# microservice) as the owner role: the shared cluster has superuser access
-# off, and plausible owns every object. bootstrap is only read when the
-# Cluster is created. The shared cluster is retired after this.
+# Imported from the shared cluster's `plausible` database (#1867). The import
+# patch is gone: bootstrap is only read when a Cluster is created, and a new
+# one now restores from the peer's archive (cnpg-standby).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  # The owner role (moved here from the shared cluster's directory).
+  # The owner role's password, the same on both sites.
   - ./secret-plausible-role.sops.yaml
 patches:
   - target:
       kind: Cluster
     patch: |-
+      # Which site is primary. A switchover writes PLAUSIBLE_PG_PRIMARY to both
+      # sites' site-overrides (bin/site-failover, docs/wsl/multi-site.md).
       - op: add
-        path: /spec/bootstrap/initdb/import
-        value:
-          type: microservice
-          databases: [plausible]
-          source:
-            externalCluster: postgres
+        path: /spec/replica/primary
+        value: ${PLAUSIBLE_PG_PRIMARY:=homelab-wsl}
+      # The old primary's demotion token, on the side being promoted only
+      # (bin/site-failover writes it). The empty default keeps its quotes
+      # (mealie/db/kustomization.yaml explains why).
       - op: add
-        path: /spec/externalClusters
-        value:
-          - name: postgres
-            connectionParameters:
-              host: postgres-rw.databases.svc.cluster.local
-              user: plausible
-              dbname: plausible
-              sslmode: require
-            password:
-              name: postgres-plausible
-              key: password
+        path: /spec/replica/promotionToken
+        value: ${PLAUSIBLE_PG_PROMOTION_TOKEN:=""}

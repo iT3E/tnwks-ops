@@ -3,5 +3,9 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: selfhosted
+  annotations:
+    # kopiur movers may run as root here (Plausible's ClickHouse data, uid 101;
+    # bin/site-failover).
+    kopiur.home-operations.com/privileged-movers: "true"
   labels:
     kustomize.toolkit.fluxcd.io/prune: disabled

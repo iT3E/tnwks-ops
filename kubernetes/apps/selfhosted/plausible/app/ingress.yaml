@@ -12,6 +12,10 @@ kind: Ingress
 metadata:
   name: plausible-tracking
   namespace: selfhosted
+  annotations:
+    # Through the Service's ClusterIP: on the site where it's at 0, only
+    # Cilium knows the other site's backends.
+    nginx.ingress.kubernetes.io/service-upstream: "true"
 spec:
   ingressClassName: nginx
   # No secretName — the ingress-nginx default-ssl-certificate is the
@@ -51,6 +55,9 @@ metadata:
   name: plausible
   namespace: selfhosted
   annotations:
+    # Through the Service's ClusterIP: on the site where it's at 0, only
+    # Cilium knows the other site's backends.
+    nginx.ingress.kubernetes.io/service-upstream: "true"
     # Auth subrequest: nginx asks oauth2-proxy (cluster-internal Service)
     # whether the request carries a valid session. 202 → allow; 401 → signin.
     nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local/oauth2/auth"

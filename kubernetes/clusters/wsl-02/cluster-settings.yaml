@@ -130,6 +130,9 @@ data:
   # The MQTT broker: a standby here, with HA (its Service is global).
   MOSQUITTO_REPLICAS: "0"
   MOSQUITTO_HELM_DISABLE_WAIT: "true"
+  # Plausible: warm standby (its Postgres a replica of homelab-wsl's; the
+  # app at 0). bin/site-failover "plausible".
+  PLAUSIBLE_REPLICAS: "0"
   # Jellyfin runs here since 2026-11-06 (bin/site-failover, then this
   # setting), with an empty library; homelab-wsl keeps it at 0.
   # Ombi, Ombi-f and Wizarr run here since 2026-11-06 (bin/site-failover,

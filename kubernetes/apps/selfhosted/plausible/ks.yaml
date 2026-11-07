@@ -9,11 +9,10 @@ spec:
   path: ./kubernetes/apps/selfhosted/plausible/db
   components:
     - ../../../../components/cnpg-cluster
+    - ../../../../components/cnpg-standby
   dependsOn:
     - name: cloudnative-pg-plugin-barman-cloud
     - name: aws-backup-credentials
-    # The import's source (the shared cluster), for its first boot.
-    - name: cloudnative-pg-cluster
   # The owner role's Secret ships with it (db/).
   decryption:
     provider: sops
