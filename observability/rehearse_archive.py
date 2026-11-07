@@ -76,6 +76,21 @@ def main():
         for file in (base / "secrets").iterdir():
             file.chmod(0o600)
         (base / "objstore.yaml").chmod(0o600)
+        # Reproduce Kubernetes' fsGroup-readable Secret projection, then run
+        # the exact production init command to satisfy Garage's strict check.
+        source = base / "secret-source"
+        source.mkdir(mode=0o700)
+        for key in ["rpc-secret", "admin-token", "metrics-token"]:
+            (base / "secrets" / key).rename(source / key)
+            (source / key).chmod(0o440)
+        release = yaml.safe_load((ROOT / "kubernetes/apps/monitoring/garage/app/helmrelease.yaml").read_text())
+        init = release["spec"]["values"]["controllers"]["garage"]["initContainers"]["credentials"]
+        docker("run", "--rm", "--network", "none", "--read-only", "--user", user,
+               "--mount", f"type=bind,src={source},dst=/secret-source,readonly",
+               "--mount", f"type=bind,src={base / 'secrets'},dst=/secrets",
+               "--entrypoint", init["command"][0], CADDY, *init["command"][1:], *init["args"])
+        assert all((base / "secrets" / key).stat().st_mode & 0o777 == 0o600
+                   for key in ["rpc-secret", "admin-token", "metrics-token"])
         started = []
 
         def run(role, image, args, mounts=(), writable=()):

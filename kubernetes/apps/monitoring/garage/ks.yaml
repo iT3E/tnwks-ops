@@ -1,6 +1,5 @@
 ---
-# WSL-02 only. Deliberately not referenced by either cluster until the
-# storage preflight, local integration test and network migration complete.
+# WSL-02 only; the cluster overlay supplies its verified node and storage class.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
