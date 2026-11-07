@@ -185,6 +185,23 @@ replica count. With neither observed, the state is Unknown. URLs and strings are
 `observability/inventory.py` (`PROBES`). Each probe has a 3 s timeout, and they run
 in parallel within the 20 s scrape.
 
+## Recovery evidence
+
+`homelab_recovery_prerequisite_state{k8s_cluster, app, prerequisite}`, per warm app and
+site: could this site take the app over? 1 met, 3 not met. A prerequisite with no
+evidence is left out, so `homelab:recovery_state` stays Unknown.
+
+| prerequisite | Met when |
+| --- | --- |
+| `database` | every one of the app's Postgres clusters on this site is healthy (primary or replica) |
+| `backup` | each has a completed base backup on this site within 30 h |
+| `restore` | the weekly standby restore last restored each of its PVCs here within 8 days. Also met where the app runs, and for an app with no PVCs to copy (Grafana) |
+| `fence` | `site-lease-fence` succeeded within 10 min and the app's lease doesn't name this site. An unreadable lease is no evidence |
+
+`homelab_restore_last_success_timestamp_seconds` and
+`homelab_fence_last_verified_timestamp_seconds` feed the Sites & Failover board.
+Restore stays Unknown on a standby until the first Sunday drill (05:15).
+
 ## Following rollout work
 
 1. Validate backlog behavior and certificate renewal for the global query path.

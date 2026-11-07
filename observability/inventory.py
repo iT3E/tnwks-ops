@@ -82,7 +82,9 @@ def inventory():
                      "workloads": spec.get("workloads", ["deployment/" + item for item in spec.get("deployments", [name])]),
                      "clusters": [site["cluster"] for site in sites], "databases": dbs,
                      "tier": "warm" if spec.get("lease") else "movable",
-                     "fencing_required": bool(spec.get("lease"))})
+                     "fencing_required": bool(spec.get("lease")),
+                     # PVCs the weekly standby restore copies (restore evidence).
+                     "pvcs": [pvc["name"] for pvc in spec.get("pvcs", []) if not pvc.get("transfer_only")]})
         if name in PROBES:
             url, expect = PROBES[name]
             apps[-1]["probe"] = {"url": url, "expect": expect}

@@ -8,7 +8,10 @@ import json
 import logging
 import math
 import os
+import random
+import socket
 import ssl
+import struct
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -127,6 +130,7 @@ class Collector:
             "overrides": self.overrides,
             "databases": self.databases,
             "services": self.services,
+            "recovery": self.recovery,
         }
         successes = []
         for name, function in sections.items():
@@ -195,6 +199,76 @@ class Collector:
             scope = dict(labels, app=app["name"], observability_target="service")
             metrics.add("probe_success", int(ok), **scope)
             metrics.add("probe_duration_seconds", duration, **scope)
+
+    def recovery(self, metrics: Metrics, labels: dict):
+        """Per warm app, whether this site could take it over: 1 met, 3 not met; a
+        prerequisite with no evidence is left out, so the rules keep it Unknown.
+
+        database: every one of its Postgres clusters here is healthy (primary or replica).
+        backup: each has a completed base backup here within 30 h.
+        restore: the weekly standby restore last restored each of its PVCs here within
+          8 days; met where the app runs here (its data is live), or has no PVCs.
+        fence: the fence CronJob succeeded within 10 min and the app's site lease
+          doesn't name this site. An unreadable lease is no evidence.
+        """
+        now = self.clock()
+        warm = [app for app in self.inventory["apps"] if app.get("tier") == "warm"]
+        if not warm:
+            return
+        clusters = {obj["metadata"]["name"]: obj for obj in
+                    self.api.get("/apis/postgresql.cnpg.io/v1/namespaces/databases/clusters").get("items", [])}
+        backups: dict[str, float] = {}
+        for obj in self.api.get("/apis/postgresql.cnpg.io/v1/namespaces/databases/backups").get("items", []):
+            status = obj.get("status", {})
+            done = timestamp(status.get("stoppedAt"))
+            if status.get("phase") == "completed" and done:
+                name = obj.get("spec", {}).get("cluster", {}).get("name")
+                backups[name] = max(backups.get(name, 0), done)
+        fence_job = next((obj for obj in self.api.get("/apis/batch/v1/namespaces/databases/cronjobs").get("items", [])
+                          if obj["metadata"]["name"] == "site-lease-fence"), None)
+        fence_ok = timestamp((fence_job or {}).get("status", {}).get("lastSuccessfulTime"))
+        for app in warm:
+            scope = dict(labels, app=app["name"])
+
+            def state(prerequisite, value):
+                metrics.add("homelab_recovery_prerequisite_state", value, prerequisite=prerequisite, **scope)
+
+            dbs = [clusters.get(name) for name in app.get("databases", [])]
+            state("database", 1 if dbs and all(
+                db and "healthy" in db.get("status", {}).get("phase", "")
+                and db.get("status", {}).get("readyInstances", 0) >= db.get("spec", {}).get("instances", 1)
+                for db in dbs) else 3)
+
+            ages = [now - backups[name] for name in app.get("databases", []) if name in backups]
+            if app.get("databases") and len(ages) == len(app["databases"]):
+                state("backup", 1 if max(ages) <= 30 * 3600 else 3)
+
+            if self.desired.get(app["name"], 0) > 0 or not app.get("pvcs"):
+                state("restore", 1)
+            else:
+                drills = self.api.get(
+                    f"/apis/kopiur.home-operations.com/v1alpha1/namespaces/{app['namespace']}/restores"
+                    "?labelSelector=app.kubernetes.io%2Fname%3Dstandby-restore").get("items", [])
+                newest = {}
+                for obj in drills:
+                    pvc = obj["metadata"].get("labels", {}).get("tnwks.us/pvc")
+                    created = timestamp(obj["metadata"].get("creationTimestamp"))
+                    if pvc in app["pvcs"] and created and created > newest.get(pvc, (0, ""))[0]:
+                        newest[pvc] = (created, obj.get("status", {}).get("phase", ""))
+                if len(newest) == len(app["pvcs"]):
+                    ok = all(phase in ("Completed", "Succeeded") and now - created <= 8 * 86400
+                             for created, phase in newest.values())
+                    state("restore", 1 if ok else 3)
+                    if ok:
+                        metrics.add("homelab_restore_last_success_timestamp_seconds",
+                                    min(created for created, _ in newest.values()), **scope)
+
+            if fence_ok:
+                lease = lease_txt(f"{app['name']}.lease.tnwks.local.")
+                if lease is not None:
+                    fenced = lease == self.cluster
+                    state("fence", 1 if (not fenced and now - fence_ok <= 600) else 3)
+                    metrics.add("homelab_fence_last_verified_timestamp_seconds", fence_ok, **scope)
 
     def flux(self, metrics: Metrics, labels: dict):
         for group, version, plural, kind in [
@@ -274,6 +348,46 @@ def path_probe(url: str, timeout: float = 3) -> tuple[bool, float]:
     except (OSError, urllib.error.URLError):
         ok = False
     return ok, time.monotonic() - start
+
+
+def lease_txt(name: str, timeout: float = 2.0) -> str | None:
+    """First TXT string of an absolute name from the pod's resolver, or None (no
+    answer, an error, or no record). Same lookup as the fence and the app gates."""
+    try:
+        with open("/etc/resolv.conf") as f:
+            server = next(line.split()[1] for line in f if line.startswith("nameserver"))
+        qid = random.randint(0, 0xFFFF)
+        query = struct.pack(">HHHHHH", qid, 0x0100, 1, 0, 0, 0)
+        for label in name.rstrip(".").split("."):
+            query += bytes([len(label)]) + label.encode()
+        query += b"\x00" + struct.pack(">HH", 16, 1)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.settimeout(timeout)
+            s.sendto(query, (server, 53))
+            resp, _ = s.recvfrom(4096)
+        rid, flags, qd, an, _, _ = struct.unpack(">HHHHHH", resp[:12])
+        if rid != qid or flags & 0x000F:
+            return None
+        off = 12
+        for _ in range(qd):
+            while resp[off]:
+                off += resp[off] + 1
+            off += 5
+        for _ in range(an):
+            if resp[off] & 0xC0 == 0xC0:
+                off += 2
+            else:
+                while resp[off]:
+                    off += resp[off] + 1
+                off += 1
+            rtype, _, _, rdlen = struct.unpack(">HHIH", resp[off:off + 10])
+            off += 10
+            if rtype == 16 and rdlen:
+                return resp[off + 1:off + 1 + resp[off]].decode()
+            off += rdlen
+    except (OSError, StopIteration, IndexError, struct.error, UnicodeDecodeError):
+        return None
+    return None
 
 
 def content_probe(url: str, expect: str, timeout: float = 3) -> tuple[bool, float]:

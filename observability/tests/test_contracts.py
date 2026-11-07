@@ -132,6 +132,43 @@ def test_content_probe_only_where_the_app_runs(small_inventory, monkeypatch):
     assert 'probe_success{app="test",k8s_cluster="one",observability_target="service",observer_cluster="one"} 1' in out
 
 
+def test_recovery_prerequisites_from_evidence_only(small_inventory, monkeypatch):
+    import collector
+    now = 2_000_000_000
+
+    class Api(FakeApi):
+        def get(self, path):
+            if path.endswith("/clusters"):
+                return {"items": [{"metadata": {"name": "test-pg"}, "spec": {"instances": 1},
+                                   "status": {"phase": "Cluster in healthy state", "readyInstances": 1}}]}
+            if path.endswith("/backups"):
+                return {"items": [{"spec": {"cluster": {"name": "test-pg"}},
+                                   "status": {"phase": "completed", "stoppedAt": "2033-05-18T02:00:00Z"}}]}
+            if path.endswith("/cronjobs"):
+                return {"items": [{"metadata": {"name": "site-lease-fence"},
+                                   "status": {"lastSuccessfulTime": "2033-05-18T03:32:00Z"}}]}
+            if "/restores" in path:
+                return {"items": [{"metadata": {"labels": {"tnwks.us/pvc": "data"},
+                                                "creationTimestamp": "2033-05-14T00:00:00Z"},
+                                   "status": {"phase": "Failed"}}]}
+            return super().get(path)
+
+    small_inventory["apps"][0]["pvcs"] = ["data"]
+    leases = {"test.lease.tnwks.local.": "one"}
+    monkeypatch.setattr(collector, "lease_txt", leases.get)
+    out = Collector(Api(), small_inventory, "one", clock=lambda: now).collect().decode()
+
+    def got(prerequisite):
+        line = next(row for row in out.splitlines() if f'prerequisite="{prerequisite}"' in row)
+        return line.rsplit(" ", 1)[1]
+    assert got("database") == "1" and got("backup") == "1"
+    assert got("restore") == "3"  # the standby's last drill failed
+    assert got("fence") == "3"  # the lease names this site
+    leases.clear()  # unreadable lease: no fence evidence at all
+    out = Collector(Api(), small_inventory, "one", clock=lambda: now).collect().decode()
+    assert 'prerequisite="fence"' not in out
+
+
 def test_failed_collection_retains_old_success_time_without_cached_healthy_samples(small_inventory):
     api = FakeApi()
     now = [1000]

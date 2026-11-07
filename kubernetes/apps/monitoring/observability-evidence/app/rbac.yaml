@@ -24,7 +24,15 @@ rules:
     resources: [gitrepositories]
     verbs: [list]
   - apiGroups: [postgresql.cnpg.io]
-    resources: [clusters]
+    resources: [clusters, backups]
+    verbs: [list]
+  # Recovery evidence: the fence CronJob's last success, and the standby
+  # restore drills' Restores.
+  - apiGroups: [batch]
+    resources: [cronjobs]
+    verbs: [list]
+  - apiGroups: [kopiur.home-operations.com]
+    resources: [restores]
     verbs: [list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
