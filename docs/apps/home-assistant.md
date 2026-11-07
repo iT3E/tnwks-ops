@@ -1,8 +1,8 @@
 # Home Assistant
 
 Home Assistant runs on `homelab-wsl` from
-`kubernetes/apps/home-automation/home-assistant/`. Its recorder writes to the
-shared CNPG cluster (database `home_assistant`).
+`kubernetes/apps/home-automation/home-assistant/`. Its recorder writes to its
+own CNPG cluster, `databases/home-assistant-pg` (database `home_assistant`).
 
 ## Access
 
