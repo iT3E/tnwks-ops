@@ -2165,6 +2165,106 @@
     "owner": "homelab operator"
   },
   {
+    "dashboard": "tnwks-wifi",
+    "tab": "Site dependency",
+    "panel": "Site host uplinks",
+    "query": "label_replace(max by (k8s_cluster, instance, nic) (windows_net_current_bandwidth_bytes{k8s_cluster=~\"$cluster\"} > 0) * 8, \"host\", \"$1\", \"instance\", \"(.+)\")",
+    "unit": "bps",
+    "query_mode": "instant",
+    "inputs": [
+      "windows_net_current_bandwidth_bytes"
+    ],
+    "sources": [
+      {
+        "metric": "windows_net_current_bandwidth_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi",
+    "tab": "Site dependency",
+    "panel": "Site host uplink traffic",
+    "query": "sum by (k8s_cluster, instance, nic) (rate(windows_net_bytes_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) > 0",
+    "unit": "Bps",
+    "query_mode": "range",
+    "inputs": [
+      "windows_net_bytes_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_net_bytes_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi",
+    "tab": "Site dependency",
+    "panel": "Site 2 Wi-Fi signal",
+    "query": "max by (ap_name, channel) (unpoller_client_radio_signal_db{k8s_cluster=~\"$cluster\",source_site=\"\",name=\"WSL-02\"})",
+    "unit": "dBm",
+    "query_mode": "range",
+    "inputs": [
+      "unpoller_client_radio_signal_db"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_radio_signal_db",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi",
+    "tab": "Site dependency",
+    "panel": "Site 2 Wi-Fi association",
+    "query": "max by (ap_name) (unpoller_client_uptime_seconds{k8s_cluster=~\"$cluster\",source_site=\"\",name=\"WSL-02\"})",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "unpoller_client_uptime_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_uptime_seconds",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
     "dashboard": "tnwks-kubernetes",
     "tab": "Reconciliation",
     "panel": "Flux resource readiness",

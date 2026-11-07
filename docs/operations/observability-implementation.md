@@ -313,6 +313,18 @@ OCIRepository and HelmRepository with its Ready condition and suspension, which
 is what the custom-resource config would add. HelmCharts are left out: a
 HelmRelease's Ready covers its chart.
 
+## Site 2's Wi-Fi dependency
+
+Site 2's Windows host reaches the router over Wi-Fi only; site 1's is wired.
+The Wi-Fi & LAN board's Site dependency tab measures that path from both ends:
+each host's NICs with a link and their negotiated rate and traffic
+(windows_exporter), and the site 2 host's signal, access point and association
+uptime as UniFi reports it (`SITE2_WIFI_CLIENT` in `observability/dashboards.py`,
+its computer name; household clients are never named). A reassociation resets
+the uptime and interrupts the site tunnel and its BGP sessions, so read it with
+the Network board's History tab. First measured 2026-11-07: site 1 wired at
+1 Gbit/s, site 2 on Wi-Fi at 300 Mbit/s and -72 dBm on channel 149.
+
 ## Databases outside CloudNativePG
 
 MongoDB (UniFi), Immich's Postgres, Plausible's ClickHouse and the two Valkeys

@@ -57,6 +57,9 @@ ROUTER = ("gxf3edrffkw", {"node": "routerboard_name"})
 NODE = ("200ac8fdbfbb74b39aff88118e4d1c2c", {"cluster": "k8s_cluster", "node": "kubernetes_node"})
 WINDOWS = ("IV0hu1m7z", {"server": "instance"})
 ACCESS_POINT = ("home-wifi", {"ap": "name"})
+# The site 2 host, a UniFi Wi-Fi client (its Windows computer name, as in the
+# Ansible inventory). Household clients are never named on the boards.
+SITE2_WIFI_CLIENT = "WSL-02"
 
 
 def alerts(state: str) -> str:
@@ -347,6 +350,18 @@ def catalogue() -> list[Board]:
                   "Correlate site 2 connectivity loss with AP/uplink and WireGuard/BGP observations. This does not identify individual household clients."),
                 p("Peer path duration", metric("homelab_peer_probe_duration_seconds"), "s",
                   "Bounded transport probe duration; one sample does not measure line-rate Wi-Fi performance."),
+                # Measured 2026-11-07: site 1 on its wired NIC at 1 Gbit/s, site 2
+                # only on Wi-Fi (300 Mbit/s link rate).
+                p("Site host uplinks", f'label_replace(max by (k8s_cluster, instance, nic) ({selector("windows_net_current_bandwidth_bytes")} > 0) * 8, "host", "$1", "instance", "(.+)")', "bps",
+                  "Each site's Windows host NICs with a link, at their negotiated rate (windows_exporter). Site 2's host reaches the router over Wi-Fi only, so its link rate changes with the radio.",
+                  "table"),
+                p("Site host uplink traffic", f'sum by (k8s_cluster, instance, nic) (rate({selector("windows_net_bytes_total")}[$__rate_interval])) > 0', "Bps",
+                  "Traffic through each host NIC in use: everything the site sends or receives, the site tunnel included.", link=WINDOWS),
+                p("Site 2 Wi-Fi signal", f'max by (ap_name, channel) ({selector("unpoller_client_radio_signal_db", f'name="{SITE2_WIFI_CLIENT}"')})', "dBm",
+                  "The site 2 host's signal at its access point, as UniFi reports it (either site's poller). A change of AP or channel starts a new line."),
+                p("Site 2 Wi-Fi association", f'max by (ap_name) ({selector("unpoller_client_uptime_seconds", f'name="{SITE2_WIFI_CLIENT}"')})', "s",
+                  "How long the site 2 host has been associated. A drop to zero is a reconnect or roam, which interrupts the site's tunnel and BGP sessions.",
+                  "table"),
             ],
         }, "Network"),
         Board("tnwks-kubernetes", "Kubernetes & GitOps", "kubernetes", "l2",
