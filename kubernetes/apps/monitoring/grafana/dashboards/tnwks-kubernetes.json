@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Is desired state reconciling, and which resource or controller is blocking it?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+                "content": "Is desired state reconciling, and which resource or controller is blocking it?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -135,6 +135,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bool",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -146,7 +153,7 @@
               }
             }
           },
-          "description": "Current Ready conditions read from the API with revision/suspension shown separately. A live controller process can still fail reconciliation."
+          "description": "Current Ready conditions read from the API with revision/suspension shown separately. A live controller process can still fail reconciliation.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-2": {
@@ -244,6 +251,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bool",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -255,7 +269,7 @@
               }
             }
           },
-          "description": "Declared suspension; do not report deliberate suspension as a controller crash."
+          "description": "Declared suspension; do not report deliberate suspension as a controller crash.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-3": {
@@ -317,6 +331,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "ops",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -324,7 +345,7 @@
               }
             }
           },
-          "description": "Controller process metrics supplement the CR Ready state; controller PodMonitor access needs explicit network-policy integration."
+          "description": "Controller process metrics supplement the CR Ready state; controller PodMonitor access needs explicit network-policy integration.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-4": {
@@ -386,6 +407,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -393,7 +421,7 @@
               }
             }
           },
-          "description": "Effective desired minus Ready per tracked app/site. A zero-replica standby is not a failed application."
+          "description": "Effective desired minus Ready per tracked app/site. A zero-replica standby is not a failed application.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-5": {
@@ -455,6 +483,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "percentunit",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -462,7 +497,7 @@
               }
             }
           },
-          "description": "CPU busy fraction per nested node view. Do not sum shared WSL kernel capacity as independent physical nodes."
+          "description": "CPU busy fraction per nested node view. Do not sum shared WSL kernel capacity as independent physical nodes.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-6": {
@@ -524,6 +559,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bytes",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -531,7 +573,7 @@
               }
             }
           },
-          "description": "Shared WSL kernel memory view on nested Talos nodes. Cross-check Windows physical available memory."
+          "description": "Shared WSL kernel memory view on nested Talos nodes. Cross-check Windows physical available memory.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       }
     },

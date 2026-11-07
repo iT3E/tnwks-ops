@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Are automations and recording useful, including their hardware dependencies?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+                "content": "Are automations and recording useful, including their hardware dependencies?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/home-assistant.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -99,6 +99,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "fps",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/home-assistant.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -106,7 +113,7 @@
               }
             }
           },
-          "description": "Aggregate camera input FPS without camera/zone/person identifiers. Input FPS alone does not prove recordings were persisted."
+          "description": "Aggregate camera input FPS without camera/zone/person identifiers. Input FPS alone does not prove recordings were persisted.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-2": {
@@ -168,6 +175,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "fps",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/home-assistant.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -175,7 +189,7 @@
               }
             }
           },
-          "description": "Aggregate skipped frames; inspect host/detector load and source health before drawing conclusions."
+          "description": "Aggregate skipped frames; inspect host/detector load and source health before drawing conclusions.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-3": {
@@ -237,6 +251,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/home-assistant.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -244,7 +265,7 @@
               }
             }
           },
-          "description": "Detector-specific inference latency; hardware absent by design is not a failed detector."
+          "description": "Detector-specific inference latency; hardware absent by design is not a failed detector.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-4": {
@@ -342,13 +363,20 @@
                       }
                     }
                   ],
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/home-assistant.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Path probe with freshness. USB/Z-Wave dependencies remain pinned and cannot fully fail over."
+          "description": "Path probe with freshness. USB/Z-Wave dependencies remain pinned and cannot fully fail over.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-5": {
@@ -410,6 +438,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/home-assistant.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -417,7 +452,7 @@
               }
             }
           },
-          "description": "Only an aggregate entity count is returned. No person, entity or camera identifiers are displayed."
+          "description": "Only an aggregate entity count is returned. No person, entity or camera identifiers are displayed.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-6": {
@@ -515,13 +550,20 @@
                       }
                     }
                   ],
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/home-assistant.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Whether the broker accepted the evidence collector's login, from each site, through its global Service. Message delivery between clients isn't measured."
+          "description": "Whether the broker accepted the evidence collector's login, from each site, through its global Service. Message delivery between clients isn't measured.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-7": {
@@ -583,6 +625,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/home-assistant.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -590,7 +639,7 @@
               }
             }
           },
-          "description": "From the broker's retained $SYS/broker/clients/connected, read by each site's collector. A sudden drop is clients disconnecting, not the broker restarting."
+          "description": "From the broker's retained $SYS/broker/clients/connected, read by each site's collector. A sudden drop is clients disconnecting, not the broker restarting.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       }
     },

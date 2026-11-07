@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Is client experience failing at RF, the AP uplink, DHCP/DNS, or site 2's Wi-Fi path?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+                "content": "Is client experience failing at RF, the AP uplink, DHCP/DNS, or site 2's Wi-Fi path?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -138,7 +138,12 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/home-wifi?from=${__from}&to=${__to}&var-cluster=${cluster:percentencode}&var-datasource=${datasource:percentencode}"
+                      "url": "/d/home-wifi/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+                      "targetBlank": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
@@ -152,7 +157,7 @@
               }
             }
           },
-          "description": "AP inventory/uptime. Device-only identifiers; household client names/MACs are excluded."
+          "description": "AP inventory/uptime. Device-only identifiers; household client names/MACs are excluded.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-2": {
@@ -250,6 +255,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "Mbits",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -261,7 +273,7 @@
               }
             }
           },
-          "description": "Negotiated uplink speed. A slow or errored uplink can masquerade as an RF problem."
+          "description": "Negotiated uplink speed. A slow or errored uplink can masquerade as an RF problem.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-3": {
@@ -323,6 +335,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -330,7 +349,7 @@
               }
             }
           },
-          "description": "Collector-specific failure evidence; HTTP scrape success does not prove the UniFi API refresh succeeded."
+          "description": "Collector-specific failure evidence; HTTP scrape success does not prove the UniFi API refresh succeeded.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-4": {
@@ -392,6 +411,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bool",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -399,7 +425,7 @@
               }
             }
           },
-          "description": "Correlate site 2 connectivity loss with AP/uplink and WireGuard/BGP observations. This does not identify individual household clients."
+          "description": "Correlate site 2 connectivity loss with AP/uplink and WireGuard/BGP observations. This does not identify individual household clients.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-5": {
@@ -461,6 +487,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -468,7 +501,7 @@
               }
             }
           },
-          "description": "Bounded transport probe duration; one sample does not measure line-rate Wi-Fi performance."
+          "description": "Bounded transport probe duration; one sample does not measure line-rate Wi-Fi performance.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       }
     },

@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Is the Internet path usable, and is loss/latency or saturation the issue?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+                "content": "Is the Internet path usable, and is loss/latency or saturation the issue?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -135,13 +135,20 @@
                       }
                     }
                   ],
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Observed Internet probe state with freshness/coverage. A working exporter is insufficient."
+          "description": "Observed Internet probe state with freshness/coverage. A working exporter is insufficient.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-2": {
@@ -203,6 +210,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -210,7 +224,7 @@
               }
             }
           },
-          "description": "p90 over the probe histogram; compare with baseline/threshold and packet loss."
+          "description": "p90 over the probe histogram; compare with baseline/threshold and packet loss.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-3": {
@@ -272,6 +286,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -279,7 +300,7 @@
               }
             }
           },
-          "description": "The actual recording rule used by the WAN alert, not a separately maintained display threshold."
+          "description": "The actual recording rule used by the WAN alert, not a separately maintained display threshold.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-4": {
@@ -341,6 +362,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "percentunit",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -348,7 +376,7 @@
               }
             }
           },
-          "description": "Probe packet loss; distinguish a missing series from zero measured loss."
+          "description": "Probe packet loss; distinguish a missing series from zero measured loss.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-5": {
@@ -410,6 +438,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bps",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -417,7 +452,7 @@
               }
             }
           },
-          "description": "Measured WAN receive throughput. Current traffic is not the available speed of the connection."
+          "description": "Measured WAN receive throughput. Current traffic is not the available speed of the connection.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-6": {
@@ -482,7 +517,12 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/wan-traffic?from=${__from}&to=${__to}&var-cluster=${cluster:percentencode}&var-datasource=${datasource:percentencode}"
+                      "url": "/d/wan-traffic/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
@@ -492,7 +532,7 @@
               }
             }
           },
-          "description": "Measured WAN transmit throughput. Detailed traffic remains available at its stable dashboard UID."
+          "description": "Measured WAN transmit throughput. Detailed traffic remains available at its stable dashboard UID.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-7": {
@@ -554,6 +594,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bool",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -561,7 +608,7 @@
               }
             }
           },
-          "description": "Whether the UISP exporter reached its controller. This is collector evidence, not the radio link's own health."
+          "description": "Whether the UISP exporter reached its controller. This is collector evidence, not the radio link's own health.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       }
     },

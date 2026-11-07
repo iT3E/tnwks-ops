@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "What is firing now, and can I reach its evidence and runbook?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+                "content": "What is firing now, and can I reach its evidence and runbook?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -135,6 +135,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "None",
                   "custom": {
                     "align": "auto",
@@ -146,7 +153,7 @@
               }
             }
           },
-          "description": "Current Prometheus firing state, independent of the dashboard historical time selection, excluding heartbeats. Follow the rule's dashboard/runbook annotation for diagnosis."
+          "description": "Current Prometheus firing state, independent of the dashboard historical time selection, excluding heartbeats. Follow the rule's dashboard/runbook annotation for diagnosis.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-2": {
@@ -244,6 +251,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "None",
                   "custom": {
                     "align": "auto",
@@ -255,7 +269,7 @@
               }
             }
           },
-          "description": "Pending is not yet firing. Alertmanager silencing/inhibition and notification state are viewed through the per-site Alertmanager links."
+          "description": "Pending is not yet firing. Alertmanager silencing/inhibition and notification state are viewed through the per-site Alertmanager links.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-3": {
@@ -317,6 +331,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/external-monitoring.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -324,7 +345,7 @@
               }
             }
           },
-          "description": "Failures during the window, not a definitive end-to-end notification receipt check."
+          "description": "Failures during the window, not a definitive end-to-end notification receipt check.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       }
     },

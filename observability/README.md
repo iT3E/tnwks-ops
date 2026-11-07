@@ -11,6 +11,29 @@ reads the existing failover catalogue and renders each cluster's Flux graph to
 find its actual expected CNPG clusters. Missing upstream data is Unknown; the
 collector cannot infer fencing or restore proof from workload readiness.
 
+The generated [panel evidence catalogue](../docs/operations/observability-panel-catalogue.md)
+maps every operator and household panel to its source metrics, observation budget,
+missing/error behavior, owner and runbook. `panel-contracts.json` is the machine
+form. Project recording rules are expanded to their inputs; external mixins keep
+their upstream ownership. A configured source does not prove a current observation.
+Household aggregates and positive fence attestations remain explicitly planned.
+
+Run a bounded read-only source audit through the existing Thanos Service proxy:
+
+```bash
+uv run --project observability python observability/audit_sources.py \
+  --kubeconfig ~/.kube/config-homelab-wsl \
+  --output observability/.cache/panel-source-audit.json
+```
+
+The report retains only known site identities and series counts, marks partial
+queries, and never prints upstream response/error bodies. A present metric alone
+does not verify an exporter refresh or a complete SLO window; inspect the relevant
+collector and freshness evidence too. Current evidence has a 180s observation
+budget; daily backup and weekly restore objectives are separate from scrape age.
+Operator panels link to their runbooks. Diagnosis links retain incident time and
+use Grafana's multi-value query-parameter format to preserve both selected sites.
+
 `collector.py` runs on Python's standard library. Its service account has no
 Secret access or mutation verbs. Raw API responses, ConfigMap values and private
 identifiers are not logged. `kiosk_proxy.py` allows six exact instant queries,
