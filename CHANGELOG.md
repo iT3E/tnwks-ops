@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.36.2 - 2026-11-07
+
+### Fixed
+
+* Firefly's failover and the weekly standby restore no longer copy finance-sync-state. Its state has been in Postgres since 2026-11-02, and the PVC is a rollback copy that exists only on homelab-wsl, so site 2's restore failed and a Firefly switchover to it would have been refused.
+
 ## v2.36.1 - 2026-11-07
 
 ### Fixed
