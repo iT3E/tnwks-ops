@@ -123,6 +123,9 @@ spec:
       enabled: ${CILIUM_SERVICEMONITOR_ENABLED}
       serviceMonitor:
         enabled: ${CILIUM_SERVICEMONITOR_ENABLED}
+        # The chart otherwise refuses to render without the CRD, which an offline
+        # render can't see. Bootstrap sets these monitors off until it exists.
+        trustCRDsExist: true
     rollOutCiliumPods: true
     autoDirectNodeRoutes: true
     # Pods reached without masquerading: the cluster's own range, or, with

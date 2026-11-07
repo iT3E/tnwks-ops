@@ -76,7 +76,7 @@ data:
   LB_EXTERNAL_TRAFFIC_POLICY: "Cluster"
   # Cilium's ServiceMonitor stays off: 02-cni-bootstrap.yml installs Cilium
   # from these values before kube-prometheus-stack (and its CRD) exists.
-  CILIUM_SERVICEMONITOR_ENABLED: "false"
+  CILIUM_SERVICEMONITOR_ENABLED: "true"
   CILIUM_HUBBLE_UI_INGRESS_ENABLED: "false"
   # kube-prometheus-stack runs here since 2026-11-05, so apps' ServiceMonitors
   # can be created.
