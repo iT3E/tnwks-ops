@@ -49,7 +49,8 @@ spec:
                      {"app": "transcriber", "cluster": "transcriber-pg"},
                      {"app": "firefly", "cluster": "firefly-pg"},
                      {"app": "firefly", "cluster": "finance-sync-pg"},
-                     {"app": "home-assistant", "cluster": "home-assistant-pg"}]
+                     {"app": "home-assistant", "cluster": "home-assistant-pg"},
+                     {"app": "grafana", "cluster": "grafana-pg"}]
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true

@@ -1,5 +1,7 @@
 ---
-# grafana's own Postgres (kubernetes/components/cnpg-cluster).
+# grafana's own Postgres (kubernetes/components/cnpg-cluster), primary on the
+# site named by GRAFANA_PG_PRIMARY and a replica cluster on the other
+# (cnpg-standby, docs/wsl/multi-site.md).
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -9,6 +11,7 @@ spec:
   path: ./kubernetes/apps/monitoring/grafana/db
   components:
     - ../../../../components/cnpg-cluster
+    - ../../../../components/cnpg-standby
   dependsOn:
     - name: cloudnative-pg-plugin-barman-cloud
     - name: aws-backup-credentials

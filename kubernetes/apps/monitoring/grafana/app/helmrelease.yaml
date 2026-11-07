@@ -17,10 +17,14 @@ spec:
   maxHistory: 2
   install:
     createNamespace: true
+    # A standby site has an unbound WaitForFirstConsumer data PVC at 0, which
+    # Helm's wait (kstatus) never sees as ready.
+    disableWait: ${GRAFANA_HELM_DISABLE_WAIT:=false}
     remediation:
       retries: 3
   upgrade:
     cleanupOnFail: true
+    disableWait: ${GRAFANA_HELM_DISABLE_WAIT:=false}
     remediation:
       # Schema migration is forward-only; never automatically start v12 on
       # a database already migrated by v13. Recovery requires the DB backup.
@@ -31,15 +35,55 @@ spec:
   dependsOn:
     - name: local-path-provisioner
       namespace: kube-system
-    - name: ingress-nginx
+    - name: ingress-nginx-internal
       namespace: networking
   values:
     image:
       repository: grafana/grafana
       tag: 13.3.0
       sha: 488984b716c0862639f91a698adbe2862677a5a07bad42da5f03f3030883b205
-    # Which site runs it (docs/wsl/multi-site.md, "Switching an app").
+    # Which site runs it (docs/wsl/multi-site.md, "Switching an app"). A warm
+    # app: homelab-wsl at 1, homelab-wsl-02 at 0 with a replica of grafana-pg.
     replicas: ${GRAFANA_REPLICAS:=1}
+    # Fencing (docs/wsl/multi-site.md): wait while this site is fenced from
+    # writing Grafana's database (grafana.lease.tnwks.local names it), or while
+    # the lease can't be read. GRAFANA_LEASE_GATE=off skips it.
+    extraInitContainers:
+      - name: site-lease-gate
+        image: docker.io/library/busybox:1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+        command: ["sh", "-c"]
+        args:
+          - |
+            [ "$GATE" = gate-off ] && { echo "lease gate off"; exit 0; }
+            while true; do
+              t=$(nslookup -type=txt "$LEASE" 2>/dev/null | sed -n 's/.*text = "\(.*\)"/\1/p' | head -1)
+              if [ -z "$t" ]; then echo "lease $LEASE unreadable; waiting"
+              elif [ "$t" = "$SITE" ]; then echo "$SITE is fenced from writing grafana; waiting"
+              else echo "lease $LEASE: $t; not fenced, starting"; exit 0; fi
+              sleep 10
+            done
+        env:
+          - name: LEASE
+            value: grafana.lease.tnwks.local.
+          - name: SITE
+            value: "${CLUSTER_NAME}"
+          # Prefixed: a bare on/off would reach the chart as a YAML boolean.
+          - name: GATE
+            value: gate-${GRAFANA_LEASE_GATE:=on}
+        securityContext:
+          runAsUser: 65534
+          runAsGroup: 65534
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 1m
+            memory: 4Mi
+          limits:
+            memory: 16Mi
     deploymentStrategy:
       type: Recreate
     # init-chown-data runs busybox chown as root over the PVC. On WSL
@@ -265,6 +309,8 @@ spec:
 
     imageRenderer:
       enabled: true
+      # Runs on both sites, idle on the standby: the chart can't set 0 replicas
+      # (it drops a zero and falls back to 1).
       existingSecret: grafana-renderer-auth
       image:
         tag: v5.12.10
@@ -312,6 +358,13 @@ spec:
     serviceMonitor:
       enabled: true
 
+    # Global over Cluster Mesh: either site's ingress reaches Grafana wherever
+    # it runs (docs/wsl/multi-site.md, "Shared VIPs").
+    service:
+      annotations:
+        service.cilium.io/global: "true"
+        service.cilium.io/affinity: local
+
     sidecar:
       dashboards:
         enabled: true
@@ -333,7 +386,11 @@ spec:
       ingressClassName: nginx-internal
       annotations:
         hajimari.io/icon: simple-icons:grafana
-        nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc.cluster.local:80/oauth2/auth"
+        # OAUTH2_PROXY_URL: in-cluster on homelab-wsl; homelab-wsl-02 asks
+        # homelab-wsl's over the LAN.
+        nginx.ingress.kubernetes.io/auth-url: "${OAUTH2_PROXY_URL:=http://oauth2-proxy.auth.svc.cluster.local:80}/oauth2/auth"
+        # Through the Service, not EndpointSlices, which have no remote backends.
+        nginx.ingress.kubernetes.io/service-upstream: "true"
         nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${INTERNAL_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
         nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User,X-Auth-Request-Groups,X-Auth-Request-Email"
         # Cognito-backed sessions are split across multiple cookies; the
