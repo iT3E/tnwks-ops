@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.222.0 - 2026-11-07
+
+### Changed
+
+* Jellyfin runs on homelab-wsl-02 (with an empty library; the media on the desktop's E: stays put): homelab-wsl keeps it at 0, jellyfin.tnwks.us reaches it through cloudflared over Cluster Mesh, and jellyfin.internal.tnwks.us is on the homelab-wsl-02-first shared VIP.
+
 ## v1.221.0 - 2026-11-07
 
 ### Added
