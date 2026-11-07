@@ -265,7 +265,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"}",
+                        "expr": "max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": false

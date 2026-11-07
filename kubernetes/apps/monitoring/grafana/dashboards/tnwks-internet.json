@@ -499,7 +499,7 @@
         "kind": "Panel",
         "spec": {
           "id": 8,
-          "title": "ISP radio evidence",
+          "title": "ISP radio collector",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -513,7 +513,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "unms_device_uptime_seconds{k8s_cluster=~\"$cluster\"}",
+                        "expr": "unms_collector_success{k8s_cluster=~\"$cluster\"}",
                         "instant": false,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": true
@@ -553,7 +553,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "s",
+                  "unit": "bool",
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -561,7 +561,7 @@
               }
             }
           },
-          "description": "ISP device uptime where available; use exporter last-refresh/success evidence when diagnosing a blind collector."
+          "description": "Whether the UISP exporter reached its controller. This is collector evidence, not the radio link's own health."
         }
       }
     },

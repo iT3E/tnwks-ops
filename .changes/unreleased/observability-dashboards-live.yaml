@@ -1,0 +1,3 @@
+kind: Added
+body: Serve the generated dashboards in Grafana and make Homelab the home page, keeping the previous board as Homelab (classic).
+time: 2026-11-07T01:05:00-08:00

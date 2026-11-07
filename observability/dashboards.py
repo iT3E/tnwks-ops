@@ -21,6 +21,20 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "kubernetes/apps/monitoring/grafana/dashboards"
 CLUSTERS = ("homelab-wsl", "homelab-wsl-02")
 SCOPE = 'k8s_cluster=~"$cluster"'
+ALERT_SCOPE = 'cluster=~"$cluster"'
+# Each site's collector and rules report on both sites, so the global view returns
+# these once per observer. max keeps the worst state, and Unknown (0) yields to a
+# real answer. Keys are the series identity without the observing Prometheus.
+IDENTITY = {
+    "homelab:service_state": ("app",),
+    "homelab:recovery_state": ("app",),
+    "homelab:database_backup_state": ("namespace", "db_cluster"),
+    "homelab_expected_database_info": ("namespace", "db_cluster", "app"),
+    "homelab_expected_workload_info": ("app", "tier", "kind", "workload"),
+}
+# Table columns that describe the scrape, not the thing being reported.
+SCRAPE_COLUMNS = ("__name__", "Time", "__replica__", "cluster", "container", "endpoint",
+                  "instance", "job", "observer_cluster", "pod", "prometheus", "service")
 STATE = {
     "0": model.ValueMappingResult(text="Unknown", color="#8e8e8e"),
     "1": model.ValueMappingResult(text="Healthy", color="#299c46"),
@@ -41,6 +55,7 @@ class Panel:
     kind: str = "timeseries"
     link: str | None = None
     legend: str = "{{k8s_cluster}} {{app}} {{instance}}"
+    empty: str = "Unknown — missing evidence"
 
 
 @dataclass(frozen=True)
@@ -55,14 +70,22 @@ class Board:
     kiosk: bool = False
 
 
-def p(title: str, expr: str, unit: str, explanation: str, kind="timeseries", link=None):
-    return Panel(title, expr, unit, explanation, kind, link)
+def p(title: str, expr: str, unit: str, explanation: str, kind="timeseries", link=None,
+      empty="Unknown — missing evidence"):
+    return Panel(title, expr, unit, explanation, kind, link, empty=empty)
 
 
-def metric(name: str, extra: str = "") -> str:
+def selector(name: str, extra: str = "") -> str:
     if name.startswith(("unpoller_", "cnpg_")):
         extra = 'source_site=""' + ("," + extra if extra else "")
     return f"{name}{{{SCOPE}{',' + extra if extra else ''}}}"
+
+
+def metric(name: str, extra: str = "") -> str:
+    keys = IDENTITY.get(name)
+    if keys is None:
+        return selector(name, extra)
+    return f"max by (k8s_cluster, {', '.join(keys)}) ({selector(name, extra)})"
 
 
 def coverage() -> list[Panel]:
@@ -85,7 +108,7 @@ def catalogue() -> list[Board]:
             "Now": coverage() + [
                 p("Service paths", metric("homelab:service_state"), "state",
                   "Synthetic content/transport evidence per service. No probe or stale probe is Unknown, never an implicit success.", "table", "tnwks-apps"),
-                p("Current firing alerts", f'ALERTS{{{SCOPE},alertstate="firing"}}', "short",
+                p("Current firing alerts", f'ALERTS{{{ALERT_SCOPE},alertstate="firing"}}', "short",
                   "Current Prometheus rule state; this is not a historical Alertmanager event list and does not show silence/inhibition state.", "table", "tnwks-alerts"),
                 p("Recovery evidence", metric("homelab:recovery_state"), "state",
                   "Per-app prerequisites. Unknown fencing or untested recovery blocks a positive readiness conclusion. A dashboard never authorizes promotion.", "table", "tnwks-data"),
@@ -93,7 +116,7 @@ def catalogue() -> list[Board]:
                   "The archive is hosted only on WSL-02. Its failure does not remove local 15-day metrics; older history becomes unavailable.", "stat", "tnwks-observability"),
             ],
             "Change and history": [
-                p("Observed state changes", f'changes({metric("homelab:service_state")}[1h])', "short",
+                p("Observed state changes", f'max by (k8s_cluster, app) (changes({selector("homelab:service_state")}[1h]))', "short",
                   "Sampled transitions in observed service state. This is supplementary evidence and can miss transitions during a monitoring gap."),
                 p("Latest workload rollout", f'time() - {metric("homelab_workload_transition_timestamp_seconds")}', "s",
                   "Time since a workload Ready transition reported by Kubernetes. This is not necessarily its deployment or git revision time.", "table"),
@@ -119,7 +142,8 @@ def catalogue() -> list[Board]:
                 p("Runtime overrides present", metric("homelab_site_override_present"), "bool",
                   "Presence of flux-system/site-overrides. Raw contents and secret-like values are never exposed.", "table"),
                 p("Override creation age", f'time() - {metric("homelab_site_override_created_timestamp_seconds")}', "s",
-                  "Age of creation, not last modification. Consult structured operation events for when a particular override changed.", "table"),
+                  "Age of creation, not last modification. Consult structured operation events for when a particular override changed.", "table",
+                  empty="No overrides"),
             ],
             "Recovery": [
                 p("Readiness evidence", metric("homelab:recovery_state"), "state",
@@ -153,8 +177,6 @@ def catalogue() -> list[Board]:
                   "The existing weekly job covers its configured PVC entries only. This does not certify every app or a database restore.", "table"),
             ],
             "Storage": [
-                p("PVC used", f'{metric("kubelet_volume_stats_used_bytes")} / {metric("kubelet_volume_stats_capacity_bytes")}', "percentunit",
-                  "Used versus available filesystem capacity for volumes that publish stats. Local-path requested PVC sizes are not reliable physical quotas."),
                 p("Windows disk free", metric("windows_logical_disk_free_bytes", 'volume=~"C:|E:"'), "bytes",
                   "Physical Windows free capacity. WSL's virtual disk maximum is not an independent physical capacity budget."),
             ],
@@ -197,8 +219,8 @@ def catalogue() -> list[Board]:
                   "Measured WAN receive throughput. Current traffic is not the available speed of the connection."),
                 p("Upload", metric("wan:transmit_bits:rate1m"), "bps",
                   "Measured WAN transmit throughput. Detailed traffic remains available at its stable dashboard UID.", link="wan-traffic"),
-                p("ISP radio evidence", metric("unms_device_uptime_seconds"), "s",
-                  "ISP device uptime where available; use exporter last-refresh/success evidence when diagnosing a blind collector."),
+                p("ISP radio collector", metric("unms_collector_success"), "bool",
+                  "Whether the UISP exporter reached its controller. This is collector evidence, not the radio link's own health."),
             ],
         }, "Network"),
         Board("tnwks-wifi", "Wi-Fi & LAN", "network", "l2",
@@ -297,8 +319,8 @@ def catalogue() -> list[Board]:
             "Trust": coverage() + [
                 p("Collector source success", metric("homelab_collection_success"), "bool",
                   "Collector-specific upstream success. HTTP scrape success can coexist with a blind collector.", "table"),
-                p("Scrape failures", f'sum by (k8s_cluster, job) ({metric("up")} == 0)', "short",
-                  "Discovered failed targets only. Compare with declared inventory to detect targets that disappeared from discovery.", "table"),
+                p("Scrape failures", f'count by (k8s_cluster, job) ({metric("up")} == 0) or on (k8s_cluster) (0 * count by (k8s_cluster) ({metric("up")}))', "short",
+                  "Failed targets per job; a site showing 0 has none. Compare with declared inventory to detect targets that disappeared from discovery.", "table"),
             ],
             "Cost": [
                 p("Active series", metric("prometheus_tsdb_head_series"), "short",
@@ -322,9 +344,9 @@ def catalogue() -> list[Board]:
         Board("tnwks-alerts", "Alerts", "observability", "l2",
               "What is firing now, and can I reach its evidence and runbook?", {
             "Current": [
-                p("Firing now", f'ALERTS{{{SCOPE},alertstate="firing"}}', "short",
+                p("Firing now", f'ALERTS{{{ALERT_SCOPE},alertstate="firing"}}', "short",
                   "Current Prometheus firing state, independent of the dashboard historical time selection. Follow the rule's dashboard/runbook annotation for diagnosis.", "table"),
-                p("Pending now", f'ALERTS{{{SCOPE},alertstate="pending"}}', "short",
+                p("Pending now", f'ALERTS{{{ALERT_SCOPE},alertstate="pending"}}', "short",
                   "Pending is not yet firing. Alertmanager silencing/inhibition and notification state are viewed through the per-site Alertmanager links.", "table"),
             ],
             "Delivery": [
@@ -354,7 +376,7 @@ def catalogue() -> list[Board]:
 def visualization(panel: Panel):
     cls = {"stat": stat.Visualization, "table": table.Visualization,
            "timeseries": timeseries.Visualization}[panel.kind]
-    viz = cls().unit("short" if panel.unit in ("state", "coverage") else panel.unit).no_value("Unknown — missing evidence")
+    viz = cls().unit("short" if panel.unit in ("state", "coverage") else panel.unit).no_value(panel.empty)
     if panel.unit == "state":
         viz.mappings([model.ValueMap(options=STATE)])
     if panel.unit == "coverage":
@@ -428,7 +450,7 @@ def resource(board: Board) -> dict:
             if panel.kind == "table":
                 query.format(prom_model.PromQueryFormat.TABLE)
                 data.transformation(dashboard.Transformation().group("organize").options({
-                    "excludeByName": {"Time": True, "__name__": True},
+                    "excludeByName": dict.fromkeys(SCRAPE_COLUMNS, True),
                     "indexByName": {"Value": 0, "k8s_cluster": 1, "app": 2, "db_cluster": 2},
                     "renameByName": {"k8s_cluster": "Site", "db_cluster": "Database",
                                      "app": "App", "observer_cluster": "Observer",

@@ -149,8 +149,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,
@@ -314,8 +324,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,
@@ -388,7 +408,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "homelab:recovery_state{k8s_cluster=~\"$cluster\"}",
+                        "expr": "max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
@@ -410,8 +430,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,
