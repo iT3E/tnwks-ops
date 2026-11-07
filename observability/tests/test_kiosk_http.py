@@ -47,7 +47,8 @@ def test_facade_refuses_general_prometheus_access(facade, path):
 def test_facade_healthy_without_exposing_general_queries(facade):
     assert request(facade, "/healthz")[0] == 200
     code, result = request(facade, "/api/v1/query?query=1%2B1")
-    assert code == 200 and result["data"]["result"] == []
+    assert code == 200 and result["data"]["resultType"] == "scalar"
+    assert result["data"]["result"][1] == "2"
 
 
 def test_allowed_query_with_unavailable_upstream_fails_closed(facade):

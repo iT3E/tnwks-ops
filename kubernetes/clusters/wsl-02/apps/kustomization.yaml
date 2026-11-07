@@ -31,6 +31,9 @@ resources:
   # Monitoring of this cluster: Prometheus (kube-prometheus-stack) and
   # Alertmanager to the War Room, alerts labelled cluster=homelab-wsl-02.
   - ../../../apps/monitoring/namespace.yaml
+  - ../../../apps/monitoring/observability-pki/ks.yaml
+  - ../../../apps/monitoring/observability-evidence/ks.yaml
+  - ./observability-garage-ks.yaml
   - ./alertmanager-ks.yaml
   - ../../../apps/monitoring/kube-prometheus-stack/ks.yaml
   - ../../../apps/monitoring/node-exporter/ks.yaml

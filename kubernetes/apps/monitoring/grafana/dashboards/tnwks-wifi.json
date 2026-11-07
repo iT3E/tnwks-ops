@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Is client experience failing at RF, the AP uplink, DHCP/DNS, or site 2's Wi-Fi path?\n\nChoose Global or a direct local datasource. Expected sites remain in inventory; unavailable, stale and partial data cannot certify a healthy fleet. Current alerts are separate from historical state.\n\n[Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+                "content": "Is client experience failing at RF, the AP uplink, DHCP/DNS, or site 2's Wi-Fi path?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -58,7 +58,8 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "max by (k8s_cluster, name) (unpoller_device_uptime_seconds{k8s_cluster=~\"$cluster\"})",
+                        "expr": "max by (k8s_cluster, name) (unpoller_device_uptime_seconds{k8s_cluster=~\"$cluster\",source_site=\"\"})",
+                        "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": false
@@ -72,7 +73,33 @@
                   }
                 }
               ],
-              "transformations": [],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
               "queryOptions": {}
             }
           },
@@ -104,7 +131,8 @@
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
-                    "inspect": false
+                    "inspect": false,
+                    "minWidth": 70
                   }
                 },
                 "overrides": []
@@ -132,7 +160,8 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "max by (k8s_cluster, name) (unpoller_device_uplink_speed_mbps{k8s_cluster=~\"$cluster\"})",
+                        "expr": "max by (k8s_cluster, name) (unpoller_device_uplink_speed_mbps{k8s_cluster=~\"$cluster\",source_site=\"\"})",
+                        "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": false
@@ -146,7 +175,33 @@
                   }
                 }
               ],
-              "transformations": [],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
               "queryOptions": {}
             }
           },
@@ -172,7 +227,8 @@
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
-                    "inspect": false
+                    "inspect": false,
+                    "minWidth": 70
                   }
                 },
                 "overrides": []
@@ -200,7 +256,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "sum by (k8s_cluster) (increase(unpoller_prometheus_refresh_failures_total{k8s_cluster=~\"$cluster\"}[15m]))",
+                        "expr": "sum by (k8s_cluster) (increase(unpoller_prometheus_refresh_failures_total{k8s_cluster=~\"$cluster\",source_site=\"\"}[15m]))",
                         "instant": false,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": true
@@ -400,7 +456,7 @@
               "layout": {
                 "kind": "AutoGridLayout",
                 "spec": {
-                  "columnWidthMode": "standard",
+                  "columnWidthMode": "narrow",
                   "rowHeightMode": "standard",
                   "items": [
                     {
@@ -453,7 +509,7 @@
               "layout": {
                 "kind": "AutoGridLayout",
                 "spec": {
-                  "columnWidthMode": "standard",
+                  "columnWidthMode": "narrow",
                   "rowHeightMode": "standard",
                   "items": [
                     {

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -90,7 +91,7 @@ def handler(allowed: set[str], upstream: str):
                 return
             query = params["query"][0]
             if query == "1+1":
-                self.respond(200, {"status": "success", "data": {"resultType": "vector", "result": []}})
+                self.respond(200, {"status": "success", "data": {"resultType": "scalar", "result": [time.time(), "2"]}})
                 return
             if query not in allowed:
                 self.respond(403, {"status": "error", "error": "query not allowed"})

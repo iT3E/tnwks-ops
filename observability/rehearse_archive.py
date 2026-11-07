@@ -67,7 +67,7 @@ def main():
         caddy = caddy.replace(":8443", "127.0.0.1:13113").replace("127.0.0.1:3900", "127.0.0.1:13103")
         (base / "Caddyfile").write_text(caddy)
         objstore = {"type": "S3", "config": {"bucket": "homelab-metrics", "region": "garage",
-                    "endpoint": "127.0.0.1:13113", "insecure": False,
+                    "endpoint": "127.0.0.1:13113", "insecure": False, "bucket_lookup_type": "path",
                     "access_key": access, "secret_key": secret,
                     "http_config": {"tls_config": {"ca_file": "/tls/tls.crt"}}}}
         (base / "objstore.yaml").write_text(yaml.safe_dump(objstore))
@@ -105,6 +105,7 @@ def main():
             run("tls", CADDY, ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"],
                 [("Caddyfile", "/etc/caddy/Caddyfile"), *tls_mounts])
             s3 = S3(base)
+            s3.multipart_check()
             body = bytes(range(256)) * 8192
             s3.request("PUT", "acceptance/roundtrip", body)
             assert s3.request("GET", "acceptance/roundtrip") == body

@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Is the Internet path usable, and is loss/latency or saturation the issue?\n\nChoose Global or a direct local datasource. Expected sites remain in inventory; unavailable, stale and partial data cannot certify a healthy fleet. Current alerts are separate from historical state.\n\n[Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+                "content": "Is the Internet path usable, and is loss/latency or saturation the issue?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -575,7 +575,7 @@
               "layout": {
                 "kind": "AutoGridLayout",
                 "spec": {
-                  "columnWidthMode": "standard",
+                  "columnWidthMode": "narrow",
                   "rowHeightMode": "standard",
                   "items": [
                     {
@@ -637,7 +637,7 @@
               "layout": {
                 "kind": "AutoGridLayout",
                 "spec": {
-                  "columnWidthMode": "standard",
+                  "columnWidthMode": "narrow",
                   "rowHeightMode": "standard",
                   "items": [
                     {

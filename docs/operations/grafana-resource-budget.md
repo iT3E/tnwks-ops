@@ -79,7 +79,7 @@ Allow another 0–100 MiB on the existing Grafana for the new catalogue under th
 
 These ranges overlap and are not hard upper bounds. Start with about 3 GiB extra physical-RAM headroom on site 1 and 7 GiB on site 2, confirm no sustained memory PSI/swap/refault pressure, then tune actual requests/limits. Do not lower current Prometheus limits based only on the short quiet sample. Windows gaming, inference and other desktop workloads share the host budget.
 
-**Query-only Thanos is much smaller:** sidecar plus Query is roughly 150–450 MiB per site under the assumed load and needs no history/cache PVC. Object-store history adds Store Gateway, one compactor, a Garage server on site 2 and their disk budgets. Neither a query frontend nor a Thanos Ruler, Redis, memcached, bucket web UI or local MinIO is required for this scale; local Prometheus remains the rule/alert owner.
+**Query-only Thanos is much smaller:** sidecar plus Query is roughly 150–450 MiB per site under the assumed load and needs no history/cache PVC. Object-store history adds Store Gateway, one compactor, a Garage server on site 2 and their disk budgets. A query frontend, Redis, memcached, bucket web UI and local MinIO are unnecessary for the bounded archive. Local Prometheus remains the short-window alert owner; complete-history SLO evaluation may require a separately budgeted rule evaluator.
 
 ## Where disk goes with Thanos history
 
@@ -126,3 +126,41 @@ The E: pressure exists independently of this project: Prometheus currently occup
 ## Self-hosted archive amendment
 
 Garage on WSL-02 replaces the unspecified remote S3 destination. See the local-S3 research for community manifests, alternatives, durability/API limits and the pinned-version integration gate. Its ordinary working-set estimate raises the full project headroom target for site 2 to about 7 GiB. This remains a resource forecast, not an applied storage or deployment change.
+
+## Deployment preflight refresh
+
+Read-only Windows measurements at **2026-11-07 05:57 UTC**:
+
+| Host | Physical free C: | Physical free E: | Windows available RAM |
+| --- | --- | --- | --- |
+| Site 1 | 208.76 GiB | 84.81 GiB | 9.46 GiB |
+| WSL-02 | 1,303.24 GiB | Not present | 20.44 GiB |
+
+This supersedes the earlier free-space snapshot. A 64Gi C: monitoring VHDX leaves
+about 144.76 GiB before other growth. The first rollout puts Garage's nominal
+256Gi data / 8Gi metadata on WSL-02 and adds only the small collector on site 1;
+PVC requests do not preallocate that capacity or enforce local-path quotas.
+
+A separate household Grafana is the current isolation candidate. Unlike a second
+organization within an existing process, it adds approximately 350–500 MiB per
+site and an optional 1Gi local preferences/SQLite claim. If retained, use extra
+physical-RAM headroom allowances of **3.5 GiB on site 1 and 7.5 GiB on site 2**;
+site 2's nominal disk budget then becomes **369 GiB**. These are planning margins,
+not simultaneous measured usage. Site 1's available RAM now varies materially
+from the earlier sample; validate WSL pressure during busy desktop workloads.
+
+The local Grafana 13.3 rehearsal used roughly 349 MiB for a clean control and
+465 MiB for the instance containing the 12 operator resources, without production
+query load or provisioning sidecars. This does not establish a peak or attribute
+the whole difference to dashboard count. The TLS proxy requests 10m CPU / 32Mi RAM
+and allows 128Mi on WSL-02. Query permits two concurrent queries with a 768Mi limit;
+Store uses a 128MB index cache, 256MB chunk pool and 1Gi process limit. Compactor
+allows 4Gi with one worker and a 64Gi scratch claim. Broad queries may be rejected
+by explicit limits; do not substitute those ceilings for expected resident RAM.
+
+Archive acceptance includes multipart upload/complete/abort, verified HTTPS,
+mutual TLS, historical reads, normal restart, process-kill recovery and cache
+rebuild. Its tiny fixture cannot size production compaction or prove host-power-loss
+durability. The 28d SLO evaluation path still needs a complete-history evaluator;
+if Pyrra requires a Thanos Ruler, add its budget rather than evaluate 28d on a 15d
+local Prometheus and call it complete.

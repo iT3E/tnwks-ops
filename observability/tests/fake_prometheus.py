@@ -20,7 +20,15 @@ class Handler(BaseHTTPRequestHandler):
         query = params.get("query", [""])[0]
         data = {"resultType": "vector", "result": []}
         if "buildinfo" in path.path:
-            data = {"version": "3.10.0"}
+            data = {"version": "3.15.1"}
+        elif path.path.endswith("/metadata"):
+            data = {}
+        elif path.path.endswith("/series"):
+            data = []
+        elif path.path.endswith("/rules"):
+            data = {"groups": []}
+        elif query == "1+1":
+            data = {"resultType": "scalar", "result": [time.time(), "2"]}
         elif path.path.endswith("/labels"):
             data = ["k8s_cluster", "app", "domain"]
         elif "/label/" in path.path:
@@ -38,6 +46,9 @@ class Handler(BaseHTTPRequestHandler):
                     {"metric": {"k8s_cluster": "homelab-wsl-02", "app": "test"},
                      "value": [time.time(), "0"]},
                 ]
+                if "homelab:site_state" in query:
+                    for item in data["result"]:
+                        item["metric"].pop("app", None)
         body = json.dumps({"status": "success", "data": data}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")

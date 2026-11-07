@@ -29,11 +29,21 @@ jobs:
           uv run --project observability ruff check observability
           uv run --project observability pytest observability/tests -q
           uv run --project observability python observability/validate.py
+      - name: Schema-check inactive Helm workloads
+        run: |
+          curl -fsSL https://bjw-s-labs.github.io/helm-charts/other/app-template-3.7.3.tgz \
+            -o "$RUNNER_TEMP/observability-app-template.tgz"
+          uv run --project observability python observability/validate.py \
+            --chart "$RUNNER_TEMP/observability-app-template.tgz"
       - name: Recording rules and failure fixtures
         run: |
           docker run --rm --network none --entrypoint /bin/promtool \
             --mount type=bind,src="$PWD/observability/generated",dst=/rules,readonly \
-            prom/prometheus@sha256:502ad90314c7485892ce696cb14a99fceab9fc27af29f4b427f41bd39701a199 \
+            prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2 \
             test rules /rules/rule-tests.yaml
       - name: Disposable Garage and Thanos acceptance
         run: uv run --project observability python observability/rehearse_archive.py
+      - name: Disposable Grafana provisioning and browser acceptance
+        run: |
+          uv run --project observability playwright install --with-deps chromium
+          uv run --project observability python observability/rehearse_grafana.py --browser

@@ -33,7 +33,7 @@ spec:
             seccompProfile:
               type: RuntimeDefault
           nodeSelector:
-            observability.home.arpa/archive: 'true'
+            kubernetes.io/hostname: ${OBSERVABILITY_ARCHIVE_NODE:=homelab-wsl-02-worker-1}
         containers:
           app:
             image:
@@ -106,7 +106,7 @@ spec:
           readOnly: true
       data:
         type: persistentVolumeClaim
-        storageClass: ${OBSERVABILITY_STORAGE_CLASS}
+        storageClass: ${OBSERVABILITY_STORAGE_CLASS:=local-path-observability}
         accessMode: ReadWriteOnce
         size: 64Gi
         globalMounts:

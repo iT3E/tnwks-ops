@@ -21,9 +21,10 @@ spec:
         annotations:
           reloader.stakater.com/auto: "true"
         pod:
+          automountServiceAccountToken: false
           # Fail closed if this component is accidentally selected elsewhere.
           nodeSelector:
-            observability.home.arpa/archive: "true"
+            kubernetes.io/hostname: "${OBSERVABILITY_ARCHIVE_NODE:=homelab-wsl-02-worker-1}"
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
@@ -145,15 +146,17 @@ spec:
           - path: /secrets
             readOnly: true
       metadata:
+        retain: true
         type: persistentVolumeClaim
-        storageClass: "${OBSERVABILITY_STORAGE_CLASS}"
+        storageClass: "${OBSERVABILITY_STORAGE_CLASS:=local-path-observability}"
         accessMode: ReadWriteOnce
         size: 8Gi
         globalMounts:
           - path: /metadata
       data:
+        retain: true
         type: persistentVolumeClaim
-        storageClass: "${OBSERVABILITY_STORAGE_CLASS}"
+        storageClass: "${OBSERVABILITY_STORAGE_CLASS:=local-path-observability}"
         accessMode: ReadWriteOnce
         size: 256Gi
         globalMounts:

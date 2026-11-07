@@ -76,19 +76,3 @@ spec:
     app.kubernetes.io/instance: thanos-store
     app.kubernetes.io/component: app
     k8s_cluster: ${CLUSTER_NAME}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: observability-archive
-  annotations:
-    service.cilium.io/global: 'true'
-spec:
-  ports:
-  - name: https
-    port: 443
-    targetPort: 8443
-  selector:
-    app.kubernetes.io/name: observability-garage
-    app.kubernetes.io/instance: observability-garage
-    app.kubernetes.io/component: garage

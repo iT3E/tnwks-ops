@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Are automations and recording useful, including their hardware dependencies?\n\nChoose Global or a direct local datasource. Expected sites remain in inventory; unavailable, stale and partial data cannot certify a healthy fleet. Current alerts are separate from historical state.\n\n[Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+                "content": "Are automations and recording useful, including their hardware dependencies?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -500,7 +500,7 @@
               "layout": {
                 "kind": "AutoGridLayout",
                 "spec": {
-                  "columnWidthMode": "standard",
+                  "columnWidthMode": "narrow",
                   "rowHeightMode": "standard",
                   "items": [
                     {
@@ -553,7 +553,7 @@
               "layout": {
                 "kind": "AutoGridLayout",
                 "spec": {
-                  "columnWidthMode": "standard",
+                  "columnWidthMode": "narrow",
                   "rowHeightMode": "standard",
                   "items": [
                     {

@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Is the house working?\n\nStatus words describe measured evidence. Unknown means monitoring cannot confirm the state."
+                "content": "Is the house working?\n\nMissing evidence is Unknown."
               },
               "fieldConfig": {
                 "defaults": {},
@@ -675,8 +675,8 @@
               "layout": {
                 "kind": "AutoGridLayout",
                 "spec": {
-                  "columnWidthMode": "standard",
-                  "rowHeightMode": "standard",
+                  "columnWidthMode": "narrow",
+                  "rowHeightMode": "short",
                   "items": [
                     {
                       "kind": "AutoGridLayoutItem",

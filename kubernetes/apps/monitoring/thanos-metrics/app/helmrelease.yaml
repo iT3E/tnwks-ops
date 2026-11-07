@@ -221,7 +221,7 @@ spec:
           readOnly: true
       data:
         type: persistentVolumeClaim
-        storageClass: ${OBSERVABILITY_STORAGE_CLASS}
+        storageClass: ${OBSERVABILITY_STORAGE_CLASS:=local-path-observability}
         accessMode: ReadWriteOnce
         size: 4Gi
         globalMounts:

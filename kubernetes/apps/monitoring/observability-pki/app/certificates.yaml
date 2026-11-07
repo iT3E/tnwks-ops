@@ -21,6 +21,7 @@ spec:
   dnsNames:
     - observability-store.monitoring.svc.cluster.local
   usages:
+    - digital signature
     - server auth
   privateKey:
     algorithm: ECDSA
@@ -40,6 +41,7 @@ spec:
     kind: Issuer
   commonName: observability-query
   usages:
+    - digital signature
     - client auth
   privateKey:
     algorithm: ECDSA
@@ -60,6 +62,7 @@ spec:
   dnsNames:
     - observability-archive.monitoring.svc.cluster.local
   usages:
+    - digital signature
     - server auth
   privateKey:
     algorithm: ECDSA

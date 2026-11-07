@@ -7,6 +7,7 @@ import hmac
 import json
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
@@ -39,10 +40,35 @@ class S3:
         signed["Authorization"] = (f"AWS4-HMAC-SHA256 Credential={self.access}/{scope}, "
                                    f"SignedHeaders={names}, Signature={signature}")
         url = self.endpoint + path + ("?" + query if query else "")
-        request = urllib.request.Request(url, method=method, data=data if method == "PUT" else None,
+        request = urllib.request.Request(url, method=method, data=data if method in ("PUT", "POST") else None,
                                          headers=signed)
         with urllib.request.urlopen(request, timeout=10) as response:
             return response.read()
+
+    def multipart_check(self):
+        key = "acceptance/multipart.bin"
+        raw = self.request("POST", key, query="uploads=")
+        upload = ET.fromstring(raw).find("{*}UploadId").text
+        parts = [b"a" * (5 * 1024 * 1024), b"b" * (5 * 1024 * 1024), b"c" * (1024 * 1024)]
+        completed = ET.Element("CompleteMultipartUpload")
+        for number, data in enumerate(parts, 1):
+            query = urllib.parse.urlencode({"partNumber": number, "uploadId": upload})
+            self.request("PUT", key, data, query=query)
+            part = ET.SubElement(completed, "Part")
+            ET.SubElement(part, "PartNumber").text = str(number)
+            ET.SubElement(part, "ETag").text = '"' + hashlib.md5(data, usedforsecurity=False).hexdigest() + '"'
+        self.request("POST", key, ET.tostring(completed), query=urllib.parse.urlencode({"uploadId": upload}))
+        assert self.request("GET", key) == b"".join(parts)
+        self.request("DELETE", key)
+        upload = ET.fromstring(self.request("POST", key, query="uploads=")).find("{*}UploadId").text
+        query = urllib.parse.urlencode({"uploadId": upload})
+        self.request("DELETE", key, query=query)
+        try:
+            self.request("GET", key, query=query)
+        except urllib.error.HTTPError as error:
+            assert error.code == 404
+        else:
+            raise AssertionError("aborted multipart upload still exists")
 
 
 def main():

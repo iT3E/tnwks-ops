@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Can the other dashboards be trusted, and is monitoring itself sustainable?\n\nChoose Global or a direct local datasource. Expected sites remain in inventory; unavailable, stale and partial data cannot certify a healthy fleet. Current alerts are separate from historical state.\n\n[Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+                "content": "Can the other dashboards be trusted, and is monitoring itself sustainable?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -100,6 +100,10 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "#5794f2"
+                  },
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -169,6 +173,26 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#d44a3a"
+                      },
+                      {
+                        "value": 1,
+                        "color": "#e5ac0e"
+                      },
+                      {
+                        "value": 2,
+                        "color": "#299c46"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -196,7 +220,8 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "homelab:site_state{k8s_cluster=~\"$cluster\"}",
+                        "expr": "max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})",
+                        "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": false
@@ -210,7 +235,33 @@
                   }
                 }
               ],
-              "transformations": [],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "State"
+                      }
+                    }
+                  }
+                }
+              ],
               "queryOptions": {}
             }
           },
@@ -242,28 +293,8 @@
                           "color": "#8e8e8e"
                         },
                         "1": {
-                          "text": "Healthy",
-                          "color": "#299c46"
-                        },
-                        "2": {
-                          "text": "Degraded",
-                          "color": "#e5ac0e"
-                        },
-                        "3": {
-                          "text": "Failed",
-                          "color": "#d44a3a"
-                        },
-                        "4": {
-                          "text": "Standby",
+                          "text": "Reporting",
                           "color": "#5794f2"
-                        },
-                        "5": {
-                          "text": "Not applicable",
-                          "color": "#8e8e8e"
-                        },
-                        "6": {
-                          "text": "Maintenance",
-                          "color": "#b877d9"
                         }
                       }
                     }
@@ -277,7 +308,8 @@
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
-                    "inspect": false
+                    "inspect": false,
+                    "minWidth": 70
                   }
                 },
                 "overrides": []
@@ -306,6 +338,7 @@
                       "version": "v0",
                       "spec": {
                         "expr": "time() - homelab_observer_last_success_timestamp_seconds{k8s_cluster=~\"$cluster\"}",
+                        "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": false
@@ -319,7 +352,33 @@
                   }
                 }
               ],
-              "transformations": [],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
               "queryOptions": {}
             }
           },
@@ -351,7 +410,8 @@
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
-                    "inspect": false
+                    "inspect": false,
+                    "minWidth": 70
                   }
                 },
                 "overrides": []
@@ -380,6 +440,7 @@
                       "version": "v0",
                       "spec": {
                         "expr": "homelab_collection_success{k8s_cluster=~\"$cluster\"}",
+                        "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": false
@@ -393,7 +454,33 @@
                   }
                 }
               ],
-              "transformations": [],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
               "queryOptions": {}
             }
           },
@@ -419,7 +506,8 @@
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
-                    "inspect": false
+                    "inspect": false,
+                    "minWidth": 70
                   }
                 },
                 "overrides": []
@@ -448,6 +536,7 @@
                       "version": "v0",
                       "spec": {
                         "expr": "sum by (k8s_cluster, job) (up{k8s_cluster=~\"$cluster\"} == 0)",
+                        "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": false
@@ -461,7 +550,33 @@
                   }
                 }
               ],
-              "transformations": [],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
               "queryOptions": {}
             }
           },
@@ -487,7 +602,8 @@
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
-                    "inspect": false
+                    "inspect": false,
+                    "minWidth": 70
                   }
                 },
                 "overrides": []
@@ -1026,7 +1142,7 @@
               "layout": {
                 "kind": "AutoGridLayout",
                 "spec": {
-                  "columnWidthMode": "standard",
+                  "columnWidthMode": "narrow",
                   "rowHeightMode": "standard",
                   "items": [
                     {
@@ -1106,7 +1222,7 @@
               "layout": {
                 "kind": "AutoGridLayout",
                 "spec": {
-                  "columnWidthMode": "standard",
+                  "columnWidthMode": "narrow",
                   "rowHeightMode": "standard",
                   "items": [
                     {
@@ -1159,7 +1275,7 @@
               "layout": {
                 "kind": "AutoGridLayout",
                 "spec": {
-                  "columnWidthMode": "standard",
+                  "columnWidthMode": "narrow",
                   "rowHeightMode": "standard",
                   "items": [
                     {

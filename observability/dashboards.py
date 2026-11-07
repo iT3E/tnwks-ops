@@ -14,6 +14,7 @@ from grafana_foundation_sdk.builders import common as common_builder
 from grafana_foundation_sdk.builders import prometheus, stat, table, text, timeseries
 from grafana_foundation_sdk.cog.encoder import JSONEncoder
 from grafana_foundation_sdk.models import common
+from grafana_foundation_sdk.models import prometheus as prom_model
 from grafana_foundation_sdk.models import dashboardv2 as model
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,6 +60,8 @@ def p(title: str, expr: str, unit: str, explanation: str, kind="timeseries", lin
 
 
 def metric(name: str, extra: str = "") -> str:
+    if name.startswith(("unpoller_", "cnpg_")):
+        extra = 'source_site=""' + ("," + extra if extra else "")
     return f"{name}{{{SCOPE}{',' + extra if extra else ''}}}"
 
 
@@ -68,7 +71,7 @@ def coverage() -> list[Panel]:
           "short", "Declared inventory survives the disappearance of a source. This is expected scope, not health.", "stat"),
         p("Reporting sites", 'count(homelab:site_reporting == 1) or vector(0)', "short",
           "A reporting site has fresh, successful evidence collection. Compare with expected sites; partial results never certify fleet health.", "stat"),
-        p("Site evidence", metric("homelab:site_state"), "state",
+        p("Site evidence", f'max by (k8s_cluster) ({metric("homelab:site_state")})', "coverage",
           "Measured site evidence, including explicit Unknown when an expected site stops reporting. Independent site probes distinguish unreachable from unobserved.", "table", "tnwks-sites"),
         p("Evidence age", f'time() - {metric("homelab_observer_last_success_timestamp_seconds")}', "s",
           "Age of the last successful Kubernetes inventory observation. A recent Prometheus scrape alone does not prove the collector is seeing its upstream.", "table", "tnwks-observability"),
@@ -351,11 +354,27 @@ def catalogue() -> list[Board]:
 def visualization(panel: Panel):
     cls = {"stat": stat.Visualization, "table": table.Visualization,
            "timeseries": timeseries.Visualization}[panel.kind]
-    viz = cls().unit("short" if panel.unit == "state" else panel.unit).no_value("Unknown — missing evidence")
+    viz = cls().unit("short" if panel.unit in ("state", "coverage") else panel.unit).no_value("Unknown — missing evidence")
     if panel.unit == "state":
         viz.mappings([model.ValueMap(options=STATE)])
+    if panel.unit == "coverage":
+        viz.mappings([model.ValueMap(options={
+            "0": model.ValueMappingResult(text="Unknown", color="#8e8e8e"),
+            "1": model.ValueMappingResult(text="Reporting", color="#5794f2"),
+        })])
+    if panel.kind == "table":
+        viz.min_width(70)
     if panel.kind == "stat":
         viz.reduce_options(common_builder.ReduceDataOptions().calcs(["lastNotNull"]).values(False))
+        if panel.unit not in ("state", "coverage"):
+            viz.color_scheme(dashboard.FieldColor().mode(model.FieldColorModeId.FIXED).fixed_color("#5794f2"))
+        if panel.title == "Reporting sites":
+            viz.color_scheme(dashboard.FieldColor().mode(model.FieldColorModeId.THRESHOLDS))
+            viz.thresholds(dashboard.ThresholdsConfig().mode(model.ThresholdsMode.ABSOLUTE).steps([
+                model.Threshold(value=None, color="#d44a3a"),
+                model.Threshold(value=1, color="#e5ac0e"),
+                model.Threshold(value=len(CLUSTERS), color="#299c46"),
+            ]))
     if panel.kind == "timeseries":
         viz.legend(common_builder.VizLegendOptions().display_mode(common.LegendDisplayMode.TABLE)
                    .placement(common.LegendPlacement.BOTTOM).calcs(["lastNotNull", "max"]))
@@ -387,12 +406,13 @@ def resource(board: Board) -> dict:
     about = (dashboard.Panel().id(1).title("About this view")
              .description("Purpose, scope and the interpretation of missing evidence.")
              .visualization(text.Visualization().content(board.question + "\n\n"
-                 + ("Status words describe measured evidence. Unknown means monitoring cannot confirm the state."
-                    if board.kiosk else "Choose Global or a direct local datasource. Expected sites remain in inventory; unavailable, stale and partial data cannot certify a healthy fleet. Current alerts are separate from historical state."
-                       + "\n\n[Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"))))
+                 + ("Missing evidence is Unknown."
+                    if board.kiosk else "Missing or partial evidence is Unknown. "
+                       + "[Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"))))
     builder.element("about", about)
     for tab_name, panels in board.tabs.items():
-        grid = dashboard.AutoGrid().max_column_count(3).column_width_mode("standard").row_height_mode("standard")
+        grid = (dashboard.AutoGrid().max_column_count(3).column_width_mode("narrow")
+                .row_height_mode("standard" if board.level == "l2" else "short"))
         if count == 0:
             grid.with_item("about")
         for panel in panels:
@@ -404,8 +424,18 @@ def resource(board: Board) -> dict:
                 query.instant()
             else:
                 query.range()
+            data = dashboard.QueryGroup().target(dashboard.Target().ref_id("A").query(query))
+            if panel.kind == "table":
+                query.format(prom_model.PromQueryFormat.TABLE)
+                data.transformation(dashboard.Transformation().group("organize").options({
+                    "excludeByName": {"Time": True, "__name__": True},
+                    "indexByName": {"Value": 0, "k8s_cluster": 1, "app": 2, "db_cluster": 2},
+                    "renameByName": {"k8s_cluster": "Site", "db_cluster": "Database",
+                                     "app": "App", "observer_cluster": "Observer",
+                                     "Value": "State" if panel.unit in ("state", "coverage") else "Value"},
+                }))
             element = (dashboard.Panel().id(count + 1).title(panel.title).description(panel.description)
-                       .data(dashboard.QueryGroup().target(dashboard.Target().ref_id("A").query(query)))
+                       .data(data)
                        .visualization(visualization(panel)))
             builder.element(key, element)
             grid.with_item(key)

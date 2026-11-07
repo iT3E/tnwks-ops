@@ -1,4 +1,4 @@
 ---
 kind: Added
-body: Prepare generated Grafana dashboards, bounded observability evidence and private Garage/Thanos archive components with offline failure tests; cluster activation remains gated on storage and upgrade validation.
+body: Deploy a private Garage object store on WSL-02 and read-only evidence collectors on both sites, prepare the Grafana database upgrade backup, and add generated dashboards and bounded Thanos components with offline failure tests.
 time: 2026-11-06T18:00:00-08:00

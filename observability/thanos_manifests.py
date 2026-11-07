@@ -46,10 +46,10 @@ def workload(name, command, memory, request, cpu, args, persistent=None, server=
         values["service"]["app"]["ports"]["grpc"] = {"port": 10901}
     if persistent:
         values["persistence"]["data"] = {"type": "persistentVolumeClaim",
-            "storageClass": "${OBSERVABILITY_STORAGE_CLASS}", "accessMode": "ReadWriteOnce",
+            "storageClass": "${OBSERVABILITY_STORAGE_CLASS:=local-path-observability}", "accessMode": "ReadWriteOnce",
             "size": persistent, "globalMounts": [{"path": "/data"}]}
     if command == "compact":
-        values["controllers"]["app"]["pod"]["nodeSelector"] = {"observability.home.arpa/archive": "true"}
+        values["controllers"]["app"]["pod"]["nodeSelector"] = {"kubernetes.io/hostname": "${OBSERVABILITY_ARCHIVE_NODE:=homelab-wsl-02-worker-1}"}
     return {"apiVersion": "helm.toolkit.fluxcd.io/v2", "kind": "HelmRelease",
         "metadata": {"name": name, "namespace": "monitoring"}, "spec": {
             "interval": "30m", "chart": {"spec": {"chart": "app-template", "version": "3.7.3",
@@ -100,12 +100,6 @@ def generated_platform():
         "name": "thanos-store-${CLUSTER_NAME}"}, "spec": {"ports": [{"name": "grpc", "port": 10901}],
         "selector": {"app.kubernetes.io/name": "thanos-store", "app.kubernetes.io/instance": "thanos-store",
                      "app.kubernetes.io/component": "app", "k8s_cluster": "${CLUSTER_NAME}"}}})
-    services.append({"apiVersion": "v1", "kind": "Service", "metadata": {
-        "name": "observability-archive", "annotations": {"service.cilium.io/global": "true"}},
-        "spec": {"ports": [{"name": "https", "port": 443, "targetPort": 8443}],
-            "selector": {"app.kubernetes.io/name": "observability-garage",
-                         "app.kubernetes.io/instance": "observability-garage",
-                         "app.kubernetes.io/component": "garage"}}})
     base = ROOT / "kubernetes/apps/monitoring/thanos-metrics/app"
     result[base / "services.yaml"] = "".join("---\n" + yaml.safe_dump(s, sort_keys=False) for s in services)
     kust = yaml.safe_load(result[base / "kustomization.yaml"])

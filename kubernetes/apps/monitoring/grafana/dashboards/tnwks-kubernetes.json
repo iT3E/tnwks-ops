@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Is desired state reconciling, and which resource or controller is blocking it?\n\nChoose Global or a direct local datasource. Expected sites remain in inventory; unavailable, stale and partial data cannot certify a healthy fleet. Current alerts are separate from historical state.\n\n[Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+                "content": "Is desired state reconciling, and which resource or controller is blocking it?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -59,6 +59,7 @@
                       "version": "v0",
                       "spec": {
                         "expr": "homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}",
+                        "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": false
@@ -72,7 +73,33 @@
                   }
                 }
               ],
-              "transformations": [],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
               "queryOptions": {}
             }
           },
@@ -98,7 +125,8 @@
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
-                    "inspect": false
+                    "inspect": false,
+                    "minWidth": 70
                   }
                 },
                 "overrides": []
@@ -127,6 +155,7 @@
                       "version": "v0",
                       "spec": {
                         "expr": "homelab_flux_resource_suspended{k8s_cluster=~\"$cluster\"}",
+                        "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": false
@@ -140,7 +169,33 @@
                   }
                 }
               ],
-              "transformations": [],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
               "queryOptions": {}
             }
           },
@@ -166,7 +221,8 @@
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
-                    "inspect": false
+                    "inspect": false,
+                    "minWidth": 70
                   }
                 },
                 "overrides": []
@@ -463,7 +519,7 @@
               "layout": {
                 "kind": "AutoGridLayout",
                 "spec": {
-                  "columnWidthMode": "standard",
+                  "columnWidthMode": "narrow",
                   "rowHeightMode": "standard",
                   "items": [
                     {
@@ -516,7 +572,7 @@
               "layout": {
                 "kind": "AutoGridLayout",
                 "spec": {
-                  "columnWidthMode": "standard",
+                  "columnWidthMode": "narrow",
                   "rowHeightMode": "standard",
                   "items": [
                     {

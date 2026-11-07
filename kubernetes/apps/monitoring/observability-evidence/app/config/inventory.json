@@ -196,6 +196,38 @@
       "databases": [],
       "tier": "movable",
       "fencing_required": false
+    },
+    {
+      "name": "jellyfin",
+      "namespace": "production",
+      "prefix": "JELLYFIN",
+      "workloads": [
+        "statefulset/jellyfin"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [],
+      "tier": "movable",
+      "fencing_required": false
+    },
+    {
+      "name": "plausible",
+      "namespace": "selfhosted",
+      "prefix": "PLAUSIBLE",
+      "workloads": [
+        "statefulset/plausible"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [
+        "plausible-pg"
+      ],
+      "tier": "movable",
+      "fencing_required": false
     }
   ],
   "databases": [
@@ -249,11 +281,11 @@
       "source": "packing-api-db"
     },
     {
-      "name": "postgres",
-      "app": "shared-postgres",
+      "name": "plausible-pg",
+      "app": "plausible",
       "namespace": "databases",
       "cluster": "homelab-wsl",
-      "source": "cloudnative-pg-cluster"
+      "source": "plausible-db"
     },
     {
       "name": "things-api-pg",
@@ -303,6 +335,13 @@
       "namespace": "databases",
       "cluster": "homelab-wsl-02",
       "source": "mealie-db"
+    },
+    {
+      "name": "plausible-pg",
+      "app": "plausible",
+      "namespace": "databases",
+      "cluster": "homelab-wsl-02",
+      "source": "plausible-db"
     },
     {
       "name": "transcriber-pg",

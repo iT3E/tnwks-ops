@@ -118,7 +118,7 @@ def fixtures():
 def generate():
     resource = rule_resource()
     result = {
-        ROOT / "kubernetes/apps/monitoring/observability-evidence/app/rules.yaml": resource,
+        ROOT / "kubernetes/apps/monitoring/observability-evidence/rules/rules.yaml": resource,
         ROOT / "observability/generated/rules-for-test.yaml": {"groups": resource["spec"]["groups"]},
         ROOT / "observability/generated/rule-tests.yaml": fixtures(),
     }

@@ -3,7 +3,7 @@
 This directory owns the dashboard definitions, evidence exporter, query isolation
 boundary and offline acceptance tests. Cluster activation is tracked in
 [`observability-implementation.md`](../docs/operations/observability-implementation.md).
-The new Flux Kustomizations are deliberately absent from both active cluster graphs.
+The initial rollout selects evidence collectors and the shared PKI on both WSL sites, with Garage only on WSL-02. Dashboard and Thanos activation follows their separate migration checks.
 
 `dashboards.py` uses the pinned official Grafana Foundation SDK to generate stable
 v2 resources: 12 operator dashboards and one household dashboard. `inventory.py`
@@ -24,7 +24,7 @@ workloads. Query keeps the expected endpoints even during failed health checks
 and refuses partial responses. Direct local Prometheus remains the independent
 fallback. Store has explicit cache, request and concurrency limits. Compaction
 uses one worker, 35d raw retention and no downsampling. Garage is pinned to an
-explicit archive-node label and uses 256Gi data / 8Gi metadata claims. Its S3
+explicit archive-node hostname and uses 256Gi data / 8Gi metadata claims. Its S3
 listener is pod-local; a TLS proxy provides the cross-site endpoint.
 
 ```bash
@@ -34,6 +34,7 @@ uv run --project observability ruff check observability
 uv run --project observability pytest observability/tests -q
 uv run --project observability python observability/validate.py
 uv run --project observability python observability/rehearse_archive.py
+uv run --project observability python observability/rehearse_grafana.py --browser
 ```
 
 Generation/validation needs `kustomize` or `kubectl kustomize`; neither contacts a

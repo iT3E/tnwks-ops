@@ -6,3 +6,4 @@ resources:
   - ./ca.sops.yaml
   - ./objstore.sops.yaml
   - ./certificates.yaml
+  - ./archive-service.yaml

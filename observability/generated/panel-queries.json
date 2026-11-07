@@ -19,8 +19,8 @@
     "dashboard": "home",
     "tab": "Now",
     "title": "Site evidence",
-    "expr": "homelab:site_state{k8s_cluster=~\"$cluster\"}",
-    "unit": "state",
+    "expr": "max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "coverage",
     "kiosk": false
   },
   {
@@ -107,8 +107,8 @@
     "dashboard": "tnwks-sites",
     "tab": "Sites",
     "title": "Site evidence",
-    "expr": "homelab:site_state{k8s_cluster=~\"$cluster\"}",
-    "unit": "state",
+    "expr": "max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "coverage",
     "kiosk": false
   },
   {
@@ -251,7 +251,7 @@
     "dashboard": "tnwks-data",
     "tab": "Backups",
     "title": "WAL failures",
-    "expr": "increase(cnpg_pg_stat_archiver_failed_count{k8s_cluster=~\"$cluster\"}[1h])",
+    "expr": "increase(cnpg_pg_stat_archiver_failed_count{k8s_cluster=~\"$cluster\",source_site=\"\"}[1h])",
     "unit": "short",
     "kiosk": false
   },
@@ -395,7 +395,7 @@
     "dashboard": "tnwks-wifi",
     "tab": "Access points",
     "title": "AP uptime",
-    "expr": "max by (k8s_cluster, name) (unpoller_device_uptime_seconds{k8s_cluster=~\"$cluster\"})",
+    "expr": "max by (k8s_cluster, name) (unpoller_device_uptime_seconds{k8s_cluster=~\"$cluster\",source_site=\"\"})",
     "unit": "s",
     "kiosk": false
   },
@@ -403,7 +403,7 @@
     "dashboard": "tnwks-wifi",
     "tab": "Access points",
     "title": "AP uplink",
-    "expr": "max by (k8s_cluster, name) (unpoller_device_uplink_speed_mbps{k8s_cluster=~\"$cluster\"})",
+    "expr": "max by (k8s_cluster, name) (unpoller_device_uplink_speed_mbps{k8s_cluster=~\"$cluster\",source_site=\"\"})",
     "unit": "Mbits",
     "kiosk": false
   },
@@ -411,7 +411,7 @@
     "dashboard": "tnwks-wifi",
     "tab": "Access points",
     "title": "Wi-Fi collector failures",
-    "expr": "sum by (k8s_cluster) (increase(unpoller_prometheus_refresh_failures_total{k8s_cluster=~\"$cluster\"}[15m]))",
+    "expr": "sum by (k8s_cluster) (increase(unpoller_prometheus_refresh_failures_total{k8s_cluster=~\"$cluster\",source_site=\"\"}[15m]))",
     "unit": "short",
     "kiosk": false
   },
@@ -635,8 +635,8 @@
     "dashboard": "tnwks-observability",
     "tab": "Trust",
     "title": "Site evidence",
-    "expr": "homelab:site_state{k8s_cluster=~\"$cluster\"}",
-    "unit": "state",
+    "expr": "max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "coverage",
     "kiosk": false
   },
   {

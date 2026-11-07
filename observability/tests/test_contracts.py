@@ -65,7 +65,7 @@ def test_inventory_comes_from_the_existing_failover_catalogue():
     dbs = {(db["cluster"], db["name"]) for db in inv["databases"]}
     assert ("homelab-wsl", "litellm-pg") in dbs
     assert ("homelab-wsl-02", "litellm-pg") not in dbs
-    assert ("homelab-wsl", "postgres") in dbs
+    assert all(name != "postgres" for _, name in dbs)  # Retired in v2.0.0.
 
 
 class FakeApi:

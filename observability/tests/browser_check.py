@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -13,9 +14,13 @@ from dashboards import catalogue
 
 def main():
     base = os.environ.get("GRAFANA_TEST_URL", "http://127.0.0.1:13101")
-    out = Path(os.environ.get("GRAFANA_TEST_ARTIFACTS", "/tmp/observability-browser"))
+    out = Path(os.environ.get("GRAFANA_TEST_ARTIFACTS", "observability/.cache/browser"))
     out.mkdir(parents=True, exist_ok=True)
     errors = []
+    pending = {}
+    failed = []
+    http_errors = []
+    console = []
     results = []
     with sync_playwright() as p:
         executable = os.environ.get("CHROMIUM_EXECUTABLE")
@@ -23,11 +28,24 @@ def main():
                                     args=["--no-sandbox", "--disable-dev-shm-usage", "--no-proxy-server"])
         page = browser.new_page(viewport={"width": 1440, "height": 1000})
         page.on("pageerror", lambda error: errors.append(str(error)))
+        page.on("request", lambda request: pending.update({request.url: time.monotonic()}))
+        page.on("requestfinished", lambda request: pending.pop(request.url, None))
+        page.on("requestfailed", lambda request: failed.append({"url": request.url, "failure": request.failure}))
+        page.on("response", lambda response: http_errors.append({"url": response.url, "status": response.status}) if response.status >= 400 else None)
+        page.on("console", lambda message: console.append({"type": message.type, "text": message.text}))
         for board in catalogue():
             if board.kiosk:
                 continue
             page.goto(f"{base}/d/{board.uid}?var-datasource=prometheus-global", wait_until="domcontentloaded")
-            page.get_by_text(board.title, exact=True).first.wait_for(timeout=15000)
+            try:
+                page.get_by_text(board.title, exact=True).filter(visible=True).first.wait_for(timeout=45000)
+            except Exception:
+                (out / "failed-page.html").write_text(page.content())
+                (out / "failed-state.json").write_text(json.dumps(page.evaluate(
+                    '({ready:document.readyState,body:!!document.body,root:document.getElementById("reactRoot")?.outerHTML,frames:[...document.querySelectorAll("iframe")].map(f=>f.src)})')))
+                (out / "failed-network.json").write_text(json.dumps({"pending": pending, "failed": failed,
+                    "errors": errors, "http_errors": http_errors, "console": console}, indent=2))
+                raise
             body = page.locator("body").inner_text()
             for bad in ["Visualization plugin not found", "Panel plugin not found", "An unexpected error happened"]:
                 assert bad not in body, (board.uid, bad)
@@ -39,10 +57,18 @@ def main():
                 page.wait_for_timeout(150)
             results.append({"dashboard": board.uid, "title": board.title, "tabs": list(board.tabs)})
         page.goto(f"{base}/d/home?var-datasource=prometheus-global", wait_until="domcontentloaded")
-        page.screenshot(path=str(out / "homelab-desktop.png"), full_page=True)
+        page.get_by_text("Expected sites", exact=True).filter(visible=True).wait_for(timeout=45000)
+        evidence = page.get_by_test_id("data-testid Panel header Site evidence")
+        evidence.get_by_text("homelab-wsl-02", exact=True).wait_for(timeout=15000)
+        evidence.get_by_text("Unknown", exact=True).wait_for(timeout=15000)
+        (out / "home-rendered.html").write_text(page.content())
+        page.screenshot(path=str(out / "homelab-desktop.png"), full_page=True, animations="disabled")
         page.set_viewport_size({"width": 768, "height": 1024})
         page.reload(wait_until="domcontentloaded")
-        page.screenshot(path=str(out / "homelab-tablet.png"), full_page=True)
+        page.get_by_text("Expected sites", exact=True).filter(visible=True).wait_for(timeout=45000)
+        page.get_by_test_id("data-testid Panel header Site evidence").get_by_text(
+            "homelab-wsl-02", exact=True).wait_for(timeout=15000)
+        page.screenshot(path=str(out / "homelab-tablet.png"), full_page=True, animations="disabled")
         browser.close()
     (out / "browser-results.json").write_text(json.dumps({"dashboards": results, "page_errors": errors}, indent=2) + "\n")
     assert not errors, errors

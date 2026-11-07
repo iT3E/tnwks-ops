@@ -4,7 +4,6 @@ kind: Kustomization
 resources:
   - ./helmrelease.yaml
   - ./rbac.yaml
-  - ./rules.yaml
 configMapGenerator:
   - name: observability-evidence-code
     namespace: monitoring

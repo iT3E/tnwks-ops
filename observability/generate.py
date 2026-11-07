@@ -24,7 +24,7 @@ def artifacts():
     files[app / "collector.py"] = (ROOT / "observability/collector.py").read_text()
     resource = rule_resource()
     rules = {
-        ROOT / "kubernetes/apps/monitoring/observability-evidence/app/rules.yaml": resource,
+        ROOT / "kubernetes/apps/monitoring/observability-evidence/rules/rules.yaml": resource,
         ROOT / "observability/generated/rules-for-test.yaml": {"groups": resource["spec"]["groups"]},
         ROOT / "observability/generated/rule-tests.yaml": fixtures(),
     }
