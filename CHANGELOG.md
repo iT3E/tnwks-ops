@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.5.0 - 2026-11-07
+
+### Added
+
+* Scrape the Flux controllers on both sites and turn on Cilium and Hubble metrics on homelab-wsl-02.
+
 ## v2.4.0 - 2026-11-07
 
 ### Added

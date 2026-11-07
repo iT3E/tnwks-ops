@@ -1,3 +1,0 @@
-kind: Added
-body: Scrape the Flux controllers on both sites and turn on Cilium and Hubble metrics on homelab-wsl-02.
-time: 2026-11-07T01:30:00-08:00
