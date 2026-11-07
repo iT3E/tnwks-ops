@@ -673,6 +673,11 @@ task failover:clear APP=mealie                      # only once git matches
   It skips an app with `site-overrides` here (a switchover under way). It
   keeps the standby current and is the standing restore drill: a failure is
   `KubeJobFailed`, and no success for 8 days is `StandbyRestoreDrillStale`.
+- **Fix forward: `--no-rollback`.** By default a failed PVC copy starts the
+  app again on the old site. With `--no-rollback` it stays stopped there; fix
+  the cause and run the same switchover again (it stops, copies and starts as
+  before). The tool refuses up front if a target PVC is missing on the new site
+  (an app not deployed there), before anything stops.
 - **Unplanned: `--promote`.** For when the old site is dead. First set
   `site_leases.<app>` to the dead site (a PR to `dns-sites.tf`); the tool
   refuses until the router says so. Then run `task failover APP=<app>

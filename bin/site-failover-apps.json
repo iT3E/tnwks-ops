@@ -379,7 +379,8 @@
         "policy": "ombi",
         "uid": 1000,
         "gid": 1000,
-        "transfer_only": true
+        "transfer_only": true,
+        "restore_privileged": true
       }
     ],
     "check": {
@@ -407,7 +408,8 @@
         "policy": "ombi-f",
         "uid": 1000,
         "gid": 1000,
-        "transfer_only": true
+        "transfer_only": true,
+        "restore_privileged": true
       }
     ],
     "check": {
