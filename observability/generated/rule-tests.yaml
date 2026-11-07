@@ -600,3 +600,38 @@ tests:
       value: 3
     - labels: homelab:app_rto_state{k8s_cluster="one",app="untested"}
       value: 0
+- name: 'other databases: ready, failed, standby, unobserved'
+  interval: 1m
+  input_series:
+  - series: homelab_expected_other_database_info{k8s_cluster="one",observer_cluster="one",namespace="db",workload="ok",kind="statefulset",engine="e",app="a"}
+    values: 1+0x10
+  - series: kube_statefulset_replicas{k8s_cluster="one",namespace="db",statefulset="ok"}
+    values: 1+0x10
+  - series: kube_statefulset_status_replicas_ready{k8s_cluster="one",namespace="db",statefulset="ok"}
+    values: 1+0x10
+  - series: homelab_expected_other_database_info{k8s_cluster="one",observer_cluster="one",namespace="db",workload="down",kind="deployment",engine="e",app="a"}
+    values: 1+0x10
+  - series: kube_deployment_spec_replicas{k8s_cluster="one",namespace="db",deployment="down"}
+    values: 1+0x10
+  - series: kube_deployment_status_replicas_available{k8s_cluster="one",namespace="db",deployment="down"}
+    values: 0+0x10
+  - series: homelab_expected_other_database_info{k8s_cluster="one",observer_cluster="one",namespace="db",workload="standby",kind="statefulset",engine="e",app="a"}
+    values: 1+0x10
+  - series: kube_statefulset_replicas{k8s_cluster="one",namespace="db",statefulset="standby"}
+    values: 0+0x10
+  - series: kube_statefulset_status_replicas_ready{k8s_cluster="one",namespace="db",statefulset="standby"}
+    values: 0+0x10
+  - series: homelab_expected_other_database_info{k8s_cluster="one",observer_cluster="one",namespace="db",workload="missing",kind="statefulset",engine="e",app="a"}
+    values: 1+0x10
+  promql_expr_test:
+  - expr: homelab:other_database_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:other_database_state{k8s_cluster="one",namespace="db",workload="down",engine="e",app="a"}
+      value: 3
+    - labels: homelab:other_database_state{k8s_cluster="one",namespace="db",workload="missing",engine="e",app="a"}
+      value: 0
+    - labels: homelab:other_database_state{k8s_cluster="one",namespace="db",workload="ok",engine="e",app="a"}
+      value: 1
+    - labels: homelab:other_database_state{k8s_cluster="one",namespace="db",workload="standby",engine="e",app="a"}
+      value: 4

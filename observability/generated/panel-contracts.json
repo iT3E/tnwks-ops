@@ -1046,6 +1046,76 @@
   },
   {
     "dashboard": "tnwks-data",
+    "tab": "Other databases",
+    "panel": "Database state",
+    "query": "max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:other_database_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_expected_other_database_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_deployment_spec_replicas",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_deployment_status_replicas_available",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_statefulset_replicas",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "kube_statefulset_status_replicas_ready",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/backups.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Other databases",
+    "panel": "Database container restarts",
+    "query": "sum by (k8s_cluster, pod, container) (increase(kube_pod_container_status_restarts_total{k8s_cluster=~\"$cluster\",container=~\"mongo|clickhouse\"}[1h]) or increase(kube_pod_container_status_restarts_total{k8s_cluster=~\"$cluster\",pod=~\"immich-postgres-[0-9]+|valkey-.+|immich-valkey-.+\"}[1h]))",
+    "unit": "short",
+    "query_mode": "range",
+    "inputs": [
+      "kube_pod_container_status_restarts_total"
+    ],
+    "sources": [
+      {
+        "metric": "kube_pod_container_status_restarts_total",
+        "producer": "kube-state-metrics",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/backups.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-data",
     "tab": "Backups",
     "panel": "Base backup age",
     "query": "homelab:database_backup_age_seconds{k8s_cluster=~\"$cluster\"}",

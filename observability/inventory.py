@@ -48,6 +48,20 @@ def databases(sites):
 OBJECTIVES = {"rpo": 30 * 3600, "rto": 3600}
 APP_OBJECTIVES: dict[str, dict[str, int]] = {}
 
+# Databases outside CloudNativePG, with no exporter of their own: watched
+# through their workload's readiness (kube-state-metrics). Ready means every
+# container in the pod passes its readiness check; ClickHouse has none, so for
+# it Ready only means running, and Plausible's content probe covers its queries.
+OTHER_DATABASES = [
+    {"namespace": "networking", "kind": "statefulset", "workload": "unifi", "engine": "mongodb", "app": "unifi"},
+    {"namespace": "selfhosted", "kind": "statefulset", "workload": "immich-postgres", "engine": "postgresql", "app": "immich"},
+    {"namespace": "selfhosted", "kind": "statefulset", "workload": "plausible", "engine": "clickhouse", "app": "plausible"},
+    {"namespace": "selfhosted", "kind": "deployment", "workload": "immich-valkey", "engine": "valkey", "app": "immich"},
+    # Site 1 only (kubernetes/clusters/wsl-02 doesn't deploy the cache namespace).
+    {"namespace": "cache", "kind": "deployment", "workload": "valkey", "engine": "valkey", "app": "valkey",
+     "clusters": ["homelab-wsl"]},
+]
+
 PROBES = {
     "mealie": ("http://mealie.production.svc.cluster.local:9000/api/app/about", '"version"'),
     "transcriber": ("http://transcriber-app.production.svc.cluster.local:8081/api/healthz", '"ok":true'),
@@ -62,7 +76,8 @@ PROBES = {
     "ombi-f": ("http://ombi-f.production.svc.cluster.local:3579/", "<html"),
     "wizarr": ("http://wizarr.production.svc.cluster.local:5690/", "<html"),
     "jellyfin": ("http://jellyfin.production.svc.cluster.local:8096/health", "Healthy"),
-    "plausible": ("http://plausible.selfhosted.svc.cluster.local:8000/api/health", '"postgres":"ok"'),
+    # Plausible's health covers both its databases: Postgres and ClickHouse.
+    "plausible": ("http://plausible.selfhosted.svc.cluster.local:8000/api/health", ['"postgres":"ok"', '"clickhouse":"ok"']),
     "grafana": ("http://grafana.monitoring.svc.cluster.local/api/health", '"database": "ok"'),
 }
 
@@ -117,6 +132,7 @@ def inventory():
             apps[-1]["probe"] = {"url": url, "expect": expect}
     vips, ingress = shared_vips()
     return {"version": 1, "sites": sites, "apps": apps, "databases": databases(sites), "objectives": OBJECTIVES,
+            "other_databases": OTHER_DATABASES,
             "vips": vips, "ingress": ingress}
 
 

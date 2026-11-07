@@ -321,7 +321,10 @@
       "objectives": {},
       "probe": {
         "url": "http://plausible.selfhosted.svc.cluster.local:8000/api/health",
-        "expect": "\"postgres\":\"ok\""
+        "expect": [
+          "\"postgres\":\"ok\"",
+          "\"clickhouse\":\"ok\""
+        ]
       }
     },
     {
@@ -480,6 +483,46 @@
     "rpo": 108000,
     "rto": 3600
   },
+  "other_databases": [
+    {
+      "namespace": "networking",
+      "kind": "statefulset",
+      "workload": "unifi",
+      "engine": "mongodb",
+      "app": "unifi"
+    },
+    {
+      "namespace": "selfhosted",
+      "kind": "statefulset",
+      "workload": "immich-postgres",
+      "engine": "postgresql",
+      "app": "immich"
+    },
+    {
+      "namespace": "selfhosted",
+      "kind": "statefulset",
+      "workload": "plausible",
+      "engine": "clickhouse",
+      "app": "plausible"
+    },
+    {
+      "namespace": "selfhosted",
+      "kind": "deployment",
+      "workload": "immich-valkey",
+      "engine": "valkey",
+      "app": "immich"
+    },
+    {
+      "namespace": "cache",
+      "kind": "deployment",
+      "workload": "valkey",
+      "engine": "valkey",
+      "app": "valkey",
+      "clusters": [
+        "homelab-wsl"
+      ]
+    }
+  ],
   "vips": [
     {
       "address": "10.10.95.10",

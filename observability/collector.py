@@ -145,6 +145,13 @@ class Collector:
             metrics.add("homelab_app_recovery_objective_seconds", seconds, app=name,
                         objective="rpo", k8s_cluster=cluster, observer_cluster=self.cluster)
 
+        for database in self.inventory.get("other_databases", []):
+            labels_ = {key: value for key, value in database.items() if key != "clusters"}
+            for site in self.inventory["sites"]:
+                if site["cluster"] in database.get("clusters", [site["cluster"]]):
+                    metrics.add("homelab_expected_other_database_info", 1, k8s_cluster=site["cluster"],
+                                observer_cluster=self.cluster, **labels_)
+
         for database in self.expected_databases():
             metrics.add("homelab_expected_database_info", 1, app=database["app"],
                         namespace=database["namespace"], db_cluster=database["name"],
@@ -649,8 +656,9 @@ def peer_attestations(base: str, peer: str, timeout: float = 3) -> dict[str, flo
         return None
 
 
-def content_probe(url: str, expect: str, timeout: float = 3) -> tuple[bool, float]:
-    """2xx and the expected string in the first 64 KiB. Fixed inventory URLs only."""
+def content_probe(url: str, expect: str | list[str], timeout: float = 3) -> tuple[bool, float]:
+    """2xx and every expected string in the first 64 KiB. Fixed inventory URLs only."""
+    wanted = [expect] if isinstance(expect, str) else expect
     start = time.monotonic()
     context = None
     if url.startswith("https://"):
@@ -659,7 +667,8 @@ def content_probe(url: str, expect: str, timeout: float = 3) -> tuple[bool, floa
         context.verify_mode = ssl.CERT_NONE
     try:
         with urllib.request.urlopen(url, timeout=timeout, context=context) as response:
-            ok = 200 <= response.status < 300 and expect in response.read(65536).decode("utf-8", "replace")
+            body = response.read(65536).decode("utf-8", "replace")
+            ok = 200 <= response.status < 300 and all(item in body for item in wanted)
     except (OSError, urllib.error.URLError, ValueError):
         ok = False
     return ok, time.monotonic() - start

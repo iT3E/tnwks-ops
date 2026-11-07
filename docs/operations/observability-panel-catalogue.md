@@ -42,6 +42,8 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-data / Databases / CNPG role: in recovery | `cnpg_pg_replication_in_recovery` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
 | tnwks-data / Databases / Connections | `cnpg_backends_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
 | tnwks-data / Databases / Replay timestamp lag | `cnpg_pg_replication_lag` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
+| tnwks-data / Other databases / Database state | `homelab_expected_other_database_info`<br>`kube_deployment_spec_replicas`<br>`kube_deployment_status_replicas_available`<br>`kube_statefulset_replicas`<br>`kube_statefulset_status_replicas_ready` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
+| tnwks-data / Other databases / Database container restarts | `kube_pod_container_status_restarts_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
 | tnwks-data / Backups / Base backup age | `barman_cloud_cloudnative_pg_io_last_available_backup_timestamp` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
 | tnwks-data / Backups / Backup coverage | `barman_cloud_cloudnative_pg_io_last_available_backup_timestamp`<br>`homelab_expected_database_info` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
 | tnwks-data / Backups / WAL failures | `cnpg_pg_stat_archiver_failed_count` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
