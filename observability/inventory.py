@@ -44,7 +44,9 @@ def databases(sites):
 # Per-app recovery objectives, in seconds. rpo: the oldest its newest backup
 # (every scheduled PVC and every primary database) may be, a daily backup plus
 # slack. rto: the longest its weekly standby restore drill may take to write
-# the data back. Provisional until the owner sets them per app here.
+# the data back. Set 2026-11-07 (the owner delegated the choice): every app has
+# the same daily Kopiur/Barman schedule and the same weekly drill, so one pair
+# fits all. Override an app here once its schedule or importance differs.
 OBJECTIVES = {"rpo": 30 * 3600, "rto": 3600}
 APP_OBJECTIVES: dict[str, dict[str, int]] = {}
 
