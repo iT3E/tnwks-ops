@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.28.0 - 2026-11-07
+
+### Changed
+
+* State values on the observability boards use colored cells and backgrounds for readable contrast, Unready workloads sums per app instead of one line per collector restart, and the first review of performance, accessibility and privacy is recorded.
+
 ## v2.27.0 - 2026-11-07
 
 ### Added
