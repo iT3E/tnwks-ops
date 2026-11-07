@@ -10,7 +10,6 @@ from dashboards import CLUSTERS, NO_EVENTS, catalogue, generated, resource
 from inventory import inventory
 from kiosk_proxy import sanitize
 
-
 EMPTY_IS_NORMAL = {"Override creation age", "Workloads needing attention",
                    "Current firing alerts", "Firing now", "Pending now",
                    "PVCs without a backup schedule"}
@@ -179,6 +178,7 @@ def test_recovery_prerequisites_from_evidence_only(small_inventory, monkeypatch)
 
 def test_fence_needs_a_fresh_attestation_from_the_other_site(small_inventory, monkeypatch):
     import json
+
     import collector
     now = 2_000_000_000
     small_inventory["sites"][1]["probe_url"] = "http://prometheus-two.monitoring.svc.cluster.local:9090/-/ready"
@@ -220,11 +220,12 @@ def test_fence_needs_a_fresh_attestation_from_the_other_site(small_inventory, mo
 @pytest.mark.parametrize("scenario", ["unhealthy", "future-backup", "future-restore", "running-without-drill"])
 def test_recovery_never_substitutes_readiness_or_future_timestamps_for_proof(small_inventory, monkeypatch, scenario):
     import datetime
+
     import collector
     now = 2_000_000_000
 
     def iso(seconds):
-        return datetime.datetime.fromtimestamp(seconds, datetime.timezone.utc).isoformat()
+        return datetime.datetime.fromtimestamp(seconds, datetime.UTC).isoformat()
 
     class Api(FakeApi):
         def get(self, path):
@@ -258,6 +259,7 @@ def test_recovery_never_substitutes_readiness_or_future_timestamps_for_proof(sma
 def test_mqtt_probe_logs_in_and_reads_the_sys_client_count():
     import socket
     import threading
+
     import collector
 
     server = socket.socket()
@@ -317,6 +319,7 @@ def test_ingress_probe_checks_dns_tls_routing_and_reads_the_serving_site(tmp_pat
     import subprocess
     import threading
     from http.server import BaseHTTPRequestHandler, HTTPServer
+
     import collector
 
     if not shutil.which("openssl"):
@@ -371,6 +374,7 @@ def test_ingress_probe_checks_dns_tls_routing_and_reads_the_serving_site(tmp_pat
 
 def test_slos_fit_local_history_and_pyrra_generic_rules():
     import yaml
+
     from rules import SLO_WINDOW_SECONDS
 
     path = Path(__file__).resolve().parents[2] / "kubernetes/apps/monitoring/pyrra/app/slos.yaml"

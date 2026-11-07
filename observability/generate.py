@@ -6,12 +6,12 @@ from pathlib import Path
 
 import yaml
 
+from contracts import generated_contracts
 from dashboards import generated
 from inventory import inventory
-from thanos_manifests import generated_platform
 from rules import fixtures, rule_resource
+from thanos_manifests import generated_platform
 from vendor import generated_upstream
-from contracts import generated_contracts
 
 ROOT = Path(__file__).resolve().parents[1]
 

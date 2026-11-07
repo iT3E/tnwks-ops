@@ -19,7 +19,7 @@ class S3:
 
     def request(self, method, key="", data=b"", query="", headers=None):
         path = "/homelab-metrics/" + urllib.parse.quote(key, safe="/")
-        now = dt.datetime.now(dt.timezone.utc)
+        now = dt.datetime.now(dt.UTC)
         date, stamp = now.strftime("%Y%m%d"), now.strftime("%Y%m%dT%H%M%SZ")
         payload_hash = hashlib.sha256(data).hexdigest()
         signed = {"host": "127.0.0.1:13103", "x-amz-content-sha256": payload_hash,
@@ -27,7 +27,7 @@ class S3:
         signed.update(headers or {})
         names = ";".join(sorted(signed))
         canonical_headers = "".join(f"{k}:{v}\n" for k, v in sorted(signed.items()))
-        canonical = "\n".join([method, path, query, canonical_headers, names, payload_hash])
+        canonical = f"{method}\n{path}\n{query}\n{canonical_headers}\n{names}\n{payload_hash}"
         scope = f"{date}/garage/s3/aws4_request"
         def sign(k, v):
             return hmac.new(k, v.encode(), hashlib.sha256).digest()

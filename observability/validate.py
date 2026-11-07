@@ -47,7 +47,7 @@ def main():
                           "OBSERVABILITY_STORAGE_CLASS": "local-path",
                           "OBSERVABILITY_ARCHIVE_NODE": "homelab-wsl-02-worker-1"}
 
-                def replace(match):
+                def replace(match, params=params):
                     key, default = match.groups()
                     value = params.get(key, default)
                     assert value is not None, f"missing test substitution {key}"

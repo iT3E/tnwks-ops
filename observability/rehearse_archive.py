@@ -208,7 +208,7 @@ def main():
             print("PASS: S3 roundtrip/range/list/delete; verified S3 HTTPS and StoreAPI mutual TLS; Thanos historical query; Garage restart and SIGKILL recovery; Store cache rebuild")
         finally:
             for name in reversed(started):
-                subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+                subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True)
 
 
 if __name__ == "__main__":

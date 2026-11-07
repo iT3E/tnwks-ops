@@ -1,6 +1,7 @@
 """Generate normalized evidence rules and executable PromQL behavior fixtures."""
 
 from pathlib import Path
+
 import yaml
 
 from inventory import inventory
@@ -672,7 +673,7 @@ def other_database_fixtures():
              {"series": info % ("missing", "statefulset"), "values": "1+0x10"},
          ], "promql_expr_test": [
              {"expr": "homelab:other_database_state", "eval_time": "5m", "exp_samples": [
-                 {"labels": 'homelab:other_database_state{k8s_cluster="one",namespace="db",workload="%s",engine="e",app="a"}' % w, "value": v}
+                 {"labels": f'homelab:other_database_state{{k8s_cluster="one",namespace="db",workload="{w}",engine="e",app="a"}}', "value": v}
                  for w, v in (("down", 3), ("missing", 0), ("ok", 1), ("standby", 4))]},
          ]},
     ]

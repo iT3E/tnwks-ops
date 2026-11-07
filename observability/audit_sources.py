@@ -13,8 +13,8 @@ import subprocess
 import urllib.parse
 from pathlib import Path
 
-from dashboards import CLUSTERS
 from contracts import panel_contracts
+from dashboards import CLUSTERS
 
 
 def summarize(response):
@@ -45,7 +45,7 @@ def main():
         endpoint += urllib.parse.urlencode({"query": expression, "timeout": "10s"})
         row = dict(sources[name])
         try:
-            process = subprocess.run(["kubectl", "--kubeconfig", str(args.kubeconfig), "get", "--raw", endpoint],
+            process = subprocess.run(["kubectl", "--kubeconfig", str(args.kubeconfig), "get", "--raw", endpoint], check=False,
                                      capture_output=True, text=True, timeout=20)
             row.update(summarize(json.loads(process.stdout)) if process.returncode == 0 else {"status": "transport-error"})
         except (OSError, ValueError, subprocess.TimeoutExpired):
@@ -55,7 +55,7 @@ def main():
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         rows = list(pool.map(inspect, sorted(sources)))
     encoded = json.dumps(contracts, sort_keys=True).encode()
-    result = {"observed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    result = {"observed_at": datetime.datetime.now(datetime.UTC).isoformat(),
               "contract_sha256": hashlib.sha256(encoded).hexdigest(),
               "expected_sites": list(CLUSTERS), "sources": rows}
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,4 @@
+---
+kind: Fixed
+body: "Update observability code and generated collector configuration for Ruff 0.17 lint rules."
+time: 2026-11-07T11:24:59-08:00
