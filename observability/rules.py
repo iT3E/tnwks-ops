@@ -71,7 +71,8 @@ def network_records():
     sessions). node-bgp: the Cilium agents' sessions with the distro, all
     (healthy), some (degraded) or none (failed). The router is observed by
     homelab-wsl's mktxp only, so homelab-wsl-02's rules leave those Unknown and
-    the dashboards keep the real answer.
+    the dashboards keep the real answer. mesh: the site's Cilium agents and its
+    KVStoreMesh both have the other cluster ready.
     """
     sites = inventory()["sites"]
 
@@ -90,9 +91,16 @@ def network_records():
     nodes = 'cilium_bgp_control_plane_session_state{source_site=""}'
     node_bgp = (f'3 - (min by (k8s_cluster) ({nodes}) == bool 1)'
                 f' - (max by (k8s_cluster) ({nodes}) == bool 1)')
+    # Tagged apart first: `or` would drop KVStoreMesh's series, whose labels
+    # match the agents'.
+    mesh = ('3 - 2 * (min by (k8s_cluster) ('
+            'label_replace(cilium_clustermesh_remote_cluster_readiness_status{source_site=""}, "reader", "agent", "", "")'
+            ' or label_replace(cilium_kvstoremesh_remote_cluster_readiness_status{source_site=""}, "reader", "kvstoremesh", "", "")'
+            ') == bool 1)')
     expected = "max by (k8s_cluster) (homelab_expected_site_info)"
-    known = " or ".join(hop(n, e) for n, e in (("tunnel", tunnel), ("router-bgp", router_bgp), ("node-bgp", node_bgp)))
-    unknown = " or ".join(hop(n, f"0 * {expected}") for n in ("tunnel", "router-bgp", "node-bgp"))
+    hops = (("tunnel", tunnel), ("router-bgp", router_bgp), ("node-bgp", node_bgp), ("mesh", mesh))
+    known = " or ".join(hop(n, e) for n, e in hops)
+    unknown = " or ".join(hop(n, f"0 * {expected}") for n, _ in hops)
     # Which site the router sends each shared VIP to: its preferred site while
     # that site's session is up, else the other one while its session is up.
     # Inferred from live sessions and the declared local preference (100/50),
@@ -276,6 +284,8 @@ def fixtures():
              {"series": 'mktxp_bgp_established{name="wsl-site1-1"}', "values": "1+0x10"},
              {"series": 'cilium_bgp_control_plane_session_state{k8s_cluster="homelab-wsl",node="a"}', "values": "1+0x10"},
              {"series": 'cilium_bgp_control_plane_session_state{k8s_cluster="homelab-wsl",node="b"}', "values": "0+0x10"},
+             {"series": 'cilium_clustermesh_remote_cluster_readiness_status{k8s_cluster="homelab-wsl",target_cluster="homelab-wsl-02"}', "values": "1+0x10"},
+             {"series": 'cilium_kvstoremesh_remote_cluster_readiness_status{k8s_cluster="homelab-wsl",target_cluster="homelab-wsl-02"}', "values": "0+0x10"},
          ], "promql_expr_test": [
              {"expr": "homelab:network_path_state", "eval_time": "5m", "exp_samples": [
                  {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="tunnel"}', "value": 1},
@@ -284,6 +294,9 @@ def fixtures():
                  {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="router-bgp"}', "value": 3},
                  {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="node-bgp"}', "value": 2},
                  {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="node-bgp"}', "value": 0},
+                 # The agents see the peer, KVStoreMesh doesn't: failed, not averaged.
+                 {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="mesh"}', "value": 3},
+                 {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="mesh"}', "value": 0},
              ]},
          ]},
         {"name": "shared VIPs follow the preferred site's session, else the other's", "interval": "1m",

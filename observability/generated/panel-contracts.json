@@ -1141,6 +1141,16 @@
         "availability": "configured"
       },
       {
+        "metric": "cilium_clustermesh_remote_cluster_readiness_status",
+        "producer": "Cilium agent metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "cilium_kvstoremesh_remote_cluster_readiness_status",
+        "producer": "Cilium agent metrics",
+        "availability": "configured"
+      },
+      {
         "metric": "homelab_expected_site_info",
         "producer": "read-only evidence collector",
         "availability": "configured"
@@ -1182,6 +1192,16 @@
     "sources": [
       {
         "metric": "cilium_bgp_control_plane_session_state",
+        "producer": "Cilium agent metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "cilium_clustermesh_remote_cluster_readiness_status",
+        "producer": "Cilium agent metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "cilium_kvstoremesh_remote_cluster_readiness_status",
         "producer": "Cilium agent metrics",
         "availability": "configured"
       },
@@ -1277,6 +1297,81 @@
     "sources": [
       {
         "metric": "cilium_clustermesh_remote_cluster_readiness_status",
+        "producer": "Cilium agent metrics",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
+    "panel": "KVStoreMesh remote cluster",
+    "query": "max by (k8s_cluster, target_cluster) (cilium_kvstoremesh_remote_cluster_readiness_status{k8s_cluster=~\"$cluster\"})",
+    "unit": "bool",
+    "query_mode": "instant",
+    "inputs": [
+      "cilium_kvstoremesh_remote_cluster_readiness_status"
+    ],
+    "sources": [
+      {
+        "metric": "cilium_kvstoremesh_remote_cluster_readiness_status",
+        "producer": "Cilium agent metrics",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
+    "panel": "Mesh sync errors",
+    "query": "sum by (k8s_cluster, scope) (rate(cilium_kvstoremesh_kvstore_sync_errors_total{k8s_cluster=~\"$cluster\"}[$__rate_interval]))",
+    "unit": "ops",
+    "query_mode": "range",
+    "inputs": [
+      "cilium_kvstoremesh_kvstore_sync_errors_total"
+    ],
+    "sources": [
+      {
+        "metric": "cilium_kvstoremesh_kvstore_sync_errors_total",
+        "producer": "Cilium agent metrics",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
+    "panel": "Mesh remote failures",
+    "query": "max by (k8s_cluster, target_cluster) (cilium_kvstoremesh_remote_cluster_failures{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "query_mode": "range",
+    "inputs": [
+      "cilium_kvstoremesh_remote_cluster_failures"
+    ],
+    "sources": [
+      {
+        "metric": "cilium_kvstoremesh_remote_cluster_failures",
         "producer": "Cilium agent metrics",
         "availability": "configured"
       }

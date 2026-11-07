@@ -204,6 +204,10 @@ tests:
     values: 1+0x10
   - series: cilium_bgp_control_plane_session_state{k8s_cluster="homelab-wsl",node="b"}
     values: 0+0x10
+  - series: cilium_clustermesh_remote_cluster_readiness_status{k8s_cluster="homelab-wsl",target_cluster="homelab-wsl-02"}
+    values: 1+0x10
+  - series: cilium_kvstoremesh_remote_cluster_readiness_status{k8s_cluster="homelab-wsl",target_cluster="homelab-wsl-02"}
+    values: 0+0x10
   promql_expr_test:
   - expr: homelab:network_path_state
     eval_time: 5m
@@ -219,6 +223,10 @@ tests:
     - labels: homelab:network_path_state{k8s_cluster="homelab-wsl",hop="node-bgp"}
       value: 2
     - labels: homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="node-bgp"}
+      value: 0
+    - labels: homelab:network_path_state{k8s_cluster="homelab-wsl",hop="mesh"}
+      value: 3
+    - labels: homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="mesh"}
       value: 0
 - name: shared VIPs follow the preferred site's session, else the other's
   interval: 1m

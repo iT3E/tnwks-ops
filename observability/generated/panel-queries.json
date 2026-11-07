@@ -368,6 +368,30 @@
     "kiosk": false
   },
   {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
+    "title": "KVStoreMesh remote cluster",
+    "expr": "max by (k8s_cluster, target_cluster) (cilium_kvstoremesh_remote_cluster_readiness_status{k8s_cluster=~\"$cluster\"})",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
+    "title": "Mesh sync errors",
+    "expr": "sum by (k8s_cluster, scope) (rate(cilium_kvstoremesh_kvstore_sync_errors_total{k8s_cluster=~\"$cluster\"}[$__rate_interval]))",
+    "unit": "ops",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
+    "title": "Mesh remote failures",
+    "expr": "max by (k8s_cluster, target_cluster) (cilium_kvstoremesh_remote_cluster_failures{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
     "dashboard": "tnwks-internet",
     "tab": "Experience",
     "title": "Internet probe",

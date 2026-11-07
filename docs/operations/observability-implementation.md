@@ -241,6 +241,19 @@ no failures), the Compactor synced them with nothing to compact and not halted,
 and a range query restricted to the Store (`storeMatch[]`) returned site 2's
 08:00-09:00Z data from the archive alone. Garage had 964 of 1081 GB free.
 
+## Mesh evidence
+
+The clustermesh-apiserver's own metrics (mesh API, KVStoreMesh, and etcd's
+leader and size) are scraped on both sites. The `mesh` hop of
+`homelab:network_path_state` needs both the site's Cilium agents and its
+KVStoreMesh to have the other cluster ready; either one alone fails it.
+
+Flux resources come from the evidence collector, not kube-state-metrics custom
+resources: it lists every Kustomization, HelmRelease, GitRepository,
+OCIRepository and HelmRepository with its Ready condition and suspension, which
+is what the custom-resource config would add. HelmCharts are left out: a
+HelmRelease's Ready covers its chart.
+
 ## Ingress and shared-VIP evidence
 
 Each site's collector uses every name on the shared VIPs (`dns-sites.tf`) as a

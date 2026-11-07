@@ -81,10 +81,13 @@ spec:
         or (0 * max(mktxp_system_uptime) + 3), "k8s_cluster", "homelab-wsl-02", "", ""), "hop", "router-bgp", "",
         "") or label_replace(3 - (min by (k8s_cluster) (cilium_bgp_control_plane_session_state{source_site=""})
         == bool 1) - (max by (k8s_cluster) (cilium_bgp_control_plane_session_state{source_site=""}) == bool 1),
-        "hop", "node-bgp", "", "")) or on (k8s_cluster, hop) (label_replace(0 * max by (k8s_cluster) (homelab_expected_site_info),
-        "hop", "tunnel", "", "") or label_replace(0 * max by (k8s_cluster) (homelab_expected_site_info), "hop",
-        "router-bgp", "", "") or label_replace(0 * max by (k8s_cluster) (homelab_expected_site_info), "hop", "node-bgp",
-        "", ""))
+        "hop", "node-bgp", "", "") or label_replace(3 - 2 * (min by (k8s_cluster) (label_replace(cilium_clustermesh_remote_cluster_readiness_status{source_site=""},
+        "reader", "agent", "", "") or label_replace(cilium_kvstoremesh_remote_cluster_readiness_status{source_site=""},
+        "reader", "kvstoremesh", "", "")) == bool 1), "hop", "mesh", "", "")) or on (k8s_cluster, hop) (label_replace(0
+        * max by (k8s_cluster) (homelab_expected_site_info), "hop", "tunnel", "", "") or label_replace(0 * max by
+        (k8s_cluster) (homelab_expected_site_info), "hop", "router-bgp", "", "") or label_replace(0 * max by (k8s_cluster)
+        (homelab_expected_site_info), "hop", "node-bgp", "", "") or label_replace(0 * max by (k8s_cluster) (homelab_expected_site_info),
+        "hop", "mesh", "", ""))
     - record: homelab:router_bgp_prefixes
       expr: label_replace(sum(mktxp_bgp_prefix_count{name=~"wsl-site1(-[0-9]+)?"}), "k8s_cluster", "homelab-wsl",
         "", "") or label_replace(sum(mktxp_bgp_prefix_count{name=~"wsl-site2(-[0-9]+)?"}), "k8s_cluster", "homelab-wsl-02",

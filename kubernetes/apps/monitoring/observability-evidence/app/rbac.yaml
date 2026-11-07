@@ -21,7 +21,7 @@ rules:
     resources: [helmreleases]
     verbs: [list]
   - apiGroups: [source.toolkit.fluxcd.io]
-    resources: [gitrepositories]
+    resources: [gitrepositories, ocirepositories, helmrepositories]
     verbs: [list]
   - apiGroups: [postgresql.cnpg.io]
     resources: [clusters, backups]

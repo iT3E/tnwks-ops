@@ -286,6 +286,8 @@ class Collector:
             ("kustomize.toolkit.fluxcd.io", "v1", "kustomizations", "Kustomization"),
             ("helm.toolkit.fluxcd.io", "v2", "helmreleases", "HelmRelease"),
             ("source.toolkit.fluxcd.io", "v1", "gitrepositories", "GitRepository"),
+            ("source.toolkit.fluxcd.io", "v1", "ocirepositories", "OCIRepository"),
+            ("source.toolkit.fluxcd.io", "v1", "helmrepositories", "HelmRepository"),
         ]:
             response = self.api.get(f"/apis/{group}/{version}/{plural}")
             for obj in response.get("items", []):
