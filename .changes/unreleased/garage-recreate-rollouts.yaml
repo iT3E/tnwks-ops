@@ -1,0 +1,3 @@
+kind: Fixed
+body: Run the single-node archive with a Recreate Deployment and retained claims so failed revisions can recover declaratively.
+time: 2026-11-06T22:34:00-08:00
