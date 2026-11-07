@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.1.2 - 2026-11-07
+
+### Fixed
+
+* Run the single-node archive with a Recreate Deployment and retained claims so failed revisions can recover declaratively.
+
 ## v2.1.1 - 2026-11-07
 
 ### Fixed
