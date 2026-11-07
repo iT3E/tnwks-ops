@@ -20,7 +20,8 @@ function Invoke-VolumeHelper([string]$Action, [string[]]$Extra = @()) {
     if ($Action -ne 'probe') { $helperArgs += @('--uuid', $script:state.uuid, '--size-gib', "$SizeGiB") }
     $output = & wsl.exe @helperArgs @Extra 2>&1
     if ($LASTEXITCODE -ne 0) { throw "Monitoring volume helper ($Action) failed; no fallback is allowed." }
-    return (($output -join "`n").Replace([char]0, '').Trim() | ConvertFrom-Json)
+    # Windows PowerShell 5.1 has no String.Replace(char, string); -replace works in both.
+    return ((($output -join "`n") -replace "`0", '').Trim() | ConvertFrom-Json)
 }
 
 if (-not (Test-Path -LiteralPath $stateFile)) {

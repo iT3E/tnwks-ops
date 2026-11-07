@@ -103,6 +103,13 @@ spec:
                 ;;
             esac
         done
+        # The monitoring disk's marker must be there, or the claim would land on
+        # the distro disk under a not-yet-mounted mountpoint.
+        case "${absolutePath}" in
+          /var/lib/rancher/k3s/storage/observability/*)
+            test -r "${absolutePath%/*}/.tnwks-observability-id" || exit 1
+            ;;
+        esac
         mkdir -m 0777 -p ${absolutePath}
         chmod 701 ${absolutePath}/..
       teardown: |-

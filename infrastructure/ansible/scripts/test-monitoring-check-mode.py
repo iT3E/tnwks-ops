@@ -21,8 +21,8 @@ def main():
     source = next(t["ansible.windows.win_powershell"]["script"] for t in tasks if "ansible.windows.win_powershell" in t)
     script = r"""
 $ProgressPreference='SilentlyContinue'
-function Test-Path { param($LiteralPath) return $false }
-function Get-Item { param($LiteralPath) return [pscustomobject]@{Length=0} }
+function Test-Path { param($LiteralPath) return $true }
+function Get-Item { param($LiteralPath) return [pscustomobject]@{Length=[long]4194304} }
 function Get-PSDrive { param($Name) return [pscustomobject]@{Free=1000GB} }
 function Join-Path { param($Path,$ChildPath) return 'Invoke-ForbiddenMutation' }
 function Invoke-ForbiddenMutation { throw 'Mutation boundary reached in check mode' }

@@ -127,7 +127,9 @@ databases and Flux, so it must not depend on a metrics disk.
 
 The bare mountpoint is immutable (`chattr +i`). containerd creates a missing
 hostPath itself, so without that a pod starting before the mount would write to
-the distro disk on E:. It fails and retries instead. Talos' kubelet has its own
+the distro disk on E:. It fails and retries instead. The provisioner's setup script
+also refuses a new claim until the disk's marker is there, since the mountpoint is
+only immutable after the first mount. Talos' kubelet has its own
 `/var/lib/rancher`, so a `hostPath` with `type: Directory` under this path fails
 forever; leave the type off.
 
