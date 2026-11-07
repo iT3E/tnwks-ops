@@ -3,6 +3,13 @@
 # WSL-02 against ntp.ubuntu.com, disabled on the desktop). Ubuntu's own
 # drop-in allows it on WSL. Hyper-V time sync also sets the clock from
 # Windows (windows_time); both point at the same source.
+# Ubuntu ships no drop-in directory (and --check doesn't notice).
+- name: timesyncd drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/timesyncd.conf.d
+    state: directory
+    mode: "0755"
+
 - name: timesyncd uses the router
   ansible.builtin.copy:
     dest: /etc/systemd/timesyncd.conf.d/tnwks.conf
