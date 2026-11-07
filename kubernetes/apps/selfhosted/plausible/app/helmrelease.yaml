@@ -64,7 +64,7 @@ spec:
                     name: plausible-secret
                     key: DATABASE_PASSWORD
               - name: DATABASE_URL
-                value: "postgres://plausible:$(DATABASE_PASSWORD)@postgres-rw.databases.svc.cluster.local:5432/plausible"
+                value: "postgres://plausible:$(DATABASE_PASSWORD)@plausible-pg-rw.databases.svc.cluster.local:5432/plausible"
               - name: CLICKHOUSE_DATABASE_URL
                 value: "http://localhost:8123/plausible_events_db"
               - name: DISABLE_REGISTRATION

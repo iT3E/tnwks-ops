@@ -1,0 +1,36 @@
+---
+# plausible's own CNPG cluster, databases/plausible-pg, from
+# ../../../../components/cnpg-cluster (added by the plausible-db Kustomization).
+#
+# First boot imports `plausible` from the shared cluster (CNPG initdb.import,
+# microservice) as the owner role: the shared cluster has superuser access
+# off, and plausible owns every object. bootstrap is only read when the
+# Cluster is created. The shared cluster is retired after this.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # The owner role (moved here from the shared cluster's directory).
+  - ./secret-plausible-role.sops.yaml
+patches:
+  - target:
+      kind: Cluster
+    patch: |-
+      - op: add
+        path: /spec/bootstrap/initdb/import
+        value:
+          type: microservice
+          databases: [plausible]
+          source:
+            externalCluster: postgres
+      - op: add
+        path: /spec/externalClusters
+        value:
+          - name: postgres
+            connectionParameters:
+              host: postgres-rw.databases.svc.cluster.local
+              user: plausible
+              dbname: plausible
+              sslmode: require
+            password:
+              name: postgres-plausible
+              key: password
