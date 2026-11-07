@@ -1,10 +1,21 @@
 ---
+# v1 was provisioned before the disk was mounted and its directory is gone.
+# It stays here only to drop its prune guard; the next change removes it.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: observability-storage-check
-  annotations:
-    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path-observability
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: observability-storage-check-v2
 spec:
   accessModes: [ReadWriteOnce]
   storageClassName: local-path-observability

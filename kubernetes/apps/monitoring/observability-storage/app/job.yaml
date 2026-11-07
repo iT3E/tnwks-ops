@@ -6,7 +6,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: observability-storage-check-v1
+  name: observability-storage-check-v2
 spec:
   backoffLimit: 4
   template:
@@ -75,7 +75,7 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: observability-storage-check
+            claimName: observability-storage-check-v2
         - name: root
           hostPath:
             path: /var/lib/rancher/k3s/storage/observability
