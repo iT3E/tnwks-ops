@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.5.1 - 2026-11-07
+
+### Fixed
+
+* Probe the archive and Internet paths and report workload state, so the overview shows real status instead of permanent Unknown.
+
 ## v2.5.0 - 2026-11-07
 
 ### Added

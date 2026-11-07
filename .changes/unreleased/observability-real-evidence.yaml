@@ -1,3 +1,0 @@
-kind: Fixed
-body: Probe the archive and Internet paths and report workload state, so the overview shows real status instead of permanent Unknown.
-time: 2026-11-07T02:05:00-08:00
