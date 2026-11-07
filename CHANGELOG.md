@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.7.0 - 2026-11-07
+
+### Added
+
+* Add a 20Gi ext4 monitoring volume on C for site 1, mounted into the running worker with no node restart.
+
 ## v2.6.0 - 2026-11-07
 
 ### Added

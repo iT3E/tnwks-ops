@@ -1,3 +1,0 @@
-kind: Added
-body: Add a 20Gi ext4 monitoring volume on C for site 1, mounted into the running worker with no node restart.
-time: 2026-11-07T01:30:00-08:00
