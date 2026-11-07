@@ -470,6 +470,13 @@ def cmd_switchover(args):
     if args.promote:
         return promote(args, app, old, new)
     po, pn = preflight(old, new, app)
+    # A restore into a PVC that isn't there (and isn't one this tool creates or
+    # prebinds) waits forever: check before anything stops.
+    if not args.skip_pvcs and not app.get("prebind"):
+        for pvc in app["pvcs"]:
+            if not pvc.get("create") and new.get("pvc", pvc["name"], app["namespace"], check=False) is None:
+                die(f"{new.name}: PVC {app['namespace']}/{pvc['name']} doesn't exist (is {args.app} deployed there? "
+                    f"flux get ks {app['kustomizations']['app'] if isinstance(app['kustomizations']['app'], str) else ''})")
     if not args.yes:
         if input(f"{args.app} stops on {old.name} and starts on {new.name}. Type the app name to go on: ").strip() != args.app:
             die("aborted")
@@ -495,9 +502,15 @@ def cmd_switchover(args):
             for pvc in app["pvcs"]:
                 copy_pvc(old, new, app, pvc, stamp)
         except RuntimeError as e:
+            log(f"ERROR: {e}")
+            if args.no_rollback:
+                # Fix forward: the app stays stopped on the old site; fix the
+                # cause and run the same switchover again.
+                log(f"{args.app} stays stopped on {old.name} (--no-rollback). Fix the cause, then rerun: "
+                    f"site-failover switchover {args.app} --to {new.name} --no-rollback")
+                sys.exit(1)
             # Nothing has moved yet (the database is untouched): put the app
             # back on the old site and stop.
-            log(f"ERROR: {e}")
             log(f"rolling back: {args.app} starts again on {old.name}")
             old.set_overrides(args.app, {})
             old.reconcile(app["kustomizations"]["app"])
@@ -659,6 +672,8 @@ def main():
     s.add_argument("--to", required=True)
     s.add_argument("--yes", action="store_true")
     s.add_argument("--skip-pvcs", action="store_true", help="don't copy PVCs (the new site's copy is current)")
+    s.add_argument("--no-rollback", action="store_true",
+                   help="on a failed copy, leave the app stopped on the old site to fix forward (rerun the same command)")
     s.add_argument("--promote", action="store_true", help="unplanned: the old site is dead and fenced by its site lease")
     s.set_defaults(fn=cmd_switchover)
     s = sub.add_parser("clear")
