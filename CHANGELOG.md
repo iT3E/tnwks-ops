@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.0.3 - 2026-11-07
+
+### Fixed
+
+* Both WSL sites keep time the same way: Windows Time (windows_time) and the distro's timesyncd (wsl_time) sync from the router. WSL-02 goes back to the TSC page clocksource: the MSR one ran just as slow (its slow VM clock is a host problem, the BIOS first).
+
 ## v2.0.2 - 2026-11-07
 
 ### Fixed
