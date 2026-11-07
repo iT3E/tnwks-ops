@@ -670,6 +670,8 @@ task failover:clear APP=mealie                      # only once git matches
 - **Weekly standby restore.** `kopiur-system/standby-restore` (a CronJob on
   both sites, Sundays 05:15) restores the other site's newest snapshot of
   each warm app's PVC into this site's copy, wherever the app is off here.
+  A StatefulSet's PVC (Home Assistant's) doesn't exist on the standby until it
+  has run there, so the restore creates it and the StatefulSet adopts it.
   It skips an app with `site-overrides` here (a switchover under way). It
   keeps the standby current and is the standing restore drill: a failure is
   `KubeJobFailed`, and no success for 8 days is `StandbyRestoreDrillStale`.

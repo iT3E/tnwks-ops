@@ -1,0 +1,4 @@
+---
+kind: Added
+body: The weekly standby restore covers Home Assistant too. It reads StatefulSets as well as Deployments, and creates a StatefulSet's PVC on the standby when it isn't there yet, as site-failover does. All four warm apps with PVCs now get restore evidence and an RTO.
+time: 2026-11-07T20:20:00Z

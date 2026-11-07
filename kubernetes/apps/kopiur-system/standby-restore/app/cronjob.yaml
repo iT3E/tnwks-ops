@@ -59,7 +59,14 @@ spec:
                       "prefix": "TRANSCRIBER", "uid": 1000, "gid": 1000},
                      {"namespace": "production", "pvc": "firefly-upload",
                       "policy": "firefly", "deployment": "firefly",
-                      "prefix": "FIREFLY", "uid": 33, "gid": 33}]
+                      "prefix": "FIREFLY", "uid": 33, "gid": 33},
+                     {"namespace": "home-automation",
+                      "pvc": "config-home-assistant-0",
+                      "policy": "home-assistant",
+                      "workload": "statefulset/home-assistant",
+                      "prefix": "HOME_ASSISTANT", "uid": 568, "gid": 568,
+                      "create": {"capacity": "5Gi",
+                                 "storageClass": "local-path"}}]
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true

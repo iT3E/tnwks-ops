@@ -6,8 +6,11 @@ It keeps the standby's PVCs current and is a standing restore drill: a failed
 or empty restore fails the Job (KubeJobFailed), and StandbyRestoreDrillStale
 fires when there has been no successful run for 8 days.
 
-Skipped for an app that runs on this site (its Deployment has replicas) or
-that has site-overrides here (a switchover is under way).
+Skipped for an app that runs on this site (its Deployment or StatefulSet has
+replicas) or that has site-overrides here (a switchover is under way). A
+StatefulSet's PVC doesn't exist on the standby until its pod has run; an entry
+with `create` has the restore create it (as bin/site-failover does), and the
+StatefulSet adopts it when it scales up.
 """
 import datetime
 import json
@@ -50,20 +53,27 @@ def api(method, path, body=None):
 
 def drill(entry, repository):
     ns, pvc, prefix = entry["namespace"], entry["pvc"], entry["prefix"]
-    dep = api("GET", f"/apis/apps/v1/namespaces/{ns}/deployments/{entry['deployment']}")
+    kind, workload = entry.get("workload", f"deployment/{entry.get('deployment')}").split("/", 1)
+    dep = api("GET", f"/apis/apps/v1/namespaces/{ns}/{kind}s/{workload}")
     if dep is None:
-        log(f"{ns}/{pvc}: no Deployment {entry['deployment']} here; skipped")
+        log(f"{ns}/{pvc}: no {kind} {workload} here; skipped")
         return True
     if dep["spec"].get("replicas", 1) > 0:
-        log(f"{ns}/{pvc}: {entry['deployment']} runs on this site; skipped")
+        log(f"{ns}/{pvc}: {workload} runs on this site; skipped")
         return True
     ov = (api("GET", "/api/v1/namespaces/flux-system/configmaps/site-overrides") or {}).get("data") or {}
     if any(k.startswith(prefix + "_") for k in ov):
         log(f"{ns}/{pvc}: site-overrides for {prefix}_* (a switchover); skipped")
         return True
+    target = {"pvcRef": {"name": pvc}}
     if api("GET", f"/api/v1/namespaces/{ns}/persistentvolumeclaims/{pvc}") is None:
-        log(f"{ns}/{pvc}: PVC missing")
-        return False
+        if not entry.get("create"):
+            log(f"{ns}/{pvc}: PVC missing")
+            return False
+        c = entry["create"]
+        log(f"{ns}/{pvc}: no PVC here yet; the restore creates it ({c['capacity']}, {c['storageClass']})")
+        target = {"pvc": {"name": pvc, "capacity": c["capacity"], "storageClassName": c["storageClass"],
+                          "accessModes": ["ReadWriteOnce"]}}
 
     name = f"{pvc}-drill-{datetime.datetime.now(datetime.timezone.utc):%Y%m%d%H%M}"
     log(f"{ns}/{pvc}: Restore {name} from {repository} ({ns}/{ns}-{entry['policy']}, newest)")
@@ -74,7 +84,7 @@ def drill(entry, repository):
         "spec": {
             "repository": {"kind": "ClusterRepository", "name": repository},
             "source": {"identity": {"hostname": ns, "username": f"{ns}-{entry['policy']}", "sourcePath": f"/pvc/{pvc}"}},
-            "target": {"pvcRef": {"name": pvc}},
+            "target": target,
             "credentialProjection": {"enabled": True},
             "options": {"enableFileDeletion": True},
             "mover": {"securityContext": {"runAsUser": entry["uid"], "runAsGroup": entry["gid"]}},
