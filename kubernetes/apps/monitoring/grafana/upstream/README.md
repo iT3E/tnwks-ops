@@ -1,11 +1,21 @@
 # Reference dashboards
 
-These are the same six Grafana.com revisions previously downloaded at pod
-startup. `catalogue.json` records each original URL, revision, UID and SHA256.
-Original exports are retained byte-for-byte in `raw/`; their author and source
-attribution remain in the exports and linked source pages. Grafana.com's API
-does not supply a per-export license field; no additional license is asserted
-here. Consult each upstream project's terms when redistributing its material.
+Third-party boards provisioned from git, each under a license its publisher
+states. `catalogue.json` records each source URL, revision, UID, license and
+SHA256. Original exports are retained byte-for-byte in `raw/`; their author and
+source attribution remain in the exports and linked source pages.
+
+| Board | Source | License |
+| --- | --- | --- |
+| UniFi Poller (clients, USW, UAP) | grafana.com revisions of the unpoller boards | MIT (github.com/unpoller/dashboards) |
+| NGINX Ingress controller | ingress-nginx `controller-v1.15.1`, `deploy/grafana/dashboards/nginx.json` | Apache-2.0 |
+| Alertmanager / Overview | kube-prometheus-stack 92.17.1 | Apache-2.0 |
+
+Grafana.com states no license per export, so a board is only kept when its
+publisher's repository grants one. The MikroTik (13679) and Plausible (22200)
+boards had none; the generated Network & Routing board's Router tab and the
+Apps & Ingress board's Analytics tab replace them. The old NGINX board (14314)
+had none either; ingress-nginx's own board replaces it, under the UID `nginx`.
 
 `observability/generate.py` verifies the hashes, maps the import-only
 `${DS_PROMETHEUS}` input to the existing Prometheus datasource UID, removes the

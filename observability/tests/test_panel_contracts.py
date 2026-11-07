@@ -6,7 +6,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from contracts import metric_names, panel_contracts, source_contract
 from conventions import dashboard_link
-from dashboards import catalogue, resource
+from dashboards import catalogue, legend, resource
 from rules import records
 from audit_sources import summarize
 
@@ -50,11 +50,19 @@ def test_operator_links_preserve_multiple_sites_and_time_without_exposing_operat
                 assert "180s" in spec["description"]
 
 
+def test_series_are_named_by_the_labels_their_query_keeps():
+    named = {panel.title: legend(panel) for board in catalogue() for ps in board.tabs.values() for panel in ps}
+    assert named["HTTP requests"] == "{{k8s_cluster}} {{ingress}}"
+    assert named["HTTP p95 duration"] == "{{k8s_cluster}} {{ingress}}"
+    assert named["Site tunnel traffic"] == "{{interface}}"
+    assert named["Node memory available"] == "{{k8s_cluster}} {{app}} {{instance}}"
+
+
 def test_entity_links_open_the_clicked_series_and_keep_the_incident_time():
     assert dashboard_link("home-wifi", {"ap": "name"}, table=True) == (
         '/d/home-wifi/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}'
         '&var-ap=${__data.fields.name:percentencode}')
-    assert dashboard_link("k8s-nginx-ingress-prometheus-ng", {"ingress": "ingress"}).endswith(
+    assert dashboard_link("nginx", {"ingress": "ingress"}).endswith(
         '&var-ingress=${__field.labels.ingress:percentencode}')
     targets = {}
     for board in catalogue():
@@ -66,8 +74,7 @@ def test_entity_links_open_the_clicked_series_and_keep_the_incident_time():
                     # Every entity label must survive the panel's own aggregation.
                     for label in entity.values():
                         assert label in panel.expr or "by (" not in panel.expr, (panel.title, label)
-    assert set(targets) == {"k8s-nginx-ingress-prometheus-ng", "gxf3edrffkw", "200ac8fdbfbb74b39aff88118e4d1c2c",
-                            "IV0hu1m7z", "home-wifi"}
+    assert set(targets) == {"nginx", "200ac8fdbfbb74b39aff88118e4d1c2c", "IV0hu1m7z", "home-wifi"}
 
 
 def test_live_audit_drops_private_labels_and_preserves_partial_query_failure():

@@ -56,7 +56,6 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-data / Storage / Windows disk free | `windows_logical_disk_free_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
 | tnwks-network / Paths / Site path probes | `homelab_peer_probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / Paths / Site tunnel traffic | `mktxp_peer_rx_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
-| tnwks-network / Paths / Router interface errors | `mktxp_interface_rx_error_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / BGP and mesh / Path by hop | `cilium_bgp_control_plane_session_state`<br>`cilium_clustermesh_remote_cluster_readiness_status`<br>`cilium_kvstoremesh_remote_cluster_readiness_status`<br>`homelab_expected_site_info`<br>`mktxp_bgp_established`<br>`mktxp_last_handshake`<br>`mktxp_system_uptime` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / BGP and mesh / Shared VIP routes | `cilium_bgp_control_plane_session_state`<br>`cilium_clustermesh_remote_cluster_readiness_status`<br>`cilium_kvstoremesh_remote_cluster_readiness_status`<br>`homelab_expected_site_info`<br>`mktxp_bgp_established`<br>`mktxp_last_handshake`<br>`mktxp_system_uptime` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / BGP and mesh / Routes received per site | `mktxp_bgp_prefix_count` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
@@ -65,6 +64,21 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-network / BGP and mesh / KVStoreMesh remote cluster | `cilium_kvstoremesh_remote_cluster_readiness_status` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / BGP and mesh / Mesh sync errors | `cilium_kvstoremesh_kvstore_sync_errors_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / BGP and mesh / Mesh remote failures | `cilium_kvstoremesh_remote_cluster_failures` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Router / Router uptime | `mktxp_system_uptime` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Router / Router CPU | `mktxp_system_cpu_load` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Router / Router memory used | `mktxp_system_free_memory`<br>`mktxp_system_total_memory` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Router / Router temperature | `mktxp_system_cpu_temperature` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Router / Router storage used | `mktxp_system_free_hdd_space`<br>`mktxp_system_total_hdd_space` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Router / Interface receive | `mktxp_interface_rx_byte_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Router / Interface transmit | `mktxp_interface_tx_byte_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Router / Interface errors | `mktxp_interface_rx_error_total`<br>`mktxp_interface_tx_error_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Router / Interface drops | `mktxp_interface_rx_drop_total`<br>`mktxp_interface_tx_drop_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Router / Interface link | `mktxp_interface_disabled`<br>`mktxp_interface_running` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Router / Address pool use | `mktxp_ip_pool_total`<br>`mktxp_ip_pool_used` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Router / Tracked connections | `mktxp_ip_connections_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Router / Routes by protocol | `mktxp_routes_protocol_count` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Router / Firewall drop rules | `mktxp_firewall_filter_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / Router / Firmware upgrade | `mktxp_routerboard_firmware_upgrade_available` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / History / Router BGP session resets | `mktxp_bgp_uptime` | 180s | None in range | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / History / Cilium BGP session changes | `cilium_bgp_control_plane_session_state` | 180s | None in range | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / History / Path hop changes | `cilium_bgp_control_plane_session_state`<br>`cilium_clustermesh_remote_cluster_readiness_status`<br>`cilium_kvstoremesh_remote_cluster_readiness_status`<br>`homelab_expected_site_info`<br>`mktxp_bgp_established`<br>`mktxp_last_handshake`<br>`mktxp_system_uptime` | 180s | None in range | [Runbook](../../docs/network/architecture.md) |
@@ -101,6 +115,11 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-apps / Shared-VIP names / Name state by site | `homelab_expected_ingress_info`<br>`probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-apps / Shared-VIP names / Served by | `homelab_ingress_served_by_info` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-apps / Shared-VIP names / Name certificate remaining | `homelab_ingress_cert_expiry_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
+| tnwks-apps / Analytics / Analytics health | `plausible_health` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
+| tnwks-apps / Analytics / Visitors today | `plausible_visitors` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
+| tnwks-apps / Analytics / Page views today | `plausible_pageviews` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
+| tnwks-apps / Analytics / Bounce rate today | `plausible_bounce_rate` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
+| tnwks-apps / Analytics / Visit duration today | `plausible_visit_duration` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-apps / Dependencies / Certificate validity remaining | `certmanager_certificate_expiration_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-apps / Dependencies / Tunnel connections | `cloudflared_tunnel_ha_connections` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-home / Cameras / Recording input | `frigate_camera_fps` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/home-assistant.md) |

@@ -61,7 +61,7 @@
                         "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",severity!=\"none\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{cluster}} {{alertname}} {{severity}}",
                         "range": false
                       },
                       "datasource": {
@@ -177,7 +177,7 @@
                         "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"pending\",severity!=\"none\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{cluster}} {{alertname}} {{severity}}",
                         "range": false
                       },
                       "datasource": {
@@ -292,7 +292,7 @@
                       "spec": {
                         "expr": "sum by (k8s_cluster, state) (alertmanager_alerts{k8s_cluster=~\"$cluster\"})",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{state}}",
                         "range": true
                       },
                       "datasource": {
@@ -368,7 +368,7 @@
                       "spec": {
                         "expr": "max by (k8s_cluster) (alertmanager_silences{k8s_cluster=~\"$cluster\",state=\"active\"})",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}}",
                         "range": false
                       },
                       "datasource": {
@@ -448,7 +448,7 @@
                       "spec": {
                         "expr": "min by (k8s_cluster) (alertmanager_config_last_reload_successful{k8s_cluster=~\"$cluster\"})",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}}",
                         "range": false
                       },
                       "datasource": {
@@ -528,7 +528,7 @@
                       "spec": {
                         "expr": "sum by (k8s_cluster, integration) (increase(alertmanager_notifications_total{k8s_cluster=~\"$cluster\"}[1h]))",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{integration}}",
                         "range": true
                       },
                       "datasource": {
@@ -604,7 +604,7 @@
                       "spec": {
                         "expr": "sum by (k8s_cluster, integration) (increase(alertmanager_notifications_failed_total{k8s_cluster=~\"$cluster\"}[1h]))",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{integration}}",
                         "range": true
                       },
                       "datasource": {

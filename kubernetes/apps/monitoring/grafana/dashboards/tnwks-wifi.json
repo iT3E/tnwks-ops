@@ -61,7 +61,7 @@
                         "expr": "max by (k8s_cluster, name) (unpoller_device_uptime_seconds{k8s_cluster=~\"$cluster\",source_site=\"\"})",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{name}}",
                         "range": false
                       },
                       "datasource": {
@@ -181,7 +181,7 @@
                         "expr": "max by (k8s_cluster, name) (unpoller_device_uplink_speed_mbps{k8s_cluster=~\"$cluster\",source_site=\"\"})",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{name}}",
                         "range": false
                       },
                       "datasource": {
@@ -300,7 +300,7 @@
                       "spec": {
                         "expr": "sum by (k8s_cluster) (increase(unpoller_prometheus_refresh_failures_total{k8s_cluster=~\"$cluster\",source_site=\"\"}[15m]))",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}}",
                         "range": true
                       },
                       "datasource": {
@@ -529,7 +529,7 @@
                         "expr": "label_replace(max by (k8s_cluster, instance, nic) (windows_net_current_bandwidth_bytes{k8s_cluster=~\"$cluster\"} > 0) * 8, \"host\", \"$1\", \"instance\", \"(.+)\")",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{instance}} {{nic}}",
                         "range": false
                       },
                       "datasource": {
@@ -644,7 +644,7 @@
                       "spec": {
                         "expr": "sum by (k8s_cluster, instance, nic) (rate(windows_net_bytes_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) > 0",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{instance}} {{nic}}",
                         "range": true
                       },
                       "datasource": {
@@ -724,7 +724,7 @@
                       "spec": {
                         "expr": "max by (ap_name, channel) (unpoller_client_radio_signal_db{k8s_cluster=~\"$cluster\",source_site=\"\",name=\"WSL-02\"})",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{ap_name}} {{channel}}",
                         "range": true
                       },
                       "datasource": {
@@ -801,7 +801,7 @@
                         "expr": "max by (ap_name) (unpoller_client_uptime_seconds{k8s_cluster=~\"$cluster\",source_site=\"\",name=\"WSL-02\"})",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{ap_name}}",
                         "range": false
                       },
                       "datasource": {

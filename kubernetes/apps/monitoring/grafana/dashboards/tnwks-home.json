@@ -60,7 +60,7 @@
                       "spec": {
                         "expr": "sum by (k8s_cluster) (frigate_camera_fps{k8s_cluster=~\"$cluster\"})",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}}",
                         "range": true
                       },
                       "datasource": {
@@ -136,7 +136,7 @@
                       "spec": {
                         "expr": "sum by (k8s_cluster) (frigate_skipped_fps{k8s_cluster=~\"$cluster\"})",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}}",
                         "range": true
                       },
                       "datasource": {
@@ -212,7 +212,7 @@
                       "spec": {
                         "expr": "max by (k8s_cluster, detector) (frigate_detector_inference_speed_seconds{k8s_cluster=~\"$cluster\"})",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{detector}}",
                         "range": true
                       },
                       "datasource": {
@@ -288,7 +288,7 @@
                       "spec": {
                         "expr": "max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{app}}",
                         "range": false
                       },
                       "datasource": {
@@ -399,7 +399,7 @@
                       "spec": {
                         "expr": "sum by (k8s_cluster) (homeassistant_entity_available{k8s_cluster=~\"$cluster\"} == 0)",
                         "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}}",
                         "range": true
                       },
                       "datasource": {

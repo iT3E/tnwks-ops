@@ -132,14 +132,6 @@ spec:
         providers:
           # Removing a provider orphans its dashboards, which Grafana deletes on
           # startup; that is how retired dashboards leave the PVC-backed store.
-          - name: network
-            disableDeletion: false
-            editable: true
-            folder: "Network"
-            options:
-              path: /var/lib/grafana/dashboards/network
-            orgId: 1
-            type: file
           - name: unpoller
             disableDeletion: false
             editable: true
@@ -154,14 +146,6 @@ spec:
             folder: "NGINX"
             options:
               path: /var/lib/grafana/dashboards/nginx
-            orgId: 1
-            type: file
-          - name: plausible
-            disableDeletion: false
-            editable: true
-            folder: "Plausible"
-            options:
-              path: /var/lib/grafana/dashboards/plausible
             orgId: 1
             type: file
           # The kept hand-made boards, mounted rather than sidecar-loaded: their
@@ -268,13 +252,11 @@ spec:
           - name: Alertmanager
             orgId: 1
 
-    # Same providers, folders, filenames and UIDs; no startup downloads.
-    # Exact revisions and source hashes are in ../upstream/catalogue.json.
+    # Pinned, licensed references; no startup downloads. Exact revisions,
+    # licenses and source hashes are in ../upstream/catalogue.json.
     dashboardsConfigMaps:
-      network: grafana-upstream-network
       unpoller: grafana-upstream-unpoller
       nginx: grafana-upstream-nginx
-      plausible: grafana-upstream-plausible
       alertmanager: grafana-upstream-alertmanager
       legacy: grafana-dashboard
       windows: grafana-dashboard-windows

@@ -52,8 +52,7 @@ def main():
             "updateIntervalSeconds": 2, "options": {"path": "/etc/dashboards",
             "foldersFromFilesStructure": True}}]}
         references = json.loads((ROOT / "kubernetes/apps/monitoring/grafana/upstream/catalogue.json").read_text())
-        folders = {"network": "Network", "unpoller": "UniFi Poller", "nginx": "NGINX", "plausible": "Plausible",
-                   "alertmanager": "Kubernetes"}
+        folders = {"unpoller": "UniFi Poller", "nginx": "NGINX", "alertmanager": "Kubernetes"}
         for entry in references:
             target = base / "reference" / entry["provider"] / entry["file"]
             target.parent.mkdir(parents=True, exist_ok=True)
