@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.26.0 - 2026-11-07
+
+### Added
+
+* Keep failover, Flux, upgrade and network events as Prometheus series on each site, listed on History tabs of the Kubernetes & GitOps, Sites & Failover and Network & Routing boards.
+
 ## v2.25.0 - 2026-11-07
 
 ### Changed
