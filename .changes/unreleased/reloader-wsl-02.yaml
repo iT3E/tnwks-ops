@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Run Reloader on homelab-wsl-02 too: workloads there kept running old config after a ConfigMap or Secret change (the evidence collector ran 2-hour-old code).'
+time: 2026-11-07T12:30:00-08:00
