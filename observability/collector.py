@@ -539,6 +539,7 @@ def ingress_probe(host: str, vip: str, timeout: float = 3, port: int = 443,
             addresses = sorted(resolve(host))
         result["dns"] = addresses == [vip]
         context = context or ssl.create_default_context()
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         with socket.create_connection((addresses[0], port), timeout=timeout) as raw:
             with context.wrap_socket(raw, server_hostname=host) as tls:
                 result["expiry"] = ssl.cert_time_to_seconds(tls.getpeercert()["notAfter"])

@@ -337,6 +337,7 @@ def test_ingress_probe_checks_dns_tls_routing_and_reads_the_serving_site(tmp_pat
 
     server = HTTPServer(("127.0.0.1", 0), Handler)
     server_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    server_context.minimum_version = ssl.TLSVersion.TLSv1_2
     server_context.load_cert_chain(cert, key)
     server.socket = server_context.wrap_socket(server.socket, server_side=True)
     threading.Thread(target=server.serve_forever, daemon=True).start()
