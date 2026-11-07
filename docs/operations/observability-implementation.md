@@ -111,16 +111,41 @@ request; its 768Mi limit is peak headroom, not idle consumption. The six referen
 exports retain their existing providers/UIDs and are provisioned from git rather
 than downloaded during pod startup.
 
+## Site 1 Prometheus volume
+
+Site 1's metrics sit on `C:\WSL\observability.vhdx`, a 20Gi expandable ext4 disk,
+so their growth stays off E:. The `windows_observability_storage` role creates it
+once, and the task `tnwks-observability-mount` attaches and mounts it at boot and
+every minute after. It never formats a disk it finds at startup.
+
+The disk mounts on the distro inside worker-1's `/var` Docker volume, at
+`lib/rancher/k3s/storage/observability`. Docker's data root is a shared mount and
+Talos' `/var` is its slave, so the mount reaches the running node with no restart.
+Worker-1 keeps its normal lifecycle, and a missing disk stops only the pods using
+the `local-path-observability` class. The node carries most of the site's
+databases and Flux, so it must not depend on a metrics disk.
+
+The bare mountpoint is immutable (`chattr +i`). containerd creates a missing
+hostPath itself, so without that a pod starting before the mount would write to
+the distro disk on E:. It fails and retries instead. Talos' kubelet has its own
+`/var/lib/rancher`, so a `hostPath` with `type: Directory` under this path fails
+forever; leave the type off.
+
+- **Compaction:** `tnwks-vhdx-compact` pauses the mount task, like every task that
+  calls `wsl.exe`, and starts it again afterwards.
+- **Destroying worker-1:** Docker can't remove the volume while the disk is mounted
+  or the mountpoint is immutable. Disable the task, `umount` the path and
+  `chattr -i` it first. A new worker gets a new volume, and the task finds it.
+- **Reclaim:** the class is `Retain`. Deleting the PVC leaves the data on the disk.
+
 ## Following rollout work
 
-1. Give site 1 persistent 15d Prometheus storage without placing that growth on E:,
-   keeping local metrics and alert evaluation independent of the archive.
-2. Add the second independent Grafana and preserve legacy URLs. Validate backlog
+1. Add the second independent Grafana and preserve legacy URLs. Validate backlog
    behavior and certificate renewal for the global query path.
-4. Deploy the isolated household Grafana and aggregate-only backend, revoke old
+2. Deploy the isolated household Grafana and aggregate-only backend, revoke old
    kiosk operator access/sessions and test all datasource APIs. Define fresh domain
    evidence before any household status can be healthy.
-5. Add Pyrra with complete-history 28d evaluation and local short-window alerts.
+3. Add Pyrra with complete-history 28d evaluation and local short-window alerts.
    A local 28d recording on 15d retention is invalid. Budget a history-aware rule
    evaluator if the selected Pyrra path requires it.
 6. Complete FRR/BGP/mesh, expected Wi-Fi APs, content probes, fencing/restore

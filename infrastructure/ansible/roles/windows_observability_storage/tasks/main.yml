@@ -1,0 +1,42 @@
+---
+- name: Monitoring volume directories
+  ansible.windows.win_file:
+    path: "{{ item }}"
+    state: directory
+  loop:
+    - C:\WSL
+    - "{{ observability_storage_dir }}"
+
+- name: Guarded monitoring volume scripts
+  ansible.windows.win_copy:
+    src: "{{ item }}"
+    dest: '{{ observability_storage_dir }}\{{ item }}'
+  loop: [Mount-TnwksObservability.ps1, observability-volume.py]
+
+- name: Create and attach the dedicated 20Gi C monitoring volume
+  ansible.windows.win_powershell:
+    parameters:
+      Vhdx: "{{ observability_storage_vhdx }}"
+      StateDir: "{{ observability_storage_dir }}"
+      Distro: "{{ observability_storage_distro }}"
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param([string]$Vhdx, [string]$StateDir, [string]$Distro)
+      $exists = Test-Path -LiteralPath $Vhdx
+      $state = Join-Path $StateDir 'volume.json'
+      if ($exists -and -not (Test-Path -LiteralPath $state)) {
+          throw 'Existing monitoring VHDX has no ownership record; refusing adoption.'
+      }
+      $allocated = if ($exists) { (Get-Item -LiteralPath $Vhdx).Length } else { 0 }
+      $remaining = [math]::Max(0, 20GB - $allocated)
+      if ((Get-PSDrive C).Free -lt ($remaining + 50GB)) {
+          throw 'C: cannot accommodate full volume growth plus the 50GiB reserve.'
+      }
+      $Ansible.Changed = -not $exists
+      if ($Ansible.CheckMode) { return }
+      & (Join-Path $StateDir 'Mount-TnwksObservability.ps1') -Vhdx $Vhdx -StateDir $StateDir -Distro $Distro -Initialize
+
+- name: Monitoring volume attachment at boot and every minute
+  tnwks_win_scheduled_task:
+    name: "{{ observability_storage_task }}"
+    xml: "{{ lookup('ansible.builtin.template', 'monitoring-mount.xml.j2') }}"

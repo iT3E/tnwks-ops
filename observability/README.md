@@ -65,8 +65,8 @@ resources; do not merge a generated-only dependency bump that fails this check.
 
 `storage-preflight.ps1 -Site wsl` is read-only and reports physical Windows drive
 headroom, memory and the backing drive of registered WSL images. It never attaches,
-formats, resizes or moves a disk. The 64Gi C: volume's creation, persistent mount,
-Talos bind and permissions remain a separately validated migration.
+formats, resizes or moves a disk. The site 1 Prometheus volume is a separate 20Gi
+VHDX on C:, owned by the `windows_observability_storage` role.
 
 The Grafana 13.3 browser gate is `tests/browser_check.py`. It must pass against a
 disposable upgraded Grafana before production activation; API import alone does

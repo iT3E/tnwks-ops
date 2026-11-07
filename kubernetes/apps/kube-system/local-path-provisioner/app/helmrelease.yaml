@@ -75,6 +75,16 @@ spec:
         nodePathMap:
           - node: homelab-wsl-worker-1
             paths: ["/var/lib/rancher/k3s/storage"]
+      local-path-observability:
+        storageClass:
+          create: true
+          defaultClass: false
+          defaultVolumeType: hostPath
+          reclaimPolicy: Retain
+          volumeBindingMode: WaitForFirstConsumer
+        nodePathMap:
+          - node: homelab-wsl-worker-1
+            paths: ["/var/lib/rancher/k3s/storage/observability"]
     # NOTE: Do not enable Flux variable substitution on this HelmRelease
     configmap:
       setup: |-

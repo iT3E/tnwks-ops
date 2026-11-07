@@ -1,0 +1,18 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: observability-storage-check
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: local-path-provisioner
+  path: ./kubernetes/apps/monitoring/observability-storage/app
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  interval: 30m
+  retryInterval: 1m
+  timeout: 15m
+  prune: true
+  wait: true

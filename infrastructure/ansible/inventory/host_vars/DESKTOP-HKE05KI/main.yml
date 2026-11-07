@@ -6,6 +6,9 @@
 # kubernetes/clusters/wsl/cluster-settings.yaml.
 ansible_host: 172.26.80.1
 
+# Prometheus sits on its own ext4 VHDX on C:, not the E: distro disk.
+observability_storage_enabled: true
+
 # One tnwks-coral-detector-<id> service per Coral; a second Coral is one more
 # line (ports 5556 / 9556). docs/wsl/coral-detector.md.
 coral_detector_devices:

@@ -1,0 +1,6 @@
+---
+observability_storage_enabled: false
+observability_storage_vhdx: 'C:\WSL\observability.vhdx'
+observability_storage_dir: 'C:\ProgramData\tnwks-observability'
+observability_storage_distro: Ubuntu
+observability_storage_task: tnwks-observability-mount

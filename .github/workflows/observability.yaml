@@ -7,6 +7,10 @@ on:
       - kubernetes/**
       - bin/site-failover-apps.json
       - .github/workflows/observability.yaml
+      - infrastructure/ansible/roles/windows_observability_storage/**
+      - infrastructure/ansible/roles/windows_wsl_maintenance/**
+      - infrastructure/ansible/scripts/*monitoring*.py
+      - infrastructure/ansible/tests/test_observability_storage.py
 permissions:
   contents: read
 jobs:
@@ -30,6 +34,11 @@ jobs:
           uv run --project observability pytest observability/tests -q
           uv run --project observability python observability/validate.py
           uv run --project observability python observability/validate_health.py
+      - name: Native storage safety contracts and disposable mount rehearsal
+        run: |
+          python3 -m unittest discover -s infrastructure/ansible/tests -p test_observability_storage.py -v
+          uv run --project observability python infrastructure/ansible/scripts/test-monitoring-check-mode.py --powershell pwsh
+          python3 infrastructure/ansible/scripts/rehearse-monitoring-mount.py
       - name: Schema-check inactive Helm workloads
         run: |
           curl -fsSL https://bjw-s-labs.github.io/helm-charts/other/app-template-3.7.3.tgz \
