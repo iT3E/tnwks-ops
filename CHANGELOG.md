@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.33.0 - 2026-11-07
+
+### Changed
+
+* Per-app recovery objectives are final, no longer provisional (RPO 30 h, RTO 1 h for every app, overridable in inventory.py).
+
 ## v2.32.1 - 2026-11-07
 
 ### Fixed

@@ -1,4 +1,0 @@
----
-kind: Changed
-body: Per-app recovery objectives are final, no longer provisional (RPO 30 h, RTO 1 h for every app, overridable in inventory.py).
-time: 2026-11-07T18:24:18Z
