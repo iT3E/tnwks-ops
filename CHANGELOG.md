@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.32.0 - 2026-11-07
+
+### Changed
+
+* Grafana reference boards are kept only under a license their publisher states. NGINX uses ingress-nginx's own board, and generated Router and Analytics tabs replace the MikroTik and Plausible boards. Timeseries legends now name each series by the labels its query keeps.
+
 ## v2.31.0 - 2026-11-07
 
 ### Added
