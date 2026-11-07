@@ -1,0 +1,3 @@
+kind: Added
+body: 'Recovery evidence per warm app and site (database, backup, restore drill, site lease), so recovery readiness is no longer always Unknown.'
+time: 2026-11-07T12:10:00-08:00
