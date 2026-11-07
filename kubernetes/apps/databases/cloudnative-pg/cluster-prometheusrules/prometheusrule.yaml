@@ -38,12 +38,19 @@ spec:
           for: 1m
           labels:
             severity: warning
+        # Streaming standbys only. A replica cluster (CNPG replica mode, the
+        # standby site's copy) replays the other site's WAL archive, and its
+        # lag is the time since the last transaction it replayed: it grows
+        # all night on an idle database. StandbyReplicaBehind
+        # (kube-prometheus-stack/app/peer-rules.yaml) compares archived WAL
+        # with the primary's instead.
         - alert: PGReplication
           annotations:
             description: Standby is lagging behind by over 300 seconds (5 minutes)
             summary: The standby is lagging behind the primary
           expr: |-
             cnpg_pg_replication_lag > 300
+            unless on (job, instance) cnpg_collector_replica_mode == 1
           for: 1m
           labels:
             severity: warning
