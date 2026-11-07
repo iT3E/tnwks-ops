@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.20.0 - 2026-11-07
+
+### Changed
+
+* Every alert links to its domain board scoped to the alerting site, so Telegram messages open the right board at the incident time; a test keeps new alerts from skipping it.
+
 ## v2.19.0 - 2026-11-07
 
 ### Changed
