@@ -198,6 +198,15 @@ def wait(what, fn, timeout=900, every=10):
     raise RuntimeError(f"timed out after {timeout}s waiting for {what}")
 
 
+def owns(name, key):
+    """Whether an override key is this app's. Prefixes can nest (ombi's OMBI_
+    is a prefix of ombi-f's OMBI_F_): a key belongs to the app with the longest
+    matching prefix, so clearing one app never touches the other."""
+    apps = {k: v for k, v in json.loads(APPS_FILE.read_text()).items() if not k.startswith("_")}
+    best = max((a["prefix"] for a in apps.values() if key.startswith(a["prefix"] + "_")), key=len, default=None)
+    return best == apps[name]["prefix"]
+
+
 def load_app(name):
     apps = json.loads(APPS_FILE.read_text())
     if name not in apps or name.startswith("_"):
@@ -273,7 +282,9 @@ def cmd_status(args):
     app = load_app(args.app)
     p = app["prefix"]
     for s in map(Site, SITES):
-        ov = {k: v for k, v in s.overrides().items() if k.split("_")[0] in {pp.split("_")[0] for pp in [p] + [x for _, x in pg_list(app)]}}
+        prefixes = [p] + [x for _, x in pg_list(app)]
+        ov = {k: v for k, v in s.overrides().items()
+              if owns(args.app, k) or any(k.startswith(x + "_") for x in prefixes[1:])}
         pgs = [(cl, pg_state(s, app, cl) or {}) for cl, _ in pg_list(app)]
         deps = []
         for w in workloads(app):
@@ -643,7 +654,7 @@ def promote(args, app, old, new):
 def cmd_clear(args):
     app = load_app(args.app)
     for s in map(Site, SITES):
-        ov = {k: v for k, v in s.overrides().items() if k.startswith(app["prefix"] + "_")}
+        ov = {k: v for k, v in s.overrides().items() if owns(args.app, k)}
         if not ov:
             continue
         log(f"{s.name}: clearing {sorted(ov)}; the app returns to git's values there")
