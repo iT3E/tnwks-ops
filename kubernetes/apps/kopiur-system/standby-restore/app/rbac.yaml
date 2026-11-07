@@ -1,7 +1,8 @@
 ---
-# What the weekly standby restore needs: read the app's Deployment and PVC,
-# read site-overrides (skip during a switchover), and manage its own kopiur
-# Restores. Restores run in the apps' namespaces, so it's a ClusterRole.
+# What the weekly standby restore needs: read the app's Deployment or
+# StatefulSet and PVC, read site-overrides (skip during a switchover), and
+# manage its own kopiur Restores. Restores run in the apps' namespaces, so it's
+# a ClusterRole.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -14,7 +15,7 @@ metadata:
   name: standby-restore
 rules:
   - apiGroups: ["apps"]
-    resources: ["deployments"]
+    resources: ["deployments", "statefulsets"]
     verbs: ["get"]
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
