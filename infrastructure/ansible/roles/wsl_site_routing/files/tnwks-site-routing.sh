@@ -30,8 +30,12 @@
 #   the mark was lost), or anything from the VIP pool leaving by the uplink.
 #   Without it such a packet leaves eth0 past Docker's masquerade and Windows
 #   drops it, invisibly. `iptables -vL TNWKS-SR-MISROUTED` shows the count.
-# - Stage B, off by default (MASQUERADE=true): masquerade the node subnet out
-#   of the uplink, for when the Docker network no longer does.
+# - Stage B, off by default (MASQUERADE=true): masquerade the node subnet's
+#   egress, for when the Docker network no longer does. Like Docker's own
+#   rule, by any interface (the uplink, or a tunnel of the host's own such as
+#   the desktop's wg01-home, whose peer accepts only the host's address)
+#   except the site tunnel, where the router routes the real addresses, and
+#   the bridge itself.
 #
 # The Docker bridge is looked up by the Docker network's name each run, so a
 # renamed bridge (Stage B fixes the name) is picked up by the next `up`
@@ -134,7 +138,11 @@ rules() {
   echo "*nat"
   echo ":$C_NAT - [0:0]"
   if [[ "$MASQUERADE" == true ]]; then
-    echo "-A $C_NAT -s $NODE_SUBNET -o $UPLINK -m comment --comment \"$TAG: node egress\" -j MASQUERADE"
+    echo "-A $C_NAT -o $WG_IF -m comment --comment \"$TAG: site tunnel, real addresses\" -j RETURN"
+    if [[ -n "$br" ]]; then
+      echo "-A $C_NAT -o $br -m comment --comment \"$TAG: the bridge itself\" -j RETURN"
+    fi
+    echo "-A $C_NAT -s $NODE_SUBNET -m comment --comment \"$TAG: node egress\" -j MASQUERADE"
   fi
   echo "COMMIT"
 }
