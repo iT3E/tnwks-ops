@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.37.3 - 2026-11-07
+
+### Fixed
+
+* StandbyRestoreDrillStale also fires when the drill has never succeeded 8 days after its CronJob was created. Before, it had no series to fire on until a first success.
+
 ## v2.37.2 - 2026-11-07
 
 ### Fixed

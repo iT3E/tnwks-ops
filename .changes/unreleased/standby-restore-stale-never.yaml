@@ -1,4 +1,0 @@
----
-kind: Fixed
-body: StandbyRestoreDrillStale also fires when the drill has never succeeded 8 days after its CronJob was created. Before, it had no series to fire on until a first success.
-time: 2026-11-07T20:55:00Z
