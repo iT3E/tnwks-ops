@@ -78,7 +78,7 @@ backup (2026-11-07 01:00 UTC) and WAL stay under `cnpg/homelab-wsl/`.
 | changedetection | `production/config-changedetection-0` | Watch list and history |
 | Firefly III | `production/firefly-upload` | Transaction attachments (none yet). The ledger is in Postgres; the Passport keypair and `APP_KEY` are in git (SOPS) |
 | Transcriber | `production/transcriber-audio` | Clip audio (~7 MB per hour of speech, kept 90 days). Transcripts are in Postgres; the models download again. Runs on homelab-wsl-02, so its snapshots are in that site's repository (`kopiur-homelab-wsl-02/`) |
-| finance-sync | `production/finance-sync-state` | The jobs feeding Firefly: rotating Simplifi token, `sync_state.json` (losing it re-posts transactions), account and category maps, Amazon order database and rules. None of it is in git or the image |
+| finance-sync | `production/finance-sync-state` | The rollback copy, on homelab-wsl only: the state the jobs feeding Firefly kept as files until 2026-11-02. It now lives in Postgres (`finance-sync-pg`), so failover and the standby restore don't copy this PVC (`docs/apps/finance-sync.md`) |
 
 The mover must run as the app's user (`mover.securityContext`): kopia fails
 the snapshot on any file it can't read. Home Assistant is 568 (its `.storage`

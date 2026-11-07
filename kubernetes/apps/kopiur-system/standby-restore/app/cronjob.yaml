@@ -59,10 +59,7 @@ spec:
                       "prefix": "TRANSCRIBER", "uid": 1000, "gid": 1000},
                      {"namespace": "production", "pvc": "firefly-upload",
                       "policy": "firefly", "deployment": "firefly",
-                      "prefix": "FIREFLY", "uid": 33, "gid": 33},
-                     {"namespace": "production", "pvc": "finance-sync-state",
-                      "policy": "finance-sync", "deployment": "firefly",
-                      "prefix": "FIREFLY", "uid": 1000, "gid": 1000}]
+                      "prefix": "FIREFLY", "uid": 33, "gid": 33}]
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
