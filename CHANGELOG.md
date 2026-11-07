@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.38.1 - 2026-11-07
+
+### Security
+
+* Fix onboarding callback XSS, restrict collector listeners and workflow permissions, require modern TLS, and prevent sensitive configuration logging and incomplete URL matching.
+
 ## v2.38.0 - 2026-11-07
 
 ### Added
