@@ -42,7 +42,7 @@ PRODUCERS = {
     "up": "Prometheus scrape status",
 }
 PLANNED = {
-    "homelab_house_state": "household aggregate recording rules and isolated Grafana are not deployed",
+    "homelab_house_state": "the isolated household Grafana isn't deployed; the household view is Home Assistant's House systems (homelab:house_state)",
 }
 
 

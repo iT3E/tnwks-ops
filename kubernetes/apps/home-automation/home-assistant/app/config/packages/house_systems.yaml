@@ -1,0 +1,73 @@
+---
+# House systems: the household view of the monitoring (L0), six plain states
+# for the Home dashboard. docs/operations/observability-implementation.md,
+# "Household view".
+#
+# Each site's Prometheus records homelab:house_state{domain} for its own share
+# (observability/rules.py, house_records): 1 healthy, 2 degraded, 3 failed.
+# Thanos Query holds both sites, so this asks it once a minute and combines
+# them here. Only these aggregates reach HA: no hosts, cameras or people.
+#   internet               the best site: one Internet line, and site 2's own
+#                          Wi-Fi trouble isn't the house's Internet
+#   wifi, automation,      the worst site that has a part in it; none at all
+#   cameras                is Unknown
+#   apps                   the worst site, and Unknown when a site is missing
+#   monitoring             how many sites report, of those expected
+rest:
+  - resource: http://thanos-query.monitoring.svc.cluster.local:10902/api/v1/query
+    params:
+      query: >-
+        homelab:house_state
+        or label_replace(count(max by (k8s_cluster) (homelab_expected_site_info)), "domain", "sites", "", "")
+    scan_interval: 60
+    timeout: 15
+    sensor:
+      - name: House internet
+        unique_id: house_internet
+        icon: mdi:web
+        value_template: >-
+          {%- set s = value_json.data.result | selectattr('metric.domain', 'eq', 'internet')
+                | map(attribute='value') | map('last') | map('int') | list -%}
+          {{ 'Healthy' if 1 in s else 'Degraded' if 2 in s else 'Failed' if 3 in s else 'Unknown' }}
+      - name: House Wi-Fi
+        unique_id: house_wifi
+        icon: mdi:wifi
+        value_template: >-
+          {%- set s = value_json.data.result | selectattr('metric.domain', 'eq', 'wifi')
+                | map(attribute='value') | map('last') | map('int') | list -%}
+          {{ 'Unknown' if not s else 'Failed' if 3 in s else 'Degraded' if 2 in s else 'Unknown' if 0 in s else 'Healthy' }}
+      - name: House home automation
+        unique_id: house_automation
+        icon: mdi:home-automation
+        value_template: >-
+          {%- set s = value_json.data.result | selectattr('metric.domain', 'eq', 'automation')
+                | map(attribute='value') | map('last') | map('int') | list -%}
+          {{ 'Unknown' if not s else 'Failed' if 3 in s else 'Degraded' if 2 in s else 'Unknown' if 0 in s else 'Healthy' }}
+      - name: House cameras
+        unique_id: house_cameras
+        icon: mdi:cctv
+        value_template: >-
+          {%- set s = value_json.data.result | selectattr('metric.domain', 'eq', 'cameras')
+                | map(attribute='value') | map('last') | map('int') | list -%}
+          {{ 'Unknown' if not s else 'Failed' if 3 in s else 'Degraded' if 2 in s else 'Unknown' if 0 in s else 'Healthy' }}
+      - name: House apps
+        unique_id: house_apps
+        icon: mdi:apps
+        value_template: >-
+          {%- set r = value_json.data.result -%}
+          {%- set s = r | selectattr('metric.domain', 'eq', 'apps')
+                | map(attribute='value') | map('last') | map('int') | list -%}
+          {%- set sites = r | selectattr('metric.domain', 'eq', 'sites')
+                | map(attribute='value') | map('last') | map('int') | first | default(0) -%}
+          {{ 'Failed' if 3 in s else 'Degraded' if 2 in s
+             else 'Unknown' if (not s or 0 in s or s | length < sites) else 'Healthy' }}
+      - name: House monitoring
+        unique_id: house_monitoring
+        icon: mdi:chart-timeline-variant
+        value_template: >-
+          {%- set r = value_json.data.result -%}
+          {%- set up = r | selectattr('metric.domain', 'eq', 'monitoring')
+                | map(attribute='value') | map('last') | map('int') | select('eq', 1) | list | length -%}
+          {%- set sites = r | selectattr('metric.domain', 'eq', 'sites')
+                | map(attribute='value') | map('last') | map('int') | first | default(0) -%}
+          {{ 'Unknown' if sites == 0 else 'Healthy' if up >= sites else 'Failed' if up == 0 else 'Degraded' }}

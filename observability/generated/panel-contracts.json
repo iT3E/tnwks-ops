@@ -4355,7 +4355,7 @@
     "sources": [
       {
         "metric": "homelab_house_state",
-        "producer": "household aggregate recording rules and isolated Grafana are not deployed",
+        "producer": "the isolated household Grafana isn't deployed; the household view is Home Assistant's House systems (homelab:house_state)",
         "availability": "planned"
       }
     ],
@@ -4380,7 +4380,7 @@
     "sources": [
       {
         "metric": "homelab_house_state",
-        "producer": "household aggregate recording rules and isolated Grafana are not deployed",
+        "producer": "the isolated household Grafana isn't deployed; the household view is Home Assistant's House systems (homelab:house_state)",
         "availability": "planned"
       }
     ],
@@ -4405,7 +4405,7 @@
     "sources": [
       {
         "metric": "homelab_house_state",
-        "producer": "household aggregate recording rules and isolated Grafana are not deployed",
+        "producer": "the isolated household Grafana isn't deployed; the household view is Home Assistant's House systems (homelab:house_state)",
         "availability": "planned"
       }
     ],
@@ -4430,7 +4430,7 @@
     "sources": [
       {
         "metric": "homelab_house_state",
-        "producer": "household aggregate recording rules and isolated Grafana are not deployed",
+        "producer": "the isolated household Grafana isn't deployed; the household view is Home Assistant's House systems (homelab:house_state)",
         "availability": "planned"
       }
     ],
@@ -4455,7 +4455,7 @@
     "sources": [
       {
         "metric": "homelab_house_state",
-        "producer": "household aggregate recording rules and isolated Grafana are not deployed",
+        "producer": "the isolated household Grafana isn't deployed; the household view is Home Assistant's House systems (homelab:house_state)",
         "availability": "planned"
       }
     ],
@@ -4480,7 +4480,7 @@
     "sources": [
       {
         "metric": "homelab_house_state",
-        "producer": "household aggregate recording rules and isolated Grafana are not deployed",
+        "producer": "the isolated household Grafana isn't deployed; the household view is Home Assistant's House systems (homelab:house_state)",
         "availability": "planned"
       }
     ],

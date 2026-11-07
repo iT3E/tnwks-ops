@@ -127,6 +127,9 @@ lovelace:
       mode: yaml
       filename: dashboards/monitoring.yaml
       title: Monitoring
+      # The operator Grafana, whose viewer can query every datasource: admins
+      # only. The household sees House systems on Home (house_systems.yaml).
+      require_admin: true
       icon: mdi:chart-timeline-variant
     kitchen-display:
       mode: yaml

@@ -66,6 +66,48 @@ def records():
         # Content probe from the site that runs the app; Standby (4) where it's
         # deliberately at zero; Unknown where neither is observed.
         "homelab:service_state": '(3 - 2 * min by (k8s_cluster, app) (probe_success{observability_target="service"} and (time() - timestamp(probe_success{observability_target="service"})) < 180)) or on (k8s_cluster, app) (homelab:workload_state == 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))',
+        **house_records(),
+    }
+
+
+def house_records():
+    """The household view (L0): one state per domain, for this site's own share
+    only, with no names or identifiers. 1 healthy, 2 degraded, 3 failed; a
+    domain this site has no part in has no series. Home Assistant combines the
+    sites (its house_systems package): docs/operations/observability-implementation.md,
+    "Household view"."""
+    own = "and on (k8s_cluster) (max by (k8s_cluster) (homelab_observer_info))"
+
+    def domain(expr, name):
+        return f'label_replace({expr}, "domain", "{name}", "", "")'
+
+    def share(now, day):
+        # All of what worked at some point in the last day is working: 1; some
+        # of it: 2; none of it: 3. Something off for a whole day drops out.
+        return (f"(({now}) >= bool ({day})) + 2 * (({now}) < bool ({day})) "
+                f"or (0 * ({day}) + 3)")
+
+    cameras_now = "count(frigate_camera_fps > 0)"
+    cameras_day = "count(max_over_time(frigate_camera_fps[1d]) > 0)"
+    aps_now = "count(max by (name) (unpoller_device_uptime_seconds > 0))"
+    aps_day = "count(max by (name) (max_over_time(unpoller_device_uptime_seconds[1d]) > 0))"
+    active = f"(homelab:service_state != 4 {own})"
+    return {
+        # Worst over the apps this site serves: Failed > Degraded > Unknown >
+        # Healthy. A reporting site serving none has nothing failing (1), so
+        # every reporting site has an apps row and a missing one stands out.
+        "homelab:house_apps_rank": (f"max((({active}) == bool 3) * 4 + (({active}) == bool 2) * 3"
+                                    f" + (({active}) == bool 0) * 2 + (({active}) == bool 1))"
+                                    " or (0 * max(homelab_observer_info) + 1)"),
+        "homelab:house_state": " or ".join([
+            domain(f"max(homelab:internet_state {own})", "internet"),
+            domain(share(aps_now, aps_day), "wifi"),
+            domain(f'max(homelab:service_state{{app="home-assistant"}} != 4 {own})', "automation"),
+            domain(share(cameras_now, cameras_day), "cameras"),
+            domain("(homelab:house_apps_rank == bool 4) * 3 + (homelab:house_apps_rank == bool 3) * 2"
+                   " + (homelab:house_apps_rank == bool 1)", "apps"),
+            domain(f"3 - 2 * max(homelab:site_reporting {own})", "monitoring"),
+        ]),
     }
 
 
@@ -517,7 +559,60 @@ def fixtures():
          ]},
         *objective_fixtures(),
         *other_database_fixtures(),
+        *house_fixtures(),
     ]}
+
+
+def house_fixtures():
+    own = {"series": 'homelab_observer_info{k8s_cluster="one",observer_cluster="one"}', "values": "1+0x10"}
+
+    def state(domain, value):
+        return {"labels": f'homelab:house_state{{domain="{domain}"}}', "value": value}
+
+    service = 'homelab_expected_workload_info{k8s_cluster="%s",app="%s"}'
+    return [
+        {"name": "household view: this site's share, worst app, partial cameras", "interval": "1m",
+         "input_series": [
+             own,
+             {"series": 'probe_success{k8s_cluster="one",observability_target="internet"}', "values": "1+0x10"},
+             {"series": 'homelab_observer_info{k8s_cluster="one",observer_cluster="one",job="x"}', "values": "1+0x10"},
+             # Home Assistant runs here; a failed app here; a standby app; the
+             # other site's apps (Unknown from here) don't count.
+             {"series": 'probe_success{k8s_cluster="one",observability_target="service",app="home-assistant"}', "values": "1+0x10"},
+             {"series": service % ("one", "home-assistant"), "values": "1+0x10"},
+             {"series": 'probe_success{k8s_cluster="one",observability_target="service",app="broken"}', "values": "0+0x10"},
+             {"series": service % ("one", "broken"), "values": "1+0x10"},
+             {"series": service % ("two", "elsewhere"), "values": "1+0x10"},
+             # Three cameras worked today, two do now, one has been off all along.
+             {"series": 'frigate_camera_fps{camera="a"}', "values": "5+0x10"},
+             {"series": 'frigate_camera_fps{camera="b"}', "values": "5+0x10"},
+             {"series": 'frigate_camera_fps{camera="c"}', "values": "5 5 0 0 0 0 0 0 0 0 0"},
+             {"series": 'frigate_camera_fps{camera="off"}', "values": "0+0x10"},
+             # Every AP that was up is up.
+             {"series": 'unpoller_device_uptime_seconds{name="ap1"}', "values": "100+60x10"},
+             {"series": 'unpoller_device_uptime_seconds{name="ap2",source_site="two"}', "values": "100+60x10"},
+             {"series": 'homelab_collection_success{k8s_cluster="one",collector="workloads"}', "values": "1+0x10"},
+             {"series": 'homelab_collection_last_success_timestamp_seconds{k8s_cluster="one",collector="workloads"}', "values": "0+60x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:house_state", "eval_time": "5m", "exp_samples": [
+                 state("apps", 3), state("automation", 1), state("cameras", 2),
+                 state("internet", 1), state("monitoring", 1), state("wifi", 1)]},
+         ]},
+        {"name": "household view: nothing working, and no part in a domain", "interval": "1m",
+         "input_series": [
+             own,
+             {"series": 'probe_success{k8s_cluster="one",observability_target="internet"}', "values": "0+0x10"},
+             {"series": 'frigate_camera_fps{camera="a"}', "values": "5 5 0 0 0 0 0 0 0 0 0"},
+             {"series": 'unpoller_device_uptime_seconds{name="ap1"}', "values": "100 160 _ _ _ _ _ _ _ _ _"},
+             {"series": 'homelab_collection_success{k8s_cluster="one",collector="workloads"}', "values": "0+0x10"},
+             {"series": 'homelab_collection_last_success_timestamp_seconds{k8s_cluster="one",collector="workloads"}', "values": "0+0x10"},
+         ], "promql_expr_test": [
+             # No apps here: nothing failing. No Home Assistant here: no row.
+             {"expr": "homelab:house_state", "eval_time": "10m", "exp_samples": [
+                 state("apps", 1), state("cameras", 3), state("internet", 3), state("monitoring", 3),
+                 state("wifi", 3)]},
+         ]},
+    ]
 
 
 def other_database_fixtures():
