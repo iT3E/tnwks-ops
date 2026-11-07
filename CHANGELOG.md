@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.13.1 - 2026-11-07
+
+### Fixed
+
+* Run Reloader on homelab-wsl-02 too: workloads there kept running old config after a ConfigMap or Secret change (the evidence collector ran 2-hour-old code).
+
 ## v2.13.0 - 2026-11-07
 
 ### Added
