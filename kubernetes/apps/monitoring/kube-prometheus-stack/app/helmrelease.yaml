@@ -284,13 +284,11 @@ spec:
         # fsGroupChangePolicy on local-path PVCs (the prometheus container
         # uid:gid 1000:2000 hits `permission denied:
         # /prometheus/queries.active` and crashloops). EmptyDir works.
-        # 2-day retention loses data on pod restart but for a dev cluster
-        # that's fine. MS-01 overlay should kustomize-patch this back to
-        # a real PVC against ceph-block when MS-01 is bootstrapped.
+        # Both WSL sites patch this to a claim with 15d retention in their
+        # overlays. MS-01 should patch it to ceph-block when it is bootstrapped.
         storageSpec: {}
         # StoreAPI for the global view (mutual TLS over the mesh) and block
-        # upload to Garage. Uploads run on emptyDir too: only the unshipped 2h
-        # head is at risk on a restart. Keep the image equal to versions.py.
+        # upload to Garage. Keep the image equal to versions.py.
         thanos:
           image: quay.io/thanos/thanos:v0.42.5@sha256:0a546b98a8dd47735456ab389983675ee363d68127e334937a9fceeea10da5e7
           objectStorageConfig:

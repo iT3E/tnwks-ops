@@ -40,11 +40,9 @@ generated dashboards out of provisioning until the Grafana upgrade passed.
 ## Global query rollout
 
 Every target now carries `k8s_cluster`. Each Prometheus runs a Thanos sidecar:
-mutual-TLS StoreAPI over the mesh, and block upload to Garage. Uploads do not wait
-for persistent storage, so the archive starts filling on site 1's emptyDir and a
-restart there only risks the unshipped 2h head. Site 2's Prometheus moves to a
-40Gi local-path claim with 15d retention. Site 1 stays at 2d until its native
-volume exists.
+mutual-TLS StoreAPI over the mesh, and block upload to Garage. Both keep 15d
+locally: site 2 on a 40Gi local-path claim, site 1 on its
+[own volume](#site-1-prometheus-volume).
 
 Query answers partially by default rather than erroring on a lost site. Store and
 Compactor run only beside the archive. The recording rules are live on both sites;
