@@ -196,20 +196,29 @@ evidence is left out, so `homelab:recovery_state` stays Unknown.
 | `database` | every one of the app's Postgres clusters on this site is healthy (primary or replica) |
 | `backup` | each has a completed base backup on this site within 30 h; future timestamps fail |
 | `restore` | the latest restore of every required PVC on this site completed within 8 days; running workloads do not substitute for a drill. No copied PVCs (Grafana) satisfies only this prerequisite |
-| `fence` | a lease naming this site explicitly blocks promotion. A positive former-primary fence attestation is not produced yet, so an unblocked lease leaves this prerequisite Unknown |
+| `fence` | a lease naming this site blocks promotion (3). Otherwise met only by the other site's fence attestation for the app, at most 5 minutes old (below); none leaves it Unknown |
 
 `homelab_restore_last_success_timestamp_seconds` feeds the Sites & Failover board.
 Restore remains Unknown until a completed drill covers every required PVC. Its
 age is conservatively measured from the restore object's creation. The absence of
 copied PVCs does not prove a PostgreSQL database restore or an application RTO.
 
+Fence attestations: each minute the fence Job on each site records, per app whose
+lease it read, the lease, a result and the time in
+`databases/site-lease-fence-status` (Flux creates it, `ssa: IfNotPresent`, and
+never resets it). `clear` means the lease doesn't name that site. `absent`,
+`replica`, `fenced` or `fencing` mean it does, and none of the site's Clusters for
+the app can write. An unreadable lease or an API error writes nothing, so the
+attestation ages. Each collector publishes its own site's attestations
+(`homelab_fence_last_verified_timestamp_seconds`, `homelab_fence_attestation_info`)
+and reads the other site's from that site's Prometheus over the mesh. So the
+standby is only ready when the site it would take over from has proven, within
+5 minutes, that its fence reads this app's lease and would act on it. With that
+site down, the fence stays Unknown: the lease is its fence when it returns.
+
 `homelab_fence_job_last_success_timestamp_seconds` reports only fleet Job liveness.
-The fence Job exits successfully even when a lease cannot be read; it is not an
-app-specific attestation. `homelab_lease_authority_reachable` reports whether the
-current DNS answer is recognized, and `homelab_site_lease_blocks_local` reports its
-local restriction. Neither certifies that a former primary cannot write.
-`homelab_fence_last_verified_timestamp_seconds` is deliberately absent until an
-owning mechanism produces that proof. Recovery cannot be Healthy without it.
+`homelab_lease_authority_reachable` reports whether the current DNS answer is
+recognized, and `homelab_site_lease_blocks_local` reports its local restriction.
 
 Recovery prerequisite and workload samples expire after 180 seconds. Workload
 counts deduplicate overlapping collector pods; a missing component leaves its app

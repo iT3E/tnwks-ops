@@ -39,7 +39,6 @@ PRODUCERS = {
     "up": "Prometheus scrape status",
 }
 PLANNED = {
-    "homelab_fence_last_verified_timestamp_seconds": "per-app former-primary fence attestation is not implemented",
     "homelab_house_state": "household aggregate recording rules and isolated Grafana are not deployed",
 }
 

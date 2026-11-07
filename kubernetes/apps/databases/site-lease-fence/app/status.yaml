@@ -1,0 +1,10 @@
+---
+# The fence's per-app attestations (scripts/fence.py writes them; the other
+# site's evidence collector reads them). Flux only creates it, so its data is
+# never reset to empty.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: site-lease-fence-status
+  annotations:
+    kustomize.toolkit.fluxcd.io/ssa: IfNotPresent

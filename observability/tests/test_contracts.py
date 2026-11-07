@@ -175,6 +175,46 @@ def test_recovery_prerequisites_from_evidence_only(small_inventory, monkeypatch)
     assert 'prerequisite="fence"' not in out
 
 
+def test_fence_needs_a_fresh_attestation_from_the_other_site(small_inventory, monkeypatch):
+    import json
+    import collector
+    now = 2_000_000_000
+    small_inventory["sites"][1]["probe_url"] = "http://prometheus-two.monitoring.svc.cluster.local:9090/-/ready"
+    status = {"test": json.dumps({"lease": "none", "result": "clear", "checked": now - 30}),
+              "unknown-app": json.dumps({"lease": "none", "result": "clear", "checked": now}),
+              "TEST_REPLICAS": "0"}
+
+    class Api(FakeApi):
+        def get(self, path):
+            if "site-lease-fence-status" in path:
+                return {"items": [{"data": status}]}
+            return super().get(path)
+
+    peer = {}
+    asked = []
+    monkeypatch.setattr(collector, "peer_attestations", lambda base, cluster: (asked.append((base, cluster)), peer)[1])
+    monkeypatch.setattr(collector, "lease_txt", lambda _: "none")
+
+    def collect():
+        return Collector(Api(), small_inventory, "one", clock=lambda: now).collect().decode()
+
+    out = collect()
+    # This site's own attestation is published; it never vouches for this site.
+    assert 'homelab_fence_last_verified_timestamp_seconds{app="test",k8s_cluster="one",observer_cluster="one"} 1999999970' in out
+    assert 'homelab_fence_attestation_info{app="test",k8s_cluster="one",lease="none",observer_cluster="one",result="clear"} 1' in out
+    assert "unknown-app" not in out and "TEST_REPLICAS" not in out
+    assert asked == [("http://prometheus-two.monitoring.svc.cluster.local:9090", "two")]
+    assert 'prerequisite="fence"' not in out  # nothing from the other site
+    peer["test"] = now - 600
+    assert 'prerequisite="fence"' not in collect()  # stale
+    peer["test"] = now + 600
+    assert 'prerequisite="fence"' not in collect()  # from the future
+    peer["test"] = now - 90
+    assert 'homelab_recovery_prerequisite_state{app="test",k8s_cluster="one",observer_cluster="one",prerequisite="fence"} 1' in collect()
+    status["test"] = json.dumps({"lease": "none", "result": "clear", "checked": now + 3600})
+    assert "homelab_fence_last_verified_timestamp_seconds" not in collect()  # a future attestation isn't published
+
+
 @pytest.mark.parametrize("scenario", ["unhealthy", "future-backup", "future-restore", "running-without-drill"])
 def test_recovery_never_substitutes_readiness_or_future_timestamps_for_proof(small_inventory, monkeypatch, scenario):
     import datetime

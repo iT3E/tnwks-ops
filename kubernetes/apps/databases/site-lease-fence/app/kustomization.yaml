@@ -5,6 +5,7 @@ namespace: databases
 resources:
   - ./rbac.yaml
   - ./cronjob.yaml
+  - ./status.yaml
 configMapGenerator:
   - name: site-lease-fence-script
     files:

@@ -214,8 +214,11 @@ class Collector:
         backup: each has a completed base backup here within 30 h, never in the future.
         restore: a completed restore of each required PVC here within 8 days. A
           running app is not a restore drill; apps without copied PVCs need no drill.
-        fence: a lease naming this site blocks promotion. A successful fleet fence
-          Job cannot attest that it read this app's lease or fenced a former primary.
+        fence: a lease naming this site blocks promotion. Otherwise it's met only
+          by a fresh attestation from the other site's fence: that it read this
+          app's lease within 5 minutes and nothing there can write against it
+          (site-lease-fence-status, read through that site's Prometheus). A
+          successful fleet fence Job alone proves neither.
         """
         now = self.clock()
         warm = [app for app in self.inventory["apps"] if app.get("tier") == "warm"]
@@ -233,6 +236,24 @@ class Collector:
         fence_job = next((obj for obj in self.api.get("/apis/batch/v1/namespaces/databases/cronjobs").get("items", [])
                           if obj["metadata"]["name"] == "site-lease-fence"), None)
         fence_ok = timestamp((fence_job or {}).get("status", {}).get("lastSuccessfulTime"))
+        holders = {site["cluster"] for site in self.inventory["sites"]} | {"none"}
+        found = self.api.get("/api/v1/namespaces/databases/configmaps"
+                             "?fieldSelector=metadata.name%3Dsite-lease-fence-status").get("items", [])
+        for app in warm:
+            try:
+                value = json.loads(((found[0].get("data") or {}) if found else {})[app["name"]])
+                checked = float(value["checked"])
+            except (KeyError, ValueError, TypeError):
+                continue
+            if value.get("lease") in holders and value.get("result") in FENCE_RESULTS and checked <= now + 60:
+                scope = dict(labels, app=app["name"])
+                metrics.add("homelab_fence_last_verified_timestamp_seconds", checked, **scope)
+                metrics.add("homelab_fence_attestation_info", 1, lease=value["lease"],
+                            result=value["result"], **scope)
+        peers = [site for site in self.inventory["sites"]
+                 if site["cluster"] != self.cluster and site.get("probe_url")]
+        attestations = [peer_attestations(site["probe_url"].rsplit("/-/", 1)[0], site["cluster"]) or {}
+                        for site in peers]
         for app in warm:
             scope = dict(labels, app=app["name"])
 
@@ -278,8 +299,12 @@ class Collector:
                 metrics.add("homelab_site_lease_blocks_local", int(lease == self.cluster), **scope)
                 if lease == self.cluster:
                     state("fence", 3)
-                # No positive fence evidence: the CronJob can succeed even when
-                # every DNS lookup failed. A current TXT answer cannot backfill it.
+                elif peers and all(-60 <= now - peer.get(app["name"], -math.inf) <= 300
+                                   for peer in attestations):
+                    state("fence", 1)
+                # Otherwise no positive fence evidence: the CronJob can succeed even
+                # when every DNS lookup failed, and a current TXT answer can't
+                # backfill the other site's attestation.
 
     def flux(self, metrics: Metrics, labels: dict):
         for group, version, plural, kind in [
@@ -529,6 +554,22 @@ def ingress_probe(host: str, vip: str, timeout: float = 3, port: int = 443,
         pass
     result["duration"] = time.monotonic() - start
     return result
+
+
+FENCE_RESULTS = {"clear", "absent", "replica", "fenced", "fencing"}
+
+
+def peer_attestations(base: str, peer: str, timeout: float = 3) -> dict[str, float] | None:
+    """The other site's fence attestations, per app (when each was checked), from
+    its own Prometheus over the mesh; None if they can't be read."""
+    expr = ('max by (app) (homelab_fence_last_verified_timestamp_seconds'
+            f'{{k8s_cluster="{peer}",observer_cluster="{peer}"}})')
+    try:
+        with urllib.request.build_opener(NoRedirect()).open(
+                base + "/api/v1/query?" + urllib.parse.urlencode({"query": expr}), timeout=timeout) as response:
+            return {row["metric"]["app"]: float(row["value"][1]) for row in json.load(response)["data"]["result"]}
+    except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError):
+        return None
 
 
 def content_probe(url: str, expect: str, timeout: float = 3) -> tuple[bool, float]:

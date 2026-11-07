@@ -30,7 +30,7 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-sites / Placement / Runtime overrides present | `homelab_site_override_present` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Placement / Override creation age | `homelab_site_override_created_timestamp_seconds` | 180s | No overrides | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Recovery / Readiness evidence | `homelab_expected_workload_info`<br>`homelab_recovery_prerequisite_state` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
-| tnwks-sites / Recovery / Fencing evidence age | `homelab_fence_last_verified_timestamp_seconds` (planned) | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
+| tnwks-sites / Recovery / Fencing evidence age | `homelab_fence_last_verified_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Recovery / Fence job age | `homelab_fence_job_last_success_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Recovery / Lease authority reachable | `homelab_lease_authority_reachable` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Recovery / Lease blocks this site | `homelab_site_lease_blocks_local` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |

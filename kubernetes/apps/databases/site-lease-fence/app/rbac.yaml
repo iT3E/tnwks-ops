@@ -1,5 +1,6 @@
 ---
-# Read the warm apps' CNPG Clusters and set the fencing annotation on one.
+# Read the warm apps' CNPG Clusters and set the fencing annotation on one;
+# write the per-app attestations.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -13,6 +14,10 @@ rules:
   - apiGroups: ["postgresql.cnpg.io"]
     resources: ["clusters"]
     verbs: ["get", "patch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["site-lease-fence-status"]
+    verbs: ["patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

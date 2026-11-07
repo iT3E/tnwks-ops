@@ -707,8 +707,8 @@
     "sources": [
       {
         "metric": "homelab_fence_last_verified_timestamp_seconds",
-        "producer": "per-app former-primary fence attestation is not implemented",
-        "availability": "planned"
+        "producer": "read-only evidence collector",
+        "availability": "configured"
       }
     ],
     "observation_budget_seconds": 180,

@@ -59,6 +59,32 @@ rules:
     resourceNames: [site-overrides]
     verbs: [list]
 ---
+# This site's fence attestations (databases/site-lease-fence).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: observability-fence-status
+  namespace: databases
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [site-lease-fence-status]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: observability-fence-status
+  namespace: databases
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: observability-fence-status
+subjects:
+  - kind: ServiceAccount
+    name: observability-evidence
+    namespace: monitoring
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
