@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.12.0 - 2026-11-07
+
+### Added
+
+* Service state from content probes: each app's health URL, checked for an expected answer from the site that runs it; Standby on the other site.
+
 ## v2.11.0 - 2026-11-07
 
 ### Added

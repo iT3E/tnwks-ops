@@ -1,3 +1,0 @@
-kind: Added
-body: 'Service state from content probes: each app''s health URL, checked for an expected answer from the site that runs it; Standby on the other site.'
-time: 2026-11-07T11:45:00-08:00
