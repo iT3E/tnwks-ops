@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.35.3 - 2026-11-07
+
+### Fixed
+
+* Update observability code and generated collector configuration for Ruff 0.17 lint rules.
+
 ## v2.35.2 - 2026-11-07
 
 ### Fixed
