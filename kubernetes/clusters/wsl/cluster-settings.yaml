@@ -185,4 +185,8 @@ data:
   # Jellyfin runs on homelab-wsl-02 since 2026-11-06 (its media library, this
   # desktop's E:, stays here unused); this site keeps it at 0.
   JELLYFIN_REPLICAS: "0"
+  # Plausible: on homelab-wsl-02 since 2026-11-06; here its standby (the
+  # database a replica of wsl-02's, the app at 0).
+  PLAUSIBLE_REPLICAS: "0"
+  PLAUSIBLE_PG_PRIMARY: "homelab-wsl-02"
   UNIFI_BACKUP_SUSPEND: "true"
