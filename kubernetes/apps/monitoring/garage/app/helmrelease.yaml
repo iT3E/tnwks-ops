@@ -1,0 +1,178 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: observability-garage
+  namespace: monitoring
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  values:
+    controllers:
+      garage:
+        type: statefulset
+        annotations:
+          reloader.stakater.com/auto: "true"
+        pod:
+          automountServiceAccountToken: false
+          # Fail closed if this component is accidentally selected elsewhere.
+          nodeSelector:
+            kubernetes.io/hostname: "${OBSERVABILITY_ARCHIVE_NODE:=homelab-wsl-02-worker-1}"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile:
+              type: RuntimeDefault
+        containers:
+          app:
+            image:
+              repository: docker.io/dxflrs/garage
+              tag: v2.5.0@sha256:677e5b758e4425a325b811c425c026bf35a4bf42f7ddbaa773de3f4fd779a5a5
+            command: [/garage]
+            args: [server, --single-node, --default-bucket]
+            env:
+              GARAGE_DEFAULT_BUCKET: homelab-metrics
+              GARAGE_DEFAULT_ACCESS_KEY:
+                valueFrom:
+                  secretKeyRef:
+                    name: observability-garage-credentials
+                    key: access-key
+              GARAGE_DEFAULT_SECRET_KEY:
+                valueFrom:
+                  secretKeyRef:
+                    name: observability-garage-credentials
+                    key: secret-key
+            securityContext:
+              readOnlyRootFilesystem: true
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: [ALL]
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                memory: 1Gi
+            probes:
+              liveness: &health
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health
+                    port: 3903
+                  initialDelaySeconds: 30
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 6
+              readiness: *health
+          tls:
+            image:
+              repository: docker.io/library/caddy
+              tag: 2.11.9-alpine@sha256:0bbb055bda6793c999bde78b1b5ce3e89f829fb031af2cf50056ea1246559fee
+            command: [caddy]
+            args: [run, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
+            env:
+              XDG_DATA_HOME: /tmp/caddy/data
+              XDG_CONFIG_HOME: /tmp/caddy/config
+            securityContext:
+              readOnlyRootFilesystem: true
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: [ALL]
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 128Mi
+            probes:
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: 8443
+    service:
+      app:
+        controller: garage
+        ports:
+          https:
+            port: 443
+            targetPort: 8443
+          admin:
+            port: 3903
+    persistence:
+      config:
+        type: configMap
+        name: observability-garage-config
+        globalMounts:
+          - path: /etc/garage.toml
+            subPath: garage.toml
+            readOnly: true
+          - path: /etc/caddy/Caddyfile
+            subPath: Caddyfile
+            readOnly: true
+      tls:
+        type: secret
+        name: observability-garage-s3
+        advancedMounts:
+          garage:
+            tls:
+              - path: /tls
+                readOnly: true
+      tmp:
+        type: emptyDir
+        sizeLimit: 32Mi
+        advancedMounts:
+          garage:
+            tls:
+              - path: /tmp
+      credentials:
+        type: secret
+        name: observability-garage-credentials
+        defaultMode: 0440
+        globalMounts:
+          - path: /secrets
+            readOnly: true
+      metadata:
+        retain: true
+        type: persistentVolumeClaim
+        storageClass: "${OBSERVABILITY_STORAGE_CLASS:=local-path-observability}"
+        accessMode: ReadWriteOnce
+        size: 8Gi
+        globalMounts:
+          - path: /metadata
+      data:
+        retain: true
+        type: persistentVolumeClaim
+        storageClass: "${OBSERVABILITY_STORAGE_CLASS:=local-path-observability}"
+        accessMode: ReadWriteOnce
+        size: 256Gi
+        globalMounts:
+          - path: /data
+    serviceMonitor:
+      app:
+        enabled: true
+        serviceName: observability-garage
+        endpoints:
+          - port: admin
+            path: /metrics
+            interval: 1m
+            authorization:
+              credentials:
+                name: observability-garage-credentials
+                key: metrics-token
+            relabelings:
+              - targetLabel: k8s_cluster
+                replacement: "${CLUSTER_NAME}"

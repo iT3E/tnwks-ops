@@ -1,0 +1,124 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+configMapGenerator:
+- name: grafana-home
+  files:
+  - home.json
+  options:
+    annotations:
+      grafana_folder: Overview
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
+- name: grafana-tnwks-sites
+  files:
+  - tnwks-sites.json
+  options:
+    annotations:
+      grafana_folder: Sites & Failover
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
+- name: grafana-tnwks-data
+  files:
+  - tnwks-data.json
+  options:
+    annotations:
+      grafana_folder: Data
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
+- name: grafana-tnwks-network
+  files:
+  - tnwks-network.json
+  options:
+    annotations:
+      grafana_folder: Network
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
+- name: grafana-tnwks-internet
+  files:
+  - tnwks-internet.json
+  options:
+    annotations:
+      grafana_folder: Network
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
+- name: grafana-tnwks-wifi
+  files:
+  - tnwks-wifi.json
+  options:
+    annotations:
+      grafana_folder: Network
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
+- name: grafana-tnwks-kubernetes
+  files:
+  - tnwks-kubernetes.json
+  options:
+    annotations:
+      grafana_folder: Kubernetes
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
+- name: grafana-tnwks-apps
+  files:
+  - tnwks-apps.json
+  options:
+    annotations:
+      grafana_folder: Apps
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
+- name: grafana-tnwks-home
+  files:
+  - tnwks-home.json
+  options:
+    annotations:
+      grafana_folder: Home
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
+- name: grafana-tnwks-hosts
+  files:
+  - tnwks-hosts.json
+  options:
+    annotations:
+      grafana_folder: Hosts
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
+- name: grafana-tnwks-observability
+  files:
+  - tnwks-observability.json
+  options:
+    annotations:
+      grafana_folder: Observability
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
+- name: grafana-tnwks-alerts
+  files:
+  - tnwks-alerts.json
+  options:
+    annotations:
+      grafana_folder: Observability
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
+- name: grafana-house
+  files:
+  - house.json
+  options:
+    annotations:
+      grafana_folder: House
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_house_dashboard: 'true'
+generatorOptions:
+  disableNameSuffixHash: true

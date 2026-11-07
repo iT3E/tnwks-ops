@@ -1,0 +1,70 @@
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: observability-ca
+spec:
+  ca:
+    secretName: observability-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: observability-store-server
+spec:
+  secretName: observability-store-server
+  duration: 2160h
+  renewBefore: 720h
+  issuerRef:
+    name: observability-ca
+    kind: Issuer
+  dnsNames:
+    - observability-store.monitoring.svc.cluster.local
+  usages:
+    - digital signature
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: observability-store-client
+spec:
+  secretName: observability-store-client
+  duration: 2160h
+  renewBefore: 720h
+  issuerRef:
+    name: observability-ca
+    kind: Issuer
+  commonName: observability-query
+  usages:
+    - digital signature
+    - client auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: observability-garage-s3
+spec:
+  secretName: observability-garage-s3
+  duration: 2160h
+  renewBefore: 720h
+  issuerRef:
+    name: observability-ca
+    kind: Issuer
+  dnsNames:
+    - observability-archive.monitoring.svc.cluster.local
+  usages:
+    - digital signature
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always

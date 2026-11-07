@@ -1,0 +1,78 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: thanos-sidecar-${CLUSTER_NAME}
+  annotations:
+    service.cilium.io/global: 'true'
+spec:
+  ports:
+  - name: grpc
+    port: 10901
+    targetPort: 10901
+  selector:
+    app.kubernetes.io/name: prometheus
+    prometheus: kube-prometheus-stack-prometheus
+    k8s_cluster: ${CLUSTER_NAME}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-${CLUSTER_NAME}
+  annotations:
+    service.cilium.io/global: 'true'
+spec:
+  ports:
+  - name: http
+    port: 9090
+    targetPort: 9090
+  selector:
+    app.kubernetes.io/name: prometheus
+    prometheus: kube-prometheus-stack-prometheus
+    k8s_cluster: ${CLUSTER_NAME}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: thanos-sidecar-${PEER_CLUSTER_NAME}
+  annotations:
+    service.cilium.io/global: 'true'
+spec:
+  ports:
+  - name: grpc
+    port: 10901
+    targetPort: 10901
+  selector:
+    app.kubernetes.io/name: prometheus
+    prometheus: kube-prometheus-stack-prometheus
+    k8s_cluster: ${PEER_CLUSTER_NAME}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-${PEER_CLUSTER_NAME}
+  annotations:
+    service.cilium.io/global: 'true'
+spec:
+  ports:
+  - name: http
+    port: 9090
+    targetPort: 9090
+  selector:
+    app.kubernetes.io/name: prometheus
+    prometheus: kube-prometheus-stack-prometheus
+    k8s_cluster: ${PEER_CLUSTER_NAME}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: thanos-store-${CLUSTER_NAME}
+spec:
+  ports:
+  - name: grpc
+    port: 10901
+  selector:
+    app.kubernetes.io/name: thanos-store
+    app.kubernetes.io/instance: thanos-store
+    app.kubernetes.io/component: app
+    k8s_cluster: ${CLUSTER_NAME}

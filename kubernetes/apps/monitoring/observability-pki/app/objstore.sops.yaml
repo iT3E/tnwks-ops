@@ -1,0 +1,61 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+    name: observability-thanos-objstore
+    namespace: monitoring
+type: Opaque
+stringData:
+    objstore.yaml: ENC[AES256_GCM,data:LGp+VtqBwLeEGpmFUFxDmoRHDQdFfYDnlKTsHOoH+hiUQKmycH67S0eXyzEob2fHBwOgdbA5c7sAIG4tciDFuSFFvP+Oqkv2XsX3hbtdyREkAyhhc02wKIWk2ZCQYmQt0y4mMLqY0hUMrOBjQZR8ISFITCX9AQkcDYJcRIn33PBBPei6EC5jhCopMAW5oIw4lMm7/TGiezYGOfKRD+azUjm9z4uMonb6WVZ67wTJkf6zD2TPmDocWItkT9mBfTPW3mY1z/TbSJUO49QbiOTNQ7HZ48iDm3vfQ6Tsit92kks8DFTJCyR+NfLhB5OiVlrwhSc4rrBg33zn+zhR5yNM2/RiCoavPIjZLh38BSoW159I03SuMM5oqW0UF5yHWrzxMBx8APZJ/0cubXH3tIOFS/yamkfwrIRYH9Vck7gQU8fsxbMqCmNXjyO3Weef+nDeaIZchzz6WdMAk57Z6cg=,iv:ffqbwolc6KaB39Zta0qyS2n2ae5J9c7yR0egf29nBQA=,tag:csxvAMK3hrjkcN2MkoYq4g==,type:str]
+sops:
+    kms:
+        - arn: arn:aws:kms:us-west-2:654654220436:key/mrk-74c4597ebffd41d38a852228e13d76cc
+          role: arn:aws:iam::654654220436:role/iam-role-sops
+          created_at: "2026-11-07T05:56:15Z"
+          enc: AQICAHhNDAK0Is+rGNAlNYnav2FEvs37O7WQwrCmqkcTMDWNIQGByPNctFWy2rIL4Hg2Z+tHAAAAfjB8BgkqhkiG9w0BBwagbzBtAgEAMGgGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQMTzMtd+3OYv3/jFWOAgEQgDsjKifuapxiZF74HpwS1W4cmmNpXw3aFlXW2RYmDb36+c0bcH3nlJCObRM2g/qFf3DPpxKWkY3m7YGGWg==
+          aws_profile: ""
+    gcp_kms: []
+    azure_kv: []
+    hc_vault: []
+    age:
+        - recipient: age1mzxwncaj0364q8jxfj0y73ptt63czwxucf9lrnn28c7kwyr5wfdsj9gsk2
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBXQnRkdTNXUDdYR0hObFVs
+            Q0J1WGRTdm0zTG1JZG0rVThSbk13ejUzUG5JClRMeFE0V2hkVHlJclpEVUpuY3Fy
+            R1MzSVFsRC9lRU5jdFp5RDlLdkNaNmMKLS0tIE83cjJNVG1sMWMzNzFiVWVvZ084
+            Smxod2xWeUxkUVdPcTkxRzJxKy9lL0kKm9MIvuUPn2vRb0uQ2OZIK6mCSmva1b1K
+            vtAwqggoqJJWkLGW1teKKFJ1euTcDAmQpxQfCV9ZoWqgLN2cGPJWfQ==
+            -----END AGE ENCRYPTED FILE-----
+        - recipient: age12uckcdwv9p2s75ae3h20wgn70taatdzzl44n9x6vr8h9qurzkaqqkhphz7
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSAvR21wNUZnaUsxWGlrbTVx
+            TzFZV29vODVkeCtyR2RZN0I1dnJ5c2l0Zm1FClpFb1NYcXNJcytXUk44UUZOVzRi
+            Y242SW9sczBvM2w0aXhCU3ZuLzlOa1EKLS0tIHIyQWg0RElQdXJjZ0YyZThNYjRk
+            Vll2dEFpY21TV2dXVGtjZU0xdE1JRmcKO0nrbZR+vU9w2DCN8ESkgZp/ObBaAhz+
+            t0Ya93fvbjryvOi00gJwp+GoPf1jyo3lYTBQJcjtJR1lmugi79w/ZQ==
+            -----END AGE ENCRYPTED FILE-----
+        - recipient: age1hmmuna95ktwl9sf9j56wjjukyf22ukdyjd8c47nlf5fjgyeyk5rsmhtyjx
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSB2SVJETDNhZS9oVmEzQzBV
+            aWFIZkEzY1cyQ3l2cFhpZHZIc3dqemR4N25jCnRJTlV1bTN6WlBWaElRMUM1QkpQ
+            QWFqMm9aNWpuUkRQSnhwYmFxT1NqdWsKLS0tIE5GSlZFUHZYTkhYMEdJWDMzUmlU
+            SEdyMWpZMld6WVRUdlVhY3VvRFlYU00KC/2zcc0dh6TWbAPBoSJYqHkXqdDCELSf
+            4EId/aZY1BYExg6p/EqE3O4fgUpM5H9ywjgAV60DurFAwCXF0d9hCw==
+            -----END AGE ENCRYPTED FILE-----
+        - recipient: age1p6nksz7jrqlq8jm0qcvxwgaw8dup334tjp7y59w5pydkp8mnw9ssvtay53
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSA0eDRXS016Qm5oOG4rckVQ
+            aWg3LzJvQWdqT0lsbVkzSGZ2cCtPd3Z6b3g0CllvaDJVbE9oTzlWVXo1TTJMNU5G
+            RWhsQWFVakFmUVRqTUI1NXc2dHBhSnMKLS0tIDVYWGhxSWRDbW41ZGFZMWRDcjdi
+            RWk4L3hoUk9zeC8vVzUzQ3UwdVl5bWcKgYExROQwL6+Qt0mfDeH5OdMmQS02cRLW
+            jFaaFvlPzKpPAwXrkUxSWQdltMRBA3K0mS0NuWA5E3OJ5+uWez/CVA==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-11-07T05:56:16Z"
+    mac: ENC[AES256_GCM,data:GQ5VC59S5en12szpHhEbKaMWVRsm9N24dK4HGoevNVqxhaayd2g8KPrwFT81uefWuvknnd99HLLyNkjYS6RZukA/sNA9lAS4OKOBiJ4rr2Sqryn4oGQS5Dk+CWv1IQlH32UBtRuiyyD7vwd1ZHtuBoZqO1UbidIPyrHGbnAKLpM=,iv:TtCQbVRkvKGQa+ggFBYTxKPvw+7ePM83rmr1pCJtwwQ=,tag:3LnSiH8ZrIfQHbF7/zDIfQ==,type:str]
+    pgp: []
+    encrypted_regex: ^(data|stringData)$
+    version: 3.7.3

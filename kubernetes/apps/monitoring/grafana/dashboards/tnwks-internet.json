@@ -1,0 +1,762 @@
+{
+  "apiVersion": "dashboard.grafana.app/v2",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "tnwks-internet"
+  },
+  "spec": {
+    "annotations": [],
+    "cursorSync": "Crosshair",
+    "elements": {
+      "about": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1,
+          "title": "About this view",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "text",
+            "version": "",
+            "spec": {
+              "options": {
+                "mode": "markdown",
+                "content": "Is the Internet path usable, and is loss/latency or saturation the issue?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+              }
+            }
+          },
+          "description": "Purpose, scope and the interpretation of missing evidence."
+        }
+      },
+      "panel-1": {
+        "kind": "Panel",
+        "spec": {
+          "id": 2,
+          "title": "Internet probe",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "homelab:internet_state{k8s_cluster=~\"$cluster\"}",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#8e8e8e"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#299c46"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#d44a3a"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#5794f2"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#8e8e8e"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#b877d9"
+                        }
+                      }
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Observed Internet probe state with freshness/coverage. A working exporter is insufficient."
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "id": 3,
+          "title": "WAN p90 latency",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "smokeping:rtt_p90:rate1m{k8s_cluster=~\"$cluster\"}",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "p90 over the probe histogram; compare with baseline/threshold and packet loss."
+        }
+      },
+      "panel-3": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4,
+          "title": "WAN latency threshold",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "smokeping:latency_threshold:1h{k8s_cluster=~\"$cluster\"}",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The actual recording rule used by the WAN alert, not a separately maintained display threshold."
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "id": 5,
+          "title": "Packet loss",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "smokeping:loss_ratio:rate1m{k8s_cluster=~\"$cluster\"}",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Probe packet loss; distinguish a missing series from zero measured loss."
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "id": 6,
+          "title": "Download",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "wan:receive_bits:rate1m{k8s_cluster=~\"$cluster\"}",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bps",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Measured WAN receive throughput. Current traffic is not the available speed of the connection."
+        }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "id": 7,
+          "title": "Upload",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "wan:transmit_bits:rate1m{k8s_cluster=~\"$cluster\"}",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bps",
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/wan-traffic?from=${__from}&to=${__to}&var-cluster=${cluster:percentencode}&var-datasource=${datasource:percentencode}"
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Measured WAN transmit throughput. Detailed traffic remains available at its stable dashboard UID."
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "id": 8,
+          "title": "ISP radio evidence",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "unms_device_uptime_seconds{k8s_cluster=~\"$cluster\"}",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "ISP device uptime where available; use exporter last-refresh/success evidence when diagnosing a blind collector."
+        }
+      }
+    },
+    "layout": {
+      "kind": "TabsLayout",
+      "spec": {
+        "tabs": [
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "AutoGridLayout",
+                "spec": {
+                  "columnWidthMode": "narrow",
+                  "rowHeightMode": "standard",
+                  "items": [
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "about"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-1"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-2"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-3"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-4"
+                        }
+                      }
+                    }
+                  ],
+                  "maxColumnCount": 3,
+                  "fillScreen": false
+                }
+              },
+              "title": "Experience"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "AutoGridLayout",
+                "spec": {
+                  "columnWidthMode": "narrow",
+                  "rowHeightMode": "standard",
+                  "items": [
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-5"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-6"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-7"
+                        }
+                      }
+                    }
+                  ],
+                  "maxColumnCount": 3,
+                  "fillScreen": false
+                }
+              },
+              "title": "Traffic"
+            }
+          }
+        ]
+      }
+    },
+    "links": [
+      {
+        "title": "Dashboards",
+        "type": "dashboards",
+        "icon": "",
+        "tooltip": "",
+        "tags": [
+          "tnwks"
+        ],
+        "asDropdown": true,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true
+      }
+    ],
+    "preload": false,
+    "tags": [
+      "tnwks",
+      "l2",
+      "network"
+    ],
+    "timeSettings": {
+      "from": "now-6h",
+      "to": "now",
+      "autoRefresh": "1m",
+      "autoRefreshIntervals": [
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h"
+      ],
+      "hideTimepicker": false,
+      "fiscalYearStartMonth": 0,
+      "timezone": "browser"
+    },
+    "title": "Internet",
+    "variables": [
+      {
+        "kind": "DatasourceVariable",
+        "spec": {
+          "name": "datasource",
+          "pluginId": "prometheus",
+          "refresh": "never",
+          "regex": "/^(Global|Local|Site 1|Site 2)$/",
+          "current": {
+            "text": "Global",
+            "value": "prometheus-global"
+          },
+          "options": [],
+          "multi": false,
+          "includeAll": false,
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": true,
+          "label": "Metrics"
+        }
+      },
+      {
+        "kind": "CustomVariable",
+        "spec": {
+          "name": "cluster",
+          "query": "homelab-wsl,homelab-wsl-02",
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "multi": true,
+          "includeAll": true,
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": false,
+          "allValue": ".*",
+          "label": "Cluster"
+        }
+      }
+    ],
+    "description": "Is the Internet path usable, and is loss/latency or saturation the issue?",
+    "editable": false
+  }
+}

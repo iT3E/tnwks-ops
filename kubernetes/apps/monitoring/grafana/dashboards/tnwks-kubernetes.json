@@ -1,0 +1,697 @@
+{
+  "apiVersion": "dashboard.grafana.app/v2",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "tnwks-kubernetes"
+  },
+  "spec": {
+    "annotations": [],
+    "cursorSync": "Crosshair",
+    "elements": {
+      "about": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1,
+          "title": "About this view",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "text",
+            "version": "",
+            "spec": {
+              "options": {
+                "mode": "markdown",
+                "content": "Is desired state reconciling, and which resource or controller is blocking it?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+              }
+            }
+          },
+          "description": "Purpose, scope and the interpretation of missing evidence."
+        }
+      },
+      "panel-1": {
+        "kind": "Panel",
+        "spec": {
+          "id": 2,
+          "title": "Flux resource readiness",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bool",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Current Ready conditions read from the API with revision/suspension shown separately. A live controller process can still fail reconciliation."
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "id": 3,
+          "title": "Suspended resources",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "homelab_flux_resource_suspended{k8s_cluster=~\"$cluster\"}",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bool",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Declared suspension; do not report deliberate suspension as a controller crash."
+        }
+      },
+      "panel-3": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4,
+          "title": "Reconcile failures",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (k8s_cluster, controller) (rate(controller_runtime_reconcile_total{k8s_cluster=~\"$cluster\",result=\"error\"}[5m]))",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ops",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Controller process metrics supplement the CR Ready state; controller PodMonitor access needs explicit network-policy integration."
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "id": 5,
+          "title": "Unready workloads",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "homelab_workload_desired_replicas{k8s_cluster=~\"$cluster\"} - homelab_workload_ready_replicas{k8s_cluster=~\"$cluster\"}",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Effective desired minus Ready per tracked app/site. A zero-replica standby is not a failed application."
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "id": 6,
+          "title": "Node CPU utilization",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "CPU busy fraction per nested node view. Do not sum shared WSL kernel capacity as independent physical nodes."
+        }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "id": 7,
+          "title": "Node memory available",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "node_memory_MemAvailable_bytes{k8s_cluster=~\"$cluster\"}",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Shared WSL kernel memory view on nested Talos nodes. Cross-check Windows physical available memory."
+        }
+      }
+    },
+    "layout": {
+      "kind": "TabsLayout",
+      "spec": {
+        "tabs": [
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "AutoGridLayout",
+                "spec": {
+                  "columnWidthMode": "narrow",
+                  "rowHeightMode": "standard",
+                  "items": [
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "about"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-1"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-2"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-3"
+                        }
+                      }
+                    }
+                  ],
+                  "maxColumnCount": 3,
+                  "fillScreen": false
+                }
+              },
+              "title": "Reconciliation"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "AutoGridLayout",
+                "spec": {
+                  "columnWidthMode": "narrow",
+                  "rowHeightMode": "standard",
+                  "items": [
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-4"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-5"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-6"
+                        }
+                      }
+                    }
+                  ],
+                  "maxColumnCount": 3,
+                  "fillScreen": false
+                }
+              },
+              "title": "Workloads"
+            }
+          }
+        ]
+      }
+    },
+    "links": [
+      {
+        "title": "Dashboards",
+        "type": "dashboards",
+        "icon": "",
+        "tooltip": "",
+        "tags": [
+          "tnwks"
+        ],
+        "asDropdown": true,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true
+      }
+    ],
+    "preload": false,
+    "tags": [
+      "tnwks",
+      "l2",
+      "kubernetes"
+    ],
+    "timeSettings": {
+      "from": "now-6h",
+      "to": "now",
+      "autoRefresh": "1m",
+      "autoRefreshIntervals": [
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h"
+      ],
+      "hideTimepicker": false,
+      "fiscalYearStartMonth": 0,
+      "timezone": "browser"
+    },
+    "title": "Kubernetes & GitOps",
+    "variables": [
+      {
+        "kind": "DatasourceVariable",
+        "spec": {
+          "name": "datasource",
+          "pluginId": "prometheus",
+          "refresh": "never",
+          "regex": "/^(Global|Local|Site 1|Site 2)$/",
+          "current": {
+            "text": "Global",
+            "value": "prometheus-global"
+          },
+          "options": [],
+          "multi": false,
+          "includeAll": false,
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": true,
+          "label": "Metrics"
+        }
+      },
+      {
+        "kind": "CustomVariable",
+        "spec": {
+          "name": "cluster",
+          "query": "homelab-wsl,homelab-wsl-02",
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "multi": true,
+          "includeAll": true,
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": false,
+          "allValue": ".*",
+          "label": "Cluster"
+        }
+      }
+    ],
+    "description": "Is desired state reconciling, and which resource or controller is blocking it?",
+    "editable": false
+  }
+}

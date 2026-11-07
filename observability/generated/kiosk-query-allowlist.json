@@ -1,0 +1,8 @@
+[
+  "homelab_house_state{domain=\"apps\"}",
+  "homelab_house_state{domain=\"automation\"}",
+  "homelab_house_state{domain=\"cameras\"}",
+  "homelab_house_state{domain=\"internet\"}",
+  "homelab_house_state{domain=\"monitoring\"}",
+  "homelab_house_state{domain=\"wifi\"}"
+]

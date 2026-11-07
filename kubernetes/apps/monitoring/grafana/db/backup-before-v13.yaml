@@ -1,0 +1,13 @@
+---
+# One declarative checkpoint before Grafana changes its database schema.
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: grafana-before-v13
+  namespace: databases
+spec:
+  cluster:
+    name: grafana-pg
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

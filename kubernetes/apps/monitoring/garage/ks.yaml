@@ -1,0 +1,24 @@
+---
+# WSL-02 only. Deliberately not referenced by either cluster until the
+# storage preflight, local integration test and network migration complete.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: observability-garage
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: kube-prometheus-stack
+    - name: observability-pki
+  path: ./kubernetes/apps/monitoring/garage/app
+  prune: true
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  interval: 30m
+  retryInterval: 1m
+  timeout: 10m

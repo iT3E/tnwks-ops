@@ -1,0 +1,354 @@
+{
+  "version": 1,
+  "sites": [
+    {
+      "id": "wsl",
+      "cluster": "homelab-wsl",
+      "probe_url": "http://prometheus-homelab-wsl.monitoring.svc.cluster.local:9090/-/ready"
+    },
+    {
+      "id": "wsl-02",
+      "cluster": "homelab-wsl-02",
+      "probe_url": "http://prometheus-homelab-wsl-02.monitoring.svc.cluster.local:9090/-/ready"
+    }
+  ],
+  "apps": [
+    {
+      "name": "mealie",
+      "namespace": "production",
+      "prefix": "MEALIE",
+      "workloads": [
+        "deployment/mealie"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [
+        "mealie-pg"
+      ],
+      "tier": "warm",
+      "fencing_required": true
+    },
+    {
+      "name": "transcriber",
+      "namespace": "production",
+      "prefix": "TRANSCRIBER",
+      "workloads": [
+        "deployment/transcriber",
+        "deployment/transcriber-frontend"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [
+        "transcriber-pg"
+      ],
+      "tier": "warm",
+      "fencing_required": true
+    },
+    {
+      "name": "changedetection",
+      "namespace": "production",
+      "prefix": "CHANGEDETECTION",
+      "workloads": [
+        "statefulset/changedetection"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [],
+      "tier": "movable",
+      "fencing_required": false
+    },
+    {
+      "name": "immich",
+      "namespace": "selfhosted",
+      "prefix": "IMMICH",
+      "workloads": [
+        "deployment/immich-server",
+        "deployment/immich-machine-learning",
+        "deployment/immich-valkey",
+        "statefulset/immich-postgres",
+        "deployment/immichframe",
+        "deployment/kitchen-screensaver"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [],
+      "tier": "movable",
+      "fencing_required": false
+    },
+    {
+      "name": "firefly",
+      "namespace": "production",
+      "prefix": "FIREFLY",
+      "workloads": [
+        "deployment/firefly"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [
+        "firefly-pg",
+        "finance-sync-pg"
+      ],
+      "tier": "warm",
+      "fencing_required": true
+    },
+    {
+      "name": "media",
+      "namespace": "media",
+      "prefix": "MEDIA",
+      "workloads": [
+        "deployment/sonarr",
+        "deployment/radarr",
+        "deployment/prowlarr",
+        "statefulset/qbittorrent",
+        "statefulset/recyclarr"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [],
+      "tier": "movable",
+      "fencing_required": false
+    },
+    {
+      "name": "home-assistant",
+      "namespace": "home-automation",
+      "prefix": "HOME_ASSISTANT",
+      "workloads": [
+        "statefulset/home-assistant"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [
+        "home-assistant-pg"
+      ],
+      "tier": "warm",
+      "fencing_required": true
+    },
+    {
+      "name": "unifi",
+      "namespace": "networking",
+      "prefix": "UNIFI",
+      "workloads": [
+        "statefulset/unifi"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [],
+      "tier": "movable",
+      "fencing_required": false
+    },
+    {
+      "name": "ombi",
+      "namespace": "production",
+      "prefix": "OMBI",
+      "workloads": [
+        "deployment/ombi"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [],
+      "tier": "movable",
+      "fencing_required": false
+    },
+    {
+      "name": "ombi-f",
+      "namespace": "production",
+      "prefix": "OMBI_F",
+      "workloads": [
+        "deployment/ombi-f"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [],
+      "tier": "movable",
+      "fencing_required": false
+    },
+    {
+      "name": "wizarr",
+      "namespace": "production",
+      "prefix": "WIZARR",
+      "workloads": [
+        "statefulset/wizarr"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [],
+      "tier": "movable",
+      "fencing_required": false
+    },
+    {
+      "name": "jellyfin",
+      "namespace": "production",
+      "prefix": "JELLYFIN",
+      "workloads": [
+        "statefulset/jellyfin"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [],
+      "tier": "movable",
+      "fencing_required": false
+    },
+    {
+      "name": "plausible",
+      "namespace": "selfhosted",
+      "prefix": "PLAUSIBLE",
+      "workloads": [
+        "statefulset/plausible"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [
+        "plausible-pg"
+      ],
+      "tier": "movable",
+      "fencing_required": false
+    }
+  ],
+  "databases": [
+    {
+      "name": "finance-sync-pg",
+      "app": "finance-sync",
+      "namespace": "databases",
+      "cluster": "homelab-wsl",
+      "source": "finance-sync-db"
+    },
+    {
+      "name": "firefly-pg",
+      "app": "firefly",
+      "namespace": "databases",
+      "cluster": "homelab-wsl",
+      "source": "firefly-db"
+    },
+    {
+      "name": "grafana-pg",
+      "app": "grafana",
+      "namespace": "databases",
+      "cluster": "homelab-wsl",
+      "source": "grafana-db"
+    },
+    {
+      "name": "home-assistant-pg",
+      "app": "home-assistant",
+      "namespace": "databases",
+      "cluster": "homelab-wsl",
+      "source": "home-assistant-db"
+    },
+    {
+      "name": "litellm-pg",
+      "app": "litellm",
+      "namespace": "databases",
+      "cluster": "homelab-wsl",
+      "source": "litellm-db"
+    },
+    {
+      "name": "mealie-pg",
+      "app": "mealie",
+      "namespace": "databases",
+      "cluster": "homelab-wsl",
+      "source": "mealie-db"
+    },
+    {
+      "name": "packing-api-pg",
+      "app": "packing-api",
+      "namespace": "databases",
+      "cluster": "homelab-wsl",
+      "source": "packing-api-db"
+    },
+    {
+      "name": "plausible-pg",
+      "app": "plausible",
+      "namespace": "databases",
+      "cluster": "homelab-wsl",
+      "source": "plausible-db"
+    },
+    {
+      "name": "things-api-pg",
+      "app": "things-api",
+      "namespace": "databases",
+      "cluster": "homelab-wsl",
+      "source": "things-api-db"
+    },
+    {
+      "name": "transcriber-pg",
+      "app": "transcriber",
+      "namespace": "databases",
+      "cluster": "homelab-wsl",
+      "source": "transcriber-db"
+    },
+    {
+      "name": "vaultwarden-pg",
+      "app": "vaultwarden",
+      "namespace": "databases",
+      "cluster": "homelab-wsl",
+      "source": "vaultwarden-db"
+    },
+    {
+      "name": "finance-sync-pg",
+      "app": "finance-sync",
+      "namespace": "databases",
+      "cluster": "homelab-wsl-02",
+      "source": "finance-sync-db"
+    },
+    {
+      "name": "firefly-pg",
+      "app": "firefly",
+      "namespace": "databases",
+      "cluster": "homelab-wsl-02",
+      "source": "firefly-db"
+    },
+    {
+      "name": "home-assistant-pg",
+      "app": "home-assistant",
+      "namespace": "databases",
+      "cluster": "homelab-wsl-02",
+      "source": "home-assistant-db"
+    },
+    {
+      "name": "mealie-pg",
+      "app": "mealie",
+      "namespace": "databases",
+      "cluster": "homelab-wsl-02",
+      "source": "mealie-db"
+    },
+    {
+      "name": "plausible-pg",
+      "app": "plausible",
+      "namespace": "databases",
+      "cluster": "homelab-wsl-02",
+      "source": "plausible-db"
+    },
+    {
+      "name": "transcriber-pg",
+      "app": "transcriber",
+      "namespace": "databases",
+      "cluster": "homelab-wsl-02",
+      "source": "transcriber-db"
+    }
+  ]
+}

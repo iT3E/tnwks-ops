@@ -1,0 +1,10 @@
+{
+  admin off
+  auto_https off
+  persist_config off
+}
+
+https://:8443 {
+  tls /tls/tls.crt /tls/tls.key
+  reverse_proxy 127.0.0.1:3900
+}

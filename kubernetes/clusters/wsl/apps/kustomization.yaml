@@ -51,6 +51,8 @@ resources:
   - ../../../apps/kube-system/local-path-provisioner/ks.yaml
   - ../../../apps/media
   - ../../../apps/monitoring
+  - ../../../apps/monitoring/observability-pki/ks.yaml
+  - ../../../apps/monitoring/observability-evidence/ks.yaml
   - ../../../apps/selfhosted
   # Immich (photo library for the kitchen screensaver): WSL-only, its library
   # sits on local-path-bulk. See docs/apps/immich.md.

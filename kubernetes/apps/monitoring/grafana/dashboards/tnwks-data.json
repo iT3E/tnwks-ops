@@ -1,0 +1,1142 @@
+{
+  "apiVersion": "dashboard.grafana.app/v2",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "tnwks-data"
+  },
+  "spec": {
+    "annotations": [],
+    "cursorSync": "Crosshair",
+    "elements": {
+      "about": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1,
+          "title": "About this view",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "text",
+            "version": "",
+            "spec": {
+              "options": {
+                "mode": "markdown",
+                "content": "Are databases healthy, and can each application's data actually be recovered?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+              }
+            }
+          },
+          "description": "Purpose, scope and the interpretation of missing evidence."
+        }
+      },
+      "panel-1": {
+        "kind": "Panel",
+        "spec": {
+          "id": 2,
+          "title": "Expected databases",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "homelab_expected_database_info{k8s_cluster=~\"$cluster\"}",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Expected database inventory by site/namespace/db_cluster. The Kubernetes site label is never overloaded with the CNPG name."
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "id": 3,
+          "title": "CNPG role: in recovery",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "homelab:database_in_recovery{k8s_cluster=~\"$cluster\"}",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bool",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "PostgreSQL's observed recovery state. Zero means primary role, not fencing proof. Same-name databases at two sites stay distinct."
+        }
+      },
+      "panel-3": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4,
+          "title": "Connections",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (k8s_cluster, namespace, db_cluster) (homelab:database_connections{k8s_cluster=~\"$cluster\"})",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Observed database connections; compare against the configured limit and wait/transaction evidence."
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "id": 5,
+          "title": "Replay timestamp lag",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "homelab:database_replay_lag_seconds{k8s_cluster=~\"$cluster\"}",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Replay timestamp lag can grow on idle databases. It is not by itself an RPO or a measure of unarchived writes."
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "id": 6,
+          "title": "Base backup age",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "homelab:database_backup_age_seconds{k8s_cluster=~\"$cluster\"}",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Barman plugin's last successful base backup per database. The warning threshold is 30h; a missing metric is separately reported as missing coverage."
+        }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "id": 7,
+          "title": "Backup coverage",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "homelab:database_backup_state{k8s_cluster=~\"$cluster\"}",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "State"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#8e8e8e"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#299c46"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#d44a3a"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#5794f2"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#8e8e8e"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#b877d9"
+                        }
+                      }
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Expected database left join observed Barman evidence. Missing series cannot be hidden by another database's fresh backup."
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "id": 8,
+          "title": "WAL failures",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "increase(cnpg_pg_stat_archiver_failed_count{k8s_cluster=~\"$cluster\",source_site=\"\"}[1h])",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Failed WAL archiving attempts in the selected window. Idle WAL age alone is not a failure."
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "id": 9,
+          "title": "Weekly PVC drill age",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "time() - kube_cronjob_status_last_successful_time{k8s_cluster=~\"$cluster\",namespace=\"kopiur-system\",cronjob=\"standby-restore\"}",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "__name__": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The existing weekly job covers its configured PVC entries only. This does not certify every app or a database restore."
+        }
+      },
+      "panel-9": {
+        "kind": "Panel",
+        "spec": {
+          "id": 10,
+          "title": "PVC used",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "kubelet_volume_stats_used_bytes{k8s_cluster=~\"$cluster\"} / kubelet_volume_stats_capacity_bytes{k8s_cluster=~\"$cluster\"}",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Used versus available filesystem capacity for volumes that publish stats. Local-path requested PVC sizes are not reliable physical quotas."
+        }
+      },
+      "panel-10": {
+        "kind": "Panel",
+        "spec": {
+          "id": 11,
+          "title": "Windows disk free",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "windows_logical_disk_free_bytes{k8s_cluster=~\"$cluster\",volume=~\"C:|E:\"}",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": false,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "asc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {}
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Physical Windows free capacity. WSL's virtual disk maximum is not an independent physical capacity budget."
+        }
+      }
+    },
+    "layout": {
+      "kind": "TabsLayout",
+      "spec": {
+        "tabs": [
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "AutoGridLayout",
+                "spec": {
+                  "columnWidthMode": "narrow",
+                  "rowHeightMode": "standard",
+                  "items": [
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "about"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-1"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-2"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-3"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-4"
+                        }
+                      }
+                    }
+                  ],
+                  "maxColumnCount": 3,
+                  "fillScreen": false
+                }
+              },
+              "title": "Databases"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "AutoGridLayout",
+                "spec": {
+                  "columnWidthMode": "narrow",
+                  "rowHeightMode": "standard",
+                  "items": [
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-5"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-6"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-7"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-8"
+                        }
+                      }
+                    }
+                  ],
+                  "maxColumnCount": 3,
+                  "fillScreen": false
+                }
+              },
+              "title": "Backups"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "AutoGridLayout",
+                "spec": {
+                  "columnWidthMode": "narrow",
+                  "rowHeightMode": "standard",
+                  "items": [
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-9"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-10"
+                        }
+                      }
+                    }
+                  ],
+                  "maxColumnCount": 3,
+                  "fillScreen": false
+                }
+              },
+              "title": "Storage"
+            }
+          }
+        ]
+      }
+    },
+    "links": [
+      {
+        "title": "Dashboards",
+        "type": "dashboards",
+        "icon": "",
+        "tooltip": "",
+        "tags": [
+          "tnwks"
+        ],
+        "asDropdown": true,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true
+      }
+    ],
+    "preload": false,
+    "tags": [
+      "tnwks",
+      "l2",
+      "data"
+    ],
+    "timeSettings": {
+      "from": "now-6h",
+      "to": "now",
+      "autoRefresh": "1m",
+      "autoRefreshIntervals": [
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h"
+      ],
+      "hideTimepicker": false,
+      "fiscalYearStartMonth": 0,
+      "timezone": "browser"
+    },
+    "title": "Databases & Backups",
+    "variables": [
+      {
+        "kind": "DatasourceVariable",
+        "spec": {
+          "name": "datasource",
+          "pluginId": "prometheus",
+          "refresh": "never",
+          "regex": "/^(Global|Local|Site 1|Site 2)$/",
+          "current": {
+            "text": "Global",
+            "value": "prometheus-global"
+          },
+          "options": [],
+          "multi": false,
+          "includeAll": false,
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": true,
+          "label": "Metrics"
+        }
+      },
+      {
+        "kind": "CustomVariable",
+        "spec": {
+          "name": "cluster",
+          "query": "homelab-wsl,homelab-wsl-02",
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "multi": true,
+          "includeAll": true,
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": false,
+          "allValue": ".*",
+          "label": "Cluster"
+        }
+      }
+    ],
+    "description": "Are databases healthy, and can each application's data actually be recovered?",
+    "editable": false
+  }
+}

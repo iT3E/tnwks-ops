@@ -1,0 +1,76 @@
+---
+groups:
+- name: homelab.evidence
+  interval: 1m
+  rules:
+  - record: homelab:site_reporting
+    expr: (max by (k8s_cluster) (homelab_collection_success{collector="workloads"}) == bool 1) * on (k8s_cluster)
+      (time() - max by (k8s_cluster) (homelab_collection_last_success_timestamp_seconds{collector="workloads"})
+      < bool 180)
+  - record: homelab:site_state
+    expr: (homelab:site_reporting == 1) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_expected_site_info))
+  - record: homelab:database_in_recovery
+    expr: max by (k8s_cluster, namespace, db_cluster) (label_replace(cnpg_pg_replication_in_recovery{source_site=""},
+      "db_cluster", "$1", "pod", "(.+)-[0-9]+"))
+  - record: homelab:database_replay_lag_seconds
+    expr: max by (k8s_cluster, namespace, db_cluster) (label_replace(cnpg_pg_replication_lag{source_site=""}, "db_cluster",
+      "$1", "pod", "(.+)-[0-9]+"))
+  - record: homelab:database_connections
+    expr: sum by (k8s_cluster, namespace, db_cluster) (label_replace(cnpg_pg_stat_database_numbackends{source_site=""},
+      "db_cluster", "$1", "pod", "(.+)-[0-9]+"))
+  - record: homelab:database_backup_age_seconds
+    expr: time() - max by (k8s_cluster, namespace, db_cluster) (label_replace(barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{source_site=""},
+      "db_cluster", "$1", "pod", "(.+)-[0-9]+"))
+  - record: homelab:database_backup_state
+    expr: ((homelab:database_backup_age_seconds >= bool 0) * (homelab:database_backup_age_seconds <= bool 108000)
+      + 3 * (homelab:database_backup_age_seconds > bool 108000)) or on (k8s_cluster, namespace, db_cluster) (0 *
+      max by (k8s_cluster, namespace, db_cluster) (homelab_expected_database_info))
+  - record: homelab:recovery_state
+    expr: (3 * max by (k8s_cluster, app) (homelab_recovery_prerequisite_state == 3) / 3) or on (k8s_cluster, app)
+      ((count by (k8s_cluster, app) (max by (k8s_cluster, app, prerequisite) (homelab_recovery_prerequisite_state{prerequisite=~"database|backup|restore|fence"})
+      == 1) == 4) / 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info{tier="warm"}))
+  - record: homelab:local_history_seconds
+    expr: time() - min by (k8s_cluster) (prometheus_tsdb_lowest_timestamp_seconds)
+  - record: homelab:unuploaded_block_age_seconds
+    expr: time() - max by (k8s_cluster) (thanos_shipper_last_successful_upload_time)
+  - record: homelab:archive_state
+    expr: (3 - 2 * min by (k8s_cluster) (probe_success{observability_target="archive"} and (time() - timestamp(probe_success{observability_target="archive"}))
+      < 180)) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_observer_info))
+  - record: homelab:internet_state
+    expr: (3 - 2 * min by (k8s_cluster) (probe_success{observability_target="internet"} and (time() - timestamp(probe_success{observability_target="internet"}))
+      < 180)) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_observer_info))
+  - record: homelab:service_state
+    expr: (3 - 2 * min by (k8s_cluster, app) (probe_success{observability_target="service"} and (time() - timestamp(probe_success{observability_target="service"}))
+      < 180)) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))
+  - alert: ObservabilityEvidenceStale
+    expr: (homelab_collection_success == 0) or (time() - homelab_collection_last_success_timestamp_seconds > 180)
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: A monitoring collector is no longer observing its upstream
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster
+        }}
+      description: Scrape success does not establish fresh upstream evidence. Check the collector source and network
+        access.
+  - alert: ObservabilityExpectedDatabaseBackupMissing
+    expr: homelab:database_backup_state == 0
+    for: 30m
+    labels:
+      severity: warning
+    annotations:
+      summary: Expected database has no backup evidence
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-data?var-cluster={{ $labels.k8s_cluster }}
+      description: No Barman plugin timestamp is available for this expected database. Another database's fresh
+        backup cannot satisfy its recovery requirement.
+  - alert: ObservabilityArchiveUnavailable
+    expr: probe_success{observability_target="archive"} == 0
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: The WSL-02 metrics archive is unavailable
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster
+        }}
+      description: Local metrics and alerts remain available. Restore archive uploads before retained local blocks
+        expire.

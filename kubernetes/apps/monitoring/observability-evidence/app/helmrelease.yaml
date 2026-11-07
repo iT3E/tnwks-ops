@@ -1,0 +1,85 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: observability-evidence
+  namespace: monitoring
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  values:
+    serviceAccount:
+      create: false
+      name: observability-evidence
+    controllers:
+      evidence:
+        annotations:
+          reloader.stakater.com/auto: "true"
+        pod:
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+        containers:
+          app:
+            image:
+              repository: docker.io/library/python
+              tag: 3.15-alpine@sha256:a0f2e268f2ce8f3709611a90054ec6a8ae31f6251f5896b8648b9bb99835e30a
+            command: [python3, -u, /config/collector.py]
+            env:
+              CLUSTER_NAME: "${CLUSTER_NAME}"
+              PYTHONDONTWRITEBYTECODE: "1"
+            securityContext:
+              readOnlyRootFilesystem: true
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: [ALL]
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 96Mi
+            probes:
+              liveness: &probe
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /healthz
+                    port: 9876
+                  timeoutSeconds: 2
+              readiness: *probe
+    service:
+      app:
+        controller: evidence
+        ports:
+          http:
+            port: 9876
+    persistence:
+      code:
+        type: configMap
+        name: observability-evidence-code
+        globalMounts:
+          - path: /config
+            readOnly: true
+    serviceMonitor:
+      app:
+        enabled: true
+        serviceName: observability-evidence
+        endpoints:
+          - port: http
+            interval: 1m
+            scrapeTimeout: 20s
+            # This collector intentionally emits inventory for both sites and
+            # labels remote probes by their target. Preserve those identities.
+            honorLabels: true
