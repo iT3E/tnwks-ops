@@ -182,4 +182,7 @@ data:
   OMBI_REPLICAS: "0"
   OMBI_F_REPLICAS: "0"
   WIZARR_REPLICAS: "0"
+  # Jellyfin runs on homelab-wsl-02 since 2026-11-06 (its media library, this
+  # desktop's E:, stays here unused); this site keeps it at 0.
+  JELLYFIN_REPLICAS: "0"
   UNIFI_BACKUP_SUSPEND: "true"
