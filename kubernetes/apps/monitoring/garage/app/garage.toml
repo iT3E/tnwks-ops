@@ -1,0 +1,20 @@
+# One node, one copy. This archive is not an application backup service.
+metadata_dir = "/metadata"
+data_dir = "/data"
+db_engine = "sqlite"
+replication_factor = 1
+metadata_fsync = true
+data_fsync = true
+metadata_auto_snapshot_interval = "6h"
+rpc_bind_addr = "127.0.0.1:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret_file = "/secrets/rpc-secret"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "127.0.0.1:3900"
+
+[admin]
+api_bind_addr = "0.0.0.0:3903"
+admin_token_file = "/secrets/admin-token"
+metrics_token_file = "/secrets/metrics-token"

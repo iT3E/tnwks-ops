@@ -1,0 +1,39 @@
+---
+name: Observability
+on:
+  pull_request:
+    paths:
+      - observability/**
+      - kubernetes/**
+      - bin/site-failover-apps.json
+      - .github/workflows/observability.yaml
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: observability/uv.lock
+      - name: Install pinned toolchain
+        run: uv sync --project observability --locked --python 3.13
+      - name: Generated resources and evidence contracts
+        run: |
+          uv run --project observability python observability/generate.py --check
+          uv run --project observability ruff check observability
+          uv run --project observability pytest observability/tests -q
+          uv run --project observability python observability/validate.py
+      - name: Recording rules and failure fixtures
+        run: |
+          docker run --rm --network none --entrypoint /bin/promtool \
+            --mount type=bind,src="$PWD/observability/generated",dst=/rules,readonly \
+            prom/prometheus@sha256:502ad90314c7485892ce696cb14a99fceab9fc27af29f4b427f41bd39701a199 \
+            test rules /rules/rule-tests.yaml
+      - name: Disposable Garage and Thanos acceptance
+        run: uv run --project observability python observability/rehearse_archive.py

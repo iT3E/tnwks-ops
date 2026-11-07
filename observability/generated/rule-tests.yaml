@@ -1,0 +1,104 @@
+---
+rule_files:
+- rules-for-test.yaml
+evaluation_interval: 1m
+tests:
+- name: same database name and missing backup remain distinct
+  interval: 1m
+  input_series:
+  - series: homelab_expected_database_info{k8s_cluster="one",namespace="databases",db_cluster="app-pg"}
+    values: 1+0x10
+  - series: homelab_expected_database_info{k8s_cluster="two",namespace="databases",db_cluster="app-pg"}
+    values: 1+0x10
+  - series: barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{k8s_cluster="one",namespace="databases",pod="app-pg-1"}
+    values: 30+0x10
+  promql_expr_test:
+  - expr: homelab:database_backup_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:database_backup_state{k8s_cluster="one",namespace="databases",db_cluster="app-pg"}
+      value: 1
+    - labels: homelab:database_backup_state{k8s_cluster="two",namespace="databases",db_cluster="app-pg"}
+      value: 0
+- name: successful scrape cannot refresh a stale upstream
+  interval: 1m
+  input_series:
+  - series: homelab_expected_site_info{k8s_cluster="one"}
+    values: 1+0x10
+  - series: homelab_collection_success{k8s_cluster="one",collector="workloads"}
+    values: 1+0x10
+  - series: homelab_collection_last_success_timestamp_seconds{k8s_cluster="one",collector="workloads"}
+    values: 1+0x10
+  promql_expr_test:
+  - expr: homelab:site_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:site_state{k8s_cluster="one"}
+      value: 0
+- name: absent fencing or restore evidence cannot certify readiness
+  interval: 1m
+  input_series:
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="test",tier="warm"}
+    values: 1+0x10
+  - series: homelab_recovery_prerequisite_state{k8s_cluster="one",app="test",prerequisite="database"}
+    values: 1+0x10
+  promql_expr_test:
+  - expr: homelab:recovery_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:recovery_state{k8s_cluster="one",app="test"}
+      value: 0
+- name: stale probes cannot certify current paths
+  interval: 1m
+  input_series:
+  - series: homelab_observer_info{k8s_cluster="one"}
+    values: 1+0x10
+  - series: probe_success{k8s_cluster="one",observability_target="archive"}
+    values: 1 _ _ _ _ _
+  promql_expr_test:
+  - expr: homelab:archive_state
+    eval_time: 4m
+    exp_samples:
+    - labels: homelab:archive_state{k8s_cluster="one"}
+      value: 0
+- name: duplicate observations of one prerequisite are not four prerequisites
+  interval: 1m
+  input_series:
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="test",tier="warm"}
+    values: 1+0x10
+  - series: homelab_recovery_prerequisite_state{k8s_cluster="one",app="test",prerequisite="database",observer="0"}
+    values: 1+0x10
+  - series: homelab_recovery_prerequisite_state{k8s_cluster="one",app="test",prerequisite="database",observer="1"}
+    values: 1+0x10
+  - series: homelab_recovery_prerequisite_state{k8s_cluster="one",app="test",prerequisite="database",observer="2"}
+    values: 1+0x10
+  - series: homelab_recovery_prerequisite_state{k8s_cluster="one",app="test",prerequisite="database",observer="3"}
+    values: 1+0x10
+  promql_expr_test:
+  - expr: homelab:recovery_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:recovery_state{k8s_cluster="one",app="test"}
+      value: 0
+- name: future backup evidence is unknown and peer federation is not counted twice
+  interval: 1m
+  input_series:
+  - series: homelab_expected_database_info{k8s_cluster="one",namespace="databases",db_cluster="app-pg"}
+    values: 1+0x10
+  - series: barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{k8s_cluster="one",namespace="databases",pod="app-pg-1"}
+    values: 1000+0x10
+  - series: cnpg_pg_replication_in_recovery{k8s_cluster="one",namespace="databases",pod="app-pg-1"}
+    values: 0+0x10
+  - series: cnpg_pg_replication_in_recovery{k8s_cluster="one",namespace="databases",pod="app-pg-1",source_site="one"}
+    values: 1+0x10
+  promql_expr_test:
+  - expr: homelab:database_backup_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:database_backup_state{k8s_cluster="one",namespace="databases",db_cluster="app-pg"}
+      value: 0
+  - expr: homelab:database_in_recovery
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:database_in_recovery{k8s_cluster="one",namespace="databases",db_cluster="app-pg"}
+      value: 0

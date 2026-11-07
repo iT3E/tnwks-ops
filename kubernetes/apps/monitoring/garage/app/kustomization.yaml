@@ -1,0 +1,14 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - ./helmrelease.yaml
+  - ./credentials.sops.yaml
+configMapGenerator:
+  - name: observability-garage-config
+    files:
+      - garage.toml
+      - Caddyfile
+generatorOptions:
+  disableNameSuffixHash: true

@@ -1,0 +1,794 @@
+[
+  {
+    "dashboard": "home",
+    "tab": "Now",
+    "title": "Expected sites",
+    "expr": "count(max by (k8s_cluster) (homelab_expected_site_info))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "home",
+    "tab": "Now",
+    "title": "Reporting sites",
+    "expr": "count(homelab:site_reporting == 1) or vector(0)",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "home",
+    "tab": "Now",
+    "title": "Site evidence",
+    "expr": "homelab:site_state{k8s_cluster=~\"$cluster\"}",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "home",
+    "tab": "Now",
+    "title": "Evidence age",
+    "expr": "time() - homelab_observer_last_success_timestamp_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "home",
+    "tab": "Now",
+    "title": "Service paths",
+    "expr": "homelab:service_state{k8s_cluster=~\"$cluster\"}",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "home",
+    "tab": "Now",
+    "title": "Current firing alerts",
+    "expr": "ALERTS{k8s_cluster=~\"$cluster\",alertstate=\"firing\"}",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "home",
+    "tab": "Now",
+    "title": "Recovery evidence",
+    "expr": "homelab:recovery_state{k8s_cluster=~\"$cluster\"}",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "home",
+    "tab": "Now",
+    "title": "Archive reachable",
+    "expr": "homelab:archive_state{k8s_cluster=~\"$cluster\"}",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "home",
+    "tab": "Change and history",
+    "title": "Observed state changes",
+    "expr": "changes(homelab:service_state{k8s_cluster=~\"$cluster\"}[1h])",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "home",
+    "tab": "Change and history",
+    "title": "Latest workload rollout",
+    "expr": "time() - homelab_workload_transition_timestamp_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "home",
+    "tab": "Change and history",
+    "title": "Available local history",
+    "expr": "homelab:local_history_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Sites",
+    "title": "Expected sites",
+    "expr": "count(max by (k8s_cluster) (homelab_expected_site_info))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Sites",
+    "title": "Reporting sites",
+    "expr": "count(homelab:site_reporting == 1) or vector(0)",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Sites",
+    "title": "Site evidence",
+    "expr": "homelab:site_state{k8s_cluster=~\"$cluster\"}",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Sites",
+    "title": "Evidence age",
+    "expr": "time() - homelab_observer_last_success_timestamp_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Sites",
+    "title": "Ready nodes",
+    "expr": "sum by (k8s_cluster) (kube_node_status_condition{k8s_cluster=~\"$cluster\",condition=\"Ready\",status=\"true\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Sites",
+    "title": "Cross-site observation",
+    "expr": "homelab_peer_probe_success{k8s_cluster=~\"$cluster\"}",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Placement",
+    "title": "Declared placement",
+    "expr": "homelab_expected_workload_info{k8s_cluster=~\"$cluster\"}",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Placement",
+    "title": "Desired replicas",
+    "expr": "homelab_workload_desired_replicas{k8s_cluster=~\"$cluster\"}",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Placement",
+    "title": "Ready replicas",
+    "expr": "homelab_workload_ready_replicas{k8s_cluster=~\"$cluster\"}",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Placement",
+    "title": "Runtime overrides present",
+    "expr": "homelab_site_override_present{k8s_cluster=~\"$cluster\"}",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Placement",
+    "title": "Override creation age",
+    "expr": "time() - homelab_site_override_created_timestamp_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Recovery",
+    "title": "Readiness evidence",
+    "expr": "homelab:recovery_state{k8s_cluster=~\"$cluster\"}",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Recovery",
+    "title": "Fencing evidence age",
+    "expr": "time() - homelab_fence_last_verified_timestamp_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Recovery",
+    "title": "Last restore evidence",
+    "expr": "time() - homelab_restore_last_success_timestamp_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Databases",
+    "title": "Expected databases",
+    "expr": "homelab_expected_database_info{k8s_cluster=~\"$cluster\"}",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Databases",
+    "title": "CNPG role: in recovery",
+    "expr": "homelab:database_in_recovery{k8s_cluster=~\"$cluster\"}",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Databases",
+    "title": "Connections",
+    "expr": "sum by (k8s_cluster, namespace, db_cluster) (homelab:database_connections{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Databases",
+    "title": "Replay timestamp lag",
+    "expr": "homelab:database_replay_lag_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Backups",
+    "title": "Base backup age",
+    "expr": "homelab:database_backup_age_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Backups",
+    "title": "Backup coverage",
+    "expr": "homelab:database_backup_state{k8s_cluster=~\"$cluster\"}",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Backups",
+    "title": "WAL failures",
+    "expr": "increase(cnpg_pg_stat_archiver_failed_count{k8s_cluster=~\"$cluster\"}[1h])",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Backups",
+    "title": "Weekly PVC drill age",
+    "expr": "time() - kube_cronjob_status_last_successful_time{k8s_cluster=~\"$cluster\",namespace=\"kopiur-system\",cronjob=\"standby-restore\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Storage",
+    "title": "PVC used",
+    "expr": "kubelet_volume_stats_used_bytes{k8s_cluster=~\"$cluster\"} / kubelet_volume_stats_capacity_bytes{k8s_cluster=~\"$cluster\"}",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-data",
+    "tab": "Storage",
+    "title": "Windows disk free",
+    "expr": "windows_logical_disk_free_bytes{k8s_cluster=~\"$cluster\",volume=~\"C:|E:\"}",
+    "unit": "bytes",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Paths",
+    "title": "Site path probes",
+    "expr": "homelab_peer_probe_success{k8s_cluster=~\"$cluster\"}",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Paths",
+    "title": "WireGuard received",
+    "expr": "rate(mktxp_wireguard_peer_rx_bytes{k8s_cluster=~\"$cluster\"}[5m])",
+    "unit": "Bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "Paths",
+    "title": "Router interface errors",
+    "expr": "sum by (k8s_cluster, name) (rate(mktxp_interface_rx_error_total{k8s_cluster=~\"$cluster\"}[5m]))",
+    "unit": "ops",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
+    "title": "BGP sessions",
+    "expr": "homelab_bgp_session_established{k8s_cluster=~\"$cluster\"}",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
+    "title": "Expected route observed",
+    "expr": "homelab_route_observed{k8s_cluster=~\"$cluster\"}",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
+    "title": "Cilium drops",
+    "expr": "sum by (k8s_cluster, reason) (rate(cilium_drop_count_total{k8s_cluster=~\"$cluster\"}[5m]))",
+    "unit": "pps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
+    "title": "Mesh connectivity",
+    "expr": "cilium_clustermesh_remote_cluster_readiness_status{k8s_cluster=~\"$cluster\"}",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-internet",
+    "tab": "Experience",
+    "title": "Internet probe",
+    "expr": "homelab:internet_state{k8s_cluster=~\"$cluster\"}",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-internet",
+    "tab": "Experience",
+    "title": "WAN p90 latency",
+    "expr": "smokeping:rtt_p90:rate1m{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-internet",
+    "tab": "Experience",
+    "title": "WAN latency threshold",
+    "expr": "smokeping:latency_threshold:1h{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-internet",
+    "tab": "Experience",
+    "title": "Packet loss",
+    "expr": "smokeping:loss_ratio:rate1m{k8s_cluster=~\"$cluster\"}",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-internet",
+    "tab": "Traffic",
+    "title": "Download",
+    "expr": "wan:receive_bits:rate1m{k8s_cluster=~\"$cluster\"}",
+    "unit": "bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-internet",
+    "tab": "Traffic",
+    "title": "Upload",
+    "expr": "wan:transmit_bits:rate1m{k8s_cluster=~\"$cluster\"}",
+    "unit": "bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-internet",
+    "tab": "Traffic",
+    "title": "ISP radio evidence",
+    "expr": "unms_device_uptime_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi",
+    "tab": "Access points",
+    "title": "AP uptime",
+    "expr": "max by (k8s_cluster, name) (unpoller_device_uptime_seconds{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi",
+    "tab": "Access points",
+    "title": "AP uplink",
+    "expr": "max by (k8s_cluster, name) (unpoller_device_uplink_speed_mbps{k8s_cluster=~\"$cluster\"})",
+    "unit": "Mbits",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi",
+    "tab": "Access points",
+    "title": "Wi-Fi collector failures",
+    "expr": "sum by (k8s_cluster) (increase(unpoller_prometheus_refresh_failures_total{k8s_cluster=~\"$cluster\"}[15m]))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi",
+    "tab": "Site dependency",
+    "title": "Peer path success",
+    "expr": "homelab_peer_probe_success{k8s_cluster=~\"$cluster\"}",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi",
+    "tab": "Site dependency",
+    "title": "Peer path duration",
+    "expr": "homelab_peer_probe_duration_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-kubernetes",
+    "tab": "Reconciliation",
+    "title": "Flux resource readiness",
+    "expr": "homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-kubernetes",
+    "tab": "Reconciliation",
+    "title": "Suspended resources",
+    "expr": "homelab_flux_resource_suspended{k8s_cluster=~\"$cluster\"}",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-kubernetes",
+    "tab": "Reconciliation",
+    "title": "Reconcile failures",
+    "expr": "sum by (k8s_cluster, controller) (rate(controller_runtime_reconcile_total{k8s_cluster=~\"$cluster\",result=\"error\"}[5m]))",
+    "unit": "ops",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-kubernetes",
+    "tab": "Workloads",
+    "title": "Unready workloads",
+    "expr": "homelab_workload_desired_replicas{k8s_cluster=~\"$cluster\"} - homelab_workload_ready_replicas{k8s_cluster=~\"$cluster\"}",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-kubernetes",
+    "tab": "Workloads",
+    "title": "Node CPU utilization",
+    "expr": "1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-kubernetes",
+    "tab": "Workloads",
+    "title": "Node memory available",
+    "expr": "node_memory_MemAvailable_bytes{k8s_cluster=~\"$cluster\"}",
+    "unit": "bytes",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "User paths",
+    "title": "Application probe state",
+    "expr": "homelab:service_state{k8s_cluster=~\"$cluster\"}",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "User paths",
+    "title": "HTTP requests",
+    "expr": "sum by (k8s_cluster, ingress) (rate(nginx_ingress_controller_requests{k8s_cluster=~\"$cluster\"}[$__rate_interval]))",
+    "unit": "reqps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "User paths",
+    "title": "HTTP 5xx fraction",
+    "expr": "sum by (k8s_cluster, ingress) (rate(nginx_ingress_controller_requests{k8s_cluster=~\"$cluster\",status=~\"5..\"}[$__rate_interval])) / sum by (k8s_cluster, ingress) (rate(nginx_ingress_controller_requests{k8s_cluster=~\"$cluster\"}[$__rate_interval]))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "User paths",
+    "title": "HTTP p95 duration",
+    "expr": "histogram_quantile(0.95, sum by (k8s_cluster, ingress, le) (rate(nginx_ingress_controller_request_duration_seconds_bucket{k8s_cluster=~\"$cluster\"}[$__rate_interval])))",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Dependencies",
+    "title": "Certificate validity remaining",
+    "expr": "certmanager_certificate_expiration_timestamp_seconds{k8s_cluster=~\"$cluster\"} - time()",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Dependencies",
+    "title": "Tunnel connections",
+    "expr": "cloudflared_tunnel_ha_connections{k8s_cluster=~\"$cluster\"}",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-home",
+    "tab": "Cameras",
+    "title": "Recording input",
+    "expr": "sum by (k8s_cluster) (frigate_camera_fps{k8s_cluster=~\"$cluster\"})",
+    "unit": "fps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-home",
+    "tab": "Cameras",
+    "title": "Skipped frames",
+    "expr": "sum by (k8s_cluster) (frigate_skipped_fps{k8s_cluster=~\"$cluster\"})",
+    "unit": "fps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-home",
+    "tab": "Cameras",
+    "title": "Detector inference",
+    "expr": "max by (k8s_cluster, detector) (frigate_detector_inference_speed_seconds{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-home",
+    "tab": "Automation",
+    "title": "Home Assistant path",
+    "expr": "homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"}",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-home",
+    "tab": "Automation",
+    "title": "Unavailable entities",
+    "expr": "sum by (k8s_cluster) (homeassistant_entity_available{k8s_cluster=~\"$cluster\"} == 0)",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-home",
+    "tab": "Automation",
+    "title": "MQTT connected clients",
+    "expr": "mosquitto_clients_connected{k8s_cluster=~\"$cluster\"}",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Physical resources",
+    "title": "Windows available memory",
+    "expr": "windows_memory_available_bytes{k8s_cluster=~\"$cluster\"}",
+    "unit": "bytes",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Physical resources",
+    "title": "Windows disk free",
+    "expr": "windows_logical_disk_free_bytes{k8s_cluster=~\"$cluster\",volume=~\"C:|E:\"}",
+    "unit": "bytes",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Physical resources",
+    "title": "Disk temperature",
+    "expr": "smartctl_device_temperature{k8s_cluster=~\"$cluster\"}",
+    "unit": "celsius",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Survivor fit",
+    "title": "Required app replicas",
+    "expr": "sum by (k8s_cluster, app) (homelab_workload_desired_replicas{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Survivor fit",
+    "title": "Recovery readiness",
+    "expr": "homelab:recovery_state{k8s_cluster=~\"$cluster\"}",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Trust",
+    "title": "Expected sites",
+    "expr": "count(max by (k8s_cluster) (homelab_expected_site_info))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Trust",
+    "title": "Reporting sites",
+    "expr": "count(homelab:site_reporting == 1) or vector(0)",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Trust",
+    "title": "Site evidence",
+    "expr": "homelab:site_state{k8s_cluster=~\"$cluster\"}",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Trust",
+    "title": "Evidence age",
+    "expr": "time() - homelab_observer_last_success_timestamp_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Trust",
+    "title": "Collector source success",
+    "expr": "homelab_collection_success{k8s_cluster=~\"$cluster\"}",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Trust",
+    "title": "Scrape failures",
+    "expr": "sum by (k8s_cluster, job) (up{k8s_cluster=~\"$cluster\"} == 0)",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Cost",
+    "title": "Active series",
+    "expr": "prometheus_tsdb_head_series{k8s_cluster=~\"$cluster\"}",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Cost",
+    "title": "Ingested samples",
+    "expr": "rate(prometheus_tsdb_head_samples_appended_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])",
+    "unit": "ops",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Cost",
+    "title": "Retained blocks",
+    "expr": "prometheus_tsdb_storage_blocks_bytes{k8s_cluster=~\"$cluster\"}",
+    "unit": "bytes",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Cost",
+    "title": "Rule evaluation failures",
+    "expr": "rate(prometheus_rule_evaluation_failures_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])",
+    "unit": "ops",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Archive and delivery",
+    "title": "Archive state",
+    "expr": "homelab:archive_state{k8s_cluster=~\"$cluster\"}",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Archive and delivery",
+    "title": "Unuploaded block age",
+    "expr": "homelab:unuploaded_block_age_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Archive and delivery",
+    "title": "Notification failures",
+    "expr": "sum by (k8s_cluster, integration) (rate(alertmanager_notifications_failed_total{k8s_cluster=~\"$cluster\"}[$__rate_interval]))",
+    "unit": "ops",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-alerts",
+    "tab": "Current",
+    "title": "Firing now",
+    "expr": "ALERTS{k8s_cluster=~\"$cluster\",alertstate=\"firing\"}",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-alerts",
+    "tab": "Current",
+    "title": "Pending now",
+    "expr": "ALERTS{k8s_cluster=~\"$cluster\",alertstate=\"pending\"}",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-alerts",
+    "tab": "Delivery",
+    "title": "Failed notifications",
+    "expr": "sum by (k8s_cluster, integration) (increase(alertmanager_notifications_failed_total{k8s_cluster=~\"$cluster\"}[1h]))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "house",
+    "tab": "House",
+    "title": "Internet",
+    "expr": "homelab_house_state{domain=\"internet\"}",
+    "unit": "state",
+    "kiosk": true
+  },
+  {
+    "dashboard": "house",
+    "tab": "House",
+    "title": "Wi-Fi",
+    "expr": "homelab_house_state{domain=\"wifi\"}",
+    "unit": "state",
+    "kiosk": true
+  },
+  {
+    "dashboard": "house",
+    "tab": "House",
+    "title": "Home automation",
+    "expr": "homelab_house_state{domain=\"automation\"}",
+    "unit": "state",
+    "kiosk": true
+  },
+  {
+    "dashboard": "house",
+    "tab": "House",
+    "title": "Cameras",
+    "expr": "homelab_house_state{domain=\"cameras\"}",
+    "unit": "state",
+    "kiosk": true
+  },
+  {
+    "dashboard": "house",
+    "tab": "House",
+    "title": "Apps",
+    "expr": "homelab_house_state{domain=\"apps\"}",
+    "unit": "state",
+    "kiosk": true
+  },
+  {
+    "dashboard": "house",
+    "tab": "House",
+    "title": "Monitoring",
+    "expr": "homelab_house_state{domain=\"monitoring\"}",
+    "unit": "state",
+    "kiosk": true
+  }
+]

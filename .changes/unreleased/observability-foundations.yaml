@@ -1,0 +1,4 @@
+---
+kind: Added
+body: Prepare generated Grafana dashboards, bounded observability evidence and private Garage/Thanos archive components with offline failure tests; cluster activation remains gated on storage and upgrade validation.
+time: 2026-11-06T18:00:00-08:00

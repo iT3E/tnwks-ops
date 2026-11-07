@@ -1,0 +1,19 @@
+[project]
+name = "homelab-observability"
+version = "0.1.0"
+description = "Reproducible Grafana dashboards, telemetry contracts and offline validation"
+requires-python = ">=3.12"
+dependencies = [
+  "grafana-foundation-sdk @ git+https://github.com/grafana/grafana-foundation-sdk@72b873117be02d3cd352c4ac8590b6555b0d1ce2#subdirectory=python",
+  "PyYAML==6.0.3",
+]
+
+[dependency-groups]
+dev = ["pytest==9.0.2", "ruff==0.14.0", "playwright==1.64.1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
