@@ -40,8 +40,11 @@ spec:
         # what makes Windows fail allocations: at the limit it grows the
         # system-managed C:\pagefile.sys (stalls) and then refuses new commit,
         # so apps crash or hang. Baseline 2026-10-30..11-01: median 89.6%,
-        # max 94.8%, mostly vmmemWSL (~39 GB commit). Same alertname for both
-        # severities so the critical inhibits the warning.
+        # max 94.8%, mostly vmmemWSL (~39 GB commit). That share is the fixed VM
+        # size from .wslconfig: it does not move with cluster load, and
+        # restarting WSL frees nothing lasting. Task Manager's "in use" counts
+        # physical RAM, so it can read 46 GB while commit reads 70. Same
+        # alertname for both severities so the critical inhibits the warning.
         - alert: WindowsHostCommitHigh
           expr: windows_memory_committed_bytes{job="windows-exporter"} / windows_memory_commit_limit{job="windows-exporter"} > 0.95
           for: 15m
@@ -55,8 +58,9 @@ spec:
               of its {{ with printf "round(windows_memory_commit_limit{instance='%s'} / 2^30, 0.1)" $labels.instance | query }}{{ . | first | value }}{{ end }} GiB
               commit limit (RAM + page file) for 15m. Near the limit Windows grows
               the page file, then new allocations fail and apps crash or hang.
-              Usual cause is vmmemWSL (the WSL VM that runs the cluster); cap it in
-              .wslconfig, close apps, or raise the page file size.
+              vmmemWSL holds a fixed share set by .wslconfig, so the swing is usually
+              desktop apps. Check Committed in Task Manager, not memory in use. Close
+              apps or raise the page file size.
 
         - alert: WindowsHostCommitHigh
           expr: windows_memory_committed_bytes{job="windows-exporter"} / windows_memory_commit_limit{job="windows-exporter"} > 0.98
@@ -70,8 +74,8 @@ spec:
               {{ with printf "round(windows_memory_committed_bytes{instance='%s'} / 2^30, 0.1)" $labels.instance | query }}{{ . | first | value }}{{ end }} GiB
               of its {{ with printf "round(windows_memory_commit_limit{instance='%s'} / 2^30, 0.1)" $labels.instance | query }}{{ . | first | value }}{{ end }} GiB
               commit limit (RAM + page file) for 5m. Allocations are about to fail;
-              apps and the WSL VM (the whole cluster) can crash. Free memory now:
-              close apps or restart the heaviest one (usually vmmemWSL).
+              apps and the WSL VM (the whole cluster) can crash. Close desktop apps
+              now. Restarting WSL stops the whole cluster and its commit returns.
 
         # Real swapping: sustained page-outs to the page file while available
         # memory (free + standby) is low. Pages written alone happen in the

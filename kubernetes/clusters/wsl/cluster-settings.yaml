@@ -114,9 +114,9 @@ data:
   CILIUM_BGP_PEER_ASN: "64611"
   CILIUM_BGP_PEER_ADDR: "10.5.0.1"
   SHARED_VIP_POOL: "10.10.95.0/24"
-  # Off like homelab-wsl-02: 02-cni-bootstrap.yml installs Cilium before the
-  # ServiceMonitor CRD exists.
-  CILIUM_SERVICEMONITOR_ENABLED: "false"
+  # 02-cni-bootstrap.yml installs Cilium before the ServiceMonitor CRD exists,
+  # so the chart skips its CRD check (trustCRDsExist) and Flux adds the monitors.
+  CILIUM_SERVICEMONITOR_ENABLED: "true"
   CILIUM_HUBBLE_UI_INGRESS_ENABLED: "false"
 
   # ServiceMonitor / PodMonitor toggle. Set to "false" until
