@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.38.0 - 2026-11-07
+
+### Added
+
+* CNPG clusters can be rolled from git. Bumping CNPG_ROLLOUT in cluster-settings sets each Cluster's restartedAt annotation, as kubectl cnpg restart does. Its first value rolls every instance once, which gives the running barman-cloud sidecars their 512Mi limit.
+
 ## v2.37.3 - 2026-11-07
 
 ### Fixed
