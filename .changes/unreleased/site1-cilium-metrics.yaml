@@ -1,3 +1,0 @@
-kind: Added
-body: Collect Cilium metrics on site 1, and point the Windows commit alerts at desktop apps rather than restarting WSL.
-time: 2026-11-07T01:00:00-08:00

@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.6.0 - 2026-11-07
+
+### Added
+
+* Collect Cilium metrics on site 1, and point the Windows commit alerts at desktop apps rather than restarting WSL.
+
 ## v2.5.1 - 2026-11-07
 
 ### Fixed
