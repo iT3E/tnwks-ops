@@ -35,7 +35,9 @@ def records():
             f' or (({ready} < {desired}) * 0 + 3)'
             ' or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))'),
         **network_records(),
-        "homelab:service_state": '(3 - 2 * min by (k8s_cluster, app) (probe_success{observability_target="service"} and (time() - timestamp(probe_success{observability_target="service"})) < 180)) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))',
+        # Content probe from the site that runs the app; Standby (4) where it's
+        # deliberately at zero; Unknown where neither is observed.
+        "homelab:service_state": '(3 - 2 * min by (k8s_cluster, app) (probe_success{observability_target="service"} and (time() - timestamp(probe_success{observability_target="service"})) < 180)) or on (k8s_cluster, app) (homelab:workload_state == 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))',
     }
 
 
@@ -175,6 +177,22 @@ def fixtures():
              {"expr": 'homelab:network_path_state{hop=~"tunnel|router-bgp"}', "eval_time": "5m", "exp_samples": [
                  {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="tunnel"}', "value": 0},
                  {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="router-bgp"}', "value": 0},
+             ]},
+         ]},
+        {"name": "service state: probed, failing, standby, unobserved", "interval": "1m",
+         "input_series": [
+             *[{"series": f'homelab_expected_workload_info{{k8s_cluster="one",app="{a}"}}', "values": "1+0x10"}
+               for a in ("up", "broken", "parked", "unseen")],
+             {"series": 'probe_success{k8s_cluster="one",app="up",observability_target="service"}', "values": "1+0x10"},
+             {"series": 'probe_success{k8s_cluster="one",app="broken",observability_target="service"}', "values": "0+0x10"},
+             {"series": 'homelab_workload_desired_replicas{k8s_cluster="one",app="parked"}', "values": "0+0x10"},
+             {"series": 'homelab_workload_ready_replicas{k8s_cluster="one",app="parked"}', "values": "0+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:service_state", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:service_state{k8s_cluster="one",app="up"}', "value": 1},
+                 {"labels": 'homelab:service_state{k8s_cluster="one",app="broken"}', "value": 3},
+                 {"labels": 'homelab:service_state{k8s_cluster="one",app="parked"}', "value": 4},
+                 {"labels": 'homelab:service_state{k8s_cluster="one",app="unseen"}', "value": 0},
              ]},
          ]},
         {"name": "duplicate observations of one prerequisite are not four prerequisites", "interval": "1m",

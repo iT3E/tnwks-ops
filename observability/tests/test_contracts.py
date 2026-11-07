@@ -117,6 +117,21 @@ def test_missing_workload_retains_expected_rows_and_standby_is_zero_replicas(sma
     assert "homelab_workload_present" in missing
 
 
+def test_content_probe_only_where_the_app_runs(small_inventory, monkeypatch):
+    import collector
+    calls = []
+    monkeypatch.setattr(collector, "content_probe", lambda url, expect: (calls.append(url), (True, 0.1))[1])
+    small_inventory["apps"][0]["probe"] = {"url": "http://test.apps.svc:80/health", "expect": "ok"}
+    api = FakeApi()
+    standby = Collector(api, small_inventory, "one", clock=lambda: 1000).collect().decode()
+    assert calls == [] and 'observability_target="service"' not in standby  # replicas 0 here
+    running = Collector(api, small_inventory, "one", clock=lambda: 1000)
+    running.workloads = lambda metrics, labels: running.desired.update(test=1)
+    out = running.collect().decode()
+    assert calls == ["http://test.apps.svc:80/health"]
+    assert 'probe_success{app="test",k8s_cluster="one",observability_target="service",observer_cluster="one"} 1' in out
+
+
 def test_failed_collection_retains_old_success_time_without_cached_healthy_samples(small_inventory):
     api = FakeApi()
     now = [1000]
