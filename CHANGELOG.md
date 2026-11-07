@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.7.1 - 2026-11-07
+
+### Fixed
+
+* Make the site 1 monitoring volume initialize on Windows PowerShell 5.1, fail the task on errors, and refuse claims before the disk is mounted.
+
 ## v2.7.0 - 2026-11-07
 
 ### Added

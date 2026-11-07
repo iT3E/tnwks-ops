@@ -1,3 +1,0 @@
-kind: Fixed
-body: Make the site 1 monitoring volume initialize on Windows PowerShell 5.1, fail the task on errors, and refuse claims before the disk is mounted.
-time: 2026-11-07T01:10:00-08:00
