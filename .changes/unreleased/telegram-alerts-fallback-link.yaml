@@ -1,4 +1,0 @@
----
-kind: Changed
-body: Telegram alerts from the charts' own rules link to the Alerts board for the alerting site at the incident time, and Alertmanager now knows its external URL.
-time: 2026-11-07T18:00:00Z

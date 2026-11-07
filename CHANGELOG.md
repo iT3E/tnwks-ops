@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.21.0 - 2026-11-07
+
+### Changed
+
+* Telegram alerts from the charts' own rules link to the Alerts board for the alerting site at the incident time, and Alertmanager now knows its external URL.
+
 ## v2.20.0 - 2026-11-07
 
 ### Changed
