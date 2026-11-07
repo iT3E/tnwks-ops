@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.4.0 - 2026-11-07
+
+### Added
+
+* Serve the generated dashboards in Grafana and make Homelab the home page, keeping the previous board as Homelab (classic).
+
 ## v2.3.0 - 2026-11-07
 
 ### Added
