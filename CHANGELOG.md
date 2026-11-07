@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.10.0 - 2026-11-07
+
+### Changed
+
+* Grafana is a warm app like Firefly: one name (grafana) on the homelab-wsl-first VIP, a standby on homelab-wsl-02 with a replica of its database, moved with task failover. Replaces the separate grafana-02 instance.
+
 ## v2.9.1 - 2026-11-07
 
 ### Fixed
