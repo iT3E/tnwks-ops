@@ -390,6 +390,71 @@ def lease_txt(name: str, timeout: float = 2.0) -> str | None:
     return None
 
 
+def _mqtt_string(value: str) -> bytes:
+    data = value.encode()
+    return len(data).to_bytes(2, "big") + data
+
+
+def _mqtt_packet(kind: int, body: bytes) -> bytes:
+    length, encoded = len(body), b""
+    while True:
+        byte, length = length % 128, length // 128
+        encoded += bytes([byte | (0x80 if length else 0)])
+        if not length:
+            return bytes([kind]) + encoded + body
+
+
+def _mqtt_read(sock) -> tuple[int, bytes]:
+    head = sock.recv(1)
+    if not head:
+        raise OSError("closed")
+    length, shift = 0, 0
+    while True:
+        byte = sock.recv(1)[0]
+        length += (byte & 0x7F) << shift
+        shift += 7
+        if not byte & 0x80:
+            break
+    body = b""
+    while len(body) < length:
+        chunk = sock.recv(length - len(body))
+        if not chunk:
+            raise OSError("closed")
+        body += chunk
+    return head[0], body
+
+
+def mqtt_probe(host: str, username: str, password: str, port: int = 1883,
+               timeout: float = 3) -> tuple[bool, int | None, float]:
+    """Log in (MQTT 3.1.1) and read the retained $SYS client count. Returns whether
+    the broker accepted the login, the count if it arrived in time, and the duration.
+    Reads only $SYS; never subscribes to application topics."""
+    start = time.monotonic()
+    clients = None
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as sock:
+            sock.settimeout(timeout)
+            sock.sendall(_mqtt_packet(0x10, _mqtt_string("MQTT") + bytes([4, 0xC2]) + (10).to_bytes(2, "big")
+                                      + _mqtt_string("observability-evidence-" + os.environ.get("CLUSTER_NAME", "x"))
+                                      + _mqtt_string(username) + _mqtt_string(password)))
+            kind, body = _mqtt_read(sock)
+            if kind != 0x20 or len(body) < 2 or body[1] != 0:
+                return False, None, time.monotonic() - start
+            topic = "$SYS/broker/clients/connected"
+            sock.sendall(_mqtt_packet(0x82, (1).to_bytes(2, "big") + _mqtt_string(topic) + b"\x00"))
+            deadline = start + timeout
+            while clients is None and time.monotonic() < deadline:
+                kind, body = _mqtt_read(sock)
+                if kind & 0xF0 == 0x30:
+                    size = int.from_bytes(body[:2], "big")
+                    if body[2:2 + size].decode() == topic:
+                        clients = int(body[2 + size:].decode().strip())
+            sock.sendall(b"\xe0\x00")
+    except (OSError, ValueError, IndexError):
+        return clients is not None, clients, time.monotonic() - start
+    return True, clients, time.monotonic() - start
+
+
 def content_probe(url: str, expect: str, timeout: float = 3) -> tuple[bool, float]:
     """2xx and the expected string in the first 64 KiB. Fixed inventory URLs only."""
     start = time.monotonic()
@@ -443,6 +508,17 @@ def main():
                     labels = {"observer_cluster": args.cluster, "k8s_cluster": site["cluster"]}
                     peers.add("homelab_peer_probe_success", int(ok), **labels)
                     peers.add("homelab_peer_probe_duration_seconds", duration, **labels)
+                if os.environ.get("MQTT_PASSWORD"):
+                    ok, clients, duration = mqtt_probe(os.environ.get("MQTT_HOST", "mosquitto"),
+                                                       os.environ.get("MQTT_USERNAME", ""),
+                                                       os.environ["MQTT_PASSWORD"])
+                    labels = {"observer_cluster": args.cluster, "k8s_cluster": args.cluster,
+                              "observability_target": "mqtt"}
+                    peers.add("probe_success", int(ok), **labels)
+                    peers.add("probe_duration_seconds", duration, **labels)
+                    if clients is not None:
+                        peers.add("homelab_mqtt_clients_connected", clients,
+                                  observer_cluster=args.cluster, k8s_cluster=args.cluster)
                 for target, url in PATHS.items():
                     ok, duration = path_probe(url)
                     labels = {"observer_cluster": args.cluster, "k8s_cluster": args.cluster,

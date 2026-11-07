@@ -12,6 +12,11 @@ spec:
     - name: observability-pki
   path: ./kubernetes/apps/monitoring/observability-evidence/app
   prune: true
+  # The MQTT login (app/secret-mqtt.sops.yaml).
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
   sourceRef:
     kind: GitRepository
     name: flux-system

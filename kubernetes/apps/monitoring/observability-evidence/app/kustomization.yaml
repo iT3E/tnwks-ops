@@ -4,6 +4,9 @@ kind: Kustomization
 resources:
   - ./helmrelease.yaml
   - ./rbac.yaml
+  # The broker login for the MQTT check: user `observability` in mosquitto's
+  # password file (home-automation/mosquitto/app/secrets.sops.yaml).
+  - ./secret-mqtt.sops.yaml
 configMapGenerator:
   - name: observability-evidence-code
     namespace: monitoring

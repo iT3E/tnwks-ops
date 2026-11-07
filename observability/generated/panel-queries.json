@@ -570,8 +570,16 @@
   {
     "dashboard": "tnwks-home",
     "tab": "Automation",
+    "title": "MQTT broker",
+    "expr": "homelab:mqtt_state{k8s_cluster=~\"$cluster\"}",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-home",
+    "tab": "Automation",
     "title": "MQTT connected clients",
-    "expr": "mosquitto_clients_connected{k8s_cluster=~\"$cluster\"}",
+    "expr": "homelab_mqtt_clients_connected{k8s_cluster=~\"$cluster\"}",
     "unit": "short",
     "kiosk": false
   },
