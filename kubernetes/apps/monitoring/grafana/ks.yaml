@@ -24,8 +24,8 @@ spec:
   healthCheckExprs:
     - apiVersion: postgresql.cnpg.io/v1
       kind: Backup
-      current: has(status) && has(status.phase) && status.phase == 'completed'
-      failed: has(status) && has(status.phase) && status.phase == 'failed'
+      current: has(status.phase) && status.phase == 'completed'
+      failed: has(status.phase) && status.phase == 'failed'
     - apiVersion: postgresql.cnpg.io/v1
       kind: Cluster
       current: status.conditions.exists(e, e.type == 'Ready' && e.status == 'True')

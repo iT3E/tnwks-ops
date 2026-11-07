@@ -29,6 +29,7 @@ jobs:
           uv run --project observability ruff check observability
           uv run --project observability pytest observability/tests -q
           uv run --project observability python observability/validate.py
+          uv run --project observability python observability/validate_health.py
       - name: Schema-check inactive Helm workloads
         run: |
           curl -fsSL https://bjw-s-labs.github.io/helm-charts/other/app-template-3.7.3.tgz \
