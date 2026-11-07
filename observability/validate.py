@@ -43,7 +43,9 @@ def main():
             for obj in objects:
                 if obj["kind"] != "HelmRelease":
                     continue
-                params = {"CLUSTER_NAME": "homelab-wsl", "PEER_CLUSTER_NAME": "homelab-wsl-02"}
+                params = {"CLUSTER_NAME": "homelab-wsl", "PEER_CLUSTER_NAME": "homelab-wsl-02",
+                          "OBSERVABILITY_STORAGE_CLASS": "local-path",
+                          "OBSERVABILITY_ARCHIVE_NODE": "homelab-wsl-02-worker-1"}
 
                 def replace(match):
                     key, default = match.groups()
