@@ -53,6 +53,8 @@ resources:
   - ../../../apps/monitoring
   - ../../../apps/monitoring/observability-pki/ks.yaml
   - ../../../apps/monitoring/observability-evidence/ks.yaml
+  - ../../../apps/monitoring/observability-evidence/rules-ks.yaml
+  - ../../../apps/monitoring/thanos-metrics/ks.yaml
   - ../../../apps/selfhosted
   # Immich (photo library for the kitchen screensaver): WSL-only, its library
   # sits on local-path-bulk. See docs/apps/immich.md.

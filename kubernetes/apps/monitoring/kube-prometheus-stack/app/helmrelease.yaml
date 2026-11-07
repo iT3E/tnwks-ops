@@ -131,6 +131,11 @@ spec:
     ### Prometheus instance values
     ###
     prometheus:
+      # The sidecar's HTTP metrics (upload age, for homelab:unuploaded_block_age_seconds).
+      thanosService:
+        enabled: true
+      thanosServiceMonitor:
+        enabled: true
       ingress:
         enabled: true
         ingressClassName: nginx-internal
@@ -181,10 +186,12 @@ spec:
                   - ${WINDOWS_HOST_IP}:9182
                 labels:
                   instance: ${WINDOWS_HOST_NAME}
+                  k8s_cluster: ${CLUSTER_NAME}
               - targets:
                   - ${PEER_WINDOWS_HOST_ADDR}:9182
                 labels:
                   instance: ${PEER_WINDOWS_HOST_NAME}
+                  k8s_cluster: ${PEER_CLUSTER_NAME}
 
           # SMART disk health on the Windows host. smartctl_exporter runs there as the
           # SYSTEM scheduled task \Prometheus\smartctl_exporter and re-reads the drives
@@ -199,10 +206,12 @@ spec:
                   - ${WINDOWS_HOST_IP}:9633
                 labels:
                   instance: ${WINDOWS_HOST_NAME}
+                  k8s_cluster: ${CLUSTER_NAME}
               - targets:
                   - ${PEER_WINDOWS_HOST_ADDR}:9633
                 labels:
                   instance: ${PEER_WINDOWS_HOST_NAME}
+                  k8s_cluster: ${PEER_CLUSTER_NAME}
 
           # Coral detector services on the Windows host (docs/wsl/coral-detector.md),
           # one target per Coral: tnwks-coral-detector-<id> serves /metrics on
@@ -218,6 +227,7 @@ spec:
                 labels:
                   instance: ${WINDOWS_HOST_NAME}
                   device: "0"
+                  k8s_cluster: ${CLUSTER_NAME}
 
           - job_name: unms_exporter
             # for a static target "unms.example.org", rewrite it to
@@ -233,12 +243,18 @@ spec:
             static_configs:
               - targets:
                 - uisp.tnwks.us
+                labels:
+                  k8s_cluster: ${CLUSTER_NAME}
 
 
         enableAdminAPI: true
         # On every alert too, so the War Room shows which cluster sent it.
         externalLabels:
           cluster: ${CLUSTER_NAME}
+        # The global Services select one site's Prometheus by this label.
+        podMetadata:
+          labels:
+            k8s_cluster: ${CLUSTER_NAME}
         podMonitorSelectorNilUsesHelmValues: false
         probeSelectorNilUsesHelmValues: false
         replicas: 1
@@ -253,6 +269,15 @@ spec:
         retentionSize: "6GB"
         ruleSelectorNilUsesHelmValues: false
         scrapeInterval: 1m
+        # Which site a series describes, on every target. External labels are
+        # invisible to local queries, and `cluster` already names the CNPG
+        # cluster on database series. additionalScrapeConfigs set it per target.
+        scrapeClasses:
+          - name: site
+            default: true
+            relabelings:
+              - targetLabel: k8s_cluster
+                replacement: ${CLUSTER_NAME}
         serviceMonitorSelectorNilUsesHelmValues: false
         # storageSpec: empty {} = emptyDir. On WSL kubelet doesn't honor
         # fsGroupChangePolicy on local-path PVCs (the prometheus container
@@ -262,13 +287,33 @@ spec:
         # that's fine. MS-01 overlay should kustomize-patch this back to
         # a real PVC against ceph-block when MS-01 is bootstrapped.
         storageSpec: {}
-        # thanos sidecar is intentionally absent here. The thanos chart
-        # itself is gated MS-01-only (see apps/monitoring/kustomization
-        # — loki/thanos/vector are added in clusters/ms-01/apps), so the
-        # WSL base must not ship a sidecar that tries to mount a
-        # non-existent thanos-objstore-secret. The MS-01 overlay should
-        # patch the prometheus block to add `thanos:` and the matching
-        # thanosService/thanosServiceMonitor when MS-01 comes online.
+        # StoreAPI for the global view (mutual TLS over the mesh) and block
+        # upload to Garage. Uploads run on emptyDir too: only the unshipped 2h
+        # head is at risk on a restart. Keep the image equal to versions.py.
+        thanos:
+          image: quay.io/thanos/thanos:v0.42.5@sha256:0a546b98a8dd47735456ab389983675ee363d68127e334937a9fceeea10da5e7
+          objectStorageConfig:
+            existingSecret:
+              name: observability-thanos-objstore
+              key: objstore.yaml
+          grpcServerTlsConfig:
+            certFile: /tls/tls.crt
+            keyFile: /tls/tls.key
+            caFile: /tls/ca.crt
+          volumeMounts:
+            - name: observability-store-server
+              mountPath: /tls
+              readOnly: true
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+        volumes:
+          - name: observability-store-server
+            secret:
+              secretName: observability-store-server
         walCompression: true
 
   postRenderers:

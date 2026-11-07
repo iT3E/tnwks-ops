@@ -14,7 +14,7 @@ def records():
         "homelab:site_state": '(homelab:site_reporting == 1) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_expected_site_info))',
         "homelab:database_in_recovery": f'max by ({db}) (label_replace(cnpg_pg_replication_in_recovery{{source_site=""}}, "db_cluster", "$1", "pod", "(.+)-[0-9]+"))',
         "homelab:database_replay_lag_seconds": f'max by ({db}) (label_replace(cnpg_pg_replication_lag{{source_site=""}}, "db_cluster", "$1", "pod", "(.+)-[0-9]+"))',
-        "homelab:database_connections": f'sum by ({db}) (label_replace(cnpg_pg_stat_database_numbackends{{source_site=""}}, "db_cluster", "$1", "pod", "(.+)-[0-9]+"))',
+        "homelab:database_connections": f'sum by ({db}) (label_replace(cnpg_backends_total{{source_site=""}}, "db_cluster", "$1", "pod", "(.+)-[0-9]+"))',
         "homelab:database_backup_age_seconds": f'time() - max by ({db}) (label_replace(barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{{source_site=""}}, "db_cluster", "$1", "pod", "(.+)-[0-9]+"))',
         "homelab:database_backup_state": f'((homelab:database_backup_age_seconds >= bool 0) * (homelab:database_backup_age_seconds <= bool 108000) + 3 * (homelab:database_backup_age_seconds > bool 108000)) or on ({db}) (0 * {expected_db})',
         "homelab:recovery_state": '(3 * max by (k8s_cluster, app) (homelab_recovery_prerequisite_state == 3) / 3) or on (k8s_cluster, app) ((count by (k8s_cluster, app) (max by (k8s_cluster, app, prerequisite) (homelab_recovery_prerequisite_state{prerequisite=~"database|backup|restore|fence"}) == 1) == 4) / 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info{tier="warm"}))',
@@ -36,7 +36,10 @@ def rule_resource():
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster }}',
                          "description": "Scrape success does not establish fresh upstream evidence. Check the collector source and network access."}},
         {"alert": "ObservabilityExpectedDatabaseBackupMissing",
-         "expr": 'homelab:database_backup_state == 0', "for": "30m",
+         # Each site only answers for its own primaries: the peer's databases
+         # are Unknown here by design, and a replica cluster takes no backups.
+         "expr": 'homelab:database_backup_state{k8s_cluster="${CLUSTER_NAME}"} == 0 unless on (k8s_cluster, namespace, db_cluster) (homelab:database_in_recovery == 1)',
+         "for": "30m",
          "labels": {"severity": "warning"},
          "annotations": {"summary": "Expected database has no backup evidence",
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-data?var-cluster={{ $labels.k8s_cluster }}',
@@ -99,6 +102,20 @@ def fixtures():
          ], "promql_expr_test": [
              {"expr": "homelab:recovery_state", "eval_time": "5m", "exp_samples": [
                  {"labels": 'homelab:recovery_state{k8s_cluster="one",app="test"}', "value": 0}]},
+         ]},
+        {"name": "only a local primary without backup evidence alerts", "interval": "1m",
+         "input_series": [
+             {"series": 'homelab_expected_database_info{k8s_cluster="one",namespace="databases",db_cluster="missing-pg"}', "values": "1+0x40"},
+             {"series": 'homelab_expected_database_info{k8s_cluster="one",namespace="databases",db_cluster="replica-pg"}', "values": "1+0x40"},
+             {"series": 'homelab_expected_database_info{k8s_cluster="two",namespace="databases",db_cluster="peer-pg"}', "values": "1+0x40"},
+             {"series": 'cnpg_pg_replication_in_recovery{k8s_cluster="one",namespace="databases",pod="replica-pg-1"}', "values": "1+0x40"},
+         ], "alert_rule_test": [
+             {"alertname": "ObservabilityExpectedDatabaseBackupMissing", "eval_time": "35m", "exp_alerts": [
+                 {"exp_labels": {"severity": "warning", "k8s_cluster": "one", "namespace": "databases", "db_cluster": "missing-pg"},
+                  "exp_annotations": {"summary": "Expected database has no backup evidence",
+                                      "dashboard_url": "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-data?var-cluster=one",
+                                      "description": "No Barman plugin timestamp is available for this expected database. Another database's fresh backup cannot satisfy its recovery requirement."}},
+             ]},
          ]},
         {"name": "future backup evidence is unknown and peer federation is not counted twice", "interval": "1m",
          "input_series": [

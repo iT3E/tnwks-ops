@@ -22,8 +22,8 @@ spec:
       expr: max by (k8s_cluster, namespace, db_cluster) (label_replace(cnpg_pg_replication_lag{source_site=""},
         "db_cluster", "$1", "pod", "(.+)-[0-9]+"))
     - record: homelab:database_connections
-      expr: sum by (k8s_cluster, namespace, db_cluster) (label_replace(cnpg_pg_stat_database_numbackends{source_site=""},
-        "db_cluster", "$1", "pod", "(.+)-[0-9]+"))
+      expr: sum by (k8s_cluster, namespace, db_cluster) (label_replace(cnpg_backends_total{source_site=""}, "db_cluster",
+        "$1", "pod", "(.+)-[0-9]+"))
     - record: homelab:database_backup_age_seconds
       expr: time() - max by (k8s_cluster, namespace, db_cluster) (label_replace(barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{source_site=""},
         "db_cluster", "$1", "pod", "(.+)-[0-9]+"))
@@ -60,7 +60,8 @@ spec:
         description: Scrape success does not establish fresh upstream evidence. Check the collector source and network
           access.
     - alert: ObservabilityExpectedDatabaseBackupMissing
-      expr: homelab:database_backup_state == 0
+      expr: homelab:database_backup_state{k8s_cluster="${CLUSTER_NAME}"} == 0 unless on (k8s_cluster, namespace,
+        db_cluster) (homelab:database_in_recovery == 1)
       for: 30m
       labels:
         severity: warning

@@ -34,24 +34,24 @@ spec:
       rules:
         - record: smokeping:rtt_p90:rate30s
           expr: |
-            max by (host, name, role) (
-              histogram_quantile(0.9, sum by (le, host, name, role, pod) (rate(smokeping_response_duration_seconds_bucket[30s])))
+            max by (k8s_cluster, host, name, role) (
+              histogram_quantile(0.9, sum by (k8s_cluster, le, host, name, role, pod) (rate(smokeping_response_duration_seconds_bucket[30s])))
             )
         - record: smokeping:rtt_p50:rate1m
           expr: |
-            max by (host, name, role) (
-              histogram_quantile(0.5, sum by (le, host, name, role, pod) (rate(smokeping_response_duration_seconds_bucket[1m])))
+            max by (k8s_cluster, host, name, role) (
+              histogram_quantile(0.5, sum by (k8s_cluster, le, host, name, role, pod) (rate(smokeping_response_duration_seconds_bucket[1m])))
             )
         - record: smokeping:rtt_p90:rate1m
           expr: |
-            max by (host, name, role) (
-              histogram_quantile(0.9, sum by (le, host, name, role, pod) (rate(smokeping_response_duration_seconds_bucket[1m])))
+            max by (k8s_cluster, host, name, role) (
+              histogram_quantile(0.9, sum by (k8s_cluster, le, host, name, role, pod) (rate(smokeping_response_duration_seconds_bucket[1m])))
             )
         # Baseline: median over the last hour.
         - record: smokeping:rtt_p50:rate1h
           expr: |
-            avg by (host, name, role) (
-              histogram_quantile(0.5, sum by (le, host, name, role, pod) (rate(smokeping_response_duration_seconds_bucket[1h])))
+            avg by (k8s_cluster, host, name, role) (
+              histogram_quantile(0.5, sum by (k8s_cluster, le, host, name, role, pod) (rate(smokeping_response_duration_seconds_bucket[1h])))
             )
         # max(2x, +15ms), capped at 100ms.
         - record: smokeping:latency_threshold:1h
@@ -67,17 +67,17 @@ spec:
           expr: |
             clamp_min(
               1 - (
-                sum by (host, name, role) (rate(smokeping_response_duration_seconds_count[1m]))
+                sum by (k8s_cluster, host, name, role) (rate(smokeping_response_duration_seconds_count[1m]))
                 /
-                sum by (host, name, role) (rate(smokeping_requests_total[1m]))
+                sum by (k8s_cluster, host, name, role) (rate(smokeping_requests_total[1m]))
               ),
               0
             )
         # WAN throughput on the router's WAN port (ether1), bits/s, via mktxp.
         - record: wan:receive_bits:rate1m
-          expr: sum(rate(mktxp_interface_rx_byte_total{routerboard_name="sce-rtr01",name="ether1"}[1m])) * 8
+          expr: sum by (k8s_cluster) (rate(mktxp_interface_rx_byte_total{routerboard_name="sce-rtr01",name="ether1"}[1m])) * 8
         - record: wan:transmit_bits:rate1m
-          expr: sum(rate(mktxp_interface_tx_byte_total{routerboard_name="sce-rtr01",name="ether1"}[1m])) * 8
+          expr: sum by (k8s_cluster) (rate(mktxp_interface_tx_byte_total{routerboard_name="sce-rtr01",name="ether1"}[1m])) * 8
 
         # Who is using the WAN, from flow export (monitoring/flow-collector).
         # Per client and remote network (ASN), bits/s. 2m window because the

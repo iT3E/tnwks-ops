@@ -1,4 +1,9 @@
-"""Bounded Thanos workloads. Activation remains a separate post-migration change."""
+"""Bounded Thanos workloads.
+
+Query runs on both sites. The archive only exists on WSL-02, so its one Store and
+one Compactor sit beside it: a Store on site 1 would add no availability, because
+it could not read a Garage that is down either.
+"""
 
 from pathlib import Path
 
@@ -46,10 +51,10 @@ def workload(name, command, memory, request, cpu, args, persistent=None, server=
         values["service"]["app"]["ports"]["grpc"] = {"port": 10901}
     if persistent:
         values["persistence"]["data"] = {"type": "persistentVolumeClaim",
-            "storageClass": "${OBSERVABILITY_STORAGE_CLASS:=local-path-observability}", "accessMode": "ReadWriteOnce",
+            "storageClass": "${OBSERVABILITY_STORAGE_CLASS}", "accessMode": "ReadWriteOnce",
             "size": persistent, "globalMounts": [{"path": "/data"}]}
-    if command == "compact":
-        values["controllers"]["app"]["pod"]["nodeSelector"] = {"kubernetes.io/hostname": "${OBSERVABILITY_ARCHIVE_NODE:=homelab-wsl-02-worker-1}"}
+    if persistent:
+        values["controllers"]["app"]["pod"]["nodeSelector"] = {"kubernetes.io/hostname": "${OBSERVABILITY_ARCHIVE_NODE}"}
     return {"apiVersion": "helm.toolkit.fluxcd.io/v2", "kind": "HelmRelease",
         "metadata": {"name": name, "namespace": "monitoring"}, "spec": {
             "interval": "30m", "chart": {"spec": {"chart": "app-template", "version": "3.7.3",
@@ -67,9 +72,11 @@ def generated_platform():
         "--grpc-client-server-name=observability-store.monitoring.svc.cluster.local",
         "--endpoint-strict=thanos-sidecar-${CLUSTER_NAME}.monitoring.svc.cluster.local:10901",
         "--endpoint-strict=thanos-sidecar-${PEER_CLUSTER_NAME}.monitoring.svc.cluster.local:10901",
-        "--endpoint-strict=thanos-store-${CLUSTER_NAME}.monitoring.svc.cluster.local:10901",
+        "--endpoint-strict=observability-store.monitoring.svc.cluster.local:10901",
         "--query.replica-label=__replica__", "--query.timeout=30s", "--query.max-concurrent=2",
-        "--query.max-concurrent-select=2", "--store.response-timeout=10s", "--no-query.partial-response"])
+        # Partial on purpose: a lost site must not error every panel. Grafana
+        # shows the warning, and the evidence rules turn the gap into Unknown.
+        "--query.max-concurrent-select=2", "--store.response-timeout=10s", "--query.partial-response"])
     store = workload("thanos-store", "store", "1Gi", "256Mi", "50m", [
         *server_tls, "--objstore.config-file=/objstore/objstore.yaml", "--data-dir=/data",
         "--index-cache-size=128MB", "--chunk-pool-size=256MB", "--store.grpc.series-max-concurrency=4",
@@ -81,7 +88,7 @@ def generated_platform():
         "--retention.resolution-raw=35d", "--retention.resolution-5m=35d", "--retention.resolution-1h=35d",
         "--downsampling.disable"], "64Gi")
     result = {}
-    for part, resources in [("app", [query, store]), ("compactor", [compactor])]:
+    for part, resources in [("app", [query]), ("archive", [store, compactor])]:
         base = ROOT / "kubernetes/apps/monitoring/thanos-metrics" / part
         result[base / "helmrelease.yaml"] = "".join("---\n" + yaml.safe_dump(r, sort_keys=False, width=110) for r in resources)
         result[base / "kustomization.yaml"] = "---\n" + yaml.safe_dump({
@@ -94,12 +101,16 @@ def generated_platform():
                 "name": f"{name}-{cluster}", "annotations": {"service.cilium.io/global": "true"}},
                 "spec": {"ports": [{"name": "grpc" if port == 10901 else "http", "port": port,
                                     "targetPort": port}], "selector": {
-                    "app.kubernetes.io/name": "prometheus", "prometheus": "kube-prometheus-stack-prometheus",
+                    "app.kubernetes.io/name": "prometheus",
+                    "operator.prometheus.io/name": "kube-prometheus-stack-prometheus",
                     "k8s_cluster": cluster}}})
+    # Exists on both sites; the only backend is on WSL-02. Named after the
+    # certificate's SAN, and distinct from the chart's own `thanos-store` Service.
     services.append({"apiVersion": "v1", "kind": "Service", "metadata": {
-        "name": "thanos-store-${CLUSTER_NAME}"}, "spec": {"ports": [{"name": "grpc", "port": 10901}],
-        "selector": {"app.kubernetes.io/name": "thanos-store", "app.kubernetes.io/instance": "thanos-store",
-                     "app.kubernetes.io/component": "app", "k8s_cluster": "${CLUSTER_NAME}"}}})
+        "name": "observability-store", "annotations": {"service.cilium.io/global": "true"}},
+        "spec": {"ports": [{"name": "grpc", "port": 10901, "targetPort": 10901}],
+                 "selector": {"app.kubernetes.io/name": "thanos-store",
+                              "app.kubernetes.io/instance": "thanos-store"}}})
     base = ROOT / "kubernetes/apps/monitoring/thanos-metrics/app"
     result[base / "services.yaml"] = "".join("---\n" + yaml.safe_dump(s, sort_keys=False) for s in services)
     kust = yaml.safe_load(result[base / "kustomization.yaml"])

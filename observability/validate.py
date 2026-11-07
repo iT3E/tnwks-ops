@@ -11,6 +11,7 @@ from pathlib import Path
 import yaml
 
 from generate import ROOT
+from versions import THANOS
 
 
 def main():
@@ -21,7 +22,7 @@ def main():
         assert hashlib.sha256(args.chart.read_bytes()).hexdigest() == "03bd40e5feb9419ea88e183c7eb569198b9a3e1ec1c0009dfdc9058a05d0a9f1"
     command = ["kustomize", "build"] if shutil.which("kustomize") else ["kubectl", "kustomize"]
     for path in ["grafana/dashboards", "observability-evidence/app", "garage/app",
-                 "observability-pki/app", "thanos-metrics/app", "thanos-metrics/compactor",
+                 "observability-pki/app", "thanos-metrics/app", "thanos-metrics/archive",
                  "observability-evidence/rules"]:
         rendered = subprocess.run(command + [str(ROOT / "kubernetes/apps/monitoring" / path)],
                                   capture_output=True, text=True, check=True).stdout
@@ -42,7 +43,9 @@ def main():
             for obj in objects:
                 if obj["kind"] != "HelmRelease":
                     continue
-                params = {"CLUSTER_NAME": "homelab-wsl", "PEER_CLUSTER_NAME": "homelab-wsl-02"}
+                params = {"CLUSTER_NAME": "homelab-wsl", "PEER_CLUSTER_NAME": "homelab-wsl-02",
+                          "OBSERVABILITY_STORAGE_CLASS": "local-path",
+                          "OBSERVABILITY_ARCHIVE_NODE": "homelab-wsl-02-worker-1"}
 
                 def replace(match):
                     key, default = match.groups()
@@ -71,12 +74,17 @@ def main():
                                str(ROOT / "kubernetes/clusters" / cluster / "apps")],
                                capture_output=True, text=True, check=True).stdout
         names = {obj["metadata"]["name"] for obj in yaml.safe_load_all(graph) if obj}
-        assert {"observability-pki", "observability-evidence"} <= names
+        assert {"observability-pki", "observability-evidence", "observability-rules", "thanos-metrics"} <= names
         if cluster == "wsl":
-            assert not names & {"observability-garage", "thanos-metrics-compactor"}
+            assert not names & {"observability-garage", "thanos-metrics-archive"}
         else:
-            assert "observability-garage" in names
+            assert {"observability-garage", "thanos-metrics-archive"} <= names
     print("Per-site archive placement passed for both cluster graphs")
+    prometheus = yaml.safe_load((ROOT / "kubernetes/apps/monitoring/kube-prometheus-stack/app/helmrelease.yaml").read_text())
+    assert prometheus["spec"]["values"]["prometheus"]["prometheusSpec"]["thanos"]["image"] == THANOS
+    query = (ROOT / "kubernetes/apps/monitoring/thanos-metrics/app/helmrelease.yaml").read_text()
+    assert "--no-query.partial-response" not in query, "a lost site must not error every panel"
+    print("Sidecar image and partial-response contract passed")
 
 
 if __name__ == "__main__":

@@ -33,6 +33,9 @@ resources:
   - ../../../apps/monitoring/namespace.yaml
   - ../../../apps/monitoring/observability-pki/ks.yaml
   - ../../../apps/monitoring/observability-evidence/ks.yaml
+  - ../../../apps/monitoring/observability-evidence/rules-ks.yaml
+  - ../../../apps/monitoring/thanos-metrics/ks.yaml
+  - ../../../apps/monitoring/thanos-metrics/archive-ks.yaml
   - ./observability-garage-ks.yaml
   - ./alertmanager-ks.yaml
   - ../../../apps/monitoring/kube-prometheus-stack/ks.yaml
@@ -193,6 +196,25 @@ patches:
                     memory: 1Gi
                   limits:
                     memory: 2Gi
+              # Native ext4 on the roomy C: host. No subPath: kubelet would
+              # create it root-owned, and hostPath volumes ignore fsGroup.
+              - op: replace
+                path: /spec/values/prometheus/prometheusSpec/storageSpec
+                value:
+                  disableMountSubPath: true
+                  volumeClaimTemplate:
+                    spec:
+                      storageClassName: local-path
+                      accessModes: [ReadWriteOnce]
+                      resources:
+                        requests:
+                          storage: 40Gi
+              - op: replace
+                path: /spec/values/prometheus/prometheusSpec/retention
+                value: 15d
+              - op: replace
+                path: /spec/values/prometheus/prometheusSpec/retentionSize
+                value: 30GB
   - patch: |-
       apiVersion: kustomize.toolkit.fluxcd.io/v1
       kind: Kustomization

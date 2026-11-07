@@ -155,7 +155,7 @@ def main():
                 "--endpoint-strict=127.0.0.1:13108", "--query.max-concurrent=2", "--query.timeout=5s",
                 "--grpc-client-tls-secure", "--grpc-client-tls-ca=/tls/tls.crt",
                 "--grpc-client-tls-cert=/tls/tls.crt", "--grpc-client-tls-key=/tls/tls.key",
-                "--no-query.partial-response"], tls_mounts)
+                "--query.partial-response"], tls_mounts)
             query = "http://127.0.0.1:13109/api/v1/query?" + urllib.parse.urlencode({
                 "query": "observability_archive_fixture", "time": start + 3600, "partial_response": "false"})
 
@@ -194,6 +194,17 @@ def main():
                     raise AssertionError("missing StoreAPI must not become a successful empty history")
 
             eventually(verify_missing_store)
+
+            # Dashboards take the default: a dead backend degrades to a visible
+            # warning instead of erroring every panel, and never to silence.
+            partial = "http://127.0.0.1:13109/api/v1/query?" + urllib.parse.urlencode({
+                "query": "observability_archive_fixture", "time": start + 3600})
+
+            def verify_partial_warning():
+                result = json.loads(get(partial))
+                assert result["status"] == "success" and result.get("warnings"), result
+
+            eventually(verify_partial_warning)
             print("PASS: S3 roundtrip/range/list/delete; verified S3 HTTPS and StoreAPI mutual TLS; Thanos historical query; Garage restart and SIGKILL recovery; Store cache rebuild")
         finally:
             for name in reversed(started):
