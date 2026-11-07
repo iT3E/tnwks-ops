@@ -77,3 +77,18 @@ spec:
   selector:
     app.kubernetes.io/name: thanos-store
     app.kubernetes.io/instance: thanos-store
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: observability-compactor
+  annotations:
+    service.cilium.io/global: 'true'
+spec:
+  ports:
+  - name: http
+    port: 10902
+    targetPort: 10902
+  selector:
+    app.kubernetes.io/name: thanos-compactor
+    app.kubernetes.io/instance: thanos-compactor

@@ -145,6 +145,21 @@ spec:
       apiserver:
         kvstoremesh:
           enabled: true
+        # The mesh API and KVStoreMesh: remote-cluster readiness, failures and
+        # sync errors (the "mesh" hop of homelab:network_path_state). Of etcd's
+        # ~1,600 series, only leader and size.
+        metrics:
+          serviceMonitor:
+            enabled: ${CILIUM_SERVICEMONITOR_ENABLED}
+            interval: 1m
+            kvstoremesh:
+              interval: 1m
+            etcd:
+              interval: 1m
+              metricRelabelings:
+                - sourceLabels: [__name__]
+                  regex: etcd_server_has_leader|etcd_server_leader_changes_seen_total|etcd_mvcc_db_total_size_in_bytes
+                  action: keep
         service:
           type: LoadBalancer
           loadBalancerIP: "${CLUSTERMESH_APISERVER_IP:=}"

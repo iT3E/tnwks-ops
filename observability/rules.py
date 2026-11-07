@@ -27,6 +27,13 @@ def records():
         "homelab:database_backup_state": f'((homelab:database_backup_age_seconds >= bool 0) * (homelab:database_backup_age_seconds <= bool 108000) + 3 * (homelab:database_backup_age_seconds > bool 108000)) or on ({db}) (0 * {expected_db})',
         "homelab:recovery_state": '(3 * max by (k8s_cluster, app) (' + fresh('homelab_recovery_prerequisite_state') + ' == 3) / 3) or on (k8s_cluster, app) ((count by (k8s_cluster, app) (max by (k8s_cluster, app, prerequisite) (' + fresh('homelab_recovery_prerequisite_state{prerequisite=~"database|backup|restore|fence"}') + ') == 1) == 4) / 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info{tier="warm"}))',
         "homelab:local_history_seconds": 'time() - min by (k8s_cluster) (prometheus_tsdb_lowest_timestamp_seconds)',
+        # How far behind the archive is: the newest sample it holds for each
+        # site. Prometheus cuts 2 h blocks once its head spans 3 h, so 1-3 h is
+        # normal; more means uploads, the bucket or the Compactor's sync stalled.
+        "homelab:archive_lag_seconds": 'time() - max by (k8s_cluster) (' + fresh('homelab_archive_newest_sample_timestamp_seconds') + ')',
+        # History the archive can answer for, per site (Pyrra's 28-35 d windows).
+        "homelab:archive_history_seconds": 'time() - min by (k8s_cluster) (' + fresh('homelab_archive_oldest_sample_timestamp_seconds') + ')',
+        "homelab:archive_free_ratio": 'min by (k8s_cluster) (garage_local_disk_avail{volume="data"} / garage_local_disk_total{volume="data"})',
         "homelab:unuploaded_block_age_seconds": 'time() - max by (k8s_cluster) (thanos_objstore_bucket_last_successful_upload_time{job=~".*thanos-discovery"} > 0)',
         "homelab:archive_state": '(3 - 2 * min by (k8s_cluster) (probe_success{observability_target="archive"} and (time() - timestamp(probe_success{observability_target="archive"})) < 180)) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_observer_info))',
         # The broker accepted the collector's login (MQTT), from each site. A
@@ -43,6 +50,11 @@ def records():
             f' or (({ready} < {desired}) * 0 + 3)'
             ' or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))'),
         **network_records(),
+        # Each site's collector reaches the shared-VIP names the way a client does
+        # (router DNS, verified TLS, the ingress routing the host). A pod reaches
+        # its own site's ingress for either VIP, so this is per site, by name.
+        "homelab:ingress_state": '(3 - 2 * min by (k8s_cluster, name) (probe_success{observability_target="ingress"} and (time() - timestamp(probe_success{observability_target="ingress"})) < 180)) or on (k8s_cluster, name) (0 * max by (k8s_cluster, name) (homelab_expected_ingress_info))',
+        "homelab:ingress_cert_remaining_seconds": 'min by (k8s_cluster, name) (homelab_ingress_cert_expiry_timestamp_seconds) - time()',
         # Content probe from the site that runs the app; Standby (4) where it's
         # deliberately at zero; Unknown where neither is observed.
         "homelab:service_state": '(3 - 2 * min by (k8s_cluster, app) (probe_success{observability_target="service"} and (time() - timestamp(probe_success{observability_target="service"})) < 180)) or on (k8s_cluster, app) (homelab:workload_state == 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))',
@@ -59,7 +71,8 @@ def network_records():
     sessions). node-bgp: the Cilium agents' sessions with the distro, all
     (healthy), some (degraded) or none (failed). The router is observed by
     homelab-wsl's mktxp only, so homelab-wsl-02's rules leave those Unknown and
-    the dashboards keep the real answer.
+    the dashboards keep the real answer. mesh: the site's Cilium agents and its
+    KVStoreMesh both have the other cluster ready.
     """
     sites = inventory()["sites"]
 
@@ -78,14 +91,34 @@ def network_records():
     nodes = 'cilium_bgp_control_plane_session_state{source_site=""}'
     node_bgp = (f'3 - (min by (k8s_cluster) ({nodes}) == bool 1)'
                 f' - (max by (k8s_cluster) ({nodes}) == bool 1)')
+    # Tagged apart first: `or` would drop KVStoreMesh's series, whose labels
+    # match the agents'.
+    mesh = ('3 - 2 * (min by (k8s_cluster) ('
+            'label_replace(cilium_clustermesh_remote_cluster_readiness_status{source_site=""}, "reader", "agent", "", "")'
+            ' or label_replace(cilium_kvstoremesh_remote_cluster_readiness_status{source_site=""}, "reader", "kvstoremesh", "", "")'
+            ') == bool 1)')
     expected = "max by (k8s_cluster) (homelab_expected_site_info)"
-    known = " or ".join(hop(n, e) for n, e in (("tunnel", tunnel), ("router-bgp", router_bgp), ("node-bgp", node_bgp)))
-    unknown = " or ".join(hop(n, f"0 * {expected}") for n in ("tunnel", "router-bgp", "node-bgp"))
+    hops = (("tunnel", tunnel), ("router-bgp", router_bgp), ("node-bgp", node_bgp), ("mesh", mesh))
+    known = " or ".join(hop(n, e) for n, e in hops)
+    unknown = " or ".join(hop(n, f"0 * {expected}") for n, _ in hops)
+    # Which site the router sends each shared VIP to: its preferred site while
+    # that site's session is up, else the other one while its session is up.
+    # Inferred from live sessions and the declared local preference (100/50),
+    # not read from the router's route table. 1 routed, 0 not, absent Unknown.
+    session = 'min(homelab:network_path_state{{hop="router-bgp",k8s_cluster="{}"}} > 0)'
+    routes = []
+    for vip in inventory()["vips"]:
+        first = vip["preferred"]
+        other = next(s["cluster"] for s in sites if s["cluster"] != first)
+        for site, expr in ((first, f"{session.format(first)} == bool 1"),
+                           (other, f"({session.format(other)} == bool 1) * ({session.format(first)} != bool 1)")):
+            routes.append(f'label_replace(label_replace({expr}, "k8s_cluster", "{site}", "", ""), "vip", "{vip["address"]}", "", "")')
     prefixes = " or ".join(per_site(
         f'sum(mktxp_bgp_prefix_count{{name=~"{s["router_peer"]}(-[0-9]+)?"}})', s) for s in sites)
     return {
         "homelab:network_path_state": f"({known}) or on (k8s_cluster, hop) ({unknown})",
         "homelab:router_bgp_prefixes": prefixes,
+        "homelab:shared_vip_route": " or ".join(routes),
     }
 
 
@@ -112,6 +145,26 @@ def rule_resource():
          "annotations": {"summary": "The WSL-02 metrics archive is unavailable",
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster }}',
                          "description": "Local metrics and alerts remain available. Restore archive uploads before retained local blocks expire."}},
+        {"alert": "ObservabilityIngressNameFailing", "expr": 'homelab:ingress_state == 3',
+         "for": "15m", "labels": {"severity": "warning"},
+         "annotations": {"summary": "A shared-VIP name fails from {{ $labels.k8s_cluster }}: {{ $labels.name }}",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": "That site's collector couldn't use the name as a client would: the router's DNS answer, the certificate, or the site's ingress routing the host. homelab_ingress_dns_match and homelab_ingress_http_status say which."}},
+        {"alert": "ObservabilityIngressCertificateExpiring", "expr": 'homelab:ingress_cert_remaining_seconds < 14 * 86400',
+         "for": "1h", "labels": {"severity": "warning"},
+         "annotations": {"summary": "The certificate for {{ $labels.name }} on {{ $labels.k8s_cluster }} expires within 14 days",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": "cert-manager renews at 30 days left. Check that site's Certificate and its ACME challenge."}},
+        {"alert": "ObservabilityArchiveBehind", "expr": 'homelab:archive_lag_seconds > 14400',
+         "for": "30m", "labels": {"severity": "warning"},
+         "annotations": {"summary": "The metrics archive's newest data for a site is over 4 hours old",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": "Normal is 1-3 hours. Check that site's Thanos sidecar uploads (thanos_shipper_upload_failures_total) and the Compactor's bucket sync."}},
+        {"alert": "ObservabilityArchiveSpaceLow", "expr": 'homelab:archive_free_ratio < 0.1',
+         "for": "1h", "labels": {"severity": "warning"},
+         "annotations": {"summary": "The metrics archive has under 10% free space",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": "Garage shares its disk with the WSL-02 node. Shorten the Compactor's retention or free space before uploads fail."}},
     ]
     return {"apiVersion": "monitoring.coreos.com/v1", "kind": "PrometheusRule",
             "metadata": {"name": "homelab-observability", "namespace": "monitoring"},
@@ -210,6 +263,17 @@ def fixtures():
              {"expr": "homelab:archive_state", "eval_time": "4m", "exp_samples": [
                  {"labels": 'homelab:archive_state{k8s_cluster="one"}', "value": 0}]},
          ]},
+        {"name": "archive lag is per source site, and Unknown once the index goes stale", "interval": "1m",
+         "input_series": [
+             {"series": 'homelab_archive_newest_sample_timestamp_seconds{k8s_cluster="one",observer_cluster="a"}', "values": "0+0x2"},
+             {"series": 'homelab_archive_newest_sample_timestamp_seconds{k8s_cluster="one",observer_cluster="b"}', "values": "-60+0x2"},
+         ], "promql_expr_test": [
+             # Two observers report the same archive; lag is per source site and
+             # goes absent (Unknown) once the index stops being read.
+             {"expr": "homelab:archive_lag_seconds", "eval_time": "2m", "exp_samples": [
+                 {"labels": 'homelab:archive_lag_seconds{k8s_cluster="one"}', "value": 120}]},
+             {"expr": "homelab:archive_lag_seconds", "eval_time": "6m", "exp_samples": []},
+         ]},
         {"name": "network path by hop: stale tunnel, missing router session, partial node sessions", "interval": "1m",
          "input_series": [
              {"series": 'homelab_expected_site_info{k8s_cluster="homelab-wsl"}', "values": "1+0x10"},
@@ -220,6 +284,8 @@ def fixtures():
              {"series": 'mktxp_bgp_established{name="wsl-site1-1"}', "values": "1+0x10"},
              {"series": 'cilium_bgp_control_plane_session_state{k8s_cluster="homelab-wsl",node="a"}', "values": "1+0x10"},
              {"series": 'cilium_bgp_control_plane_session_state{k8s_cluster="homelab-wsl",node="b"}', "values": "0+0x10"},
+             {"series": 'cilium_clustermesh_remote_cluster_readiness_status{k8s_cluster="homelab-wsl",target_cluster="homelab-wsl-02"}', "values": "1+0x10"},
+             {"series": 'cilium_kvstoremesh_remote_cluster_readiness_status{k8s_cluster="homelab-wsl",target_cluster="homelab-wsl-02"}', "values": "0+0x10"},
          ], "promql_expr_test": [
              {"expr": "homelab:network_path_state", "eval_time": "5m", "exp_samples": [
                  {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="tunnel"}', "value": 1},
@@ -228,6 +294,35 @@ def fixtures():
                  {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="router-bgp"}', "value": 3},
                  {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="node-bgp"}', "value": 2},
                  {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="node-bgp"}', "value": 0},
+                 # The agents see the peer, KVStoreMesh doesn't: failed, not averaged.
+                 {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl",hop="mesh"}', "value": 3},
+                 {"labels": 'homelab:network_path_state{k8s_cluster="homelab-wsl-02",hop="mesh"}', "value": 0},
+             ]},
+         ]},
+        {"name": "shared VIPs follow the preferred site's session, else the other's", "interval": "1m",
+         "input_series": [
+             {"series": 'mktxp_system_uptime{k8s_cluster="homelab-wsl"}', "values": "100+60x10"},
+             {"series": 'mktxp_bgp_established{name="wsl-site2-1"}', "values": "1+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:shared_vip_route", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl",vip="10.10.95.10"}', "value": 0},
+                 {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl-02",vip="10.10.95.10"}', "value": 1},
+                 {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl",vip="10.10.95.200"}', "value": 0},
+                 {"labels": 'homelab:shared_vip_route{k8s_cluster="homelab-wsl-02",vip="10.10.95.200"}', "value": 1},
+             ]},
+         ]},
+        {"name": "ingress names: passing, failing, unobserved", "interval": "1m",
+         "input_series": [
+             *[{"series": f'homelab_expected_ingress_info{{k8s_cluster="{site}",name="{name}"}}', "values": "1+0x10"}
+               for site in ("one", "two") for name in ("a", "b")],
+             {"series": 'probe_success{k8s_cluster="one",name="a",observability_target="ingress"}', "values": "1+0x10"},
+             {"series": 'probe_success{k8s_cluster="one",name="b",observability_target="ingress"}', "values": "0+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:ingress_state", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:ingress_state{k8s_cluster="one",name="a"}', "value": 1},
+                 {"labels": 'homelab:ingress_state{k8s_cluster="one",name="b"}', "value": 3},
+                 {"labels": 'homelab:ingress_state{k8s_cluster="two",name="a"}', "value": 0},
+                 {"labels": 'homelab:ingress_state{k8s_cluster="two",name="b"}', "value": 0},
              ]},
          ]},
         {"name": "an unobserved router leaves the router hops Unknown", "interval": "1m",

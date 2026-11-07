@@ -111,6 +111,13 @@ def generated_platform():
         "spec": {"ports": [{"name": "grpc", "port": 10901, "targetPort": 10901}],
                  "selector": {"app.kubernetes.io/name": "thanos-store",
                               "app.kubernetes.io/instance": "thanos-store"}}})
+    # The Compactor's block index (/api/v1/blocks), which each site's evidence
+    # collector reads for archive lag, history and size. Backend on WSL-02 only.
+    services.append({"apiVersion": "v1", "kind": "Service", "metadata": {
+        "name": "observability-compactor", "annotations": {"service.cilium.io/global": "true"}},
+        "spec": {"ports": [{"name": "http", "port": 10902, "targetPort": 10902}],
+                 "selector": {"app.kubernetes.io/name": "thanos-compactor",
+                              "app.kubernetes.io/instance": "thanos-compactor"}}})
     base = ROOT / "kubernetes/apps/monitoring/thanos-metrics/app"
     result[base / "services.yaml"] = "".join("---\n" + yaml.safe_dump(s, sort_keys=False) for s in services)
     kust = yaml.safe_load(result[base / "kustomization.yaml"])

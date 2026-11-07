@@ -55,6 +55,10 @@ spec:
         name: "nginx-internal"
         default: false
         controllerValue: "k8s.io/ingress-nginx-internal"
+      # Every response names the site whose ingress served it, for the
+      # evidence collector's ingress probes (observability-implementation.md).
+      addHeaders:
+        X-Homelab-Site: "${CLUSTER_NAME}"
       config:
         client-header-timeout: 120
         client-body-buffer-size: "100M"

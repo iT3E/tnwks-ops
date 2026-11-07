@@ -175,6 +175,46 @@ def test_recovery_prerequisites_from_evidence_only(small_inventory, monkeypatch)
     assert 'prerequisite="fence"' not in out
 
 
+def test_fence_needs_a_fresh_attestation_from_the_other_site(small_inventory, monkeypatch):
+    import json
+    import collector
+    now = 2_000_000_000
+    small_inventory["sites"][1]["probe_url"] = "http://prometheus-two.monitoring.svc.cluster.local:9090/-/ready"
+    status = {"test": json.dumps({"lease": "none", "result": "clear", "checked": now - 30}),
+              "unknown-app": json.dumps({"lease": "none", "result": "clear", "checked": now}),
+              "TEST_REPLICAS": "0"}
+
+    class Api(FakeApi):
+        def get(self, path):
+            if "site-lease-fence-status" in path:
+                return {"items": [{"data": status}]}
+            return super().get(path)
+
+    peer = {}
+    asked = []
+    monkeypatch.setattr(collector, "peer_attestations", lambda base, cluster: (asked.append((base, cluster)), peer)[1])
+    monkeypatch.setattr(collector, "lease_txt", lambda _: "none")
+
+    def collect():
+        return Collector(Api(), small_inventory, "one", clock=lambda: now).collect().decode()
+
+    out = collect()
+    # This site's own attestation is published; it never vouches for this site.
+    assert 'homelab_fence_last_verified_timestamp_seconds{app="test",k8s_cluster="one",observer_cluster="one"} 1999999970' in out
+    assert 'homelab_fence_attestation_info{app="test",k8s_cluster="one",lease="none",observer_cluster="one",result="clear"} 1' in out
+    assert "unknown-app" not in out and "TEST_REPLICAS" not in out
+    assert asked == [("http://prometheus-two.monitoring.svc.cluster.local:9090", "two")]
+    assert 'prerequisite="fence"' not in out  # nothing from the other site
+    peer["test"] = now - 600
+    assert 'prerequisite="fence"' not in collect()  # stale
+    peer["test"] = now + 600
+    assert 'prerequisite="fence"' not in collect()  # from the future
+    peer["test"] = now - 90
+    assert 'homelab_recovery_prerequisite_state{app="test",k8s_cluster="one",observer_cluster="one",prerequisite="fence"} 1' in collect()
+    status["test"] = json.dumps({"lease": "none", "result": "clear", "checked": now + 3600})
+    assert "homelab_fence_last_verified_timestamp_seconds" not in collect()  # a future attestation isn't published
+
+
 @pytest.mark.parametrize("scenario", ["unhealthy", "future-backup", "future-restore", "running-without-drill"])
 def test_recovery_never_substitutes_readiness_or_future_timestamps_for_proof(small_inventory, monkeypatch, scenario):
     import datetime
@@ -250,6 +290,81 @@ def test_mqtt_probe_logs_in_and_reads_the_sys_client_count():
     assert collector.mqtt_probe("127.0.0.1", "observability", "wrong", port=port)[:2] == (False, None)
     thread.join()
     server.close()
+
+
+def test_archive_index_summarizes_blocks_per_source_site(tmp_path):
+    import collector
+
+    def block(cluster, lo, hi, size):
+        return {"minTime": lo * 1000, "maxTime": hi * 1000,
+                "thanos": {"labels": {"cluster": cluster}, "files": [{"size_bytes": size}, {}]}}
+
+    index = tmp_path / "blocks.json"
+    index.write_text(json.dumps({"status": "success", "data": {"blocks": [
+        block("one", 100, 200, 5), block("one", 200, 400, 7), block("two", 50, 90, 1),
+        {"minTime": 0, "maxTime": 999000, "thanos": {"labels": {}}}]}}))
+    assert collector.archive_index(index.as_uri()) == {
+        "one": {"newest": 400, "oldest": 100, "blocks": 2, "bytes": 12},
+        "two": {"newest": 90, "oldest": 50, "blocks": 1, "bytes": 1}}
+    assert collector.archive_index((tmp_path / "missing.json").as_uri()) is None
+
+
+def test_ingress_probe_checks_dns_tls_routing_and_reads_the_serving_site(tmp_path):
+    import shutil
+    import ssl
+    import subprocess
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    import collector
+
+    if not shutil.which("openssl"):
+        pytest.skip("openssl not installed")
+    key, cert = tmp_path / "key.pem", tmp_path / "cert.pem"
+    subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2",
+                    "-subj", "/CN=app.test", "-addext", "subjectAltName=DNS:app.test",
+                    "-keyout", key, "-out", cert], check=True, capture_output=True)
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            known = self.headers["Host"] == "app.test"
+            self.send_response(302 if known else 404)
+            self.send_header(collector.SITE_HEADER, "site-b")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, *_):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    server_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    server_context.minimum_version = ssl.TLSVersion.TLSv1_2
+    server_context.load_cert_chain(cert, key)
+    server.socket = server_context.wrap_socket(server.socket, server_side=True)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    client = ssl.create_default_context(cafile=str(cert))
+    port = server.server_address[1]
+
+    def probe(host="app.test", answer=("127.0.0.1",), vip="127.0.0.1", context=client):
+        return collector.ingress_probe(host, vip, port=port, context=context, resolve=lambda _: answer)
+
+    result = probe()
+    assert (result["ok"], result["dns"], result["status"], result["served_by"]) == (True, True, 302, "site-b")
+    assert result["expiry"] > 0
+    assert probe(vip="10.0.0.1")["ok"] is False  # the router answered another address
+    assert probe(context=ssl.create_default_context())["ok"] is False  # untrusted certificate
+    status = {"code": 404}
+
+    def default_backend(self):
+        self.send_response(status["code"])
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+    Handler.do_GET = default_backend
+    assert probe()["ok"] is False
+    status["code"] = 503
+    assert probe()["ok"] is False
+    status["code"] = 400  # the app's own answer still proves the route
+    assert probe()["ok"] is True
+    server.shutdown()
 
 
 def test_failed_collection_retains_old_success_time_without_cached_healthy_samples(small_inventory):

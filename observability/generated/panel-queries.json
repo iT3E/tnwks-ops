@@ -338,6 +338,14 @@
   {
     "dashboard": "tnwks-network",
     "tab": "BGP and mesh",
+    "title": "Shared VIP routes",
+    "expr": "max by (k8s_cluster, vip) (homelab:shared_vip_route{k8s_cluster=~\"$cluster\"})",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
     "title": "Routes received per site",
     "expr": "max by (k8s_cluster) (homelab:router_bgp_prefixes{k8s_cluster=~\"$cluster\"})",
     "unit": "short",
@@ -357,6 +365,30 @@
     "title": "Mesh connectivity",
     "expr": "cilium_clustermesh_remote_cluster_readiness_status{k8s_cluster=~\"$cluster\"}",
     "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
+    "title": "KVStoreMesh remote cluster",
+    "expr": "max by (k8s_cluster, target_cluster) (cilium_kvstoremesh_remote_cluster_readiness_status{k8s_cluster=~\"$cluster\"})",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
+    "title": "Mesh sync errors",
+    "expr": "sum by (k8s_cluster, scope) (rate(cilium_kvstoremesh_kvstore_sync_errors_total{k8s_cluster=~\"$cluster\"}[$__rate_interval]))",
+    "unit": "ops",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "BGP and mesh",
+    "title": "Mesh remote failures",
+    "expr": "max by (k8s_cluster, target_cluster) (cilium_kvstoremesh_remote_cluster_failures{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
     "kiosk": false
   },
   {
@@ -532,6 +564,30 @@
     "tab": "User paths",
     "title": "HTTP p95 duration",
     "expr": "histogram_quantile(0.95, sum by (k8s_cluster, ingress, le) (rate(nginx_ingress_controller_request_duration_seconds_bucket{k8s_cluster=~\"$cluster\"}[$__rate_interval])))",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Shared-VIP names",
+    "title": "Name state by site",
+    "expr": "max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Shared-VIP names",
+    "title": "Served by",
+    "expr": "max by (k8s_cluster, name, served_cluster) (homelab_ingress_served_by_info{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-apps",
+    "tab": "Shared-VIP names",
+    "title": "Name certificate remaining",
+    "expr": "max by (k8s_cluster, name) (homelab:ingress_cert_remaining_seconds{k8s_cluster=~\"$cluster\"})",
     "unit": "s",
     "kiosk": false
   },
@@ -738,7 +794,31 @@
   {
     "dashboard": "tnwks-observability",
     "tab": "Archive and delivery",
-    "title": "Unuploaded block age",
+    "title": "Archive lag",
+    "expr": "homelab:archive_lag_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Archive and delivery",
+    "title": "Archive history",
+    "expr": "homelab:archive_history_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Archive and delivery",
+    "title": "Archive free space",
+    "expr": "homelab:archive_free_ratio{k8s_cluster=~\"$cluster\"}",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Archive and delivery",
+    "title": "Time since last upload",
     "expr": "homelab:unuploaded_block_age_seconds{k8s_cluster=~\"$cluster\"}",
     "unit": "s",
     "kiosk": false
@@ -769,7 +849,39 @@
   },
   {
     "dashboard": "tnwks-alerts",
-    "tab": "Delivery",
+    "tab": "Alertmanager",
+    "title": "Alerts in Alertmanager",
+    "expr": "sum by (k8s_cluster, state) (alertmanager_alerts{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-alerts",
+    "tab": "Alertmanager",
+    "title": "Active silences",
+    "expr": "max by (k8s_cluster) (alertmanager_silences{k8s_cluster=~\"$cluster\",state=\"active\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-alerts",
+    "tab": "Alertmanager",
+    "title": "Configuration loaded",
+    "expr": "min by (k8s_cluster) (alertmanager_config_last_reload_successful{k8s_cluster=~\"$cluster\"})",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-alerts",
+    "tab": "Alertmanager",
+    "title": "Notifications sent",
+    "expr": "sum by (k8s_cluster, integration) (increase(alertmanager_notifications_total{k8s_cluster=~\"$cluster\"}[1h]))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-alerts",
+    "tab": "Alertmanager",
     "title": "Failed notifications",
     "expr": "sum by (k8s_cluster, integration) (increase(alertmanager_notifications_failed_total{k8s_cluster=~\"$cluster\"}[1h]))",
     "unit": "short",

@@ -34,11 +34,11 @@ PRODUCERS = {
     "prometheus_": "Prometheus self-monitoring",
     "alertmanager_": "Alertmanager self-monitoring",
     "thanos_": "Thanos component metrics",
+    "garage_": "Garage admin metrics (WSL-02 archive)",
     "ALERTS": "local Prometheus alert rules (current state)",
     "up": "Prometheus scrape status",
 }
 PLANNED = {
-    "homelab_fence_last_verified_timestamp_seconds": "per-app former-primary fence attestation is not implemented",
     "homelab_house_state": "household aggregate recording rules and isolated Grafana are not deployed",
 }
 

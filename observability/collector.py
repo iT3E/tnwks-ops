@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import http.client
 import json
 import logging
 import math
@@ -119,6 +120,11 @@ class Collector:
                 # This exporter cannot certify a database fence or an application restore
                 # from a Ready workload. Unsupported evidence is deliberately absent.
 
+        for name in self.inventory.get("ingress", []):
+            for site in self.inventory["sites"]:
+                metrics.add("homelab_expected_ingress_info", 1, k8s_cluster=site["cluster"],
+                            name=name["name"], vip=name["vip"], observer_cluster=self.cluster)
+
         for database in self.expected_databases():
             metrics.add("homelab_expected_database_info", 1, app=database["app"],
                         namespace=database["namespace"], db_cluster=database["name"],
@@ -208,8 +214,11 @@ class Collector:
         backup: each has a completed base backup here within 30 h, never in the future.
         restore: a completed restore of each required PVC here within 8 days. A
           running app is not a restore drill; apps without copied PVCs need no drill.
-        fence: a lease naming this site blocks promotion. A successful fleet fence
-          Job cannot attest that it read this app's lease or fenced a former primary.
+        fence: a lease naming this site blocks promotion. Otherwise it's met only
+          by a fresh attestation from the other site's fence: that it read this
+          app's lease within 5 minutes and nothing there can write against it
+          (site-lease-fence-status, read through that site's Prometheus). A
+          successful fleet fence Job alone proves neither.
         """
         now = self.clock()
         warm = [app for app in self.inventory["apps"] if app.get("tier") == "warm"]
@@ -227,6 +236,24 @@ class Collector:
         fence_job = next((obj for obj in self.api.get("/apis/batch/v1/namespaces/databases/cronjobs").get("items", [])
                           if obj["metadata"]["name"] == "site-lease-fence"), None)
         fence_ok = timestamp((fence_job or {}).get("status", {}).get("lastSuccessfulTime"))
+        holders = {site["cluster"] for site in self.inventory["sites"]} | {"none"}
+        found = self.api.get("/api/v1/namespaces/databases/configmaps"
+                             "?fieldSelector=metadata.name%3Dsite-lease-fence-status").get("items", [])
+        for app in warm:
+            try:
+                value = json.loads(((found[0].get("data") or {}) if found else {})[app["name"]])
+                checked = float(value["checked"])
+            except (KeyError, ValueError, TypeError):
+                continue
+            if value.get("lease") in holders and value.get("result") in FENCE_RESULTS and checked <= now + 60:
+                scope = dict(labels, app=app["name"])
+                metrics.add("homelab_fence_last_verified_timestamp_seconds", checked, **scope)
+                metrics.add("homelab_fence_attestation_info", 1, lease=value["lease"],
+                            result=value["result"], **scope)
+        peers = [site for site in self.inventory["sites"]
+                 if site["cluster"] != self.cluster and site.get("probe_url")]
+        attestations = [peer_attestations(site["probe_url"].rsplit("/-/", 1)[0], site["cluster"]) or {}
+                        for site in peers]
         for app in warm:
             scope = dict(labels, app=app["name"])
 
@@ -272,14 +299,20 @@ class Collector:
                 metrics.add("homelab_site_lease_blocks_local", int(lease == self.cluster), **scope)
                 if lease == self.cluster:
                     state("fence", 3)
-                # No positive fence evidence: the CronJob can succeed even when
-                # every DNS lookup failed. A current TXT answer cannot backfill it.
+                elif peers and all(-60 <= now - peer.get(app["name"], -math.inf) <= 300
+                                   for peer in attestations):
+                    state("fence", 1)
+                # Otherwise no positive fence evidence: the CronJob can succeed even
+                # when every DNS lookup failed, and a current TXT answer can't
+                # backfill the other site's attestation.
 
     def flux(self, metrics: Metrics, labels: dict):
         for group, version, plural, kind in [
             ("kustomize.toolkit.fluxcd.io", "v1", "kustomizations", "Kustomization"),
             ("helm.toolkit.fluxcd.io", "v2", "helmreleases", "HelmRelease"),
             ("source.toolkit.fluxcd.io", "v1", "gitrepositories", "GitRepository"),
+            ("source.toolkit.fluxcd.io", "v1", "ocirepositories", "OCIRepository"),
+            ("source.toolkit.fluxcd.io", "v1", "helmrepositories", "HelmRepository"),
         ]:
             response = self.api.get(f"/apis/{group}/{version}/{plural}")
             for obj in response.get("items", []):
@@ -338,6 +371,30 @@ PATHS = {
     "internet": "http://1.1.1.1/",
 }
 CA_FILE = "/tls/ca.crt"
+# The archive's block index, as the Compactor last synced it from the bucket.
+ARCHIVE_INDEX = "http://observability-compactor.monitoring.svc.cluster.local:10902/api/v1/blocks"
+
+
+def archive_index(url: str = ARCHIVE_INDEX, timeout: float = 5) -> dict[str, dict] | None:
+    """Per source cluster: newest archived sample, oldest archived sample, block
+    count and bytes, from the Compactor's block list. None if it can't be read.
+    Each block carries the external `cluster` label of the Prometheus that made it."""
+    try:
+        with urllib.request.build_opener(NoRedirect()).open(url, timeout=timeout) as response:
+            blocks = json.load(response)["data"]["blocks"]
+    except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError):
+        return None
+    sites: dict[str, dict] = {}
+    for block in blocks:
+        cluster = (block.get("thanos") or {}).get("labels", {}).get("cluster")
+        if not cluster:
+            continue
+        site = sites.setdefault(cluster, {"newest": 0.0, "oldest": float("inf"), "blocks": 0, "bytes": 0})
+        site["newest"] = max(site["newest"], block["maxTime"] / 1000)
+        site["oldest"] = min(site["oldest"], block["minTime"] / 1000)
+        site["blocks"] += 1
+        site["bytes"] += sum(f.get("size_bytes", 0) for f in block["thanos"].get("files", []))
+    return sites
 
 
 def path_probe(url: str, timeout: float = 3) -> tuple[bool, float]:
@@ -460,6 +517,62 @@ def mqtt_probe(host: str, username: str, password: str, port: int = 1883,
     return True, clients, time.monotonic() - start
 
 
+SITE_HEADER = "X-Homelab-Site"
+
+
+def ingress_probe(host: str, vip: str, timeout: float = 3, port: int = 443,
+                  context: ssl.SSLContext | None = None, resolve=None) -> dict:
+    """One name, the way a client uses it: the router's DNS answer (A only: the
+    router answers AAAA with NXDOMAIN, which musl reads as no such name), TLS
+    verified against the system CAs, and a GET / that the ingress must route:
+    any answer but its default backend's 404 or a 5xx (no upstream). An app's
+    own 400 or a sign-in's 302/401 still proves the path. Returns whether it passed,
+    whether DNS gave the expected VIP, the HTTP status, the certificate's expiry
+    and the site the ingress says served it. Never reads the body."""
+    start = time.monotonic()
+    result = {"ok": False, "dns": False, "status": None, "expiry": None, "served_by": None}
+    try:
+        if resolve is None:
+            addresses = sorted({info[4][0] for info in socket.getaddrinfo(
+                host, port, socket.AF_INET, socket.SOCK_STREAM)})
+        else:
+            addresses = sorted(resolve(host))
+        result["dns"] = addresses == [vip]
+        context = context or ssl.create_default_context()
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        with socket.create_connection((addresses[0], port), timeout=timeout) as raw:
+            with context.wrap_socket(raw, server_hostname=host) as tls:
+                result["expiry"] = ssl.cert_time_to_seconds(tls.getpeercert()["notAfter"])
+                connection = http.client.HTTPConnection(host, timeout=timeout)
+                connection.sock = tls
+                connection.request("GET", "/", headers={"User-Agent": "observability-evidence"})
+                response = connection.getresponse()
+                result["status"] = response.status
+                result["served_by"] = response.getheader(SITE_HEADER)
+                response.close()
+        result["ok"] = result["dns"] and result["status"] < 500 and result["status"] != 404
+    except (OSError, ValueError, IndexError, KeyError, http.client.HTTPException):
+        pass
+    result["duration"] = time.monotonic() - start
+    return result
+
+
+FENCE_RESULTS = {"clear", "absent", "replica", "fenced", "fencing"}
+
+
+def peer_attestations(base: str, peer: str, timeout: float = 3) -> dict[str, float] | None:
+    """The other site's fence attestations, per app (when each was checked), from
+    its own Prometheus over the mesh; None if they can't be read."""
+    expr = ('max by (app) (homelab_fence_last_verified_timestamp_seconds'
+            f'{{k8s_cluster="{peer}",observer_cluster="{peer}"}})')
+    try:
+        with urllib.request.build_opener(NoRedirect()).open(
+                base + "/api/v1/query?" + urllib.parse.urlencode({"query": expr}), timeout=timeout) as response:
+            return {row["metric"]["app"]: float(row["value"][1]) for row in json.load(response)["data"]["result"]}
+    except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError):
+        return None
+
+
 def content_probe(url: str, expect: str, timeout: float = 3) -> tuple[bool, float]:
     """2xx and the expected string in the first 64 KiB. Fixed inventory URLs only."""
     start = time.monotonic()
@@ -524,6 +637,26 @@ def main():
                     if clients is not None:
                         peers.add("homelab_mqtt_clients_connected", clients,
                                   observer_cluster=args.cluster, k8s_cluster=args.cluster)
+                index = archive_index()
+                if index is not None:
+                    for cluster, site in sorted(index.items()):
+                        scope = {"observer_cluster": args.cluster, "k8s_cluster": cluster}
+                        peers.add("homelab_archive_newest_sample_timestamp_seconds", site["newest"], **scope)
+                        peers.add("homelab_archive_oldest_sample_timestamp_seconds", site["oldest"], **scope)
+                        peers.add("homelab_archive_blocks", site["blocks"], **scope)
+                        peers.add("homelab_archive_bytes", site["bytes"], **scope)
+                names = inventory.get("ingress", [])
+                with ThreadPoolExecutor(max_workers=8) as pool:
+                    results = list(pool.map(lambda n: ingress_probe(n["host"], n["vip"]), names))
+                for name, result in zip(names, results):
+                    scope = {"observer_cluster": args.cluster, "k8s_cluster": args.cluster, "name": name["name"]}
+                    peers.add("probe_success", int(result["ok"]), observability_target="ingress", **scope)
+                    peers.add("probe_duration_seconds", result["duration"], observability_target="ingress", **scope)
+                    peers.add("homelab_ingress_dns_match", int(result["dns"]), **scope)
+                    peers.add("homelab_ingress_http_status", result["status"], **scope)
+                    peers.add("homelab_ingress_cert_expiry_timestamp_seconds", result["expiry"], **scope)
+                    if result["served_by"]:
+                        peers.add("homelab_ingress_served_by_info", 1, served_cluster=result["served_by"], **scope)
                 for target, url in PATHS.items():
                     ok, duration = path_probe(url)
                     labels = {"observer_cluster": args.cluster, "k8s_cluster": args.cluster,

@@ -30,7 +30,7 @@ def test_every_panel_has_a_source_budget_runbook_and_explicit_unimplemented_evid
         assert all(source["metric"] not in recording for source in panel["sources"])
         assert (Path(__file__).resolve().parents[2] / panel["runbook"]).is_file()
     planned = {s["metric"] for p in panels for s in p["sources"] if s["availability"] == "planned"}
-    assert planned == {"homelab_house_state", "homelab_fence_last_verified_timestamp_seconds"}
+    assert planned == {"homelab_house_state"}
 
 
 def test_operator_links_preserve_multiple_sites_and_time_without_exposing_operator_links_to_house():

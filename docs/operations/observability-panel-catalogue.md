@@ -30,7 +30,7 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-sites / Placement / Runtime overrides present | `homelab_site_override_present` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Placement / Override creation age | `homelab_site_override_created_timestamp_seconds` | 180s | No overrides | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Recovery / Readiness evidence | `homelab_expected_workload_info`<br>`homelab_recovery_prerequisite_state` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
-| tnwks-sites / Recovery / Fencing evidence age | `homelab_fence_last_verified_timestamp_seconds` (planned) | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
+| tnwks-sites / Recovery / Fencing evidence age | `homelab_fence_last_verified_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Recovery / Fence job age | `homelab_fence_job_last_success_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Recovery / Lease authority reachable | `homelab_lease_authority_reachable` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Recovery / Lease blocks this site | `homelab_site_lease_blocks_local` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
@@ -47,10 +47,14 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-network / Paths / Site path probes | `homelab_peer_probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / Paths / Site tunnel traffic | `mktxp_peer_rx_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / Paths / Router interface errors | `mktxp_interface_rx_error_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
-| tnwks-network / BGP and mesh / Path by hop | `cilium_bgp_control_plane_session_state`<br>`homelab_expected_site_info`<br>`mktxp_bgp_established`<br>`mktxp_last_handshake`<br>`mktxp_system_uptime` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / BGP and mesh / Path by hop | `cilium_bgp_control_plane_session_state`<br>`cilium_clustermesh_remote_cluster_readiness_status`<br>`cilium_kvstoremesh_remote_cluster_readiness_status`<br>`homelab_expected_site_info`<br>`mktxp_bgp_established`<br>`mktxp_last_handshake`<br>`mktxp_system_uptime` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / BGP and mesh / Shared VIP routes | `cilium_bgp_control_plane_session_state`<br>`cilium_clustermesh_remote_cluster_readiness_status`<br>`cilium_kvstoremesh_remote_cluster_readiness_status`<br>`homelab_expected_site_info`<br>`mktxp_bgp_established`<br>`mktxp_last_handshake`<br>`mktxp_system_uptime` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / BGP and mesh / Routes received per site | `mktxp_bgp_prefix_count` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / BGP and mesh / Cilium drops | `cilium_drop_count_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / BGP and mesh / Mesh connectivity | `cilium_clustermesh_remote_cluster_readiness_status` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / BGP and mesh / KVStoreMesh remote cluster | `cilium_kvstoremesh_remote_cluster_readiness_status` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / BGP and mesh / Mesh sync errors | `cilium_kvstoremesh_kvstore_sync_errors_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / BGP and mesh / Mesh remote failures | `cilium_kvstoremesh_remote_cluster_failures` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-internet / Experience / Internet probe | `homelab_observer_info`<br>`probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-internet / Experience / WAN p90 latency | `smokeping:rtt_p90:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-internet / Experience / WAN latency threshold | `smokeping:latency_threshold:1h` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
@@ -73,6 +77,9 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-apps / User paths / HTTP requests | `nginx_ingress_controller_requests` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-apps / User paths / HTTP 5xx fraction | `nginx_ingress_controller_requests` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-apps / User paths / HTTP p95 duration | `nginx_ingress_controller_request_duration_seconds_bucket` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
+| tnwks-apps / Shared-VIP names / Name state by site | `homelab_expected_ingress_info`<br>`probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
+| tnwks-apps / Shared-VIP names / Served by | `homelab_ingress_served_by_info` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
+| tnwks-apps / Shared-VIP names / Name certificate remaining | `homelab_ingress_cert_expiry_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-apps / Dependencies / Certificate validity remaining | `certmanager_certificate_expiration_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-apps / Dependencies / Tunnel connections | `cloudflared_tunnel_ha_connections` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-home / Cameras / Recording input | `frigate_camera_fps` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/home-assistant.md) |
@@ -98,11 +105,18 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-observability / Cost / Retained blocks | `prometheus_tsdb_storage_blocks_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Cost / Rule evaluation failures | `prometheus_rule_evaluation_failures_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Archive and delivery / Archive state | `homelab_observer_info`<br>`probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
-| tnwks-observability / Archive and delivery / Unuploaded block age | `thanos_objstore_bucket_last_successful_upload_time` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
+| tnwks-observability / Archive and delivery / Archive lag | `homelab_archive_newest_sample_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
+| tnwks-observability / Archive and delivery / Archive history | `homelab_archive_oldest_sample_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
+| tnwks-observability / Archive and delivery / Archive free space | `garage_local_disk_avail`<br>`garage_local_disk_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
+| tnwks-observability / Archive and delivery / Time since last upload | `thanos_objstore_bucket_last_successful_upload_time` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Archive and delivery / Notification failures | `alertmanager_notifications_failed_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/external-monitoring.md) |
 | tnwks-alerts / Current / Firing now | `ALERTS` | 180s | None | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-alerts / Current / Pending now | `ALERTS` | 180s | None | [Runbook](../../docs/operations/observability-implementation.md) |
-| tnwks-alerts / Delivery / Failed notifications | `alertmanager_notifications_failed_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/external-monitoring.md) |
+| tnwks-alerts / Alertmanager / Alerts in Alertmanager | `alertmanager_alerts` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
+| tnwks-alerts / Alertmanager / Active silences | `alertmanager_silences` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
+| tnwks-alerts / Alertmanager / Configuration loaded | `alertmanager_config_last_reload_successful` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
+| tnwks-alerts / Alertmanager / Notifications sent | `alertmanager_notifications_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
+| tnwks-alerts / Alertmanager / Failed notifications | `alertmanager_notifications_failed_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/external-monitoring.md) |
 | house / House / Internet | `homelab_house_state` (planned) | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/home-assistant.md) |
 | house / House / Wi-Fi | `homelab_house_state` (planned) | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/home-assistant.md) |
 | house / House / Home automation | `homelab_house_state` (planned) | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/home-assistant.md) |

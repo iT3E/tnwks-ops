@@ -7,6 +7,13 @@ nothing can write to it after the other site was promoted.
 A lease that can't be read changes nothing: deciding to fence needs a lease
 that says so. A newly fenced Cluster fails the Job (KubeJobFailed); one that's
 already fenced is only logged. Unfencing is manual, after a rebuild.
+
+Each app whose lease was read, and whose Clusters here are in the state that
+lease requires, is attested in the site-lease-fence-status ConfigMap: the
+lease, the result (clear: the lease doesn't name this site; absent, replica,
+fenced, or fencing: it does, and nothing here can write) and the time. The
+other site's evidence collector reads that as proof this site's fence is live
+for the app. An app with an unreadable lease or an API error isn't attested.
 """
 import json
 import os
@@ -15,11 +22,15 @@ import socket
 import ssl
 import struct
 import sys
+import time
 import urllib.error
 import urllib.request
 
 SA = "/var/run/secrets/kubernetes.io/serviceaccount"
 FENCE = "cnpg.io/fencedInstances"
+STATUS = "/api/v1/namespaces/databases/configmaps/site-lease-fence-status"
+# Worst first: an app with several Clusters is attested with its worst result.
+RESULTS = ["fencing", "fenced", "replica", "absent"]
 
 
 def log(msg):
@@ -93,35 +104,61 @@ def api(method, path, body=None, content_type="application/json"):
         raise RuntimeError(f"{method} {path}: {e.code} {e.read().decode()[:300]}") from e
 
 
+def fence(name, cluster, site):
+    """Make sure this site's cluster can't write, its lease naming this site.
+    Returns how: absent, replica, fenced (already) or fencing (just now)."""
+    path = f"/apis/postgresql.cnpg.io/v1/namespaces/databases/clusters/{cluster}"
+    c = api("GET", path)
+    if c is None:
+        log(f"{name}: fenced, and there's no {cluster} here")
+        return "absent"
+    primary = (c["spec"].get("replica") or {}).get("primary") or site
+    if primary != site:
+        log(f"{name}: fenced; {cluster} follows {primary} (a replica): fine")
+        return "replica"
+    if FENCE in (c["metadata"].get("annotations") or {}):
+        log(f"{name}: fenced; {cluster} still claims primary and is already fenced. Rebuild it as a replica")
+        return "fenced"
+    log(f"{name}: FENCED by its site lease, and {cluster} still claims primary here: fencing it")
+    api("PATCH", path, {"metadata": {"annotations": {FENCE: '["*"]'}}}, "application/merge-patch+json")
+    return "fencing"
+
+
 def main():
     site = os.environ["SITE"]
-    newly = []
+    clusters = {}
     for app in json.loads(os.environ["APPS"]):
-        name, cluster = app["app"], app["cluster"]
+        clusters.setdefault(app["app"], []).append(app["cluster"])
+    newly, failed, attested = [], [], {}
+    for name, names in clusters.items():
         lease = txt(f"{name}.lease.tnwks.local.")
         if lease is None:
             log(f"{name}: lease unreadable; nothing changed")
             continue
         if lease != site:
             log(f"{name}: lease {lease!r}; this site isn't fenced")
+            attested[name] = {"lease": lease, "result": "clear"}
             continue
-        path = f"/apis/postgresql.cnpg.io/v1/namespaces/databases/clusters/{cluster}"
-        c = api("GET", path)
-        if c is None:
-            log(f"{name}: fenced, and there's no {cluster} here")
+        try:
+            results = [fence(name, cluster, site) for cluster in names]
+        except RuntimeError as e:
+            log(f"{name}: {e}")
+            failed.append(name)
             continue
-        primary = (c["spec"].get("replica") or {}).get("primary") or site
-        if primary != site:
-            log(f"{name}: fenced; {cluster} follows {primary} (a replica): fine")
-            continue
-        if FENCE in (c["metadata"].get("annotations") or {}):
-            log(f"{name}: fenced; {cluster} still claims primary and is already fenced. Rebuild it as a replica")
-            continue
-        log(f"{name}: FENCED by its site lease, and {cluster} still claims primary here: fencing it")
-        api("PATCH", path, {"metadata": {"annotations": {FENCE: '["*"]'}}}, "application/merge-patch+json")
-        newly.append(cluster)
+        newly += [cluster for cluster, result in zip(names, results) if result == "fencing"]
+        attested[name] = {"lease": lease, "result": min(results, key=RESULTS.index)}
+    if attested:
+        checked = int(time.time())
+        data = {name: json.dumps(dict(value, checked=checked), sort_keys=True) for name, value in attested.items()}
+        try:
+            if api("PATCH", STATUS, {"data": data}, "application/merge-patch+json") is None:
+                log("site-lease-fence-status is missing (Flux creates it); nothing attested")
+        except RuntimeError as e:
+            log(f"attestation not written: {e}")
+            failed.append("attestation")
     if newly:
         log(f"fenced {', '.join(newly)}: see docs/wsl/multi-site.md (Fencing) for the rebuild")
+    if newly or failed:
         sys.exit(1)
 
 

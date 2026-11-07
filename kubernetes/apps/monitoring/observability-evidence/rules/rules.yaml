@@ -39,6 +39,14 @@ spec:
         < 180))) == 1) == 4) / 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info{tier="warm"}))
     - record: homelab:local_history_seconds
       expr: time() - min by (k8s_cluster) (prometheus_tsdb_lowest_timestamp_seconds)
+    - record: homelab:archive_lag_seconds
+      expr: time() - max by (k8s_cluster) ((homelab_archive_newest_sample_timestamp_seconds and (time() - timestamp(homelab_archive_newest_sample_timestamp_seconds)
+        < 180)))
+    - record: homelab:archive_history_seconds
+      expr: time() - min by (k8s_cluster) ((homelab_archive_oldest_sample_timestamp_seconds and (time() - timestamp(homelab_archive_oldest_sample_timestamp_seconds)
+        < 180)))
+    - record: homelab:archive_free_ratio
+      expr: min by (k8s_cluster) (garage_local_disk_avail{volume="data"} / garage_local_disk_total{volume="data"})
     - record: homelab:unuploaded_block_age_seconds
       expr: time() - max by (k8s_cluster) (thanos_objstore_bucket_last_successful_upload_time{job=~".*thanos-discovery"}
         > 0)
@@ -73,14 +81,30 @@ spec:
         or (0 * max(mktxp_system_uptime) + 3), "k8s_cluster", "homelab-wsl-02", "", ""), "hop", "router-bgp", "",
         "") or label_replace(3 - (min by (k8s_cluster) (cilium_bgp_control_plane_session_state{source_site=""})
         == bool 1) - (max by (k8s_cluster) (cilium_bgp_control_plane_session_state{source_site=""}) == bool 1),
-        "hop", "node-bgp", "", "")) or on (k8s_cluster, hop) (label_replace(0 * max by (k8s_cluster) (homelab_expected_site_info),
-        "hop", "tunnel", "", "") or label_replace(0 * max by (k8s_cluster) (homelab_expected_site_info), "hop",
-        "router-bgp", "", "") or label_replace(0 * max by (k8s_cluster) (homelab_expected_site_info), "hop", "node-bgp",
-        "", ""))
+        "hop", "node-bgp", "", "") or label_replace(3 - 2 * (min by (k8s_cluster) (label_replace(cilium_clustermesh_remote_cluster_readiness_status{source_site=""},
+        "reader", "agent", "", "") or label_replace(cilium_kvstoremesh_remote_cluster_readiness_status{source_site=""},
+        "reader", "kvstoremesh", "", "")) == bool 1), "hop", "mesh", "", "")) or on (k8s_cluster, hop) (label_replace(0
+        * max by (k8s_cluster) (homelab_expected_site_info), "hop", "tunnel", "", "") or label_replace(0 * max by
+        (k8s_cluster) (homelab_expected_site_info), "hop", "router-bgp", "", "") or label_replace(0 * max by (k8s_cluster)
+        (homelab_expected_site_info), "hop", "node-bgp", "", "") or label_replace(0 * max by (k8s_cluster) (homelab_expected_site_info),
+        "hop", "mesh", "", ""))
     - record: homelab:router_bgp_prefixes
       expr: label_replace(sum(mktxp_bgp_prefix_count{name=~"wsl-site1(-[0-9]+)?"}), "k8s_cluster", "homelab-wsl",
         "", "") or label_replace(sum(mktxp_bgp_prefix_count{name=~"wsl-site2(-[0-9]+)?"}), "k8s_cluster", "homelab-wsl-02",
         "", "")
+    - record: homelab:shared_vip_route
+      expr: label_replace(label_replace(min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl"}
+        > 0) == bool 1, "k8s_cluster", "homelab-wsl", "", ""), "vip", "10.10.95.10", "", "") or label_replace(label_replace((min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl-02"}
+        > 0) == bool 1) * (min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl"} > 0) != bool
+        1), "k8s_cluster", "homelab-wsl-02", "", ""), "vip", "10.10.95.10", "", "") or label_replace(label_replace(min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl-02"}
+        > 0) == bool 1, "k8s_cluster", "homelab-wsl-02", "", ""), "vip", "10.10.95.200", "", "") or label_replace(label_replace((min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl"}
+        > 0) == bool 1) * (min(homelab:network_path_state{hop="router-bgp",k8s_cluster="homelab-wsl-02"} > 0) !=
+        bool 1), "k8s_cluster", "homelab-wsl", "", ""), "vip", "10.10.95.200", "", "")
+    - record: homelab:ingress_state
+      expr: (3 - 2 * min by (k8s_cluster, name) (probe_success{observability_target="ingress"} and (time() - timestamp(probe_success{observability_target="ingress"}))
+        < 180)) or on (k8s_cluster, name) (0 * max by (k8s_cluster, name) (homelab_expected_ingress_info))
+    - record: homelab:ingress_cert_remaining_seconds
+      expr: min by (k8s_cluster, name) (homelab_ingress_cert_expiry_timestamp_seconds) - time()
     - record: homelab:service_state
       expr: (3 - 2 * min by (k8s_cluster, app) (probe_success{observability_target="service"} and (time() - timestamp(probe_success{observability_target="service"}))
         < 180)) or on (k8s_cluster, app) (homelab:workload_state == 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster,
@@ -118,3 +142,45 @@ spec:
           }}
         description: Local metrics and alerts remain available. Restore archive uploads before retained local blocks
           expire.
+    - alert: ObservabilityIngressNameFailing
+      expr: homelab:ingress_state == 3
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'A shared-VIP name fails from {{ $labels.k8s_cluster }}: {{ $labels.name }}'
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $labels.k8s_cluster }}
+        description: 'That site''s collector couldn''t use the name as a client would: the router''s DNS answer,
+          the certificate, or the site''s ingress routing the host. homelab_ingress_dns_match and homelab_ingress_http_status
+          say which.'
+    - alert: ObservabilityIngressCertificateExpiring
+      expr: homelab:ingress_cert_remaining_seconds < 14 * 86400
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: The certificate for {{ $labels.name }} on {{ $labels.k8s_cluster }} expires within 14 days
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $labels.k8s_cluster }}
+        description: cert-manager renews at 30 days left. Check that site's Certificate and its ACME challenge.
+    - alert: ObservabilityArchiveBehind
+      expr: homelab:archive_lag_seconds > 14400
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: The metrics archive's newest data for a site is over 4 hours old
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster
+          }}
+        description: Normal is 1-3 hours. Check that site's Thanos sidecar uploads (thanos_shipper_upload_failures_total)
+          and the Compactor's bucket sync.
+    - alert: ObservabilityArchiveSpaceLow
+      expr: homelab:archive_free_ratio < 0.1
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: The metrics archive has under 10% free space
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster
+          }}
+        description: Garage shares its disk with the WSL-02 node. Shorten the Compactor's retention or free space
+          before uploads fail.
