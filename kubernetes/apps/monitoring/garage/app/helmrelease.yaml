@@ -33,6 +33,30 @@ spec:
             fsGroupChangePolicy: OnRootMismatch
             seccompProfile:
               type: RuntimeDefault
+        initContainers:
+          credentials:
+            image:
+              repository: docker.io/library/caddy
+              tag: 2.11.9-alpine@sha256:0bbb055bda6793c999bde78b1b5ce3e89f829fb031af2cf50056ea1246559fee
+            command: [/bin/sh, -ec]
+            # Kubelet adds fsGroup read access to Secret files, even with a
+            # 0600 defaultMode. Garage requires owner-only credentials.
+            args:
+              - >-
+                umask 077;
+                for key in rpc-secret admin-token metrics-token;
+                do cp /secret-source/$key /secrets/$key; chmod 600 /secrets/$key; done
+            securityContext:
+              readOnlyRootFilesystem: true
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: [ALL]
+            resources:
+              requests:
+                cpu: 5m
+                memory: 16Mi
+              limits:
+                memory: 32Mi
         containers:
           app:
             image:
@@ -138,13 +162,26 @@ spec:
           garage:
             tls:
               - path: /tmp
-      credentials:
+      credential-source:
         type: secret
         name: observability-garage-credentials
         defaultMode: 0440
-        globalMounts:
-          - path: /secrets
-            readOnly: true
+        advancedMounts:
+          garage:
+            credentials:
+              - path: /secret-source
+                readOnly: true
+      credentials:
+        type: emptyDir
+        medium: Memory
+        sizeLimit: 1Mi
+        advancedMounts:
+          garage:
+            credentials:
+              - path: /secrets
+            app:
+              - path: /secrets
+                readOnly: true
       metadata:
         retain: true
         type: persistentVolumeClaim
