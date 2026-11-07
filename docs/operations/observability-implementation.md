@@ -50,6 +50,30 @@ the backup alert fires only for a site's own primaries.
 
 ## Dashboards
 
+### Dashboard ownership
+
+One provider owns each UID:
+
+| Provider | Boards | Retire one by |
+| --- | --- | --- |
+| sidecar (`grafana_dashboard` ConfigMaps) | generated `tnwks-*` boards, chart mixins | moving it to a mounted provider, then removing its file |
+| `network`, `unpoller`, `nginx`, `plausible`, `alertmanager` (mounted) | pinned references (`upstream/catalogue.json`) | removing its catalogue entry |
+| `legacy`, `windows` (mounted) | kept hand-made boards in `grafana/app/dashboard/` | removing its file |
+
+The sidecar writes into an emptyDir after Grafana starts. With deletion on,
+Grafana would delete and re-create every sidecar board on each restart, so the
+sidecar provider keeps `disableDelete: true`. Then a removed file doesn't retire
+its board; it leaves an ordinary, unprovisioned dashboard behind. Mounted
+providers' files exist at startup, so they delete safely. Checked against the
+pinned Grafana with a persistent database:
+
+- In one apply, a mounted provider takes over boards the sidecar provider owned.
+- Removing a file then deletes its board while Grafana runs, and it stays gone
+  after a restart.
+- The other boards keep their UIDs.
+
+`validate_grafana.py` asserts this split.
+
 The generated boards are provisioned on site 1, the only Grafana so far. `home` is
 now the generated Homelab board, and the previous board stays as Homelab (classic)
 under its own UID until it has no remaining use. Grafana 13 accepts the v2 file in

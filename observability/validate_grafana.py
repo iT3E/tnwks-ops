@@ -53,9 +53,18 @@ def main():
     search = next(m for m in app["volumeMounts"] if m["name"] == "search")
     assert env["GF_UNIFIED_STORAGE_INDEX_PATH"]["value"].startswith(search["mountPath"] + "/")
     assert not any(c["name"] == "download-dashboards" for c in grafana.get("initContainers", []))
-    # One mounted ConfigMap per pinned reference provider (upstream/catalogue.json).
+    # One mounted ConfigMap per pinned reference provider (upstream/catalogue.json)
+    # and per kept hand-made board group. Mounted files exist when Grafana starts,
+    # so those providers may delete; the sidecar's emptyDir doesn't, so it mustn't.
     catalogue = json.loads((ROOT / "kubernetes/apps/monitoring/grafana/upstream/catalogue.json").read_text())
-    assert sum(m["name"].startswith("dashboards-") for m in app["volumeMounts"]) == len({e["provider"] for e in catalogue})
+    mounted = release["spec"]["values"]["dashboardsConfigMaps"]
+    assert {e["provider"] for e in catalogue} | {"legacy", "windows"} == set(mounted)
+    assert sum(m["name"].startswith("dashboards-") for m in app["volumeMounts"]) == len(mounted)
+    providers = release["spec"]["values"]["dashboardProviders"]["dashboardproviders.yaml"]["providers"]
+    assert {p["name"] for p in providers} == set(mounted)
+    assert all(p["options"]["path"] == f"/var/lib/grafana/dashboards/{p['name']}" and not p["disableDeletion"]
+               for p in providers)
+    assert release["spec"]["values"]["sidecar"]["dashboards"]["provider"]["disableDelete"] is True
     assert grafana["securityContext"]["fsGroup"] == 472
     # Warm app (docs/wsl/multi-site.md): the lease gate's env must reach the pod
     # as strings; a bare on/off substitution would be a YAML boolean.
