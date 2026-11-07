@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.19.0 - 2026-11-07
+
+### Changed
+
+* Replace the empty UI-made Alertmanager / Overview board with the pinned kube-prometheus mixin board under the same UID.
+
 ## v2.18.0 - 2026-11-07
 
 ### Added
