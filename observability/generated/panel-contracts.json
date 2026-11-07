@@ -2902,7 +2902,107 @@
   },
   {
     "dashboard": "tnwks-alerts",
-    "tab": "Delivery",
+    "tab": "Alertmanager",
+    "panel": "Alerts in Alertmanager",
+    "query": "sum by (k8s_cluster, state) (alertmanager_alerts{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "query_mode": "range",
+    "inputs": [
+      "alertmanager_alerts"
+    ],
+    "sources": [
+      {
+        "metric": "alertmanager_alerts",
+        "producer": "Alertmanager self-monitoring",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/observability-implementation.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-alerts",
+    "tab": "Alertmanager",
+    "panel": "Active silences",
+    "query": "max by (k8s_cluster) (alertmanager_silences{k8s_cluster=~\"$cluster\",state=\"active\"})",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "alertmanager_silences"
+    ],
+    "sources": [
+      {
+        "metric": "alertmanager_silences",
+        "producer": "Alertmanager self-monitoring",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/observability-implementation.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-alerts",
+    "tab": "Alertmanager",
+    "panel": "Configuration loaded",
+    "query": "min by (k8s_cluster) (alertmanager_config_last_reload_successful{k8s_cluster=~\"$cluster\"})",
+    "unit": "bool",
+    "query_mode": "instant",
+    "inputs": [
+      "alertmanager_config_last_reload_successful"
+    ],
+    "sources": [
+      {
+        "metric": "alertmanager_config_last_reload_successful",
+        "producer": "Alertmanager self-monitoring",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/observability-implementation.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-alerts",
+    "tab": "Alertmanager",
+    "panel": "Notifications sent",
+    "query": "sum by (k8s_cluster, integration) (increase(alertmanager_notifications_total{k8s_cluster=~\"$cluster\"}[1h]))",
+    "unit": "short",
+    "query_mode": "range",
+    "inputs": [
+      "alertmanager_notifications_total"
+    ],
+    "sources": [
+      {
+        "metric": "alertmanager_notifications_total",
+        "producer": "Alertmanager self-monitoring",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/observability-implementation.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-alerts",
+    "tab": "Alertmanager",
     "panel": "Failed notifications",
     "query": "sum by (k8s_cluster, integration) (increase(alertmanager_notifications_failed_total{k8s_cluster=~\"$cluster\"}[1h]))",
     "unit": "short",

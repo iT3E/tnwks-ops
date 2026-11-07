@@ -403,7 +403,15 @@ def catalogue() -> list[Board]:
                   "Pending is not yet firing. Alertmanager silencing/inhibition and notification state are viewed through the per-site Alertmanager links.",
                   "table", empty=NO_ALERTS),
             ],
-            "Delivery": [
+            "Alertmanager": [
+                p("Alerts in Alertmanager", f'sum by (k8s_cluster, state) ({selector("alertmanager_alerts")})', "short",
+                  "Alerts each site's Alertmanager holds: active, or suppressed by a silence or inhibition. Compare with Firing now: an alert firing in Prometheus but missing here never reached Alertmanager."),
+                p("Active silences", f'max by (k8s_cluster) ({selector("alertmanager_silences", "state=\"active\"")})', "short",
+                  "Silences in force. A forgotten silence hides real alerts; check each one has an end time and a reason.", "stat"),
+                p("Configuration loaded", f'min by (k8s_cluster) ({selector("alertmanager_config_last_reload_successful")})', "bool",
+                  "Whether each Alertmanager's last configuration reload succeeded. A failed reload keeps the previous routes and receivers.", "stat"),
+                p("Notifications sent", f'sum by (k8s_cluster, integration) (increase({selector("alertmanager_notifications_total")}[1h]))', "short",
+                  "Notification attempts per integration in the last hour."),
                 p("Failed notifications", f'sum by (k8s_cluster, integration) (increase({metric("alertmanager_notifications_failed_total")}[1h]))', "short",
                   "Failures during the window, not a definitive end-to-end notification receipt check."),
             ],

@@ -84,6 +84,34 @@ spec:
             memory: 4Mi
           limits:
             memory: 16Mi
+      # The Angular panels #1882 dropped from `plugins` stay on each site's
+      # volume, and Grafana 13 can't load them. Nothing provisioned uses them.
+      # A no-op once they're gone.
+      - name: remove-angular-plugins
+        image: docker.io/library/busybox:1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+        command: ["sh", "-c"]
+        args:
+          - >-
+            cd /var/lib/grafana/plugins 2>/dev/null || exit 0;
+            rm -rf grafana-piechart-panel grafana-worldmap-panel natel-discrete-panel
+            pr0ps-trackmap-panel vonage-status-panel
+        securityContext:
+          runAsUser: 472
+          runAsGroup: 472
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 1m
+            memory: 4Mi
+          limits:
+            memory: 16Mi
+        volumeMounts:
+          - name: storage
+            mountPath: /var/lib/grafana
     deploymentStrategy:
       type: Recreate
     # init-chown-data runs busybox chown as root over the PVC. On WSL
@@ -194,7 +222,10 @@ spec:
               tracesToLogsV2:
                 datasourceUid: loki
                 filterByTraceID: true
+          # A fixed UID: deleteDatasources recreates it on every start, and
+          # without one each start gave it a new identity.
           - name: Alertmanager
+            uid: alertmanager
             type: alertmanager
             access: proxy
             url: http://alertmanager.monitoring.svc.cluster.local:9093
