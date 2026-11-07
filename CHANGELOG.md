@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.18.0 - 2026-11-07
+
+### Added
+
+* Operator boards link from a domain panel to its entity board (ingress, router, node, Windows host, access point) on the clicked series or row, keeping the incident time range.
+
 ## v2.17.0 - 2026-11-07
 
 ### Added
