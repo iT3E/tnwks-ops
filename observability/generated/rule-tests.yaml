@@ -3,6 +3,114 @@ rule_files:
 - rules-for-test.yaml
 evaluation_interval: 1m
 tests:
+- name: header counts distinct selected sites, not observers
+  interval: 1m
+  input_series:
+  - series: homelab_expected_site_info{k8s_cluster="one",observer="a"}
+    values: 1+0x10
+  - series: homelab_expected_site_info{k8s_cluster="one",observer="b"}
+    values: 1+0x10
+  - series: homelab_expected_site_info{k8s_cluster="two",observer="a"}
+    values: 1+0x10
+  - series: homelab_expected_site_info{k8s_cluster="two",observer="b"}
+    values: 1+0x10
+  - series: homelab:site_reporting{k8s_cluster="one",observer="a"}
+    values: 1+0x10
+  - series: homelab:site_reporting{k8s_cluster="one",observer="b"}
+    values: 1+0x10
+  - series: homelab:site_reporting{k8s_cluster="two",observer="a"}
+    values: 1+0x10
+  - series: homelab:site_reporting{k8s_cluster="two",observer="b"}
+    values: 1+0x10
+  promql_expr_test:
+  - expr: count(max by (k8s_cluster) (homelab_expected_site_info{k8s_cluster=~"one"}))
+    eval_time: 5m
+    exp_samples:
+    - labels: '{}'
+      value: 1
+  - expr: count(max by (k8s_cluster) (homelab_expected_site_info{k8s_cluster=~".*"}))
+    eval_time: 5m
+    exp_samples:
+    - labels: '{}'
+      value: 2
+  - expr: count(max by (k8s_cluster) (homelab:site_reporting{k8s_cluster=~"one"}) == 1) or vector(0)
+    eval_time: 5m
+    exp_samples:
+    - labels: '{}'
+      value: 1
+  - expr: count(max by (k8s_cluster) (homelab:site_reporting{k8s_cluster=~".*"}) == 1) or vector(0)
+    eval_time: 5m
+    exp_samples:
+    - labels: '{}'
+      value: 2
+- name: future observer timestamps are not current evidence
+  interval: 1m
+  input_series:
+  - series: homelab_expected_site_info{k8s_cluster="one"}
+    values: 1+0x10
+  - series: homelab_collection_success{k8s_cluster="one",collector="workloads"}
+    values: 1+0x10
+  - series: homelab_collection_last_success_timestamp_seconds{k8s_cluster="one",collector="workloads"}
+    values: 10000+0x10
+  promql_expr_test:
+  - expr: homelab:site_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:site_state{k8s_cluster="one"}
+      value: 0
+- name: stale complete prerequisites cannot certify recovery
+  interval: 1m
+  input_series:
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="test",tier="warm"}
+    values: 1+0x10
+  - series: homelab_recovery_prerequisite_state{k8s_cluster="one",app="test",prerequisite="database"}
+    values: 1 _ _ _ _ _
+  - series: homelab_recovery_prerequisite_state{k8s_cluster="one",app="test",prerequisite="backup"}
+    values: 1 _ _ _ _ _
+  - series: homelab_recovery_prerequisite_state{k8s_cluster="one",app="test",prerequisite="restore"}
+    values: 1 _ _ _ _ _
+  - series: homelab_recovery_prerequisite_state{k8s_cluster="one",app="test",prerequisite="fence"}
+    values: 1 _ _ _ _ _
+  promql_expr_test:
+  - expr: homelab:recovery_state
+    eval_time: 4m
+    exp_samples:
+    - labels: homelab:recovery_state{k8s_cluster="one",app="test"}
+      value: 0
+- name: one missing component does not leave a multi-workload app healthy
+  interval: 1m
+  input_series:
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="test"}
+    values: 1+0x10
+  - series: homelab_workload_present{k8s_cluster="one",app="test",workload="missing"}
+    values: 0+0x10
+  - series: homelab_workload_desired_replicas{k8s_cluster="one",app="test",workload="running"}
+    values: 1+0x10
+  - series: homelab_workload_ready_replicas{k8s_cluster="one",app="test",workload="running"}
+    values: 1+0x10
+  promql_expr_test:
+  - expr: homelab:workload_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:workload_state{k8s_cluster="one",app="test"}
+      value: 0
+- name: duplicate collectors do not invent desired replicas
+  interval: 1m
+  input_series:
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="test"}
+    values: 1+0x10
+  - series: homelab_workload_desired_replicas{k8s_cluster="one",app="test",workload="running",pod="old"}
+    values: 1+0x10
+  - series: homelab_workload_desired_replicas{k8s_cluster="one",app="test",workload="running",pod="new"}
+    values: 1+0x10
+  - series: homelab_workload_ready_replicas{k8s_cluster="one",app="test",workload="running",pod="new"}
+    values: 1+0x10
+  promql_expr_test:
+  - expr: homelab:workload_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:workload_state{k8s_cluster="one",app="test"}
+      value: 1
 - name: same database name and missing backup remain distinct
   interval: 1m
   input_series:

@@ -205,11 +205,11 @@ class Collector:
         prerequisite with no evidence is left out, so the rules keep it Unknown.
 
         database: every one of its Postgres clusters here is healthy (primary or replica).
-        backup: each has a completed base backup here within 30 h.
-        restore: the weekly standby restore last restored each of its PVCs here within
-          8 days; met where the app runs here (its data is live), or has no PVCs.
-        fence: the fence CronJob succeeded within 10 min and the app's site lease
-          doesn't name this site. An unreadable lease is no evidence.
+        backup: each has a completed base backup here within 30 h, never in the future.
+        restore: a completed restore of each required PVC here within 8 days. A
+          running app is not a restore drill; apps without copied PVCs need no drill.
+        fence: a lease naming this site blocks promotion. A successful fleet fence
+          Job cannot attest that it read this app's lease or fenced a former primary.
         """
         now = self.clock()
         warm = [app for app in self.inventory["apps"] if app.get("tier") == "warm"]
@@ -235,15 +235,15 @@ class Collector:
 
             dbs = [clusters.get(name) for name in app.get("databases", [])]
             state("database", 1 if dbs and all(
-                db and "healthy" in db.get("status", {}).get("phase", "")
+                db and db.get("status", {}).get("phase") == "Cluster in healthy state"
                 and db.get("status", {}).get("readyInstances", 0) >= db.get("spec", {}).get("instances", 1)
                 for db in dbs) else 3)
 
             ages = [now - backups[name] for name in app.get("databases", []) if name in backups]
             if app.get("databases") and len(ages) == len(app["databases"]):
-                state("backup", 1 if max(ages) <= 30 * 3600 else 3)
+                state("backup", 1 if all(0 <= age <= 30 * 3600 for age in ages) else 3)
 
-            if self.desired.get(app["name"], 0) > 0 or not app.get("pvcs"):
+            if not app.get("pvcs"):
                 state("restore", 1)
             else:
                 drills = self.api.get(
@@ -256,19 +256,24 @@ class Collector:
                     if pvc in app["pvcs"] and created and created > newest.get(pvc, (0, ""))[0]:
                         newest[pvc] = (created, obj.get("status", {}).get("phase", ""))
                 if len(newest) == len(app["pvcs"]):
-                    ok = all(phase in ("Completed", "Succeeded") and now - created <= 8 * 86400
+                    ok = all(phase in ("Completed", "Succeeded") and 0 <= now - created <= 8 * 86400
                              for created, phase in newest.values())
                     state("restore", 1 if ok else 3)
                     if ok:
                         metrics.add("homelab_restore_last_success_timestamp_seconds",
                                     min(created for created, _ in newest.values()), **scope)
 
-            if fence_ok:
-                lease = lease_txt(f"{app['name']}.lease.tnwks.local.")
-                if lease is not None:
-                    fenced = lease == self.cluster
-                    state("fence", 1 if (not fenced and now - fence_ok <= 600) else 3)
-                    metrics.add("homelab_fence_last_verified_timestamp_seconds", fence_ok, **scope)
+            if fence_ok and 0 <= now - fence_ok:
+                metrics.add("homelab_fence_job_last_success_timestamp_seconds", fence_ok, **scope)
+            lease = lease_txt(f"{app['name']}.lease.tnwks.local.")
+            valid = lease in {site["cluster"] for site in self.inventory["sites"]} | {"none"}
+            metrics.add("homelab_lease_authority_reachable", int(valid), **scope)
+            if valid:
+                metrics.add("homelab_site_lease_blocks_local", int(lease == self.cluster), **scope)
+                if lease == self.cluster:
+                    state("fence", 3)
+                # No positive fence evidence: the CronJob can succeed even when
+                # every DNS lookup failed. A current TXT answer cannot backfill it.
 
     def flux(self, metrics: Metrics, labels: dict):
         for group, version, plural, kind in [

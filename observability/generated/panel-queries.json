@@ -3,7 +3,7 @@
     "dashboard": "home",
     "tab": "Now",
     "title": "Expected sites",
-    "expr": "count(max by (k8s_cluster) (homelab_expected_site_info))",
+    "expr": "count(max by (k8s_cluster) (homelab_expected_site_info{k8s_cluster=~\"$cluster\"}))",
     "unit": "short",
     "kiosk": false
   },
@@ -11,7 +11,7 @@
     "dashboard": "home",
     "tab": "Now",
     "title": "Reporting sites",
-    "expr": "count(homelab:site_reporting == 1) or vector(0)",
+    "expr": "count(max by (k8s_cluster) (homelab:site_reporting{k8s_cluster=~\"$cluster\"}) == 1) or vector(0)",
     "unit": "short",
     "kiosk": false
   },
@@ -91,7 +91,7 @@
     "dashboard": "tnwks-sites",
     "tab": "Sites",
     "title": "Expected sites",
-    "expr": "count(max by (k8s_cluster) (homelab_expected_site_info))",
+    "expr": "count(max by (k8s_cluster) (homelab_expected_site_info{k8s_cluster=~\"$cluster\"}))",
     "unit": "short",
     "kiosk": false
   },
@@ -99,7 +99,7 @@
     "dashboard": "tnwks-sites",
     "tab": "Sites",
     "title": "Reporting sites",
-    "expr": "count(homelab:site_reporting == 1) or vector(0)",
+    "expr": "count(max by (k8s_cluster) (homelab:site_reporting{k8s_cluster=~\"$cluster\"}) == 1) or vector(0)",
     "unit": "short",
     "kiosk": false
   },
@@ -197,6 +197,30 @@
     "title": "Fencing evidence age",
     "expr": "time() - homelab_fence_last_verified_timestamp_seconds{k8s_cluster=~\"$cluster\"}",
     "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Recovery",
+    "title": "Fence job age",
+    "expr": "time() - homelab_fence_job_last_success_timestamp_seconds{k8s_cluster=~\"$cluster\"}",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Recovery",
+    "title": "Lease authority reachable",
+    "expr": "homelab_lease_authority_reachable{k8s_cluster=~\"$cluster\"}",
+    "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "Recovery",
+    "title": "Lease blocks this site",
+    "expr": "homelab_site_lease_blocks_local{k8s_cluster=~\"$cluster\"}",
+    "unit": "bool",
     "kiosk": false
   },
   {
@@ -627,7 +651,7 @@
     "dashboard": "tnwks-observability",
     "tab": "Trust",
     "title": "Expected sites",
-    "expr": "count(max by (k8s_cluster) (homelab_expected_site_info))",
+    "expr": "count(max by (k8s_cluster) (homelab_expected_site_info{k8s_cluster=~\"$cluster\"}))",
     "unit": "short",
     "kiosk": false
   },
@@ -635,7 +659,7 @@
     "dashboard": "tnwks-observability",
     "tab": "Trust",
     "title": "Reporting sites",
-    "expr": "count(homelab:site_reporting == 1) or vector(0)",
+    "expr": "count(max by (k8s_cluster) (homelab:site_reporting{k8s_cluster=~\"$cluster\"}) == 1) or vector(0)",
     "unit": "short",
     "kiosk": false
   },

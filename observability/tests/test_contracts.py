@@ -164,9 +164,53 @@ def test_recovery_prerequisites_from_evidence_only(small_inventory, monkeypatch)
     assert got("database") == "1" and got("backup") == "1"
     assert got("restore") == "3"  # the standby's last drill failed
     assert got("fence") == "3"  # the lease names this site
+    leases["test.lease.tnwks.local."] = "two"
+    out = Collector(Api(), small_inventory, "one", clock=lambda: now).collect().decode()
+    assert 'prerequisite="fence"' not in out  # a fleet Job cannot attest a former primary's fence
+    assert 'homelab_fence_last_verified_timestamp_seconds' not in out
+    assert 'homelab_fence_job_last_success_timestamp_seconds' in out
+    assert 'homelab_lease_authority_reachable{app="test",k8s_cluster="one",observer_cluster="one"} 1' in out
     leases.clear()  # unreadable lease: no fence evidence at all
     out = Collector(Api(), small_inventory, "one", clock=lambda: now).collect().decode()
     assert 'prerequisite="fence"' not in out
+
+
+@pytest.mark.parametrize("scenario", ["unhealthy", "future-backup", "future-restore", "running-without-drill"])
+def test_recovery_never_substitutes_readiness_or_future_timestamps_for_proof(small_inventory, monkeypatch, scenario):
+    import datetime
+    import collector
+    now = 2_000_000_000
+
+    def iso(seconds):
+        return datetime.datetime.fromtimestamp(seconds, datetime.timezone.utc).isoformat()
+
+    class Api(FakeApi):
+        def get(self, path):
+            if path.endswith("/clusters"):
+                return {"items": [{"metadata": {"name": "test-pg"}, "spec": {"instances": 1},
+                                   "status": {"phase": "Cluster in unhealthy state" if scenario == "unhealthy"
+                                              else "Cluster in healthy state", "readyInstances": 1}}]}
+            if path.endswith("/backups"):
+                return {"items": [{"spec": {"cluster": {"name": "test-pg"}},
+                                   "status": {"phase": "completed", "stoppedAt": iso(now + 60 if scenario == "future-backup" else now - 60)}}]}
+            if "/restores" in path and scenario != "running-without-drill":
+                return {"items": [{"metadata": {"labels": {"tnwks.us/pvc": "data"},
+                                                "creationTimestamp": iso(now + 60 if scenario == "future-restore" else now - 60)},
+                                   "status": {"phase": "Completed"}}]}
+            return super().get(path)
+
+    small_inventory["apps"][0]["pvcs"] = ["data"]
+    monkeypatch.setattr(collector, "lease_txt", lambda _: "two")
+    c = Collector(Api(), small_inventory, "one", clock=lambda: now)
+    if scenario == "running-without-drill":
+        c.workloads = lambda metrics, labels: c.desired.update(test=1)
+    out = c.collect().decode()
+    if scenario == "running-without-drill":
+        assert 'prerequisite="restore"' not in out
+    else:
+        prerequisite = {"unhealthy": "database", "future-backup": "backup", "future-restore": "restore"}[scenario]
+        line = next(row for row in out.splitlines() if f'prerequisite="{prerequisite}"' in row)
+        assert line.endswith(" 3")
 
 
 def test_mqtt_probe_logs_in_and_reads_the_sys_client_count():

@@ -1,0 +1,4 @@
+---
+kind: Fixed
+body: Keep recovery unknown without per-app fencing and restore proof, reject future evidence, and count selected sites and workload observations once.
+time: 2026-11-07T10:40:00Z

@@ -11,17 +11,21 @@ ROOT = Path(__file__).resolve().parents[1]
 def records():
     db = "k8s_cluster, namespace, db_cluster"
     expected_db = f"max by ({db}) (homelab_expected_database_info)"
-    desired = "sum by (k8s_cluster, app) (homelab_workload_desired_replicas)"
-    ready = "sum by (k8s_cluster, app) (homelab_workload_ready_replicas)"
+    identity = "k8s_cluster, app, kind, workload"
+    def fresh(name):
+        return f"({name} and (time() - timestamp({name}) < 180))"
+
+    desired = f"sum by (k8s_cluster, app) (max by ({identity}) ({fresh('homelab_workload_desired_replicas')}))"
+    ready = f"sum by (k8s_cluster, app) (max by ({identity}) ({fresh('homelab_workload_ready_replicas')}))"
     return {
-        "homelab:site_reporting": '(max by (k8s_cluster) (homelab_collection_success{collector="workloads"}) == bool 1) * on (k8s_cluster) (time() - max by (k8s_cluster) (homelab_collection_last_success_timestamp_seconds{collector="workloads"}) < bool 180)',
+        "homelab:site_reporting": '(max by (k8s_cluster) (homelab_collection_success{collector="workloads"}) == bool 1) * on (k8s_cluster) (time() - max by (k8s_cluster) (homelab_collection_last_success_timestamp_seconds{collector="workloads"}) < bool 180) * on (k8s_cluster) (time() - max by (k8s_cluster) (homelab_collection_last_success_timestamp_seconds{collector="workloads"}) >= bool 0)',
         "homelab:site_state": '(homelab:site_reporting == 1) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_expected_site_info))',
         "homelab:database_in_recovery": f'max by ({db}) (label_replace(cnpg_pg_replication_in_recovery{{source_site=""}}, "db_cluster", "$1", "pod", "(.+)-[0-9]+"))',
         "homelab:database_replay_lag_seconds": f'max by ({db}) (label_replace(cnpg_pg_replication_lag{{source_site=""}}, "db_cluster", "$1", "pod", "(.+)-[0-9]+"))',
         "homelab:database_connections": f'sum by ({db}) (label_replace(cnpg_backends_total{{source_site=""}}, "db_cluster", "$1", "pod", "(.+)-[0-9]+"))',
         "homelab:database_backup_age_seconds": f'time() - max by ({db}) (label_replace(barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{{source_site=""}}, "db_cluster", "$1", "pod", "(.+)-[0-9]+"))',
         "homelab:database_backup_state": f'((homelab:database_backup_age_seconds >= bool 0) * (homelab:database_backup_age_seconds <= bool 108000) + 3 * (homelab:database_backup_age_seconds > bool 108000)) or on ({db}) (0 * {expected_db})',
-        "homelab:recovery_state": '(3 * max by (k8s_cluster, app) (homelab_recovery_prerequisite_state == 3) / 3) or on (k8s_cluster, app) ((count by (k8s_cluster, app) (max by (k8s_cluster, app, prerequisite) (homelab_recovery_prerequisite_state{prerequisite=~"database|backup|restore|fence"}) == 1) == 4) / 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info{tier="warm"}))',
+        "homelab:recovery_state": '(3 * max by (k8s_cluster, app) (' + fresh('homelab_recovery_prerequisite_state') + ' == 3) / 3) or on (k8s_cluster, app) ((count by (k8s_cluster, app) (max by (k8s_cluster, app, prerequisite) (' + fresh('homelab_recovery_prerequisite_state{prerequisite=~"database|backup|restore|fence"}') + ') == 1) == 4) / 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info{tier="warm"}))',
         "homelab:local_history_seconds": 'time() - min by (k8s_cluster) (prometheus_tsdb_lowest_timestamp_seconds)',
         "homelab:unuploaded_block_age_seconds": 'time() - max by (k8s_cluster) (thanos_objstore_bucket_last_successful_upload_time{job=~".*thanos-discovery"} > 0)',
         "homelab:archive_state": '(3 - 2 * min by (k8s_cluster) (probe_success{observability_target="archive"} and (time() - timestamp(probe_success{observability_target="archive"})) < 180)) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_observer_info))',
@@ -32,6 +36,7 @@ def records():
         # Replica evidence, not an end-to-end path: 1 healthy, 2 degraded, 3 failed,
         # 4 standby (desired 0, the normal state of an app on the other site).
         "homelab:workload_state": (
+            '0 * max by (k8s_cluster, app) (homelab_workload_present == 0) or '
             f'({desired} == 0) + 4'
             f' or ((({ready} >= {desired}) * 0) + 1)'
             f' or ((({ready} < {desired}) > 0) * 0 + 2)'
@@ -114,9 +119,61 @@ def rule_resource():
 
 
 def fixtures():
+    from dashboards import coverage
+    header = {panel.title: panel.expr for panel in coverage()}
     # Real cases: two same-name DBs in distinct sites, missing expected DB,
     # stale upstream despite successful scrape, and absent fence/restore evidence.
     return {"rule_files": ["rules-for-test.yaml"], "evaluation_interval": "1m", "tests": [
+        {"name": "header counts distinct selected sites, not observers", "interval": "1m",
+         "input_series": [
+             *[{"series": f'homelab_expected_site_info{{k8s_cluster="{site}",observer="{observer}"}}', "values": "1+0x10"}
+               for site in ("one", "two") for observer in ("a", "b")],
+             *[{"series": f'homelab:site_reporting{{k8s_cluster="{site}",observer="{observer}"}}', "values": "1+0x10"}
+               for site in ("one", "two") for observer in ("a", "b")],
+         ], "promql_expr_test": [
+             {"expr": expr.replace("$cluster", scope), "eval_time": "5m",
+              "exp_samples": [{"labels": "{}", "value": value}]}
+             for expr in header.values() if expr in (header["Expected sites"], header["Reporting sites"])
+             for scope, value in (("one", 1), (".*", 2))
+         ]},
+        {"name": "future observer timestamps are not current evidence", "interval": "1m",
+         "input_series": [
+             {"series": 'homelab_expected_site_info{k8s_cluster="one"}', "values": "1+0x10"},
+             {"series": 'homelab_collection_success{k8s_cluster="one",collector="workloads"}', "values": "1+0x10"},
+             {"series": 'homelab_collection_last_success_timestamp_seconds{k8s_cluster="one",collector="workloads"}', "values": "10000+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:site_state", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:site_state{k8s_cluster="one"}', "value": 0}]},
+         ]},
+        {"name": "stale complete prerequisites cannot certify recovery", "interval": "1m",
+         "input_series": [
+             {"series": 'homelab_expected_workload_info{k8s_cluster="one",app="test",tier="warm"}', "values": "1+0x10"},
+             *[{"series": f'homelab_recovery_prerequisite_state{{k8s_cluster="one",app="test",prerequisite="{name}"}}', "values": "1 _ _ _ _ _"}
+               for name in ("database", "backup", "restore", "fence")],
+         ], "promql_expr_test": [
+             {"expr": "homelab:recovery_state", "eval_time": "4m", "exp_samples": [
+                 {"labels": 'homelab:recovery_state{k8s_cluster="one",app="test"}', "value": 0}]},
+         ]},
+        {"name": "one missing component does not leave a multi-workload app healthy", "interval": "1m",
+         "input_series": [
+             {"series": 'homelab_expected_workload_info{k8s_cluster="one",app="test"}', "values": "1+0x10"},
+             {"series": 'homelab_workload_present{k8s_cluster="one",app="test",workload="missing"}', "values": "0+0x10"},
+             {"series": 'homelab_workload_desired_replicas{k8s_cluster="one",app="test",workload="running"}', "values": "1+0x10"},
+             {"series": 'homelab_workload_ready_replicas{k8s_cluster="one",app="test",workload="running"}', "values": "1+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:workload_state", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:workload_state{k8s_cluster="one",app="test"}', "value": 0}]},
+         ]},
+        {"name": "duplicate collectors do not invent desired replicas", "interval": "1m",
+         "input_series": [
+             {"series": 'homelab_expected_workload_info{k8s_cluster="one",app="test"}', "values": "1+0x10"},
+             *[{"series": f'homelab_workload_desired_replicas{{k8s_cluster="one",app="test",workload="running",pod="{pod}"}}', "values": "1+0x10"}
+               for pod in ("old", "new")],
+             {"series": 'homelab_workload_ready_replicas{k8s_cluster="one",app="test",workload="running",pod="new"}', "values": "1+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:workload_state", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:workload_state{k8s_cluster="one",app="test"}', "value": 1}]},
+         ]},
         {"name": "same database name and missing backup remain distinct", "interval": "1m",
          "input_series": [
              {"series": 'homelab_expected_database_info{k8s_cluster="one",namespace="databases",db_cluster="app-pg"}', "values": "1+0x10"},
