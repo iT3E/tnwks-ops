@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.0.4 - 2026-11-07
+
+### Fixed
+
+* wsl_time creates /etc/systemd/timesyncd.conf.d first: Ubuntu ships none, so the apply after #1874 failed on both distros.
+
 ## v2.0.3 - 2026-11-07
 
 ### Fixed
