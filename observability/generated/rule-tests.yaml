@@ -80,6 +80,49 @@ tests:
     exp_samples:
     - labels: homelab:recovery_state{k8s_cluster="one",app="test"}
       value: 0
+- name: workload state tells standby from failed and keeps missing apps Unknown
+  interval: 1m
+  input_series:
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="up"}
+    values: 1+0x10
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="partial"}
+    values: 1+0x10
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="down"}
+    values: 1+0x10
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="parked"}
+    values: 1+0x10
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="missing"}
+    values: 1+0x10
+  - series: homelab_workload_desired_replicas{k8s_cluster="one",app="up"}
+    values: 2+0x10
+  - series: homelab_workload_ready_replicas{k8s_cluster="one",app="up"}
+    values: 2+0x10
+  - series: homelab_workload_desired_replicas{k8s_cluster="one",app="partial"}
+    values: 2+0x10
+  - series: homelab_workload_ready_replicas{k8s_cluster="one",app="partial"}
+    values: 1+0x10
+  - series: homelab_workload_desired_replicas{k8s_cluster="one",app="down"}
+    values: 1+0x10
+  - series: homelab_workload_ready_replicas{k8s_cluster="one",app="down"}
+    values: 0+0x10
+  - series: homelab_workload_desired_replicas{k8s_cluster="one",app="parked"}
+    values: 0+0x10
+  - series: homelab_workload_ready_replicas{k8s_cluster="one",app="parked"}
+    values: 0+0x10
+  promql_expr_test:
+  - expr: homelab:workload_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:workload_state{k8s_cluster="one",app="up"}
+      value: 1
+    - labels: homelab:workload_state{k8s_cluster="one",app="partial"}
+      value: 2
+    - labels: homelab:workload_state{k8s_cluster="one",app="down"}
+      value: 3
+    - labels: homelab:workload_state{k8s_cluster="one",app="parked"}
+      value: 4
+    - labels: homelab:workload_state{k8s_cluster="one",app="missing"}
+      value: 0
 - name: only a local primary without backup evidence alerts
   interval: 1m
   input_series:

@@ -27,14 +27,24 @@ ALERT_SCOPE = 'cluster=~"$cluster"'
 # real answer. Keys are the series identity without the observing Prometheus.
 IDENTITY = {
     "homelab:service_state": ("app",),
+    "homelab:workload_state": ("app",),
     "homelab:recovery_state": ("app",),
     "homelab:database_backup_state": ("namespace", "db_cluster"),
     "homelab_expected_database_info": ("namespace", "db_cluster", "app"),
     "homelab_expected_workload_info": ("app", "tier", "kind", "workload"),
 }
 # Table columns that describe the scrape, not the thing being reported.
-SCRAPE_COLUMNS = ("__name__", "Time", "__replica__", "cluster", "container", "endpoint",
-                  "instance", "job", "observer_cluster", "pod", "prometheus", "service")
+SCRAPE_COLUMNS = ("__name__", "Time", "__replica__", "alertstate", "cluster", "container", "endpoint",
+                  "instance", "job", "kind", "namespace", "observer_cluster", "pod", "prometheus",
+                  "service")
+NO_ALERTS = "None"
+
+
+def alerts(state: str) -> str:
+    """Real alerts by the site that raised them; heartbeats carry severity none."""
+    selector = f'ALERTS{{{ALERT_SCOPE},alertstate="{state}",severity!="none"}}'
+    return ('label_replace(max by (cluster, alertname, severity) '
+            f'({selector}), "k8s_cluster", "$1", "cluster", "(.+)")')
 STATE = {
     "0": model.ValueMappingResult(text="Unknown", color="#8e8e8e"),
     "1": model.ValueMappingResult(text="Healthy", color="#299c46"),
@@ -106,10 +116,12 @@ def catalogue() -> list[Board]:
         Board("home", "Homelab", "overview", "l1",
               "What is affected, which evidence is available, and where should I look next?", {
             "Now": coverage() + [
-                p("Service paths", metric("homelab:service_state"), "state",
-                  "Synthetic content/transport evidence per service. No probe or stale probe is Unknown, never an implicit success.", "table", "tnwks-apps"),
-                p("Current firing alerts", f'ALERTS{{{ALERT_SCOPE},alertstate="firing"}}', "short",
-                  "Current Prometheus rule state; this is not a historical Alertmanager event list and does not show silence/inhibition state.", "table", "tnwks-alerts"),
+                p("Workloads needing attention", f'sort_desc({metric("homelab:workload_state")} != 4 != 1)', "state",
+                  "Apps not fully ready, from replica counts. Empty means every app is ready or a deliberate standby. This is workload evidence, not an end-to-end path check.",
+                  "table", "tnwks-sites", empty="All ready or standby"),
+                p("Current firing alerts", alerts("firing"), "short",
+                  "Current Prometheus rule state, excluding heartbeats; this is not a historical Alertmanager event list and does not show silence/inhibition state.",
+                  "table", "tnwks-alerts", empty=NO_ALERTS),
                 p("Recovery evidence", metric("homelab:recovery_state"), "state",
                   "Per-app prerequisites. Unknown fencing or untested recovery blocks a positive readiness conclusion. A dashboard never authorizes promotion.", "table", "tnwks-data"),
                 p("Archive reachable", metric("homelab:archive_state"), "state",
@@ -133,6 +145,8 @@ def catalogue() -> list[Board]:
                   "Fresh bounded probes from one site to the other. Observer identity is retained; this is connectivity evidence, not the remote site's internal condition.", "table"),
             ],
             "Placement": [
+                p("Workload state", metric("homelab:workload_state"), "state",
+                  "Per app and site, from replica counts: ready, degraded, failed, or a deliberate standby at zero replicas. A site that stops reporting shows Unknown.", "table"),
                 p("Declared placement", metric("homelab_expected_workload_info"), "short",
                   "Expected app/site/tier inventory independent of discovery. Standbys and hardware-pinned applications remain visible.", "table"),
                 p("Desired replicas", metric("homelab_workload_desired_replicas"), "short",
@@ -272,7 +286,7 @@ def catalogue() -> list[Board]:
                   "Buckets combined before calculating the percentile. Never average per-pod percentiles."),
             ],
             "Dependencies": [
-                p("Certificate validity remaining", f'{metric("certmanager_certificate_expiration_timestamp_seconds")} - time()', "s",
+                p("Certificate validity remaining", f'max by (k8s_cluster, name) ({metric("certmanager_certificate_expiration_timestamp_seconds")}) - time()', "s",
                   "Expiry of certificates managed by cert-manager. S3 transport trust and external identity-provider health are separate checks.", "table"),
                 p("Tunnel connections", metric("cloudflared_tunnel_ha_connections"), "short",
                   "Cloudflared connection evidence. This does not by itself certify the origin, identity provider or application content."),
@@ -344,10 +358,12 @@ def catalogue() -> list[Board]:
         Board("tnwks-alerts", "Alerts", "observability", "l2",
               "What is firing now, and can I reach its evidence and runbook?", {
             "Current": [
-                p("Firing now", f'ALERTS{{{ALERT_SCOPE},alertstate="firing"}}', "short",
-                  "Current Prometheus firing state, independent of the dashboard historical time selection. Follow the rule's dashboard/runbook annotation for diagnosis.", "table"),
-                p("Pending now", f'ALERTS{{{ALERT_SCOPE},alertstate="pending"}}', "short",
-                  "Pending is not yet firing. Alertmanager silencing/inhibition and notification state are viewed through the per-site Alertmanager links.", "table"),
+                p("Firing now", alerts("firing"), "short",
+                  "Current Prometheus firing state, independent of the dashboard historical time selection, excluding heartbeats. Follow the rule's dashboard/runbook annotation for diagnosis.",
+                  "table", empty=NO_ALERTS),
+                p("Pending now", alerts("pending"), "short",
+                  "Pending is not yet firing. Alertmanager silencing/inhibition and notification state are viewed through the per-site Alertmanager links.",
+                  "table", empty=NO_ALERTS),
             ],
             "Delivery": [
                 p("Failed notifications", f'sum by (k8s_cluster, integration) (increase({metric("alertmanager_notifications_failed_total")}[1h]))', "short",

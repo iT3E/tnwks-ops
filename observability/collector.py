@@ -229,6 +229,35 @@ class Collector:
                         **scope)
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *_args, **_kwargs):
+        return None
+
+
+# Fixed endpoints. Any HTTP answer proves the path, so the archive's 403 for an
+# anonymous request counts: this is reachability, not bucket or application health.
+PATHS = {
+    "archive": "https://observability-archive.monitoring.svc.cluster.local/",
+    "internet": "http://1.1.1.1/",
+}
+CA_FILE = "/tls/ca.crt"
+
+
+def path_probe(url: str, timeout: float = 3) -> tuple[bool, float]:
+    start = time.monotonic()
+    handlers = [NoRedirect()]
+    if url.startswith("https://"):
+        handlers.append(urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=CA_FILE)))
+    try:
+        urllib.request.build_opener(*handlers).open(url, timeout=timeout).close()
+        ok = True
+    except urllib.error.HTTPError:
+        ok = True
+    except (OSError, urllib.error.URLError):
+        ok = False
+    return ok, time.monotonic() - start
+
+
 def peer_probe(url: str, timeout: float = 3) -> tuple[bool, float]:
     start = time.monotonic()
     try:
@@ -266,6 +295,12 @@ def main():
                     labels = {"observer_cluster": args.cluster, "k8s_cluster": site["cluster"]}
                     peers.add("homelab_peer_probe_success", int(ok), **labels)
                     peers.add("homelab_peer_probe_duration_seconds", duration, **labels)
+                for target, url in PATHS.items():
+                    ok, duration = path_probe(url)
+                    labels = {"observer_cluster": args.cluster, "k8s_cluster": args.cluster,
+                              "observability_target": target}
+                    peers.add("probe_success", int(ok), **labels)
+                    peers.add("probe_duration_seconds", duration, **labels)
                 body += peers.render()
             else:
                 self.send_error(404)

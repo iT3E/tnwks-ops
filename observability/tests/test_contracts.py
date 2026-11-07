@@ -11,6 +11,10 @@ from inventory import inventory
 from kiosk_proxy import sanitize
 
 
+EMPTY_IS_NORMAL = {"Override creation age", "Workloads needing attention",
+                   "Current firing alerts", "Firing now", "Pending now"}
+
+
 def test_sdk_generates_isolated_household_and_operator_resources():
     boards = catalogue()
     operator = [b for b in boards if not b.kiosk]
@@ -29,8 +33,8 @@ def test_sdk_generates_isolated_household_and_operator_resources():
             spec = panel["spec"]
             assert spec["description"]
             if spec["vizConfig"]["group"] != "text":
-                # An absent override is the normal state, not missing evidence.
-                if spec["title"] != "Override creation age":
+                # Nothing to list is the normal state for these, not missing evidence.
+                if spec["title"] not in EMPTY_IS_NORMAL:
                     assert "Unknown" in spec["vizConfig"]["spec"]["fieldConfig"]["defaults"]["noValue"]
         variables = obj["spec"]["variables"]
         if board.kiosk:

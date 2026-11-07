@@ -46,6 +46,13 @@ spec:
     - record: homelab:internet_state
       expr: (3 - 2 * min by (k8s_cluster) (probe_success{observability_target="internet"} and (time() - timestamp(probe_success{observability_target="internet"}))
         < 180)) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_observer_info))
+    - record: homelab:workload_state
+      expr: (sum by (k8s_cluster, app) (homelab_workload_desired_replicas) == 0) + 4 or (((sum by (k8s_cluster,
+        app) (homelab_workload_ready_replicas) >= sum by (k8s_cluster, app) (homelab_workload_desired_replicas))
+        * 0) + 1) or (((sum by (k8s_cluster, app) (homelab_workload_ready_replicas) < sum by (k8s_cluster, app)
+        (homelab_workload_desired_replicas)) > 0) * 0 + 2) or ((sum by (k8s_cluster, app) (homelab_workload_ready_replicas)
+        < sum by (k8s_cluster, app) (homelab_workload_desired_replicas)) * 0 + 3) or on (k8s_cluster, app) (0 *
+        max by (k8s_cluster, app) (homelab_expected_workload_info))
     - record: homelab:service_state
       expr: (3 - 2 * min by (k8s_cluster, app) (probe_success{observability_target="service"} and (time() - timestamp(probe_success{observability_target="service"}))
         < 180)) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))

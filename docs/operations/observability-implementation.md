@@ -62,6 +62,20 @@ Both sites report on both sites, so the global view returns some series twice;
 `IDENTITY` in `dashboards.py` reduces those with `max`, which keeps the worst state
 and lets a real answer replace an observer's Unknown.
 
+## What the state panels are based on
+
+| State | Source | Today |
+| --- | --- | --- |
+| Site | Collector success and freshness | Real |
+| Database backup | Barman timestamps against expected databases | Real |
+| Workload | Replica counts; desired 0 is Standby, not Failed | Real |
+| Archive, Internet | Collector reachability probes; any HTTP answer proves the path | Real |
+| Service path | `probe_success{observability_target="service"}` | Unknown: no content probes yet |
+| Recovery | `homelab_recovery_prerequisite_state` | Unknown: nothing emits fencing or restore evidence yet |
+
+A row is not evidence: a panel can return data and still be Unknown for every row.
+Check the values when judging coverage, not just whether a query returns.
+
 ## Validation evidence
 
 - Six behavior fixtures cover missing/future backups, same-name databases across

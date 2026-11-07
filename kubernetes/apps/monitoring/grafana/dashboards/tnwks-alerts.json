@@ -58,7 +58,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "ALERTS{cluster=~\"$cluster\",alertstate=\"firing\"}",
+                        "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",severity!=\"none\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
@@ -83,11 +83,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -132,7 +135,7 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
-                  "noValue": "Unknown — missing evidence",
+                  "noValue": "None",
                   "custom": {
                     "align": "auto",
                     "inspect": false,
@@ -143,7 +146,7 @@
               }
             }
           },
-          "description": "Current Prometheus firing state, independent of the dashboard historical time selection. Follow the rule's dashboard/runbook annotation for diagnosis."
+          "description": "Current Prometheus firing state, independent of the dashboard historical time selection, excluding heartbeats. Follow the rule's dashboard/runbook annotation for diagnosis."
         }
       },
       "panel-2": {
@@ -164,7 +167,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "ALERTS{cluster=~\"$cluster\",alertstate=\"pending\"}",
+                        "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"pending\",severity!=\"none\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
@@ -189,11 +192,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -238,7 +244,7 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
-                  "noValue": "Unknown — missing evidence",
+                  "noValue": "None",
                   "custom": {
                     "align": "auto",
                     "inspect": false,

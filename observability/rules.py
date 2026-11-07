@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 def records():
     db = "k8s_cluster, namespace, db_cluster"
     expected_db = f"max by ({db}) (homelab_expected_database_info)"
+    desired = "sum by (k8s_cluster, app) (homelab_workload_desired_replicas)"
+    ready = "sum by (k8s_cluster, app) (homelab_workload_ready_replicas)"
     return {
         "homelab:site_reporting": '(max by (k8s_cluster) (homelab_collection_success{collector="workloads"}) == bool 1) * on (k8s_cluster) (time() - max by (k8s_cluster) (homelab_collection_last_success_timestamp_seconds{collector="workloads"}) < bool 180)',
         "homelab:site_state": '(homelab:site_reporting == 1) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_expected_site_info))',
@@ -22,6 +24,14 @@ def records():
         "homelab:unuploaded_block_age_seconds": 'time() - max by (k8s_cluster) (thanos_objstore_bucket_last_successful_upload_time{job=~".*thanos-discovery"} > 0)',
         "homelab:archive_state": '(3 - 2 * min by (k8s_cluster) (probe_success{observability_target="archive"} and (time() - timestamp(probe_success{observability_target="archive"})) < 180)) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_observer_info))',
         "homelab:internet_state": '(3 - 2 * min by (k8s_cluster) (probe_success{observability_target="internet"} and (time() - timestamp(probe_success{observability_target="internet"})) < 180)) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_observer_info))',
+        # Replica evidence, not an end-to-end path: 1 healthy, 2 degraded, 3 failed,
+        # 4 standby (desired 0, the normal state of an app on the other site).
+        "homelab:workload_state": (
+            f'({desired} == 0) + 4'
+            f' or ((({ready} >= {desired}) * 0) + 1)'
+            f' or ((({ready} < {desired}) > 0) * 0 + 2)'
+            f' or (({ready} < {desired}) * 0 + 3)'
+            ' or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))'),
         "homelab:service_state": '(3 - 2 * min by (k8s_cluster, app) (probe_success{observability_target="service"} and (time() - timestamp(probe_success{observability_target="service"})) < 180)) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))',
     }
 
@@ -102,6 +112,27 @@ def fixtures():
          ], "promql_expr_test": [
              {"expr": "homelab:recovery_state", "eval_time": "5m", "exp_samples": [
                  {"labels": 'homelab:recovery_state{k8s_cluster="one",app="test"}', "value": 0}]},
+         ]},
+        {"name": "workload state tells standby from failed and keeps missing apps Unknown", "interval": "1m",
+         "input_series": [
+             *[{"series": f'homelab_expected_workload_info{{k8s_cluster="one",app="{a}"}}', "values": "1+0x10"}
+               for a in ("up", "partial", "down", "parked", "missing")],
+             {"series": 'homelab_workload_desired_replicas{k8s_cluster="one",app="up"}', "values": "2+0x10"},
+             {"series": 'homelab_workload_ready_replicas{k8s_cluster="one",app="up"}', "values": "2+0x10"},
+             {"series": 'homelab_workload_desired_replicas{k8s_cluster="one",app="partial"}', "values": "2+0x10"},
+             {"series": 'homelab_workload_ready_replicas{k8s_cluster="one",app="partial"}', "values": "1+0x10"},
+             {"series": 'homelab_workload_desired_replicas{k8s_cluster="one",app="down"}', "values": "1+0x10"},
+             {"series": 'homelab_workload_ready_replicas{k8s_cluster="one",app="down"}', "values": "0+0x10"},
+             {"series": 'homelab_workload_desired_replicas{k8s_cluster="one",app="parked"}', "values": "0+0x10"},
+             {"series": 'homelab_workload_ready_replicas{k8s_cluster="one",app="parked"}', "values": "0+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:workload_state", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:workload_state{k8s_cluster="one",app="up"}', "value": 1},
+                 {"labels": 'homelab:workload_state{k8s_cluster="one",app="partial"}', "value": 2},
+                 {"labels": 'homelab:workload_state{k8s_cluster="one",app="down"}', "value": 3},
+                 {"labels": 'homelab:workload_state{k8s_cluster="one",app="parked"}', "value": 4},
+                 {"labels": 'homelab:workload_state{k8s_cluster="one",app="missing"}', "value": 0},
+             ]},
          ]},
         {"name": "only a local primary without backup evidence alerts", "interval": "1m",
          "input_series": [

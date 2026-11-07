@@ -245,11 +245,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -372,11 +375,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -445,7 +451,7 @@
         "kind": "Panel",
         "spec": {
           "id": 6,
-          "title": "Service paths",
+          "title": "Workloads needing attention",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -459,7 +465,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})",
+                        "expr": "sort_desc(max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"}) != 4 != 1)",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
@@ -484,11 +490,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -571,10 +580,10 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/tnwks-apps?from=${__from}&to=${__to}&var-cluster=${cluster:percentencode}&var-datasource=${datasource:percentencode}"
+                      "url": "/d/tnwks-sites?from=${__from}&to=${__to}&var-cluster=${cluster:percentencode}&var-datasource=${datasource:percentencode}"
                     }
                   ],
-                  "noValue": "Unknown — missing evidence",
+                  "noValue": "All ready or standby",
                   "custom": {
                     "align": "auto",
                     "inspect": false,
@@ -585,7 +594,7 @@
               }
             }
           },
-          "description": "Synthetic content/transport evidence per service. No probe or stale probe is Unknown, never an implicit success."
+          "description": "Apps not fully ready, from replica counts. Empty means every app is ready or a deliberate standby. This is workload evidence, not an end-to-end path check."
         }
       },
       "panel-6": {
@@ -606,7 +615,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "ALERTS{cluster=~\"$cluster\",alertstate=\"firing\"}",
+                        "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",severity!=\"none\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
@@ -631,11 +640,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -686,7 +698,7 @@
                       "url": "/d/tnwks-alerts?from=${__from}&to=${__to}&var-cluster=${cluster:percentencode}&var-datasource=${datasource:percentencode}"
                     }
                   ],
-                  "noValue": "Unknown — missing evidence",
+                  "noValue": "None",
                   "custom": {
                     "align": "auto",
                     "inspect": false,
@@ -697,7 +709,7 @@
               }
             }
           },
-          "description": "Current Prometheus rule state; this is not a historical Alertmanager event list and does not show silence/inhibition state."
+          "description": "Current Prometheus rule state, excluding heartbeats; this is not a historical Alertmanager event list and does not show silence/inhibition state."
         }
       },
       "panel-7": {
@@ -743,11 +755,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -1069,11 +1084,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
@@ -1175,11 +1193,14 @@
                         "__name__": true,
                         "Time": true,
                         "__replica__": true,
+                        "alertstate": true,
                         "cluster": true,
                         "container": true,
                         "endpoint": true,
                         "instance": true,
                         "job": true,
+                        "kind": true,
+                        "namespace": true,
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
