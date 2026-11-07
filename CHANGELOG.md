@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.34.0 - 2026-11-07
+
+### Added
+
+* Six Grafana preview features on trial (state kept across drilldowns, fitted table columns, auto-height panels, tabular digits, colorblind-safe palettes, recently viewed boards), with the browser rehearsal running the same set.
+
 ## v2.33.0 - 2026-11-07
 
 ### Changed
