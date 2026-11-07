@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Can users reach a usable application, and where is the request path failing?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+                "content": "Can users reach a usable application, and where is the request path failing?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -170,6 +170,13 @@
                       }
                     }
                   ],
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -181,7 +188,7 @@
               }
             }
           },
-          "description": "Content probe to the in-cluster Service on its active site. This bypasses client DNS, ingress and sign-in; those paths need separate evidence."
+          "description": "Content probe to the in-cluster Service on its active site. This bypasses client DNS, ingress and sign-in; those paths need separate evidence.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-2": {
@@ -243,6 +250,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "reqps",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -250,7 +264,7 @@
               }
             }
           },
-          "description": "Rate counters before aggregation. Use the same scope when comparing the error numerator and total denominator."
+          "description": "Rate counters before aggregation. Use the same scope when comparing the error numerator and total denominator.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-3": {
@@ -312,6 +326,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "percentunit",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -319,7 +340,7 @@
               }
             }
           },
-          "description": "Weighted errors/requests. No traffic is not a perfect availability measurement; independent synthetic evidence remains necessary."
+          "description": "Weighted errors/requests. No traffic is not a perfect availability measurement; independent synthetic evidence remains necessary.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-4": {
@@ -381,6 +402,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -388,7 +416,7 @@
               }
             }
           },
-          "description": "Buckets combined before calculating the percentile. Never average per-pod percentiles."
+          "description": "Buckets combined before calculating the percentile. Never average per-pod percentiles.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-5": {
@@ -486,6 +514,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -497,7 +532,7 @@
               }
             }
           },
-          "description": "Expiry of certificates managed by cert-manager. S3 transport trust and external identity-provider health are separate checks."
+          "description": "Expiry of certificates managed by cert-manager. S3 transport trust and external identity-provider health are separate checks.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-6": {
@@ -559,6 +594,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -566,7 +608,7 @@
               }
             }
           },
-          "description": "Cloudflared connection evidence. This does not by itself certify the origin, identity provider or application content."
+          "description": "Cloudflared connection evidence. This does not by itself certify the origin, identity provider or application content.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       }
     },

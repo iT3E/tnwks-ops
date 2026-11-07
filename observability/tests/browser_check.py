@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import time
+import urllib.parse
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -36,7 +37,7 @@ def main():
         for board in catalogue():
             if board.kiosk:
                 continue
-            page.goto(f"{base}/d/{board.uid}?var-datasource=prometheus-global", wait_until="domcontentloaded")
+            page.goto(f"{base}/d/{board.uid}/view?var-datasource=prometheus-global", wait_until="networkidle")
             try:
                 page.get_by_text(board.title, exact=True).filter(visible=True).first.wait_for(timeout=45000)
             except Exception:
@@ -59,13 +60,13 @@ def main():
         reference_path = Path(__file__).resolve().parents[2] / "kubernetes/apps/monitoring/grafana/upstream"
         for reference in json.loads((reference_path / "catalogue.json").read_text()):
             title = json.loads((reference_path / reference["file"]).read_text())["title"]
-            page.goto(f"{base}/d/{reference['uid']}", wait_until="domcontentloaded")
+            page.goto(f"{base}/d/{reference['uid']}/view", wait_until="domcontentloaded")
             page.get_by_text(title, exact=True).filter(visible=True).first.wait_for(timeout=45000)
             page.wait_for_timeout(500)
             body = page.locator("body").inner_text()
             for bad in ["Visualization plugin not found", "Panel plugin not found", "An unexpected error happened", "Data source was not found"]:
                 assert bad not in body, (reference["uid"], bad)
-        page.goto(f"{base}/d/home?var-datasource=prometheus-global", wait_until="domcontentloaded")
+        page.goto(f"{base}/d/home/view?var-datasource=prometheus-global", wait_until="domcontentloaded")
         page.get_by_text("Expected sites", exact=True).filter(visible=True).wait_for(timeout=45000)
         evidence = page.get_by_test_id("data-testid Panel header Site evidence")
         evidence.get_by_text("homelab-wsl-02", exact=True).wait_for(timeout=15000)
@@ -78,8 +79,33 @@ def main():
         page.get_by_test_id("data-testid Panel header Site evidence").get_by_text(
             "homelab-wsl-02", exact=True).wait_for(timeout=15000)
         page.screenshot(path=str(out / "homelab-tablet.png"), full_page=True, animations="disabled")
+        # Real data-link interpolation, including two selected sites and incident
+        # time. Looking for template strings alone cannot prove this behavior.
+        page.set_viewport_size({"width": 1440, "height": 1000})
+        incident_to = int(time.time() * 1000)
+        incident_from = incident_to - 3600000
+        query = urllib.parse.urlencode([
+            ("from", str(incident_from)), ("to", str(incident_to)),
+            ("var-datasource", "prometheus-global"),
+            ("var-cluster", "homelab-wsl"), ("var-cluster", "homelab-wsl-02"),
+        ])
+        page.goto(f"{base}/d/home/view?{query}", wait_until="domcontentloaded")
+        panel = page.get_by_test_id("data-testid Panel header Site evidence")
+        panel.get_by_text("Reporting", exact=True).click(timeout=15000)
+        diagnose = page.get_by_role("link", name="Diagnose", exact=True)
+        target = urllib.parse.urlparse(diagnose.get_attribute("href"))
+        params = urllib.parse.parse_qs(target.query)
+        assert target.path == "/d/tnwks-sites/view"
+        assert params["from"] == [str(incident_from)] and params["to"] == [str(incident_to)]
+        assert params["var-cluster"] == ["homelab-wsl", "homelab-wsl-02"]
+        assert params["var-datasource"] == ["prometheus-global"]
+        diagnose.click()
+        page.get_by_role("tab", name="Sites", exact=True).wait_for(timeout=15000)
+        navigation = {"journey": "home to sites", "incident_time_preserved": True,
+                      "selected_sites": params["var-cluster"]}
         browser.close()
-    (out / "browser-results.json").write_text(json.dumps({"dashboards": results, "page_errors": errors}, indent=2) + "\n")
+    (out / "browser-results.json").write_text(json.dumps({"dashboards": results, "navigation": navigation,
+        "page_errors": errors}, indent=2) + "\n")
     assert not errors, errors
     print(f"Rendered {len(results)} operator dashboards and six pinned references in Grafana; screenshots and evidence: {out}")
 

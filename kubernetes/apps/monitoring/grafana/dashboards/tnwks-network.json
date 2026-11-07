@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Where does the path from the router through FRR/Cilium to a service fail?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+                "content": "Where does the path from the router through FRR/Cilium to a service fail?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -135,6 +135,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bool",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -146,7 +153,7 @@
               }
             }
           },
-          "description": "Cross-site probe success from each observer. Read with transport and endpoint evidence; a BGP Established session alone is insufficient."
+          "description": "Cross-site probe success from each observer. Read with transport and endpoint evidence; a BGP Established session alone is insufficient.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-2": {
@@ -208,6 +215,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "Bps",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -215,7 +229,7 @@
               }
             }
           },
-          "description": "Received on the router's WireGuard interface for each site's distro. Missing series mean the router isn't observed, not an idle tunnel."
+          "description": "Received on the router's WireGuard interface for each site's distro. Missing series mean the router isn't observed, not an idle tunnel.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-3": {
@@ -277,6 +291,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "ops",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -284,7 +305,7 @@
               }
             }
           },
-          "description": "Router receive errors by interface. Telemetry enables are integrated after the network migration release."
+          "description": "Router receive errors by interface. Telemetry enables are integrated after the network migration release.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-4": {
@@ -417,6 +438,13 @@
                       }
                     }
                   ],
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -428,7 +456,7 @@
               }
             }
           },
-          "description": "Per site: the WireGuard tunnel to the router (handshake within 180 s), the router's BGP session with the distro's FRR, and the Cilium agents' sessions with the distro. Unknown when the router or the agents aren't observed."
+          "description": "Per site: the WireGuard tunnel to the router (handshake within 180 s), the router's BGP session with the distro's FRR, and the Cilium agents' sessions with the distro. Unknown when the router or the agents aren't observed.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-5": {
@@ -495,13 +523,20 @@
                     "mode": "fixed",
                     "fixedColor": "#5794f2"
                   },
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Prefixes the router accepted from each site's FRR (its node, pod and shared-VIP routes). Zero with an established session means the site announces nothing."
+          "description": "Prefixes the router accepted from each site's FRR (its node, pod and shared-VIP routes). Zero with an established session means the site announces nothing.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-6": {
@@ -563,6 +598,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "pps",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -570,7 +612,7 @@
               }
             }
           },
-          "description": "Agent drop counters, with bounded labels. Cilium metrics activation belongs to the post-network-release integration."
+          "description": "Agent drop counters, with bounded labels. Cilium metrics activation belongs to the post-network-release integration.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-7": {
@@ -668,6 +710,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bool",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -679,7 +728,7 @@
               }
             }
           },
-          "description": "Remote cluster readiness from Cilium. Mesh API/KVStoreMesh metrics have separate enabling requirements."
+          "description": "Remote cluster readiness from Cilium. Mesh API/KVStoreMesh metrics have separate enabling requirements.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       }
     },

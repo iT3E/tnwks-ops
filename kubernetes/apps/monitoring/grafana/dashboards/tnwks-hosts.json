@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Can the physical hosts sustain the workload and a site failure?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+                "content": "Can the physical hosts sustain the workload and a site failure?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -99,6 +99,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bytes",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -106,7 +113,7 @@
               }
             }
           },
-          "description": "Physical host availability. Do not add this to WSL MemAvailable, which overlaps the same memory."
+          "description": "Physical host availability. Do not add this to WSL MemAvailable, which overlaps the same memory.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-2": {
@@ -204,6 +211,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bytes",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -215,7 +229,7 @@
               }
             }
           },
-          "description": "Physical free space remains authoritative even if an ext4 VHDX reports much more virtual space."
+          "description": "Physical free space remains authoritative even if an ext4 VHDX reports much more virtual space.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-3": {
@@ -277,6 +291,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "celsius",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -284,7 +305,7 @@
               }
             }
           },
-          "description": "SMART device temperature where published. Missing SMART data is a collection gap, not a passing disk test."
+          "description": "SMART device temperature where published. Missing SMART data is a collection gap, not a passing disk test.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-4": {
@@ -382,6 +403,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -393,7 +421,7 @@
               }
             }
           },
-          "description": "Current placement demand. Full survivor-fit evidence also needs measured requests/peaks, storage placement and pinned hardware."
+          "description": "Current placement demand. Full survivor-fit evidence also needs measured requests/peaks, storage placement and pinned hardware.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-5": {
@@ -526,6 +554,13 @@
                       }
                     }
                   ],
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -537,7 +572,7 @@
               }
             }
           },
-          "description": "Readiness remains Unknown until storage/fencing/restore/capacity evidence exists. This page does not promise all services fit or fail over."
+          "description": "Readiness remains Unknown until storage/fencing/restore/capacity evidence exists. This page does not promise all services fit or fail over.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       }
     },

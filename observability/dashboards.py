@@ -16,6 +16,7 @@ from grafana_foundation_sdk.cog.encoder import JSONEncoder
 from grafana_foundation_sdk.models import common
 from grafana_foundation_sdk.models import prometheus as prom_model
 from grafana_foundation_sdk.models import dashboardv2 as model
+from conventions import OBSERVATION_BUDGET_SECONDS, dashboard_link, runbook_path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "kubernetes/apps/monitoring/grafana/dashboards"
@@ -401,7 +402,7 @@ def catalogue() -> list[Board]:
     return boards
 
 
-def visualization(panel: Panel):
+def visualization(panel: Panel, runbook: str | None = None):
     cls = {"stat": stat.Visualization, "table": table.Visualization,
            "timeseries": timeseries.Visualization}[panel.kind]
     viz = cls().unit("short" if panel.unit in ("state", "coverage") else panel.unit).no_value(panel.empty)
@@ -421,8 +422,13 @@ def visualization(panel: Panel):
     if panel.kind == "timeseries":
         viz.legend(common_builder.VizLegendOptions().display_mode(common.LegendDisplayMode.TABLE)
                    .placement(common.LegendPlacement.BOTTOM).calcs(["lastNotNull", "max"]))
+    links = []
     if panel.link:
-        viz.data_links([model.DataLink(title="Diagnose", url=f'/d/{panel.link}?from=${{__from}}&to=${{__to}}&var-cluster=${{cluster:percentencode}}&var-datasource=${{datasource:percentencode}}')])
+        links.append(model.DataLink(title="Diagnose", url=dashboard_link(panel.link)))
+    if runbook:
+        links.append(model.DataLink(title="Runbook", url=f'https://github.com/iT3E/tnwks-ops/blob/main/{runbook}', target_blank=True))
+    if links:
+        viz.data_links(links)
     return viz
 
 
@@ -451,7 +457,7 @@ def resource(board: Board) -> dict:
              .visualization(text.Visualization().content(board.question + "\n\n"
                  + ("Missing evidence is Unknown."
                     if board.kiosk else "Missing or partial evidence is Unknown. "
-                       + "[Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"))))
+                       + f"[Runbook](https://github.com/iT3E/tnwks-ops/blob/main/{runbook_path(board.domain)})"))))
     builder.element("about", about)
     for tab_name, panels in board.tabs.items():
         grid = (dashboard.AutoGrid().max_column_count(3).column_width_mode("narrow")
@@ -477,9 +483,14 @@ def resource(board: Board) -> dict:
                                      "app": "App", "observer_cluster": "Observer",
                                      "Value": "State" if panel.unit in ("state", "coverage") else "Value"},
                 }))
-            element = (dashboard.Panel().id(count + 1).title(panel.title).description(panel.description)
+            description = panel.description
+            if not board.kiosk:
+                description += (f"\n\nObservation budget: {OBSERVATION_BUDGET_SECONDS}s for current evidence; "
+                                "backup/restore objectives and historical windows are separate. "
+                                "Source contract: observability/generated/panel-contracts.json.")
+            element = (dashboard.Panel().id(count + 1).title(panel.title).description(description)
                        .data(data)
-                       .visualization(visualization(panel)))
+                       .visualization(visualization(panel, None if board.kiosk else runbook_path(board.domain, panel.title))))
             builder.element(key, element)
             grid.with_item(key)
         tab_layout.tab(dashboard.Tab().title(tab_name).layout(grid))

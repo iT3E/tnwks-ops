@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "What is affected, which evidence is available, and where should I look next?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+                "content": "What is affected, which evidence is available, and where should I look next?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -104,13 +104,20 @@
                     "mode": "fixed",
                     "fixedColor": "#5794f2"
                   },
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Declared inventory survives the disappearance of a source. This is expected scope, not health."
+          "description": "Declared inventory survives the disappearance of a source. This is expected scope, not health.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-2": {
@@ -177,13 +184,20 @@
                     "mode": "fixed",
                     "fixedColor": "#5794f2"
                   },
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Distinct selected sites with fresh, successful evidence. Duplicate observations count once. Compare with Expected sites; partial results never certify fleet health."
+          "description": "Distinct selected sites with fresh, successful evidence. Duplicate observations count once. Compare with Expected sites; partial results never certify fleet health.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-3": {
@@ -299,7 +313,12 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/tnwks-sites?from=${__from}&to=${__to}&var-cluster=${cluster:percentencode}&var-datasource=${datasource:percentencode}"
+                      "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
@@ -313,7 +332,7 @@
               }
             }
           },
-          "description": "Measured site evidence, including explicit Unknown when an expected site stops reporting. Independent site probes distinguish unreachable from unobserved."
+          "description": "Measured site evidence, including explicit Unknown when an expected site stops reporting. Independent site probes distinguish unreachable from unobserved.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-4": {
@@ -414,7 +433,12 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/tnwks-observability?from=${__from}&to=${__to}&var-cluster=${cluster:percentencode}&var-datasource=${datasource:percentencode}"
+                      "url": "/d/tnwks-observability/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
@@ -428,7 +452,7 @@
               }
             }
           },
-          "description": "Age of the last successful Kubernetes inventory observation. A recent Prometheus scrape alone does not prove the collector is seeing its upstream."
+          "description": "Age of the last successful Kubernetes inventory observation. A recent Prometheus scrape alone does not prove the collector is seeing its upstream.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-5": {
@@ -564,7 +588,12 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/tnwks-sites?from=${__from}&to=${__to}&var-cluster=${cluster:percentencode}&var-datasource=${datasource:percentencode}"
+                      "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
                     }
                   ],
                   "noValue": "All ready or standby",
@@ -578,7 +607,7 @@
               }
             }
           },
-          "description": "Apps not fully ready, from replica counts. Empty means every app is ready or a deliberate standby. This is workload evidence, not an end-to-end path check."
+          "description": "Apps not fully ready, from replica counts. Empty means every app is ready or a deliberate standby. This is workload evidence, not an end-to-end path check.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-6": {
@@ -679,7 +708,12 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/tnwks-alerts?from=${__from}&to=${__to}&var-cluster=${cluster:percentencode}&var-datasource=${datasource:percentencode}"
+                      "url": "/d/tnwks-alerts/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
                     }
                   ],
                   "noValue": "None",
@@ -693,7 +727,7 @@
               }
             }
           },
-          "description": "Current Prometheus rule state, excluding heartbeats; this is not a historical Alertmanager event list and does not show silence/inhibition state."
+          "description": "Current Prometheus rule state, excluding heartbeats; this is not a historical Alertmanager event list and does not show silence/inhibition state.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-7": {
@@ -829,7 +863,12 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/tnwks-data?from=${__from}&to=${__to}&var-cluster=${cluster:percentencode}&var-datasource=${datasource:percentencode}"
+                      "url": "/d/tnwks-data/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
@@ -843,7 +882,7 @@
               }
             }
           },
-          "description": "Per-app prerequisites. Unknown fencing or untested recovery blocks a positive readiness conclusion. A dashboard never authorizes promotion."
+          "description": "Per-app prerequisites. Unknown fencing or untested recovery blocks a positive readiness conclusion. A dashboard never authorizes promotion.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-8": {
@@ -944,7 +983,12 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/tnwks-observability?from=${__from}&to=${__to}&var-cluster=${cluster:percentencode}&var-datasource=${datasource:percentencode}"
+                      "url": "/d/tnwks-observability/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence"
@@ -953,7 +997,7 @@
               }
             }
           },
-          "description": "The archive is hosted only on WSL-02. Its failure does not remove local 15-day metrics; older history becomes unavailable."
+          "description": "The archive is hosted only on WSL-02. Its failure does not remove local 15-day metrics; older history becomes unavailable.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-9": {
@@ -1015,6 +1059,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -1022,7 +1073,7 @@
               }
             }
           },
-          "description": "Sampled transitions in observed service state. This is supplementary evidence and can miss transitions during a monitoring gap."
+          "description": "Sampled transitions in observed service state. This is supplementary evidence and can miss transitions during a monitoring gap.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-10": {
@@ -1120,6 +1171,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -1131,7 +1189,7 @@
               }
             }
           },
-          "description": "Time since a workload Ready transition reported by Kubernetes. This is not necessarily its deployment or git revision time."
+          "description": "Time since a workload Ready transition reported by Kubernetes. This is not necessarily its deployment or git revision time.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-11": {
@@ -1229,6 +1287,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -1240,7 +1305,7 @@
               }
             }
           },
-          "description": "Observed earliest retained sample, not configured retention. New persistent storage accumulates history gradually."
+          "description": "Observed earliest retained sample, not configured retention. New persistent storage accumulates history gradually.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       }
     },

@@ -29,7 +29,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Can the other dashboards be trusted, and is monitoring itself sustainable?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-dashboard-design.md)"
+                "content": "Can the other dashboards be trusted, and is monitoring itself sustainable?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md)"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -104,13 +104,20 @@
                     "mode": "fixed",
                     "fixedColor": "#5794f2"
                   },
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Declared inventory survives the disappearance of a source. This is expected scope, not health."
+          "description": "Declared inventory survives the disappearance of a source. This is expected scope, not health.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-2": {
@@ -177,13 +184,20 @@
                     "mode": "fixed",
                     "fixedColor": "#5794f2"
                   },
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Distinct selected sites with fresh, successful evidence. Duplicate observations count once. Compare with Expected sites; partial results never certify fleet health."
+          "description": "Distinct selected sites with fresh, successful evidence. Duplicate observations count once. Compare with Expected sites; partial results never certify fleet health.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-3": {
@@ -299,7 +313,12 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/tnwks-sites?from=${__from}&to=${__to}&var-cluster=${cluster:percentencode}&var-datasource=${datasource:percentencode}"
+                      "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
@@ -313,7 +332,7 @@
               }
             }
           },
-          "description": "Measured site evidence, including explicit Unknown when an expected site stops reporting. Independent site probes distinguish unreachable from unobserved."
+          "description": "Measured site evidence, including explicit Unknown when an expected site stops reporting. Independent site probes distinguish unreachable from unobserved.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-4": {
@@ -414,7 +433,12 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/tnwks-observability?from=${__from}&to=${__to}&var-cluster=${cluster:percentencode}&var-datasource=${datasource:percentencode}"
+                      "url": "/d/tnwks-observability/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
@@ -428,7 +452,7 @@
               }
             }
           },
-          "description": "Age of the last successful Kubernetes inventory observation. A recent Prometheus scrape alone does not prove the collector is seeing its upstream."
+          "description": "Age of the last successful Kubernetes inventory observation. A recent Prometheus scrape alone does not prove the collector is seeing its upstream.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-5": {
@@ -526,6 +550,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bool",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -537,7 +568,7 @@
               }
             }
           },
-          "description": "Collector-specific upstream success. HTTP scrape success can coexist with a blind collector."
+          "description": "Collector-specific upstream success. HTTP scrape success can coexist with a blind collector.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-6": {
@@ -635,6 +666,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -646,7 +684,7 @@
               }
             }
           },
-          "description": "Failed targets per job; a site showing 0 has none. Compare with declared inventory to detect targets that disappeared from discovery."
+          "description": "Failed targets per job; a site showing 0 has none. Compare with declared inventory to detect targets that disappeared from discovery.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-7": {
@@ -708,6 +746,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -715,7 +760,7 @@
               }
             }
           },
-          "description": "Head series/churn drive memory and disk growth. Add telemetry in bounded batches before raising resource limits."
+          "description": "Head series/churn drive memory and disk growth. Add telemetry in bounded batches before raising resource limits.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-8": {
@@ -777,6 +822,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "ops",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -784,7 +836,7 @@
               }
             }
           },
-          "description": "Ingested samples per second; compare before/after each collector family."
+          "description": "Ingested samples per second; compare before/after each collector family.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-9": {
@@ -846,6 +898,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bytes",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -853,7 +912,7 @@
               }
             }
           },
-          "description": "Compressed blocks only; WAL/head, metadata and compaction scratch require additional disk."
+          "description": "Compressed blocks only; WAL/head, metadata and compaction scratch require additional disk.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-10": {
@@ -915,6 +974,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "ops",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -922,7 +988,7 @@
               }
             }
           },
-          "description": "Local alerts must remain independent of Grafana and the remote archive."
+          "description": "Local alerts must remain independent of Grafana and the remote archive.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-11": {
@@ -1020,13 +1086,20 @@
                       }
                     }
                   ],
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Local Garage on WSL-02 only. A loss of this endpoint makes archive history unavailable without invalidating retained local data."
+          "description": "Local Garage on WSL-02 only. A loss of this endpoint makes archive history unavailable without invalidating retained local data.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-12": {
@@ -1088,6 +1161,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -1095,7 +1175,7 @@
               }
             }
           },
-          "description": "Sidecar last-upload evidence; absent while uploads are not configured. An unavailable archive needs attention before local retention deletes the backlog."
+          "description": "Sidecar last-upload evidence; absent while uploads are not configured. An unavailable archive needs attention before local retention deletes the backlog.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-13": {
@@ -1157,6 +1237,13 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "ops",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/external-monitoring.md",
+                      "targetBlank": true
+                    }
+                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {}
                 },
@@ -1164,7 +1251,7 @@
               }
             }
           },
-          "description": "Delivery failures. No active alerts is reassuring only when local evaluation, routing and external heartbeat delivery are functioning."
+          "description": "Delivery failures. No active alerts is reassuring only when local evaluation, routing and external heartbeat delivery are functioning.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       }
     },
