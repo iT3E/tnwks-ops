@@ -248,7 +248,9 @@ in parallel within the 20 s scrape.
 
 `homelab_recovery_prerequisite_state{k8s_cluster, app, prerequisite}`, per warm app and
 site: could this site take the app over? 1 met, 3 not met. A prerequisite with no
-evidence is left out, so `homelab:recovery_state` stays Unknown.
+evidence is left out, so `homelab:recovery_state` stays Unknown. The site that runs
+the app (desired replicas above 0) shows Not applicable (5): nothing there needs to
+take it over, and the restore drill only runs where the app is off.
 
 | prerequisite | Met when |
 | --- | --- |
@@ -455,7 +457,9 @@ app shares the daily schedule and the weekly drill, so no app overrides them yet
   restore drill, from each Restore's creation to its Ready condition, taking
   the slowest PVC (`homelab_restore_last_duration_seconds`).
   `homelab:app_rto_state` compares that with the objective and stays Unknown
-  until a drill reports. This covers the data restore, not the whole failover.
+  until a drill reports. The site that runs the app shows Not applicable (5),
+  since the drill restores into the standby. This covers the data restore, not
+  the whole failover.
 - **Coverage.** The collector reports which SnapshotPolicy covers each
   catalogue PVC and whether a running schedule uses it
   (`homelab_app_backup_scheduled`). A PVC no site schedules has an unbounded

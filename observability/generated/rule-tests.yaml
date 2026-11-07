@@ -143,6 +143,27 @@ tests:
     exp_samples:
     - labels: homelab:site_state{k8s_cluster="one"}
       value: 0
+- name: 'recovery: Not applicable where the warm app runs; a parked site still needs evidence'
+  interval: 1m
+  input_series:
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="test",tier="warm"}
+    values: 1+0x10
+  - series: homelab_expected_workload_info{k8s_cluster="two",app="test",tier="warm"}
+    values: 1+0x10
+  - series: homelab_workload_desired_replicas{k8s_cluster="one",app="test",kind="deployment",workload="test"}
+    values: 1+0x10
+  - series: homelab_workload_desired_replicas{k8s_cluster="two",app="test",kind="deployment",workload="test"}
+    values: 0+0x10
+  - series: homelab_recovery_prerequisite_state{k8s_cluster="two",app="test",prerequisite="backup"}
+    values: 3+0x10
+  promql_expr_test:
+  - expr: homelab:recovery_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:recovery_state{k8s_cluster="one",app="test"}
+      value: 5
+    - labels: homelab:recovery_state{k8s_cluster="two",app="test"}
+      value: 3
 - name: absent fencing or restore evidence cannot certify readiness
   interval: 1m
   input_series:
@@ -631,7 +652,7 @@ tests:
     exp_samples:
     - labels: homelab:app_rpo_state{k8s_cluster="one",app="app"}
       value: 0
-- name: 'restore time: within, past, and Unknown without a drill'
+- name: 'restore time: within, past, Unknown without a drill, Not applicable where the app runs'
   interval: 1m
   input_series:
   - series: homelab_restore_last_duration_seconds{k8s_cluster="one",observer_cluster="one",app="quick"}
@@ -644,6 +665,12 @@ tests:
     values: 3600+0x10
   - series: homelab_app_recovery_objective_seconds{k8s_cluster="one",observer_cluster="one",app="untested",objective="rto"}
     values: 3600+0x10
+  - series: homelab_app_recovery_objective_seconds{k8s_cluster="one",observer_cluster="one",app="active",objective="rto"}
+    values: 3600+0x10
+  - series: homelab_workload_desired_replicas{k8s_cluster="one",app="active",kind="deployment",workload="active"}
+    values: 1+0x10
+  - series: homelab_workload_desired_replicas{k8s_cluster="one",app="untested",kind="deployment",workload="untested"}
+    values: 0+0x10
   promql_expr_test:
   - expr: homelab:app_rto_state
     eval_time: 5m
@@ -654,6 +681,8 @@ tests:
       value: 3
     - labels: homelab:app_rto_state{k8s_cluster="one",app="untested"}
       value: 0
+    - labels: homelab:app_rto_state{k8s_cluster="one",app="active"}
+      value: 5
 - name: 'other databases: ready, failed, standby, unobserved'
   interval: 1m
   input_series:

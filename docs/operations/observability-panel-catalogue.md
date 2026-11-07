@@ -12,7 +12,7 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | home / Now / Evidence age | `homelab_observer_last_success_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | home / Now / Workloads needing attention | `homelab_expected_workload_info`<br>`homelab_workload_desired_replicas`<br>`homelab_workload_present`<br>`homelab_workload_ready_replicas` | 180s | All ready or standby | [Runbook](../../docs/wsl/multi-site.md) |
 | home / Now / Current firing alerts | `ALERTS` | 180s | None | [Runbook](../../docs/wsl/multi-site.md) |
-| home / Now / Recovery evidence | `homelab_expected_workload_info`<br>`homelab_recovery_prerequisite_state` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
+| home / Now / Recovery evidence | `homelab_expected_workload_info`<br>`homelab_recovery_prerequisite_state`<br>`homelab_workload_desired_replicas` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | home / Now / Archive reachable | `homelab_observer_info`<br>`probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | home / Change and history / Observed state changes | `homelab_expected_workload_info`<br>`homelab_workload_desired_replicas`<br>`homelab_workload_present`<br>`homelab_workload_ready_replicas`<br>`probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | home / Change and history / Latest workload rollout | `homelab_workload_transition_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
@@ -29,7 +29,7 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-sites / Placement / Ready replicas | `homelab_workload_ready_replicas` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Placement / Runtime overrides present | `homelab_site_override_present` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Placement / Override creation age | `homelab_site_override_created_timestamp_seconds` | 180s | No overrides | [Runbook](../../docs/wsl/multi-site.md) |
-| tnwks-sites / Recovery / Readiness evidence | `homelab_expected_workload_info`<br>`homelab_recovery_prerequisite_state` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
+| tnwks-sites / Recovery / Readiness evidence | `homelab_expected_workload_info`<br>`homelab_recovery_prerequisite_state`<br>`homelab_workload_desired_replicas` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Recovery / Fencing evidence age | `homelab_fence_last_verified_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Recovery / Fence job age | `homelab_fence_job_last_success_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Recovery / Lease authority reachable | `homelab_lease_authority_reachable` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
@@ -50,7 +50,7 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-data / Backups / Weekly PVC drill age | `kube_cronjob_status_last_successful_time` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
 | tnwks-data / Objectives / Recovery point by app | `barman_cloud_cloudnative_pg_io_last_available_backup_timestamp`<br>`cnpg_pg_replication_in_recovery`<br>`homelab_app_backup_scheduled`<br>`homelab_app_recovery_objective_seconds`<br>`homelab_expected_database_info`<br>`kopiur_policy_last_backup_success_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
 | tnwks-data / Objectives / Backup age by app | `barman_cloud_cloudnative_pg_io_last_available_backup_timestamp`<br>`cnpg_pg_replication_in_recovery`<br>`homelab_app_backup_scheduled`<br>`homelab_expected_database_info`<br>`kopiur_policy_last_backup_success_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
-| tnwks-data / Objectives / Restore time by app | `homelab_app_recovery_objective_seconds`<br>`homelab_restore_last_duration_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
+| tnwks-data / Objectives / Restore time by app | `homelab_app_recovery_objective_seconds`<br>`homelab_restore_last_duration_seconds`<br>`homelab_workload_desired_replicas` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
 | tnwks-data / Objectives / Last drill duration | `homelab_restore_last_duration_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
 | tnwks-data / Objectives / PVCs without a backup schedule | `homelab_app_backup_scheduled` | 180s | Every PVC is scheduled on a site | [Runbook](../../docs/operations/backups.md) |
 | tnwks-data / Storage / Windows disk free | `windows_logical_disk_free_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
@@ -133,7 +133,7 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-hosts / Physical resources / Windows disk free | `windows_logical_disk_free_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
 | tnwks-hosts / Physical resources / Disk temperature | `smartctl_device_temperature` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
 | tnwks-hosts / Survivor fit / Required app replicas | `homelab_workload_desired_replicas` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
-| tnwks-hosts / Survivor fit / Recovery readiness | `homelab_expected_workload_info`<br>`homelab_recovery_prerequisite_state` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-hosts / Survivor fit / Recovery readiness | `homelab_expected_workload_info`<br>`homelab_recovery_prerequisite_state`<br>`homelab_workload_desired_replicas` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
 | tnwks-observability / Trust / Expected sites | `homelab_expected_site_info` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Trust / Reporting sites | `homelab_collection_last_success_timestamp_seconds`<br>`homelab_collection_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Trust / Site evidence | `homelab_collection_last_success_timestamp_seconds`<br>`homelab_collection_success`<br>`homelab_expected_site_info` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
