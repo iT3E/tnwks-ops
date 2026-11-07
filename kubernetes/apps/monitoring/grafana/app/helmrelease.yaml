@@ -286,6 +286,16 @@ spec:
         use_browser_locale: true
       explore:
         enabled: true
+      # Preview features on trial (observability-implementation.md, "Preview
+      # features"). The browser rehearsal runs with the same set; deleting a
+      # line is the fallback, and the boards don't depend on any of them.
+      feature_toggles:
+        preserveDashboardStateWhenNavigating: true
+        table.autoColumnWidths: true
+        grafana.dashboardsAutoHeightPanels: true
+        dataviz.tabularNums: true
+        enableColorblindSafePanelOptions: true
+        recentlyViewedDashboards: true
       grafana_net:
         url: https://grafana.net
       log:

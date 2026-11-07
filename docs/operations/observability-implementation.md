@@ -450,6 +450,29 @@ app shares the daily schedule and the weekly drill, so no app overrides them yet
   recovery point; the Databases & Backups board lists these on its Objectives
   tab, next to the states.
 
+## Preview features
+
+Grafana 13.3 has 398 feature flags, 63 on by default; the boards need none
+beyond those defaults (v2 tabs and the auto grid come from `dashboardNewLayouts`
+and `grafana.dashboardAutoGridDefault`). Since 2026-11-07 six off-by-default
+flags are on trial, set in the HelmRelease's `grafana.ini` `[feature_toggles]`:
+
+| Flag | What it changes |
+| --- | --- |
+| `preserveDashboardStateWhenNavigating` | A drilldown keeps the chosen sites and datasource. |
+| `table.autoColumnWidths` | Table columns fit their content: site names no longer truncate (`homelab-wsl-(`). |
+| `grafana.dashboardsAutoHeightPanels` | Auto-grid panels can size to their content. |
+| `dataviz.tabularNums` | Fixed-width digits, so values align in tables and stats. |
+| `enableColorblindSafePanelOptions` | Adds colorblind-safe palette options to panel settings. |
+| `recentlyViewedDashboards` | Recently opened boards on the dashboards page. |
+
+The trial is bounded by the rehearsal: `rehearse_grafana.py` reads the same
+flags from the HelmRelease, starts the pinned Grafana with them, checks through
+Grafana's flag evaluation API that each one is on, and runs the browser check
+of every board, tab and reference. The stable fallback is deleting a line:
+nothing generated depends on a flag. Flags change between Grafana releases, so
+a version bump reruns the rehearsal before it ships.
+
 ## Following rollout work
 
 Access, recovery, review and drills are in

@@ -1,6 +1,7 @@
 """Exercise Grafana provisioning in a disposable instance with synthetic metrics."""
 
 import argparse
+import base64
 import json
 import os
 import secrets
@@ -10,6 +11,7 @@ import sys
 import tempfile
 import threading
 import urllib.error
+import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
@@ -75,6 +77,12 @@ def main():
             "GF_AUTH_ANONYMOUS_ENABLED": "true", "GF_AUTH_ANONYMOUS_ORG_ROLE": "Viewer",
             "GF_ANALYTICS_REPORTING_ENABLED": "false", "GF_ANALYTICS_CHECK_FOR_UPDATES": "false",
             "GF_PLUGINS_PREINSTALL_DISABLED": "true", "GF_SECURITY_ADMIN_PASSWORD": secrets.token_hex(32)}
+        # The deployed preview toggles, so the rehearsal renders what production does.
+        release = yaml.safe_load((ROOT / "kubernetes/apps/monitoring/grafana/app/helmrelease.yaml").read_text())
+        toggles = sorted(k for k, v in release["spec"]["values"]["grafana.ini"].get("feature_toggles", {}).items()
+                         if v is True)
+        if toggles:
+            env["GF_FEATURE_TOGGLES_ENABLE"] = ",".join(toggles)
         try:
             if args.renderer:
                 token = secrets.token_hex(32)
@@ -117,6 +125,14 @@ def main():
 
             eventually(verify)
             assert len(json.loads(get(url + "/api/datasources"))) == 5
+            flags = urllib.request.Request(
+                url + "/apis/features.grafana.app/v0alpha1/namespaces/default/ofrep/v1/evaluate/flags",
+                data=b'{"context":{}}', method="POST", headers={"Content-Type": "application/json",
+                "Authorization": "Basic " + base64.b64encode(
+                    f"admin:{env['GF_SECURITY_ADMIN_PASSWORD']}".encode()).decode()})
+            with urllib.request.urlopen(flags, timeout=30) as response:
+                evaluated = {f["key"]: f["value"] for f in json.loads(response.read())["flags"]}
+            assert all(evaluated.get(t) is True for t in toggles), {t: evaluated.get(t) for t in toggles}
             if args.browser:
                 subprocess.run([sys.executable, str(ROOT / "observability/tests/browser_check.py")],
                     env=dict(os.environ, GRAFANA_TEST_URL=url), check=True)
@@ -137,7 +153,7 @@ def main():
                     raise AssertionError("deleted file remains provisioned")
 
             eventually(verify_prune)
-            print(f"PASS: Grafana v2 UIDs, tab layouts, folders, five datasources, {len(references)} pinned reference dashboards and file deletion")
+            print(f"PASS: Grafana v2 UIDs, tab layouts, folders, five datasources, {len(references)} pinned reference dashboards, file deletion and preview toggles {toggles}")
         finally:
             subprocess.run(["docker", "rm", "-f", name], capture_output=True)
             subprocess.run(["docker", "rm", "-f", renderer], capture_output=True)
