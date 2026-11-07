@@ -127,6 +127,8 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-observability / Cost / Rule evaluation failures | `prometheus_rule_evaluation_failures_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Objectives / SLO window coverage | `prometheus_tsdb_lowest_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Objectives / SLO availability | `pyrra_availability` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
+| tnwks-observability / Objectives / 28-day availability | `probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
+| tnwks-observability / Objectives / 28-day window coverage | `probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Objectives / Error budget left | `pyrra_availability`<br>`pyrra_objective` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Archive and delivery / Archive state | `homelab_observer_info`<br>`probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Archive and delivery / Archive lag | `homelab_archive_newest_sample_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |

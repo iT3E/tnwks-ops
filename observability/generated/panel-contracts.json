@@ -3418,6 +3418,56 @@
   {
     "dashboard": "tnwks-observability",
     "tab": "Objectives",
+    "panel": "28-day availability",
+    "query": "label_replace(avg by (k8s_cluster) (avg_over_time(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"internet\"}[28d])), \"slo\", \"internet\", \"\", \"\") or label_replace(avg by (k8s_cluster) (avg_over_time(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"ingress\",name=\"hass\"}[28d])), \"slo\", \"home-assistant-path\", \"\", \"\") or label_replace(avg by (k8s_cluster) (avg_over_time(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"ingress\"}[28d])), \"slo\", \"shared-vip-names\", \"\", \"\") or label_replace(avg by (k8s_cluster) (avg_over_time(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"mqtt\"}[28d])), \"slo\", \"mqtt-broker\", \"\", \"\")",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "probe_success"
+    ],
+    "sources": [
+      {
+        "metric": "probe_success",
+        "producer": "evidence collector probes",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/observability-implementation.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Objectives",
+    "panel": "28-day window coverage",
+    "query": "label_replace(clamp_max((time() - min by (k8s_cluster) (min_over_time(timestamp(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"internet\"})[28d:1h]))) / 2419200, 1), \"slo\", \"internet\", \"\", \"\") or label_replace(clamp_max((time() - min by (k8s_cluster) (min_over_time(timestamp(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"ingress\",name=\"hass\"})[28d:1h]))) / 2419200, 1), \"slo\", \"home-assistant-path\", \"\", \"\") or label_replace(clamp_max((time() - min by (k8s_cluster) (min_over_time(timestamp(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"ingress\"})[28d:1h]))) / 2419200, 1), \"slo\", \"shared-vip-names\", \"\", \"\") or label_replace(clamp_max((time() - min by (k8s_cluster) (min_over_time(timestamp(probe_success{k8s_cluster=~\"$cluster\",observability_target=\"mqtt\"})[28d:1h]))) / 2419200, 1), \"slo\", \"mqtt-broker\", \"\", \"\")",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "probe_success"
+    ],
+    "sources": [
+      {
+        "metric": "probe_success",
+        "producer": "evidence collector probes",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/observability-implementation.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Objectives",
     "panel": "Error budget left",
     "query": "max by (k8s_cluster, slo) (1 - (1 - pyrra_availability{k8s_cluster=~\"$cluster\"}) / (1 - pyrra_objective{k8s_cluster=~\"$cluster\"}))",
     "unit": "percentunit",
