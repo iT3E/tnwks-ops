@@ -21,5 +21,6 @@ resources:
   - ./ombi.yaml
   - ./ombi-f.yaml
   - ./wizarr.yaml
+  - ./jellyfin.yaml
   - ./firefly.yaml
   - ./finance-sync.yaml
