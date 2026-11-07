@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.14.1 - 2026-11-07
+
+### Fixed
+
+* Keep recovery unknown without per-app fencing and restore proof, reject future evidence, and count selected sites and workload observations once.
+
 ## v2.14.0 - 2026-11-07
 
 ### Added
