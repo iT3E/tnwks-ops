@@ -21,4 +21,4 @@ jobs:
     name: actionlint
     permissions:
       contents: read
-    uses: iT3E/github-workflows/.github/workflows/actionlint.yaml@282008593fefd7f0392c41c3127a630c091c3d1d # v1.4.1
+    uses: iT3E/github-workflows/.github/workflows/actionlint.yaml@317dd05ec8f5988a9a6f799a2119aba537b4bb16 # v1.4.2
