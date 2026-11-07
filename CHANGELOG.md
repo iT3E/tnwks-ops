@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.13.0 - 2026-11-07
+
+### Added
+
+* Recovery evidence per warm app and site (database, backup, restore drill, site lease), so recovery readiness is no longer always Unknown.
+
 ## v2.12.0 - 2026-11-07
 
 ### Added
