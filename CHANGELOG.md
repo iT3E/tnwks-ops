@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.221.0 - 2026-11-07
+
+### Added
+
+* Jellyfin can move between the WSL sites: replica toggle, global Service and Service-upstream Ingresses, a transfer-only kopiur policy for its config, a site-failover entry (prebind with its library volume, root restore), and homelab-wsl-02 deploying it at 0. Its media library stays on the desktop.
+
 ## v1.220.1 - 2026-11-07
 
 ### Fixed
