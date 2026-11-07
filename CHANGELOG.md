@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.25.0 - 2026-11-07
+
+### Changed
+
+* Record the licenses of the pinned reference boards where their publishers state one (UniFi Poller boards are MIT), and mark the rest as pending.
+
 ## v2.24.0 - 2026-11-07
 
 ### Added
