@@ -64,5 +64,16 @@
     "attribution": "https://grafana.com/grafana/dashboards/22200/",
     "license": "Not specified in the Grafana.com export API",
     "sha256": "fb55a12c0ae0f725001fd7a8a1264d0e7d99aa7c353b5dcb941cf95503679f83"
+  },
+  {
+    "provider": "alertmanager",
+    "file": "alertmanager-overview.json",
+    "grafana_com_id": null,
+    "revision": "kube-prometheus-stack 92.17.1",
+    "uid": "alertmanager-overview",
+    "source": "oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack:92.17.1 (templates/grafana/dashboards-1.14/alertmanager-overview.yaml, rendered with alertmanager.enabled=true)",
+    "attribution": "https://github.com/prometheus-operator/kube-prometheus",
+    "license": "Apache-2.0",
+    "sha256": "c893dcf4129df92d3c00883c9593c1ecd05aa41eff7111bcebca94e66f3735f9"
   }
 ]

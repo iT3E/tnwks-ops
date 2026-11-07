@@ -164,6 +164,17 @@ spec:
               path: /var/lib/grafana/dashboards/plausible
             orgId: 1
             type: file
+          # The kube-prometheus mixin's board, which this stack's chart renders
+          # only with its own Alertmanager. Its UID replaces the empty UI-made
+          # "Alertmanager / Overview" (provisioning takes over a matching UID).
+          - name: alertmanager
+            disableDeletion: false
+            editable: true
+            folder: "Kubernetes"
+            options:
+              path: /var/lib/grafana/dashboards/alertmanager
+            orgId: 1
+            type: file
 
     datasources:
       datasources.yaml:
@@ -244,6 +255,7 @@ spec:
       unpoller: grafana-upstream-unpoller
       nginx: grafana-upstream-nginx
       plausible: grafana-upstream-plausible
+      alertmanager: grafana-upstream-alertmanager
 
     # Grafana's own data (users, preferences, alert state, UI-made
     # dashboards) lives in Postgres on the CNPG cluster. A Grafana 13 rollback

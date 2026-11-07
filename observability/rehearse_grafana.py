@@ -52,7 +52,8 @@ def main():
             "updateIntervalSeconds": 2, "options": {"path": "/etc/dashboards",
             "foldersFromFilesStructure": True}}]}
         references = json.loads((ROOT / "kubernetes/apps/monitoring/grafana/upstream/catalogue.json").read_text())
-        folders = {"network": "Network", "unpoller": "UniFi Poller", "nginx": "NGINX", "plausible": "Plausible"}
+        folders = {"network": "Network", "unpoller": "UniFi Poller", "nginx": "NGINX", "plausible": "Plausible",
+                   "alertmanager": "Kubernetes"}
         for entry in references:
             target = base / "reference" / entry["provider"] / entry["file"]
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -137,7 +138,7 @@ def main():
                     raise AssertionError("deleted file remains provisioned")
 
             eventually(verify_prune)
-            print("PASS: Grafana v2 UIDs, tab layouts, folders, five datasources, six pinned reference dashboards and file deletion")
+            print(f"PASS: Grafana v2 UIDs, tab layouts, folders, five datasources, {len(references)} pinned reference dashboards and file deletion")
         finally:
             subprocess.run(["docker", "rm", "-f", name], capture_output=True)
             subprocess.run(["docker", "rm", "-f", renderer], capture_output=True)

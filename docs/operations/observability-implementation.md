@@ -56,6 +56,14 @@ under its own UID until it has no remaining use. Grafana 13 accepts the v2 file 
 `default_home_dashboard_path` and redirects to `/d/default-home-dashboard/`, tabs
 intact. Home Assistant's Monitoring tab frames that home page, so it follows.
 
+Alertmanager / Overview (`alertmanager-overview`, folder Kubernetes) is the
+kube-prometheus mixin's board, pinned in `grafana/upstream/catalogue.json` from
+the stack's own chart version. The chart renders it only with its bundled
+Alertmanager, which this stack doesn't use. Its UID replaces an empty board made
+in the UI on 2026-11-01: file provisioning takes over a dashboard with the same
+UID, checked against the pinned Grafana. The Alerts board's Alertmanager tab is
+the per-site summary; this board is the per-instance detail.
+
 Both sites report on both sites, so the global view returns some series twice;
 `IDENTITY` in `dashboards.py` reduces those with `max`, which keeps the worst state
 and lets a real answer replace an observer's Unknown.

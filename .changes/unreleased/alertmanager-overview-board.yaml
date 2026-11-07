@@ -1,0 +1,4 @@
+---
+kind: Changed
+body: Replace the empty UI-made Alertmanager / Overview board with the pinned kube-prometheus mixin board under the same UID.
+time: 2026-11-07T17:00:00Z
