@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.37.2 - 2026-11-07
+
+### Fixed
+
+* CNPG's barman-cloud sidecar gets a 512Mi memory limit (was 256Mi). Base backups on homelab-wsl-02 OOMKilled it mid-upload, and the Backup failed with an rpc EOF.
+
 ## v2.37.1 - 2026-11-07
 
 ### Fixed
