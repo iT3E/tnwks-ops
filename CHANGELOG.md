@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.225.0 - 2026-11-07
+
+### Removed
+
+* The shared databases/postgres CNPG cluster is retired on homelab-wsl: every app runs on its own cluster. Its last backup stays in S3; the CNPG alerts now wait for the operator instead, and the apps' finished import patches are gone.
+
 ## v1.224.0 - 2026-11-07
 
 ### Added
