@@ -193,12 +193,6 @@
         "policy": "firefly",
         "uid": 33,
         "gid": 33
-      },
-      {
-        "name": "finance-sync-state",
-        "policy": "finance-sync",
-        "uid": 1000,
-        "gid": 1000
       }
     ],
     "check": {

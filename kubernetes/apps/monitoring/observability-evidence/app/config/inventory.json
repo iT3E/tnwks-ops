@@ -135,8 +135,7 @@
       "tier": "warm",
       "fencing_required": true,
       "pvcs": [
-        "firefly-upload",
-        "finance-sync-state"
+        "firefly-upload"
       ],
       "objectives": {},
       "probe": {
