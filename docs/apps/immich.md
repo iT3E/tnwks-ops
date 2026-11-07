@@ -23,7 +23,7 @@ controllers:
 | `valkey`           | Job queue for the server                                                | none (emptyDir)                      |
 | `postgres`         | `ghcr.io/immich-app/postgres` with VectorChord, dedicated to Immich     | `data-immich-postgres-0` PVC         |
 
-The shared CNPG cluster in `databases` isn't used: it doesn't carry
+The CNPG clusters in `databases` aren't used: they don't carry
 VectorChord, and Immich's own image is what upstream tests against. The
 `cache/valkey` instance is oauth2-proxy's session store, so Immich gets its
 own queue.

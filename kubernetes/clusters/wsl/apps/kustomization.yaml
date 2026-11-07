@@ -85,3 +85,14 @@ resources:
   - ./home-automation
   - ./networking
   - ./production
+# The shared `databases/postgres` cluster is retired here: every app has its own
+# (kubernetes/components/cnpg-cluster). Its last base backup and WAL stay in S3
+# under cnpg/homelab-wsl/. homelab-ms-01 (down) still lists it.
+patches:
+  - patch: |-
+      $patch: delete
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata:
+        name: cloudnative-pg-cluster
+        namespace: flux-system

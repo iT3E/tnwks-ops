@@ -55,17 +55,16 @@ S3 is `tnwks-homelab-backups-654654262098` in the prod AWS account,
 
 ### Postgres
 
-Apps are moving off the shared `databases/postgres` Cluster to one CNPG
-cluster each (`kubernetes/components/cnpg-cluster`, an `<app>-db` Flux
-Kustomization): Mealie, the transcriber, Firefly, finance-sync and Home
-Assistant have their own (2026-11-05). Each archives WAL and takes a daily
-base backup to `s3://<bucket>/cnpg/<app>/<site>/`, from its own ObjectStore;
-an app with a standby on the other WSL site (`cnpg-standby`) has a replica
-there that re-archives under that site's name. The shared cluster still holds
-the rest (`bitwarden`, `litellm`, `plausible`, `grafana`, `vantrip`, the
-things API), plus the rollback copies of the moved databases, and is backed
-up as before under `cnpg/homelab-wsl/`. Anything in a CNPG cluster is covered
-by barman-cloud; there is nothing per-database to configure.
+Every app has its own CNPG cluster (`kubernetes/components/cnpg-cluster`, an
+`<app>-db` Flux Kustomization). Each archives WAL and takes a daily base
+backup to `s3://<bucket>/cnpg/<app>/<site>/`, from its own ObjectStore; an app
+with a standby on the other WSL site (`cnpg-standby`) has a replica there that
+re-archives under that site's name. Anything in a CNPG cluster is covered by
+barman-cloud; there is nothing per-database to configure.
+
+The shared `databases/postgres` cluster is retired on homelab-wsl (all its
+databases were imported into the apps' own clusters first). Its last base
+backup (2026-11-07 01:00 UTC) and WAL stay under `cnpg/homelab-wsl/`.
 
 ### PVCs (kopiur)
 

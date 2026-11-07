@@ -104,8 +104,8 @@ resources:
 # Parts of those shared ks.yaml files that don't run here (yet):
 #   - PrometheusRules: no kube-prometheus-stack on this cluster.
 #   - ingress-nginx (public): waits for this cluster's own cloudflared tunnel.
-#   - cloudnative-pg-cluster: homelab-wsl's shared `postgres` cluster; apps
-#     get their own clusters here.
+#   - cloudnative-pg-cluster: the shared `postgres` cluster (retired on
+#     homelab-wsl too); apps have their own clusters.
 patches:
   # The media apps at 0 have unbound WaitForFirstConsumer PVCs, which Helm's
   # wait (kstatus) never sees as ready.

@@ -2,11 +2,10 @@
 
 A Kustomize component that gives one app its own CloudNativePG cluster, with
 barman-cloud WAL archiving and daily base backups to the app's own S3 prefix.
-It replaces a database in the shared `databases/postgres` cluster: one app per
-cluster, so each app gets its own restarts, major upgrades, cache and
-point-in-time restore (barman restores a whole cluster, never one database).
-
-Nothing uses it yet. Moving an app onto it is a separate PR per app.
+It replaced the shared `databases/postgres` cluster (retired on homelab-wsl):
+one app per cluster, so each app gets its own restarts, major upgrades, cache
+and point-in-time restore (barman restores a whole cluster, never one
+database). Every app with a Postgres database uses it.
 
 ## What it creates
 
@@ -87,9 +86,6 @@ spec:
   dependsOn:
     - name: cloudnative-pg-plugin-barman-cloud
     - name: aws-backup-credentials
-    # The role Secret postgres-mealie is still in the shared cluster's
-    # kustomization; drop this once it moves into db/.
-    - name: cloudnative-pg-cluster
   prune: true
   wait: true # the Cluster's Ready condition gates the app
   sourceRef:
@@ -144,7 +140,7 @@ written any status, and the app starts against a database that isn't there:
       current: status.conditions.exists(e, e.type == 'Ready' && e.status == 'True')
 ```
 
-## Moving an app off the shared cluster (later)
+## Importing from another cluster
 
 One app at a time, with CNPG's `initdb.import` (`type: microservice`) from the
 shared `postgres` cluster: a patch in `db/kustomization.yaml` that adds the

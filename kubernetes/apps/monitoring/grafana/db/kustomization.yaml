@@ -2,34 +2,10 @@
 # grafana's own CNPG cluster, databases/grafana-pg, from
 # ../../../../components/cnpg-cluster (added by the grafana-db Kustomization).
 #
-# First boot imports `grafana` from the shared cluster (CNPG initdb.import,
-# microservice) as the owner role: the shared cluster has superuser access
-# off, and grafana owns every object. bootstrap is only read when the Cluster
-# is created; the shared copy stays as the rollback.
+# Imported `grafana` from homelab-wsl's shared cluster at first boot (CNPG
+# initdb.import). That cluster is retired, and bootstrap is only read when a
+# Cluster is created, so the import patch is gone.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ./secret-grafana-role.sops.yaml
-patches:
-  - target:
-      kind: Cluster
-    patch: |-
-      - op: add
-        path: /spec/bootstrap/initdb/import
-        value:
-          type: microservice
-          databases: [grafana]
-          source:
-            externalCluster: postgres
-      - op: add
-        path: /spec/externalClusters
-        value:
-          - name: postgres
-            connectionParameters:
-              host: postgres-rw.databases.svc.cluster.local
-              user: grafana
-              dbname: grafana
-              sslmode: require
-            password:
-              name: postgres-grafana
-              key: password

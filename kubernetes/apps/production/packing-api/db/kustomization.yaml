@@ -2,34 +2,10 @@
 # packing-api's own CNPG cluster, databases/packing-api-pg, from
 # ../../../../components/cnpg-cluster (added by the packing-api-db Kustomization).
 #
-# First boot imports `vantrip` from the shared cluster (CNPG initdb.import,
-# microservice) as the owner role: the shared cluster has superuser access
-# off, and packing_api owns every object. bootstrap is only read when the Cluster
-# is created; the shared copy stays as the rollback.
+# Imported `vantrip` from homelab-wsl's shared cluster at first boot (CNPG
+# initdb.import). That cluster is retired, and bootstrap is only read when a
+# Cluster is created, so the import patch is gone.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ./secret-packing-api-role.sops.yaml
-patches:
-  - target:
-      kind: Cluster
-    patch: |-
-      - op: add
-        path: /spec/bootstrap/initdb/import
-        value:
-          type: microservice
-          databases: [vantrip]
-          source:
-            externalCluster: postgres
-      - op: add
-        path: /spec/externalClusters
-        value:
-          - name: postgres
-            connectionParameters:
-              host: postgres-rw.databases.svc.cluster.local
-              user: packing_api
-              dbname: vantrip
-              sslmode: require
-            password:
-              name: postgres-packing-api
-              key: password
