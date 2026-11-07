@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'WSL-02''s VM clock ran ~13% slow on the Hyper-V TSC page clocksource (every timer in homelab-wsl-02 slow, AlertmanagerClusterCrashlooping firing); its .wslconfig now pins hyperv_clocksource_msr, a per-host wsl_clocksource in windows_host_settings.'
-time: 2026-11-06T18:35:25.000000000-08:00

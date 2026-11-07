@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.0.2 - 2026-11-07
+
+### Fixed
+
+* WSL-02's VM clock ran ~13% slow on the Hyper-V TSC page clocksource (every timer in homelab-wsl-02 slow, AlertmanagerClusterCrashlooping firing); its .wslconfig now pins hyperv_clocksource_msr, a per-host wsl_clocksource in windows_host_settings.
+
 ## v2.0.1 - 2026-11-07
 
 ### Fixed
