@@ -109,6 +109,37 @@ tests:
       value: 0
     - labels: homelab:network_path_state{k8s_cluster="homelab-wsl",hop="router-bgp"}
       value: 0
+- name: 'service state: probed, failing, standby, unobserved'
+  interval: 1m
+  input_series:
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="up"}
+    values: 1+0x10
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="broken"}
+    values: 1+0x10
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="parked"}
+    values: 1+0x10
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="unseen"}
+    values: 1+0x10
+  - series: probe_success{k8s_cluster="one",app="up",observability_target="service"}
+    values: 1+0x10
+  - series: probe_success{k8s_cluster="one",app="broken",observability_target="service"}
+    values: 0+0x10
+  - series: homelab_workload_desired_replicas{k8s_cluster="one",app="parked"}
+    values: 0+0x10
+  - series: homelab_workload_ready_replicas{k8s_cluster="one",app="parked"}
+    values: 0+0x10
+  promql_expr_test:
+  - expr: homelab:service_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:service_state{k8s_cluster="one",app="up"}
+      value: 1
+    - labels: homelab:service_state{k8s_cluster="one",app="broken"}
+      value: 3
+    - labels: homelab:service_state{k8s_cluster="one",app="parked"}
+      value: 4
+    - labels: homelab:service_state{k8s_cluster="one",app="unseen"}
+      value: 0
 - name: duplicate observations of one prerequisite are not four prerequisites
   interval: 1m
   input_series:

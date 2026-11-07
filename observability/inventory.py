@@ -37,6 +37,28 @@ def databases(sites):
     return sorted(result, key=lambda db: (db["cluster"], db["name"]))
 
 
+# Content probe per app: its health URL through its Service, and a string the
+# answer must contain (a 200 from a proxy or an error page isn't the app). The
+# collector probes an app only on the site that runs it (desired replicas > 0).
+PROBES = {
+    "mealie": ("http://mealie.production.svc.cluster.local:9000/api/app/about", '"version"'),
+    "transcriber": ("http://transcriber-app.production.svc.cluster.local:8081/api/healthz", '"ok":true'),
+    "changedetection": ("http://changedetection.production.svc.cluster.local:5000/", "<html"),
+    "immich": ("http://immich-server.selfhosted.svc.cluster.local:2283/api/server/ping", "pong"),
+    "firefly": ("http://firefly.production.svc.cluster.local:8080/health", "OK"),
+    "media": ("http://sonarr.media.svc.cluster.local:8989/ping", "OK"),
+    "home-assistant": ("http://home-assistant.home-automation.svc.cluster.local:8123/manifest.json", "Home Assistant"),
+    # Self-signed on the controller itself: transport and content, not the certificate.
+    "unifi": ("https://unifi.networking.svc.cluster.local:8443/status", '"up":true'),
+    "ombi": ("http://ombi.production.svc.cluster.local:3579/", "<html"),
+    "ombi-f": ("http://ombi-f.production.svc.cluster.local:3579/", "<html"),
+    "wizarr": ("http://wizarr.production.svc.cluster.local:5690/", "<html"),
+    "jellyfin": ("http://jellyfin.production.svc.cluster.local:8096/health", "Healthy"),
+    "plausible": ("http://plausible.selfhosted.svc.cluster.local:8000/api/health", '"postgres":"ok"'),
+    "grafana": ("http://grafana.monitoring.svc.cluster.local/api/health", '"database": "ok"'),
+}
+
+
 def inventory():
     source = json.loads((ROOT / "bin/site-failover-apps.json").read_text())
     sites = [
@@ -61,6 +83,9 @@ def inventory():
                      "clusters": [site["cluster"] for site in sites], "databases": dbs,
                      "tier": "warm" if spec.get("lease") else "movable",
                      "fencing_required": bool(spec.get("lease"))})
+        if name in PROBES:
+            url, expect = PROBES[name]
+            apps[-1]["probe"] = {"url": url, "expect": expect}
     return {"version": 1, "sites": sites, "apps": apps, "databases": databases(sites)}
 
 

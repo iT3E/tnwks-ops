@@ -11,6 +11,7 @@ import os
 import ssl
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -79,6 +80,8 @@ class Collector:
     def __init__(self, api, inventory: dict, cluster: str, clock=time.time):
         self.api, self.inventory, self.cluster, self.clock = api, inventory, cluster, clock
         self.last_success: dict[str, float] = {}
+        # Desired replicas per app on this site, from the last workloads pass.
+        self.desired: dict[str, int] = {}
         self.lock = threading.Lock()
 
     def expected_databases(self):
@@ -123,6 +126,7 @@ class Collector:
             "flux": self.flux,
             "overrides": self.overrides,
             "databases": self.databases,
+            "services": self.services,
         }
         successes = []
         for name, function in sections.items():
@@ -148,6 +152,7 @@ class Collector:
         return metrics.render()
 
     def workloads(self, metrics: Metrics, labels: dict):
+        self.desired = {}
         by_namespace: dict[str, list] = {}
         for app in self.inventory["apps"]:
             if self.cluster in app["clusters"]:
@@ -172,11 +177,24 @@ class Collector:
                         desired = obj.get("spec", {}).get("replicas", 1)
                         ready = obj.get("status", {}).get("readyReplicas", 0)
                         metrics.add("homelab_workload_desired_replicas", desired, **scope)
+                        self.desired[app["name"]] = self.desired.get(app["name"], 0) + desired
                         metrics.add("homelab_workload_ready_replicas", ready, **scope)
                         for condition in obj.get("status", {}).get("conditions", []):
                             if condition.get("type") == "Available":
                                 metrics.add("homelab_workload_transition_timestamp_seconds",
                                             timestamp(condition.get("lastTransitionTime")), **scope)
+
+    def services(self, metrics: Metrics, labels: dict):
+        """Content probes, only for the apps this site runs: a standby has nothing to
+        answer, and the rules show it as Standby from its replica count."""
+        apps = [app for app in self.inventory["apps"]
+                if app.get("probe") and self.desired.get(app["name"], 0) > 0]
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(lambda app: content_probe(**app["probe"]), apps))
+        for app, (ok, duration) in zip(apps, results):
+            scope = dict(labels, app=app["name"], observability_target="service")
+            metrics.add("probe_success", int(ok), **scope)
+            metrics.add("probe_duration_seconds", duration, **scope)
 
     def flux(self, metrics: Metrics, labels: dict):
         for group, version, plural, kind in [
@@ -254,6 +272,22 @@ def path_probe(url: str, timeout: float = 3) -> tuple[bool, float]:
     except urllib.error.HTTPError:
         ok = True
     except (OSError, urllib.error.URLError):
+        ok = False
+    return ok, time.monotonic() - start
+
+
+def content_probe(url: str, expect: str, timeout: float = 3) -> tuple[bool, float]:
+    """2xx and the expected string in the first 64 KiB. Fixed inventory URLs only."""
+    start = time.monotonic()
+    context = None
+    if url.startswith("https://"):
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+    try:
+        with urllib.request.urlopen(url, timeout=timeout, context=context) as response:
+            ok = 200 <= response.status < 300 and expect in response.read(65536).decode("utf-8", "replace")
+    except (OSError, urllib.error.URLError, ValueError):
         ok = False
     return ok, time.monotonic() - start
 

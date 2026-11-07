@@ -72,7 +72,8 @@ spec:
         "", "")
     - record: homelab:service_state
       expr: (3 - 2 * min by (k8s_cluster, app) (probe_success{observability_target="service"} and (time() - timestamp(probe_success{observability_target="service"}))
-        < 180)) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))
+        < 180)) or on (k8s_cluster, app) (homelab:workload_state == 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster,
+        app) (homelab_expected_workload_info))
     - alert: ObservabilityEvidenceStale
       expr: (homelab_collection_success == 0) or (time() - homelab_collection_last_success_timestamp_seconds > 180)
       for: 5m

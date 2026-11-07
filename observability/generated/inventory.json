@@ -32,7 +32,11 @@
         "mealie-pg"
       ],
       "tier": "warm",
-      "fencing_required": true
+      "fencing_required": true,
+      "probe": {
+        "url": "http://mealie.production.svc.cluster.local:9000/api/app/about",
+        "expect": "\"version\""
+      }
     },
     {
       "name": "transcriber",
@@ -50,7 +54,11 @@
         "transcriber-pg"
       ],
       "tier": "warm",
-      "fencing_required": true
+      "fencing_required": true,
+      "probe": {
+        "url": "http://transcriber-app.production.svc.cluster.local:8081/api/healthz",
+        "expect": "\"ok\":true"
+      }
     },
     {
       "name": "changedetection",
@@ -65,7 +73,11 @@
       ],
       "databases": [],
       "tier": "movable",
-      "fencing_required": false
+      "fencing_required": false,
+      "probe": {
+        "url": "http://changedetection.production.svc.cluster.local:5000/",
+        "expect": "<html"
+      }
     },
     {
       "name": "immich",
@@ -85,7 +97,11 @@
       ],
       "databases": [],
       "tier": "movable",
-      "fencing_required": false
+      "fencing_required": false,
+      "probe": {
+        "url": "http://immich-server.selfhosted.svc.cluster.local:2283/api/server/ping",
+        "expect": "pong"
+      }
     },
     {
       "name": "firefly",
@@ -103,7 +119,11 @@
         "finance-sync-pg"
       ],
       "tier": "warm",
-      "fencing_required": true
+      "fencing_required": true,
+      "probe": {
+        "url": "http://firefly.production.svc.cluster.local:8080/health",
+        "expect": "OK"
+      }
     },
     {
       "name": "media",
@@ -122,7 +142,11 @@
       ],
       "databases": [],
       "tier": "movable",
-      "fencing_required": false
+      "fencing_required": false,
+      "probe": {
+        "url": "http://sonarr.media.svc.cluster.local:8989/ping",
+        "expect": "OK"
+      }
     },
     {
       "name": "home-assistant",
@@ -139,7 +163,11 @@
         "home-assistant-pg"
       ],
       "tier": "warm",
-      "fencing_required": true
+      "fencing_required": true,
+      "probe": {
+        "url": "http://home-assistant.home-automation.svc.cluster.local:8123/manifest.json",
+        "expect": "Home Assistant"
+      }
     },
     {
       "name": "unifi",
@@ -154,7 +182,11 @@
       ],
       "databases": [],
       "tier": "movable",
-      "fencing_required": false
+      "fencing_required": false,
+      "probe": {
+        "url": "https://unifi.networking.svc.cluster.local:8443/status",
+        "expect": "\"up\":true"
+      }
     },
     {
       "name": "ombi",
@@ -169,7 +201,11 @@
       ],
       "databases": [],
       "tier": "movable",
-      "fencing_required": false
+      "fencing_required": false,
+      "probe": {
+        "url": "http://ombi.production.svc.cluster.local:3579/",
+        "expect": "<html"
+      }
     },
     {
       "name": "ombi-f",
@@ -184,7 +220,11 @@
       ],
       "databases": [],
       "tier": "movable",
-      "fencing_required": false
+      "fencing_required": false,
+      "probe": {
+        "url": "http://ombi-f.production.svc.cluster.local:3579/",
+        "expect": "<html"
+      }
     },
     {
       "name": "wizarr",
@@ -199,7 +239,11 @@
       ],
       "databases": [],
       "tier": "movable",
-      "fencing_required": false
+      "fencing_required": false,
+      "probe": {
+        "url": "http://wizarr.production.svc.cluster.local:5690/",
+        "expect": "<html"
+      }
     },
     {
       "name": "jellyfin",
@@ -214,7 +258,11 @@
       ],
       "databases": [],
       "tier": "movable",
-      "fencing_required": false
+      "fencing_required": false,
+      "probe": {
+        "url": "http://jellyfin.production.svc.cluster.local:8096/health",
+        "expect": "Healthy"
+      }
     },
     {
       "name": "plausible",
@@ -231,7 +279,11 @@
         "plausible-pg"
       ],
       "tier": "movable",
-      "fencing_required": false
+      "fencing_required": false,
+      "probe": {
+        "url": "http://plausible.selfhosted.svc.cluster.local:8000/api/health",
+        "expect": "\"postgres\":\"ok\""
+      }
     },
     {
       "name": "grafana",
@@ -248,7 +300,11 @@
         "grafana-pg"
       ],
       "tier": "warm",
-      "fencing_required": true
+      "fencing_required": true,
+      "probe": {
+        "url": "http://grafana.monitoring.svc.cluster.local/api/health",
+        "expect": "\"database\": \"ok\""
+      }
     }
   ],
   "databases": [
