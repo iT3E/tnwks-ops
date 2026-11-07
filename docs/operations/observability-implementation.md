@@ -175,6 +175,16 @@ Only homelab-wsl's mktxp observes the router, so homelab-wsl-02's own rules leav
 the router hops Unknown, and the dashboards keep the real answer. The router-side
 names come from `observability/inventory.py` (sites), matching `site-tunnels.tf`.
 
+## Service path evidence
+
+`homelab:service_state{k8s_cluster, app}` comes from a content probe: the collector on
+the site that runs an app (desired replicas above 0) requests its health URL through
+its Service. The probe passes on a 2xx whose body contains an expected string, so an
+error page or a proxy's 200 doesn't count. The site at 0 shows Standby (4), from its
+replica count. With neither observed, the state is Unknown. URLs and strings are in
+`observability/inventory.py` (`PROBES`). Each probe has a 3 s timeout, and they run
+in parallel within the 20 s scrape.
+
 ## Following rollout work
 
 1. Validate backlog behavior and certificate renewal for the global query path.
