@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.9.0 - 2026-11-07
+
+### Added
+
+* Run a second Grafana on site 2 at grafana-02, with its own database and login, so the dashboards survive losing site 1.
+
 ## v2.8.0 - 2026-11-07
 
 ### Changed
