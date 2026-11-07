@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v1.224.0 - 2026-11-07
+
+### Added
+
+* Plausible can move between the WSL sites: its Postgres runs as a CNPG replica cluster on homelab-wsl-02 (cnpg-standby), its Service is global with service-upstream Ingresses, and bin/site-failover moves its ClickHouse volume with a transfer-only kopiur policy.
+
 ## v1.223.0 - 2026-11-07
 
 ### Changed
