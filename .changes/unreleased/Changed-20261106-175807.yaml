@@ -1,0 +1,3 @@
+kind: Changed
+body: 'Plausible runs on homelab-wsl-02 with its Postgres primary there; homelab-wsl keeps a standby (database replica, app at 0), and analytics.tnwks.us reaches it through cloudflared over Cluster Mesh.'
+time: 2026-11-06T17:58:07.000000000-08:00
