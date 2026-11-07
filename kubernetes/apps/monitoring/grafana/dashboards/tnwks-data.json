@@ -58,7 +58,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "homelab_expected_database_info{k8s_cluster=~\"$cluster\"}",
+                        "expr": "max by (k8s_cluster, namespace, db_cluster, app) (homelab_expected_database_info{k8s_cluster=~\"$cluster\"})",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
@@ -80,8 +80,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,
@@ -176,8 +186,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,
@@ -410,8 +430,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,
@@ -484,7 +514,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "homelab:database_backup_state{k8s_cluster=~\"$cluster\"}",
+                        "expr": "max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
@@ -506,8 +536,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,
@@ -706,8 +746,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,
@@ -766,75 +816,6 @@
         "kind": "Panel",
         "spec": {
           "id": 10,
-          "title": "PVC used",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "spec": {
-                        "expr": "kubelet_volume_stats_used_bytes{k8s_cluster=~\"$cluster\"} / kubelet_volume_stats_capacity_bytes{k8s_cluster=~\"$cluster\"}",
-                        "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
-                        "range": true
-                      },
-                      "datasource": {
-                        "name": "${datasource}"
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "timeseries",
-            "version": "",
-            "spec": {
-              "options": {
-                "legend": {
-                  "displayMode": "table",
-                  "placement": "bottom",
-                  "showLegend": false,
-                  "calcs": [
-                    "lastNotNull",
-                    "max"
-                  ]
-                },
-                "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
-                }
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "unit": "percentunit",
-                  "noValue": "Unknown — missing evidence",
-                  "custom": {}
-                },
-                "overrides": []
-              }
-            }
-          },
-          "description": "Used versus available filesystem capacity for volumes that publish stats. Local-path requested PVC sizes are not reliable physical quotas."
-        }
-      },
-      "panel-10": {
-        "kind": "Panel",
-        "spec": {
-          "id": 11,
           "title": "Windows disk free",
           "links": [],
           "data": {
@@ -1035,15 +1016,6 @@
                         "element": {
                           "kind": "ElementReference",
                           "name": "panel-9"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-10"
                         }
                       }
                     }

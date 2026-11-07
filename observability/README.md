@@ -3,7 +3,7 @@
 This directory owns the dashboard definitions, evidence exporter, query isolation
 boundary and offline acceptance tests. Cluster activation is tracked in
 [`observability-implementation.md`](../docs/operations/observability-implementation.md).
-Both WSL sites select the evidence collectors, shared PKI, recording rules and Thanos Query; Garage, Thanos Store and the Compactor run only on WSL-02. Dashboard activation follows its own checks.
+Both WSL sites select the evidence collectors, shared PKI, recording rules and Thanos Query; Garage, Thanos Store and the Compactor run only on WSL-02. Site 1 serves the dashboards.
 
 `dashboards.py` uses the pinned official Grafana Foundation SDK to generate stable
 v2 resources: 12 operator dashboards and one household dashboard. `inventory.py`

@@ -80,8 +80,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,
@@ -314,8 +324,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,
@@ -410,8 +430,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,
@@ -575,8 +605,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,

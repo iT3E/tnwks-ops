@@ -32,7 +32,8 @@ groups:
   - record: homelab:local_history_seconds
     expr: time() - min by (k8s_cluster) (prometheus_tsdb_lowest_timestamp_seconds)
   - record: homelab:unuploaded_block_age_seconds
-    expr: time() - max by (k8s_cluster) (thanos_shipper_last_successful_upload_time)
+    expr: time() - max by (k8s_cluster) (thanos_objstore_bucket_last_successful_upload_time{job=~".*thanos-discovery"}
+      > 0)
   - record: homelab:archive_state
     expr: (3 - 2 * min by (k8s_cluster) (probe_success{observability_target="archive"} and (time() - timestamp(probe_success{observability_target="archive"}))
       < 180)) or on (k8s_cluster) (0 * max by (k8s_cluster) (homelab_observer_info))

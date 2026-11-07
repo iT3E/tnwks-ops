@@ -50,6 +50,18 @@ Query answers partially by default rather than erroring on a lost site. Store an
 Compactor run only beside the archive. The recording rules are live on both sites;
 the backup alert fires only for a site's own primaries.
 
+## Dashboards
+
+The generated boards are provisioned on site 1, the only Grafana so far. `home` is
+now the generated Homelab board, and the previous board stays as Homelab (classic)
+under its own UID until it has no remaining use. Grafana 13 accepts the v2 file in
+`default_home_dashboard_path` and redirects to `/d/default-home-dashboard/`, tabs
+intact. Home Assistant's Monitoring tab frames that home page, so it follows.
+
+Both sites report on both sites, so the global view returns some series twice;
+`IDENTITY` in `dashboards.py` reduces those with `max`, which keeps the worst state
+and lets a real answer replace an observer's Unknown.
+
 ## Validation evidence
 
 - Six behavior fixtures cover missing/future backups, same-name databases across
@@ -87,11 +99,9 @@ than downloaded during pod startup.
 
 ## Following rollout work
 
-1. Activate the generated dashboards and cut over `home` without duplicate
-   provisioning sources; validate them against live data on both sites.
-2. Give site 1 persistent 15d Prometheus storage without placing that growth on E:,
+1. Give site 1 persistent 15d Prometheus storage without placing that growth on E:,
    keeping local metrics and alert evaluation independent of the archive.
-3. Add the second independent Grafana and preserve legacy URLs. Validate backlog
+2. Add the second independent Grafana and preserve legacy URLs. Validate backlog
    behavior and certificate renewal for the global query path.
 4. Deploy the isolated household Grafana and aggregate-only backend, revoke old
    kiosk operator access/sessions and test all datasource APIs. Define fresh domain

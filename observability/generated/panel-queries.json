@@ -35,7 +35,7 @@
     "dashboard": "home",
     "tab": "Now",
     "title": "Service paths",
-    "expr": "homelab:service_state{k8s_cluster=~\"$cluster\"}",
+    "expr": "max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})",
     "unit": "state",
     "kiosk": false
   },
@@ -43,7 +43,7 @@
     "dashboard": "home",
     "tab": "Now",
     "title": "Current firing alerts",
-    "expr": "ALERTS{k8s_cluster=~\"$cluster\",alertstate=\"firing\"}",
+    "expr": "ALERTS{cluster=~\"$cluster\",alertstate=\"firing\"}",
     "unit": "short",
     "kiosk": false
   },
@@ -51,7 +51,7 @@
     "dashboard": "home",
     "tab": "Now",
     "title": "Recovery evidence",
-    "expr": "homelab:recovery_state{k8s_cluster=~\"$cluster\"}",
+    "expr": "max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})",
     "unit": "state",
     "kiosk": false
   },
@@ -67,7 +67,7 @@
     "dashboard": "home",
     "tab": "Change and history",
     "title": "Observed state changes",
-    "expr": "changes(homelab:service_state{k8s_cluster=~\"$cluster\"}[1h])",
+    "expr": "max by (k8s_cluster, app) (changes(homelab:service_state{k8s_cluster=~\"$cluster\"}[1h]))",
     "unit": "short",
     "kiosk": false
   },
@@ -139,7 +139,7 @@
     "dashboard": "tnwks-sites",
     "tab": "Placement",
     "title": "Declared placement",
-    "expr": "homelab_expected_workload_info{k8s_cluster=~\"$cluster\"}",
+    "expr": "max by (k8s_cluster, app, tier, kind, workload) (homelab_expected_workload_info{k8s_cluster=~\"$cluster\"})",
     "unit": "short",
     "kiosk": false
   },
@@ -179,7 +179,7 @@
     "dashboard": "tnwks-sites",
     "tab": "Recovery",
     "title": "Readiness evidence",
-    "expr": "homelab:recovery_state{k8s_cluster=~\"$cluster\"}",
+    "expr": "max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})",
     "unit": "state",
     "kiosk": false
   },
@@ -203,7 +203,7 @@
     "dashboard": "tnwks-data",
     "tab": "Databases",
     "title": "Expected databases",
-    "expr": "homelab_expected_database_info{k8s_cluster=~\"$cluster\"}",
+    "expr": "max by (k8s_cluster, namespace, db_cluster, app) (homelab_expected_database_info{k8s_cluster=~\"$cluster\"})",
     "unit": "short",
     "kiosk": false
   },
@@ -243,7 +243,7 @@
     "dashboard": "tnwks-data",
     "tab": "Backups",
     "title": "Backup coverage",
-    "expr": "homelab:database_backup_state{k8s_cluster=~\"$cluster\"}",
+    "expr": "max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})",
     "unit": "state",
     "kiosk": false
   },
@@ -261,14 +261,6 @@
     "title": "Weekly PVC drill age",
     "expr": "time() - kube_cronjob_status_last_successful_time{k8s_cluster=~\"$cluster\",namespace=\"kopiur-system\",cronjob=\"standby-restore\"}",
     "unit": "s",
-    "kiosk": false
-  },
-  {
-    "dashboard": "tnwks-data",
-    "tab": "Storage",
-    "title": "PVC used",
-    "expr": "kubelet_volume_stats_used_bytes{k8s_cluster=~\"$cluster\"} / kubelet_volume_stats_capacity_bytes{k8s_cluster=~\"$cluster\"}",
-    "unit": "percentunit",
     "kiosk": false
   },
   {
@@ -386,9 +378,9 @@
   {
     "dashboard": "tnwks-internet",
     "tab": "Traffic",
-    "title": "ISP radio evidence",
-    "expr": "unms_device_uptime_seconds{k8s_cluster=~\"$cluster\"}",
-    "unit": "s",
+    "title": "ISP radio collector",
+    "expr": "unms_collector_success{k8s_cluster=~\"$cluster\"}",
+    "unit": "bool",
     "kiosk": false
   },
   {
@@ -483,7 +475,7 @@
     "dashboard": "tnwks-apps",
     "tab": "User paths",
     "title": "Application probe state",
-    "expr": "homelab:service_state{k8s_cluster=~\"$cluster\"}",
+    "expr": "max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})",
     "unit": "state",
     "kiosk": false
   },
@@ -555,7 +547,7 @@
     "dashboard": "tnwks-home",
     "tab": "Automation",
     "title": "Home Assistant path",
-    "expr": "homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"}",
+    "expr": "max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})",
     "unit": "state",
     "kiosk": false
   },
@@ -611,7 +603,7 @@
     "dashboard": "tnwks-hosts",
     "tab": "Survivor fit",
     "title": "Recovery readiness",
-    "expr": "homelab:recovery_state{k8s_cluster=~\"$cluster\"}",
+    "expr": "max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})",
     "unit": "state",
     "kiosk": false
   },
@@ -659,7 +651,7 @@
     "dashboard": "tnwks-observability",
     "tab": "Trust",
     "title": "Scrape failures",
-    "expr": "sum by (k8s_cluster, job) (up{k8s_cluster=~\"$cluster\"} == 0)",
+    "expr": "count by (k8s_cluster, job) (up{k8s_cluster=~\"$cluster\"} == 0) or on (k8s_cluster) (0 * count by (k8s_cluster) (up{k8s_cluster=~\"$cluster\"}))",
     "unit": "short",
     "kiosk": false
   },
@@ -723,7 +715,7 @@
     "dashboard": "tnwks-alerts",
     "tab": "Current",
     "title": "Firing now",
-    "expr": "ALERTS{k8s_cluster=~\"$cluster\",alertstate=\"firing\"}",
+    "expr": "ALERTS{cluster=~\"$cluster\",alertstate=\"firing\"}",
     "unit": "short",
     "kiosk": false
   },
@@ -731,7 +723,7 @@
     "dashboard": "tnwks-alerts",
     "tab": "Current",
     "title": "Pending now",
-    "expr": "ALERTS{k8s_cluster=~\"$cluster\",alertstate=\"pending\"}",
+    "expr": "ALERTS{cluster=~\"$cluster\",alertstate=\"pending\"}",
     "unit": "short",
     "kiosk": false
   },

@@ -29,7 +29,9 @@ def test_sdk_generates_isolated_household_and_operator_resources():
             spec = panel["spec"]
             assert spec["description"]
             if spec["vizConfig"]["group"] != "text":
-                assert "Unknown" in spec["vizConfig"]["spec"]["fieldConfig"]["defaults"]["noValue"]
+                # An absent override is the normal state, not missing evidence.
+                if spec["title"] != "Override creation age":
+                    assert "Unknown" in spec["vizConfig"]["spec"]["fieldConfig"]["defaults"]["noValue"]
         variables = obj["spec"]["variables"]
         if board.kiosk:
             assert not variables

@@ -188,6 +188,7 @@ patches:
                           - ${PEER_WINDOWS_HOST_ADDR}:9090
                         labels:
                           source_site: ${PEER_CLUSTER_NAME}
+                          k8s_cluster: ${PEER_CLUSTER_NAME}
               - op: replace
                 path: /spec/values/prometheus/prometheusSpec/resources
                 value:

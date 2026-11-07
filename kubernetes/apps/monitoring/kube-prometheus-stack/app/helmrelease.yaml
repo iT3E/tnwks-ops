@@ -174,6 +174,7 @@ spec:
                   - ${PEER_WINDOWS_HOST_ADDR}:9090
                 labels:
                   source_site: ${PEER_CLUSTER_NAME}
+                  k8s_cluster: ${PEER_CLUSTER_NAME}
 
           # This site's Windows host over vEthernet, and the other site's over
           # the LAN (docs/wsl/multi-site.md: each site watches the other).

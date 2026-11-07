@@ -188,7 +188,9 @@ spec:
         check_for_plugin_updates: false
         reporting_enabled: false
       dashboards:
-        default_home_dashboard_path: /tmp/dashboards/tnwks-home.json
+        # The sidecar writes it under its grafana_folder annotation. Grafana 13
+        # takes the v2 file here and redirects to /d/default-home-dashboard/.
+        default_home_dashboard_path: /tmp/dashboards/Overview/home.json
       date_formats:
         use_browser_locale: true
       explore:

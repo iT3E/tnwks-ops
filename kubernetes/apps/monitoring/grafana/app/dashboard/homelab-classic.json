@@ -960,7 +960,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Home",
-  "uid": "home",
+  "title": "Homelab (classic)",
+  "uid": "homelab-classic",
   "version": 1
 }

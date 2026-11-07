@@ -242,8 +242,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,
@@ -359,8 +369,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,
@@ -461,8 +481,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,
@@ -535,7 +565,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "sum by (k8s_cluster, job) (up{k8s_cluster=~\"$cluster\"} == 0)",
+                        "expr": "count by (k8s_cluster, job) (up{k8s_cluster=~\"$cluster\"} == 0) or on (k8s_cluster) (0 * count by (k8s_cluster) (up{k8s_cluster=~\"$cluster\"}))",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
@@ -557,8 +587,18 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
+                        "__name__": true,
                         "Time": true,
-                        "__name__": true
+                        "__replica__": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
                       },
                       "indexByName": {
                         "Value": 0,
@@ -610,7 +650,7 @@
               }
             }
           },
-          "description": "Discovered failed targets only. Compare with declared inventory to detect targets that disappeared from discovery."
+          "description": "Failed targets per job; a site showing 0 has none. Compare with declared inventory to detect targets that disappeared from discovery."
         }
       },
       "panel-7": {
