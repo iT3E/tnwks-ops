@@ -86,6 +86,8 @@
       tags: [usb-attach]
     - role: windows_wsl_maintenance
       tags: [wsl-maintenance]
+    - role: windows_time
+      tags: [time]
     # Check-only by default (an sshd_config rewrite restarts sshd under the
     # session). Like host-settings, near the end: a failed assertion stops
     # nothing else.

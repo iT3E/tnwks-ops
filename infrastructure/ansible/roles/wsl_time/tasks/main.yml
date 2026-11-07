@@ -1,0 +1,21 @@
+---
+# systemd-timesyncd on the router, the same on both sites (it was enabled on
+# WSL-02 against ntp.ubuntu.com, disabled on the desktop). Ubuntu's own
+# drop-in allows it on WSL. Hyper-V time sync also sets the clock from
+# Windows (windows_time); both point at the same source.
+- name: timesyncd uses the router
+  ansible.builtin.copy:
+    dest: /etc/systemd/timesyncd.conf.d/tnwks.conf
+    content: |
+      # Managed by tnwks-ops (Ansible role wsl_time).
+      [Time]
+      NTP={{ ntp_server }}
+      FallbackNTP=
+    mode: "0644"
+  notify: Restart timesyncd
+
+- name: timesyncd runs
+  ansible.builtin.systemd_service:
+    name: systemd-timesyncd
+    enabled: true
+    state: started
