@@ -1,3 +1,0 @@
-kind: Changed
-body: Keep 15 days of site 1 metrics on the new C volume instead of 2 days on an emptyDir.
-time: 2026-11-07T01:45:00-08:00

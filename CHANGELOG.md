@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.8.0 - 2026-11-07
+
+### Changed
+
+* Keep 15 days of site 1 metrics on the new C volume instead of 2 days on an emptyDir.
+
 ## v2.7.1 - 2026-11-07
 
 ### Fixed
