@@ -41,6 +41,13 @@ def databases(sites):
 # Content probe per app: its health URL through its Service, and a string the
 # answer must contain (a 200 from a proxy or an error page isn't the app). The
 # collector probes an app only on the site that runs it (desired replicas > 0).
+# Per-app recovery objectives, in seconds. rpo: the oldest its newest backup
+# (every scheduled PVC and every primary database) may be, a daily backup plus
+# slack. rto: the longest its weekly standby restore drill may take to write
+# the data back. Provisional until the owner sets them per app here.
+OBJECTIVES = {"rpo": 30 * 3600, "rto": 3600}
+APP_OBJECTIVES: dict[str, dict[str, int]] = {}
+
 PROBES = {
     "mealie": ("http://mealie.production.svc.cluster.local:9000/api/app/about", '"version"'),
     "transcriber": ("http://transcriber-app.production.svc.cluster.local:8081/api/healthz", '"ok":true'),
@@ -103,12 +110,13 @@ def inventory():
                      "tier": "warm" if spec.get("lease") else "movable",
                      "fencing_required": bool(spec.get("lease")),
                      # PVCs the weekly standby restore copies (restore evidence).
-                     "pvcs": [pvc["name"] for pvc in spec.get("pvcs", []) if not pvc.get("transfer_only")]})
+                     "pvcs": [pvc["name"] for pvc in spec.get("pvcs", []) if not pvc.get("transfer_only")],
+                     "objectives": APP_OBJECTIVES.get(name, {})})
         if name in PROBES:
             url, expect = PROBES[name]
             apps[-1]["probe"] = {"url": url, "expect": expect}
     vips, ingress = shared_vips()
-    return {"version": 1, "sites": sites, "apps": apps, "databases": databases(sites),
+    return {"version": 1, "sites": sites, "apps": apps, "databases": databases(sites), "objectives": OBJECTIVES,
             "vips": vips, "ingress": ingress}
 
 

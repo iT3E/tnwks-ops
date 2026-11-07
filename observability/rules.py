@@ -55,6 +55,7 @@ def records():
             f' or ((({ready} < {desired}) > 0) * 0 + 2)'
             f' or (({ready} < {desired}) * 0 + 3)'
             ' or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))'),
+        **objective_records(fresh),
         **network_records(),
         # Each site's collector reaches the shared-VIP names the way a client does
         # (router DNS, verified TLS, the ingress routing the host). A pod reaches
@@ -64,6 +65,44 @@ def records():
         # Content probe from the site that runs the app; Standby (4) where it's
         # deliberately at zero; Unknown where neither is observed.
         "homelab:service_state": '(3 - 2 * min by (k8s_cluster, app) (probe_success{observability_target="service"} and (time() - timestamp(probe_success{observability_target="service"})) < 180)) or on (k8s_cluster, app) (homelab:workload_state == 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))',
+    }
+
+
+def objective_records(fresh):
+    """Per-app recovery objectives on each site (inventory.OBJECTIVES).
+
+    Backup age is the app's oldest newest-backup over every scheduled PVC
+    (Kopiur's last success for its policy) and every primary database
+    (Barman's). A scheduled PVC or a primary without one, or with a timestamp
+    in the future, leaves the app Unknown: a fresh backup of one piece can't
+    stand in for another. Where nothing is scheduled (a standby), no row.
+    """
+    db = "k8s_cluster, namespace, db_cluster"
+    scheduled = f"max by (k8s_cluster, namespace, policy, app, pvc) ({fresh('homelab_app_backup_scheduled')} == 1)"
+    primaries = f"max by ({db}, app) (homelab_expected_database_info) and on ({db}) (homelab:database_in_recovery == 0)"
+
+    def target(objective):
+        return f'max by (k8s_cluster, app) (homelab_app_recovery_objective_seconds{{objective="{objective}"}})'
+
+    gap = (f"max by (k8s_cluster, app) ({scheduled} unless on (k8s_cluster, app, pvc) homelab:app_pvc_backup_age_seconds)"
+           f" or max by (k8s_cluster, app) ({primaries} unless on ({db}) (homelab:database_backup_age_seconds >= 0))")
+    drill = f"max by (k8s_cluster, app) ({fresh('homelab_restore_last_duration_seconds')})"
+    return {
+        "homelab:app_pvc_backup_age_seconds": (
+            "((time() - max by (k8s_cluster, namespace, policy) (kopiur_policy_last_backup_success_timestamp_seconds)) >= 0)"
+            f" * on (k8s_cluster, namespace, policy) group_right {scheduled}"),
+        "homelab:app_backup_age_seconds": (
+            "max by (k8s_cluster, app) (homelab:app_pvc_backup_age_seconds or "
+            f"((homelab:database_backup_age_seconds >= 0) * on ({db}) group_right max by ({db}, app) ({primaries})))"),
+        # 1 within the objective, 3 past it, 0 when a piece has no evidence.
+        "homelab:app_rpo_state": (
+            f"(0 * ({gap})) or ((homelab:app_backup_age_seconds <= bool on (k8s_cluster, app) {target('rpo')})"
+            f" + 3 * (homelab:app_backup_age_seconds > bool on (k8s_cluster, app) {target('rpo')}))"),
+        # The last successful standby restore drill against the restore objective;
+        # Unknown until a drill reports how long it took.
+        "homelab:app_rto_state": (
+            f"(({drill} <= bool on (k8s_cluster, app) {target('rto')}) + 3 * ({drill} > bool on (k8s_cluster, app) {target('rto')}))"
+            f" or on (k8s_cluster, app) (0 * {target('rto')})"),
     }
 
 
@@ -454,7 +493,72 @@ def fixtures():
              {"expr": "homelab:recovery_state", "eval_time": "5m", "exp_samples": [
                  {"labels": 'homelab:recovery_state{k8s_cluster="one",app="test"}', "value": 3}]},
          ]},
+        *objective_fixtures(),
     ]}
+
+
+def objective_fixtures():
+    sched = 'homelab_app_backup_scheduled{k8s_cluster="one",observer_cluster="one",namespace="apps",app="%s",pvc="%s",policy="%s"}'
+    kopiur = 'kopiur_policy_last_backup_success_timestamp_seconds{k8s_cluster="one",namespace="apps",policy="%s"}'
+    objective = 'homelab_app_recovery_objective_seconds{k8s_cluster="one",observer_cluster="one",app="%s",objective="%s"}'
+    return [
+        {"name": "an app's backup age is its oldest piece, and a piece without evidence is Unknown", "interval": "1m",
+         "input_series": [
+             # fresh: one PVC 100 s old and a primary database 200 s old.
+             {"series": sched % ("fresh", "data", "fresh"), "values": "1+0x10"},
+             {"series": kopiur % "fresh", "values": "200+0x10"},
+             {"series": 'homelab_expected_database_info{k8s_cluster="one",namespace="databases",db_cluster="fresh-pg",app="fresh"}', "values": "1+0x10"},
+             {"series": 'cnpg_pg_replication_in_recovery{k8s_cluster="one",namespace="databases",pod="fresh-pg-1"}', "values": "0+0x10"},
+             {"series": 'barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{k8s_cluster="one",namespace="databases",pod="fresh-pg-1"}', "values": "100+0x10"},
+             {"series": objective % ("fresh", "rpo"), "values": "1000+0x10"},
+             # stale: past its objective.
+             {"series": sched % ("stale", "data", "stale"), "values": "1+0x10"},
+             {"series": kopiur % "stale", "values": "0+0x10"},
+             {"series": objective % ("stale", "rpo"), "values": "60+0x10"},
+             # partial: one of two scheduled PVCs has never backed up.
+             {"series": sched % ("partial", "a", "partial-a"), "values": "1+0x10"},
+             {"series": sched % ("partial", "b", "partial-b"), "values": "1+0x10"},
+             {"series": kopiur % "partial-a", "values": "250+0x10"},
+             {"series": objective % ("partial", "rpo"), "values": "1000+0x10"},
+             # standby: suspended here, so no row at all.
+             {"series": sched % ("standby", "data", "standby"), "values": "0+0x10"},
+             {"series": objective % ("standby", "rpo"), "values": "1000+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:app_backup_age_seconds", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:app_backup_age_seconds{k8s_cluster="one",app="fresh"}', "value": 200},
+                 {"labels": 'homelab:app_backup_age_seconds{k8s_cluster="one",app="partial"}', "value": 50},
+                 {"labels": 'homelab:app_backup_age_seconds{k8s_cluster="one",app="stale"}', "value": 300}]},
+             {"expr": "homelab:app_rpo_state", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:app_rpo_state{k8s_cluster="one",app="fresh"}', "value": 1},
+                 {"labels": 'homelab:app_rpo_state{k8s_cluster="one",app="partial"}', "value": 0},
+                 {"labels": 'homelab:app_rpo_state{k8s_cluster="one",app="stale"}', "value": 3}]},
+         ]},
+        {"name": "a primary without backup evidence is Unknown; a replica's missing backup isn't counted", "interval": "1m",
+         "input_series": [
+             {"series": 'homelab_expected_database_info{k8s_cluster="one",namespace="databases",db_cluster="app-pg",app="app"}', "values": "1+0x10"},
+             {"series": 'cnpg_pg_replication_in_recovery{k8s_cluster="one",namespace="databases",pod="app-pg-1"}', "values": "0+0x10"},
+             {"series": 'homelab_expected_database_info{k8s_cluster="two",namespace="databases",db_cluster="app-pg",app="app"}', "values": "1+0x10"},
+             {"series": 'cnpg_pg_replication_in_recovery{k8s_cluster="two",namespace="databases",pod="app-pg-1"}', "values": "1+0x10"},
+             {"series": 'homelab_app_recovery_objective_seconds{k8s_cluster="one",app="app",objective="rpo"}', "values": "1000+0x10"},
+             {"series": 'homelab_app_recovery_objective_seconds{k8s_cluster="two",app="app",objective="rpo"}', "values": "1000+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:app_rpo_state", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:app_rpo_state{k8s_cluster="one",app="app"}', "value": 0}]},
+         ]},
+        {"name": "restore time: within, past, and Unknown without a drill", "interval": "1m",
+         "input_series": [
+             {"series": 'homelab_restore_last_duration_seconds{k8s_cluster="one",observer_cluster="one",app="quick"}', "values": "30+0x10"},
+             {"series": objective % ("quick", "rto"), "values": "3600+0x10"},
+             {"series": 'homelab_restore_last_duration_seconds{k8s_cluster="one",observer_cluster="one",app="slow"}', "values": "7200+0x10"},
+             {"series": objective % ("slow", "rto"), "values": "3600+0x10"},
+             {"series": objective % ("untested", "rto"), "values": "3600+0x10"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:app_rto_state", "eval_time": "5m", "exp_samples": [
+                 {"labels": 'homelab:app_rto_state{k8s_cluster="one",app="quick"}', "value": 1},
+                 {"labels": 'homelab:app_rto_state{k8s_cluster="one",app="slow"}', "value": 3},
+                 {"labels": 'homelab:app_rto_state{k8s_cluster="one",app="untested"}', "value": 0}]},
+         ]},
+    ]
 
 
 def generate():

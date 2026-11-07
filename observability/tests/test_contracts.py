@@ -12,7 +12,8 @@ from kiosk_proxy import sanitize
 
 
 EMPTY_IS_NORMAL = {"Override creation age", "Workloads needing attention",
-                   "Current firing alerts", "Firing now", "Pending now"}
+                   "Current firing alerts", "Firing now", "Pending now",
+                   "PVCs without a backup schedule"}
 
 
 def test_sdk_generates_isolated_household_and_operator_resources():
@@ -458,3 +459,37 @@ def test_flux_event_history_uses_api_event_times(small_inventory):
             'namespace="monitoring",observer_cluster="one",ready="False",resource="grafana"}') in out
     # No transition time, no event: the Unknown Kustomization emits none.
     assert 'ready="Unknown"' not in out
+
+
+def test_backup_schedules_and_drill_duration_per_app(small_inventory):
+    small_inventory["apps"][0]["pvcs"] = ["data", "cache"]
+    small_inventory["objectives"] = {"rpo": 108000, "rto": 3600}
+    small_inventory["databases"] = [{"name": "other-pg", "app": "other", "namespace": "databases", "cluster": "one"}]
+    now = 2_000_000_000
+    created = "2033-05-18T03:00:00Z"
+
+    class Api(FakeApi):
+        def get(self, path):
+            if path.endswith("/snapshotpolicies"):
+                return {"items": [{"metadata": {"name": "test"},
+                                   "spec": {"sources": [{"pvc": {"name": "data"}}]}}]}
+            if path.endswith("/snapshotschedules"):
+                return {"items": [{"spec": {"policyRef": {"name": "test"}, "schedule": {"suspend": False}}}]}
+            if "/restores" in path:
+                return {"items": [{"metadata": {"labels": {"tnwks.us/pvc": pvc}, "creationTimestamp": created},
+                                   "status": {"phase": "Completed", "conditions": [
+                                       {"type": "Ready", "status": "True",
+                                        "lastTransitionTime": f"2033-05-18T03:0{minute}:00Z"}]}}
+                                  for pvc, minute in (("data", 2), ("cache", 5))]}
+            return super().get(path)
+
+    out = Collector(Api(), small_inventory, "one", clock=lambda: now).collect().decode()
+    assert 'homelab_app_backup_scheduled{app="test",k8s_cluster="one",namespace="apps",observer_cluster="one",policy="test",pvc="data"} 1' in out
+    # No SnapshotPolicy covers it: unscheduled, not silently dropped.
+    assert 'policy="none",pvc="cache"} 0' in out
+    assert 'homelab_app_recovery_objective_seconds{app="test",k8s_cluster="two",objective="rpo",observer_cluster="one"} 108000' in out
+    assert 'objective="rto"' in out
+    # A database outside the failover catalogue still has a recovery point.
+    assert 'homelab_app_recovery_objective_seconds{app="other",k8s_cluster="one",objective="rpo",observer_cluster="one"} 108000' in out
+    # The slowest PVC: five minutes.
+    assert 'homelab_restore_last_duration_seconds{app="test",k8s_cluster="one",observer_cluster="one"} 300' in out

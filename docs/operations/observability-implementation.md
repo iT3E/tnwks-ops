@@ -383,6 +383,31 @@ Objectives tab, so an incomplete window reads as incomplete. Targets are
 provisional and burn-rate alerts are off until a full window gives a baseline.
 The Pyrra UI is `pyrra.<internal domain>`, on site 1's local Prometheus.
 
+### Recovery objectives per app
+
+Each app has a recovery point objective (RPO) and, if it's warm with PVCs, a
+restore time objective (RTO), in `observability/inventory.py` (`OBJECTIVES`,
+overridden per app in `APP_OBJECTIVES`). Both are provisional: 30 h, a daily
+backup plus slack, and 1 h.
+
+- **Recovery point.** `homelab:app_backup_age_seconds` is the age of the app's
+  oldest newest-backup over every PVC with a running Kopiur schedule on the site
+  (Kopiur's last success for the PVC's SnapshotPolicy) and every primary
+  database there (Barman's). `homelab:app_rpo_state` is 1 within the objective
+  and 3 past it. It's Unknown when a scheduled PVC or a primary has no backup
+  evidence, because a fresh backup of one piece can't stand in for another. A
+  site with nothing scheduled, like a standby, has no row.
+- **Restore time.** The collector times each app's last successful standby
+  restore drill, from each Restore's creation to its Ready condition, taking
+  the slowest PVC (`homelab_restore_last_duration_seconds`).
+  `homelab:app_rto_state` compares that with the objective and stays Unknown
+  until a drill reports. This covers the data restore, not the whole failover.
+- **Coverage.** The collector reports which SnapshotPolicy covers each
+  catalogue PVC and whether a running schedule uses it
+  (`homelab_app_backup_scheduled`). A PVC no site schedules has an unbounded
+  recovery point; the Databases & Backups board lists these on its Objectives
+  tab, next to the states.
+
 ## Following rollout work
 
 Access, recovery, review and drills are in
@@ -393,8 +418,9 @@ Access, recovery, review and drills are in
    before any household status can be Healthy.
 2. 28-day objectives over the archive. A local 28-day recording on 15-day
    retention is invalid, so it needs a history-aware evaluator such as Thanos
-   Ruler. Also per-app recovery objectives, and Pyrra burn alerts once the
-   14-day windows are covered.
+   Ruler. Also owner-set per-app recovery objectives in place of the
+   provisional defaults, and Pyrra burn alerts once the 14-day windows are
+   covered.
 3. The distros' FRR view of BGP and an off-site client vantage.
 
 Unsupported evidence remains Unknown. Existing MS-01 manifests and AWS

@@ -74,6 +74,29 @@ spec:
         and (time() - timestamp(homelab_workload_ready_replicas) < 180)))) < sum by (k8s_cluster, app) (max by (k8s_cluster,
         app, kind, workload) ((homelab_workload_desired_replicas and (time() - timestamp(homelab_workload_desired_replicas)
         < 180))))) * 0 + 3) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))
+    - record: homelab:app_pvc_backup_age_seconds
+      expr: ((time() - max by (k8s_cluster, namespace, policy) (kopiur_policy_last_backup_success_timestamp_seconds))
+        >= 0) * on (k8s_cluster, namespace, policy) group_right max by (k8s_cluster, namespace, policy, app, pvc)
+        ((homelab_app_backup_scheduled and (time() - timestamp(homelab_app_backup_scheduled) < 180)) == 1)
+    - record: homelab:app_backup_age_seconds
+      expr: max by (k8s_cluster, app) (homelab:app_pvc_backup_age_seconds or ((homelab:database_backup_age_seconds
+        >= 0) * on (k8s_cluster, namespace, db_cluster) group_right max by (k8s_cluster, namespace, db_cluster,
+        app) (max by (k8s_cluster, namespace, db_cluster, app) (homelab_expected_database_info) and on (k8s_cluster,
+        namespace, db_cluster) (homelab:database_in_recovery == 0))))
+    - record: homelab:app_rpo_state
+      expr: (0 * (max by (k8s_cluster, app) (max by (k8s_cluster, namespace, policy, app, pvc) ((homelab_app_backup_scheduled
+        and (time() - timestamp(homelab_app_backup_scheduled) < 180)) == 1) unless on (k8s_cluster, app, pvc) homelab:app_pvc_backup_age_seconds)
+        or max by (k8s_cluster, app) (max by (k8s_cluster, namespace, db_cluster, app) (homelab_expected_database_info)
+        and on (k8s_cluster, namespace, db_cluster) (homelab:database_in_recovery == 0) unless on (k8s_cluster,
+        namespace, db_cluster) (homelab:database_backup_age_seconds >= 0)))) or ((homelab:app_backup_age_seconds
+        <= bool on (k8s_cluster, app) max by (k8s_cluster, app) (homelab_app_recovery_objective_seconds{objective="rpo"}))
+        + 3 * (homelab:app_backup_age_seconds > bool on (k8s_cluster, app) max by (k8s_cluster, app) (homelab_app_recovery_objective_seconds{objective="rpo"})))
+    - record: homelab:app_rto_state
+      expr: ((max by (k8s_cluster, app) ((homelab_restore_last_duration_seconds and (time() - timestamp(homelab_restore_last_duration_seconds)
+        < 180))) <= bool on (k8s_cluster, app) max by (k8s_cluster, app) (homelab_app_recovery_objective_seconds{objective="rto"}))
+        + 3 * (max by (k8s_cluster, app) ((homelab_restore_last_duration_seconds and (time() - timestamp(homelab_restore_last_duration_seconds)
+        < 180))) > bool on (k8s_cluster, app) max by (k8s_cluster, app) (homelab_app_recovery_objective_seconds{objective="rto"})))
+        or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_app_recovery_objective_seconds{objective="rto"}))
     - record: homelab:network_path_state
       expr: (label_replace(label_replace(3 - 2 * (min(mktxp_last_handshake{interface="wg-site1"}) < bool 180), "k8s_cluster",
         "homelab-wsl", "", "") or label_replace(3 - 2 * (min(mktxp_last_handshake{interface="wg-site2"}) < bool
