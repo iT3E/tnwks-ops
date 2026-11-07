@@ -95,6 +95,42 @@ resources:
 # (kubernetes/components/cnpg-cluster). Its last base backup and WAL stay in S3
 # under cnpg/homelab-wsl/. homelab-ms-01 (down) still lists it.
 patches:
+  # Prometheus on its own disk on C: (docs/operations/observability-implementation.md).
+  # The class only exists on worker-1. No subPath: kubelet would create it
+  # root-owned, and hostPath volumes ignore fsGroup.
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata:
+        name: kube-prometheus-stack
+        namespace: flux-system
+      spec:
+        patches:
+          - target:
+              kind: HelmRelease
+              name: kube-prometheus-stack
+            patch: |-
+              - op: add
+                path: /spec/values/prometheus/prometheusSpec/nodeSelector
+                value:
+                  kubernetes.io/hostname: homelab-wsl-worker-1
+              - op: replace
+                path: /spec/values/prometheus/prometheusSpec/storageSpec
+                value:
+                  disableMountSubPath: true
+                  volumeClaimTemplate:
+                    spec:
+                      storageClassName: local-path-observability
+                      accessModes: [ReadWriteOnce]
+                      resources:
+                        requests:
+                          storage: 19Gi
+              - op: replace
+                path: /spec/values/prometheus/prometheusSpec/retention
+                value: 15d
+              - op: replace
+                path: /spec/values/prometheus/prometheusSpec/retentionSize
+                value: 15GB
   - patch: |-
       $patch: delete
       apiVersion: kustomize.toolkit.fluxcd.io/v1
