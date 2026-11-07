@@ -25,6 +25,7 @@ locals {
     transcriber    = "none"
     firefly        = "none"
     home-assistant = "none"
+    grafana        = "none"
   }
 
   site_dns_records = {
@@ -43,6 +44,22 @@ locals {
       ttl             = "5m"
       match_subdomain = true
       comment         = "shared VIP (homelab-wsl first): mosquitto"
+    }
+    vip_grafana = {
+      name            = "grafana.internal.tnwks.us"
+      address         = local.vip_wsl
+      type            = "A"
+      ttl             = "5m"
+      match_subdomain = true
+      comment         = "shared VIP (homelab-wsl first): grafana"
+    }
+    vip_grafana_embed = {
+      name            = "grafana-embed.internal.tnwks.us"
+      address         = local.vip_wsl
+      type            = "A"
+      ttl             = "5m"
+      match_subdomain = true
+      comment         = "shared VIP (homelab-wsl first): grafana (kiosk frames)"
     }
     vip_firefly = {
       name            = "firefly.internal.tnwks.us"
@@ -123,16 +140,6 @@ locals {
       ttl             = "5m"
       match_subdomain = true
       comment         = "shared VIP (homelab-wsl-02 first): qbittorrent"
-    }
-    # Site 2's own Grafana (grafana.internal.tnwks.us stays with homelab-wsl). Its
-    # LAN address, not a shared VIP: the name must reach site 2's ingress only.
-    wsl02_grafana = {
-      name            = "grafana-02.internal.tnwks.us"
-      address         = local.wsl02_lan_address
-      type            = "A"
-      ttl             = "5m"
-      match_subdomain = true
-      comment         = "homelab-wsl-02 only: grafana-02"
     }
   }
 }

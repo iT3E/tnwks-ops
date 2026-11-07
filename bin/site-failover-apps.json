@@ -522,5 +522,28 @@
         "wget -qO- \"http://$(hostname -i):8000/api/health\""
       ]
     }
+  },
+  "grafana": {
+    "prefix": "GRAFANA",
+    "namespace": "monitoring",
+    "kustomizations": {
+      "db": "grafana-db",
+      "app": "grafana"
+    },
+    "postgres": "grafana-pg",
+    "deployments": [
+      "grafana"
+    ],
+    "pvcs": [],
+    "check": {
+      "deployment": "grafana",
+      "container": "grafana",
+      "command": [
+        "wget",
+        "-qO-",
+        "http://localhost:3000/api/health"
+      ]
+    },
+    "lease": true
   }
 }

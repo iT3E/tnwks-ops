@@ -228,6 +228,23 @@
       ],
       "tier": "movable",
       "fencing_required": false
+    },
+    {
+      "name": "grafana",
+      "namespace": "monitoring",
+      "prefix": "GRAFANA",
+      "workloads": [
+        "deployment/grafana"
+      ],
+      "clusters": [
+        "homelab-wsl",
+        "homelab-wsl-02"
+      ],
+      "databases": [
+        "grafana-pg"
+      ],
+      "tier": "warm",
+      "fencing_required": true
     }
   ],
   "databases": [
@@ -321,6 +338,13 @@
       "namespace": "databases",
       "cluster": "homelab-wsl-02",
       "source": "firefly-db"
+    },
+    {
+      "name": "grafana-pg",
+      "app": "grafana",
+      "namespace": "databases",
+      "cluster": "homelab-wsl-02",
+      "source": "grafana-db"
     },
     {
       "name": "home-assistant-pg",

@@ -1,6 +1,9 @@
 ---
 # grafana's own CNPG cluster, databases/grafana-pg, from
-# ../../../../components/cnpg-cluster (added by the grafana-db Kustomization).
+# ../../../../components/cnpg-cluster plus cnpg-standby (both added by the
+# grafana-db Kustomization), the same manifest on both sites. The site named by
+# GRAFANA_PG_PRIMARY runs the primary; the other a replica cluster from its WAL
+# archive.
 #
 # Imported `grafana` from homelab-wsl's shared cluster at first boot (CNPG
 # initdb.import). That cluster is retired, and bootstrap is only read when a
@@ -8,5 +11,21 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  # homelab-wsl only (the homelab-wsl-02 overlay deletes it): taken there
+  # before the v13 schema migration, and the rollback point for it.
   - ./backup-before-v13.yaml
+  # The owner role's password, the same on both sites.
   - ./secret-grafana-role.sops.yaml
+patches:
+  - target:
+      kind: Cluster
+    patch: |-
+      # Which site is primary, and on the side being promoted only, the old
+      # primary's demotion token (docs/wsl/multi-site.md). The empty default
+      # carries its quotes: a bare empty value is null, which the CRD rejects.
+      - op: add
+        path: /spec/replica/primary
+        value: ${GRAFANA_PG_PRIMARY:=homelab-wsl}
+      - op: add
+        path: /spec/replica/promotionToken
+        value: ${GRAFANA_PG_PROMOTION_TOKEN:=""}

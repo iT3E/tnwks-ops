@@ -468,7 +468,7 @@ the BGP hold time (9 s; a clean FRR stop moves it at once):
 
 | VIP | Preferred | Names (router site records, `dns-sites.tf`) |
 | --- | --- | --- |
-| `10.10.95.10` | homelab-wsl | `hass`, `firefly` |
+| `10.10.95.10` | homelab-wsl | `hass`, `firefly`, `grafana`, `grafana-embed` |
 | `10.10.95.200` | homelab-wsl-02 | `transcriber`, `changedetection`, `immich`, `immichframe`, `kitchen-screensaver`, `qbittorrent`, `playwright-mcp`, `unifi` |
 
 Both are the internal ingress (`networking/ingress-nginx-internal-vip-wsl` and
@@ -551,12 +551,12 @@ cluster with `io.cilium.k8s.policy.cluster`.
 
 | Tier | Apps | On a move |
 | --- | --- | --- |
-| Warm | Mealie, Home Assistant, Firefly, storefront API | switchover: database primary and PVC data move |
+| Warm | Mealie, Home Assistant, Firefly, Grafana, storefront API | switchover: database primary and PVC data move |
 | Moves, state per site | Frigate, mosquitto | only config moves; each site keeps its own state |
 | Stateless | sites, playwright-mcp | scale up there, down here |
 | Cold | media stack, Immich | stay down until their home site is back |
 | Pinned | zwave-js-ui (Z-Stick) | down while wsl-01 is down. Home Assistant runs without Z-Wave on wsl-02; accepted |
-| Not placed | monitoring, the OpenClaw gateway | each site runs its own monitoring and watches the other |
+| Not placed | monitoring (Prometheus, Thanos, Alertmanager), the OpenClaw gateway | each site runs its own monitoring and watches the other |
 
 Vaultwarden isn't in use and isn't planned for.
 

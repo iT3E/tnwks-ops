@@ -126,6 +126,9 @@ data:
   # The media stack runs here since 2026-11-06 (bin/site-failover, then this
   # setting), until a target-state decision; homelab-wsl keeps copies at 0.
   # Home Assistant: warm standby here (bin/site-failover "home-assistant").
+  # Grafana: standby here (replica of grafana-pg), homelab-wsl runs it.
+  GRAFANA_REPLICAS: "0"
+  GRAFANA_HELM_DISABLE_WAIT: "true"
   HOME_ASSISTANT_REPLICAS: "0"
   # The MQTT broker: a standby here, with HA (its Service is global).
   MOSQUITTO_REPLICAS: "0"

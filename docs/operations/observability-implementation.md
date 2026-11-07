@@ -138,22 +138,26 @@ forever; leave the type off.
   `chattr -i` it first. A new worker gets a new volume, and the task finds it.
 - **Reclaim:** the class is `Retain`. Deleting the PVC leaves the data on the disk.
 
-## Site 2 Grafana
+## Grafana on both sites
 
-`grafana-02.<internal domain>` is a second Grafana on homelab-wsl-02 with the same
-boards, datasource UIDs and global view, so losing site 1 doesn't lose the
-dashboards. It depends on nothing that lives on site 1: SQLite on a local claim
-instead of the CNPG database, and the local login form with the admin account in
-`grafana-admin-secret` instead of oauth2-proxy. `auth.proxy` is off there, or any
-client could sign in by sending the header oauth2-proxy normally sets.
+Grafana is a warm app, like Firefly (`docs/wsl/multi-site.md`, "Apps"): one name,
+`grafana.<internal domain>`, on the homelab-wsl-first shared VIP. homelab-wsl runs
+it (`GRAFANA_REPLICAS`). homelab-wsl-02 keeps it at 0, with a replica cluster of
+`grafana-pg` replaying the WAL archive. `task failover APP=grafana TO=homelab-wsl-02`
+moves it, and the global Service lets either site's ingress reach it. Users,
+preferences and UI-made dashboards move with the database. The provisioned boards
+are on both sites already.
 
-- **Not shared:** users, preferences and UI-made dashboards live in each site's
-  own database. Provisioned boards are identical.
-- **No kiosk or renderer:** the kitchen display's JWT login and the image renderer
-  stay with site 1.
-- **Logs:** site 2 has no Loki, so its Loki datasource errors. Metrics are complete.
-- **DNS:** `dns-sites.tf` points the name at WSL-02's LAN address, not a shared
-  VIP, which either site's ingress may answer.
+- **Losing site 1:** set `site_leases.grafana`, then
+  `task failover APP=grafana TO=homelab-wsl-02 -- --promote`. Until then the name
+  has nowhere to go. The sign-in still goes through homelab-wsl's oauth2-proxy, as
+  for every app on the VIPs, so with site 1 down only the kiosk (JWT) and local
+  admin logins work. Use the admin account in `grafana-admin-secret`.
+- **Renderer:** runs on both sites, idle on the standby. The chart can't scale it to 0.
+- **Logs:** site 2 has no Loki, so the Loki datasource errors while Grafana runs
+  there. Metrics are complete through each site's Thanos Query.
+- **Replaced** the separate `grafana-02` instance (SQLite, local login), which
+  didn't match the other apps' multi-site setup.
 
 ## Following rollout work
 
