@@ -43,6 +43,13 @@ SCRAPE_COLUMNS = ("__name__", "Time", "__replica__", "alertstate", "cluster", "c
                   "instance", "job", "kind", "namespace", "observer_cluster", "pod", "prometheus",
                   "service")
 NO_ALERTS = "None"
+# Entity boards (pinned upstream, chart mixins and the kept classic boards),
+# opened on the clicked series: domain -> entity.
+NGINX = ("k8s-nginx-ingress-prometheus-ng", {"ingress": "ingress"})
+ROUTER = ("gxf3edrffkw", {"node": "routerboard_name"})
+NODE = ("200ac8fdbfbb74b39aff88118e4d1c2c", {"cluster": "k8s_cluster", "node": "kubernetes_node"})
+WINDOWS = ("IV0hu1m7z", {"server": "instance"})
+ACCESS_POINT = ("home-wifi", {"ap": "name"})
 
 
 def alerts(state: str) -> str:
@@ -68,7 +75,9 @@ class Panel:
     unit: str
     description: str
     kind: str = "timeseries"
-    link: str | None = None
+    # A board UID (keeps the selected sites), or (UID, {variable: label}) to open
+    # an entity board on the clicked series or row.
+    link: str | tuple[str, dict[str, str]] | None = None
     legend: str = "{{k8s_cluster}} {{app}} {{instance}}"
     empty: str = "Unknown — missing evidence"
 
@@ -205,7 +214,7 @@ def catalogue() -> list[Board]:
             ],
             "Storage": [
                 p("Windows disk free", metric("windows_logical_disk_free_bytes", 'volume=~"C:|E:"'), "bytes",
-                  "Physical Windows free capacity. WSL's virtual disk maximum is not an independent physical capacity budget."),
+                  "Physical Windows free capacity. WSL's virtual disk maximum is not an independent physical capacity budget.", link=WINDOWS),
             ],
         }, "Data"),
         Board("tnwks-network", "Network & Routing", "network", "l2",
@@ -216,8 +225,8 @@ def catalogue() -> list[Board]:
                 # The router, seen by homelab-wsl's mktxp: not scoped to $cluster.
                 p("Site tunnel traffic", 'sum by (interface) (rate(mktxp_peer_rx_total{interface=~"wg-site[0-9]+"}[5m]))', "Bps",
                   "Received on the router's WireGuard interface for each site's distro. Missing series mean the router isn't observed, not an idle tunnel."),
-                p("Router interface errors", f'sum by (k8s_cluster, name) (rate({metric("mktxp_interface_rx_error_total")}[5m]))', "ops",
-                  "Router receive errors by interface. Telemetry enables are integrated after the network migration release."),
+                p("Router interface errors", f'sum by (k8s_cluster, routerboard_name, name) (rate({metric("mktxp_interface_rx_error_total")}[5m]))', "ops",
+                  "Router receive errors by interface. Telemetry enables are integrated after the network migration release.", link=ROUTER),
             ],
             "BGP and mesh": [
                 p("Path by hop", metric("homelab:network_path_state"), "state",
@@ -263,9 +272,9 @@ def catalogue() -> list[Board]:
               "Is client experience failing at RF, the AP uplink, DHCP/DNS, or site 2's Wi-Fi path?", {
             "Access points": [
                 p("AP uptime", f'max by (k8s_cluster, name) ({metric("unpoller_device_uptime_seconds")})', "s",
-                  "AP inventory/uptime. Device-only identifiers; household client names/MACs are excluded.", "table", "home-wifi"),
+                  "AP inventory/uptime. Device-only identifiers; household client names/MACs are excluded.", "table", ACCESS_POINT),
                 p("AP uplink", f'max by (k8s_cluster, name) ({metric("unpoller_device_uplink_speed_mbps")})', "Mbits",
-                  "Negotiated uplink speed. A slow or errored uplink can masquerade as an RF problem.", "table"),
+                  "Negotiated uplink speed. A slow or errored uplink can masquerade as an RF problem.", "table", ACCESS_POINT),
                 p("Wi-Fi collector failures", f'sum by (k8s_cluster) (increase({metric("unpoller_prometheus_refresh_failures_total")}[15m]))', "short",
                   "Collector-specific failure evidence; HTTP scrape success does not prove the UniFi API refresh succeeded."),
             ],
@@ -289,10 +298,10 @@ def catalogue() -> list[Board]:
             "Workloads": [
                 p("Unready workloads", f'{metric("homelab_workload_desired_replicas")} - {metric("homelab_workload_ready_replicas")}', "short",
                   "Effective desired minus Ready per tracked app/site. A zero-replica standby is not a failed application."),
-                p("Node CPU utilization", f'1 - avg by (k8s_cluster, instance) (rate({metric("node_cpu_seconds_total", "mode=\"idle\"")}[$__rate_interval]))', "percentunit",
-                  "CPU busy fraction per nested node view. Do not sum shared WSL kernel capacity as independent physical nodes."),
+                p("Node CPU utilization", f'1 - avg by (k8s_cluster, instance, kubernetes_node) (rate({metric("node_cpu_seconds_total", "mode=\"idle\"")}[$__rate_interval]))', "percentunit",
+                  "CPU busy fraction per nested node view. Do not sum shared WSL kernel capacity as independent physical nodes.", link=NODE),
                 p("Node memory available", metric("node_memory_MemAvailable_bytes"), "bytes",
-                  "Shared WSL kernel memory view on nested Talos nodes. Cross-check Windows physical available memory."),
+                  "Shared WSL kernel memory view on nested Talos nodes. Cross-check Windows physical available memory.", link=NODE),
             ],
         }, "Kubernetes"),
         Board("tnwks-apps", "Apps & Ingress", "apps", "l2",
@@ -301,11 +310,11 @@ def catalogue() -> list[Board]:
                 p("Application probe state", metric("homelab:service_state"), "state",
                   "Content probe to the in-cluster Service on its active site. This bypasses client DNS, ingress and sign-in; those paths need separate evidence.", "table"),
                 p("HTTP requests", f'sum by (k8s_cluster, ingress) (rate({metric("nginx_ingress_controller_requests")}[$__rate_interval]))', "reqps",
-                  "Rate counters before aggregation. Use the same scope when comparing the error numerator and total denominator."),
+                  "Rate counters before aggregation. Use the same scope when comparing the error numerator and total denominator.", link=NGINX),
                 p("HTTP 5xx fraction", f'sum by (k8s_cluster, ingress) (rate({metric("nginx_ingress_controller_requests", "status=~\"5..\"")}[$__rate_interval])) / sum by (k8s_cluster, ingress) (rate({metric("nginx_ingress_controller_requests")}[$__rate_interval]))', "percentunit",
-                  "Weighted errors/requests. No traffic is not a perfect availability measurement; independent synthetic evidence remains necessary."),
+                  "Weighted errors/requests. No traffic is not a perfect availability measurement; independent synthetic evidence remains necessary.", link=NGINX),
                 p("HTTP p95 duration", f'histogram_quantile(0.95, sum by (k8s_cluster, ingress, le) (rate({metric("nginx_ingress_controller_request_duration_seconds_bucket")}[$__rate_interval])))', "s",
-                  "Buckets combined before calculating the percentile. Never average per-pod percentiles."),
+                  "Buckets combined before calculating the percentile. Never average per-pod percentiles.", link=NGINX),
             ],
             "Shared-VIP names": [
                 p("Name state by site", metric("homelab:ingress_state"), "state",
@@ -347,7 +356,7 @@ def catalogue() -> list[Board]:
               "Can the physical hosts sustain the workload and a site failure?", {
             "Physical resources": [
                 p("Windows available memory", metric("windows_memory_available_bytes"), "bytes",
-                  "Physical host availability. Do not add this to WSL MemAvailable, which overlaps the same memory."),
+                  "Physical host availability. Do not add this to WSL MemAvailable, which overlaps the same memory.", link=WINDOWS),
                 p("Windows disk free", metric("windows_logical_disk_free_bytes", 'volume=~"C:|E:"'), "bytes",
                   "Physical free space remains authoritative even if an ext4 VHDX reports much more virtual space.", "table"),
                 p("Disk temperature", metric("smartctl_device_temperature"), "celsius",
@@ -465,7 +474,10 @@ def visualization(panel: Panel, runbook: str | None = None):
                    .placement(common.LegendPlacement.BOTTOM).calcs(["lastNotNull", "max"]))
     links = []
     if panel.link:
-        links.append(model.DataLink(title="Diagnose", url=dashboard_link(panel.link)))
+        uid, entity = (panel.link, None) if isinstance(panel.link, str) else panel.link
+        if entity and panel.kind == "table":
+            assert not set(entity.values()) & set(SCRAPE_COLUMNS), (panel.title, "table hides the entity's field")
+        links.append(model.DataLink(title="Diagnose", url=dashboard_link(uid, entity, panel.kind == "table")))
     if runbook:
         links.append(model.DataLink(title="Runbook", url=f'https://github.com/iT3E/tnwks-ops/blob/main/{runbook}', target_blank=True))
     if links:

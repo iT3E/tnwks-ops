@@ -35,6 +35,10 @@ class Handler(BaseHTTPRequestHandler):
             data = ["homelab-wsl", "homelab-wsl-02"]
         elif path.path.endswith("query_range"):
             data = {"resultType": "matrix", "result": []}
+        elif "unpoller_device_uptime_seconds" in query:
+            # A device name with spaces: entity links must encode the clicked row.
+            data["result"] = [{"metric": {"k8s_cluster": "homelab-wsl", "name": "AP Test Room"},
+                               "value": [time.time(), "86400"]}]
         elif "homelab" in query:
             if query.startswith("count("):
                 count = "2" if "homelab_expected_site_info" in query else "1"

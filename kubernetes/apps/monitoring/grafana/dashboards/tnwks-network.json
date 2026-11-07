@@ -250,7 +250,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "sum by (k8s_cluster, name) (rate(mktxp_interface_rx_error_total{k8s_cluster=~\"$cluster\"}[5m]))",
+                        "expr": "sum by (k8s_cluster, routerboard_name, name) (rate(mktxp_interface_rx_error_total{k8s_cluster=~\"$cluster\"}[5m]))",
                         "instant": false,
                         "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
                         "range": true
@@ -292,6 +292,10 @@
                 "defaults": {
                   "unit": "ops",
                   "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/gxf3edrffkw/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-node=${__field.labels.routerboard_name:percentencode}"
+                    },
                     {
                       "title": "Runbook",
                       "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",

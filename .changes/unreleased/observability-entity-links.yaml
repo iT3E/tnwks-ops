@@ -1,0 +1,4 @@
+---
+kind: Added
+body: Operator boards link from a domain panel to its entity board (ingress, router, node, Windows host, access point) on the clicked series or row, keeping the incident time range.
+time: 2026-11-07T16:30:00Z

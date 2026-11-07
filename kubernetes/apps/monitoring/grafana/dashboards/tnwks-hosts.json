@@ -101,6 +101,10 @@
                   "unit": "bytes",
                   "links": [
                     {
+                      "title": "Diagnose",
+                      "url": "/d/IV0hu1m7z/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-server=${__field.labels.instance:percentencode}"
+                    },
+                    {
                       "title": "Runbook",
                       "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
                       "targetBlank": true
