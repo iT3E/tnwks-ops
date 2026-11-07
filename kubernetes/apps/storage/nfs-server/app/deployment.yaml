@@ -37,7 +37,7 @@ spec:
         # The gdrive-sync export's root belongs to the squash uid (1000) and
         # nobody else: every client is mapped to it (configmap.yaml).
         - name: gdrive-sync-perms
-          image: docker.io/library/busybox:1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+          image: docker.io/library/busybox:1.38@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
           command: ["sh", "-c", "chown 1000:1000 /gdrive-sync && chmod 0700 /gdrive-sync"]
           securityContext:
             capabilities:
