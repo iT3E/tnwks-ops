@@ -19,6 +19,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
             summary: "The speech transcriber isn't running (or isn't scraped)."
             description: "No speech is being captured. Check `kubectl -n production logs deploy/transcriber -c selfcheck` and `-c app`."
         - alert: TranscriberCaptureDown
@@ -29,6 +30,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
             summary: "No audio from {{ $labels.camera }} for 30 minutes."
             description: "transcriber can't read audio from the go2rtc stream for {{ $labels.camera }}. Check the stream offers audio and the pod log."
         - alert: TranscriberMQTTDisconnected
@@ -37,6 +39,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
             summary: "The transcriber has lost MQTT."
             description: "Without Frigate's speech ON/OFF topic no clips are cut. Check mosquitto and the transcriber MQTT login."
         - alert: TranscriberBacklog
@@ -47,6 +50,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
             summary: "{{ $value }} speech clips waiting to be transcribed for 2 hours."
             description: "Check transcriber_models_loaded and the pod log. A bigger WHISPER_MODEL or busy hours can outrun 4 CPU threads."
         - alert: TranscriberFailures
@@ -54,5 +58,6 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
             summary: "Speech clips are failing to transcribe."
             description: "More than 5 clip failures in the last hour. `transcriber show <id>` prints the error; `transcriber reprocess --failed` retries."

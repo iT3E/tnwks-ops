@@ -160,6 +160,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-internet?var-cluster={{ $externalLabels.cluster }}"
             summary: "Internet latency spiking"
             description: >-
               {{ $value }} of 3 internet targets are over 2x their normal latency.
@@ -183,6 +184,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-internet?var-cluster={{ $externalLabels.cluster }}"
             summary: "Internet packet loss"
             description: >-
               {{ $value }} of 3 internet targets losing >5% of pings.
@@ -205,6 +207,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-internet?var-cluster={{ $externalLabels.cluster }}"
             summary: "Latency/loss inside the network (before the ISP)"
             description: >-
               Pings from the cluster to the router (10.10.91.1) are slow or dropping,
@@ -219,5 +222,6 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-internet?var-cluster={{ $externalLabels.cluster }}"
             summary: "smokeping-prober is not being scraped"
             description: "WAN latency monitoring is blind: no successful smokeping-prober scrape for 5 minutes."

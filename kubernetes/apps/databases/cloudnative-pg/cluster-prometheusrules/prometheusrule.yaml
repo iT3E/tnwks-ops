@@ -13,6 +13,7 @@ spec:
       rules:
         - alert: LongRunningTransaction
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-data?var-cluster={{ $externalLabels.cluster }}"
             description: Pod {{ $labels.pod }} is taking more than 5 minutes (300 seconds) for a query.
             summary: A query is taking longer than 5 minutes.
           expr: |-
@@ -22,6 +23,7 @@ spec:
             severity: warning
         - alert: BackendsWaiting
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-data?var-cluster={{ $externalLabels.cluster }}"
             description: Pod {{ $labels.pod  }} has been waiting for longer than 5 minutes
             summary: If a backend is waiting for longer than 5 minutes
           expr: |-
@@ -31,6 +33,7 @@ spec:
             severity: warning
         - alert: PGDatabase
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-data?var-cluster={{ $externalLabels.cluster }}"
             description: Over 150,000,000 transactions from frozen xid on pod {{ $labels.pod  }}
             summary: Number of transactions from the frozen XID to the current one
           expr: |-
@@ -46,6 +49,7 @@ spec:
         # with the primary's instead.
         - alert: PGReplication
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-data?var-cluster={{ $externalLabels.cluster }}"
             description: Standby is lagging behind by over 300 seconds (5 minutes)
             summary: The standby is lagging behind the primary
           expr: |-
@@ -56,6 +60,7 @@ spec:
             severity: warning
         - alert: LastFailedArchiveTime
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-data?var-cluster={{ $externalLabels.cluster }}"
             description: Archiving failed for {{ $labels.pod }}
             summary: Checks the last time archiving failed. Will be -1 when it has not failed.
           expr: |-
@@ -73,6 +78,7 @@ spec:
         # namespace, and a max per namespace let the freshest hide a stale one.
         - alert: PostgresBackupStale
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-data?var-cluster={{ $externalLabels.cluster }}"
             description: >-
               The newest base backup of {{ $labels.namespace }}/{{ $labels.cluster }}
               is older than 30 hours (or none exists). Check the ScheduledBackup
@@ -92,6 +98,7 @@ spec:
         # the segment it's on keeps failing.
         - alert: PostgresWALArchivingStalled
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-data?var-cluster={{ $externalLabels.cluster }}"
             description: >-
               {{ $labels.pod }} has been failing to archive WAL to S3 for 15
               minutes (its last failure is newer than its last success).
@@ -105,6 +112,7 @@ spec:
             severity: warning
         - alert: DatabaseDeadlockConflicts
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-data?var-cluster={{ $externalLabels.cluster }}"
             description: There are over 10 deadlock conflicts in {{ $labels.pod }}
             summary: Checks the number of database conflicts
           expr: |-

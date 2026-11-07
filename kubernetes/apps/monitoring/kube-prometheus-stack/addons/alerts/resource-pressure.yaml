@@ -28,6 +28,7 @@ spec:
         # working-set/limit ratio instead.)
         - alert: ContainerMemoryNearLimit
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $externalLabels.cluster }}"
             summary: >-
               Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }}
               is at {{ $value | humanizePercentage }} of its memory limit
@@ -53,6 +54,7 @@ spec:
         # (~0 MB/s) but below a brief legitimate burst.
         - alert: ContainerHighDiskReadThrash
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $externalLabels.cluster }}"
             summary: >-
               {{ $labels.namespace }}/{{ $labels.pod }} is reading
               {{ $value | humanize1024 }}B/s from disk

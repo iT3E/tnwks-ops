@@ -13,6 +13,7 @@ spec:
       rules:
         - alert: SiteOverrideLingering
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-sites?var-cluster={{ $externalLabels.cluster }}"
             description: >-
               flux-system/site-overrides on this cluster has existed for more
               than 24 hours, so some apps run off their git default site.

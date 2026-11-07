@@ -15,6 +15,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-data?var-cluster={{ $externalLabels.cluster }}"
             summary: "The weekly standby restore hasn't succeeded for 8 days."
             description: >-
               CronJob kopiur-system/standby-restore restores the other site's

@@ -58,6 +58,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "SMART health FAILED on {{ $labels.model_name }} ({{ $labels.instance }})"
             description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }} reports SMART overall-health FAILED. The drive itself predicts failure: back it up now and replace it."
 
@@ -73,6 +74,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "SMART attribute {{ $labels.attribute_name }} at/below threshold on {{ $labels.model_name }}"
             description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }}: attribute {{ $labels.attribute_id }} {{ $labels.attribute_name }} normalized value {{ $value }} is at or below the vendor failure threshold. Back the drive up and plan a replacement."
 
@@ -85,6 +87,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "{{ $labels.attribute_name }} increased on {{ $labels.model_name }}"
             description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} on {{ $labels.instance }}: {{ $labels.attribute_name }} went up by {{ $value | humanize }} in the last hour. The drive is remapping or failing to read/write blocks. Make sure it is backed up; repeated increases mean replace it."
 
@@ -97,6 +100,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "SATA link CRC errors on {{ $labels.model_name }}"
             description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} on {{ $labels.instance }}: {{ $value | humanize }} new interface CRC errors in the last hour. This is usually the SATA cable or port, not the flash. Reseat or swap the cable."
 
@@ -108,6 +112,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "NVMe critical warning on {{ $labels.model_name }}"
             description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }} set NVMe critical warning bits {{ $value }} (1=spare low, 2=over temperature, 4=reliability degraded, 8=read-only, 16=backup failed). Back it up and check `smartctl -a` on the host."
 
@@ -117,6 +122,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "NVMe media errors increased on {{ $labels.model_name }}"
             description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} on {{ $labels.instance }} logged {{ $value | humanize }} new media/data integrity errors in the last hour (unrecovered read/write). Make sure it is backed up."
 
@@ -131,6 +137,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "NVMe spare blocks exhausted on {{ $labels.model_name }}"
             description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }}: available spare is {{ $value }}%, at or below the drive's own threshold. It is close to going read-only. Replace it."
 
@@ -142,6 +149,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "SSD {{ $labels.model_name }} has used {{ $value }}% of its rated endurance"
             description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }} is at {{ $value }}% of its rated write endurance. Many drives outlive the rating, but plan a replacement and keep it backed up."
 
@@ -153,6 +161,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "{{ $labels.model_name }} at {{ $value }}°C"
             description: "{{ $labels.model_name }} serial {{ $labels.serial_number }} ({{ $labels.device }}) on {{ $labels.instance }} has been above 70°C for 15m ({{ $value }}°C now). Sustained heat throttles and ages the drive; check airflow or the M.2 heatsink."
 
@@ -164,6 +173,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "A drive disappeared from {{ $labels.instance }}"
             description: "smartctl on {{ $labels.instance }} sees {{ $value }} drive(s), fewer than it saw in the last day. A drive dropped off the bus or stopped answering SMART. Check Disk Management and `smartctl --scan` on the host."
 
@@ -175,6 +185,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "Windows reports {{ $labels.model }} as {{ $labels.status }}"
             description: "Win32_DiskDrive on {{ $labels.instance }} reports {{ $labels.model }} ({{ $labels.name }}) status {{ $labels.status }} instead of OK. Back it up and check the drive."
 
@@ -186,5 +197,6 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "smartctl_exporter on {{ $labels.instance }} is down, disk health is blind"
             description: "Prometheus can't scrape smartctl_exporter on {{ $labels.instance }}:9633 while windows_exporter is fine. Check the Windows scheduled task \\Prometheus\\smartctl_exporter and the 'smartctl_exporter (Prometheus)' firewall rule."

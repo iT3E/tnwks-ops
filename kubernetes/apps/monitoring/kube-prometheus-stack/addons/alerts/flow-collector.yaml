@@ -16,6 +16,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-internet?var-cluster={{ $externalLabels.cluster }}"
             summary: "flow-collector is not being scraped"
             description: >-
               No successful scrape of monitoring/flow-collector for 10 minutes, so WAN
@@ -26,6 +27,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-internet?var-cluster={{ $externalLabels.cluster }}"
             summary: "No sFlow/NetFlow reaching flow-collector"
             description: >-
               flow-collector is up but has had no flow packets for
@@ -39,6 +41,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-internet?var-cluster={{ $externalLabels.cluster }}"
             summary: "flow-collector has no ASN table"
             description: >-
               The iptoasn download failed and there is no cached copy, so remote networks

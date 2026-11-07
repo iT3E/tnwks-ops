@@ -22,6 +22,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
             summary: "The Simplifi to Firefly sync hasn't succeeded in over 26 hours."
             description: "Check the last finance-sync-simplifi Jobs in production; Firefly balances are going stale."
         - alert: FinanceAmazonEnrichStale
@@ -33,6 +34,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
             summary: "The weekly Amazon enrichment hasn't succeeded in over 8 days."
             description: "Check the last finance-sync-amazon Jobs in production."
         - alert: FinanceSyncNeverSucceeded
@@ -54,4 +56,5 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
             summary: "{{ $labels.cronjob }} is enabled but has never completed successfully."

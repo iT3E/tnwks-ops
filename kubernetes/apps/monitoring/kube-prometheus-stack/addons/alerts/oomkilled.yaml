@@ -9,6 +9,7 @@ spec:
       rules:
         - alert: OOMKilled
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $externalLabels.cluster }}"
             summary: Container {{ $labels.container }} of pod {{ $labels.pod }} in namespace {{ $labels.namespace }} was OOM killed
             message: Container {{ $labels.container }} of pod {{ $labels.pod }} in namespace {{ $labels.namespace }} was OOM killed recently
             description: Container {{ $labels.container }} of pod {{ $labels.pod }} in namespace {{ $labels.namespace }} was OOM killed and has restarted within the last hour
