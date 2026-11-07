@@ -338,8 +338,6 @@ Access, recovery, review and drills are in
 3. The distros' FRR view of BGP, structured operation events with local
    availability on both sites (site 2 has no Loki), and an off-site client
    vantage.
-4. Retire Homelab (classic), now owned by the `legacy` provider, by removing its
-   file.
 
 Unsupported evidence remains Unknown. Existing MS-01 manifests and AWS
 application backup destinations remain separate from this metrics archive.
