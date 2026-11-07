@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.24.0 - 2026-11-07
+
+### Added
+
+* Document how to reach, recover, review and drill the observability stack on each site.
+
+### Removed
+
+* Retire the Homelab (classic) board, the last one pinned to a single Windows host; its panels are on the generated boards and the Windows Exporter board.
+
 ## v2.23.0 - 2026-11-07
 
 ### Added
