@@ -50,7 +50,7 @@ spec:
     # the lease can't be read. GRAFANA_LEASE_GATE=off skips it.
     extraInitContainers:
       - name: site-lease-gate
-        image: docker.io/library/busybox:1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+        image: docker.io/library/busybox:1.38@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
         command: ["sh", "-c"]
         args:
           - |
@@ -88,7 +88,7 @@ spec:
       # volume, and Grafana 13 can't load them. Nothing provisioned uses them.
       # A no-op once they're gone.
       - name: remove-angular-plugins
-        image: docker.io/library/busybox:1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+        image: docker.io/library/busybox:1.38@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
         command: ["sh", "-c"]
         args:
           - >-
