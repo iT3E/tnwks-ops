@@ -152,8 +152,8 @@ client could sign in by sending the header oauth2-proxy normally sets.
 - **No kiosk or renderer:** the kitchen display's JWT login and the image renderer
   stay with site 1.
 - **Logs:** site 2 has no Loki, so its Loki datasource errors. Metrics are complete.
-- **DNS:** `dns-sites.tf` points the name at site 2's shared VIP. With site 2 down,
-  site 1's ingress answers it with a 404, since it has no such host.
+- **DNS:** `dns-sites.tf` points the name at WSL-02's LAN address, not a shared
+  VIP, which either site's ingress may answer.
 
 ## Following rollout work
 
