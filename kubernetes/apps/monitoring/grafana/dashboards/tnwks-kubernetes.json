@@ -583,6 +583,470 @@
           },
           "description": "Shared WSL kernel memory view on nested Talos nodes. Cross-check Windows physical available memory.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "id": 8,
+          "title": "Source revisions fetched",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster, resource, revision) (max_over_time(homelab_flux_source_revision_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "When"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "dateTimeAsIso",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "None in range",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Each Git or OCI revision Flux fetched in the range and when, from the source's artifact. Fetched isn't applied: the Ready transitions of the Kustomizations that use it show the apply.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "id": 9,
+          "title": "Helm releases deployed",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster, resource, chart_version, app_version, release_status) (max_over_time(homelab_flux_release_deployed_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "When"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "dateTimeAsIso",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "None in range",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The latest install or upgrade of each HelmRelease in the range, from its release history, with the chart and app version and whether it deployed or failed. An upgrade that changed only values keeps its version.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-9": {
+        "kind": "Panel",
+        "spec": {
+          "id": 10,
+          "title": "Flux Ready transitions",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "label_replace(max by (k8s_cluster, kind, resource, ready) (max_over_time(homelab_flux_ready_transition_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from, \"flux_kind\", \"$1\", \"kind\", \"(.+)\")",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "When"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "dateTimeAsIso",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "None in range",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "When each Flux resource's Ready condition last changed in the range, per resulting state, from the API. Only the latest change per state is kept: a resource that flapped shows its last False and its last True.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-10": {
+        "kind": "Panel",
+        "spec": {
+          "id": 11,
+          "title": "Node versions",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "min by (k8s_cluster, node, os_image, kubelet_version, kernel_version) (min_over_time(timestamp(kube_node_info{k8s_cluster=~\"$cluster\"})[$__range:5m])) * 1000",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "When"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "dateTimeAsIso",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "When each node's Talos, kubelet and kernel versions were first seen in the range, at 5-minute resolution. Two rows for one node mean it was upgraded, and the later row is when.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
       }
     },
     "layout": {
@@ -684,6 +1148,59 @@
                 }
               },
               "title": "Workloads"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "AutoGridLayout",
+                "spec": {
+                  "columnWidthMode": "narrow",
+                  "rowHeightMode": "standard",
+                  "items": [
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-7"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-8"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-9"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-10"
+                        }
+                      }
+                    }
+                  ],
+                  "maxColumnCount": 3,
+                  "fillScreen": false
+                }
+              },
+              "title": "History"
             }
           }
         ]

@@ -232,6 +232,30 @@
     "kiosk": false
   },
   {
+    "dashboard": "tnwks-sites",
+    "tab": "History",
+    "title": "Serving-state changes",
+    "expr": "max by (k8s_cluster, app) (changes(homelab:service_state{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "History",
+    "title": "Shared VIP route changes",
+    "expr": "max by (k8s_cluster, vip) (changes(homelab:shared_vip_route{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "History",
+    "title": "Workload availability transitions",
+    "expr": "max by (k8s_cluster, app, workload) (max_over_time(homelab_workload_transition_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from",
+    "unit": "dateTimeAsIso",
+    "kiosk": false
+  },
+  {
     "dashboard": "tnwks-data",
     "tab": "Databases",
     "title": "Expected databases",
@@ -392,6 +416,30 @@
     "kiosk": false
   },
   {
+    "dashboard": "tnwks-network",
+    "tab": "History",
+    "title": "Router BGP session resets",
+    "expr": "max by (k8s_cluster, routerboard_name, name) (resets(mktxp_bgp_uptime{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "History",
+    "title": "Cilium BGP session changes",
+    "expr": "max by (k8s_cluster, node) (changes(cilium_bgp_control_plane_session_state{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "History",
+    "title": "Path hop changes",
+    "expr": "max by (k8s_cluster, hop) (changes(homelab:network_path_state{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
     "dashboard": "tnwks-internet",
     "tab": "Experience",
     "title": "Internet probe",
@@ -533,6 +581,38 @@
     "title": "Node memory available",
     "expr": "node_memory_MemAvailable_bytes{k8s_cluster=~\"$cluster\"}",
     "unit": "bytes",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-kubernetes",
+    "tab": "History",
+    "title": "Source revisions fetched",
+    "expr": "max by (k8s_cluster, resource, revision) (max_over_time(homelab_flux_source_revision_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from",
+    "unit": "dateTimeAsIso",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-kubernetes",
+    "tab": "History",
+    "title": "Helm releases deployed",
+    "expr": "max by (k8s_cluster, resource, chart_version, app_version, release_status) (max_over_time(homelab_flux_release_deployed_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from",
+    "unit": "dateTimeAsIso",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-kubernetes",
+    "tab": "History",
+    "title": "Flux Ready transitions",
+    "expr": "label_replace(max by (k8s_cluster, kind, resource, ready) (max_over_time(homelab_flux_ready_transition_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from, \"flux_kind\", \"$1\", \"kind\", \"(.+)\")",
+    "unit": "dateTimeAsIso",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-kubernetes",
+    "tab": "History",
+    "title": "Node versions",
+    "expr": "min by (k8s_cluster, node, os_image, kubelet_version, kernel_version) (min_over_time(timestamp(kube_node_info{k8s_cluster=~\"$cluster\"})[$__range:5m])) * 1000",
+    "unit": "dateTimeAsIso",
     "kiosk": false
   },
   {

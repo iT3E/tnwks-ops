@@ -2108,6 +2108,354 @@
           },
           "description": "Per-app restore evidence, not one successful fleet CronJob. Missing per-app results remain Unknown.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
+      },
+      "panel-19": {
+        "kind": "Panel",
+        "spec": {
+          "id": 20,
+          "title": "Serving-state changes",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster, app) (changes(homelab:service_state{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "None in range",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "How often each app's observed state at a site changed in the range: a failover shows as a change on both sites. Sampled at each rule evaluation, so a blip shorter than that can be missed.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-20": {
+        "kind": "Panel",
+        "spec": {
+          "id": 21,
+          "title": "Shared VIP route changes",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster, vip) (changes(homelab:shared_vip_route{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "Value"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "None in range",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "How often the router's inferred route for each shared VIP to each site changed in the range, from its BGP sessions and preferences. Sampled at each rule evaluation.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-21": {
+        "kind": "Panel",
+        "spec": {
+          "id": 22,
+          "title": "Workload availability transitions",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster, app, workload) (max_over_time(homelab_workload_transition_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "db_cluster": "Database",
+                        "app": "App",
+                        "observer_cluster": "Observer",
+                        "Value": "When"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "dateTimeAsIso",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "None in range",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "When each tracked workload's Available condition last changed in the range, from Kubernetes: a scale to or from zero, or a rollout that lost availability.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
       }
     },
     "layout": {
@@ -2334,6 +2682,50 @@
                 }
               },
               "title": "Recovery"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "AutoGridLayout",
+                "spec": {
+                  "columnWidthMode": "narrow",
+                  "rowHeightMode": "standard",
+                  "items": [
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-19"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-20"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-21"
+                        }
+                      }
+                    }
+                  ],
+                  "maxColumnCount": 3,
+                  "fillScreen": false
+                }
+              },
+              "title": "History"
             }
           }
         ]

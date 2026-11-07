@@ -35,6 +35,9 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-sites / Recovery / Lease authority reachable | `homelab_lease_authority_reachable` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Recovery / Lease blocks this site | `homelab_site_lease_blocks_local` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-sites / Recovery / Last restore evidence | `homelab_restore_last_success_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/wsl/multi-site.md) |
+| tnwks-sites / History / Serving-state changes | `homelab_expected_workload_info`<br>`homelab_workload_desired_replicas`<br>`homelab_workload_present`<br>`homelab_workload_ready_replicas`<br>`probe_success` | 180s | None in range | [Runbook](../../docs/wsl/multi-site.md) |
+| tnwks-sites / History / Shared VIP route changes | `cilium_bgp_control_plane_session_state`<br>`cilium_clustermesh_remote_cluster_readiness_status`<br>`cilium_kvstoremesh_remote_cluster_readiness_status`<br>`homelab_expected_site_info`<br>`mktxp_bgp_established`<br>`mktxp_last_handshake`<br>`mktxp_system_uptime` | 180s | None in range | [Runbook](../../docs/wsl/multi-site.md) |
+| tnwks-sites / History / Workload availability transitions | `homelab_workload_transition_timestamp_seconds` | 180s | None in range | [Runbook](../../docs/wsl/multi-site.md) |
 | tnwks-data / Databases / Expected databases | `homelab_expected_database_info` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
 | tnwks-data / Databases / CNPG role: in recovery | `cnpg_pg_replication_in_recovery` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
 | tnwks-data / Databases / Connections | `cnpg_backends_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/backups.md) |
@@ -55,6 +58,9 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-network / BGP and mesh / KVStoreMesh remote cluster | `cilium_kvstoremesh_remote_cluster_readiness_status` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / BGP and mesh / Mesh sync errors | `cilium_kvstoremesh_kvstore_sync_errors_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-network / BGP and mesh / Mesh remote failures | `cilium_kvstoremesh_remote_cluster_failures` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / History / Router BGP session resets | `mktxp_bgp_uptime` | 180s | None in range | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / History / Cilium BGP session changes | `cilium_bgp_control_plane_session_state` | 180s | None in range | [Runbook](../../docs/network/architecture.md) |
+| tnwks-network / History / Path hop changes | `cilium_bgp_control_plane_session_state`<br>`cilium_clustermesh_remote_cluster_readiness_status`<br>`cilium_kvstoremesh_remote_cluster_readiness_status`<br>`homelab_expected_site_info`<br>`mktxp_bgp_established`<br>`mktxp_last_handshake`<br>`mktxp_system_uptime` | 180s | None in range | [Runbook](../../docs/network/architecture.md) |
 | tnwks-internet / Experience / Internet probe | `homelab_observer_info`<br>`probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-internet / Experience / WAN p90 latency | `smokeping:rtt_p90:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-internet / Experience / WAN latency threshold | `smokeping:latency_threshold:1h` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
@@ -73,6 +79,10 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-kubernetes / Workloads / Unready workloads | `homelab_workload_desired_replicas`<br>`homelab_workload_ready_replicas` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/cluster-upgrades.md) |
 | tnwks-kubernetes / Workloads / Node CPU utilization | `node_cpu_seconds_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/cluster-upgrades.md) |
 | tnwks-kubernetes / Workloads / Node memory available | `node_memory_MemAvailable_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/cluster-upgrades.md) |
+| tnwks-kubernetes / History / Source revisions fetched | `homelab_flux_source_revision_timestamp_seconds` | 180s | None in range | [Runbook](../../docs/operations/cluster-upgrades.md) |
+| tnwks-kubernetes / History / Helm releases deployed | `homelab_flux_release_deployed_timestamp_seconds` | 180s | None in range | [Runbook](../../docs/operations/cluster-upgrades.md) |
+| tnwks-kubernetes / History / Flux Ready transitions | `homelab_flux_ready_transition_timestamp_seconds` | 180s | None in range | [Runbook](../../docs/operations/cluster-upgrades.md) |
+| tnwks-kubernetes / History / Node versions | `kube_node_info` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/cluster-upgrades.md) |
 | tnwks-apps / User paths / Application probe state | `homelab_expected_workload_info`<br>`homelab_workload_desired_replicas`<br>`homelab_workload_present`<br>`homelab_workload_ready_replicas`<br>`probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-apps / User paths / HTTP requests | `nginx_ingress_controller_requests` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |
 | tnwks-apps / User paths / HTTP 5xx fraction | `nginx_ingress_controller_requests` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/access.md) |

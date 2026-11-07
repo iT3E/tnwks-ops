@@ -820,6 +820,131 @@
     "owner": "homelab operator"
   },
   {
+    "dashboard": "tnwks-sites",
+    "tab": "History",
+    "panel": "Serving-state changes",
+    "query": "max by (k8s_cluster, app) (changes(homelab:service_state{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:service_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_expected_workload_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_workload_desired_replicas",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_workload_present",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_workload_ready_replicas",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "probe_success",
+        "producer": "evidence collector probes",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/wsl/multi-site.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "History",
+    "panel": "Shared VIP route changes",
+    "query": "max by (k8s_cluster, vip) (changes(homelab:shared_vip_route{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:shared_vip_route"
+    ],
+    "sources": [
+      {
+        "metric": "cilium_bgp_control_plane_session_state",
+        "producer": "Cilium agent metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "cilium_clustermesh_remote_cluster_readiness_status",
+        "producer": "Cilium agent metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "cilium_kvstoremesh_remote_cluster_readiness_status",
+        "producer": "Cilium agent metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_expected_site_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_bgp_established",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_last_handshake",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_system_uptime",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/wsl/multi-site.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-sites",
+    "tab": "History",
+    "panel": "Workload availability transitions",
+    "query": "max by (k8s_cluster, app, workload) (max_over_time(homelab_workload_transition_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from",
+    "unit": "dateTimeAsIso",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_workload_transition_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_workload_transition_timestamp_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/wsl/multi-site.md",
+    "owner": "homelab operator"
+  },
+  {
     "dashboard": "tnwks-data",
     "tab": "Databases",
     "panel": "Expected databases",
@@ -1385,6 +1510,111 @@
     "owner": "homelab operator"
   },
   {
+    "dashboard": "tnwks-network",
+    "tab": "History",
+    "panel": "Router BGP session resets",
+    "query": "max by (k8s_cluster, routerboard_name, name) (resets(mktxp_bgp_uptime{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "mktxp_bgp_uptime"
+    ],
+    "sources": [
+      {
+        "metric": "mktxp_bgp_uptime",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "History",
+    "panel": "Cilium BGP session changes",
+    "query": "max by (k8s_cluster, node) (changes(cilium_bgp_control_plane_session_state{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "cilium_bgp_control_plane_session_state"
+    ],
+    "sources": [
+      {
+        "metric": "cilium_bgp_control_plane_session_state",
+        "producer": "Cilium agent metrics",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-network",
+    "tab": "History",
+    "panel": "Path hop changes",
+    "query": "max by (k8s_cluster, hop) (changes(homelab:network_path_state{k8s_cluster=~\"$cluster\"}[$__range])) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:network_path_state"
+    ],
+    "sources": [
+      {
+        "metric": "cilium_bgp_control_plane_session_state",
+        "producer": "Cilium agent metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "cilium_clustermesh_remote_cluster_readiness_status",
+        "producer": "Cilium agent metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "cilium_kvstoremesh_remote_cluster_readiness_status",
+        "producer": "Cilium agent metrics",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_expected_site_info",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_bgp_established",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_last_handshake",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "mktxp_system_uptime",
+        "producer": "router MKTXP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
     "dashboard": "tnwks-internet",
     "tab": "Experience",
     "panel": "Internet probe",
@@ -1834,6 +2064,106 @@
       {
         "metric": "node_memory_MemAvailable_bytes",
         "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/cluster-upgrades.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-kubernetes",
+    "tab": "History",
+    "panel": "Source revisions fetched",
+    "query": "max by (k8s_cluster, resource, revision) (max_over_time(homelab_flux_source_revision_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from",
+    "unit": "dateTimeAsIso",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_flux_source_revision_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_flux_source_revision_timestamp_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/cluster-upgrades.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-kubernetes",
+    "tab": "History",
+    "panel": "Helm releases deployed",
+    "query": "max by (k8s_cluster, resource, chart_version, app_version, release_status) (max_over_time(homelab_flux_release_deployed_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from",
+    "unit": "dateTimeAsIso",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_flux_release_deployed_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_flux_release_deployed_timestamp_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/cluster-upgrades.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-kubernetes",
+    "tab": "History",
+    "panel": "Flux Ready transitions",
+    "query": "label_replace(max by (k8s_cluster, kind, resource, ready) (max_over_time(homelab_flux_ready_transition_timestamp_seconds{k8s_cluster=~\"$cluster\"}[$__range])) * 1000 > $__from, \"flux_kind\", \"$1\", \"kind\", \"(.+)\")",
+    "unit": "dateTimeAsIso",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_flux_ready_transition_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_flux_ready_transition_timestamp_seconds",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/cluster-upgrades.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-kubernetes",
+    "tab": "History",
+    "panel": "Node versions",
+    "query": "min by (k8s_cluster, node, os_image, kubelet_version, kernel_version) (min_over_time(timestamp(kube_node_info{k8s_cluster=~\"$cluster\"})[$__range:5m])) * 1000",
+    "unit": "dateTimeAsIso",
+    "query_mode": "instant",
+    "inputs": [
+      "kube_node_info"
+    ],
+    "sources": [
+      {
+        "metric": "kube_node_info",
+        "producer": "kube-state-metrics",
         "availability": "configured"
       }
     ],

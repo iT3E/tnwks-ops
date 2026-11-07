@@ -43,6 +43,9 @@ SCRAPE_COLUMNS = ("__name__", "Time", "__replica__", "alertstate", "cluster", "c
                   "instance", "job", "kind", "namespace", "observer_cluster", "pod", "prometheus",
                   "service")
 NO_ALERTS = "None"
+# An event list over the selected range: empty is the normal state. Whether the
+# source is reporting shows on the Observability board, not here.
+NO_EVENTS = "None in range"
 # Entity boards (pinned upstream, chart mixins and the kept classic boards),
 # opened on the clicked series: domain -> entity.
 NGINX = ("k8s-nginx-ingress-prometheus-ng", {"ingress": "ingress"})
@@ -110,6 +113,17 @@ def metric(name: str, extra: str = "") -> str:
     if keys is None:
         return selector(name, extra)
     return f"max by (k8s_cluster, {', '.join(keys)}) ({selector(name, extra)})"
+
+
+def since(name: str, by: str) -> str:
+    """Events kept as series whose value is the event time (from the API, not the
+    scrape): the latest per label set in the selected range, in ms for Grafana."""
+    return (f'max by (k8s_cluster, {by}) (max_over_time({selector(name)}[$__range])) * 1000 > $__from')
+
+
+def changes(name: str, by: str) -> str:
+    """Sampled state changes in the selected range, rows with none dropped."""
+    return f'max by (k8s_cluster, {by}) (changes({selector(name)}[$__range])) > 0'
 
 
 def coverage() -> list[Panel]:
@@ -189,6 +203,17 @@ def catalogue() -> list[Board]:
                 p("Last restore evidence", f'time() - {metric("homelab_restore_last_success_timestamp_seconds")}', "s",
                   "Per-app restore evidence, not one successful fleet CronJob. Missing per-app results remain Unknown.", "table"),
             ],
+            "History": [
+                p("Serving-state changes", changes("homelab:service_state", "app"), "short",
+                  "How often each app's observed state at a site changed in the range: a failover shows as a change on both sites. Sampled at each rule evaluation, so a blip shorter than that can be missed.",
+                  "table", empty=NO_EVENTS),
+                p("Shared VIP route changes", changes("homelab:shared_vip_route", "vip"), "short",
+                  "How often the router's inferred route for each shared VIP to each site changed in the range, from its BGP sessions and preferences. Sampled at each rule evaluation.",
+                  "table", empty=NO_EVENTS),
+                p("Workload availability transitions", since("homelab_workload_transition_timestamp_seconds", "app, workload"), "dateTimeAsIso",
+                  "When each tracked workload's Available condition last changed in the range, from Kubernetes: a scale to or from zero, or a rollout that lost availability.",
+                  "table", empty=NO_EVENTS),
+            ],
         }, "Sites & Failover"),
         Board("tnwks-data", "Databases & Backups", "data", "l2",
               "Are databases healthy, and can each application's data actually be recovered?", {
@@ -246,6 +271,17 @@ def catalogue() -> list[Board]:
                 p("Mesh remote failures", f'max by (k8s_cluster, target_cluster) ({selector("cilium_kvstoremesh_remote_cluster_failures")})', "short",
                   "KVStoreMesh connection failures to the other cluster since its last restart."),
             ],
+            "History": [
+                p("Router BGP session resets", f'max by (k8s_cluster, routerboard_name, name) (resets({selector("mktxp_bgp_uptime")}[$__range])) > 0', "short",
+                  "Times each of the router's BGP sessions restarted in the range: its uptime went back. A session that dropped and came back between scrapes still counts. Only site 1 observes the router.",
+                  "table", ROUTER, empty=NO_EVENTS),
+                p("Cilium BGP session changes", changes("cilium_bgp_control_plane_session_state", "node"), "short",
+                  "State changes of each node's Cilium BGP session with its distro's FRR in the range. Sampled at each scrape, so a shorter flap can be missed.",
+                  "table", empty=NO_EVENTS),
+                p("Path hop changes", changes("homelab:network_path_state", "hop"), "short",
+                  "State changes of each path hop (tunnel, router BGP, agents, mesh) per site in the range, sampled at each rule evaluation.",
+                  "table", empty=NO_EVENTS),
+            ],
         }, "Network"),
         Board("tnwks-internet", "Internet", "network", "l2",
               "Is the Internet path usable, and is loss/latency or saturation the issue?", {
@@ -302,6 +338,24 @@ def catalogue() -> list[Board]:
                   "CPU busy fraction per nested node view. Do not sum shared WSL kernel capacity as independent physical nodes.", link=NODE),
                 p("Node memory available", metric("node_memory_MemAvailable_bytes"), "bytes",
                   "Shared WSL kernel memory view on nested Talos nodes. Cross-check Windows physical available memory.", link=NODE),
+            ],
+            # Each site's Prometheus keeps these for 15 days and the archive for 35,
+            # so the history reads locally on either site.
+            "History": [
+                p("Source revisions fetched", since("homelab_flux_source_revision_timestamp_seconds", "resource, revision"), "dateTimeAsIso",
+                  "Each Git or OCI revision Flux fetched in the range and when, from the source's artifact. Fetched isn't applied: the Ready transitions of the Kustomizations that use it show the apply.",
+                  "table", empty=NO_EVENTS),
+                p("Helm releases deployed", since("homelab_flux_release_deployed_timestamp_seconds", "resource, chart_version, app_version, release_status"), "dateTimeAsIso",
+                  "The latest install or upgrade of each HelmRelease in the range, from its release history, with the chart and app version and whether it deployed or failed. An upgrade that changed only values keeps its version.",
+                  "table", empty=NO_EVENTS),
+                p("Flux Ready transitions",
+                  'label_replace(' + since("homelab_flux_ready_transition_timestamp_seconds", "kind, resource, ready")
+                  + ', "flux_kind", "$1", "kind", "(.+)")', "dateTimeAsIso",
+                  "When each Flux resource's Ready condition last changed in the range, per resulting state, from the API. Only the latest change per state is kept: a resource that flapped shows its last False and its last True.",
+                  "table", empty=NO_EVENTS),
+                p("Node versions", f'min by (k8s_cluster, node, os_image, kubelet_version, kernel_version) (min_over_time(timestamp({selector("kube_node_info")})[$__range:5m])) * 1000', "dateTimeAsIso",
+                  "When each node's Talos, kubelet and kernel versions were first seen in the range, at 5-minute resolution. Two rows for one node mean it was upgraded, and the later row is when.",
+                  "table"),
             ],
         }, "Kubernetes"),
         Board("tnwks-apps", "Apps & Ingress", "apps", "l2",
@@ -534,7 +588,8 @@ def resource(board: Board) -> dict:
                     "indexByName": {"Value": 0, "k8s_cluster": 1, "app": 2, "db_cluster": 2},
                     "renameByName": {"k8s_cluster": "Site", "db_cluster": "Database",
                                      "app": "App", "observer_cluster": "Observer",
-                                     "Value": "State" if panel.unit in ("state", "coverage") else "Value"},
+                                     "Value": {"state": "State", "coverage": "State",
+                                               "dateTimeAsIso": "When"}.get(panel.unit, "Value")},
                 }))
             description = panel.description
             if not board.kiosk:

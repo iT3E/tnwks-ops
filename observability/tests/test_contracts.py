@@ -6,7 +6,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from collector import Collector, Metrics, timestamp
-from dashboards import CLUSTERS, catalogue, generated, resource
+from dashboards import CLUSTERS, NO_EVENTS, catalogue, generated, resource
 from inventory import inventory
 from kiosk_proxy import sanitize
 
@@ -34,8 +34,9 @@ def test_sdk_generates_isolated_household_and_operator_resources():
             assert spec["description"]
             if spec["vizConfig"]["group"] != "text":
                 # Nothing to list is the normal state for these, not missing evidence.
-                if spec["title"] not in EMPTY_IS_NORMAL:
-                    assert "Unknown" in spec["vizConfig"]["spec"]["fieldConfig"]["defaults"]["noValue"]
+                no_value = spec["vizConfig"]["spec"]["fieldConfig"]["defaults"]["noValue"]
+                if spec["title"] not in EMPTY_IS_NORMAL and no_value != NO_EVENTS:
+                    assert "Unknown" in no_value
         variables = obj["spec"]["variables"]
         if board.kiosk:
             assert not variables
@@ -424,3 +425,36 @@ def test_household_facade_drops_identity_and_never_hides_unknown_or_failed_obser
         sanitize(vector(999))
     with pytest.raises(ValueError):
         sanitize({"status": "error"})
+
+
+def test_flux_event_history_uses_api_event_times(small_inventory):
+    class Api(FakeApi):
+        def get(self, path):
+            if "gitrepositories" in path:
+                return {"items": [{"metadata": {"name": "flux-system", "namespace": "flux-system"},
+                                   "status": {"artifact": {"revision": "main@sha1:abc",
+                                                           "lastUpdateTime": "2026-11-07T10:00:00Z"}}}]}
+            if "helmrepositories" in path:  # An index digest is not a deploy event.
+                return {"items": [{"metadata": {"name": "charts", "namespace": "flux-system"},
+                                   "status": {"artifact": {"revision": "sha256:def",
+                                                           "lastUpdateTime": "2026-11-07T10:00:00Z"}}}]}
+            if "helmreleases" in path:
+                return {"items": [{"metadata": {"name": "grafana", "namespace": "monitoring"},
+                                   "status": {"conditions": [{"type": "Ready", "status": "False",
+                                                              "lastTransitionTime": "2026-11-07T11:00:00Z"}],
+                                              "history": [{"chartName": "grafana", "chartVersion": "14.4.0",
+                                                           "appVersion": "13.3.0", "status": "failed",
+                                                           "lastDeployed": "2026-11-07T10:59:00Z"}]}}]}
+            return super().get(path)
+
+    out = Collector(Api(), small_inventory, "one", clock=lambda: 1000).collect().decode()
+    assert ('homelab_flux_source_revision_timestamp_seconds{k8s_cluster="one",kind="GitRepository",'
+            'namespace="flux-system",observer_cluster="one",resource="flux-system",revision="main@sha1:abc"} '
+            f'{timestamp("2026-11-07T10:00:00Z"):.12g}') in out
+    assert 'revision="sha256:def"' not in out
+    assert ('chart_version="14.4.0"' in out and 'release_status="failed"' in out
+            and f'{timestamp("2026-11-07T10:59:00Z"):.12g}' in out)
+    assert ('homelab_flux_ready_transition_timestamp_seconds{k8s_cluster="one",kind="HelmRelease",'
+            'namespace="monitoring",observer_cluster="one",ready="False",resource="grafana"}') in out
+    # No transition time, no event: the Unknown Kustomization emits none.
+    assert 'ready="Unknown"' not in out
