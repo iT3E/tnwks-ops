@@ -12,3 +12,4 @@ resources:
   - ../../../../apps/monitoring/kube-prometheus-stack/addons/alerts/resource-pressure.yaml
   - ../../../../apps/monitoring/kube-prometheus-stack/addons/alerts/site-overrides.yaml
   - ../../../../apps/monitoring/kube-prometheus-stack/addons/servicemonitors/alertmanager.yaml
+  - ../../../../apps/monitoring/kube-prometheus-stack/addons/servicemonitors/flux-controllers.yaml
