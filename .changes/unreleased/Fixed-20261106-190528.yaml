@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'wsl_time creates /etc/systemd/timesyncd.conf.d first: Ubuntu ships none, so the apply after #1874 failed on both distros.'
+time: 2026-11-06T19:05:28.000000000-08:00
