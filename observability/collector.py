@@ -330,6 +330,27 @@ class Collector:
                     metrics.add("homelab_flux_resource_ready", int(status == "True"), **scope)
                 metrics.add("homelab_flux_resource_state", {"True": 1, "False": 3}.get(status, 0),
                             **scope)
+                # Event history, kept as series: each value is when the API says
+                # the event happened, so a scrape gap delays a row but doesn't move
+                # it, and Prometheus keeps the row after the object moves on.
+                metrics.add("homelab_flux_ready_transition_timestamp_seconds",
+                            timestamp(ready.get("lastTransitionTime")), ready=status, **scope)
+                artifact = obj.get("status", {}).get("artifact") or {}
+                # Git and OCI revisions are commits and tags. A HelmRepository's
+                # revision is an index digest that changes on any upstream publish.
+                if kind in ("GitRepository", "OCIRepository") and artifact.get("revision"):
+                    metrics.add("homelab_flux_source_revision_timestamp_seconds",
+                                timestamp(artifact.get("lastUpdateTime")),
+                                revision=artifact["revision"], **scope)
+                history = obj.get("status", {}).get("history") or []
+                if kind == "HelmRelease" and history:
+                    latest = history[0]
+                    metrics.add("homelab_flux_release_deployed_timestamp_seconds",
+                                timestamp(latest.get("lastDeployed")),
+                                chart=latest.get("chartName", ""),
+                                chart_version=latest.get("chartVersion", ""),
+                                app_version=latest.get("appVersion", ""),
+                                release_status=latest.get("status", ""), **scope)
 
     def overrides(self, metrics: Metrics, labels: dict):
         # List ConfigMaps rather than fetching the named map: absence is an ordinary

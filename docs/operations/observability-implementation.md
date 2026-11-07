@@ -313,6 +313,37 @@ OCIRepository and HelmRepository with its Ready condition and suspension, which
 is what the custom-resource config would add. HelmCharts are left out: a
 HelmRelease's Ready covers its chart.
 
+## Event history
+
+Failover, Flux, upgrade and network events are kept as Prometheus series, so
+each site's own Prometheus holds its events for 15 days and the archive for 35.
+Either site reads them locally, without Loki (site 2 has none). Each board's
+History tab lists the events in the selected time range.
+
+| Board | Events | From |
+| --- | --- | --- |
+| Kubernetes & GitOps | Git/OCI revisions fetched, Helm installs and upgrades (chart and app version, deployed or failed), Flux Ready transitions, node Talos/kubelet/kernel versions | collector (API event times), kube-state-metrics |
+| Sites & Failover | serving-state changes per app and site, shared-VIP route changes, workload availability transitions | recording rules, collector |
+| Network & Routing | router BGP session resets, Cilium BGP session changes, path hop changes | MKTXP, Cilium agents, recording rules |
+
+There are two kinds of row:
+
+- **Event times from the API.** The value is when Kubernetes or Flux says the
+  event happened (`homelab_flux_source_revision_timestamp_seconds`,
+  `homelab_flux_release_deployed_timestamp_seconds`,
+  `homelab_flux_ready_transition_timestamp_seconds`,
+  `homelab_workload_transition_timestamp_seconds`). A scrape gap delays a row
+  but doesn't move it. Only the latest event per label set survives between
+  scrapes, so two upgrades within one scrape interval show as one.
+- **Sampled changes** (`changes()`, `resets()` over the range). These count
+  transitions between samples, so a flap shorter than the scrape or rule
+  interval can be missed. A BGP session reset is the exception: the uptime
+  going back counts it even when the session recovered between scrapes.
+
+An empty list is the normal state ("None in range"); whether each source is
+reporting is on the Observability board. A HelmRepository's revision is an index
+digest that changes on any upstream publish, so it isn't recorded as an event.
+
 ## Ingress and shared-VIP evidence
 
 Each site's collector uses every name on the shared VIPs (`dns-sites.tf`) as a
@@ -364,9 +395,7 @@ Access, recovery, review and drills are in
    retention is invalid, so it needs a history-aware evaluator such as Thanos
    Ruler. Also per-app recovery objectives, and Pyrra burn alerts once the
    14-day windows are covered.
-3. The distros' FRR view of BGP, structured operation events with local
-   availability on both sites (site 2 has no Loki), and an off-site client
-   vantage.
+3. The distros' FRR view of BGP and an off-site client vantage.
 
 Unsupported evidence remains Unknown. Existing MS-01 manifests and AWS
 application backup destinations remain separate from this metrics archive.
