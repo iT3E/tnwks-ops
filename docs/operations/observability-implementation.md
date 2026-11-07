@@ -450,6 +450,39 @@ app shares the daily schedule and the weekly drill, so no app overrides them yet
   recovery point; the Databases & Backups board lists these on its Objectives
   tab, next to the states.
 
+## Household view
+
+The household's view (L0) is a **House systems** section on Home Assistant's
+Home dashboard: six words (Internet, Wi-Fi, Automation, Cameras, Apps,
+Monitoring), each Healthy, Degraded, Failed or Unknown. The household already
+uses Home Assistant on the wall displays, so it needs no second Grafana.
+
+- **Each site certifies its own share.** `homelab:house_state{domain}`
+  (`house_records()` in `rules.py`) is recorded on each site's Prometheus from
+  what that site serves: its Internet probe; the APs or cameras that worked at
+  some point in the last day against those working now (something off for a
+  whole day drops out, so a disabled camera doesn't count); Home Assistant where
+  it's active; the worst of the apps active there; whether its own collector
+  reports. A site has no row for something it has no part in.
+- **Home Assistant combines the sites**
+  (`config/packages/house_systems.yaml`). It asks Thanos Query, on whichever
+  site it runs, once a minute. Internet takes the best site (one line; site 2's
+  Wi-Fi isn't the house's Internet). Wi-Fi, Automation and Cameras take the
+  worst site with a part in them, Unknown when none has. Apps is Unknown when a
+  site is missing. Monitoring is Degraded when some sites report, Failed when
+  none do.
+- **Privacy by construction.** Only those aggregates reach Home Assistant:
+  the queries are fixed in git and carry no host, camera, AP or person. The
+  Monitoring tab, which frames the operator Grafana (whose viewer can query
+  every datasource), is admin-only.
+- **Tests.** promtool fixtures cover a site's share (a failed app, partial
+  cameras, a domain with no part) and nothing working. The combining templates
+  were rendered against synthetic answers: normal, a site lost, site 2's
+  Internet probe failing, a failed app, partial cameras, and no answer.
+
+The isolated household Grafana that `dashboards.py` still generates (`House`,
+`kiosk_proxy.py`) is not deployed; this replaces it.
+
 ## Preview features
 
 Grafana 13.3 has 398 feature flags, 63 on by default; the boards need none
@@ -478,15 +511,17 @@ a version bump reruns the rehearsal before it ships.
 Access, recovery, review and drills are in
 [`observability-operations.md`](observability-operations.md). Still open:
 
-1. The household Grafana and its aggregate-only backend: revoke the old kiosk
-   operator access, test every datasource API, and define fresh domain evidence
-   before any household status can be Healthy.
+1. Household view: check the House systems section on a wall display once it's
+   live (see "Household view").
 2. Pyrra burn alerts once the 14-day windows are covered (about 2026-11-21;
    the probes' history starts 2026-11-07, after the Prometheus restarts). 28-day
    alerting would need a history-aware evaluator (Thanos Ruler); the 28-day
    view doesn't.
-3. The distros' FRR view of BGP. The off-site vantage is healthchecks.io
-   ([`external-monitoring.md`](external-monitoring.md)), by the owner's decision.
+
+Closed by decision (2026-11-07, the owner delegating): no FRR exporter, because
+FRR is seen from both ends of its sessions (the router, each Cilium node) and
+through the cross-site probes; and the off-site vantage is healthchecks.io
+([`external-monitoring.md`](external-monitoring.md)).
 
 Unsupported evidence remains Unknown. Existing MS-01 manifests and AWS
 application backup destinations remain separate from this metrics archive.

@@ -635,3 +635,83 @@ tests:
       value: 1
     - labels: homelab:other_database_state{k8s_cluster="one",namespace="db",workload="standby",engine="e",app="a"}
       value: 4
+- name: 'household view: this site''s share, worst app, partial cameras'
+  interval: 1m
+  input_series:
+  - &id001
+    series: homelab_observer_info{k8s_cluster="one",observer_cluster="one"}
+    values: 1+0x10
+  - series: probe_success{k8s_cluster="one",observability_target="internet"}
+    values: 1+0x10
+  - series: homelab_observer_info{k8s_cluster="one",observer_cluster="one",job="x"}
+    values: 1+0x10
+  - series: probe_success{k8s_cluster="one",observability_target="service",app="home-assistant"}
+    values: 1+0x10
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="home-assistant"}
+    values: 1+0x10
+  - series: probe_success{k8s_cluster="one",observability_target="service",app="broken"}
+    values: 0+0x10
+  - series: homelab_expected_workload_info{k8s_cluster="one",app="broken"}
+    values: 1+0x10
+  - series: homelab_expected_workload_info{k8s_cluster="two",app="elsewhere"}
+    values: 1+0x10
+  - series: frigate_camera_fps{camera="a"}
+    values: 5+0x10
+  - series: frigate_camera_fps{camera="b"}
+    values: 5+0x10
+  - series: frigate_camera_fps{camera="c"}
+    values: 5 5 0 0 0 0 0 0 0 0 0
+  - series: frigate_camera_fps{camera="off"}
+    values: 0+0x10
+  - series: unpoller_device_uptime_seconds{name="ap1"}
+    values: 100+60x10
+  - series: unpoller_device_uptime_seconds{name="ap2",source_site="two"}
+    values: 100+60x10
+  - series: homelab_collection_success{k8s_cluster="one",collector="workloads"}
+    values: 1+0x10
+  - series: homelab_collection_last_success_timestamp_seconds{k8s_cluster="one",collector="workloads"}
+    values: 0+60x10
+  promql_expr_test:
+  - expr: homelab:house_state
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:house_state{domain="apps"}
+      value: 3
+    - labels: homelab:house_state{domain="automation"}
+      value: 1
+    - labels: homelab:house_state{domain="cameras"}
+      value: 2
+    - labels: homelab:house_state{domain="internet"}
+      value: 1
+    - labels: homelab:house_state{domain="monitoring"}
+      value: 1
+    - labels: homelab:house_state{domain="wifi"}
+      value: 1
+- name: 'household view: nothing working, and no part in a domain'
+  interval: 1m
+  input_series:
+  - *id001
+  - series: probe_success{k8s_cluster="one",observability_target="internet"}
+    values: 0+0x10
+  - series: frigate_camera_fps{camera="a"}
+    values: 5 5 0 0 0 0 0 0 0 0 0
+  - series: unpoller_device_uptime_seconds{name="ap1"}
+    values: 100 160 _ _ _ _ _ _ _ _ _
+  - series: homelab_collection_success{k8s_cluster="one",collector="workloads"}
+    values: 0+0x10
+  - series: homelab_collection_last_success_timestamp_seconds{k8s_cluster="one",collector="workloads"}
+    values: 0+0x10
+  promql_expr_test:
+  - expr: homelab:house_state
+    eval_time: 10m
+    exp_samples:
+    - labels: homelab:house_state{domain="apps"}
+      value: 1
+    - labels: homelab:house_state{domain="cameras"}
+      value: 3
+    - labels: homelab:house_state{domain="internet"}
+      value: 3
+    - labels: homelab:house_state{domain="monitoring"}
+      value: 3
+    - labels: homelab:house_state{domain="wifi"}
+      value: 3
