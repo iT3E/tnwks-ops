@@ -28,6 +28,14 @@
   "ignoreTests": false,
   "dependencyDashboard": true,
   "dependencyDashboardTitle": "Renovate Dashboard 🤖",
+  "dependencyDashboardOSVVulnerabilitySummary": "all",
+  "osvVulnerabilityAlerts": true,
+  // Security fixes remain visible even for packages whose routine upgrades
+  // wait on compatibility review. They still pass CI and the impact review.
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "dependencyDashboardApproval": false
+  },
   "suppressNotifications": ["prIgnoreNotification"],
   "rebaseWhen": "conflicted",
   "schedule": ["before 7am"],
@@ -36,6 +44,38 @@
   "prHourlyLimit": 4,
   "prConcurrentLimit": 12,
   "packageRules": [
+    {
+      "description": "Coral: queue NumPy majors until its Windows runtime supports them",
+      "matchFileNames": ["infrastructure/ansible/roles/windows_coral_detector/**"],
+      "matchPackageNames": ["numpy"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "dependencyDashboardCategory": "Compatibility review",
+      "groupName": "Coral NumPy compatibility",
+      "prBodyNotes": [
+        "The Windows Coral runtime currently requires NumPy 1.x and Python 3.9. Review docs/operations/dependency-compatibility.md before approving this update. Security fixes bypass dashboard approval."
+      ]
+    },
+    {
+      "description": "UniFi: queue MongoDB release-line changes until supported by the application",
+      "matchFileNames": ["kubernetes/apps/networking/unifi/**"],
+      "matchPackageNames": ["docker.io/library/mongo"],
+      "matchUpdateTypes": ["major", "minor"],
+      "dependencyDashboardApproval": true,
+      "dependencyDashboardCategory": "Compatibility review",
+      "groupName": "UniFi MongoDB compatibility",
+      "prBodyNotes": [
+        "Confirm the deployed UniFi application supports the proposed MongoDB release line; see docs/operations/dependency-compatibility.md. Compatible patch updates remain enabled."
+      ]
+    },
+    {
+      "description": "Recheck MongoDB support whenever the UniFi image changes",
+      "matchFileNames": ["kubernetes/apps/networking/unifi/**"],
+      "matchPackageNames": ["ghcr.io/linuxserver/unifi-network-application"],
+      "prBodyNotes": [
+        "Recheck UniFi's supported MongoDB versions and the pending MongoDB updates in the Dependency Dashboard. A weekly compatibility watch also tracks upstream documentation changes."
+      ]
+    },
     {
       // prConcurrentLimit is easy to fill with stale PRs. cloudflared is the
       // public edge, so its updates jump the queue instead of sitting
