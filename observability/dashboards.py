@@ -378,6 +378,14 @@ def catalogue() -> list[Board]:
                 p("Rule evaluation failures", f'rate({metric("prometheus_rule_evaluation_failures_total")}[$__rate_interval])', "ops",
                   "Local alerts must remain independent of Grafana and the remote archive."),
             ],
+            "Objectives": [
+                p("SLO window coverage", metric("homelab:slo_window_coverage_ratio"), "percentunit",
+                  "How much of the 14 d SLO window each site's Prometheus holds. Below 100%, every availability on this tab covers only that share of its window: incomplete, not wrong.", "stat"),
+                p("SLO availability", f'max by (k8s_cluster, slo) ({selector("pyrra_availability")})', "percentunit",
+                  "Good probe intervals over all of them in the window, per SLO and site (Pyrra, from slos.yaml). Targets are provisional until a full window exists; the Pyrra UI has burn rates.", "table"),
+                p("Error budget left", f'max by (k8s_cluster, slo) (1 - (1 - {selector("pyrra_availability")}) / (1 - {selector("pyrra_objective")}))', "percentunit",
+                  "Share of the allowed failures not yet used in the window. Negative means the objective is missed. Read with SLO window coverage.", "table"),
+            ],
             "Archive and delivery": [
                 p("Archive state", metric("homelab:archive_state"), "state",
                   "Local Garage on WSL-02 only. A loss of this endpoint makes archive history unavailable without invalidating retained local data.", "stat"),

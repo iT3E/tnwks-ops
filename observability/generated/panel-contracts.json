@@ -2692,6 +2692,87 @@
   },
   {
     "dashboard": "tnwks-observability",
+    "tab": "Objectives",
+    "panel": "SLO window coverage",
+    "query": "homelab:slo_window_coverage_ratio{k8s_cluster=~\"$cluster\"}",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:slo_window_coverage_ratio"
+    ],
+    "sources": [
+      {
+        "metric": "prometheus_tsdb_lowest_timestamp_seconds",
+        "producer": "Prometheus self-monitoring",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/observability-implementation.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Objectives",
+    "panel": "SLO availability",
+    "query": "max by (k8s_cluster, slo) (pyrra_availability{k8s_cluster=~\"$cluster\"})",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "pyrra_availability"
+    ],
+    "sources": [
+      {
+        "metric": "pyrra_availability",
+        "producer": "Pyrra SLO rules (kubernetes/apps/monitoring/pyrra/app/slos.yaml)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/observability-implementation.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-observability",
+    "tab": "Objectives",
+    "panel": "Error budget left",
+    "query": "max by (k8s_cluster, slo) (1 - (1 - pyrra_availability{k8s_cluster=~\"$cluster\"}) / (1 - pyrra_objective{k8s_cluster=~\"$cluster\"}))",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "pyrra_availability",
+      "pyrra_objective"
+    ],
+    "sources": [
+      {
+        "metric": "pyrra_availability",
+        "producer": "Pyrra SLO rules (kubernetes/apps/monitoring/pyrra/app/slos.yaml)",
+        "availability": "configured"
+      },
+      {
+        "metric": "pyrra_objective",
+        "producer": "Pyrra SLO rules (kubernetes/apps/monitoring/pyrra/app/slos.yaml)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/observability-implementation.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-observability",
     "tab": "Archive and delivery",
     "panel": "Archive state",
     "query": "homelab:archive_state{k8s_cluster=~\"$cluster\"}",

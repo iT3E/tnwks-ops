@@ -54,6 +54,7 @@ resources:
   - ../../../apps/monitoring/observability-pki/ks.yaml
   - ../../../apps/monitoring/observability-evidence/ks.yaml
   - ../../../apps/monitoring/observability-evidence/rules-ks.yaml
+  - ../../../apps/monitoring/pyrra/ks.yaml
   - ../../../apps/monitoring/grafana/dashboards-ks.yaml
   - ../../../apps/monitoring/thanos-metrics/ks.yaml
   - ../../../apps/monitoring/observability-storage/ks.yaml

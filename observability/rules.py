@@ -6,6 +6,9 @@ import yaml
 from inventory import inventory
 
 ROOT = Path(__file__).resolve().parents[1]
+# The SLO window (kubernetes/apps/monitoring/pyrra/app/slos.yaml): inside the
+# 15 d local retention, since Pyrra's rules run on each site's Prometheus.
+SLO_WINDOW_SECONDS = 14 * 86400
 
 
 def records():
@@ -27,6 +30,9 @@ def records():
         "homelab:database_backup_state": f'((homelab:database_backup_age_seconds >= bool 0) * (homelab:database_backup_age_seconds <= bool 108000) + 3 * (homelab:database_backup_age_seconds > bool 108000)) or on ({db}) (0 * {expected_db})',
         "homelab:recovery_state": '(3 * max by (k8s_cluster, app) (' + fresh('homelab_recovery_prerequisite_state') + ' == 3) / 3) or on (k8s_cluster, app) ((count by (k8s_cluster, app) (max by (k8s_cluster, app, prerequisite) (' + fresh('homelab_recovery_prerequisite_state{prerequisite=~"database|backup|restore|fence"}') + ') == 1) == 4) / 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info{tier="warm"}))',
         "homelab:local_history_seconds": 'time() - min by (k8s_cluster) (prometheus_tsdb_lowest_timestamp_seconds)',
+        # Share of the SLO window this site's Prometheus holds: below 1, every
+        # SLO's availability covers only that much of its window.
+        "homelab:slo_window_coverage_ratio": f'clamp_max(homelab:local_history_seconds / {SLO_WINDOW_SECONDS}, 1)',
         # How far behind the archive is: the newest sample it holds for each
         # site. Prometheus cuts 2 h blocks once its head spans 3 h, so 1-3 h is
         # normal; more means uploads, the bucket or the Compactor's sync stalled.

@@ -1,0 +1,4 @@
+---
+kind: Changed
+body: Telegram alerts link to their dashboard scoped to the incident, from an hour before the alert started to now while it fires, or to 15 minutes after it resolved.
+time: 2026-11-07T15:30:00Z

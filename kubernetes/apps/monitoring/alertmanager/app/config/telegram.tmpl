@@ -2,8 +2,10 @@
   Telegram (parse_mode HTML) message for the War Room.
 
   Every alert line carries the labels that tell alerts apart (rule_group,
-  pod, instance, ...), plus runbook and graph links, so a grouped
-  "FIRING:2" no longer shows two identical lines.
+  pod, instance, ...), plus runbook, dashboard and graph links, so a grouped
+  "FIRING:2" no longer shows two identical lines. The dashboard link opens on
+  the incident: from an hour before it started to now, or to 15 minutes after
+  it resolved.
 
   Flux events (flux-system/addons/alerts) carry their error text in the
   `message` annotation, so that is the last fallback for the alert line.
@@ -20,7 +22,8 @@
 {{ range $i, $a := .Alerts }}{{ if lt $i 8 }}
 • {{ with $a.Annotations.description }}{{ . }}{{ else }}{{ with $a.Annotations.summary }}{{ . }}{{ else }}{{ with $a.Annotations.message }}{{ . }}{{ end }}{{ end }}{{ end }}
 {{ template "telegram.labels" $a }}
-{{- if $a.Annotations.runbook_url }} <a href="{{ $a.Annotations.runbook_url }}">runbook</a>{{ end }}{{ if $a.GeneratorURL }} <a href="{{ $a.GeneratorURL }}">graph</a>{{ end }}
+{{- if $a.Annotations.runbook_url }} <a href="{{ $a.Annotations.runbook_url }}">runbook</a>{{ end }}
+{{- with $a.Annotations.dashboard_url }} <a href="{{ . }}&from={{ ($a.StartsAt.Add -3600000000000).UnixMilli }}&to={{ if eq $a.Status "resolved" }}{{ ($a.EndsAt.Add 900000000000).UnixMilli }}{{ else }}now{{ end }}">dashboard</a>{{ end }}{{ if $a.GeneratorURL }} <a href="{{ $a.GeneratorURL }}">graph</a>{{ end }}
 {{ end }}{{ end -}}
 {{ if gt (len .Alerts) 8 }}
 …and {{ len .Alerts | printf "%d" }} total, see Alertmanager.

@@ -34,6 +34,7 @@ PRODUCERS = {
     "prometheus_": "Prometheus self-monitoring",
     "alertmanager_": "Alertmanager self-monitoring",
     "thanos_": "Thanos component metrics",
+    "pyrra_": "Pyrra SLO rules (kubernetes/apps/monitoring/pyrra/app/slos.yaml)",
     "garage_": "Garage admin metrics (WSL-02 archive)",
     "ALERTS": "local Prometheus alert rules (current state)",
     "up": "Prometheus scrape status",

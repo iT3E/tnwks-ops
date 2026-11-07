@@ -1,0 +1,73 @@
+---
+# Service level objectives (docs/operations/observability-implementation.md,
+# "Objectives"). Each site's Prometheus has only its own collector's probes, so
+# each SLO is per site, without grouping (Pyrra's generic rules refuse it).
+# pyrra.dev/k8s_cluster labels every generated series with the site.
+#
+# Windows are 14 d, inside the 15 d local retention: the rules run on each
+# site's own Prometheus, and a longer window would silently cover only part of
+# itself. homelab:slo_window_coverage_ratio shows how much of it exists yet.
+# Targets are provisional, and alerts stay off until a 14 d baseline is in.
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: internet
+  labels:
+    pyrra.dev/k8s_cluster: "${CLUSTER_NAME}"
+spec:
+  description: This site reaches the Internet (any HTTP answer from 1.1.1.1), checked every minute by its evidence collector.
+  target: "99.5"
+  window: 14d
+  indicator:
+    bool_gauge:
+      metric: probe_success{observability_target="internet"}
+  alerting:
+    disabled: true
+---
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: home-assistant-path
+  labels:
+    pyrra.dev/k8s_cluster: "${CLUSTER_NAME}"
+spec:
+  description: Home Assistant's name works from this site as a client uses it (router DNS, verified TLS, the ingress routing it).
+  target: "99.5"
+  window: 14d
+  indicator:
+    bool_gauge:
+      metric: probe_success{observability_target="ingress",name="hass"}
+  alerting:
+    disabled: true
+---
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: shared-vip-names
+  labels:
+    pyrra.dev/k8s_cluster: "${CLUSTER_NAME}"
+spec:
+  description: Every name on the shared VIPs works from this site as a client uses it; one failing name counts against it.
+  target: "99"
+  window: 14d
+  indicator:
+    bool_gauge:
+      metric: probe_success{observability_target="ingress"}
+  alerting:
+    disabled: true
+---
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: mqtt-broker
+  labels:
+    pyrra.dev/k8s_cluster: "${CLUSTER_NAME}"
+spec:
+  description: The MQTT broker accepts the evidence collector's login from this site, through its global Service.
+  target: "99.5"
+  window: 14d
+  indicator:
+    bool_gauge:
+      metric: probe_success{observability_target="mqtt"}
+  alerting:
+    disabled: true
