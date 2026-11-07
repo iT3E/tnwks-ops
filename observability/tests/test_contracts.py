@@ -387,7 +387,7 @@ def test_slos_fit_local_history_and_pyrra_generic_rules():
         assert labels["pyrra.dev/k8s_cluster"] == "${CLUSTER_NAME}"  # the site on every pyrra_* series
         indicator = next(iter(spec["indicator"].values()))
         assert not indicator.get("grouping")  # generic rules refuse grouping
-        assert spec["alerting"]["disabled"] is True  # until a full-window baseline
+        assert not (spec.get("alerting") or {}).get("disabled")  # burn-rate alerts are on
 
 
 def test_failed_collection_retains_old_success_time_without_cached_healthy_samples(small_inventory):

@@ -414,8 +414,16 @@ The rules run on each site's own Prometheus, which keeps 15 d, so the windows ar
 history-aware evaluator over the archive (Thanos Ruler) first.
 `homelab:slo_window_coverage_ratio` is the share of the window a site's
 Prometheus holds, shown beside the availabilities on the Observability board's
-Objectives tab, so an incomplete window reads as incomplete. Targets are
-provisional and burn-rate alerts are off until a full window gives a baseline.
+Objectives tab, so an incomplete window reads as incomplete.
+
+Pyrra's multi-window burn-rate alerts are on (`ErrorBudgetBurn`, with the SLO
+and site as labels): critical for a fast burn (14x over 30 m and 3 m, 7x over
+3 h and 15 m), warning for a slow one (2x over 12 h and 1 h, 1x over 2 d and
+3 h). The longest of those windows is 2 days, so they don't need a full 14-day
+window. They were turned on 2026-11-07, once the targets were final. Replayed
+over the history then (about 6 h), only `shared-vip-names` on site 1 would have
+fired, during the site-loss drill, when eight names served only from site 2
+really were down.
 The Pyrra UI is `pyrra.<internal domain>`, on site 1's local Prometheus.
 
 The 28-day view needs no evaluator over the archive: the Objectives tab computes
@@ -424,8 +432,8 @@ the same `slos.yaml` definitions), next to its 28-day window coverage, the share
 of the window the chosen datasource holds from the indicator's earliest sample.
 Through the Global datasource the archive supplies the weeks local retention
 lacks; Local can't cover more than 15 days, and the coverage says so. It's a
-comparison, not an alerting objective: burn-rate alerts stay on the 14-day
-Pyrra rules once their windows are full.
+comparison, not an alerting objective: burn-rate alerts come from the 14-day
+Pyrra rules.
 
 ### Recovery objectives per app
 
@@ -517,10 +525,8 @@ Access, recovery, review and drills are in
 
 1. Household view: check the House systems section on a wall display once it's
    live (see "Household view").
-2. Pyrra burn alerts once the 14-day windows are covered (about 2026-11-21;
-   the probes' history starts 2026-11-07, after the Prometheus restarts). 28-day
-   alerting would need a history-aware evaluator (Thanos Ruler); the 28-day
-   view doesn't.
+2. 28-day alerting would need a history-aware evaluator (Thanos Ruler); the
+   28-day view doesn't. The 14-day burn-rate alerts are on (see "Objectives").
 
 Closed by decision (2026-11-07, the owner delegating): no FRR exporter, because
 FRR is seen from both ends of its sessions (the router, each Cilium node) and

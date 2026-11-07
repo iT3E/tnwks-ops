@@ -7,7 +7,8 @@
 # Windows are 14 d, inside the 15 d local retention: the rules run on each
 # site's own Prometheus, and a longer window would silently cover only part of
 # itself. homelab:slo_window_coverage_ratio shows how much of it exists yet.
-# Targets are provisional, and alerts stay off until a 14 d baseline is in.
+# Targets are final (set 2026-11-07, delegated). Pyrra's burn-rate alerts are
+# on: their longest window is 2 d, so they don't wait for a full 14 d one.
 apiVersion: pyrra.dev/v1alpha1
 kind: ServiceLevelObjective
 metadata:
@@ -21,8 +22,6 @@ spec:
   indicator:
     bool_gauge:
       metric: probe_success{observability_target="internet"}
-  alerting:
-    disabled: true
 ---
 apiVersion: pyrra.dev/v1alpha1
 kind: ServiceLevelObjective
@@ -37,8 +36,6 @@ spec:
   indicator:
     bool_gauge:
       metric: probe_success{observability_target="ingress",name="hass"}
-  alerting:
-    disabled: true
 ---
 apiVersion: pyrra.dev/v1alpha1
 kind: ServiceLevelObjective
@@ -53,8 +50,6 @@ spec:
   indicator:
     bool_gauge:
       metric: probe_success{observability_target="ingress"}
-  alerting:
-    disabled: true
 ---
 apiVersion: pyrra.dev/v1alpha1
 kind: ServiceLevelObjective
@@ -69,5 +64,3 @@ spec:
   indicator:
     bool_gauge:
       metric: probe_success{observability_target="mqtt"}
-  alerting:
-    disabled: true
