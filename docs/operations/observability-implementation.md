@@ -78,7 +78,9 @@ to now, or to 15 minutes after it resolved. Every alert that reaches a person ha
 one: its domain board, scoped to the site the alert is about (generated alerts'
 `k8s_cluster`) or else the site whose Prometheus raised it
 (`$externalLabels.cluster`). `tests/test_alert_links.py` fails on an alert
-without one. `tests/browser_check.py` clicks both
+without one. The charts' own rules (kube-prometheus mixins, Kopiur,
+tuppr) carry a runbook instead; Telegram links those to the Alerts board for the
+site that raised them, at Grafana's address beside Alertmanager's external URL. `tests/browser_check.py` clicks both
 hops in a disposable Grafana and checks the target, time range and selection.
 
 ## What the state panels are based on
