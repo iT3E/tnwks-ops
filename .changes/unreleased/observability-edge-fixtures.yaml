@@ -1,4 +1,0 @@
----
-kind: Added
-body: Rule fixtures for an idle database, an app with no traffic, an expiring certificate and a failed restore drill.
-time: 2026-11-07T18:45:00Z

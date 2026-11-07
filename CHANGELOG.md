@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.23.0 - 2026-11-07
+
+### Added
+
+* Rule fixtures for an idle database, an app with no traffic, an expiring certificate and a failed restore drill.
+
 ## v2.22.0 - 2026-11-07
 
 ### Changed
