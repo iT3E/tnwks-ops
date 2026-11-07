@@ -325,17 +325,21 @@ The Pyrra UI is `pyrra.<internal domain>`, on site 1's local Prometheus.
 
 ## Following rollout work
 
-1. Validate backlog behavior and certificate renewal for the global query path.
-2. Deploy the isolated household Grafana and aggregate-only backend, revoke old
-   kiosk operator access/sessions and test all datasource APIs. Define fresh domain
-   evidence before any household status can be healthy.
-3. Add Pyrra with complete-history 28d evaluation and local short-window alerts.
-   A local 28d recording on 15d retention is invalid. Budget a history-aware rule
-   evaluator if the selected Pyrra path requires it.
-6. Complete FRR/BGP/mesh, expected Wi-Fi APs, content probes, fencing/restore
-   attestations, structured operation events, pinned hardware, survivor capacity
-   and alert/runbook links. Unsupported evidence remains Unknown.
+Access, recovery, review and drills are in
+[`observability-operations.md`](observability-operations.md). Still open:
 
-Record live verification and rollout commit IDs here as each stage completes.
-Existing MS-01 manifests and AWS application backup destinations remain separate
-from this new metrics archive.
+1. The household Grafana and its aggregate-only backend: revoke the old kiosk
+   operator access, test every datasource API, and define fresh domain evidence
+   before any household status can be Healthy.
+2. 28-day objectives over the archive. A local 28-day recording on 15-day
+   retention is invalid, so it needs a history-aware evaluator such as Thanos
+   Ruler. Also per-app recovery objectives, and Pyrra burn alerts once the
+   14-day windows are covered.
+3. The distros' FRR view of BGP, structured operation events with local
+   availability on both sites (site 2 has no Loki), and an off-site client
+   vantage.
+4. Retire Homelab (classic), now owned by the `legacy` provider, by removing its
+   file.
+
+Unsupported evidence remains Unknown. Existing MS-01 manifests and AWS
+application backup destinations remain separate from this metrics archive.
