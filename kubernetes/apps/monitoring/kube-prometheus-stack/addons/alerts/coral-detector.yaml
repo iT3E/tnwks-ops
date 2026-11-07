@@ -26,6 +26,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-home?var-cluster={{ $externalLabels.cluster }}"
             summary: "Coral detector {{ $labels.device }} on {{ $labels.instance }} is not answering"
             description: >-
               Prometheus has not scraped the tnwks-coral-detector-{{ $labels.device }}
@@ -41,6 +42,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-home?var-cluster={{ $externalLabels.cluster }}"
             summary: "Coral detector {{ $labels.device }} on {{ $labels.instance }} has no working Coral"
             description: >-
               tnwks-coral-detector-{{ $labels.device }} answers, but its Coral is not
@@ -60,6 +62,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-home?var-cluster={{ $externalLabels.cluster }}"
             summary: "Frigate is detecting but Coral {{ $labels.device }} runs no inferences"
             description: >-
               Frigate has detector coral{{ $labels.device }} and runs detection

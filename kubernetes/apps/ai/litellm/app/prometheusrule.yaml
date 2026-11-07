@@ -18,5 +18,6 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
             summary: "The Bedrock Roles Anywhere certificate expires 2027-03-28."
             description: "Renew it, update kubernetes/apps/ai/litellm/app/secret-roles-anywhere.sops.yaml, and move the date in this rule."

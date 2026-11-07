@@ -1,0 +1,4 @@
+---
+kind: Changed
+body: Every alert links to its domain board scoped to the alerting site, so Telegram messages open the right board at the incident time; a test keeps new alerts from skipping it.
+time: 2026-11-07T17:30:00Z

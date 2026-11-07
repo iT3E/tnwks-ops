@@ -10,6 +10,7 @@ spec:
       rules:
         - alert: LokiRequestErrors
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $externalLabels.cluster }}"
             message: "{{ $labels.job }} {{ $labels.route }} is experiencing {{ $value | humanizePercentage }} errors."
           expr: |
             100 * sum(rate(loki_request_duration_seconds_count{status_code=~"5.."}[1m])) by (namespace, job, route)
@@ -21,6 +22,7 @@ spec:
             severity: critical
         - alert: LokiRequestPanics
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $externalLabels.cluster }}"
             message: "{{ $labels.job }} is experiencing {{ $value | humanizePercentage }} increase of panics."
           expr: |
             sum(increase(loki_panic_total[10m])) by (namespace, job)
@@ -29,6 +31,7 @@ spec:
             severity: critical
         - alert: LokiRequestLatency
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $externalLabels.cluster }}"
             message: "{{ $labels.job }} {{ $labels.route }} is experiencing {{ $value }}s 99th percentile latency."
           expr: |
             namespace_job_route:loki_request_duration_seconds:99quantile{route!~"(?i).*tail.*"}

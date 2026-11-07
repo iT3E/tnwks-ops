@@ -31,6 +31,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-wifi?var-cluster={{ $externalLabels.cluster }}"
             summary: "unpoller gets no data from the UniFi controller"
             description: >-
               {{ with query "absent(unpoller_device_info)" }}unpoller exports no AP metrics at all
@@ -49,6 +50,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-wifi?var-cluster={{ $externalLabels.cluster }}"
             summary: "AP uplink below 1 Gbps"
             description: >-
               {{ $labels.name }} negotiated {{ $value }} Mbps on its uplink instead
@@ -72,6 +74,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-wifi?var-cluster={{ $externalLabels.cluster }}"
             summary: "AP not answering pings"
             description: >-
               {{ $labels.name }} ({{ $labels.host }}) lost {{ $value | humanizePercentage }}
@@ -104,6 +107,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-wifi?var-cluster={{ $externalLabels.cluster }}"
             summary: "AP switch port flapping"
             description: >-
               SW03 {{ $labels.ifName }} ({{ $labels.ap }}) changed link state in
@@ -123,6 +127,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-wifi?var-cluster={{ $externalLabels.cluster }}"
             summary: "Wi-Fi channel airtime above 70%"
             description: >-
               {{ $labels.name }} radio {{ $labels.radio }} (ng = 2.4 GHz, na = 5 GHz)
@@ -149,6 +154,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-wifi?var-cluster={{ $externalLabels.cluster }}"
             summary: "AP retrying over 40% of transmissions"
             description: >-
               {{ $labels.name }} retried {{ $value | humanizePercentage }} of its
@@ -167,6 +173,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-wifi?var-cluster={{ $externalLabels.cluster }}"
             summary: "Wi-Fi client satisfaction below 80%"
             description: >-
               {{ $labels.name }} radio {{ $labels.radio }} (ng = 2.4 GHz, na = 5 GHz)
@@ -189,6 +196,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-wifi?var-cluster={{ $externalLabels.cluster }}"
             summary: "AP rebooted outside the firmware upgrade window"
             description: >-
               {{ $labels.name }} restarted (uptime went back to

@@ -15,6 +15,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "Windows host CPU above 90% for 15m"
             description: "{{ $labels.instance }} CPU at {{ $value | humanizePercentage }}"
 
@@ -24,6 +25,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "Windows host memory above 90%"
             description: "{{ $labels.instance }} memory at {{ $value | humanizePercentage }}"
 
@@ -33,6 +35,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "Windows host memory above 95%"
             description: "{{ $labels.instance }} memory at {{ $value | humanizePercentage }} — risk of OOM"
 
@@ -51,6 +54,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "Windows host commit charge above 95% of the commit limit"
             description: >-
               {{ $labels.instance }} has committed
@@ -68,6 +72,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "Windows host commit charge above 98% of the commit limit"
             description: >-
               {{ $labels.instance }} has committed
@@ -91,6 +96,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "Windows host is swapping to the page file"
             description: >-
               {{ $labels.instance }} has written {{ $value | humanize }} pages/s to the page
@@ -106,6 +112,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "Windows disk {{ $labels.volume }} on {{ $labels.instance }} above 90% full"
             description: "{{ $labels.volume }} at {{ $value | humanizePercentage }}"
 
@@ -115,6 +122,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "Windows host unreachable"
             description: "{{ $labels.instance }} has been down for 5 minutes"
 
@@ -136,6 +144,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "Windows host config differs from tnwks-ops main"
             description: >-
               The nightly `--check` of playbooks/windows-host.yml and wsl-distro.yml for
@@ -156,6 +165,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
             summary: "The Windows host drift check hasn't reported for over a day"
             description: >-
               No drift-check result for more than 30h (or ever, while windows_exporter is

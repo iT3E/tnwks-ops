@@ -16,6 +16,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-sites?var-cluster={{ $externalLabels.cluster }}"
             summary: "The other WSL site's Prometheus hasn't answered for 10 minutes."
             description: >-
               {{ $labels.source_site }} isn't reachable from here: the site is
@@ -48,6 +49,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-sites?var-cluster={{ $externalLabels.cluster }}"
             summary: "{{ $labels.pod }}'s standby is {{ $value }} WAL segments (16 MB each) behind the primary."
             description: >-
               The replica cluster here hasn't caught up with the other site's

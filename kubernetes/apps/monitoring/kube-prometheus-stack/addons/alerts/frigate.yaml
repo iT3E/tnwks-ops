@@ -35,6 +35,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-home?var-cluster={{ $externalLabels.cluster }}"
             summary: "Frigate object detection has stopped"
             description: >-
               Frigate has run no object detection for 3 minutes while cameras
@@ -54,6 +55,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-home?var-cluster={{ $externalLabels.cluster }}"
             summary: "Frigate is getting no frames from any camera"
             description: >-
               Every Frigate camera has been at 0 fps for 5 minutes. Usually the
@@ -67,6 +69,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-home?var-cluster={{ $externalLabels.cluster }}"
             summary: "Frigate is down or not answering /api/metrics"
             description: >-
               Prometheus has had no successful scrape of frigate-app for 5
