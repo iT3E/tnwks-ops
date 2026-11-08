@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Runners: homelab-wsl''s ops runner registers as tnwks-ops-runner-homelab-wsl with both of its labels, so jobs that need the homelab-wsl site (UniFi plans and applies) get a runner again; the labels added in place never reached GitHub.'
+time: 2026-11-08T00:37:16.946971131-08:00

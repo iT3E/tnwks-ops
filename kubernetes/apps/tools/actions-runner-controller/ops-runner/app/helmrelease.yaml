@@ -38,11 +38,17 @@ spec:
     - name: gha-runner-scale-set-controller
   values:
     githubConfigUrl: "https://github.com/iT3E/tnwks-ops"
-    runnerScaleSetName: tnwks-ops-runner
-    # A label per site, for workflows that need something only one site has
-    # (the UniFi controller is in-cluster on homelab-wsl). Everything else
-    # asks for tnwks-ops-runner and runs on either site's runner.
-    scaleSetLabels: ["tnwks-ops-${CLUSTER_NAME}"]
+    # One scale set per site, each labeled tnwks-ops-runner (what most
+    # workflows ask for, so GitHub uses whichever site's runner is free) plus
+    # a site label for workflows that need something only one site has (the
+    # UniFi controller is in-cluster on homelab-wsl). The name carries the
+    # site because ARC only sends labels when it registers a scale set:
+    # adding scaleSetLabels to the existing tnwks-ops-runner set (#1804)
+    # never reached GitHub, and jobs asking for tnwks-ops-homelab-wsl queued.
+    # A new name registers a new set with its labels. homelab-wsl-02 patches
+    # both to its own (kubernetes/clusters/wsl-02/apps/ops-runner).
+    runnerScaleSetName: tnwks-ops-runner-${CLUSTER_NAME}
+    scaleSetLabels: ["tnwks-ops-runner", "tnwks-ops-${CLUSTER_NAME}"]
     # Same GitHub App as sites-builder (one installation, both repos).
     githubConfigSecret: sites-runner-github-app
     # Idle costs nothing; one runner at a time so device applies never overlap.
