@@ -1,0 +1,157 @@
+---
+name: "Bootstrap smoke"
+
+# Nightly: does a fresh cluster still bootstrap from main? Boots a throwaway
+# Talos-in-Docker cluster on the pinned Talos version (talos/wsl/versions.yaml),
+# installs Flux from the committed gotk-components.yaml, points it at this
+# commit, and waits for cluster-meta (kubernetes/flux/meta: every Helm, OCI
+# and Git source the apps use) to reconcile with every source Ready. This
+# catches bootstrap rot (a Flux manifest the API server rejects, a chart
+# repository that moved or died) before a site rebuild needs it. The apps
+# themselves need the SOPS age key, so they're out of scope
+# (docs/operations/ci.md).
+on:
+  schedule:
+    - cron: "43 13 * * *" # 05:43 Pacific (PST)
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/bootstrap-smoke.yaml
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: smoke
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Versions
+        id: versions
+        run: |
+          talos="$(yq '.talos' talos/wsl/versions.yaml)"
+          kubernetes="$(yq '.kubernetes' talos/wsl/versions.yaml)"
+          echo "talos=$talos" >> "$GITHUB_OUTPUT"
+          echo "kubernetes=${kubernetes#v}" >> "$GITHUB_OUTPUT"
+          echo "Talos $talos, Kubernetes $kubernetes, $(sed -n 's/^# Flux Version: //p' kubernetes/clusters/wsl/flux-system/gotk-components.yaml | head -1)"
+
+      - name: Install talosctl
+        env:
+          TALOS: ${{ steps.versions.outputs.talos }}
+        run: |
+          base="https://github.com/siderolabs/talos/releases/download/${TALOS}"
+          cd "$RUNNER_TEMP"
+          curl -fsSLO --retry 5 --retry-all-errors --retry-delay 3 "${base}/talosctl-linux-amd64"
+          curl -fsSLO --retry 5 --retry-all-errors --retry-delay 3 "${base}/sha256sum.txt"
+          grep ' talosctl-linux-amd64$' sha256sum.txt | sha256sum -c -
+          sudo install -m 0755 talosctl-linux-amd64 /usr/local/bin/talosctl
+          talosctl version --client --short
+
+      # The cluster's own Kubernetes minor, from dl.k8s.io (not the image's).
+      - name: Install kubectl
+        env:
+          KUBERNETES: ${{ steps.versions.outputs.kubernetes }}
+        run: |
+          base="https://dl.k8s.io/release/v${KUBERNETES}/bin/linux/amd64"
+          cd "$RUNNER_TEMP"
+          curl -fsSLO --retry 5 --retry-all-errors --retry-delay 3 "${base}/kubectl"
+          echo "$(curl -fsSL --retry 5 --retry-all-errors "${base}/kubectl.sha256")  kubectl" | sha256sum -c -
+          sudo install -m 0755 kubectl /usr/local/bin/kubectl
+          kubectl version --client
+
+      # Flannel on the runner's kernel needs br_netfilter, which hosted
+      # runners don't load (talosctl-cluster-action README).
+      - name: Load br_netfilter
+        run: sudo modprobe br_netfilter
+
+      - name: Cluster config
+        env:
+          TALOS: ${{ steps.versions.outputs.talos }}
+          KUBERNETES: ${{ steps.versions.outputs.kubernetes }}
+        run: |
+          cat > "$RUNNER_TEMP/talos-smoke.yaml" <<EOF
+          apiVersion: v1alpha1
+          kind: TalosCluster
+          metadata:
+            name: smoke
+          spec:
+            provider: docker
+            kubernetes-version: "${KUBERNETES}"
+            docker:
+              image: ghcr.io/siderolabs/talos:${TALOS}
+            workers:
+              count: 1
+          EOF
+
+      - name: Talos cluster
+        uses: home-operations/talosctl-cluster-action@fb6a31bf5de43218acc80d2e23958a16eee7380c # v0.2.2
+        with:
+          config: ${{ runner.temp }}/talos-smoke.yaml
+
+      - name: Install Flux
+        run: |
+          kubectl apply --server-side -f kubernetes/clusters/wsl/flux-system/gotk-components.yaml
+          kubectl -n flux-system wait --for=condition=Available deployment --all --timeout=5m
+
+      # What `flux bootstrap` would create, minus the deploy key: the repo is
+      # public, so source-controller reads it over HTTPS at this commit.
+      - name: Point Flux at this commit
+        env:
+          URL: ${{ github.server_url }}/${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          kubectl apply -f - <<EOF
+          apiVersion: source.toolkit.fluxcd.io/v1
+          kind: GitRepository
+          metadata:
+            name: flux-system
+            namespace: flux-system
+          spec:
+            interval: 1h
+            url: ${URL}
+            ref:
+              commit: ${SHA}
+          EOF
+          kubectl apply -f kubernetes/clusters/wsl/meta.yaml
+          kubectl -n flux-system wait --for=condition=Ready gitrepository/flux-system --timeout=5m
+          kubectl -n flux-system wait --for=condition=Ready kustomization/cluster-meta --timeout=5m
+
+      # OCI HelmRepositories have no Ready condition (source-controller only
+      # resolves them when a chart is pulled); every other source must be
+      # Ready.
+      - name: Sources Ready
+        run: |
+          deadline=$((SECONDS + 300))
+          while :; do
+            not_ready="$(kubectl get gitrepositories,helmrepositories,ocirepositories -A -o json | jq -r '
+              .items[]
+              | select(.kind != "HelmRepository" or .spec.type != "oci")
+              | select(([.status.conditions[]? | select(.type == "Ready" and .status == "True")] | length) == 0)
+              | "\(.kind) \(.metadata.namespace)/\(.metadata.name): \([.status.conditions[]? | select(.type == "Ready") | .message] | first // "no Ready condition yet")"')"
+            [ -z "$not_ready" ] && break
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              while IFS= read -r line; do echo "::error::$line"; done <<<"$not_ready"
+              exit 1
+            fi
+            sleep 10
+          done
+          kubectl get gitrepositories,helmrepositories,ocirepositories -A | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl get nodes -o wide || true
+          kubectl -n flux-system get pods,kustomizations,gitrepositories || true
+          kubectl -n flux-system logs deploy/source-controller --tail=50 || true
+          kubectl -n flux-system logs deploy/kustomize-controller --tail=50 || true
