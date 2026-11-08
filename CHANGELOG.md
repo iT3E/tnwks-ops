@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.60.1 - 2026-11-08
+
+### Fixed
+
+* Use the maintained Pacific Power integration for usage and grid exports; keep banked-kWh credits as a PDF import and remove the unverified billing client.
+
 ## v2.60.0 - 2026-11-08
 
 ### Added
