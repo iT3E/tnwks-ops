@@ -53,10 +53,17 @@ jobs:
           cp -r "$APP/config/." "$RUNNER_TEMP/config/"
           docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
             -e HASS_OIDC_AUTH_VERSION -e FRIGATE_INTEGRATION_VERSION -e ADVANCED_CAMERA_CARD_VERSION -e KIOSK_MODE_VERSION \
-            -e XIAOMI_MAP_EXTRACTOR_VERSION -e XIAOMI_VACUUM_MAP_CARD_VERSION \
+            -e XIAOMI_MAP_EXTRACTOR_VERSION -e XIAOMI_VACUUM_MAP_CARD_VERSION -e PACIFIC_POWER_VERSION \
             -v "$RUNNER_TEMP/config:/config" \
             -v "$PWD/$APP/scripts/prepare-config.sh:/scripts/prepare-config.sh:ro" \
             --entrypoint /bin/bash "$IMAGE" /scripts/prepare-config.sh /config
+
+      - name: Upstream Pacific Power compatibility
+        run: |
+          docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/tmp \
+            -v "$RUNNER_TEMP/config:/config:ro" -w /config \
+            --entrypoint python3 "$IMAGE" -c \
+            'from custom_components.pacific_power.config_flow import PacificPowerConfigFlow; from custom_components.pacific_power.coordinator import PacificPowerCoordinator; assert PacificPowerConfigFlow.VERSION >= 1'
 
       # check_config exits 0 even when the config is invalid, so fail on its
       # output: schema errors print an "Incorrect config" section, and

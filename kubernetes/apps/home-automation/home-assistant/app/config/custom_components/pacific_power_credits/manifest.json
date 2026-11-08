@@ -6,7 +6,7 @@
   "dependencies": ["file_upload"],
   "documentation": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/home-assistant.md",
   "integration_type": "service",
-  "iot_class": "cloud_polling",
+  "iot_class": "local_push",
   "requirements": ["pypdf==7.0.0", "fonttools==4.68.0"],
-  "version": "1.0.1"
+  "version": "1.1.0"
 }

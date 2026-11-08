@@ -12,6 +12,7 @@
 #   KIOSK_MODE_VERSION            NemesisRE/kiosk-mode
 #   XIAOMI_MAP_EXTRACTOR_VERSION  PiotrMachowski/Home-Assistant-custom-components-Xiaomi-Cloud-Map-Extractor
 #   XIAOMI_VACUUM_MAP_CARD_VERSION PiotrMachowski/lovelace-xiaomi-vacuum-map-card
+#   PACIFIC_POWER_VERSION        nkcx/ha-pacific-power
 #
 # Each install records its version in a .tnwks-version file and is skipped
 # when that already matches, so a plain restart needs no network.
@@ -96,6 +97,10 @@ install() {
     rm -rf "${dest}"
     mkdir -p "$(dirname "${dest}")"
     cp -r "${root}/${subpath}" "${dest}"
+    # Preserve a repository-root license when installing an archive subfolder.
+    if [[ -f "${root}/LICENSE" && ! -e "${dest}/LICENSE" ]]; then
+        cp "${root}/LICENSE" "${dest}/LICENSE"
+    fi
     echo "${version}" >"${dest}/.tnwks-version"
     rm -rf "${work}"
 }
@@ -109,6 +114,11 @@ install frigate "${FRIGATE_INTEGRATION_VERSION}" \
     "${config}/custom_components/frigate" \
     "https://github.com/blakeblackshear/frigate-hass-integration/archive/refs/tags/${FRIGATE_INTEGRATION_VERSION}.tar.gz" \
     custom_components/frigate
+
+install pacific_power "${PACIFIC_POWER_VERSION}" \
+    "${config}/custom_components/pacific_power" \
+    "https://github.com/nkcx/ha-pacific-power/archive/refs/tags/${PACIFIC_POWER_VERSION}.tar.gz" \
+    custom_components/pacific_power
 
 install advanced-camera-card "${ADVANCED_CAMERA_CARD_VERSION}" \
     "${config}/www/advanced-camera-card" \
