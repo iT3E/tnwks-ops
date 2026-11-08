@@ -28,7 +28,7 @@ DOMAINS = [
     ("Kubernetes", worst(f'3 - 2 * {metric("homelab_flux_resource_ready")}'),
      "every Flux resource's Ready condition", "tnwks-kubernetes"),
     ("Hosts", worst(metric("homelab:host_state")),
-     "each Windows host's CPU, memory in use, disk latency and free space", "tnwks-hosts"),
+     "each Windows host's CPU, memory in use, disk latency and free space, and its WSL VM's", "tnwks-hosts"),
     ("Data", worst(metric("homelab:database_backup_state"), metric("homelab:app_rpo_state"),
                    metric("homelab:other_database_state")),
      "database backups, each app's recovery point and the databases outside CNPG", "tnwks-data"),

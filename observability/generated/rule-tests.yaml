@@ -932,7 +932,8 @@ tests:
   - expr: homelab:house_state{domain=~"wifi|cameras"}
     eval_time: 10m
     exp_samples: []
-- name: 'host states: half-busy CPU, RAM 93% in use, slow and nearly full disk, a host gone'
+- name: 'host states: half-busy CPU, RAM 93% in use, slow and nearly full disk, a host gone; its WSL VM short of
+    memory and stalled on I/O'
   interval: 1m
   input_series:
   - series: up{job="windows-exporter",k8s_cluster="one",instance="one"}
@@ -971,6 +972,24 @@ tests:
     values: 100+0x30
   - series: up{job="windows-exporter",k8s_cluster="two",instance="two"}
     values: 0+0x30
+  - series: up{k8s_cluster="one",instance="n1",job="node-exporter"}
+    values: 1+0x30
+  - series: up{k8s_cluster="one",instance="n2",job="node-exporter"}
+    values: 1+0x30
+  - series: node_cpu_seconds_total{k8s_cluster="one",instance="n1",mode="idle",cpu="0"}
+    values: 0+45x30
+  - series: node_cpu_seconds_total{k8s_cluster="one",instance="n2",mode="idle",cpu="0"}
+    values: 0+45x30
+  - series: node_memory_MemAvailable_bytes{k8s_cluster="one",instance="n1",}
+    values: 5+0x30
+  - series: node_memory_MemTotal_bytes{k8s_cluster="one",instance="n1",}
+    values: 100+0x30
+  - series: node_filesystem_avail_bytes{k8s_cluster="one",instance="n1",mountpoint="/var"}
+    values: 50+0x30
+  - series: node_filesystem_size_bytes{k8s_cluster="one",instance="n1",mountpoint="/var"}
+    values: 100+0x30
+  - series: node_pressure_io_stalled_seconds_total{k8s_cluster="one",instance="n1",}
+    values: 0+18x30
   promql_expr_test:
   - expr: homelab:host_state
     eval_time: 20m
@@ -983,6 +1002,14 @@ tests:
       value: 2
     - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="Disk space"}
       value: 3
+    - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="WSL CPU"}
+      value: 1
+    - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="WSL memory"}
+      value: 2
+    - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="WSL disk space"}
+      value: 1
+    - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="WSL I/O stall"}
+      value: 3
     - labels: homelab:host_state{k8s_cluster="two",instance="two",resource="CPU"}
       value: 0
     - labels: homelab:host_state{k8s_cluster="two",instance="two",resource="Memory"}
@@ -991,7 +1018,7 @@ tests:
       value: 0
     - labels: homelab:host_state{k8s_cluster="two",instance="two",resource="Disk space"}
       value: 0
-- name: 'host states: an idle disk isn''t a slow one'
+- name: 'host states: an idle disk isn''t a slow one; a VM whose node-exporters are down is Unknown'
   interval: 1m
   input_series:
   - series: up{job="windows-exporter",k8s_cluster="one",instance="one"}
@@ -1002,9 +1029,22 @@ tests:
     values: 0+0x30
   - series: windows_logical_disk_read_write_latency_seconds_total{k8s_cluster="one",instance="one",volume="D:"}
     values: 0+3x30
+  - series: up{k8s_cluster="one",instance="n1",job="node-exporter"}
+    values: 0+0x30
   promql_expr_test:
   - expr: homelab:host_state{resource="Disk latency"}
     eval_time: 20m
     exp_samples:
     - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="Disk latency"}
       value: 1
+  - expr: homelab:host_state{resource=~"WSL.*"}
+    eval_time: 20m
+    exp_samples:
+    - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="WSL CPU"}
+      value: 0
+    - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="WSL memory"}
+      value: 0
+    - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="WSL disk space"}
+      value: 0
+    - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="WSL I/O stall"}
+      value: 0

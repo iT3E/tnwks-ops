@@ -36,7 +36,8 @@ def artifacts():
         files[path] = "---\n" + yaml.safe_dump(data, sort_keys=False, width=110)
     # Flux substitutes the site at reconcile time; promtool sees the fixture's.
     test_rules = ROOT / "observability/generated/rules-for-test.yaml"
-    files[test_rules] = files[test_rules].replace("${CLUSTER_NAME}", "one")
+    files[test_rules] = (files[test_rules].replace("${CLUSTER_NAME}", "one")
+                         .replace("${WINDOWS_HOST_NAME}", "one"))
     return files
 
 

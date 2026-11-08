@@ -302,6 +302,36 @@
     ],
     "sources": [
       {
+        "metric": "node_cpu_seconds_total",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_filesystem_avail_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_filesystem_size_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_memory_MemAvailable_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_memory_MemTotal_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_pressure_io_stalled_seconds_total",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
         "metric": "up",
         "producer": "Prometheus scrape status",
         "availability": "configured"
@@ -852,6 +882,36 @@
       {
         "metric": "mktxp_system_uptime",
         "producer": "router MKTXP exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_cpu_seconds_total",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_filesystem_avail_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_filesystem_size_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_memory_MemAvailable_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_memory_MemTotal_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_pressure_io_stalled_seconds_total",
+        "producer": "node-exporter (shared WSL kernel)",
         "availability": "configured"
       },
       {
@@ -5138,6 +5198,36 @@
     ],
     "sources": [
       {
+        "metric": "node_cpu_seconds_total",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_filesystem_avail_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_filesystem_size_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_memory_MemAvailable_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_memory_MemTotal_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_pressure_io_stalled_seconds_total",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
         "metric": "up",
         "producer": "Prometheus scrape status",
         "availability": "configured"
@@ -5297,6 +5387,74 @@
       },
       {
         "metric": "windows_memory_physical_total_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Physical resources",
+    "panel": "WSL VM CPU busy",
+    "query": "max by (k8s_cluster, instance) ((max by (k8s_cluster) (1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval])))) * on (k8s_cluster) group_left (instance) (0 * max by (k8s_cluster, instance) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\"}) + 1))",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "node_cpu_seconds_total",
+      "windows_cpu_logical_processor"
+    ],
+    "sources": [
+      {
+        "metric": "node_cpu_seconds_total",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_logical_processor",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Physical resources",
+    "panel": "WSL VM memory in use",
+    "query": "max by (k8s_cluster, instance) ((max by (k8s_cluster) (1 - node_memory_MemAvailable_bytes{k8s_cluster=~\"$cluster\"} / node_memory_MemTotal_bytes{k8s_cluster=~\"$cluster\"})) * on (k8s_cluster) group_left (instance) (0 * max by (k8s_cluster, instance) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\"}) + 1))",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "node_memory_MemAvailable_bytes",
+      "node_memory_MemTotal_bytes",
+      "windows_cpu_logical_processor"
+    ],
+    "sources": [
+      {
+        "metric": "node_memory_MemAvailable_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_memory_MemTotal_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_logical_processor",
         "producer": "Windows exporter",
         "availability": "configured"
       }
@@ -5478,37 +5636,6 @@
   {
     "dashboard": "tnwks-host",
     "tab": "CPU",
-    "panel": "WSL VM CPU busy",
-    "query": "max by (k8s_cluster) (1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
-    "unit": "percentunit",
-    "query_mode": "instant",
-    "inputs": [
-      "node_cpu_seconds_total",
-      "windows_cpu_logical_processor"
-    ],
-    "sources": [
-      {
-        "metric": "node_cpu_seconds_total",
-        "producer": "node-exporter (shared WSL kernel)",
-        "availability": "configured"
-      },
-      {
-        "metric": "windows_cpu_logical_processor",
-        "producer": "Windows exporter",
-        "availability": "configured"
-      }
-    ],
-    "observation_budget_seconds": 180,
-    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
-    "scope": "selected sites; explicitly described shared sources may span sites",
-    "missing": "Unknown \u2014 missing evidence",
-    "query_error": "Grafana query error; never a healthy empty response",
-    "runbook": "docs/operations/grafana-resource-budget.md",
-    "owner": "homelab operator"
-  },
-  {
-    "dashboard": "tnwks-host",
-    "tab": "CPU",
     "panel": "CPU by mode",
     "query": "sum by (mode) (rate(windows_cpu_time_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",mode!=\"idle\"}[$__rate_interval])) / scalar(max by (instance) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}))",
     "unit": "percentunit",
@@ -5575,37 +5702,6 @@
     "sources": [
       {
         "metric": "windows_system_processor_queue_length",
-        "producer": "Windows exporter",
-        "availability": "configured"
-      }
-    ],
-    "observation_budget_seconds": 180,
-    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
-    "scope": "selected sites; explicitly described shared sources may span sites",
-    "missing": "Unknown \u2014 missing evidence",
-    "query_error": "Grafana query error; never a healthy empty response",
-    "runbook": "docs/operations/grafana-resource-budget.md",
-    "owner": "homelab operator"
-  },
-  {
-    "dashboard": "tnwks-host",
-    "tab": "CPU",
-    "panel": "WSL CPU pressure",
-    "query": "max by (k8s_cluster) (rate(node_pressure_cpu_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
-    "unit": "percentunit",
-    "query_mode": "range",
-    "inputs": [
-      "node_pressure_cpu_waiting_seconds_total",
-      "windows_cpu_logical_processor"
-    ],
-    "sources": [
-      {
-        "metric": "node_pressure_cpu_waiting_seconds_total",
-        "producer": "node-exporter (shared WSL kernel)",
-        "availability": "configured"
-      },
-      {
-        "metric": "windows_cpu_logical_processor",
         "producer": "Windows exporter",
         "availability": "configured"
       }
@@ -5761,37 +5857,6 @@
     "sources": [
       {
         "metric": "windows_memory_swap_page_operations_total",
-        "producer": "Windows exporter",
-        "availability": "configured"
-      }
-    ],
-    "observation_budget_seconds": 180,
-    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
-    "scope": "selected sites; explicitly described shared sources may span sites",
-    "missing": "Unknown \u2014 missing evidence",
-    "query_error": "Grafana query error; never a healthy empty response",
-    "runbook": "docs/operations/grafana-resource-budget.md",
-    "owner": "homelab operator"
-  },
-  {
-    "dashboard": "tnwks-host",
-    "tab": "Memory",
-    "panel": "WSL memory pressure",
-    "query": "max by (k8s_cluster) (rate(node_pressure_memory_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
-    "unit": "percentunit",
-    "query_mode": "range",
-    "inputs": [
-      "node_pressure_memory_waiting_seconds_total",
-      "windows_cpu_logical_processor"
-    ],
-    "sources": [
-      {
-        "metric": "node_pressure_memory_waiting_seconds_total",
-        "producer": "node-exporter (shared WSL kernel)",
-        "availability": "configured"
-      },
-      {
-        "metric": "windows_cpu_logical_processor",
         "producer": "Windows exporter",
         "availability": "configured"
       }
@@ -6012,17 +6077,48 @@
   {
     "dashboard": "tnwks-host",
     "tab": "Disk",
-    "panel": "WSL I/O pressure",
-    "query": "max by (k8s_cluster) (rate(node_pressure_io_stalled_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "panel": "Free space by volume",
+    "query": "max by (volume) (windows_logical_disk_free_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"} / windows_logical_disk_size_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"})",
     "unit": "percentunit",
-    "query_mode": "range",
+    "query_mode": "instant",
     "inputs": [
-      "node_pressure_io_stalled_seconds_total",
+      "windows_logical_disk_free_bytes",
+      "windows_logical_disk_size_bytes"
+    ],
+    "sources": [
+      {
+        "metric": "windows_logical_disk_free_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_size_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "WSL VM",
+    "panel": "VM CPU busy",
+    "query": "max by (k8s_cluster) (1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "node_cpu_seconds_total",
       "windows_cpu_logical_processor"
     ],
     "sources": [
       {
-        "metric": "node_pressure_io_stalled_seconds_total",
+        "metric": "node_cpu_seconds_total",
         "producer": "node-exporter (shared WSL kernel)",
         "availability": "configured"
       },
@@ -6042,23 +6138,257 @@
   },
   {
     "dashboard": "tnwks-host",
-    "tab": "Disk",
-    "panel": "Free space by volume",
-    "query": "max by (volume) (windows_logical_disk_free_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"} / windows_logical_disk_size_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"})",
+    "tab": "WSL VM",
+    "panel": "VM memory in use",
+    "query": "max by (k8s_cluster) (1 - avg_over_time(node_memory_MemAvailable_bytes{k8s_cluster=~\"$cluster\"}[5m]) / node_memory_MemTotal_bytes{k8s_cluster=~\"$cluster\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
     "unit": "percentunit",
     "query_mode": "instant",
     "inputs": [
-      "windows_logical_disk_free_bytes",
-      "windows_logical_disk_size_bytes"
+      "node_memory_MemAvailable_bytes",
+      "node_memory_MemTotal_bytes",
+      "windows_cpu_logical_processor"
     ],
     "sources": [
       {
-        "metric": "windows_logical_disk_free_bytes",
-        "producer": "Windows exporter",
+        "metric": "node_memory_MemAvailable_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
         "availability": "configured"
       },
       {
-        "metric": "windows_logical_disk_size_bytes",
+        "metric": "node_memory_MemTotal_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_logical_processor",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "WSL VM",
+    "panel": "VM swap used",
+    "query": "max by (k8s_cluster) (1 - node_memory_SwapFree_bytes{k8s_cluster=~\"$cluster\"} / (node_memory_SwapTotal_bytes{k8s_cluster=~\"$cluster\"} > 0)) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "node_memory_SwapFree_bytes",
+      "node_memory_SwapTotal_bytes",
+      "windows_cpu_logical_processor"
+    ],
+    "sources": [
+      {
+        "metric": "node_memory_SwapFree_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_memory_SwapTotal_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_logical_processor",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "WSL VM",
+    "panel": "VM disk used",
+    "query": "max by (k8s_cluster) (1 - node_filesystem_avail_bytes{k8s_cluster=~\"$cluster\",mountpoint=\"/var\"} / node_filesystem_size_bytes{k8s_cluster=~\"$cluster\",mountpoint=\"/var\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "node_filesystem_avail_bytes",
+      "node_filesystem_size_bytes",
+      "windows_cpu_logical_processor"
+    ],
+    "sources": [
+      {
+        "metric": "node_filesystem_avail_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_filesystem_size_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_logical_processor",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "WSL VM",
+    "panel": "VM memory",
+    "query": "max by (measure) (label_replace(max by (k8s_cluster) (node_memory_MemTotal_bytes{k8s_cluster=~\"$cluster\"} - node_memory_MemAvailable_bytes{k8s_cluster=~\"$cluster\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"In use\", \"\", \"\") or label_replace(max by (k8s_cluster) (node_memory_Cached_bytes{k8s_cluster=~\"$cluster\"} + node_memory_Buffers_bytes{k8s_cluster=~\"$cluster\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"Page cache\", \"\", \"\") or label_replace(max by (k8s_cluster) (node_memory_SwapTotal_bytes{k8s_cluster=~\"$cluster\"} - node_memory_SwapFree_bytes{k8s_cluster=~\"$cluster\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"Swap used\", \"\", \"\") or label_replace(max by (k8s_cluster) (node_memory_MemTotal_bytes{k8s_cluster=~\"$cluster\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"Limit\", \"\", \"\"))",
+    "unit": "bytes",
+    "query_mode": "range",
+    "inputs": [
+      "node_memory_Buffers_bytes",
+      "node_memory_Cached_bytes",
+      "node_memory_MemAvailable_bytes",
+      "node_memory_MemTotal_bytes",
+      "node_memory_SwapFree_bytes",
+      "node_memory_SwapTotal_bytes",
+      "windows_cpu_logical_processor"
+    ],
+    "sources": [
+      {
+        "metric": "node_memory_Buffers_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_memory_Cached_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_memory_MemAvailable_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_memory_MemTotal_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_memory_SwapFree_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "node_memory_SwapTotal_bytes",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_logical_processor",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "WSL VM",
+    "panel": "VM CPU pressure",
+    "query": "max by (k8s_cluster) (rate(node_pressure_cpu_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "node_pressure_cpu_waiting_seconds_total",
+      "windows_cpu_logical_processor"
+    ],
+    "sources": [
+      {
+        "metric": "node_pressure_cpu_waiting_seconds_total",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_logical_processor",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "WSL VM",
+    "panel": "VM memory pressure",
+    "query": "max by (k8s_cluster) (rate(node_pressure_memory_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "node_pressure_memory_waiting_seconds_total",
+      "windows_cpu_logical_processor"
+    ],
+    "sources": [
+      {
+        "metric": "node_pressure_memory_waiting_seconds_total",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_logical_processor",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "WSL VM",
+    "panel": "VM I/O pressure",
+    "query": "max by (k8s_cluster) (rate(node_pressure_io_stalled_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "node_pressure_io_stalled_seconds_total",
+      "windows_cpu_logical_processor"
+    ],
+    "sources": [
+      {
+        "metric": "node_pressure_io_stalled_seconds_total",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_logical_processor",
         "producer": "Windows exporter",
         "availability": "configured"
       }

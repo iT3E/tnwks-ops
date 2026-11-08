@@ -86,10 +86,21 @@ def host_records():
     """Each Windows host's resources as states (Homelab's Hosts tile, L1): the USE
     signals that bite on these hosts, banded. A host whose exporter is down has
     Unknown (0) rows. Site 1's Prometheus scrapes both hosts today; a second
-    observer would be reduced like the other states (IDENTITY)."""
+    observer would be reduced like the other states (IDENTITY).
+
+    Each site also grades its own WSL VM (the "WSL ..." resources) under its own
+    host's name (WINDOWS_HOST_NAME in cluster-settings), from the node-exporter on
+    each of its cluster's nodes: Talos-in-Docker nodes all read the VM's kernel,
+    so any node's figures are the VM's. Its node-exporters down: Unknown."""
     by = "k8s_cluster, instance"
     volumes = 'volume!~"HarddiskVolume.+"'
-    expected = f'max by ({by}) (up{{job="windows-exporter"}})'
+    windows = f'max by ({by}) (up{{job="windows-exporter"}})'
+    own = 'k8s_cluster="${CLUSTER_NAME}"'
+
+    def on_host(expr):
+        return f'label_replace({expr}, "instance", "' + "${WINDOWS_HOST_NAME}" + '", "", "")'
+
+    vm = on_host(f'max by (k8s_cluster) (up{{job="node-exporter",{own}}})')
     ops = (f'rate(windows_logical_disk_reads_total{{{volumes}}}[15m])'
            f' + rate(windows_logical_disk_writes_total{{{volumes}}}[15m])')
     # Seconds per operation on the slowest volume doing real work (over 1 op/s);
@@ -97,19 +108,35 @@ def host_records():
     latency = (f'max by ({by}) (rate(windows_logical_disk_read_write_latency_seconds_total{{{volumes}}}[15m])'
                f' / ({ops}) and ({ops}) > 1)'
                f' or on ({by}) (0 * max by ({by}) (windows_logical_disk_reads_total))')
+    var = f'mountpoint="/var",{own}'
+    # (value, degraded, failed, higher is better, what has to be up for it)
     values = {
         # Sustained, not a spike: 15 minutes.
-        "CPU": (f'1 - avg by ({by}) (rate(windows_cpu_time_total{{mode="idle"}}[15m]))', 0.85, 0.95, False),
+        "CPU": (f'1 - avg by ({by}) (rate(windows_cpu_time_total{{mode="idle"}}[15m]))', 0.85, 0.95, False, windows),
         # RAM not available to new work (standby cache counts as available), over
         # 15 minutes. Not commit charge: its limit is RAM plus the page file's
         # current size, and an automatically managed page file grows when commit
         # nears it, so commit read 93% of a limit that kept moving while 70% of
         # RAM was in use (the WSL VM commits its whole .wslconfig memory).
         "Memory": ((f'1 - max by ({by}) (avg_over_time(windows_memory_available_bytes[15m]))'
-                   f' / max by ({by}) (windows_memory_physical_total_bytes)'), 0.90, 0.97, False),
-        "Disk latency": (latency, 0.05, 0.2, False),
+                    f' / max by ({by}) (windows_memory_physical_total_bytes)'), 0.90, 0.97, False, windows),
+        "Disk latency": (latency, 0.05, 0.2, False, windows),
         "Disk space": (f'min by ({by}) (windows_logical_disk_free_bytes{{{volumes}}} / windows_logical_disk_size_bytes)',
-                       0.10, 0.05, True),
+                       0.10, 0.05, True, windows),
+        # The VM's processors (its .wslconfig limit, fewer than the host's).
+        "WSL CPU": (on_host(f'max by (k8s_cluster) (1 - avg by (k8s_cluster, instance)'
+                            f' (rate(node_cpu_seconds_total{{mode="idle",{own}}}[15m])))'), 0.85, 0.95, False, vm),
+        # Page cache counts as available, as on the host.
+        "WSL memory": (on_host(f'max by (k8s_cluster) (1 - avg_over_time(node_memory_MemAvailable_bytes{{{own}}}[15m])'
+                               f' / node_memory_MemTotal_bytes{{{own}}})'), 0.90, 0.97, False, vm),
+        # The VM's ext4 disk (the nodes' /var): its own size limit. The Windows
+        # volume holding its VHDX usually fills first, and is Disk space above.
+        "WSL disk space": (on_host(f'min by (k8s_cluster) (node_filesystem_avail_bytes{{{var}}}'
+                                   f' / node_filesystem_size_bytes{{{var}}})'), 0.10, 0.05, True, vm),
+        # Share of time every runnable task stalled on I/O at once (PSI full): slow
+        # disk as the pods feel it. Under 1% in the week to 2026-11-08.
+        "WSL I/O stall": (on_host(f'max by (k8s_cluster) (rate(node_pressure_io_stalled_seconds_total{{{own}}}[15m]))'),
+                          0.10, 0.25, False, vm),
     }
     return {
         # The measured value per resource (ratios, but seconds for disk latency).
@@ -118,7 +145,7 @@ def host_records():
         "homelab:host_state": " or ".join(
             f'label_replace(({bands(f"homelab:host_usage{{resource=\"{name}\"}}", degraded, failed, higher)})'
             f' or on ({by}) (0 * {expected}), "resource", "{name}", "", "")'
-            for name, (_, degraded, failed, higher) in values.items()),
+            for name, (_, degraded, failed, higher, expected) in values.items()),
     }
 
 
@@ -721,8 +748,11 @@ def host_fixtures():
     def series(name, labels, values):
         return {"series": f'{name}{{k8s_cluster="one",instance="one",{labels}}}', "values": values}
 
+    def node(name, labels, values, node="n1"):
+        return {"series": f'{name}{{k8s_cluster="one",instance="{node}",{labels}}}', "values": values}
+
     return [
-        {"name": "host states: half-busy CPU, RAM 93% in use, slow and nearly full disk, a host gone", "interval": "1m",
+        {"name": "host states: half-busy CPU, RAM 93% in use, slow and nearly full disk, a host gone; its WSL VM short of memory and stalled on I/O", "interval": "1m",
          "input_series": [
              {"series": 'up{job="windows-exporter",k8s_cluster="one",instance="one"}', "values": "1+0x30"},
              # Two cores, each idle half of every second: 50% busy.
@@ -748,23 +778,41 @@ def host_fixtures():
              series("windows_logical_disk_size_bytes", 'volume="HarddiskVolume1"', "100+0x30"),
              # The other host's exporter is down: nothing to judge, so Unknown.
              {"series": 'up{job="windows-exporter",k8s_cluster="two",instance="two"}', "values": "0+0x30"},
+             # This site's WSL VM, read from two nodes (the same kernel): one core
+             # idle three quarters of the time (25% busy), 95% of memory in use,
+             # half the disk free, and everything stalled on I/O 30% of the time.
+             node("up", 'job="node-exporter"', "1+0x30"),
+             node("up", 'job="node-exporter"', "1+0x30", "n2"),
+             node("node_cpu_seconds_total", 'mode="idle",cpu="0"', "0+45x30"),
+             node("node_cpu_seconds_total", 'mode="idle",cpu="0"', "0+45x30", "n2"),
+             node("node_memory_MemAvailable_bytes", "", "5+0x30"),
+             node("node_memory_MemTotal_bytes", "", "100+0x30"),
+             node("node_filesystem_avail_bytes", 'mountpoint="/var"', "50+0x30"),
+             node("node_filesystem_size_bytes", 'mountpoint="/var"', "100+0x30"),
+             node("node_pressure_io_stalled_seconds_total", "", "0+18x30"),
          ], "promql_expr_test": [
              {"expr": "homelab:host_state", "eval_time": "20m", "exp_samples": [
                  state("one", "CPU", 1), state("one", "Memory", 2), state("one", "Disk latency", 2),
                  state("one", "Disk space", 3),
+                 state("one", "WSL CPU", 1), state("one", "WSL memory", 2), state("one", "WSL disk space", 1),
+                 state("one", "WSL I/O stall", 3),
                  state("two", "CPU", 0), state("two", "Memory", 0), state("two", "Disk latency", 0),
                  state("two", "Disk space", 0)]},
          ]},
-        {"name": "host states: an idle disk isn't a slow one", "interval": "1m",
+        {"name": "host states: an idle disk isn't a slow one; a VM whose node-exporters are down is Unknown", "interval": "1m",
          "input_series": [
              {"series": 'up{job="windows-exporter",k8s_cluster="one",instance="one"}', "values": "1+0x30"},
              # A few slow reads a minute: under 1 operation a second, so not judged.
              series("windows_logical_disk_reads_total", 'volume="D:"', "0+3x30"),
              series("windows_logical_disk_writes_total", 'volume="D:"', "0+0x30"),
              series("windows_logical_disk_read_write_latency_seconds_total", 'volume="D:"', "0+3x30"),
+             node("up", 'job="node-exporter"', "0+0x30"),
          ], "promql_expr_test": [
              {"expr": 'homelab:host_state{resource="Disk latency"}', "eval_time": "20m", "exp_samples": [
                  state("one", "Disk latency", 1)]},
+             {"expr": 'homelab:host_state{resource=~"WSL.*"}', "eval_time": "20m", "exp_samples": [
+                 state("one", "WSL CPU", 0), state("one", "WSL memory", 0), state("one", "WSL disk space", 0),
+                 state("one", "WSL I/O stall", 0)]},
          ]},
     ]
 

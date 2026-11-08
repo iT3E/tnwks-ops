@@ -202,85 +202,6 @@
         "kind": "Panel",
         "spec": {
           "id": 4,
-          "title": "WSL VM CPU busy",
-          "links": [
-            {
-              "title": "Runbook",
-              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-              "targetBlank": true
-            }
-          ],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "spec": {
-                        "expr": "max by (k8s_cluster) (1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
-                        "instant": true,
-                        "legendFormat": "{{k8s_cluster}}",
-                        "range": false
-                      },
-                      "datasource": {
-                        "name": "${datasource}"
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "stat",
-            "version": "",
-            "spec": {
-              "options": {
-                "graphMode": "area",
-                "colorMode": "value",
-                "justifyMode": "auto",
-                "textMode": "auto",
-                "wideLayout": true,
-                "showPercentChange": false,
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "values": false
-                },
-                "percentChangeColorMode": "standard",
-                "orientation": "auto"
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "unit": "percentunit",
-                  "color": {
-                    "mode": "fixed",
-                    "fixedColor": "text"
-                  },
-                  "noValue": "Unknown — missing evidence"
-                },
-                "overrides": []
-              }
-            }
-          },
-          "description": "Share of the WSL VM's processors (its .wslconfig limit, fewer than the host's) doing work, from the cluster nodes on this host. Near 100% while the host still has room, the VM's limit is the ceiling.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
-        }
-      },
-      "panel-4": {
-        "kind": "Panel",
-        "spec": {
-          "id": 5,
           "title": "CPU by mode",
           "links": [
             {
@@ -357,10 +278,10 @@
           "description": "Busy time split by mode. The WSL VM's work is counted as privileged time here (measured 2026-11-07: about 2.5 busy VM cores inside 3.5 privileged host cores), so privileged far above user is the cluster, not Windows apps.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-5": {
+      "panel-4": {
         "kind": "Panel",
         "spec": {
-          "id": 6,
+          "id": 5,
           "title": "Busiest cores",
           "links": [
             {
@@ -437,10 +358,10 @@
           "description": "The five busiest logical processors. One core pinned near 100% while the total looks calm is a single-threaded bottleneck.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-6": {
+      "panel-5": {
         "kind": "Panel",
         "spec": {
-          "id": 7,
+          "id": 6,
           "title": "Run queue",
           "links": [
             {
@@ -516,121 +437,10 @@
           "description": "Threads waiting for a processor, sampled. Short spikes are normal; a raised floor is saturation.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-7": {
+      "panel-6": {
         "kind": "Panel",
         "spec": {
-          "id": 8,
-          "title": "WSL CPU pressure",
-          "links": [
-            {
-              "title": "Runbook",
-              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-              "targetBlank": true
-            }
-          ],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "spec": {
-                        "expr": "max by (k8s_cluster) (rate(node_pressure_cpu_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
-                        "instant": false,
-                        "legendFormat": "{{k8s_cluster}}",
-                        "range": true
-                      },
-                      "datasource": {
-                        "name": "${datasource}"
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "timeseries",
-            "version": "",
-            "spec": {
-              "options": {
-                "legend": {
-                  "displayMode": "table",
-                  "placement": "bottom",
-                  "showLegend": true,
-                  "calcs": [
-                    "lastNotNull",
-                    "max"
-                  ]
-                },
-                "tooltip": {
-                  "mode": "multi",
-                  "sort": "desc"
-                }
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "unit": "percentunit",
-                  "noValue": "Unknown — missing evidence",
-                  "custom": {
-                    "lineWidth": 1,
-                    "showPoints": "never",
-                    "axisSoftMin": 0,
-                    "axisSoftMax": 1
-                  }
-                },
-                "overrides": [
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "homelab-wsl"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "mode": "fixed",
-                          "fixedColor": "#3d71d9"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "homelab-wsl-02"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "mode": "fixed",
-                          "fixedColor": "#a352cc"
-                        }
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-          },
-          "description": "Share of time at least one task in the WSL VM waited for a CPU (Linux PSI, read from the cluster nodes on this host). Rising pressure with a calm Windows CPU means WSL's processor limit, not the host, is the ceiling.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
-        }
-      },
-      "panel-8": {
-        "kind": "Panel",
-        "spec": {
-          "id": 9,
+          "id": 7,
           "title": "Memory in use",
           "links": [
             {
@@ -706,10 +516,10 @@
           "description": "Physical memory not available to new work. Standby cache counts as available, so this is what the host can still give out.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-9": {
+      "panel-7": {
         "kind": "Panel",
         "spec": {
-          "id": 10,
+          "id": 8,
           "title": "Commit charge",
           "links": [
             {
@@ -785,10 +595,10 @@
           "description": "Memory promised to processes against RAM plus the page file's current size. Usually high here: the WSL VM commits its whole .wslconfig memory however little it touches. Near 100% an automatically managed page file grows and the limit moves with it, so this isn't graded; trouble is commit pinned at the limit (the page file can't keep up or is at its cap), when allocations fail.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-10": {
+      "panel-8": {
         "kind": "Panel",
         "spec": {
-          "id": 11,
+          "id": 9,
           "title": "Paging to disk",
           "links": [
             {
@@ -864,10 +674,10 @@
           "description": "Pages read from or written to the page file per second. A steady stream is memory saturation: work waits on the disk instead of RAM.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-11": {
+      "panel-9": {
         "kind": "Panel",
         "spec": {
-          "id": 12,
+          "id": 10,
           "title": "Memory and commit",
           "links": [
             {
@@ -944,10 +754,10 @@
           "description": "Physical memory in use and commit charge over time. The gap between them is memory promised but untouched, most of it the WSL VM's reservation; a step down in commit charge is the page file growing.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-12": {
+      "panel-10": {
         "kind": "Panel",
         "spec": {
-          "id": 13,
+          "id": 11,
           "title": "Page file traffic",
           "links": [
             {
@@ -1023,121 +833,10 @@
           "description": "Paging over time: line it up with slow disk or a busy CPU to see which came first.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-13": {
+      "panel-11": {
         "kind": "Panel",
         "spec": {
-          "id": 14,
-          "title": "WSL memory pressure",
-          "links": [
-            {
-              "title": "Runbook",
-              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-              "targetBlank": true
-            }
-          ],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "spec": {
-                        "expr": "max by (k8s_cluster) (rate(node_pressure_memory_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
-                        "instant": false,
-                        "legendFormat": "{{k8s_cluster}}",
-                        "range": true
-                      },
-                      "datasource": {
-                        "name": "${datasource}"
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "timeseries",
-            "version": "",
-            "spec": {
-              "options": {
-                "legend": {
-                  "displayMode": "table",
-                  "placement": "bottom",
-                  "showLegend": true,
-                  "calcs": [
-                    "lastNotNull",
-                    "max"
-                  ]
-                },
-                "tooltip": {
-                  "mode": "multi",
-                  "sort": "desc"
-                }
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "unit": "percentunit",
-                  "noValue": "Unknown — missing evidence",
-                  "custom": {
-                    "lineWidth": 1,
-                    "showPoints": "never",
-                    "axisSoftMin": 0,
-                    "axisSoftMax": 1
-                  }
-                },
-                "overrides": [
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "homelab-wsl"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "mode": "fixed",
-                          "fixedColor": "#3d71d9"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "homelab-wsl-02"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "mode": "fixed",
-                          "fixedColor": "#a352cc"
-                        }
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-          },
-          "description": "Share of time at least one task in the WSL VM stalled reclaiming memory (Linux PSI). Above a few percent the VM's memory limit is too tight for its pods.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
-        }
-      },
-      "panel-14": {
-        "kind": "Panel",
-        "spec": {
-          "id": 15,
+          "id": 12,
           "title": "Slowest volume latency",
           "links": [
             {
@@ -1213,10 +912,10 @@
           "description": "Average time per disk operation on the worst volume. An SSD normally answers in under 5 ms; sustained above 20 ms the disk is what's slow.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-15": {
+      "panel-12": {
         "kind": "Panel",
         "spec": {
-          "id": 16,
+          "id": 13,
           "title": "Busiest volume",
           "links": [
             {
@@ -1292,10 +991,10 @@
           "description": "Share of time the busiest volume had work in flight. An SSD serves many requests at once, so read it with latency and queue: busy alone isn't saturation.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-16": {
+      "panel-13": {
         "kind": "Panel",
         "spec": {
-          "id": 17,
+          "id": 14,
           "title": "Queued disk requests",
           "links": [
             {
@@ -1371,10 +1070,10 @@
           "description": "Requests waiting for the disk, averaged over 5 minutes. Sustained above 2 per disk, with latency rising, is disk saturation.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-17": {
+      "panel-14": {
         "kind": "Panel",
         "spec": {
-          "id": 18,
+          "id": 15,
           "title": "Read latency by volume",
           "links": [
             {
@@ -1450,10 +1149,10 @@
           "description": "Average time per read. Spikes that line up with WSL I/O pressure are the slow disk the pods feel.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-18": {
+      "panel-15": {
         "kind": "Panel",
         "spec": {
-          "id": 19,
+          "id": 16,
           "title": "Write latency by volume",
           "links": [
             {
@@ -1529,10 +1228,10 @@
           "description": "Average time per write. Cached writes are fast until the cache fills; a step up under load is the disk catching up.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-19": {
+      "panel-16": {
         "kind": "Panel",
         "spec": {
-          "id": 20,
+          "id": 17,
           "title": "Queue depth by volume",
           "links": [
             {
@@ -1608,10 +1307,10 @@
           "description": "Requests waiting per volume, sampled.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-20": {
+      "panel-17": {
         "kind": "Panel",
         "spec": {
-          "id": 21,
+          "id": 18,
           "title": "Throughput by volume",
           "links": [
             {
@@ -1687,121 +1386,10 @@
           "description": "Bytes read and written per second. High throughput with low latency is a busy, healthy disk.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-21": {
+      "panel-18": {
         "kind": "Panel",
         "spec": {
-          "id": 22,
-          "title": "WSL I/O pressure",
-          "links": [
-            {
-              "title": "Runbook",
-              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-              "targetBlank": true
-            }
-          ],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "spec": {
-                        "expr": "max by (k8s_cluster) (rate(node_pressure_io_stalled_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
-                        "instant": false,
-                        "legendFormat": "{{k8s_cluster}}",
-                        "range": true
-                      },
-                      "datasource": {
-                        "name": "${datasource}"
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "timeseries",
-            "version": "",
-            "spec": {
-              "options": {
-                "legend": {
-                  "displayMode": "table",
-                  "placement": "bottom",
-                  "showLegend": true,
-                  "calcs": [
-                    "lastNotNull",
-                    "max"
-                  ]
-                },
-                "tooltip": {
-                  "mode": "multi",
-                  "sort": "desc"
-                }
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "unit": "percentunit",
-                  "noValue": "Unknown — missing evidence",
-                  "custom": {
-                    "lineWidth": 1,
-                    "showPoints": "never",
-                    "axisSoftMin": 0,
-                    "axisSoftMax": 1
-                  }
-                },
-                "overrides": [
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "homelab-wsl"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "mode": "fixed",
-                          "fixedColor": "#3d71d9"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "homelab-wsl-02"
-                    },
-                    "properties": [
-                      {
-                        "id": "color",
-                        "value": {
-                          "mode": "fixed",
-                          "fixedColor": "#a352cc"
-                        }
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-          },
-          "description": "Share of time every runnable task in the WSL VM stalled on I/O at once (Linux PSI, full). This is how slow disk feels from inside the cluster: all nodes share one virtual disk on the host.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
-        }
-      },
-      "panel-22": {
-        "kind": "Panel",
-        "spec": {
-          "id": 23,
+          "id": 19,
           "title": "Free space by volume",
           "links": [
             {
@@ -1993,10 +1581,738 @@
           "description": "Free share of each volume. Below 10% Windows and the VHDX that holds WSL's disk start to slow down; below 5% writes fail.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
+      "panel-19": {
+        "kind": "Panel",
+        "spec": {
+          "id": 20,
+          "title": "VM CPU busy",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster) (1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Share of the WSL VM's processors (its .wslconfig limit, fewer than the host's) doing work, from the cluster nodes on this host. Near 100% while the host still has room, the VM's limit is the ceiling.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-20": {
+        "kind": "Panel",
+        "spec": {
+          "id": 21,
+          "title": "VM memory in use",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster) (1 - avg_over_time(node_memory_MemAvailable_bytes{k8s_cluster=~\"$cluster\"}[5m]) / node_memory_MemTotal_bytes{k8s_cluster=~\"$cluster\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Share of the VM's memory (its .wslconfig limit) not available to new work; page cache counts as available. Windows sees the VM commit its whole limit whatever this says.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-21": {
+        "kind": "Panel",
+        "spec": {
+          "id": 22,
+          "title": "VM swap used",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster) (1 - node_memory_SwapFree_bytes{k8s_cluster=~\"$cluster\"} / (node_memory_SwapTotal_bytes{k8s_cluster=~\"$cluster\"} > 0)) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Share of the VM's swap (.wslconfig swap=) in use. A little is normal; a share that keeps climbing with memory pressure is the VM short of memory.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-22": {
+        "kind": "Panel",
+        "spec": {
+          "id": 23,
+          "title": "VM disk used",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster) (1 - node_filesystem_avail_bytes{k8s_cluster=~\"$cluster\",mountpoint=\"/var\"} / node_filesystem_size_bytes{k8s_cluster=~\"$cluster\",mountpoint=\"/var\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Share of the VM's ext4 disk (the nodes' /var, where pods' volumes live) in use, against its virtual size. The Windows volume holding the VHDX usually fills first: see Free space by volume.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
       "panel-23": {
         "kind": "Panel",
         "spec": {
           "id": 24,
+          "title": "VM memory",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (measure) (label_replace(max by (k8s_cluster) (node_memory_MemTotal_bytes{k8s_cluster=~\"$cluster\"} - node_memory_MemAvailable_bytes{k8s_cluster=~\"$cluster\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"In use\", \"\", \"\") or label_replace(max by (k8s_cluster) (node_memory_Cached_bytes{k8s_cluster=~\"$cluster\"} + node_memory_Buffers_bytes{k8s_cluster=~\"$cluster\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"Page cache\", \"\", \"\") or label_replace(max by (k8s_cluster) (node_memory_SwapTotal_bytes{k8s_cluster=~\"$cluster\"} - node_memory_SwapFree_bytes{k8s_cluster=~\"$cluster\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"Swap used\", \"\", \"\") or label_replace(max by (k8s_cluster) (node_memory_MemTotal_bytes{k8s_cluster=~\"$cluster\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"Limit\", \"\", \"\"))",
+                        "instant": false,
+                        "legendFormat": "{{measure}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Memory in use, page cache (given back on demand) and swap in use, against the VM's limit.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-24": {
+        "kind": "Panel",
+        "spec": {
+          "id": 25,
+          "title": "VM CPU pressure",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster) (rate(node_pressure_cpu_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "homelab-wsl"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#3d71d9"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "homelab-wsl-02"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#a352cc"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Share of time at least one task in the WSL VM waited for a CPU (Linux PSI, read from the cluster nodes on this host). Rising pressure with a calm Windows CPU means WSL's processor limit, not the host, is the ceiling.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-25": {
+        "kind": "Panel",
+        "spec": {
+          "id": 26,
+          "title": "VM memory pressure",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster) (rate(node_pressure_memory_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "homelab-wsl"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#3d71d9"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "homelab-wsl-02"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#a352cc"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Share of time at least one task in the WSL VM stalled reclaiming memory (Linux PSI). Above a few percent the VM's memory limit is too tight for its pods.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-26": {
+        "kind": "Panel",
+        "spec": {
+          "id": 27,
+          "title": "VM I/O pressure",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster) (rate(node_pressure_io_stalled_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "homelab-wsl"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#3d71d9"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "homelab-wsl-02"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#a352cc"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Share of time every runnable task in the WSL VM stalled on I/O at once (Linux PSI, full). This is how slow disk feels from inside the cluster: all nodes share one virtual disk on the host.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-27": {
+        "kind": "Panel",
+        "spec": {
+          "id": 28,
           "title": "Busiest adapter",
           "links": [
             {
@@ -2072,10 +2388,10 @@
           "description": "Traffic on the busiest adapter against its link speed. Near 100% the link is full; on Wi-Fi the link speed itself moves with the signal.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-24": {
+      "panel-28": {
         "kind": "Panel",
         "spec": {
-          "id": 25,
+          "id": 29,
           "title": "Received by adapter",
           "links": [
             {
@@ -2151,10 +2467,10 @@
           "description": "Bytes received per second on each adapter in use.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-25": {
+      "panel-29": {
         "kind": "Panel",
         "spec": {
-          "id": 26,
+          "id": 30,
           "title": "Sent by adapter",
           "links": [
             {
@@ -2230,10 +2546,10 @@
           "description": "Bytes sent per second on each adapter in use.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-26": {
+      "panel-30": {
         "kind": "Panel",
         "spec": {
-          "id": 27,
+          "id": 31,
           "title": "Errors and discards by adapter",
           "links": [
             {
@@ -2308,10 +2624,10 @@
           "description": "Packets dropped or damaged per second. Errors are the link (cable, radio, driver); discards are a full buffer. None is the normal state.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-27": {
+      "panel-31": {
         "kind": "Panel",
         "spec": {
-          "id": 28,
+          "id": 32,
           "title": "Link speed by adapter",
           "links": [
             {
@@ -2527,15 +2843,6 @@
                                     "name": "panel-2"
                                   }
                                 }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-3"
-                                  }
-                                }
                               }
                             ],
                             "maxColumnCount": 6,
@@ -2560,6 +2867,15 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
+                                    "name": "panel-3"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
                                     "name": "panel-4"
                                   }
                                 }
@@ -2570,24 +2886,6 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-5"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-6"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-7"
                                   }
                                 }
                               }
@@ -2654,25 +2952,25 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
+                                    "name": "panel-6"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-7"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
                                     "name": "panel-8"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-9"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-10"
                                   }
                                 }
                               }
@@ -2699,7 +2997,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-11"
+                                    "name": "panel-9"
                                   }
                                 }
                               },
@@ -2708,16 +3006,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-12"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-13"
+                                    "name": "panel-10"
                                   }
                                 }
                               }
@@ -2757,7 +3046,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-14"
+                                    "name": "panel-11"
                                   }
                                 }
                               },
@@ -2766,7 +3055,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-15"
+                                    "name": "panel-12"
                                   }
                                 }
                               },
@@ -2775,7 +3064,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-16"
+                                    "name": "panel-13"
                                   }
                                 }
                               }
@@ -2802,43 +3091,34 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
+                                    "name": "panel-14"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-15"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-16"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
                                     "name": "panel-17"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-18"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-19"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-20"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-21"
                                   }
                                 }
                               }
@@ -2865,7 +3145,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-22"
+                                    "name": "panel-18"
                                   }
                                 }
                               }
@@ -2905,7 +3185,34 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-23"
+                                    "name": "panel-19"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-20"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-21"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-22"
                                   }
                                 }
                               }
@@ -2927,6 +3234,15 @@
                             "columnWidthMode": "narrow",
                             "rowHeightMode": "standard",
                             "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-23"
+                                  }
+                                }
+                              },
                               {
                                 "kind": "AutoGridLayoutItem",
                                 "spec": {
@@ -2962,6 +3278,46 @@
                         "title": "Trends",
                         "collapse": false
                       }
+                    }
+                  ]
+                }
+              },
+              "title": "WSL VM"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "RowsLayout",
+                "spec": {
+                  "rows": [
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-27"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 6,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
+                      }
                     },
                     {
                       "kind": "RowsLayoutRow",
@@ -2977,7 +3333,52 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-27"
+                                    "name": "panel-28"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-29"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-30"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Trends",
+                        "collapse": false
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-31"
                                   }
                                 }
                               }

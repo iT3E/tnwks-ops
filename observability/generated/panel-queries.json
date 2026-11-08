@@ -1330,6 +1330,22 @@
   {
     "dashboard": "tnwks-hosts",
     "tab": "Physical resources",
+    "title": "WSL VM CPU busy",
+    "expr": "max by (k8s_cluster, instance) ((max by (k8s_cluster) (1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval])))) * on (k8s_cluster) group_left (instance) (0 * max by (k8s_cluster, instance) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\"}) + 1))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Physical resources",
+    "title": "WSL VM memory in use",
+    "expr": "max by (k8s_cluster, instance) ((max by (k8s_cluster) (1 - node_memory_MemAvailable_bytes{k8s_cluster=~\"$cluster\"} / node_memory_MemTotal_bytes{k8s_cluster=~\"$cluster\"})) * on (k8s_cluster) group_left (instance) (0 * max by (k8s_cluster, instance) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\"}) + 1))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Physical resources",
     "title": "Windows disk free",
     "expr": "windows_logical_disk_free_bytes{k8s_cluster=~\"$cluster\",volume=~\"C:|E:\"}",
     "unit": "bytes",
@@ -1378,14 +1394,6 @@
   {
     "dashboard": "tnwks-host",
     "tab": "CPU",
-    "title": "WSL VM CPU busy",
-    "expr": "max by (k8s_cluster) (1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
-    "unit": "percentunit",
-    "kiosk": false
-  },
-  {
-    "dashboard": "tnwks-host",
-    "tab": "CPU",
     "title": "CPU by mode",
     "expr": "sum by (mode) (rate(windows_cpu_time_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",mode!=\"idle\"}[$__rate_interval])) / scalar(max by (instance) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}))",
     "unit": "percentunit",
@@ -1405,14 +1413,6 @@
     "title": "Run queue",
     "expr": "max by (instance) (windows_system_processor_queue_length{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
     "unit": "short",
-    "kiosk": false
-  },
-  {
-    "dashboard": "tnwks-host",
-    "tab": "CPU",
-    "title": "WSL CPU pressure",
-    "expr": "max by (k8s_cluster) (rate(node_pressure_cpu_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
-    "unit": "percentunit",
     "kiosk": false
   },
   {
@@ -1453,14 +1453,6 @@
     "title": "Page file traffic",
     "expr": "sum by (instance) (rate(windows_memory_swap_page_operations_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]))",
     "unit": "ops",
-    "kiosk": false
-  },
-  {
-    "dashboard": "tnwks-host",
-    "tab": "Memory",
-    "title": "WSL memory pressure",
-    "expr": "max by (k8s_cluster) (rate(node_pressure_memory_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
-    "unit": "percentunit",
     "kiosk": false
   },
   {
@@ -1522,16 +1514,72 @@
   {
     "dashboard": "tnwks-host",
     "tab": "Disk",
-    "title": "WSL I/O pressure",
-    "expr": "max by (k8s_cluster) (rate(node_pressure_io_stalled_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "title": "Free space by volume",
+    "expr": "max by (volume) (windows_logical_disk_free_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"} / windows_logical_disk_size_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"})",
     "unit": "percentunit",
     "kiosk": false
   },
   {
     "dashboard": "tnwks-host",
-    "tab": "Disk",
-    "title": "Free space by volume",
-    "expr": "max by (volume) (windows_logical_disk_free_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"} / windows_logical_disk_size_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"})",
+    "tab": "WSL VM",
+    "title": "VM CPU busy",
+    "expr": "max by (k8s_cluster) (1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "WSL VM",
+    "title": "VM memory in use",
+    "expr": "max by (k8s_cluster) (1 - avg_over_time(node_memory_MemAvailable_bytes{k8s_cluster=~\"$cluster\"}[5m]) / node_memory_MemTotal_bytes{k8s_cluster=~\"$cluster\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "WSL VM",
+    "title": "VM swap used",
+    "expr": "max by (k8s_cluster) (1 - node_memory_SwapFree_bytes{k8s_cluster=~\"$cluster\"} / (node_memory_SwapTotal_bytes{k8s_cluster=~\"$cluster\"} > 0)) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "WSL VM",
+    "title": "VM disk used",
+    "expr": "max by (k8s_cluster) (1 - node_filesystem_avail_bytes{k8s_cluster=~\"$cluster\",mountpoint=\"/var\"} / node_filesystem_size_bytes{k8s_cluster=~\"$cluster\",mountpoint=\"/var\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "WSL VM",
+    "title": "VM memory",
+    "expr": "max by (measure) (label_replace(max by (k8s_cluster) (node_memory_MemTotal_bytes{k8s_cluster=~\"$cluster\"} - node_memory_MemAvailable_bytes{k8s_cluster=~\"$cluster\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"In use\", \"\", \"\") or label_replace(max by (k8s_cluster) (node_memory_Cached_bytes{k8s_cluster=~\"$cluster\"} + node_memory_Buffers_bytes{k8s_cluster=~\"$cluster\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"Page cache\", \"\", \"\") or label_replace(max by (k8s_cluster) (node_memory_SwapTotal_bytes{k8s_cluster=~\"$cluster\"} - node_memory_SwapFree_bytes{k8s_cluster=~\"$cluster\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"Swap used\", \"\", \"\") or label_replace(max by (k8s_cluster) (node_memory_MemTotal_bytes{k8s_cluster=~\"$cluster\"}) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"Limit\", \"\", \"\"))",
+    "unit": "bytes",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "WSL VM",
+    "title": "VM CPU pressure",
+    "expr": "max by (k8s_cluster) (rate(node_pressure_cpu_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "WSL VM",
+    "title": "VM memory pressure",
+    "expr": "max by (k8s_cluster) (rate(node_pressure_memory_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "WSL VM",
+    "title": "VM I/O pressure",
+    "expr": "max by (k8s_cluster) (rate(node_pressure_io_stalled_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
     "unit": "percentunit",
     "kiosk": false
   },
