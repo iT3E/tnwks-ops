@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.67.0 - 2026-11-08
+
+### Changed
+
+* CI: CodeQL moves to an advanced-setup workflow that scans Python and the workflows on changes that touch them, and weekly on main, instead of seven languages on every PR and push.
+
 ## v2.66.1 - 2026-11-08
 
 ### Fixed
