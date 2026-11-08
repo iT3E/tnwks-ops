@@ -7,7 +7,7 @@
 # toolchain produces coral_detector_shim_sha256 in the role defaults. Moving
 # to another toolchain (a new snapshot or Ubuntu release) changes the DLL:
 # re-pin that hash in the same PR and verify the detector after the apply.
-FROM docker.io/library/ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
+FROM docker.io/library/ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c
 
 # ca-certificates comes from the live archive (snapshot.ubuntu.com is
 # https-only); it doesn't take part in the build.
