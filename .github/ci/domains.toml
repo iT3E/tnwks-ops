@@ -116,6 +116,7 @@ paths = [
   "infrastructure/terraform/environments/prod/aws/**",
   "infrastructure/terraform/modules/aws/**",
   ".github/actions/tfc-speculative-plan/**",
+  ".github/actions/tfc-apply/**",
   ".github/workflows/terraform.yaml",
 ]
 

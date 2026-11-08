@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Terraform deploys: the Cloudflare, UniFi, MikroTik and Healthchecks applies no longer fail at job setup on the self-hosted runners. The Terraform Cloud apply steps moved into a local action, so the job no longer pulls their Docker image on runners without Docker.'
+time: 2026-11-08T08:27:50.564190445-08:00

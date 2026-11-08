@@ -1,0 +1,38 @@
+---
+name: "TFC apply"
+description: >-
+  Upload infrastructure/terraform, create a run in Terraform Cloud, and apply
+  it if it has changes. Expects TF_API_TOKEN and TF_CLOUD_ORGANIZATION in the
+  environment. The hashicorp actions are Docker actions; wrapping them in a
+  local action keeps them out of the job's setup, which pulls every Docker
+  action in a job (skipped steps included) and fails on the self-hosted
+  runners, which have no Docker daemon.
+
+inputs:
+  workspace:
+    description: "Terraform Cloud workspace name"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Upload configuration
+      id: upload
+      uses: hashicorp/tfc-workflows-github/actions/upload-configuration@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
+      with:
+        workspace: ${{ inputs.workspace }}
+        directory: "infrastructure/terraform"
+
+    - name: Create the apply run
+      id: run
+      uses: hashicorp/tfc-workflows-github/actions/create-run@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
+      with:
+        workspace: ${{ inputs.workspace }}
+        configuration_version: ${{ steps.upload.outputs.configuration_version_id }}
+
+    - name: Apply
+      if: fromJSON(steps.run.outputs.payload).data.attributes.actions.IsConfirmable
+      uses: hashicorp/tfc-workflows-github/actions/apply-run@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
+      with:
+        run: ${{ steps.run.outputs.run_id }}
+        comment: "Apply Run from GitHub Actions CI ${{ github.sha }}"
