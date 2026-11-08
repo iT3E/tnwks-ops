@@ -1,0 +1,3 @@
+kind: Changed
+body: 'CI: one Terraform action (.github/actions/terraform) replaces the runner, MikroTik and UniFi copies; endpoint overrides come in as tf-vars, and every root''s plan summary lists moves.'
+time: 2026-11-07T22:13:35.283961515-08:00

@@ -13,7 +13,7 @@ on:
       - "infrastructure/terraform/environments/prod/mikrotik/**"
       - "infrastructure/terraform/modules/mikrotik/**"
       - "infrastructure/mikrotik/**"
-      - ".github/actions/mikrotik-terraform/**"
+      - ".github/actions/terraform/**"
       - ".github/workflows/mikrotik-*.yaml"
   workflow_dispatch:
 
@@ -41,7 +41,10 @@ jobs:
           persist-credentials: false
 
       - name: Plan and apply
-        uses: ./.github/actions/mikrotik-terraform
+        uses: ./.github/actions/terraform
         with:
+          root: prod/mikrotik
+          # The wireproxy sidecar's end of the wg03 tunnel.
+          tf-vars: TF_VAR_routeros_url=https://127.0.0.1:8443
           mode: apply
           tf-api-token: ${{ secrets.TF_API_TOKEN }}

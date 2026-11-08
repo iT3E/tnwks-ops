@@ -1,21 +1,36 @@
 ---
-name: MikroTik Terraform
+name: Terraform
 description: >-
-  Plan (and optionally apply) infrastructure/terraform/environments/prod/mikrotik
-  on the tnwks-ops-runner scale set. This repo is public, so job logs are too:
-  the plan body is never printed, only counts and the addresses that change,
-  and on failure only Terraform's error blocks.
+  Plan (and optionally apply) one root under infrastructure/terraform/environments
+  with local execution: state in the root's TFC workspace, secrets from its
+  SOPS file via the runner's CI age key. Used for every root except AWS, which
+  runs remotely in TFC (.github/actions/tfc-speculative-plan). This repo is
+  public, so job logs are too: the plan body is never printed, only counts and
+  the addresses that change, and on failure only Terraform's error blocks.
 inputs:
+  root:
+    description: "Root module path under infrastructure/terraform/environments, e.g. prod/cloudflare"
+    required: true
   mode:
     description: "plan or apply"
     required: true
   tf-api-token:
-    description: Terraform Cloud token (state for tnwks-mikrotik-prod)
+    description: Terraform Cloud token (state for the root's workspace)
     required: true
+  tf-vars:
+    description: >-
+      Extra input variables, one TF_VAR_<name>=<value> per line: endpoint
+      overrides that only hold on the runner (the wireproxy end of the wg03
+      tunnel, an in-cluster Service). Not for secrets.
+    required: false
+    default: ""
 outputs:
   summary:
     description: Markdown summary of the plan
     value: ${{ steps.plan.outputs.summary }}
+  changes:
+    description: "true if the plan has changes"
+    value: ${{ steps.plan.outputs.changes }}
 runs:
   using: composite
   steps:
@@ -24,9 +39,25 @@ runs:
         terraform_version: v1.17.1
         terraform_wrapper: false
 
+    - name: Variables
+      shell: bash
+      env:
+        TF_VARS: ${{ inputs.tf-vars }}
+      run: |
+        # Checked here, read by each step below (no GITHUB_ENV).
+        : > "$RUNNER_TEMP/tf-vars"
+        while IFS= read -r line; do
+          [ -z "$line" ] && continue
+          if [[ ! "$line" =~ ^TF_VAR_[A-Za-z0-9_]+=.+$ ]]; then
+            echo "::error::tf-vars line is not TF_VAR_<name>=<value>: ${line%%=*}"
+            exit 1
+          fi
+          printf 'export %q\n' "$line" >> "$RUNNER_TEMP/tf-vars"
+        done <<< "$TF_VARS"
+
     - name: Init
       shell: bash
-      working-directory: infrastructure/terraform/environments/prod/mikrotik
+      working-directory: infrastructure/terraform/environments/${{ inputs.root }}
       env:
         TF_TOKEN_app_terraform_io: ${{ inputs.tf-api-token }}
       run: |
@@ -36,13 +67,13 @@ runs:
     - name: Plan
       id: plan
       shell: bash
-      working-directory: infrastructure/terraform/environments/prod/mikrotik
+      working-directory: infrastructure/terraform/environments/${{ inputs.root }}
       env:
         TF_TOKEN_app_terraform_io: ${{ inputs.tf-api-token }}
-        # The wireproxy sidecar's end of the wg03 tunnel.
-        TF_VAR_routeros_url: https://127.0.0.1:8443
         TF_IN_AUTOMATION: "true"
       run: |
+        # shellcheck disable=SC1091
+        . "$RUNNER_TEMP/tf-vars"
         set +e
         terraform plan -input=false -no-color -lock-timeout=5m -detailed-exitcode \
           -out="$RUNNER_TEMP/tfplan" > "$RUNNER_TEMP/plan.log" 2>&1
@@ -52,13 +83,18 @@ runs:
           grep -E '^(│|Error)' "$RUNNER_TEMP/plan.log" || tail -5 "$RUNNER_TEMP/plan.log"
           exit 1
         fi
+        # Moves (moved blocks) are no-op changes with a previous_address; list
+        # them too, since a moves-only plan still needs an apply.
         terraform show -json "$RUNNER_TEMP/tfplan" | jq -r '
           [.resource_changes[]? | select(.change.actions != ["no-op"])] as $c
+          | [.resource_changes[]? | select(.previous_address != null and .previous_address != .address)] as $m
           | "**Plan:** \($c | map(select(.change.actions | index("create"))) | length) to add, "
             + "\($c | map(select(.change.actions == ["update"])) | length) to change, "
-            + "\($c | map(select(.change.actions | index("delete"))) | length) to destroy",
+            + "\($c | map(select(.change.actions | index("delete"))) | length) to destroy, "
+            + "\($m | length) to move",
             "",
-            ($c[] | "- `\(.change.actions | join("/"))` \(.address)")
+            ($c[] | "- `\(.change.actions | join("/"))` \(.address)"),
+            ($m[] | "- `move` \(.previous_address) -> \(.address)")
         ' > "$RUNNER_TEMP/summary.md"
         echo "changes=$([ "$rc" -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
         {
@@ -72,12 +108,13 @@ runs:
     - name: Apply
       if: inputs.mode == 'apply' && steps.plan.outputs.changes == 'true'
       shell: bash
-      working-directory: infrastructure/terraform/environments/prod/mikrotik
+      working-directory: infrastructure/terraform/environments/${{ inputs.root }}
       env:
         TF_TOKEN_app_terraform_io: ${{ inputs.tf-api-token }}
-        TF_VAR_routeros_url: https://127.0.0.1:8443
         TF_IN_AUTOMATION: "true"
       run: |
+        # shellcheck disable=SC1091
+        . "$RUNNER_TEMP/tf-vars"
         terraform apply -input=false -no-color -lock-timeout=5m "$RUNNER_TEMP/tfplan" \
           > "$RUNNER_TEMP/apply.log" 2>&1 || {
           grep -E '^(│|Error)' "$RUNNER_TEMP/apply.log" || tail -5 "$RUNNER_TEMP/apply.log"; exit 1; }
