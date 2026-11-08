@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import aiohttp
@@ -29,6 +30,8 @@ from .const import (
     MODE_PORTAL,
 )
 from .portal import AccountInfo, PacificPowerApiError, PacificPowerAuthError
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class CreditConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -100,10 +103,13 @@ class CreditConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_PASSWORD: user_input["credential"],
             }
             api = CreditClient(**self._credentials)
+            stage = "sign-in"
             try:
                 await api.async_start()
                 await api.async_login()
+                stage = "user profile"
                 user = await api.async_get_user_info()
+                stage = "account discovery"
                 accounts = await api.async_get_accounts(user.get("webUserId", ""))
                 # A statement belongs to an account, not each of its agreements.
                 self._accounts = list(
@@ -111,6 +117,7 @@ class CreditConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
                 if len(self._accounts) == 1:
                     account = self._accounts[0]
+                    stage = "statement lookup"
                     balance = await api.async_latest_balance(account)
                     return await self._finish(balance, self._portal_data(account))
                 if self._accounts:
@@ -118,8 +125,8 @@ class CreditConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "no_accounts"
             except PacificPowerAuthError:
                 errors["base"] = "invalid_auth"
-            except (PacificPowerApiError, aiohttp.ClientError, TimeoutError):
-                errors["base"] = "cannot_connect"
+            except (PacificPowerApiError, aiohttp.ClientError, TimeoutError) as err:
+                errors["base"] = self._connection_error(stage, err)
             except InvalidBill as err:
                 errors["base"] = self._bill_error(err)
             finally:
@@ -149,16 +156,19 @@ class CreditConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None and user_input.get("account") in options:
             account = self._accounts[int(user_input["account"])]
             api = CreditClient(**self._credentials)
+            stage = "sign-in"
             try:
                 await api.async_start()
                 await api.async_login()
+                stage = "user profile"
                 await api.async_get_user_info()
+                stage = "statement lookup"
                 balance = await api.async_latest_balance(account)
                 return await self._finish(balance, self._portal_data(account))
             except PacificPowerAuthError:
                 return await self.async_step_portal()
-            except (PacificPowerApiError, aiohttp.ClientError, TimeoutError):
-                errors["base"] = "cannot_connect"
+            except (PacificPowerApiError, aiohttp.ClientError, TimeoutError) as err:
+                errors["base"] = self._connection_error(stage, err)
             except InvalidBill as err:
                 errors["base"] = self._bill_error(err)
             finally:
@@ -176,6 +186,18 @@ class CreditConfigFlow(ConfigFlow, domain=DOMAIN):
             CONF_CUSTOMER_ID: account.customer_idn,
             CONF_ACCOUNT_SEQUENCE: account.account_sequence,
         }
+
+    @staticmethod
+    def _connection_error(stage: str, err: Exception) -> str:
+        # Our API exceptions contain fixed messages and endpoint/status only.
+        # HTTP-client exceptions can contain auth URLs, so log only their type.
+        detail = (
+            str(err) if isinstance(err, PacificPowerApiError) else type(err).__name__
+        )
+        _LOGGER.warning("Pacific Power setup failed during %s: %s", stage, detail)
+        return (
+            "statement_unavailable" if stage == "statement lookup" else "cannot_connect"
+        )
 
     @staticmethod
     def _bill_error(err: Exception) -> str:

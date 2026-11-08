@@ -13,6 +13,7 @@ from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import aiohttp
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -180,8 +181,8 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         self.client._api_call = AsyncMock(
             side_effect=[
                 {
-                    "getAccountDetailsResponseBody": {
-                        "account": {"currentStatementDate": "2032-11-12"}
+                    "getAccountInfoResponseBody": {
+                        "accountInfo": {"currentStatementDate": "2032-11-12"}
                     }
                 },
                 {
@@ -193,6 +194,20 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         )
         result = await self.client.async_latest_balance(self.account)
         self.assertEqual(result, parse_bill_text(TEXT))
+        self.assertEqual(
+            self.client._api_call.call_args_list[0].args,
+            (
+                "/api/account/getAccountInfo",
+                {
+                    "getAccountInfoRequestBody": {
+                        "accountRequest": {
+                            "customerIDN": "12345678",
+                            "accountSequence": "001",
+                        }
+                    }
+                },
+            ),
+        )
         self.assertEqual(
             self.client._api_call.call_args.args,
             (
@@ -211,8 +226,8 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
     async def test_unchanged_statement_not_downloaded(self):
         self.client._api_call = AsyncMock(
             return_value={
-                "getAccountDetailsResponseBody": {
-                    "account": {"currentStatementDate": "2032-11-12"}
+                "getAccountInfoResponseBody": {
+                    "accountInfo": {"currentStatementDate": "2032-11-12"}
                 }
             }
         )
@@ -226,6 +241,49 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         self.client._api_call = AsyncMock(return_value={})
         with self.assertRaises(PacificPowerApiError):
             await self.client.async_latest_balance(self.account)
+
+    async def test_account_details_are_not_billing_info(self):
+        # getAccountDetails serves the profile; the portal's bill card instead
+        # uses getAccountInfoResponseBody.accountInfo.currentStatementDate.
+        self.client._api_call = AsyncMock(
+            return_value={
+                "getAccountDetailsResponseBody": {
+                    "account": {"currentStatementDate": "2032-11-12"}
+                }
+            }
+        )
+        with self.assertRaisesRegex(
+            PacificPowerApiError, "Latest statement date unavailable"
+        ):
+            await self.client.async_latest_balance(self.account)
+        self.assertEqual(
+            self.client._api_call.call_args.args[0], "/api/account/getAccountInfo"
+        )
+
+    async def test_preserve_portal_statement_date_in_download_request(self):
+        portal_date = "2032-11-12T00:00:00.000-08:00"
+        self.client._api_call = AsyncMock(
+            side_effect=[
+                {
+                    "getAccountInfoResponseBody": {
+                        "accountInfo": {"currentStatementDate": portal_date}
+                    }
+                },
+                {
+                    "getStatementPDFResponseBody": {
+                        "PDFContent": base64.b64encode(pdf_bytes()).decode()
+                    }
+                },
+            ]
+        )
+        result = await self.client.async_latest_balance(self.account)
+        self.assertEqual(result.statement_date, "2032-11-12")
+        self.assertEqual(
+            self.client._api_call.call_args.args[1]["getStatementPDFRequestBody"][
+                "statementDate"
+            ],
+            portal_date,
+        )
 
     async def test_encrypted_api_round_trip(self):
         self.client._sign_key = rsa.generate_private_key(
@@ -286,8 +344,8 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
             self.client._api_call = AsyncMock(
                 side_effect=[
                     {
-                        "getAccountDetailsResponseBody": {
-                            "account": {"currentStatementDate": "2032-11-12"}
+                        "getAccountInfoResponseBody": {
+                            "accountInfo": {"currentStatementDate": "2032-11-12"}
                         }
                     },
                     {"getStatementPDFResponseBody": {"PDFContent": encoded}},
@@ -453,6 +511,54 @@ class HassTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertEqual(result["errors"], {"base": "invalid_auth"})
             api.async_stop.assert_awaited_once()
+
+    async def test_statement_failure_is_distinguished_without_replacing_balance(self):
+        flow = CreditConfigFlow()
+        flow.hass = self.hass
+        conf = entry()
+        with (
+            patch(
+                "custom_components.pacific_power_credits.config_flow.CreditClient"
+            ) as cls,
+            patch.object(flow, "_existing_entry", return_value=conf),
+            patch.object(flow, "_finish", new=AsyncMock()) as finish,
+        ):
+            api = cls.return_value
+            api.async_start = AsyncMock()
+            api.async_stop = AsyncMock()
+            api.async_login = AsyncMock()
+            api.async_get_user_info = AsyncMock(return_value={"webUserId": "example"})
+            api.async_get_accounts = AsyncMock(
+                return_value=[AccountInfo("12345678", "001", "", "")]
+            )
+            api.async_latest_balance = AsyncMock(
+                side_effect=PacificPowerApiError("Latest statement date unavailable")
+            )
+            with self.assertLogs(
+                "custom_components.pacific_power_credits.config_flow", level="WARNING"
+            ) as logs:
+                result = await flow.async_step_portal(
+                    {"username": "test@example.test", "credential": TEST_CREDENTIAL}
+                )
+            self.assertEqual(result["errors"], {"base": "statement_unavailable"})
+            self.assertIn("statement lookup", " ".join(logs.output))
+            self.assertNotIn(TEST_CREDENTIAL, " ".join(logs.output))
+            self.assertNotIn("test@example.test", " ".join(logs.output))
+            self.assertEqual(conf.data["snapshot"]["kwh"], 2450.5)
+            finish.assert_not_awaited()
+            api.async_stop.assert_awaited_once()
+
+    async def test_http_error_diagnostic_excludes_auth_urls(self):
+        with self.assertLogs(
+            "custom_components.pacific_power_credits.config_flow", level="WARNING"
+        ) as logs:
+            code = CreditConfigFlow._connection_error(
+                "sign-in",
+                aiohttp.InvalidURL("https://example.test/?secret=private-marker"),
+            )
+        self.assertEqual(code, "cannot_connect")
+        self.assertIn("InvalidURL", " ".join(logs.output))
+        self.assertNotIn("private-marker", " ".join(logs.output))
 
 
 class LifecycleTests(unittest.IsolatedAsyncioTestCase):

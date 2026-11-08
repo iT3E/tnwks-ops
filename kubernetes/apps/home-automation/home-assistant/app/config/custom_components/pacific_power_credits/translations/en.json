@@ -46,7 +46,8 @@
       "older_bill": "This bill is older than the recorded statement. Import a newer bill.",
       "invalid_auth": "Pacific Power sign-in failed or requires an unsupported verification step. Check your login, or use Import bill PDF while keeping account verification enabled.",
       "cannot_connect": "Unable to read the latest Pacific Power statement. Try again later or import its PDF.",
-      "no_accounts": "No metered Pacific Power account was found for this login."
+      "no_accounts": "No metered Pacific Power account was found for this login.",
+      "statement_unavailable": "Signed in to Pacific Power, but could not read the latest statement. The Home Assistant log now identifies the failed step. Try again later or import the bill PDF."
     },
     "abort": {
       "already_configured": "This account is already configured. Use Reconfigure to import a newer bill.",

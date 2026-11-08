@@ -19,9 +19,9 @@ class CreditClient(PacificPowerApi):
     ) -> CreditBalance:
         """Download only when a new monthly statement is available."""
         response = await self._api_call(
-            "/api/account/getAccountDetails",
+            "/api/account/getAccountInfo",
             {
-                "getAccountDetailsRequestBody": {
+                "getAccountInfoRequestBody": {
                     "accountRequest": {
                         "customerIDN": account.customer_idn,
                         "accountSequence": account.account_sequence,
@@ -29,8 +29,8 @@ class CreditClient(PacificPowerApi):
                 }
             },
         )
-        account_data = response.get("getAccountDetailsResponseBody", {}).get(
-            "account", {}
+        account_data = response.get("getAccountInfoResponseBody", {}).get(
+            "accountInfo", {}
         )
         value = account_data.get("currentStatementDate")
         try:
@@ -46,7 +46,7 @@ class CreditClient(PacificPowerApi):
                     "webUserID": self._web_user_id,
                     "custAccountID": account.customer_idn,
                     "custAccountSeq": account.account_sequence,
-                    "statementDate": statement_date,
+                    "statementDate": value,
                 }
             },
         )
