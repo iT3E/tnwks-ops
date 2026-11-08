@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.50.0 - 2026-11-08
+
+### Added
+
+* Grafana diagnose boards: Host (CPU, memory, disk latency and network per Windows host, with the WSL VM's pressure), Wi-Fi clients (weak signal, retries and satisfaction per device) and WAN clients (who is filling the Internet line, beside latency), linked from the domain boards
+
 ## v2.49.0 - 2026-11-08
 
 ### Added
