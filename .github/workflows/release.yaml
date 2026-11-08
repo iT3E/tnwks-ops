@@ -44,7 +44,7 @@ jobs:
     # The release commit deletes .changes/unreleased/*, which matches the
     # paths filter again; that run would find nothing to release.
     if: github.actor != 'tnwks-ops-release[bot]'
-    uses: iT3E/github-workflows/.github/workflows/release.yaml@317dd05ec8f5988a9a6f799a2119aba537b4bb16 # v1.4.2
+    uses: iT3E/github-workflows/.github/workflows/release.yaml@1068f74d6d3073cdaeb6cca44517bb90bebfdfea # feat/shared-actions (pre-release)
     with:
       bump: ${{ inputs.bump || 'auto' }}
       first-version: v1.0.0

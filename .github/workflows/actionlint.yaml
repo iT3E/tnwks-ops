@@ -8,9 +8,10 @@ name: "Actionlint"
 #
 # actionlint (with shellcheck on run: blocks, and .github/actionlint.yaml)
 # on the workflows, and zizmor (security audit, config in .github/zizmor.yml)
-# on the workflows and local actions, and the repo's own workflow conventions
-# (.github/scripts/workflow-conformance.py), whenever the workflows domain is
-# on.
+# on the workflows and local actions, and the workflow conventions
+# (github-workflows' workflow-conformance action, plus this repo's ci.yaml
+# check in .github/scripts/workflow-conformance.py), whenever the workflows
+# domain is on.
 on:
   # Called by ci.yaml when its domain in .github/ci/domains.toml changed.
   workflow_call:
@@ -22,27 +23,15 @@ jobs:
     name: actionlint
     permissions:
       contents: read
-    uses: iT3E/github-workflows/.github/workflows/actionlint.yaml@317dd05ec8f5988a9a6f799a2119aba537b4bb16 # v1.4.2
+    uses: iT3E/github-workflows/.github/workflows/actionlint.yaml@1068f74d6d3073cdaeb6cca44517bb90bebfdfea # feat/shared-actions (pre-release)
 
   zizmor:
     name: zizmor
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
     permissions:
       contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: zizmor
-        uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
-        with:
-          # Findings show as annotations on the PR; no code-scanning upload.
-          advanced-security: false
-          annotations: true
-          version: 1.31.1
+    uses: iT3E/github-workflows/.github/workflows/zizmor.yaml@1068f74d6d3073cdaeb6cca44517bb90bebfdfea # feat/shared-actions (pre-release)
+    with:
+      runs-on: ubuntu-26.04
 
   conformance:
     name: conformance
@@ -56,7 +45,11 @@ jobs:
         with:
           persist-credentials: false
 
-      # Timeouts, runner labels, SHA pins, permissions, checkout credentials,
-      # self-hosted jobs on PRs, and ci.yaml covering every domain.
+      # Timeouts, runner labels, SHA pins, permissions, checkout credentials
+      # and self-hosted jobs on PRs.
       - name: Workflow conventions
+        uses: iT3E/github-workflows/actions/workflow-conformance@1068f74d6d3073cdaeb6cca44517bb90bebfdfea # feat/shared-actions (pre-release)
+
+      # This repo's own: ci.yaml covers every domain in .github/ci/domains.toml.
+      - name: ci.yaml covers the domains
         run: python3 .github/scripts/workflow-conformance.py

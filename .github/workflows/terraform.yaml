@@ -8,7 +8,7 @@ name: "Terraform"
 # root is one entry (docs/operations/ci.md).
 #
 # Logs are public: local roots print only counts and addresses
-# (.github/actions/terraform); AWS plans and applies run in Terraform Cloud.
+# (github-workflows' actions/terraform); AWS plans and applies run in Terraform Cloud.
 on:
   workflow_call:
     inputs:
@@ -64,32 +64,28 @@ jobs:
       - name: Plan
         id: tf
         if: matrix.backend == 'local' && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
-        uses: ./.github/actions/terraform
+        uses: iT3E/github-workflows/actions/terraform@1068f74d6d3073cdaeb6cca44517bb90bebfdfea # feat/shared-actions (pre-release)
         with:
-          root: ${{ matrix.root }}
+          working-directory: infrastructure/terraform/environments/${{ matrix.root }}
           mode: plan
+          terraform-version: "1.17.1"
           tf-vars: ${{ matrix.tf_vars }}
           tf-api-token: ${{ secrets.TF_API_TOKEN }}
 
-      - name: Comment
+      - name: Comment body
         if: steps.tf.outcome == 'success'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
-          NAME: ${{ matrix.name }}
           TITLE: ${{ matrix.title }}
           SUMMARY: ${{ steps.tf.outputs.summary }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: printf '#### %s Plan\n%s\n\n[Run](%s)\n' "$TITLE" "$SUMMARY" "$RUN_URL" > "$RUNNER_TEMP/plan-comment.md"
+
+      - name: Comment
+        if: steps.tf.outcome == 'success'
+        uses: iT3E/github-workflows/actions/sticky-comment@1068f74d6d3073cdaeb6cca44517bb90bebfdfea # feat/shared-actions (pre-release)
         with:
-          script: |
-            const marker = `<!-- ${process.env.NAME}-plan -->`;
-            const body = `${marker}\n#### ${process.env.TITLE} Plan\n${process.env.SUMMARY}\n\n[Run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              ...context.repo, issue_number: context.issue.number });
-            const prev = comments.find(c => c.body.startsWith(marker));
-            if (prev) {
-              await github.rest.issues.updateComment({ ...context.repo, comment_id: prev.id, body });
-            } else {
-              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
-            }
+          marker: "<!-- ${{ matrix.name }}-plan -->"
+          body-file: ${{ runner.temp }}/plan-comment.md
 
       # Posts its own comment.
       - name: Plan in Terraform Cloud
@@ -176,10 +172,11 @@ jobs:
 
       - name: Plan and apply
         if: matrix.backend == 'local' && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
-        uses: ./.github/actions/terraform
+        uses: iT3E/github-workflows/actions/terraform@1068f74d6d3073cdaeb6cca44517bb90bebfdfea # feat/shared-actions (pre-release)
         with:
-          root: ${{ matrix.root }}
+          working-directory: infrastructure/terraform/environments/${{ matrix.root }}
           mode: apply
+          terraform-version: "1.17.1"
           tf-vars: ${{ matrix.tf_vars }}
           tf-api-token: ${{ secrets.TF_API_TOKEN }}
 

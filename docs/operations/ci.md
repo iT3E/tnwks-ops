@@ -59,7 +59,7 @@ them before it decides anything.
 | `ansible` | [`ansible.yaml`](../../.github/workflows/ansible.yaml) | Playbook syntax and ansible-lint on the pinned controller |
 | `security_regressions` | [`security-regressions.yaml`](../../.github/workflows/security-regressions.yaml) | Router output, service and OAuth callback regression tests |
 | `dependency_compatibility` | [`dependency-compatibility.yaml`](../../.github/workflows/dependency-compatibility.yaml) | The compatibility gates' own tests. Its weekly report runs on its own schedule |
-| `workflows` | [`actionlint.yaml`](../../.github/workflows/actionlint.yaml) | actionlint and zizmor on the workflows and local actions; `workflow-conformance.py` for the conventions below |
+| `workflows` | [`actionlint.yaml`](../../.github/workflows/actionlint.yaml) | actionlint and zizmor on the workflows and local actions, and the conventions below (github-workflows' `workflow-conformance` action, plus `workflow-conformance.py` for `ci.yaml`) |
 
 Each domain workflow is `on: workflow_call` and has no concurrency of its
 own. `ci.yaml` cancels a superseded PR run as a whole. Check names show the
@@ -88,7 +88,7 @@ job per root:
 | `title` | Check name, e.g. `terraform / Plan MikroTik` |
 | `root` | Path under `environments/` |
 | `runner` | `ubuntu-26.04` or a self-hosted label from `.github/actionlint.yaml` |
-| `backend` | `local` (TFC state, plan on the runner, `.github/actions/terraform`) or `tfc-remote` (plan and apply in Terraform Cloud) |
+| `backend` | `local` (TFC state, plan on the runner, github-workflows' `actions/terraform`) or `tfc-remote` (plan and apply in Terraform Cloud) |
 | `workspace` | The TFC workspace, `tfc-remote` only |
 | `lock` | Concurrency group a root's plans and applies share, for roots that must never overlap (one device, one state lock) |
 | `tf_vars` | `TF_VAR_<name>=<value>` lines, endpoint overrides that only hold on the runner. Never secrets |
@@ -165,9 +165,11 @@ the compatibility `notify`) run on `ubuntu-slim`: a 1-vCPU container with
 git, jq, Python 3.12, yq and gh, capped at 15 minutes. Anything that builds,
 renders or installs toolchains stays on `ubuntu-26.04`.
 
-The `workflows` domain's conformance job
-([`workflow-conformance.py`](../../.github/scripts/workflow-conformance.py))
-fails a PR that misses any of these, and on:
+The `workflows` domain's conformance job fails a PR that misses any of
+these ([`workflow-conformance.py`](../../.github/scripts/workflow-conformance.py)),
+and on any of the following (github-workflows'
+[`workflow-conformance`](https://github.com/iT3E/github-workflows#actionsworkflow-conformance)
+action):
 
 - a job without `timeout-minutes`, or an `ubuntu-slim` job with more than 15;
 - a runner label other than `ubuntu-26.04`, `ubuntu-slim` or a self-hosted
@@ -175,4 +177,5 @@ fails a PR that misses any of these, and on:
 - a self-hosted job in a `pull_request` workflow without a same-repo check;
 - an action or docker image not pinned to a SHA or digest;
 - a workflow without top-level `permissions`;
-- an `actions/checkout` without `persist-credentials: false`.
+- an `actions/checkout` without `persist-credentials` (`false`, or an
+  explicit `true` for a job that pushes).
