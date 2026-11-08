@@ -98,5 +98,5 @@ def board() -> Board:
                 p("Link speed by adapter", f'max by (nic) ({host("windows_net_current_bandwidth_bytes")} > 0) * 8', "bps",
                   "Negotiated speed of each adapter with a link. A wired link that drops from 1 Gbit/s to 100 Mbit/s is a cable or port fault.", "table", column="Link speed"),
             ],
-        }, "Hosts", sections=True,
+        }, "Hosts", sections=True, parent="tnwks-hosts",
         variables=(Variable("host", "Host", 'label_values(windows_cpu_time_total{k8s_cluster=~"$cluster"}, instance)', multi=False),))

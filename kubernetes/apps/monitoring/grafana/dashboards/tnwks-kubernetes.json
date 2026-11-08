@@ -45,7 +45,13 @@
         "spec": {
           "id": 2,
           "title": "Flux resource readiness",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -223,16 +229,6 @@
                             }
                           }
                         ]
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -248,7 +244,13 @@
         "spec": {
           "id": 3,
           "title": "Suspended resources",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -426,16 +428,6 @@
                             }
                           }
                         ]
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -451,7 +443,13 @@
         "spec": {
           "id": 4,
           "title": "Reconcile failures",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -523,13 +521,6 @@
                   "color": {
                     "mode": "thresholds"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -544,7 +535,13 @@
         "spec": {
           "id": 5,
           "title": "Unready workloads",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -598,13 +595,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -624,7 +614,13 @@
         "spec": {
           "id": 6,
           "title": "Node CPU utilization",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -680,13 +676,9 @@
                   "unit": "percentunit",
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/200ac8fdbfbb74b39aff88118e4d1c2c/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-cluster=${__field.labels.k8s_cluster:percentencode}&var-node=${__field.labels.kubernetes_node:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
-                      "targetBlank": true
+                      "title": "Open Node (Pods)",
+                      "url": "/d/200ac8fdbfbb74b39aff88118e4d1c2c/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-cluster=${__field.labels.k8s_cluster:percentencode}&var-node=${__field.labels.kubernetes_node:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
@@ -709,7 +701,13 @@
         "spec": {
           "id": 7,
           "title": "Node memory available",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -765,13 +763,9 @@
                   "unit": "bytes",
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/200ac8fdbfbb74b39aff88118e4d1c2c/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-cluster=${__field.labels.k8s_cluster:percentencode}&var-node=${__field.labels.kubernetes_node:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
-                      "targetBlank": true
+                      "title": "Open Node (Pods)",
+                      "url": "/d/200ac8fdbfbb74b39aff88118e4d1c2c/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-cluster=${__field.labels.k8s_cluster:percentencode}&var-node=${__field.labels.kubernetes_node:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
@@ -793,7 +787,13 @@
         "spec": {
           "id": 8,
           "title": "Source revisions fetched",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -953,16 +953,6 @@
                       {
                         "id": "unit",
                         "value": "dateTimeAsIso"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -978,7 +968,13 @@
         "spec": {
           "id": 9,
           "title": "Helm releases deployed",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1138,16 +1134,6 @@
                       {
                         "id": "unit",
                         "value": "dateTimeAsIso"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1163,7 +1149,13 @@
         "spec": {
           "id": 10,
           "title": "Flux Ready transitions",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1323,16 +1315,6 @@
                       {
                         "id": "unit",
                         "value": "dateTimeAsIso"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1348,7 +1330,13 @@
         "spec": {
           "id": 11,
           "title": "Node versions",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1508,16 +1496,6 @@
                       {
                         "id": "unit",
                         "value": "dateTimeAsIso"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/cluster-upgrades.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1559,7 +1537,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 5,
+                            "maxColumnCount": 6,
                             "fillScreen": false
                           }
                         },
@@ -1765,6 +1743,18 @@
       }
     },
     "links": [
+      {
+        "title": "↑ Homelab",
+        "type": "link",
+        "icon": "dashboard",
+        "tooltip": "Up to the overview",
+        "tags": [],
+        "asDropdown": false,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true,
+        "url": "/d/home/view"
+      },
       {
         "title": "Dashboards",
         "type": "dashboards",

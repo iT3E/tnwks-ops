@@ -45,7 +45,13 @@
         "spec": {
           "id": 2,
           "title": "Expected databases",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -195,24 +201,6 @@
                         "value": "—"
                       }
                     ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "Site"
-                    },
-                    "properties": [
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                            "targetBlank": true
-                          }
-                        ]
-                      }
-                    ]
                   }
                 ]
               }
@@ -226,7 +214,13 @@
         "spec": {
           "id": 3,
           "title": "CNPG role: in recovery",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -389,16 +383,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -414,7 +398,13 @@
         "spec": {
           "id": 4,
           "title": "Connections",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -468,13 +458,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -494,7 +477,13 @@
         "spec": {
           "id": 5,
           "title": "Replay timestamp lag",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -548,13 +537,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -574,7 +556,13 @@
         "spec": {
           "id": 6,
           "title": "Database state",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -795,16 +783,6 @@
                           "type": "color-background",
                           "mode": "basic"
                         }
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -820,7 +798,13 @@
         "spec": {
           "id": 7,
           "title": "Database container restarts",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -874,13 +858,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -900,7 +877,13 @@
         "spec": {
           "id": 8,
           "title": "Base backup age",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1025,16 +1008,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1050,7 +1023,13 @@
         "spec": {
           "id": 9,
           "title": "Backup coverage",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1256,16 +1235,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1281,7 +1250,13 @@
         "spec": {
           "id": 10,
           "title": "WAL failures",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1353,13 +1328,6 @@
                   "color": {
                     "mode": "thresholds"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -1374,7 +1342,13 @@
         "spec": {
           "id": 11,
           "title": "Weekly PVC drill age",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1534,16 +1508,6 @@
                       {
                         "id": "unit",
                         "value": "s"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1559,7 +1523,13 @@
         "spec": {
           "id": 12,
           "title": "Recovery point by app",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1765,16 +1735,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1790,7 +1750,13 @@
         "spec": {
           "id": 13,
           "title": "Backup age by app",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1915,16 +1881,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1940,7 +1896,13 @@
         "spec": {
           "id": 14,
           "title": "Restore time by app",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2146,16 +2108,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -2171,7 +2123,13 @@
         "spec": {
           "id": 15,
           "title": "Last drill duration",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2296,16 +2254,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -2321,7 +2269,13 @@
         "spec": {
           "id": 16,
           "title": "PVCs without a backup schedule",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2481,16 +2435,6 @@
                       {
                         "id": "unit",
                         "value": "short"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -2506,7 +2450,13 @@
         "spec": {
           "id": 17,
           "title": "Windows disk free",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2562,13 +2512,9 @@
                   "unit": "bytes",
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/tnwks-host/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-host=${__field.labels.instance:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
+                      "title": "Open Host",
+                      "url": "/d/tnwks-host/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-host=${__field.labels.instance:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
@@ -2813,7 +2759,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 5,
+                            "maxColumnCount": 6,
                             "fillScreen": false
                           }
                         },
@@ -3028,6 +2974,18 @@
       }
     },
     "links": [
+      {
+        "title": "↑ Homelab",
+        "type": "link",
+        "icon": "dashboard",
+        "tooltip": "Up to the overview",
+        "tags": [],
+        "asDropdown": false,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true,
+        "url": "/d/home/view"
+      },
       {
         "title": "Dashboards",
         "type": "dashboards",

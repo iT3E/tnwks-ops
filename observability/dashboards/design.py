@@ -65,7 +65,7 @@ NEUTRAL = "text"
 # then how it got here, then the detail. role -> (row title, or None for no
 # header; most columns; row height; collapsed).
 SECTIONS = {
-    "headline": (None, 5, "short", False),
+    "headline": (None, 6, "short", False),
     # The household wall: touchable tiles, three across on a tablet, one on a phone (tall
     # filled a phone screen with a single tile).
     "wall": (None, 3, "standard", False),

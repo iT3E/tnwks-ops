@@ -45,7 +45,13 @@
         "spec": {
           "id": 2,
           "title": "Application probe state",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -251,16 +257,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -276,7 +272,13 @@
         "spec": {
           "id": 3,
           "title": "HTTP requests",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -332,13 +334,9 @@
                   "unit": "reqps",
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/nginx/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-ingress=${__field.labels.ingress:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
-                      "targetBlank": true
+                      "title": "Open NGINX",
+                      "url": "/d/nginx/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-ingress=${__field.labels.ingress:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
@@ -360,7 +358,13 @@
         "spec": {
           "id": 4,
           "title": "HTTP 5xx fraction",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -416,13 +420,9 @@
                   "unit": "percentunit",
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/nginx/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-ingress=${__field.labels.ingress:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
-                      "targetBlank": true
+                      "title": "Open NGINX",
+                      "url": "/d/nginx/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-ingress=${__field.labels.ingress:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
@@ -445,7 +445,13 @@
         "spec": {
           "id": 5,
           "title": "HTTP p95 duration",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -501,13 +507,9 @@
                   "unit": "s",
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/nginx/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-ingress=${__field.labels.ingress:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
-                      "targetBlank": true
+                      "title": "Open NGINX",
+                      "url": "/d/nginx/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-ingress=${__field.labels.ingress:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
@@ -529,7 +531,13 @@
         "spec": {
           "id": 6,
           "title": "Name state by site",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -735,16 +743,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -760,7 +758,13 @@
         "spec": {
           "id": 7,
           "title": "Served by",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -910,24 +914,6 @@
                         "value": "—"
                       }
                     ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "Site"
-                    },
-                    "properties": [
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
-                            "targetBlank": true
-                          }
-                        ]
-                      }
-                    ]
                   }
                 ]
               }
@@ -941,7 +927,13 @@
         "spec": {
           "id": 8,
           "title": "Name certificate remaining",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1101,16 +1093,6 @@
                       {
                         "id": "unit",
                         "value": "s"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1126,7 +1108,13 @@
         "spec": {
           "id": 9,
           "title": "Analytics health",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1304,16 +1292,6 @@
                             }
                           }
                         ]
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1329,7 +1307,13 @@
         "spec": {
           "id": 10,
           "title": "Visitors today",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1383,13 +1367,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1409,7 +1386,13 @@
         "spec": {
           "id": 11,
           "title": "Page views today",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1463,13 +1446,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1489,7 +1465,13 @@
         "spec": {
           "id": 12,
           "title": "Bounce rate today",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1543,13 +1525,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "percent",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1570,7 +1545,13 @@
         "spec": {
           "id": 13,
           "title": "Visit duration today",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1624,13 +1605,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1650,7 +1624,13 @@
         "spec": {
           "id": 14,
           "title": "Certificate validity remaining",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1810,16 +1790,6 @@
                       {
                         "id": "unit",
                         "value": "s"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1835,7 +1805,13 @@
         "spec": {
           "id": 15,
           "title": "Tunnel connections",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1889,13 +1865,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/access.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -2268,6 +2237,18 @@
       }
     },
     "links": [
+      {
+        "title": "↑ Homelab",
+        "type": "link",
+        "icon": "dashboard",
+        "tooltip": "Up to the overview",
+        "tags": [],
+        "asDropdown": false,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true,
+        "url": "/d/home/view"
+      },
       {
         "title": "Dashboards",
         "type": "dashboards",

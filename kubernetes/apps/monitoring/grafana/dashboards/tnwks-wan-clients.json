@@ -45,7 +45,13 @@
         "spec": {
           "id": 2,
           "title": "Download now",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -104,13 +110,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -125,7 +124,13 @@
         "spec": {
           "id": 3,
           "title": "Upload now",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -184,13 +189,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -205,7 +203,13 @@
         "spec": {
           "id": 4,
           "title": "Devices on the line",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -264,13 +268,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -285,7 +282,13 @@
         "spec": {
           "id": 5,
           "title": "Download attributed",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -344,13 +347,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -365,7 +361,13 @@
         "spec": {
           "id": 6,
           "title": "Top downloaders now",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -544,13 +546,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-wan-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.client:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                            "targetBlank": true
+                            "title": "Open WAN clients",
+                            "url": "/d/tnwks-wan-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.client:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -568,7 +566,13 @@
         "spec": {
           "id": 7,
           "title": "Top uploaders now",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -747,13 +751,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-wan-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.client:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                            "targetBlank": true
+                            "title": "Open WAN clients",
+                            "url": "/d/tnwks-wan-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.client:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -771,7 +771,13 @@
         "spec": {
           "id": 8,
           "title": "Data in range by device",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -950,13 +956,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-wan-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.client:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                            "targetBlank": true
+                            "title": "Open WAN clients",
+                            "url": "/d/tnwks-wan-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.client:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -974,7 +976,13 @@
         "spec": {
           "id": 9,
           "title": "Download by device",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1028,13 +1036,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bps",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1054,7 +1055,13 @@
         "spec": {
           "id": 10,
           "title": "Upload by device",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1108,13 +1115,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bps",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1134,7 +1134,13 @@
         "spec": {
           "id": 11,
           "title": "Internet latency",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1188,13 +1194,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1245,7 +1244,13 @@
         "spec": {
           "id": 12,
           "title": "Now: device, app and destination",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1424,13 +1429,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-wan-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.client:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                            "targetBlank": true
+                            "title": "Open WAN clients",
+                            "url": "/d/tnwks-wan-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.client:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -1448,7 +1449,13 @@
         "spec": {
           "id": 13,
           "title": "Data in range by destination",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1622,16 +1629,6 @@
                       {
                         "id": "unit",
                         "value": "bytes"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1647,7 +1644,13 @@
         "spec": {
           "id": 14,
           "title": "Traffic by app",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1701,13 +1704,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bps",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1727,7 +1723,13 @@
         "spec": {
           "id": 15,
           "title": "Traffic by destination",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1781,13 +1783,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "bps",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1860,7 +1855,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 5,
+                            "maxColumnCount": 6,
                             "fillScreen": false
                           }
                         },
@@ -2080,6 +2075,30 @@
       }
     },
     "links": [
+      {
+        "title": "↑ Homelab",
+        "type": "link",
+        "icon": "dashboard",
+        "tooltip": "Up to the overview",
+        "tags": [],
+        "asDropdown": false,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true,
+        "url": "/d/home/view"
+      },
+      {
+        "title": "↑ Internet",
+        "type": "link",
+        "icon": "dashboard",
+        "tooltip": "Up to the domain board",
+        "tags": [],
+        "asDropdown": false,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true,
+        "url": "/d/tnwks-internet/view"
+      },
       {
         "title": "Dashboards",
         "type": "dashboards",

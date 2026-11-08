@@ -69,5 +69,5 @@ def board() -> Board:
                 p("Traffic by destination", named(f'topk(10, {both("as_name", picked=True)})'), "bps",
                   "Both directions to the ten busiest remote networks at each moment, for the picked devices."),
             ],
-        }, "Network", sections=True,
+        }, "Network", sections=True, parent="tnwks-internet",
         variables=(Variable("client", "Device", "label_values(wan:client_app_receive_bits:rate2m, client)"),))

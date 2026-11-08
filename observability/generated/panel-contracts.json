@@ -293,6 +293,71 @@
   {
     "dashboard": "home",
     "tab": "Now",
+    "panel": "Hosts",
+    "query": "((max(((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 1)",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:host_state"
+    ],
+    "sources": [
+      {
+        "metric": "up",
+        "producer": "Prometheus scrape status",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_time_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_free_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_read_write_latency_seconds_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_reads_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_size_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_writes_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_memory_commit_limit",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_memory_committed_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/wsl/multi-site.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "home",
+    "tab": "Now",
     "panel": "Data",
     "query": "((max(((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 1))) == bool 1)",
     "unit": "state",
@@ -626,13 +691,14 @@
     "dashboard": "home",
     "tab": "Now",
     "panel": "Needs attention",
-    "query": "sort_desc(label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Site\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Workload\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Service\", \"\", \"\") or label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Name\", \"\", \"\") or label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Network path\", \"\", \"\") or label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 1, \"area\", \"Flux resource\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Recovery\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Restore time\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Backups\", \"\", \"\") or label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Database backup\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Database\", \"\", \"\"))",
+    "query": "sort_desc(label_replace(label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Site\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Workload\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Service\", \"\", \"\"), \"board\", \"tnwks-apps\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Name\", \"\", \"\"), \"board\", \"tnwks-apps\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Network path\", \"\", \"\"), \"board\", \"tnwks-network\", \"\", \"\") or label_replace(label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 1, \"area\", \"Flux resource\", \"\", \"\"), \"board\", \"tnwks-kubernetes\", \"\", \"\") or label_replace(label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 1, \"area\", \"Host\", \"\", \"\"), \"board\", \"tnwks-hosts\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Recovery\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Restore time\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Backups\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Database backup\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Database\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\"))",
     "unit": "state",
     "query_mode": "instant",
     "inputs": [
       "homelab:app_rpo_state",
       "homelab:app_rto_state",
       "homelab:database_backup_state",
+      "homelab:host_state",
       "homelab:ingress_state",
       "homelab:network_path_state",
       "homelab:other_database_state",
@@ -791,6 +857,51 @@
       {
         "metric": "probe_success",
         "producer": "evidence collector probes",
+        "availability": "configured"
+      },
+      {
+        "metric": "up",
+        "producer": "Prometheus scrape status",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_time_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_free_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_read_write_latency_seconds_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_reads_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_size_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_writes_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_memory_commit_limit",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_memory_committed_bytes",
+        "producer": "Windows exporter",
         "availability": "configured"
       }
     ],
@@ -5013,6 +5124,71 @@
     "missing": "Unknown \u2014 missing evidence",
     "query_error": "Grafana query error; never a healthy empty response",
     "runbook": "docs/apps/home-assistant.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Physical resources",
+    "panel": "Host state",
+    "query": "label_replace(homelab:host_state{k8s_cluster=~\"$cluster\"}, \"host\", \"$1\", \"instance\", \"(.+)\")",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:host_state"
+    ],
+    "sources": [
+      {
+        "metric": "up",
+        "producer": "Prometheus scrape status",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_time_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_free_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_read_write_latency_seconds_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_reads_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_size_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_writes_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_memory_commit_limit",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_memory_committed_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
     "owner": "homelab operator"
   },
   {

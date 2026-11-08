@@ -45,7 +45,13 @@
         "spec": {
           "id": 2,
           "title": "Wi-Fi clients",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -104,13 +110,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -125,7 +124,13 @@
         "spec": {
           "id": 3,
           "title": "Weak signal",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -184,13 +189,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -205,7 +203,13 @@
         "spec": {
           "id": 4,
           "title": "Low satisfaction",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -264,13 +268,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -285,7 +282,13 @@
         "spec": {
           "id": 5,
           "title": "Roams in range",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -344,13 +347,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -365,7 +361,13 @@
         "spec": {
           "id": 6,
           "title": "Weak signal clients",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -544,13 +546,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-wifi-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.name:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                            "targetBlank": true
+                            "title": "Open Wi-Fi clients",
+                            "url": "/d/tnwks-wifi-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.name:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -568,7 +566,13 @@
         "spec": {
           "id": 7,
           "title": "Low satisfaction clients",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -747,13 +751,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-wifi-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.name:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                            "targetBlank": true
+                            "title": "Open Wi-Fi clients",
+                            "url": "/d/tnwks-wifi-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.name:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -771,7 +771,13 @@
         "spec": {
           "id": 8,
           "title": "Most retries",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -950,13 +956,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-wifi-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.name:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                            "targetBlank": true
+                            "title": "Open Wi-Fi clients",
+                            "url": "/d/tnwks-wifi-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.name:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -974,7 +976,13 @@
         "spec": {
           "id": 9,
           "title": "Reconnects",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1153,13 +1161,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-wifi-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.name:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                            "targetBlank": true
+                            "title": "Open Wi-Fi clients",
+                            "url": "/d/tnwks-wifi-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.name:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -1177,7 +1181,13 @@
         "spec": {
           "id": 10,
           "title": "Signal",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1231,13 +1241,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "dBm",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1256,7 +1259,13 @@
         "spec": {
           "id": 11,
           "title": "Satisfaction",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1310,13 +1319,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "percentunit",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1337,7 +1339,13 @@
         "spec": {
           "id": 12,
           "title": "Retry rate",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1391,13 +1399,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "percentunit",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1418,7 +1419,13 @@
         "spec": {
           "id": 13,
           "title": "Throughput",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1472,13 +1479,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "Bps",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1498,7 +1498,13 @@
         "spec": {
           "id": 14,
           "title": "Connected to",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1677,13 +1683,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-wifi-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.name:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                            "targetBlank": true
+                            "title": "Open Wi-Fi clients",
+                            "url": "/d/tnwks-wifi-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.name:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -1754,7 +1756,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 5,
+                            "maxColumnCount": 6,
                             "fillScreen": false
                           }
                         },
@@ -1934,6 +1936,30 @@
       }
     },
     "links": [
+      {
+        "title": "↑ Homelab",
+        "type": "link",
+        "icon": "dashboard",
+        "tooltip": "Up to the overview",
+        "tags": [],
+        "asDropdown": false,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true,
+        "url": "/d/home/view"
+      },
+      {
+        "title": "↑ Wi-Fi & LAN",
+        "type": "link",
+        "icon": "dashboard",
+        "tooltip": "Up to the domain board",
+        "tags": [],
+        "asDropdown": false,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true,
+        "url": "/d/tnwks-wifi/view"
+      },
       {
         "title": "Dashboards",
         "type": "dashboards",

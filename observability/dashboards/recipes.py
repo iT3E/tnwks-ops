@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 
 from grafana_foundation_sdk.builders import common as common_builder
@@ -15,9 +16,27 @@ from conventions import dashboard_link
 
 from .design import NEUTRAL, SCRAPE_COLUMNS, SITES, STATE, UNKNOWN_GREY, WHOLE, ZERO_BASED
 from .model import Panel, legend, value_header, value_mappings
+from .queries import OTHER_BOARDS, ROW_BOARD
 
 
-def visualization(panel: Panel, runbook: str | None = None):
+@functools.cache
+def boards() -> tuple:
+    """The operator boards a link can reach. The House kiosk shares Homelab's UID on
+    its own Grafana, so it's never a link target."""
+    from .boards import catalogue  # the catalogue's boards import this module's callers
+    return tuple(board for board in catalogue() if not board.kiosk)
+
+
+def board_titles() -> dict[str, str]:
+    return {board.uid: board.title for board in boards()} | OTHER_BOARDS
+
+
+def link_title(uid: str) -> str:
+    """A data link says where it goes: a click on data only ever goes deeper."""
+    return "Open its board" if uid == ROW_BOARD else f"Open {board_titles()[uid]}"
+
+
+def visualization(panel: Panel):
     cls = {"stat": stat.Visualization, "table": table.Visualization,
            "timeseries": timeseries.Visualization}[panel.kind]
     unit = {"state": "none", "coverage": "none", "bool": "none", "failures": "short"}.get(panel.unit, panel.unit)
@@ -27,9 +46,7 @@ def visualization(panel: Panel, runbook: str | None = None):
         uid, entity = (panel.link, None) if isinstance(panel.link, str) else panel.link
         if entity and panel.kind == "table":
             assert not set(entity.values()) & set(SCRAPE_COLUMNS), (panel.title, "table hides the entity's field")
-        links.append(model.DataLink(title="Diagnose", url=dashboard_link(uid, entity, panel.kind == "table")))
-    if runbook:
-        links.append(model.DataLink(title="Runbook", url=f'https://github.com/iT3E/tnwks-ops/blob/main/{runbook}', target_blank=True))
+        links.append(model.DataLink(title=link_title(uid), url=dashboard_link(uid, entity, panel.kind == "table")))
     if panel.unit in ("state", "coverage"):
         viz.thresholds(dashboard.ThresholdsConfig().mode(model.ThresholdsMode.ABSOLUTE)
                        .steps([model.Threshold(value=None, color=UNKNOWN_GREY)]))
@@ -53,6 +70,9 @@ def visualization(panel: Panel, runbook: str | None = None):
         if panel.unit in ("state", "coverage"):
             properties.append(model.DynamicConfigValue(
                 id_val="custom.cellOptions", value={"type": "color-background", "mode": "basic"}))
+        if panel.link == ROW_BOARD:
+            # The row's board is for its link, not for reading.
+            viz.override_by_name("board", [model.DynamicConfigValue(id_val="custom.hidden", value=True)])
         if panel.per_site:
             # Every site column is a value: style them all by type, whatever the sites are.
             assert not panel.link, (panel.title, "a fleet table's row has no single entity to open")

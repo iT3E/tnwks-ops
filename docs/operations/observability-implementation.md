@@ -101,6 +101,31 @@ A timeseries names its series by the labels its query keeps, from the first
 ingress, Cilium drops by reason, notifications by integration, ...) showed
 several series under one site name.
 
+### Moving between levels
+
+House systems (Home Assistant, L0) → Homelab (L1) → a domain board (L2) → a
+diagnose board (L3). The same three rules hold on every board:
+
+- **A click on data goes one level down, in one click.** A tile, a table value
+  or a graph point has at most one link, it opens on the first click (Grafana's
+  `oneClick`, set in `layout.one_click()`), and its name says where: "Open
+  Internet", "Open Host". Homelab's Needs attention rows each open their own
+  area's board (a hidden `board` column, `ROW_BOARD`): a Flux row opens
+  Kubernetes, a host row Hosts.
+- **The top bar goes up and sideways.** Every board below Homelab has "↑ Homelab";
+  a diagnose board also has "↑" to its domain board (`Board.parent`), and a domain
+  board "↓" to each of its diagnose boards. The "Dashboards" list has every board.
+- **The runbook is the ↗ icon in a panel's header**, never a data link: a click on
+  a value never leaves Grafana.
+
+In Home Assistant, the "House systems" heading opens Monitoring (Grafana's
+Homelab). The area tiles keep their own tap (the area's state history): the
+Monitoring dashboard is admin-only and a tile's tap can't differ by user, so
+pointing the tiles at it would hand the household a page they can't open.
+
+`test_operator_links_preserve_multiple_sites_and_time_without_exposing_operator_links_to_house`
+and `test_every_level_links_up_and_down` hold these rules.
+
 Every hop keeps the incident's time range. Homelab's panels link to their domain
 board with the selected sites and datasource (L1 → domain). Domain panels with an
 entity board link to it on the clicked series or row instead: an ingress to the
@@ -116,7 +141,8 @@ without one. The charts' own rules (kube-prometheus mixins, Kopiur,
 tuppr) carry a runbook instead; Telegram links those to the Alerts board for the
 site that raised them, at Grafana's address beside Alertmanager's external URL. `tests/browser_check.py` clicks the
 hops in a disposable Grafana (Homelab to Sites, an access point to Home Wi-Fi, a
-WAN device to WAN clients) and checks the target, time range and selection.
+WAN device to WAN clients, then "↑ Internet" back up) and checks that one click
+lands on the target with the time range and selection kept.
 `test_every_drilldown_lands_on_a_board_that_takes_its_variables` fails on a link
 to a UID nothing deploys, or one that sets a picker the target doesn't have.
 
@@ -129,7 +155,7 @@ board's panels:
 
 | Board | Picker | Reached from | Answers |
 | --- | --- | --- | --- |
-| Host (`tnwks-host`) | one Windows host | Hosts & Capacity's host graphs, Wi-Fi's host uplink traffic, Databases' disk free | USE per resource: a tab each for CPU, memory, disk and network, busy (utilization), queued or paging (saturation) and errors, with the WSL VM's own CPU and Linux pressure stall (PSI) beside the Windows view |
+| Host (`tnwks-host`) | one Windows host | Hosts & Capacity's Host state rows and host graphs, Wi-Fi's host uplink traffic, Databases' disk free | USE per resource: a tab each for CPU, memory, disk and network, busy (utilization), queued or paging (saturation) and errors, with the WSL VM's own CPU and Linux pressure stall (PSI) beside the Windows view |
 | Wi-Fi clients (`tnwks-wifi-clients`) | wireless devices | Wi-Fi's "Clients with weak signal" | worst-first tables (weak signal, low satisfaction, most retries, reconnects) over every device; graphs of signal, satisfaction, retry rate and throughput for the picked ones; where each is associated |
 | WAN clients (`tnwks-wan-clients`) | devices from flow export | Internet's Upload and "Top WAN devices now" | top downloaders and uploaders now, data per device and per destination over the range, and Internet latency beside per-device upload, crosshair-synced, to line a spike up with its sender |
 
@@ -137,6 +163,19 @@ The worst-first tables ignore the picker so they always cover everything; the
 graphs follow it, and a click on a table row picks that entity
 (`sort="asc"|"desc"` orders a row table by its value). A diagnose board's empty
 list is the good case ("None below -70 dBm"), not missing evidence.
+
+Homelab's Hosts tile is the worst of `homelab:host_state` (`host_records()` in
+`observability/rules.py`): each Windows host's resources graded from
+`homelab:host_usage`, the measured value. Each site scrapes only its own host, so
+these are per site with no observer duplicates. A host whose exporter is down
+reads Unknown on every resource.
+
+| Resource | Measured | Degraded | Failed |
+| --- | --- | --- | --- |
+| CPU | busy share of all logical processors, over 15 minutes | above 85% | above 95% |
+| Memory commit | committed memory over the commit limit (RAM plus page file) | above 90% | above 97% |
+| Disk latency | seconds per operation on the slowest volume doing over 1 operation a second, over 15 minutes (an idle disk is 0) | above 50 ms | above 200 ms |
+| Disk space | free share of the fullest volume (`HarddiskVolume*` system partitions excluded) | below 10% | below 5% |
 
 Measured 2026-11-07, and why some queries look the way they do:
 
@@ -188,7 +227,7 @@ has the tokens, `recipes.py` turns a declared panel into a visualization,
   site's colour (`SITES`: 3:1 on both themes, none of them a state colour).
 - **Answer first.** A sectioned tab runs headline (stats), status (state
   tables), trends (graphs) and detail (other tables), each a row with its own
-  auto grid (`SECTIONS`): five tiles across, tables two across (at three they cut
+  auto grid (`SECTIONS`): six tiles across, tables two across (at three they cut
   off columns), About folded at the end. A panel's section follows from its kind
   and unit (`role()`); `role=` overrides it.
 - **Fleet tables.** `per_site="<label>"` turns a per-site table into one row per

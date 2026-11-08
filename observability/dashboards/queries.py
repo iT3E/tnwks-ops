@@ -106,6 +106,15 @@ WAN_CLIENT = ("tnwks-wan-clients", {"client": "client"})
 ACCESS_POINT = ("home-wifi", {"ap": "name"})
 
 
+# Boards not generated here, by UID: the words a link to them uses.
+OTHER_BOARDS = {NGINX[0]: "NGINX", NODE[0]: "Node (Pods)", ACCESS_POINT[0]: "Home Wi-Fi"}
+
+
+# A list that spans areas (Homelab's Needs attention) opens each row's own board,
+# from the row's hidden `board` column.
+ROW_BOARD = "${__data.fields.board}"
+
+
 # The site 2 host, a UniFi Wi-Fi client (its Windows computer name, as in the
 # Ansible inventory). No household device is named in the repository; the Wi-Fi
 # clients board reads names from UniFi at runtime.

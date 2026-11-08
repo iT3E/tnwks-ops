@@ -45,7 +45,13 @@
         "spec": {
           "id": 2,
           "title": "Sites",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -146,13 +152,9 @@
                   },
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
+                      "title": "Open Sites & Failover",
+                      "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence"
@@ -169,7 +171,13 @@
         "spec": {
           "id": 3,
           "title": "Network",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -270,13 +278,9 @@
                   },
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/tnwks-network/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
+                      "title": "Open Network & Routing",
+                      "url": "/d/tnwks-network/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence"
@@ -293,7 +297,13 @@
         "spec": {
           "id": 4,
           "title": "Internet",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -394,13 +404,9 @@
                   },
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/tnwks-internet/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
+                      "title": "Open Internet",
+                      "url": "/d/tnwks-internet/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence"
@@ -417,7 +423,13 @@
         "spec": {
           "id": 5,
           "title": "Wi-Fi",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -518,13 +530,9 @@
                   },
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/tnwks-wifi/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
+                      "title": "Open Wi-Fi & LAN",
+                      "url": "/d/tnwks-wifi/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence"
@@ -541,7 +549,13 @@
         "spec": {
           "id": 6,
           "title": "Kubernetes",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -642,13 +656,9 @@
                   },
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/tnwks-kubernetes/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
+                      "title": "Open Kubernetes & GitOps",
+                      "url": "/d/tnwks-kubernetes/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence"
@@ -664,8 +674,140 @@
         "kind": "Panel",
         "spec": {
           "id": 7,
+          "title": "Hosts",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "((max(((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 1)",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background_solid",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#c4302b"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#2f6bd0"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#6b6b6b"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#8a4fb5"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "links": [
+                    {
+                      "title": "Open Hosts & Capacity",
+                      "url": "/d/tnwks-hosts/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                      "oneClick": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The worst of each Windows host's CPU, memory commit, disk latency and free space: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "id": 8,
           "title": "Data",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -766,13 +908,9 @@
                   },
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/tnwks-data/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
+                      "title": "Open Databases & Backups",
+                      "url": "/d/tnwks-data/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence"
@@ -784,12 +922,18 @@
           "description": "The worst of database backups, each app's recovery point and the databases outside CNPG: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-7": {
+      "panel-8": {
         "kind": "Panel",
         "spec": {
-          "id": 8,
+          "id": 9,
           "title": "Recovery",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -890,13 +1034,9 @@
                   },
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
+                      "title": "Open Sites & Failover",
+                      "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence"
@@ -908,12 +1048,18 @@
           "description": "The worst of each warm app's readiness on its standby and its restore time: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-8": {
+      "panel-9": {
         "kind": "Panel",
         "spec": {
-          "id": 9,
+          "id": 10,
           "title": "Apps",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1014,13 +1160,9 @@
                   },
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/tnwks-apps/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
+                      "title": "Open Apps & Ingress",
+                      "url": "/d/tnwks-apps/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence"
@@ -1032,12 +1174,18 @@
           "description": "The worst of every app's probe and every shared name: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-9": {
+      "panel-10": {
         "kind": "Panel",
         "spec": {
-          "id": 10,
+          "id": 11,
           "title": "Home",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1138,13 +1286,9 @@
                   },
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/tnwks-home/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
+                      "title": "Open Home Automation & Cameras",
+                      "url": "/d/tnwks-home/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence"
@@ -1156,12 +1300,18 @@
           "description": "The worst of Home Assistant, MQTT and the cameras: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-10": {
+      "panel-11": {
         "kind": "Panel",
         "spec": {
-          "id": 11,
+          "id": 12,
           "title": "Observability",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1262,13 +1412,9 @@
                   },
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/tnwks-observability/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
+                      "title": "Open Observability",
+                      "url": "/d/tnwks-observability/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence"
@@ -1280,12 +1426,18 @@
           "description": "The worst of the archive and every evidence collector: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-11": {
+      "panel-12": {
         "kind": "Panel",
         "spec": {
-          "id": 12,
+          "id": 13,
           "title": "Needs attention",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1298,7 +1450,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "sort_desc(label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Site\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Workload\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Service\", \"\", \"\") or label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Name\", \"\", \"\") or label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Network path\", \"\", \"\") or label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 1, \"area\", \"Flux resource\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Recovery\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Restore time\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Backups\", \"\", \"\") or label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Database backup\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Database\", \"\", \"\"))",
+                        "expr": "sort_desc(label_replace(label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Site\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Workload\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Service\", \"\", \"\"), \"board\", \"tnwks-apps\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Name\", \"\", \"\"), \"board\", \"tnwks-apps\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Network path\", \"\", \"\"), \"board\", \"tnwks-network\", \"\", \"\") or label_replace(label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 1, \"area\", \"Flux resource\", \"\", \"\"), \"board\", \"tnwks-kubernetes\", \"\", \"\") or label_replace(label_replace((homelab:host_state{k8s_cluster=~\"$cluster\"}) != 1, \"area\", \"Host\", \"\", \"\"), \"board\", \"tnwks-hosts\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Recovery\", \"\", \"\"), \"board\", \"tnwks-sites\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Restore time\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Backups\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Database backup\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\") or label_replace(label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Database\", \"\", \"\"), \"board\", \"tnwks-data\", \"\", \"\"))",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "{{k8s_cluster}}",
@@ -1448,6 +1600,18 @@
                   {
                     "matcher": {
                       "id": "byName",
+                      "options": "board"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
                       "options": "State"
                     },
                     "properties": [
@@ -1511,13 +1675,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
+                            "title": "Open its board",
+                            "url": "/d/${__data.fields.board}/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -1527,15 +1687,21 @@
               }
             }
           },
-          "description": "Everything not healthy right now, by area: sites, workloads, services, names, network paths, Flux resources, recovery, restore time, backups and databases. Standby and Not applicable are left out. Empty means nothing needs you.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Everything not healthy right now, by area: sites, workloads, services, names, network paths, Flux resources, hosts, recovery, restore time, backups and databases. Standby and Not applicable are left out. Empty means nothing needs you. A row opens its area's board.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-12": {
+      "panel-13": {
         "kind": "Panel",
         "spec": {
-          "id": 13,
+          "id": 14,
           "title": "Current firing alerts",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1696,13 +1862,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-alerts/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
+                            "title": "Open Alerts",
+                            "url": "/d/tnwks-alerts/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -1715,12 +1877,18 @@
           "description": "Current Prometheus rule state, excluding heartbeats; this is not a historical Alertmanager event list and does not show silence/inhibition state.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-13": {
+      "panel-14": {
         "kind": "Panel",
         "spec": {
-          "id": 14,
+          "id": 15,
           "title": "Expected sites",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1779,13 +1947,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -1795,12 +1956,18 @@
           "description": "Declared inventory survives the disappearance of a source. This is expected scope, not health.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-14": {
+      "panel-15": {
         "kind": "Panel",
         "spec": {
-          "id": 15,
+          "id": 16,
           "title": "Reporting sites",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1859,13 +2026,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -1875,12 +2035,18 @@
           "description": "Distinct selected sites with fresh, successful evidence. Duplicate observations count once. Compare with Expected sites; partial results never certify fleet health.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-15": {
+      "panel-16": {
         "kind": "Panel",
         "spec": {
-          "id": 16,
+          "id": 17,
           "title": "Site evidence",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2081,13 +2247,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
+                            "title": "Open Sites & Failover",
+                            "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -2100,12 +2262,18 @@
           "description": "Measured site evidence, including explicit Unknown when an expected site stops reporting. Independent site probes distinguish unreachable from unobserved.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-16": {
+      "panel-17": {
         "kind": "Panel",
         "spec": {
-          "id": 17,
+          "id": 18,
           "title": "Evidence age",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2270,13 +2438,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-observability/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
+                            "title": "Open Observability",
+                            "url": "/d/tnwks-observability/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -2289,12 +2453,18 @@
           "description": "Age of the last successful Kubernetes inventory observation. A recent Prometheus scrape alone does not prove the collector is seeing its upstream.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-17": {
+      "panel-18": {
         "kind": "Panel",
         "spec": {
-          "id": 18,
+          "id": 19,
           "title": "Observed state changes",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2348,13 +2518,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -2369,12 +2532,18 @@
           "description": "Sampled transitions in observed service state. This is supplementary evidence and can miss transitions during a monitoring gap.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-18": {
+      "panel-19": {
         "kind": "Panel",
         "spec": {
-          "id": 19,
+          "id": 20,
           "title": "Latest workload rollout",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2534,16 +2703,6 @@
                       {
                         "id": "unit",
                         "value": "s"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -2554,12 +2713,18 @@
           "description": "Time since a workload Ready transition reported by Kubernetes. This is not necessarily its deployment or git revision time.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-19": {
+      "panel-20": {
         "kind": "Panel",
         "spec": {
-          "id": 20,
+          "id": 21,
           "title": "Available local history",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2719,16 +2884,6 @@
                       {
                         "id": "unit",
                         "value": "s"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -2849,9 +3004,18 @@
                                     "name": "panel-10"
                                   }
                                 }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-11"
+                                  }
+                                }
                               }
                             ],
-                            "maxColumnCount": 5,
+                            "maxColumnCount": 6,
                             "fillScreen": false
                           }
                         },
@@ -2873,7 +3037,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-11"
+                                    "name": "panel-12"
                                   }
                                 }
                               },
@@ -2882,7 +3046,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-12"
+                                    "name": "panel-13"
                                   }
                                 }
                               }
@@ -2909,15 +3073,6 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-13"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
                                     "name": "panel-14"
                                   }
                                 }
@@ -2937,6 +3092,15 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-16"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-17"
                                   }
                                 }
                               }
@@ -3003,7 +3167,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-17"
+                                    "name": "panel-18"
                                   }
                                 }
                               }
@@ -3030,7 +3194,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-18"
+                                    "name": "panel-19"
                                   }
                                 }
                               },
@@ -3039,7 +3203,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-19"
+                                    "name": "panel-20"
                                   }
                                 }
                               }

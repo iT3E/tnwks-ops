@@ -932,3 +932,75 @@ tests:
   - expr: homelab:house_state{domain=~"wifi|cameras"}
     eval_time: 10m
     exp_samples: []
+- name: 'host states: half-busy CPU, memory promised past 90%, slow and nearly full disk, a host gone'
+  interval: 1m
+  input_series:
+  - series: up{job="windows-exporter",k8s_cluster="one",instance="one"}
+    values: 1+0x30
+  - series: windows_cpu_time_total{k8s_cluster="one",instance="one",mode="idle",core="0"}
+    values: 0+30x30
+  - series: windows_cpu_time_total{k8s_cluster="one",instance="one",mode="idle",core="1"}
+    values: 0+30x30
+  - series: windows_memory_committed_bytes{k8s_cluster="one",instance="one",}
+    values: 93+0x30
+  - series: windows_memory_commit_limit{k8s_cluster="one",instance="one",}
+    values: 100+0x30
+  - series: windows_logical_disk_reads_total{k8s_cluster="one",instance="one",volume="C:"}
+    values: 0+600x30
+  - series: windows_logical_disk_writes_total{k8s_cluster="one",instance="one",volume="C:"}
+    values: 0+0x30
+  - series: windows_logical_disk_read_write_latency_seconds_total{k8s_cluster="one",instance="one",volume="C:"}
+    values: 0+60x30
+  - series: windows_logical_disk_free_bytes{k8s_cluster="one",instance="one",volume="C:"}
+    values: 3+0x30
+  - series: windows_logical_disk_size_bytes{k8s_cluster="one",instance="one",volume="C:"}
+    values: 100+0x30
+  - series: windows_logical_disk_reads_total{k8s_cluster="one",instance="one",volume="HarddiskVolume1"}
+    values: 0+600x30
+  - series: windows_logical_disk_writes_total{k8s_cluster="one",instance="one",volume="HarddiskVolume1"}
+    values: 0+0x30
+  - series: windows_logical_disk_read_write_latency_seconds_total{k8s_cluster="one",instance="one",volume="HarddiskVolume1"}
+    values: 0+6000x30
+  - series: windows_logical_disk_free_bytes{k8s_cluster="one",instance="one",volume="HarddiskVolume1"}
+    values: 0+0x30
+  - series: windows_logical_disk_size_bytes{k8s_cluster="one",instance="one",volume="HarddiskVolume1"}
+    values: 100+0x30
+  - series: up{job="windows-exporter",k8s_cluster="two",instance="two"}
+    values: 0+0x30
+  promql_expr_test:
+  - expr: homelab:host_state
+    eval_time: 20m
+    exp_samples:
+    - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="CPU"}
+      value: 1
+    - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="Memory commit"}
+      value: 2
+    - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="Disk latency"}
+      value: 2
+    - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="Disk space"}
+      value: 3
+    - labels: homelab:host_state{k8s_cluster="two",instance="two",resource="CPU"}
+      value: 0
+    - labels: homelab:host_state{k8s_cluster="two",instance="two",resource="Memory commit"}
+      value: 0
+    - labels: homelab:host_state{k8s_cluster="two",instance="two",resource="Disk latency"}
+      value: 0
+    - labels: homelab:host_state{k8s_cluster="two",instance="two",resource="Disk space"}
+      value: 0
+- name: 'host states: an idle disk isn''t a slow one'
+  interval: 1m
+  input_series:
+  - series: up{job="windows-exporter",k8s_cluster="one",instance="one"}
+    values: 1+0x30
+  - series: windows_logical_disk_reads_total{k8s_cluster="one",instance="one",volume="D:"}
+    values: 0+3x30
+  - series: windows_logical_disk_writes_total{k8s_cluster="one",instance="one",volume="D:"}
+    values: 0+0x30
+  - series: windows_logical_disk_read_write_latency_seconds_total{k8s_cluster="one",instance="one",volume="D:"}
+    values: 0+3x30
+  promql_expr_test:
+  - expr: homelab:host_state{resource="Disk latency"}
+    eval_time: 20m
+    exp_samples:
+    - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="Disk latency"}
+      value: 1

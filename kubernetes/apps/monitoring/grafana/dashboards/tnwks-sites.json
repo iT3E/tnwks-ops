@@ -45,7 +45,13 @@
         "spec": {
           "id": 2,
           "title": "Expected sites",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -104,13 +110,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -125,7 +124,13 @@
         "spec": {
           "id": 3,
           "title": "Reporting sites",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -184,13 +189,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -205,7 +203,13 @@
         "spec": {
           "id": 4,
           "title": "Site evidence",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -406,13 +410,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
+                            "title": "Open Sites & Failover",
+                            "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -430,7 +430,13 @@
         "spec": {
           "id": 5,
           "title": "Evidence age",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -595,13 +601,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-observability/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
+                            "title": "Open Observability",
+                            "url": "/d/tnwks-observability/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -619,7 +621,13 @@
         "spec": {
           "id": 6,
           "title": "Ready nodes",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -673,13 +681,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -730,7 +731,13 @@
         "spec": {
           "id": 7,
           "title": "Cross-site observation",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -908,16 +915,6 @@
                             }
                           }
                         ]
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -933,7 +930,13 @@
         "spec": {
           "id": 8,
           "title": "Workload state",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1139,16 +1142,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1164,7 +1157,13 @@
         "spec": {
           "id": 9,
           "title": "Declared placement",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1314,24 +1313,6 @@
                         "value": "—"
                       }
                     ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "Site"
-                    },
-                    "properties": [
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
-                      }
-                    ]
                   }
                 ]
               }
@@ -1345,7 +1326,13 @@
         "spec": {
           "id": 10,
           "title": "Desired replicas",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1505,16 +1492,6 @@
                       {
                         "id": "unit",
                         "value": "short"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1530,7 +1507,13 @@
         "spec": {
           "id": 11,
           "title": "Ready replicas",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1690,16 +1673,6 @@
                       {
                         "id": "unit",
                         "value": "short"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1715,7 +1688,13 @@
         "spec": {
           "id": 12,
           "title": "Runtime overrides present",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1893,16 +1872,6 @@
                             }
                           }
                         ]
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1918,7 +1887,13 @@
         "spec": {
           "id": 13,
           "title": "Override creation age",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2078,16 +2053,6 @@
                       {
                         "id": "unit",
                         "value": "s"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -2103,7 +2068,13 @@
         "spec": {
           "id": 14,
           "title": "Readiness evidence",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2309,16 +2280,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -2334,7 +2295,13 @@
         "spec": {
           "id": 15,
           "title": "Fencing evidence age",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2459,16 +2426,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -2484,7 +2441,13 @@
         "spec": {
           "id": 16,
           "title": "Fence job age",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2609,16 +2572,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -2634,7 +2587,13 @@
         "spec": {
           "id": 17,
           "title": "Lease authority reachable",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2797,16 +2756,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -2822,7 +2771,13 @@
         "spec": {
           "id": 18,
           "title": "Lease blocks this site",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2985,16 +2940,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -3010,7 +2955,13 @@
         "spec": {
           "id": 19,
           "title": "Last restore evidence",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -3135,16 +3086,6 @@
                       {
                         "id": "noValue",
                         "value": "—"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -3160,7 +3101,13 @@
         "spec": {
           "id": 20,
           "title": "Serving-state changes",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -3320,16 +3267,6 @@
                       {
                         "id": "unit",
                         "value": "short"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -3345,7 +3282,13 @@
         "spec": {
           "id": 21,
           "title": "Shared VIP route changes",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -3505,16 +3448,6 @@
                       {
                         "id": "unit",
                         "value": "short"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -3530,7 +3463,13 @@
         "spec": {
           "id": 22,
           "title": "Workload availability transitions",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -3690,16 +3629,6 @@
                       {
                         "id": "unit",
                         "value": "dateTimeAsIso"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -3750,7 +3679,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 5,
+                            "maxColumnCount": 6,
                             "fillScreen": false
                           }
                         },
@@ -4149,6 +4078,18 @@
       }
     },
     "links": [
+      {
+        "title": "↑ Homelab",
+        "type": "link",
+        "icon": "dashboard",
+        "tooltip": "Up to the overview",
+        "tags": [],
+        "asDropdown": false,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true,
+        "url": "/d/home/view"
+      },
       {
         "title": "Dashboards",
         "type": "dashboards",
