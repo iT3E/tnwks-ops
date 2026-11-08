@@ -71,5 +71,5 @@ def board() -> Board:
                   "Where each picked device is associated now, on which band and channel, and for how long: shortest first, so a fresh reconnect is on top.",
                   "table", WIFI_CLIENT, column="Connected for", sort="asc"),
             ],
-        }, "Network", sections=True,
+        }, "Network", sections=True, parent="tnwks-wifi",
         variables=(Variable("client", "Client", 'label_values(unpoller_client_uptime_seconds{source_site="",wired="false"}, name)'),))

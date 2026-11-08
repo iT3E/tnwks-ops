@@ -16,7 +16,7 @@ from conventions import OBSERVATION_BUDGET_SECONDS, runbook_path
 from .design import LABELS, SCRAPE_COLUMNS, SECTIONS
 from .model import Board, Variable, legend, role, value_header
 from .queries import CLUSTERS
-from .recipes import visualization
+from .recipes import board_titles, boards, visualization
 
 
 def rows(sections: dict[str, list[str]]):
@@ -67,6 +67,34 @@ def entity(variable: Variable, datasource: str):
     return picker
 
 
+def hierarchy(board: Board) -> list:
+    """The top bar's way up (Homelab, then the parent board) and down (the boards
+    whose parent this is), keeping the time range, sites and datasource."""
+    def link(uid: str, arrow: str, tooltip: str):
+        return (dashboard.DashboardLink().title(f"{arrow} {board_titles()[uid]}").type(model.DashboardLinkType.LINK)
+                .url(f"/d/{uid}/view").icon("dashboard").tooltip(tooltip).keep_time(True).include_vars(True))
+    up = [] if board.level == "l1" else [link("home", "↑", "Up to the overview")]
+    if board.parent:
+        up.append(link(board.parent, "↑", "Up to the domain board"))
+    down = [link(child.uid, "↓", "Down to the detail for one host or device")
+            for child in boards() if child.parent == board.uid]
+    return up + down
+
+
+def one_click(spec: dict) -> dict:
+    """A value has at most one data link, and a click follows it: no menu to pick from."""
+    for element in spec["elements"].values():
+        config = element["spec"]["vizConfig"]["spec"].get("fieldConfig", {})
+        lists = [config.get("defaults", {}).get("links", [])] + [
+            prop["value"] for override in config.get("overrides", []) for prop in override["properties"]
+            if prop["id"] == "links"]
+        for links in lists:
+            assert len(links) <= 1, (element["spec"]["title"], links)
+            for item in links:
+                item["oneClick"] = True
+    return spec
+
+
 def resource(board: Board) -> dict:
     builder = (dashboard.Dashboard(board.title).description(board.question)
                .editable(False).tags(["tnwks", board.level, board.domain])
@@ -87,7 +115,8 @@ def resource(board: Board) -> dict:
                          .current(model.VariableOption(text="All", value="$__all")))
         for variable in board.variables:
             builder.variable(entity(variable, datasource))
-        builder.links([dashboard.DashboardLink().title("Dashboards").type(model.DashboardLinkType.DASHBOARDS)
+        builder.links([*hierarchy(board),
+                       dashboard.DashboardLink().title("Dashboards").type(model.DashboardLinkType.DASHBOARDS)
                        .tags(["tnwks"]).as_dropdown(True).keep_time(True).include_vars(True)])
     tab_layout = dashboard.Tabs()
     count = 0
@@ -154,12 +183,17 @@ def resource(board: Board) -> dict:
                                 "Source contract: observability/generated/panel-contracts.json.")
             element = (dashboard.Panel().id(count + 1).title(panel.title).description(description)
                        .data(data)
-                       .visualization(visualization(panel, None if board.kiosk else runbook_path(board.domain, panel.title))))
+                       .visualization(visualization(panel)))
+            if not board.kiosk:
+                # The runbook is a header link, apart from the data: a click on a value
+                # only ever goes deeper into Grafana.
+                element.links([dashboard.DataLink().title("Runbook").target_blank(True)
+                               .url(f"https://github.com/iT3E/tnwks-ops/blob/main/{runbook_path(board.domain, panel.title)}")])
             builder.element(key, element)
             grid.with_item(key)
             sections[role(panel)].append(key)
         tab_layout.tab(dashboard.Tab().title(tab_name).layout(rows(sections) if board.sections else grid))
     builder.layout(tab_layout)
-    spec = json.loads(json.dumps(builder.build(), cls=JSONEncoder))
+    spec = one_click(json.loads(json.dumps(builder.build(), cls=JSONEncoder)))
     return {"apiVersion": "dashboard.grafana.app/v2", "kind": "Dashboard",
             "metadata": {"name": board.uid}, "spec": spec}

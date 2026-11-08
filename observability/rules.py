@@ -69,6 +69,51 @@ def records():
         # deliberately at zero; Unknown where neither is observed.
         "homelab:service_state": '(3 - 2 * min by (k8s_cluster, app) (probe_success{observability_target="service"} and (time() - timestamp(probe_success{observability_target="service"})) < 180)) or on (k8s_cluster, app) (homelab:workload_state == 4) or on (k8s_cluster, app) (0 * max by (k8s_cluster, app) (homelab_expected_workload_info))',
         **house_records(),
+        **host_records(),
+    }
+
+
+def bands(value, degraded, failed, higher_is_better=True):
+    """1 at or past `degraded`, 2 between, 3 past `failed`."""
+    if higher_is_better:
+        return (f"(({value}) >= bool {degraded}) + 2 * (({value}) < bool {degraded}) * (({value}) >= bool {failed})"
+                f" + 3 * (({value}) < bool {failed})")
+    return (f"(({value}) <= bool {degraded}) + 2 * (({value}) > bool {degraded}) * (({value}) <= bool {failed})"
+            f" + 3 * (({value}) > bool {failed})")
+
+
+def host_records():
+    """Each Windows host's resources as states (Homelab's Hosts tile, L1): the USE
+    signals that bite on these hosts, banded. A host whose exporter is down has
+    Unknown (0) rows; each site scrapes only its own host."""
+    by = "k8s_cluster, instance"
+    volumes = 'volume!~"HarddiskVolume.+"'
+    expected = f'max by ({by}) (up{{job="windows-exporter"}})'
+    ops = (f'rate(windows_logical_disk_reads_total{{{volumes}}}[15m])'
+           f' + rate(windows_logical_disk_writes_total{{{volumes}}}[15m])')
+    # Seconds per operation on the slowest volume doing real work (over 1 op/s);
+    # an idle disk isn't slow: 0.
+    latency = (f'max by ({by}) (rate(windows_logical_disk_read_write_latency_seconds_total{{{volumes}}}[15m])'
+               f' / ({ops}) and ({ops}) > 1)'
+               f' or on ({by}) (0 * max by ({by}) (windows_logical_disk_reads_total))')
+    values = {
+        # Sustained, not a spike: 15 minutes.
+        "CPU": (f'1 - avg by ({by}) (rate(windows_cpu_time_total{{mode="idle"}}[15m]))', 0.85, 0.95, False),
+        # Memory promised against RAM plus page file: at 100% allocations fail.
+        "Memory commit": (f'max by ({by}) (windows_memory_committed_bytes) / max by ({by}) (windows_memory_commit_limit)',
+                   0.90, 0.97, False),
+        "Disk latency": (latency, 0.05, 0.2, False),
+        "Disk space": (f'min by ({by}) (windows_logical_disk_free_bytes{{{volumes}}} / windows_logical_disk_size_bytes)',
+                       0.10, 0.05, True),
+    }
+    return {
+        # The measured value per resource (ratios, but seconds for disk latency).
+        "homelab:host_usage": " or ".join(
+            f'label_replace({value}, "resource", "{name}", "", "")' for name, (value, *_) in values.items()),
+        "homelab:host_state": " or ".join(
+            f'label_replace(({bands(f"homelab:host_usage{{resource=\"{name}\"}}", degraded, failed, higher)})'
+            f' or on ({by}) (0 * {expected}), "resource", "{name}", "", "")'
+            for name, (_, degraded, failed, higher) in values.items()),
     }
 
 
@@ -104,14 +149,6 @@ def house_records():
 
     def rank_state(name):
         return f"({name} == bool 4) * 3 + ({name} == bool 3) * 2 + ({name} == bool 1)"
-
-    def bands(value, degraded, failed, higher_is_better=True):
-        # 1 at or past `degraded`, 2 between, 3 past `failed`.
-        if higher_is_better:
-            return (f"(({value}) >= bool {degraded}) + 2 * (({value}) < bool {degraded}) * (({value}) >= bool {failed})"
-                    f" + 3 * (({value}) < bool {failed})")
-        return (f"(({value}) <= bool {degraded}) + 2 * (({value}) > bool {degraded}) * (({value}) <= bool {failed})"
-                f" + 3 * (({value}) > bool {failed})")
 
     # Backups: every app's recovery point and every database backup this site
     # takes. A site that backs nothing up has no part.
@@ -667,7 +704,60 @@ def fixtures():
         *objective_fixtures(),
         *other_database_fixtures(),
         *house_fixtures(),
+        *host_fixtures(),
     ]}
+
+
+def host_fixtures():
+    def state(host, resource, value):
+        return {"labels": f'homelab:host_state{{k8s_cluster="{host}",instance="{host}",resource="{resource}"}}',
+                "value": value}
+
+    def series(name, labels, values):
+        return {"series": f'{name}{{k8s_cluster="one",instance="one",{labels}}}', "values": values}
+
+    return [
+        {"name": "host states: half-busy CPU, memory promised past 90%, slow and nearly full disk, a host gone", "interval": "1m",
+         "input_series": [
+             {"series": 'up{job="windows-exporter",k8s_cluster="one",instance="one"}', "values": "1+0x30"},
+             # Two cores, each idle half of every second: 50% busy.
+             series("windows_cpu_time_total", 'mode="idle",core="0"', "0+30x30"),
+             series("windows_cpu_time_total", 'mode="idle",core="1"', "0+30x30"),
+             series("windows_memory_committed_bytes", "", "93+0x30"),
+             series("windows_memory_commit_limit", "", "100+0x30"),
+             # C: does 10 operations a second at 100 ms each; a hidden partition is
+             # full and slow, and doesn't count.
+             series("windows_logical_disk_reads_total", 'volume="C:"', "0+600x30"),
+             series("windows_logical_disk_writes_total", 'volume="C:"', "0+0x30"),
+             series("windows_logical_disk_read_write_latency_seconds_total", 'volume="C:"', "0+60x30"),
+             series("windows_logical_disk_free_bytes", 'volume="C:"', "3+0x30"),
+             series("windows_logical_disk_size_bytes", 'volume="C:"', "100+0x30"),
+             series("windows_logical_disk_reads_total", 'volume="HarddiskVolume1"', "0+600x30"),
+             series("windows_logical_disk_writes_total", 'volume="HarddiskVolume1"', "0+0x30"),
+             series("windows_logical_disk_read_write_latency_seconds_total", 'volume="HarddiskVolume1"', "0+6000x30"),
+             series("windows_logical_disk_free_bytes", 'volume="HarddiskVolume1"', "0+0x30"),
+             series("windows_logical_disk_size_bytes", 'volume="HarddiskVolume1"', "100+0x30"),
+             # The other host's exporter is down: nothing to judge, so Unknown.
+             {"series": 'up{job="windows-exporter",k8s_cluster="two",instance="two"}', "values": "0+0x30"},
+         ], "promql_expr_test": [
+             {"expr": "homelab:host_state", "eval_time": "20m", "exp_samples": [
+                 state("one", "CPU", 1), state("one", "Memory commit", 2), state("one", "Disk latency", 2),
+                 state("one", "Disk space", 3),
+                 state("two", "CPU", 0), state("two", "Memory commit", 0), state("two", "Disk latency", 0),
+                 state("two", "Disk space", 0)]},
+         ]},
+        {"name": "host states: an idle disk isn't a slow one", "interval": "1m",
+         "input_series": [
+             {"series": 'up{job="windows-exporter",k8s_cluster="one",instance="one"}', "values": "1+0x30"},
+             # A few slow reads a minute: under 1 operation a second, so not judged.
+             series("windows_logical_disk_reads_total", 'volume="D:"', "0+3x30"),
+             series("windows_logical_disk_writes_total", 'volume="D:"', "0+0x30"),
+             series("windows_logical_disk_read_write_latency_seconds_total", 'volume="D:"', "0+3x30"),
+         ], "promql_expr_test": [
+             {"expr": 'homelab:host_state{resource="Disk latency"}', "eval_time": "20m", "exp_samples": [
+                 state("one", "Disk latency", 1)]},
+         ]},
+    ]
 
 
 def house_fixtures():

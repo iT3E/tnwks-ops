@@ -45,7 +45,13 @@
         "spec": {
           "id": 2,
           "title": "CPU busy",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -104,13 +110,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -125,7 +124,13 @@
         "spec": {
           "id": 3,
           "title": "Run queue per core",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -184,13 +189,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -205,7 +203,13 @@
         "spec": {
           "id": 4,
           "title": "WSL VM CPU busy",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -264,13 +268,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -285,7 +282,13 @@
         "spec": {
           "id": 5,
           "title": "CPU by mode",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -339,13 +342,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "percentunit",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -366,7 +362,13 @@
         "spec": {
           "id": 6,
           "title": "Busiest cores",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -420,13 +422,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "percentunit",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -447,7 +442,13 @@
         "spec": {
           "id": 7,
           "title": "Run queue",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -501,13 +502,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -527,7 +521,13 @@
         "spec": {
           "id": 8,
           "title": "WSL CPU pressure",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -581,13 +581,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "percentunit",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -639,7 +632,13 @@
         "spec": {
           "id": 9,
           "title": "Memory in use",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -698,13 +697,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -719,7 +711,13 @@
         "spec": {
           "id": 10,
           "title": "Commit charge",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -778,13 +776,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -799,7 +790,13 @@
         "spec": {
           "id": 11,
           "title": "Paging to disk",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -858,13 +855,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -879,7 +869,13 @@
         "spec": {
           "id": 12,
           "title": "Memory and commit",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -933,13 +929,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "percentunit",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -960,7 +949,13 @@
         "spec": {
           "id": 13,
           "title": "Page file traffic",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1014,13 +1009,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "ops",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1040,7 +1028,13 @@
         "spec": {
           "id": 14,
           "title": "WSL memory pressure",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1094,13 +1088,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "percentunit",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1152,7 +1139,13 @@
         "spec": {
           "id": 15,
           "title": "Slowest volume latency",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1211,13 +1204,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -1232,7 +1218,13 @@
         "spec": {
           "id": 16,
           "title": "Busiest volume",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1291,13 +1283,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -1312,7 +1297,13 @@
         "spec": {
           "id": 17,
           "title": "Queued disk requests",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1371,13 +1362,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -1392,7 +1376,13 @@
         "spec": {
           "id": 18,
           "title": "Read latency by volume",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1446,13 +1436,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1472,7 +1455,13 @@
         "spec": {
           "id": 19,
           "title": "Write latency by volume",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1526,13 +1515,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1552,7 +1534,13 @@
         "spec": {
           "id": 20,
           "title": "Queue depth by volume",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1606,13 +1594,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1632,7 +1613,13 @@
         "spec": {
           "id": 21,
           "title": "Throughput by volume",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1686,13 +1673,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "Bps",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1712,7 +1692,13 @@
         "spec": {
           "id": 22,
           "title": "WSL I/O pressure",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1766,13 +1752,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "percentunit",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1824,7 +1803,13 @@
         "spec": {
           "id": 23,
           "title": "Free space by volume",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1998,16 +1983,6 @@
                       {
                         "id": "unit",
                         "value": "percentunit"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -2023,7 +1998,13 @@
         "spec": {
           "id": 24,
           "title": "Busiest adapter",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2082,13 +2063,6 @@
                     "mode": "fixed",
                     "fixedColor": "text"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -2103,7 +2077,13 @@
         "spec": {
           "id": 25,
           "title": "Received by adapter",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2157,13 +2137,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "Bps",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -2183,7 +2156,13 @@
         "spec": {
           "id": 26,
           "title": "Sent by adapter",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2237,13 +2216,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "Bps",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -2263,7 +2235,13 @@
         "spec": {
           "id": 27,
           "title": "Errors and discards by adapter",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2317,13 +2295,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "pps",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "None in range",
                   "custom": {
                     "lineWidth": 1,
@@ -2342,7 +2313,13 @@
         "spec": {
           "id": 28,
           "title": "Link speed by adapter",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -2502,16 +2479,6 @@
                       {
                         "id": "unit",
                         "value": "bps"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -2571,7 +2538,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 5,
+                            "maxColumnCount": 6,
                             "fillScreen": false
                           }
                         },
@@ -2710,7 +2677,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 5,
+                            "maxColumnCount": 6,
                             "fillScreen": false
                           }
                         },
@@ -2813,7 +2780,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 5,
+                            "maxColumnCount": 6,
                             "fillScreen": false
                           }
                         },
@@ -2943,7 +2910,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 5,
+                            "maxColumnCount": 6,
                             "fillScreen": false
                           }
                         },
@@ -3033,6 +3000,30 @@
       }
     },
     "links": [
+      {
+        "title": "↑ Homelab",
+        "type": "link",
+        "icon": "dashboard",
+        "tooltip": "Up to the overview",
+        "tags": [],
+        "asDropdown": false,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true,
+        "url": "/d/home/view"
+      },
+      {
+        "title": "↑ Hosts & Capacity",
+        "type": "link",
+        "icon": "dashboard",
+        "tooltip": "Up to the domain board",
+        "tags": [],
+        "asDropdown": false,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true,
+        "url": "/d/tnwks-hosts/view"
+      },
       {
         "title": "Dashboards",
         "type": "dashboards",

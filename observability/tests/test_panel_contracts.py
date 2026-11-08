@@ -45,14 +45,44 @@ def test_operator_links_preserve_multiple_sites_and_time_without_exposing_operat
                 continue
             config = spec["vizConfig"]["spec"]["fieldConfig"]
             # A table's links sit on its value (or site) column, not the defaults.
-            links = config["defaults"].get("links", []) + [
+            data = config["defaults"].get("links", []) + [
                 link for override in config.get("overrides", []) for prop in override["properties"]
                 if prop["id"] == "links" for link in prop["value"]]
+            header = spec.get("links", [])
             if board.kiosk:
-                assert not links
-            else:
-                assert any(link["title"] == "Runbook" for link in links)
-                assert "180s" in spec["description"]
+                assert not data and not header
+                continue
+            # The runbook is the panel header's link; a click on data only goes deeper
+            # into Grafana, in one click, and says where.
+            assert [link["title"] for link in header] == ["Runbook"], spec["title"]
+            assert header[0]["targetBlank"] is True
+            for link in data:
+                assert link["url"].startswith("/d/"), (spec["title"], link["url"])
+                assert link["title"].startswith("Open ") and link["oneClick"] is True, (spec["title"], link)
+            assert "180s" in spec["description"]
+
+
+def test_every_level_links_up_and_down():
+    """Homelab is the top; every other board links up to it, an L3 board to its
+    domain board too, and a domain board down to its diagnose boards."""
+    boards = {board.uid: board for board in catalogue()}
+    for board in boards.values():
+        if board.kiosk:
+            continue
+        bar = [link["title"] for link in resource(board)["spec"]["links"]]
+        expected = [] if board.level == "l1" else ["↑ Homelab"]
+        if board.parent:
+            assert board.level == "l3" and boards[board.parent].level == "l2", board.uid
+            expected.append(f"↑ {boards[board.parent].title}")
+        expected += [f"↓ {child.title}" for child in boards.values() if child.parent == board.uid]
+        assert bar == [*expected, "Dashboards"], (board.uid, bar)
+    # Every L3 board has a way up, and its domain board a panel that drills into it.
+    for board in boards.values():
+        if board.level == "l3":
+            assert board.parent, board.uid
+            parent_links = [panel.link for panels in boards[board.parent].tabs.values() for panel in panels]
+            assert any(link == board.uid or (isinstance(link, tuple) and link[0] == board.uid)
+                       for link in parent_links), board.uid
 
 
 def test_series_are_named_by_the_labels_their_query_keeps():

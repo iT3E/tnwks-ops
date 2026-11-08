@@ -5,6 +5,7 @@ import os
 import sys
 import time
 import urllib.parse
+from datetime import datetime
 from pathlib import Path
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -12,6 +13,13 @@ from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from dashboards import catalogue
+
+
+def follow(page, click, uid):
+    """Click, wait until the browser is on the board, and return its URL parameters."""
+    click()
+    page.wait_for_url(lambda url: f"/d/{uid}/" in url, timeout=15000)
+    return urllib.parse.parse_qs(urllib.parse.urlparse(page.url).query)
 
 
 def open_evidence(page):
@@ -111,29 +119,21 @@ def main():
         ])
         page.goto(f"{base}/d/home/view?{query}", wait_until="domcontentloaded")
         open_evidence(page)
+        # One click on a value goes straight to the board below: no menu, no runbook.
         panel = page.get_by_test_id("data-testid Panel header Site evidence")
-        panel.get_by_text("Reporting", exact=True).click(timeout=15000)
-        diagnose = page.get_by_role("link", name="Diagnose", exact=True)
-        target = urllib.parse.urlparse(diagnose.get_attribute("href"))
-        params = urllib.parse.parse_qs(target.query)
-        assert target.path == "/d/tnwks-sites/view"
+        params = follow(page, lambda: panel.get_by_text("Reporting", exact=True).click(timeout=15000), "tnwks-sites")
         assert params["from"] == [str(incident_from)] and params["to"] == [str(incident_to)]
         assert params["var-cluster"] == ["homelab-wsl", "homelab-wsl-02"]
         assert params["var-datasource"] == ["prometheus-global"]
-        diagnose.click()
         page.get_by_role("tab", name="Sites", exact=True).wait_for(timeout=15000)
         navigation = {"journey": "home to sites", "incident_time_preserved": True,
                       "selected_sites": params["var-cluster"]}
         # Domain -> entity: the clicked row selects the entity board's variable.
         page.goto(f"{base}/d/tnwks-wifi/view?{query}", wait_until="domcontentloaded")
         panel = page.get_by_test_id("data-testid Panel header AP uptime")
-        # The row's value opens its links; Grafana's filter actions overlay the name cell.
+        # The row's value opens its link; Grafana's filter actions overlay the name cell.
         panel.get_by_text("AP Test Room", exact=True).wait_for(timeout=15000)
-        panel.get_by_text("1 day", exact=True).click(timeout=15000)
-        diagnose = page.get_by_role("link", name="Diagnose", exact=True)
-        target = urllib.parse.urlparse(diagnose.get_attribute("href"))
-        params = urllib.parse.parse_qs(target.query)
-        assert target.path == "/d/home-wifi/view", target
+        params = follow(page, lambda: panel.get_by_text("1 day", exact=True).click(timeout=15000), "home-wifi")
         assert params["from"] == [str(incident_from)] and params["to"] == [str(incident_to)]
         assert params["var-ap"] == ["AP Test Room"], params
         navigation["entity"] = {"journey": "wi-fi to access point", "incident_time_preserved": True,
@@ -143,19 +143,21 @@ def main():
         page.get_by_role("tab", name="Traffic", exact=True).click(timeout=15000)
         panel = page.get_by_test_id("data-testid Panel header Top WAN devices now")
         panel.get_by_text("Test Laptop", exact=True).wait_for(timeout=15000)
-        panel.get_by_text("2 Mb/s", exact=True).click(timeout=15000)
-        diagnose = page.get_by_role("link", name="Diagnose", exact=True)
-        target = urllib.parse.urlparse(diagnose.get_attribute("href"))
-        params = urllib.parse.parse_qs(target.query)
-        assert target.path == "/d/tnwks-wan-clients/view", target
+        params = follow(page, lambda: panel.get_by_text("2 Mb/s", exact=True).click(timeout=15000), "tnwks-wan-clients")
         assert params["from"] == [str(incident_from)] and params["to"] == [str(incident_to)]
         assert params["var-client"] == ["Test Laptop"], params
-        diagnose.click()
         page.get_by_role("tab", name="Devices", exact=True).wait_for(timeout=15000)
         # The picker took the device: the board opens on it, not on All.
         page.get_by_test_id("data-testid Dashboard template variables Variable Value DropDown value link text Test Laptop").wait_for(timeout=15000)
         navigation["diagnose"] = {"journey": "internet to WAN device", "incident_time_preserved": True,
                                   "selected": params["var-client"]}
+        # And back up: the top bar's link to the domain board keeps the time range.
+        params = follow(page, lambda: page.get_by_role("link", name="↑ Internet").first.click(timeout=15000), "tnwks-internet")
+        # Grafana writes a kept range as ISO times: the same instants.
+        kept = [int(datetime.fromisoformat(params[key][0]).timestamp() * 1000) for key in ("from", "to")]
+        assert kept == [incident_from, incident_to], (page.url, incident_from, incident_to)
+        page.get_by_role("tab", name="Experience", exact=True).wait_for(timeout=15000)
+        navigation["up"] = {"journey": "WAN clients up to Internet", "incident_time_preserved": True}
         browser.close()
     (out / "browser-results.json").write_text(json.dumps({"dashboards": results, "navigation": navigation,
         "page_errors": errors, "reloaded": retries}, indent=2) + "\n")

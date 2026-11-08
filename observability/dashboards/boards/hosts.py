@@ -10,6 +10,11 @@ def board() -> Board:
     return Board("tnwks-hosts", "Hosts & Capacity", "hosts", "l2",
               "Can the physical hosts sustain the workload and a site failure?", {
             "Physical resources": [
+                p("Host state", f'label_replace({metric("homelab:host_state")}, "host", "$1", "instance", "(.+)")', "state",
+                  "Each host's resources, graded: CPU busy over 15 minutes (Degraded above 85%, Failed above 95%), memory commit (90%, 97%), "
+                  "latency of the slowest busy volume (50 ms, 200 ms) and the fullest volume's free space (below 10%, 5%). "
+                  "Unknown when the host's exporter is down. Click a row for that host's detail.",
+                  "table", ("tnwks-host", {"host": "host"})),
                 p("Windows available memory", metric("windows_memory_available_bytes"), "bytes",
                   "Physical host availability. Do not add this to WSL MemAvailable, which overlaps the same memory.", link=HOST),
                 p("Host CPU busy", host_cpu_busy(), "percentunit",

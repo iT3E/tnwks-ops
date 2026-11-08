@@ -45,7 +45,13 @@
         "spec": {
           "id": 2,
           "title": "AP uptime",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -210,13 +216,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/home-wifi/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-ap=${__data.fields.name:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                            "targetBlank": true
+                            "title": "Open Home Wi-Fi",
+                            "url": "/d/home-wifi/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-ap=${__data.fields.name:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -234,7 +236,13 @@
         "spec": {
           "id": 3,
           "title": "AP uplink",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -399,13 +407,9 @@
                         "id": "links",
                         "value": [
                           {
-                            "title": "Diagnose",
-                            "url": "/d/home-wifi/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-ap=${__data.fields.name:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                            "targetBlank": true
+                            "title": "Open Home Wi-Fi",
+                            "url": "/d/home-wifi/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-ap=${__data.fields.name:percentencode}",
+                            "oneClick": true
                           }
                         ]
                       }
@@ -423,7 +427,13 @@
         "spec": {
           "id": 4,
           "title": "Wi-Fi collector failures",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -495,13 +505,6 @@
                   "color": {
                     "mode": "thresholds"
                   },
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/unifi.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -516,7 +519,13 @@
         "spec": {
           "id": 5,
           "title": "Clients with weak signal",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -577,13 +586,9 @@
                   },
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/tnwks-wifi-clients/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
+                      "title": "Open Wi-Fi clients",
+                      "url": "/d/tnwks-wifi-clients/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence"
@@ -600,7 +605,13 @@
         "spec": {
           "id": 6,
           "title": "Peer path success",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -667,13 +678,6 @@
                       }
                     }
                   ],
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -692,7 +696,13 @@
         "spec": {
           "id": 7,
           "title": "Peer path duration",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -746,13 +756,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -772,7 +775,13 @@
         "spec": {
           "id": 8,
           "title": "Site host uplinks",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -932,16 +941,6 @@
                       {
                         "id": "unit",
                         "value": "bps"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -957,7 +956,13 @@
         "spec": {
           "id": 9,
           "title": "Site host uplink traffic",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1013,13 +1018,9 @@
                   "unit": "Bps",
                   "links": [
                     {
-                      "title": "Diagnose",
-                      "url": "/d/tnwks-host/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-host=${__field.labels.instance:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
+                      "title": "Open Host",
+                      "url": "/d/tnwks-host/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-host=${__field.labels.instance:percentencode}",
+                      "oneClick": true
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
@@ -1041,7 +1042,13 @@
         "spec": {
           "id": 10,
           "title": "Site 2 Wi-Fi signal",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1095,13 +1102,6 @@
               "fieldConfig": {
                 "defaults": {
                   "unit": "dBm",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "lineWidth": 1,
@@ -1120,7 +1120,13 @@
         "spec": {
           "id": 11,
           "title": "Site 2 Wi-Fi association",
-          "links": [],
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+              "targetBlank": true
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -1280,16 +1286,6 @@
                       {
                         "id": "unit",
                         "value": "s"
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                            "targetBlank": true
-                          }
-                        ]
                       }
                     ]
                   }
@@ -1340,7 +1336,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 5,
+                            "maxColumnCount": 6,
                             "fillScreen": false
                           }
                         },
@@ -1524,6 +1520,30 @@
       }
     },
     "links": [
+      {
+        "title": "↑ Homelab",
+        "type": "link",
+        "icon": "dashboard",
+        "tooltip": "Up to the overview",
+        "tags": [],
+        "asDropdown": false,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true,
+        "url": "/d/home/view"
+      },
+      {
+        "title": "↓ Wi-Fi clients",
+        "type": "link",
+        "icon": "dashboard",
+        "tooltip": "Down to the detail for one host or device",
+        "tags": [],
+        "asDropdown": false,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true,
+        "url": "/d/tnwks-wifi-clients/view"
+      },
       {
         "title": "Dashboards",
         "type": "dashboards",

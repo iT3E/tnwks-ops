@@ -60,6 +60,9 @@ class Board:
     sections: bool = False
     # Entity pickers after the site picker (L3 boards).
     variables: tuple[Variable, ...] = ()
+    # The board one level up, under Homelab (an L3 board's domain board). Its top
+    # bar links up to it, and the parent's links down to this.
+    parent: str = ""
 
 
 def p(title: str, expr: str, unit: str, explanation: str, kind="timeseries", link=None,
