@@ -64,10 +64,10 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "label_replace(homelab:host_state{k8s_cluster=~\"$cluster\"}, \"host\", \"$1\", \"instance\", \"(.+)\")",
+                        "expr": "label_replace(max by (k8s_cluster, instance, resource) (homelab:host_state{k8s_cluster=~\"$cluster\"}), \"host\", \"$1\", \"instance\", \"(.+)\")",
                         "format": "table",
                         "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "legendFormat": "{{k8s_cluster}} {{instance}} {{resource}}",
                         "range": false
                       },
                       "datasource": {
