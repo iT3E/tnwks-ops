@@ -5,9 +5,9 @@
 
 Fails (exit 1) with a GitHub annotation per violation:
 
-- every job that runs steps has `timeout-minutes`;
-- `runs-on` is a known label: ubuntu-26.04, or a self-hosted label listed in
-  .github/actionlint.yaml;
+- every job that runs steps has `timeout-minutes` (15 at most on ubuntu-slim);
+- `runs-on` is a known label: ubuntu-26.04, ubuntu-slim (API-only jobs), or a
+  self-hosted label listed in .github/actionlint.yaml;
 - a self-hosted job in a `pull_request` workflow only runs for same-repo PRs
   (its `if:` checks head.repo.full_name against github.repository);
 - every remote `uses:` (workflows and local actions) is pinned to a full
@@ -28,7 +28,9 @@ import sys
 import tomllib
 from pathlib import Path
 
-HOSTED = {"ubuntu-26.04"}
+HOSTED = {"ubuntu-26.04", "ubuntu-slim"}
+# GitHub ends an ubuntu-slim job at 15 minutes, whatever timeout-minutes says.
+SLIM_MAX_MINUTES = 15
 SHA = re.compile(r"^[^@]+@[0-9a-f]{40}$")
 DIGEST = re.compile(r"^docker://[^@]+@sha256:[0-9a-f]{64}$")
 SAME_REPO = re.compile(r"head\.repo\.full_name\s*==\s*github\.repository")
@@ -98,6 +100,9 @@ def check_workflow(path: Path, self_hosted: set[str]) -> None:
         unknown = [lbl for lbl in labels if lbl not in HOSTED and lbl not in self_hosted and not lbl.startswith("${{")]
         if unknown:
             err(path, f"{where}: runs-on {unknown} is neither {sorted(HOSTED)} nor a self-hosted label in .github/actionlint.yaml")
+        timeout = job.get("timeout-minutes")
+        if "ubuntu-slim" in labels and isinstance(timeout, int) and timeout > SLIM_MAX_MINUTES:
+            err(path, f"{where}: ubuntu-slim jobs stop at {SLIM_MAX_MINUTES} minutes; timeout-minutes is {timeout}")
         if not hosted_or_expr and events & PR_EVENTS and not SAME_REPO.search(str(job.get("if", ""))):
             err(path, f"{where}: self-hosted job in a PR-triggered workflow without a same-repo check in its if:")
         check_steps(path, where, job.get("steps"))

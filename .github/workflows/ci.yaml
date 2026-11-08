@@ -38,7 +38,7 @@ concurrency:
 jobs:
   changes:
     name: Changes
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     permissions:
       contents: read
@@ -164,7 +164,7 @@ jobs:
       - dependency_compatibility
       - workflows
       - terraform
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     permissions: {}
     steps:

@@ -159,13 +159,19 @@ aren't reconciled, because they need the cluster's SOPS age key.
      jobs that end up skipped);
    - add that job to Build Success's `needs`.
 
+Jobs that only call the GitHub API or run a few seconds of jq or stdlib
+Python (`Changes`, `Build Success`, conformance, Renovate review's `Select`,
+the compatibility `notify`) run on `ubuntu-slim`: a 1-vCPU container with
+git, jq, Python 3.12, yq and gh, capped at 15 minutes. Anything that builds,
+renders or installs toolchains stays on `ubuntu-26.04`.
+
 The `workflows` domain's conformance job
 ([`workflow-conformance.py`](../../.github/scripts/workflow-conformance.py))
 fails a PR that misses any of these, and on:
 
-- a job without `timeout-minutes`;
-- a runner label other than `ubuntu-26.04` or a self-hosted label listed in
-  `.github/actionlint.yaml`;
+- a job without `timeout-minutes`, or an `ubuntu-slim` job with more than 15;
+- a runner label other than `ubuntu-26.04`, `ubuntu-slim` or a self-hosted
+  label listed in `.github/actionlint.yaml`;
 - a self-hosted job in a `pull_request` workflow without a same-repo check;
 - an action or docker image not pinned to a SHA or digest;
 - a workflow without top-level `permissions`;
