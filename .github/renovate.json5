@@ -19,7 +19,7 @@
   // PR per rebuild; lock-file refreshes are real Terraform provider upgrades
   // (AWS applies on merge). Both stay off.
   "ignorePresets": ["docker:pinDigests", ":maintainLockFilesWeekly"],
-  // Automerge through a PR so .github/workflows/kubernetes.yaml runs, and only
+  // Automerge through a PR so .github/workflows/ci.yaml runs, and only
   // when every status check is green. Renovate merges it itself
   // (platformAutomerge off), squash per the main ruleset.
   "automergeType": "pr",

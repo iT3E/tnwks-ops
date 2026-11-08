@@ -3,7 +3,7 @@
   // Who merges what. Every update lands in one of three tiers, so nothing
   // sits untriaged:
   //   * automerge: Renovate merges the PR itself once every status check is
-  //     green, including "Build Success" from .github/workflows/kubernetes.yaml
+  //     green, including "Build Success" from .github/workflows/ci.yaml
   //     (flate render + image exists). Flux error events page the War Room if
   //     a merged bump then fails to reconcile (flux-system/addons/alerts).
   //   * impact/high: never automerged. Once the owner adds owner/review,

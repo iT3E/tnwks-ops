@@ -1,0 +1,128 @@
+# Which CI jobs a change needs. bin/ci-changes reads this, diffs the event's
+# base and head, and writes one output per domain and per group for
+# .github/workflows/ci.yaml (docs/operations/ci.md).
+#
+# Globs follow GitHub's path filters: `*` stays inside one path segment, `**`
+# crosses them. A change to anything in `always` turns every domain on and
+# lists every group member, so a CI change runs all of CI.
+#
+# To add a check: a [domains.<name>] entry here, a workflow_call workflow,
+# and a job in ci.yaml gated on needs.changes.outputs.<name> that Build
+# Success also needs. The conformance job fails if one of those is missing.
+
+always = [
+  ".github/ci/**",
+  ".github/workflows/ci.yaml",
+  "bin/ci-changes",
+]
+
+[domains.kubernetes]
+paths = [
+  "kubernetes/**",
+  "bin/flate-guard",
+  "bin/images-added",
+  ".github/flate/**",
+  ".github/actions/setup-flate/**",
+  ".github/scripts/flate-diff-comment.py",
+  ".github/workflows/kubernetes.yaml",
+]
+
+[domains.observability]
+paths = [
+  "observability/**",
+  # validate_health.py scans every manifest.
+  "kubernetes/**",
+  "bin/site-failover-apps.json",
+  "infrastructure/ansible/roles/windows_observability_storage/**",
+  "infrastructure/ansible/roles/windows_wsl_maintenance/**",
+  "infrastructure/ansible/scripts/*monitoring*.py",
+  "infrastructure/ansible/tests/test_observability_storage.py",
+  ".github/workflows/observability.yaml",
+]
+
+# The disposable Garage/Thanos and Grafana rehearsals (about two minutes)
+# read only these.
+[domains.observability_rehearsals]
+paths = [
+  "observability/**",
+  "kubernetes/apps/monitoring/**",
+  ".github/workflows/observability.yaml",
+]
+
+[domains.home_assistant]
+paths = [
+  "kubernetes/apps/home-automation/home-assistant/**",
+  ".github/workflows/home-assistant.yaml",
+]
+
+[domains.ansible]
+paths = [
+  "infrastructure/ansible/**",
+  ".github/workflows/ansible.yaml",
+]
+
+[domains.security_regressions]
+paths = [
+  "infrastructure/edgeos/**",
+  "kubernetes/apps/auth/onboard/**",
+  "kubernetes/apps/monitoring/flow-collector/**",
+  "kubernetes/apps/selfhosted/immich/sync/**",
+  "kubernetes/apps/selfhosted/kitchen-screensaver/**",
+  "observability/pyproject.toml",
+  "observability/uv.lock",
+  ".github/workflows/security-regressions.yaml",
+]
+
+[domains.dependency_compatibility]
+paths = [
+  ".github/dependency-compatibility.json",
+  ".github/scripts/dependency-compatibility*",
+  ".github/scripts/test_dependency_compatibility.py",
+  ".github/workflows/dependency-compatibility.yaml",
+  ".github/renovate.json5",
+]
+
+[domains.workflows]
+paths = [
+  ".github/workflows/**",
+  ".github/actions/**",
+  ".github/scripts/**",
+  ".github/actionlint.yaml",
+  ".github/zizmor.yml",
+]
+
+# Groups list which of their members changed, as a JSON array for a matrix.
+[groups.terraform.aws]
+paths = [
+  "infrastructure/terraform/environments/prod/aws/**",
+  "infrastructure/terraform/modules/aws/**",
+]
+
+[groups.terraform.cloudflare]
+paths = [
+  "infrastructure/terraform/environments/prod/cloudflare/**",
+  "infrastructure/terraform/modules/cloudflare/**",
+  ".github/actions/runner-terraform/**",
+]
+
+[groups.terraform.healthchecks]
+paths = [
+  "infrastructure/terraform/environments/prod/healthchecks/**",
+  "infrastructure/terraform/modules/healthchecks/**",
+  ".github/actions/runner-terraform/**",
+]
+
+[groups.terraform.mikrotik]
+paths = [
+  "infrastructure/terraform/environments/prod/mikrotik/**",
+  "infrastructure/terraform/modules/mikrotik/**",
+  "infrastructure/mikrotik/**",
+  ".github/actions/mikrotik-terraform/**",
+]
+
+[groups.terraform.unifi]
+paths = [
+  "infrastructure/terraform/environments/prod/unifi/**",
+  "infrastructure/terraform/modules/unifi/**",
+  ".github/actions/unifi-terraform/**",
+]

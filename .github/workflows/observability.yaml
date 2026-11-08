@@ -1,30 +1,22 @@
 ---
 name: Observability
 on:
-  pull_request:
-    paths:
-      - observability/**
-      - kubernetes/**
-      - bin/site-failover-apps.json
-      - .github/workflows/observability.yaml
-      - infrastructure/ansible/roles/windows_observability_storage/**
-      - infrastructure/ansible/roles/windows_wsl_maintenance/**
-      - infrastructure/ansible/scripts/*monitoring*.py
-      - infrastructure/ansible/tests/test_observability_storage.py
+  # Called by ci.yaml when its domain in .github/ci/domains.toml changed.
+  workflow_call:
+    inputs:
+      rehearse:
+        description: Run the disposable Garage/Thanos and Grafana rehearsals
+        type: boolean
+        default: true
+
 permissions:
   contents: read
 
-concurrency:
-  # A new push to a PR cancels the run it supersedes. Pushes to main key on
-  # the commit, so every one of them is checked.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-# Two tiers. `contracts` checks generated resources, schemas and rules on
-# every PR in the paths above (validate_health.py scans all of kubernetes/).
-# `rehearsals` stands up disposable Garage/Thanos and Grafana (browser and
-# renderer), about two minutes, and runs only when what they read changed:
-# observability/, kubernetes/apps/monitoring/ or this workflow.
+# Two tiers. `contracts` checks generated resources, schemas and rules
+# whenever the observability domain is on (validate_health.py scans all of
+# kubernetes/). `rehearsals` stands up disposable Garage/Thanos and Grafana
+# (browser and renderer), about two minutes, and runs only when what they
+# read changed (the observability_rehearsals domain, passed as `rehearse`).
 jobs:
   contracts:
     runs-on: ubuntu-26.04
@@ -74,31 +66,8 @@ jobs:
             prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2 \
             test rules /rules/rule-tests.yaml
 
-  scope:
-    name: Scope
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    permissions:
-      pull-requests: read
-    outputs:
-      rehearse: ${{ steps.files.outputs.rehearse }}
-    steps:
-      - name: Did the rehearsals' inputs change?
-        id: files
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
-        run: |
-          n=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '
-            [.[].filename | select(test("^(observability/|kubernetes/apps/monitoring/|\\.github/workflows/observability\\.yaml$)"))] | length' |
-            awk '{s += $1} END {print s + 0}')
-          echo "$n matching file(s)"
-          if [ "$n" -gt 0 ]; then echo rehearse=true; else echo rehearse=false; fi >> "$GITHUB_OUTPUT"
-
   rehearsals:
-    needs: scope
-    if: needs.scope.outputs.rehearse == 'true'
+    if: inputs.rehearse
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:

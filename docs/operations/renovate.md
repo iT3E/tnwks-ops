@@ -6,8 +6,9 @@ Every Renovate PR lands in one of three tiers, decided by
 - **Automerge.** Leaf app bumps, and every update of our own images
   (`ghcr.io/it3e/*`, see below). Renovate merges them itself once every
   status check is green, including the required **Build Success**
-  ([`kubernetes.yaml`](../../.github/workflows/kubernetes.yaml): flate render
-  plus "every new image exists"). If a merged bump then fails to reconcile,
+  ([`ci.yaml`](../../.github/workflows/ci.yaml): every check the change
+  touches, such as the flate render and "every new image exists", see
+  [ci.md](ci.md)). If a merged bump then fails to reconcile,
   Flux error events page the War Room (`flux-system/addons/alerts`).
 - **`impact/high`.** Cluster plumbing, Terraform, majors, and anything new.
   Never automerged. **The owner opts each one in by adding `owner/review`**;
@@ -97,7 +98,7 @@ Triggers, all in [`renovate-review.yaml`](../../.github/workflows/renovate-revie
 | Event | When it fires |
 | --- | --- |
 | `pull_request_target: labeled` (owner/review) | The owner asked for a review. Sends it if Build Success already passed |
-| `workflow_run: Kubernetes` completed | Build Success finished on a PR. Sends it if `owner/review` is already on |
+| `workflow_run: CI` completed | Build Success finished on a PR. Sends it if `owner/review` is already on |
 | `pull_request_target: synchronize` | A new push (Renovate's, or the agent's migration commit). Clears `ori/blocked`, `ori/awaiting-approval` and `owner/approved`, so each new head gets its own review. A push from Renovate also clears `owner/review`, so a rebase or newer version waits for the owner again; the agent's push keeps it |
 | `pull_request_target: unlabeled` (ori/blocked) | The owner removed the label to ask for another review |
 | `pull_request_target: labeled` (owner/approved) | The owner approved an `impact/critical` PR; the agent merges the sha it named |

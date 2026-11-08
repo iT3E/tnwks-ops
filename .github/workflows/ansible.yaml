@@ -8,24 +8,11 @@ name: "Ansible"
 # job (docs/operations/ansible.md).
 
 on:
-  pull_request:
-    paths:
-      - "infrastructure/ansible/**"
-      - ".github/workflows/ansible.yaml"
-  push:
-    branches: [main]
-    paths:
-      - "infrastructure/ansible/**"
-      - ".github/workflows/ansible.yaml"
+  # Called by ci.yaml when its domain in .github/ci/domains.toml changed.
+  workflow_call:
 
 permissions:
   contents: read
-
-concurrency:
-  # A new push to a PR cancels the run it supersedes. Pushes to main key on
-  # the commit, so every one of them is checked.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint:
