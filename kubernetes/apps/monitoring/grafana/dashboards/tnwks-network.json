@@ -181,6 +181,18 @@
                 "overrides": [
                   {
                     "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
                       "id": "byName",
                       "options": "Path"
                     },
@@ -423,6 +435,18 @@
                   {
                     "matcher": {
                       "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
                       "options": "number"
                     },
                     "properties": [
@@ -630,6 +654,18 @@
                   }
                 },
                 "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
                   {
                     "matcher": {
                       "id": "byType",
@@ -1001,6 +1037,18 @@
                 "overrides": [
                   {
                     "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
                       "id": "byName",
                       "options": "Mesh"
                     },
@@ -1185,6 +1233,18 @@
                   }
                 },
                 "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
                   {
                     "matcher": {
                       "id": "byName",
@@ -1530,6 +1590,18 @@
                   }
                 },
                 "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
                   {
                     "matcher": {
                       "id": "byName",
@@ -2342,6 +2414,18 @@
                 "overrides": [
                   {
                     "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
                       "id": "byName",
                       "options": "Link"
                     },
@@ -2525,6 +2609,18 @@
                   }
                 },
                 "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
                   {
                     "matcher": {
                       "id": "byName",
@@ -2935,6 +3031,18 @@
                 "overrides": [
                   {
                     "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
                       "id": "byName",
                       "options": "Upgrade"
                     },
@@ -3120,6 +3228,18 @@
                 "overrides": [
                   {
                     "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
                       "id": "byName",
                       "options": "Router BGP session resets"
                     },
@@ -3287,6 +3407,18 @@
                 "overrides": [
                   {
                     "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
                       "id": "byName",
                       "options": "Cilium BGP session changes"
                     },
@@ -3452,6 +3584,18 @@
                   }
                 },
                 "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
                   {
                     "matcher": {
                       "id": "byName",

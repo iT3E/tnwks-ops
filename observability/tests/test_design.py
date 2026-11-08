@@ -44,7 +44,7 @@ def test_table_values_are_named_and_formatted_on_their_own_column():
             assert matrix["options"]["columnField"] == "k8s_cluster", panel.title
             assert organize["options"]["renameByName"] == {
                 f"{panel.per_site}\\k8s_cluster": LABELS[panel.per_site]}, panel.title
-            assert [o["matcher"] for o in config["overrides"]] == [{"id": "byType", "options": "number"}], panel.title
+            assert {"id": "byType", "options": "number"} in [o["matcher"] for o in config["overrides"]], panel.title
             continue
         organize = transformations[0]["spec"]["options"]
         header = value_header(panel)
@@ -119,3 +119,13 @@ def test_house_is_a_wall_of_words():
     rows = spec["layout"]["spec"]["tabs"][0]["spec"]["layout"]["spec"]["rows"]
     assert rows[0]["spec"]["layout"]["spec"]["maxColumnCount"] == SECTIONS["wall"][1]
     assert rows[-1]["spec"]["title"] == "About this view" and rows[-1]["spec"]["collapse"] is True
+
+
+def test_a_missing_label_is_a_dash_not_the_empty_state():
+    """Grafana prints a panel's noValue in every empty cell as well as on an empty panel."""
+    for board, panel, spec in panels():
+        if panel.kind != "table":
+            continue
+        overrides = spec["vizConfig"]["spec"]["fieldConfig"]["overrides"]
+        assert {"matcher": {"id": "byType", "options": "string"},
+                "properties": [{"id": "noValue", "value": "—"}]} in overrides, panel.title
