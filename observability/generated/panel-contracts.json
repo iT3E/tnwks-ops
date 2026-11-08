@@ -1616,7 +1616,7 @@
     "dashboard": "tnwks-data",
     "tab": "Databases",
     "panel": "Connections",
-    "query": "sum by (k8s_cluster, namespace, db_cluster) (homelab:database_connections{k8s_cluster=~\"$cluster\"})",
+    "query": "sum by (k8s_cluster, db_cluster) (homelab:database_connections{k8s_cluster=~\"$cluster\"})",
     "unit": "short",
     "query_mode": "range",
     "inputs": [
@@ -1641,7 +1641,7 @@
     "dashboard": "tnwks-data",
     "tab": "Databases",
     "panel": "Replay timestamp lag",
-    "query": "homelab:database_replay_lag_seconds{k8s_cluster=~\"$cluster\"}",
+    "query": "max by (k8s_cluster, db_cluster) (homelab:database_replay_lag_seconds{k8s_cluster=~\"$cluster\"})",
     "unit": "s",
     "query_mode": "range",
     "inputs": [
