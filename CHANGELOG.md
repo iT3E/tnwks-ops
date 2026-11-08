@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.42.0 - 2026-11-08
+
+### Changed
+
+* grafana: the House kiosk is a three-across wall of state words with household wording in each tooltip, no time picker, and the About text folded away
+
 ## v2.41.0 - 2026-11-08
 
 ### Changed
