@@ -1,3 +1,0 @@
-kind: Changed
-body: 'CI: zizmor audits the workflows and local actions on PRs and main; the edgeos-sync action passes its mode through env instead of template expansion.'
-time: 2026-11-07T21:45:02.143997272-08:00

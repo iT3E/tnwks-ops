@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.55.0 - 2026-11-08
+
+### Changed
+
+* CI: zizmor audits the workflows and local actions on PRs and main; the edgeos-sync action passes its mode through env instead of template expansion.
+
 ## v2.54.0 - 2026-11-08
 
 ### Added
