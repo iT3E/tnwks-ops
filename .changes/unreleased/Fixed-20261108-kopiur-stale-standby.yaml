@@ -1,3 +1,0 @@
-kind: Fixed
-body: KopiurBackupStale no longer fires on an app's standby site, where its backup schedule is suspended on purpose and the last success (from before a switchover) ages past 48h
-time: 2026-11-08T00:00:00.000000+00:00

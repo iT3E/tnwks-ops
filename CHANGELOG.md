@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.52.1 - 2026-11-08
+
+### Fixed
+
+* KopiurBackupStale no longer fires on an app's standby site, where its backup schedule is suspended on purpose and the last success (from before a switchover) ages past 48h
+
 ## v2.52.0 - 2026-11-08
 
 ### Changed
