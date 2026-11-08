@@ -1,0 +1,4 @@
+---
+kind: Fixed
+body: Restore the built-in Energy dashboard and distribution card, removing the custom flow view while retaining the measured Home circle and kWh total.
+time: 2026-11-07T17:38:00-08:00
