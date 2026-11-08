@@ -40,23 +40,60 @@ jobs:
           fi
 
       - name: Read pinned versions
+        id: versions
         run: |
           init='.spec.values.controllers.home-assistant.initContainers.prepare-config'
           {
             echo "IMAGE=$(yq "$init.image | .repository + \":\" + .tag" "$APP/helmrelease.yaml")"
             yq "$init.env | to_entries | .[] | .key + \"=\" + .value" "$APP/helmrelease.yaml"
           } | tee -a "$GITHUB_ENV"
+          # Cache key: the pinned versions and the script that installs them.
+          echo "key=$({ yq "$init.env" "$APP/helmrelease.yaml"; cat "$APP/scripts/prepare-config.sh"; } | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
-      - name: Prepare config directory
+      - name: Copy config
         run: |
           mkdir -p "$RUNNER_TEMP/config"
           cp -r "$APP/config/." "$RUNNER_TEMP/config/"
+
+      # prepare-config.sh skips an integration whose .tnwks-version already
+      # matches, so with the cache restored it downloads nothing. GitHub
+      # archive and release downloads are the usual reason this job flakes.
+      - name: Restore integrations
+        id: integrations
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          key: ha-integrations-${{ steps.versions.outputs.key }}
+          path: |
+            ${{ runner.temp }}/config/custom_components/auth_oidc
+            ${{ runner.temp }}/config/custom_components/frigate
+            ${{ runner.temp }}/config/custom_components/pacific_power
+            ${{ runner.temp }}/config/custom_components/xiaomi_cloud_map_extractor
+            ${{ runner.temp }}/config/www/advanced-camera-card
+            ${{ runner.temp }}/config/www/kiosk-mode
+            ${{ runner.temp }}/config/www/xiaomi-vacuum-map-card
+
+      - name: Prepare config directory
+        run: |
           docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
             -e HASS_OIDC_AUTH_VERSION -e FRIGATE_INTEGRATION_VERSION -e ADVANCED_CAMERA_CARD_VERSION -e KIOSK_MODE_VERSION \
             -e XIAOMI_MAP_EXTRACTOR_VERSION -e XIAOMI_VACUUM_MAP_CARD_VERSION -e PACIFIC_POWER_VERSION \
             -v "$RUNNER_TEMP/config:/config" \
             -v "$PWD/$APP/scripts/prepare-config.sh:/scripts/prepare-config.sh:ro" \
             --entrypoint /bin/bash "$IMAGE" /scripts/prepare-config.sh /config
+
+      - name: Save integrations
+        if: steps.integrations.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          key: ha-integrations-${{ steps.versions.outputs.key }}
+          path: |
+            ${{ runner.temp }}/config/custom_components/auth_oidc
+            ${{ runner.temp }}/config/custom_components/frigate
+            ${{ runner.temp }}/config/custom_components/pacific_power
+            ${{ runner.temp }}/config/custom_components/xiaomi_cloud_map_extractor
+            ${{ runner.temp }}/config/www/advanced-camera-card
+            ${{ runner.temp }}/config/www/kiosk-mode
+            ${{ runner.temp }}/config/www/xiaomi-vacuum-map-card
 
       - name: Upstream Pacific Power compatibility
         run: |

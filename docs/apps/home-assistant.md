@@ -299,7 +299,9 @@ statistics are still where energy history lives.
 1. Edit or add a file under `config/`. A **new** file must also be listed under
    `configMapGenerator` in `kustomization.yaml` (CI checks this).
 2. Open a PR. The `Home Assistant` workflow runs HA's `check_config` against
-   the pinned image and integration versions.
+   the pinned image and integration versions. The installed integrations are
+   cached under a key built from those versions and `prepare-config.sh`, so
+   only a version bump downloads from GitHub.
 3. After merge, Flux updates the ConfigMap and reloader restarts the pod.
 
 A PR that only edits existing files under `config/` doesn't need a Changie
