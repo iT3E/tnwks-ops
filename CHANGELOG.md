@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.66.0 - 2026-11-08
+
+### Changed
+
+* CI: jobs that only call the GitHub API or run a few seconds of jq or Python (Changes, Build Success, conformance, Renovate review Select, compatibility notify) run on ubuntu-slim.
+
 ## v2.65.1 - 2026-11-08
 
 ### Fixed
