@@ -29,6 +29,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Energy flow calculations
+        run: node kubernetes/apps/home-automation/home-assistant/tests/energy-flow.test.mjs
+
       # configMapGenerator needs every file listed explicitly; a file that's
       # committed but not listed is silently never deployed.
       - name: Every config file is in a ConfigMap
