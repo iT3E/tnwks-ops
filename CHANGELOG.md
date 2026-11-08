@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.46.0 - 2026-11-08
+
+### Changed
+
+* grafana: failure counters that should be zero (WAL, mesh sync, Wi-Fi collector, reconcile, rule evaluation, notifications) are per-site counts over the selected range at the top of their tab, quiet at zero and red at the first failure, instead of empty graphs
+
 ## v2.45.1 - 2026-11-08
 
 ### Fixed

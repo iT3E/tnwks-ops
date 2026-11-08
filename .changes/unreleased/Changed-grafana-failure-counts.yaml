@@ -1,4 +1,0 @@
----
-kind: Changed
-body: "grafana: failure counters that should be zero (WAL, mesh sync, Wi-Fi collector, reconcile, rule evaluation, notifications) are per-site counts over the selected range at the top of their tab, quiet at zero and red at the first failure, instead of empty graphs"
-time: 2026-11-08T02:10:59.000000000Z
