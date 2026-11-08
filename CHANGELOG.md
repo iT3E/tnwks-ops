@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.54.0 - 2026-11-08
+
+### Added
+
+* Add a Home Assistant integration for Pacific Power banked solar kWh, with statement dates, expiry billing months, PDF import and automatic statement checks.
+
 ## v2.53.0 - 2026-11-08
 
 ### Changed
