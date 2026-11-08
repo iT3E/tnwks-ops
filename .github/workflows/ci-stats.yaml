@@ -26,7 +26,8 @@ jobs:
   stats:
     name: stats
     runs-on: ubuntu-26.04
-    timeout-minutes: 10
+    # A week is ~11,000 runs, ~5 minutes of paging.
+    timeout-minutes: 20
     permissions:
       actions: read
       contents: read

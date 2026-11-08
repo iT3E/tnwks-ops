@@ -57,7 +57,7 @@ def fetch_runs(repo: str, token: str, days: int, now: dt.datetime) -> list[dict]
     fmt = "%Y-%m-%dT%H:%M:%SZ"
 
     def fetch(start: dt.datetime, end: dt.datetime) -> None:
-        base = f"https://api.github.com/repos/{repo}/actions/runs?per_page=100&created={start.strftime(fmt)}..{end.strftime(fmt)}"
+        base = f"https://api.github.com/repos/{repo}/actions/runs?per_page=100&exclude_pull_requests=true&created={start.strftime(fmt)}..{end.strftime(fmt)}"
         page, url = get(base, token)
         if page["total_count"] > 1000 and end - start > dt.timedelta(minutes=10):
             mid = start + (end - start) / 2
