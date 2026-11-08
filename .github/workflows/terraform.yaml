@@ -180,31 +180,13 @@ jobs:
           tf-vars: ${{ matrix.tf_vars }}
           tf-api-token: ${{ secrets.TF_API_TOKEN }}
 
-      - name: Upload configuration to Terraform Cloud
-        id: upload
+      # A local action, like the plan's: Docker actions listed in a job are
+      # pulled at job setup even when skipped, and the self-hosted runners
+      # that apply the local roots have no Docker daemon.
+      - name: Apply in Terraform Cloud
         if: matrix.backend == 'tfc-remote'
-        uses: hashicorp/tfc-workflows-github/actions/upload-configuration@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
+        uses: ./.github/actions/tfc-apply
         env:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
         with:
           workspace: ${{ matrix.workspace }}
-          directory: "infrastructure/terraform"
-
-      - name: Create the apply run
-        id: run
-        if: matrix.backend == 'tfc-remote'
-        uses: hashicorp/tfc-workflows-github/actions/create-run@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
-        env:
-          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
-        with:
-          workspace: ${{ matrix.workspace }}
-          configuration_version: ${{ steps.upload.outputs.configuration_version_id }}
-
-      - name: Apply
-        if: matrix.backend == 'tfc-remote' && fromJSON(steps.run.outputs.payload).data.attributes.actions.IsConfirmable
-        uses: hashicorp/tfc-workflows-github/actions/apply-run@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
-        env:
-          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
-        with:
-          run: ${{ steps.run.outputs.run_id }}
-          comment: "Apply Run from GitHub Actions CI ${{ github.sha }}"
