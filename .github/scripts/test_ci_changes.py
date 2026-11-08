@@ -75,8 +75,8 @@ class Domains(unittest.TestCase):
         self.assertEqual(groups["terraform"], ["aws", "unifi"])
 
     def test_shared_action_plans_every_root_using_it(self):
-        _, groups = on([".github/actions/runner-terraform/action.yml"])
-        self.assertEqual(groups["terraform"], ["cloudflare", "healthchecks"])
+        _, groups = on([".github/actions/terraform/action.yml"])
+        self.assertEqual(groups["terraform"], ["cloudflare", "healthchecks", "mikrotik", "unifi"])
 
     def test_ci_change_turns_everything_on(self):
         for path in [".github/ci/domains.toml", ".github/workflows/ci.yaml", "bin/ci-changes"]:
