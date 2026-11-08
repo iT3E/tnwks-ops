@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.58.0 - 2026-11-08
+
+### Added
+
+* CI: Kubernetes PRs get one sticky comment with the rendered manifest diff (flate diff against the base branch) for each live cluster; flate is installed through a shared setup-flate action.
+
 ## v2.57.0 - 2026-11-08
 
 ### Changed

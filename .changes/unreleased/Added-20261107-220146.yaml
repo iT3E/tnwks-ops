@@ -1,3 +1,0 @@
-kind: Added
-body: 'CI: Kubernetes PRs get one sticky comment with the rendered manifest diff (flate diff against the base branch) for each live cluster; flate is installed through a shared setup-flate action.'
-time: 2026-11-07T22:01:46.430018654-08:00
