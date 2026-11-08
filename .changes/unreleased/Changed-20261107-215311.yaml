@@ -1,3 +1,0 @@
-kind: Changed
-body: 'Ansible: the Coral libusb shim builds in a pinned toolchain image (digest-pinned Ubuntu 24.04, mingw-w64 from a fixed snapshot), so the controller needs Docker instead of mingw-w64, and the Ansible Hosts plan job runs on ubuntu-26.04.'
-time: 2026-11-07T21:53:11.151692639-08:00

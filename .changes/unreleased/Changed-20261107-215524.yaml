@@ -1,3 +1,0 @@
-kind: Changed
-body: 'CI: Observability runs its Garage/Thanos and Grafana browser rehearsals in a separate job, only when observability/, kubernetes/apps/monitoring/ or the workflow changed; other Kubernetes PRs get the fast contract checks only.'
-time: 2026-11-07T21:55:24.626641549-08:00
