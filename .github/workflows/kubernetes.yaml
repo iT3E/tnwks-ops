@@ -29,7 +29,7 @@ env:
 jobs:
   flate:
     name: "Render"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     # A render takes well under a minute. Without a limit, a hung flate holds
     # the job (and the required check) for GitHub's 6-hour default. 15 leaves
     # room for a couple of hung attempts (bin/flate-guard: 2 minutes each,
@@ -128,7 +128,8 @@ jobs:
     name: "Image exists"
     needs: flate
     if: github.event_name == 'pull_request' && needs.flate.outputs.images != '[]' && needs.flate.outputs.images != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
     permissions: {}
     strategy:
       fail-fast: false
@@ -188,7 +189,8 @@ jobs:
     name: "Build Success"
     if: ${{ !cancelled() }}
     needs: [flate, images]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
     permissions: {}
     steps:
       - name: Any job failed?

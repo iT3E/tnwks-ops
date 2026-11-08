@@ -2,6 +2,8 @@
 # Self-hosted runner scale sets (kubernetes/apps/tools/actions-runner-controller).
 self-hosted-runner:
   labels:
+    # GitHub-hosted, but newer than actionlint 1.7.12's built-in label list.
+    - ubuntu-26.04
     - tnwks-ops-runner
     # Site labels of the ops runners (kubernetes/apps/tools/actions-runner-controller/ops-runner).
     - tnwks-ops-homelab-wsl
