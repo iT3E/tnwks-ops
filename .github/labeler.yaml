@@ -9,6 +9,9 @@ area/ansible:
 area/github:
   - changed-files:
       - any-glob-to-any-file: ".github/**/*"
+area/home-assistant:
+  - changed-files:
+      - any-glob-to-any-file: "kubernetes/apps/home-automation/home-assistant/**/*"
 area/kubernetes:
   - changed-files:
       - any-glob-to-any-file: "kubernetes/**/*"

@@ -8,6 +8,10 @@
   color: "72ccf3"
   description: >-
     Changes made in the github directory
+- name: area/home-assistant
+  color: "72ccf3"
+  description: >-
+    Changes made to the Home Assistant app
 - name: area/kubernetes
   color: "72ccf3"
   description: >-
