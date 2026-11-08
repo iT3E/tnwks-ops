@@ -125,8 +125,8 @@ has the tokens, `recipes.py` turns a declared panel into a visualization,
 
 - **State is a word on a colour, and colour means state.** `STATE` maps 0–6 to
   Unknown, Healthy, Degraded, Failed, Standby, Not applicable and Maintenance.
-  A stat colours its tile, a table its cell (Grafana's white or black text keeps
-  4.5:1 on each). The base colour is grey, so a value without a mapping can't
+  A stat colours its tile (solid: axe can't judge text on Grafana's gradient), a
+  table its cell (Grafana's white or black text keeps 4.5:1 on each). The base colour is grey, so a value without a mapping can't
   read as healthy. Other numbers are the neutral text colour. A series takes its
   site's colour (`SITES`: 3:1 on both themes, none of them a state colour).
 - **Answer first.** A sectioned tab runs headline (stats), status (state
@@ -146,6 +146,12 @@ has the tokens, `recipes.py` turns a declared panel into a visualization,
 - **Zero is normal.** The `failures` unit is a per-site count over the selected
   range, neutral at zero and red from one, where a graph drew a flat line on an
   empty axis. Graphs of zero-based units start at 0; ratios stop at 100%.
+
+Contrast was checked on 2026-11-07 with axe-core 4.10.2's colour-contrast rule
+on every tab of every board in both themes, against live data: no violations.
+What axe can't judge (Grafana's overlapping table cells, header pseudo-content)
+was measured against its nearest opaque background instead, and all of it meets
+4.5:1, or 3:1 for large text.
 
 A new panel is a `p()` call. A new label needs a `LABELS` entry; a state metric
 takes `unit="state"`. A new site is an entry in `CLUSTERS` and a colour in `SITES`

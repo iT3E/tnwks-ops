@@ -82,7 +82,9 @@ def visualization(panel: Panel, runbook: str | None = None):
             value: model.ValueMappingResult(text=result["text"], color=result.get("color"))
             for value, result in value_mappings(panel)[0]["options"].items()})])
     if panel.kind == "stat" and panel.unit in ("state", "coverage"):
-        viz.color_mode(common.BigValueColorMode.BACKGROUND)
+        # Solid, not Grafana's gradient: a flat tile reads calmer, and its contrast can be
+        # measured (axe can't judge text on a gradient).
+        viz.color_mode(common.BigValueColorMode.BACKGROUND_SOLID)
     if panel.kind == "stat":
         viz.reduce_options(common_builder.ReduceDataOptions().calcs(["lastNotNull"]).values(False))
         if panel.unit == "failures":
