@@ -83,7 +83,7 @@
             "spec": {
               "options": {
                 "graphMode": "area",
-                "colorMode": "background",
+                "colorMode": "background_solid",
                 "justifyMode": "auto",
                 "textMode": "auto",
                 "wideLayout": true,
@@ -207,7 +207,7 @@
             "spec": {
               "options": {
                 "graphMode": "area",
-                "colorMode": "background",
+                "colorMode": "background_solid",
                 "justifyMode": "auto",
                 "textMode": "auto",
                 "wideLayout": true,
@@ -331,7 +331,7 @@
             "spec": {
               "options": {
                 "graphMode": "area",
-                "colorMode": "background",
+                "colorMode": "background_solid",
                 "justifyMode": "auto",
                 "textMode": "auto",
                 "wideLayout": true,
@@ -455,7 +455,7 @@
             "spec": {
               "options": {
                 "graphMode": "area",
-                "colorMode": "background",
+                "colorMode": "background_solid",
                 "justifyMode": "auto",
                 "textMode": "auto",
                 "wideLayout": true,
@@ -579,7 +579,7 @@
             "spec": {
               "options": {
                 "graphMode": "area",
-                "colorMode": "background",
+                "colorMode": "background_solid",
                 "justifyMode": "auto",
                 "textMode": "auto",
                 "wideLayout": true,
@@ -703,7 +703,7 @@
             "spec": {
               "options": {
                 "graphMode": "area",
-                "colorMode": "background",
+                "colorMode": "background_solid",
                 "justifyMode": "auto",
                 "textMode": "auto",
                 "wideLayout": true,
@@ -827,7 +827,7 @@
             "spec": {
               "options": {
                 "graphMode": "area",
-                "colorMode": "background",
+                "colorMode": "background_solid",
                 "justifyMode": "auto",
                 "textMode": "auto",
                 "wideLayout": true,
@@ -951,7 +951,7 @@
             "spec": {
               "options": {
                 "graphMode": "area",
-                "colorMode": "background",
+                "colorMode": "background_solid",
                 "justifyMode": "auto",
                 "textMode": "auto",
                 "wideLayout": true,
@@ -1075,7 +1075,7 @@
             "spec": {
               "options": {
                 "graphMode": "area",
-                "colorMode": "background",
+                "colorMode": "background_solid",
                 "justifyMode": "auto",
                 "textMode": "auto",
                 "wideLayout": true,
@@ -1199,7 +1199,7 @@
             "spec": {
               "options": {
                 "graphMode": "area",
-                "colorMode": "background",
+                "colorMode": "background_solid",
                 "justifyMode": "auto",
                 "textMode": "auto",
                 "wideLayout": true,
