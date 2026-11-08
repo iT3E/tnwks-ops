@@ -58,7 +58,7 @@ them before it decides anything.
 | `ansible` | [`ansible.yaml`](../../.github/workflows/ansible.yaml) | Playbook syntax and ansible-lint on the pinned controller |
 | `security_regressions` | [`security-regressions.yaml`](../../.github/workflows/security-regressions.yaml) | Router output, service and OAuth callback regression tests |
 | `dependency_compatibility` | [`dependency-compatibility.yaml`](../../.github/workflows/dependency-compatibility.yaml) | The compatibility gates' own tests. Its weekly report runs on its own schedule |
-| `workflows` | [`actionlint.yaml`](../../.github/workflows/actionlint.yaml) | actionlint and zizmor on the workflows and local actions |
+| `workflows` | [`actionlint.yaml`](../../.github/workflows/actionlint.yaml) | actionlint and zizmor on the workflows and local actions; `workflow-conformance.py` for the conventions below |
 
 Each domain workflow is `on: workflow_call` and has no concurrency of its
 own. `ci.yaml` cancels a superseded PR run as a whole. Check names show the
@@ -87,3 +87,15 @@ caller, for example `kubernetes / Render`.
      grants every permission its jobs ask for (GitHub checks that even for
      jobs that end up skipped);
    - add that job to Build Success's `needs`.
+
+The `workflows` domain's conformance job
+([`workflow-conformance.py`](../../.github/scripts/workflow-conformance.py))
+fails a PR that misses any of these, and on:
+
+- a job without `timeout-minutes`;
+- a runner label other than `ubuntu-26.04` or a self-hosted label listed in
+  `.github/actionlint.yaml`;
+- a self-hosted job in a `pull_request` workflow without a same-repo check;
+- an action or docker image not pinned to a SHA or digest;
+- a workflow without top-level `permissions`;
+- an `actions/checkout` without `persist-credentials: false`.

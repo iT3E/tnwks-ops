@@ -8,7 +8,9 @@ name: "Actionlint"
 #
 # actionlint (with shellcheck on run: blocks, and .github/actionlint.yaml)
 # on the workflows, and zizmor (security audit, config in .github/zizmor.yml)
-# on the workflows and local actions, whenever the workflows domain is on.
+# on the workflows and local actions, and the repo's own workflow conventions
+# (.github/scripts/workflow-conformance.py), whenever the workflows domain is
+# on.
 on:
   # Called by ci.yaml when its domain in .github/ci/domains.toml changed.
   workflow_call:
@@ -41,3 +43,20 @@ jobs:
           advanced-security: false
           annotations: true
           version: 1.31.1
+
+  conformance:
+    name: conformance
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Timeouts, runner labels, SHA pins, permissions, checkout credentials,
+      # self-hosted jobs on PRs, and ci.yaml covering every domain.
+      - name: Workflow conventions
+        run: python3 .github/scripts/workflow-conformance.py
