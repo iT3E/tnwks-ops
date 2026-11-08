@@ -135,10 +135,12 @@ jobs:
       contents: read
     uses: ./.github/workflows/actionlint.yaml
 
-  # One plan per changed root (terraform.yaml), on that root's runner.
+  # One plan per changed root (terraform.yaml), on that root's runner. PRs
+  # only: on a push to main, deploy.yaml applies instead (and with no PR,
+  # terraform.yaml would route every root to the approval gate).
   terraform:
     needs: changes
-    if: needs.changes.outputs.terraform != '[]'
+    if: github.event_name == 'pull_request' && needs.changes.outputs.terraform != '[]'
     permissions:
       contents: read
       pull-requests: write
