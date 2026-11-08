@@ -142,7 +142,8 @@
                         "os_image": "OS",
                         "volume": "Volume",
                         "collector": "Collector",
-                        "slo": "Objective"
+                        "slo": "Objective",
+                        "area": "Area"
                       }
                     }
                   }
@@ -305,6 +306,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Role"
                       }
                     }
@@ -650,6 +652,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "State"
                       }
                     }
@@ -957,6 +960,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Base backup age"
                       }
                     }
@@ -1124,6 +1128,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "State"
                       }
                     }
@@ -1431,6 +1436,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Weekly PVC drill age"
                       }
                     }
@@ -1598,6 +1604,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "State"
                       }
                     }
@@ -1825,6 +1832,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Backup age by app"
                       }
                     }
@@ -1992,6 +2000,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "State"
                       }
                     }
@@ -2219,6 +2228,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Last drill duration"
                       }
                     }
@@ -2385,6 +2395,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "PVCs without a backup schedule"
                       }
                     }

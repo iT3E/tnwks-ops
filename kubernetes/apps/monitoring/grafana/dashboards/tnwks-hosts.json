@@ -226,6 +226,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Windows disk free"
                       }
                     }
@@ -471,6 +472,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Required app replicas"
                       }
                     }
@@ -638,6 +640,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "State"
                       }
                     }

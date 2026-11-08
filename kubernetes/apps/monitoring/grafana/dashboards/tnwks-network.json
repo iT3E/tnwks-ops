@@ -143,6 +143,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Path"
                       }
                     }
@@ -408,6 +409,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "State"
                       }
                     }
@@ -636,6 +638,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Carries the VIP"
                       }
                     }
@@ -980,6 +983,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Mesh"
                       }
                     }
@@ -1165,6 +1169,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "KVStoreMesh"
                       }
                     }
@@ -1509,6 +1514,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Router uptime"
                       }
                     }
@@ -2318,6 +2324,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Link"
                       }
                     }
@@ -2502,6 +2509,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Address pool use"
                       }
                     }
@@ -2909,6 +2917,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Upgrade"
                       }
                     }
@@ -3093,6 +3102,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Router BGP session resets"
                       }
                     }
@@ -3259,6 +3269,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Cilium BGP session changes"
                       }
                     }
@@ -3425,6 +3436,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Path hop changes"
                       }
                     }
@@ -3614,7 +3626,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 4,
+                            "maxColumnCount": 5,
                             "fillScreen": false
                           }
                         },

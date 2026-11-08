@@ -142,7 +142,8 @@
                         "os_image": "OS",
                         "volume": "Volume",
                         "collector": "Collector",
-                        "slo": "Objective"
+                        "slo": "Objective",
+                        "area": "Area"
                       }
                     }
                   }
@@ -304,7 +305,8 @@
                         "os_image": "OS",
                         "volume": "Volume",
                         "collector": "Collector",
-                        "slo": "Objective"
+                        "slo": "Objective",
+                        "area": "Area"
                       }
                     }
                   }
@@ -893,7 +895,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 4,
+                            "maxColumnCount": 5,
                             "fillScreen": false
                           }
                         },

@@ -303,6 +303,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "State"
                       }
                     }
@@ -509,6 +510,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Evidence age"
                       }
                     }
@@ -680,6 +682,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Source"
                       }
                     }
@@ -864,6 +867,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Scrape failures"
                       }
                     }
@@ -1430,6 +1434,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "SLO availability"
                       }
                     }
@@ -1596,6 +1601,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "28-day availability"
                       }
                     }
@@ -1762,6 +1768,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "28-day window coverage"
                       }
                     }
@@ -1928,6 +1935,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Error budget left"
                       }
                     }
@@ -2553,7 +2561,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 4,
+                            "maxColumnCount": 5,
                             "fillScreen": false
                           }
                         },
@@ -2759,7 +2767,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 4,
+                            "maxColumnCount": 5,
                             "fillScreen": false
                           }
                         },
@@ -2853,7 +2861,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 4,
+                            "maxColumnCount": 5,
                             "fillScreen": false
                           }
                         },

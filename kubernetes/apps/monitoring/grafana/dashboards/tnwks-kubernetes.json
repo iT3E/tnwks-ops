@@ -143,6 +143,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Ready"
                       }
                     }
@@ -328,6 +329,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Reconciling"
                       }
                     }
@@ -841,6 +843,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "When"
                       }
                     }
@@ -1007,6 +1010,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "When"
                       }
                     }
@@ -1173,6 +1177,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "When"
                       }
                     }
@@ -1339,6 +1344,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "When"
                       }
                     }
