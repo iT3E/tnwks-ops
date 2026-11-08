@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.68.1 - 2026-11-08
+
+### Fixed
+
+* Terraform deploys: the Cloudflare, UniFi, MikroTik and Healthchecks applies no longer fail at job setup on the self-hosted runners. The Terraform Cloud apply steps moved into a local action, so the job no longer pulls their Docker image on runners without Docker.
+
 ## v2.68.0 - 2026-11-08
 
 ### Changed
