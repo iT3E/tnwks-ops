@@ -45,6 +45,22 @@
   "prConcurrentLimit": 12,
   "packageRules": [
     {
+      // Renovate PRs run Terraform plans with real credentials
+      // (terraform-plan.yaml and the *-plan.yaml workflows), and providers
+      // execute during a plan. A release has to be 3 days old before its PR
+      // opens, so a pulled or compromised release is usually gone first.
+      "description": "Terraform providers and modules: 3 days after release",
+      "matchDatasources": ["terraform-provider", "terraform-module"],
+      "minimumReleaseAge": "3 days",
+      "internalChecksFilter": "strict"
+    },
+    {
+      "description": "Terraform CLI: 3 days after release",
+      "matchPackageNames": ["hashicorp/terraform"],
+      "minimumReleaseAge": "3 days",
+      "internalChecksFilter": "strict"
+    },
+    {
       "description": "Coral: queue NumPy majors until its Windows runtime supports them",
       "matchFileNames": ["infrastructure/ansible/roles/windows_coral_detector/**"],
       "matchPackageNames": ["numpy"],
