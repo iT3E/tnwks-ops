@@ -13,14 +13,14 @@ from grafana_foundation_sdk.models import dashboardv2 as model
 
 from conventions import dashboard_link
 
-from .design import NEUTRAL, SCRAPE_COLUMNS, SITES, UNKNOWN_GREY, WHOLE, ZERO_BASED
+from .design import NEUTRAL, SCRAPE_COLUMNS, SITES, STATE, UNKNOWN_GREY, WHOLE, ZERO_BASED
 from .model import Panel, legend, value_header, value_mappings
 
 
 def visualization(panel: Panel, runbook: str | None = None):
     cls = {"stat": stat.Visualization, "table": table.Visualization,
            "timeseries": timeseries.Visualization}[panel.kind]
-    unit = "none" if panel.unit in ("state", "coverage", "bool") else panel.unit
+    unit = {"state": "none", "coverage": "none", "bool": "none", "failures": "short"}.get(panel.unit, panel.unit)
     viz = cls().no_value(panel.empty)
     links = []
     if panel.link:
@@ -85,7 +85,12 @@ def visualization(panel: Panel, runbook: str | None = None):
         viz.color_mode(common.BigValueColorMode.BACKGROUND)
     if panel.kind == "stat":
         viz.reduce_options(common_builder.ReduceDataOptions().calcs(["lastNotNull"]).values(False))
-        if panel.unit not in ("state", "coverage"):
+        if panel.unit == "failures":
+            # A count that should be zero: quiet at zero, red at the first one.
+            viz.decimals(0).color_scheme(dashboard.FieldColor().mode(model.FieldColorModeId.THRESHOLDS))
+            viz.thresholds(dashboard.ThresholdsConfig().mode(model.ThresholdsMode.ABSOLUTE).steps([
+                model.Threshold(value=None, color=NEUTRAL), model.Threshold(value=1, color=STATE["3"].color)]))
+        elif panel.unit not in ("state", "coverage"):
             viz.color_scheme(dashboard.FieldColor().mode(model.FieldColorModeId.FIXED).fixed_color(NEUTRAL))
     if panel.kind == "timeseries":
         # The SDK leaves the legend off; without it a multi-series graph is unreadable.

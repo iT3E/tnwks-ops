@@ -1791,9 +1791,9 @@
     "dashboard": "tnwks-data",
     "tab": "Backups",
     "panel": "WAL failures",
-    "query": "increase(cnpg_pg_stat_archiver_failed_count{k8s_cluster=~\"$cluster\",source_site=\"\"}[1h])",
-    "unit": "short",
-    "query_mode": "range",
+    "query": "sum by (k8s_cluster) (increase(cnpg_pg_stat_archiver_failed_count{k8s_cluster=~\"$cluster\",source_site=\"\"}[$__range]))",
+    "unit": "failures",
+    "query_mode": "instant",
     "inputs": [
       "cnpg_pg_stat_archiver_failed_count"
     ],
@@ -2321,9 +2321,9 @@
     "dashboard": "tnwks-network",
     "tab": "BGP and mesh",
     "panel": "Mesh sync errors",
-    "query": "sum by (k8s_cluster, scope) (rate(cilium_kvstoremesh_kvstore_sync_errors_total{k8s_cluster=~\"$cluster\"}[$__rate_interval]))",
-    "unit": "ops",
-    "query_mode": "range",
+    "query": "sum by (k8s_cluster) (increase(cilium_kvstoremesh_kvstore_sync_errors_total{k8s_cluster=~\"$cluster\"}[$__range]))",
+    "unit": "failures",
+    "query_mode": "instant",
     "inputs": [
       "cilium_kvstoremesh_kvstore_sync_errors_total"
     ],
@@ -3122,9 +3122,9 @@
     "dashboard": "tnwks-wifi",
     "tab": "Access points",
     "panel": "Wi-Fi collector failures",
-    "query": "sum by (k8s_cluster) (increase(unpoller_prometheus_refresh_failures_total{k8s_cluster=~\"$cluster\",source_site=\"\"}[15m]))",
-    "unit": "short",
-    "query_mode": "range",
+    "query": "sum by (k8s_cluster) (increase(unpoller_prometheus_refresh_failures_total{k8s_cluster=~\"$cluster\",source_site=\"\"}[$__range]))",
+    "unit": "failures",
+    "query_mode": "instant",
     "inputs": [
       "unpoller_prometheus_refresh_failures_total"
     ],
@@ -3347,9 +3347,9 @@
     "dashboard": "tnwks-kubernetes",
     "tab": "Reconciliation",
     "panel": "Reconcile failures",
-    "query": "sum by (k8s_cluster, controller) (rate(controller_runtime_reconcile_total{k8s_cluster=~\"$cluster\",result=\"error\"}[5m]))",
-    "unit": "ops",
-    "query_mode": "range",
+    "query": "sum by (k8s_cluster) (increase(controller_runtime_reconcile_total{k8s_cluster=~\"$cluster\",result=\"error\"}[$__range]))",
+    "unit": "failures",
+    "query_mode": "instant",
     "inputs": [
       "controller_runtime_reconcile_total"
     ],
@@ -4503,9 +4503,9 @@
     "dashboard": "tnwks-observability",
     "tab": "Cost",
     "panel": "Rule evaluation failures",
-    "query": "rate(prometheus_rule_evaluation_failures_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])",
-    "unit": "ops",
-    "query_mode": "range",
+    "query": "sum by (k8s_cluster) (increase(prometheus_rule_evaluation_failures_total{k8s_cluster=~\"$cluster\"}[$__range]))",
+    "unit": "failures",
+    "query_mode": "instant",
     "inputs": [
       "prometheus_rule_evaluation_failures_total"
     ],
@@ -4794,9 +4794,9 @@
     "dashboard": "tnwks-observability",
     "tab": "Archive and delivery",
     "panel": "Notification failures",
-    "query": "sum by (k8s_cluster, integration) (rate(alertmanager_notifications_failed_total{k8s_cluster=~\"$cluster\"}[$__rate_interval]))",
-    "unit": "ops",
-    "query_mode": "range",
+    "query": "sum by (k8s_cluster) (increase(alertmanager_notifications_failed_total{k8s_cluster=~\"$cluster\"}[$__range]))",
+    "unit": "failures",
+    "query_mode": "instant",
     "inputs": [
       "alertmanager_notifications_failed_total"
     ],
@@ -4969,9 +4969,9 @@
     "dashboard": "tnwks-alerts",
     "tab": "Alertmanager",
     "panel": "Failed notifications",
-    "query": "sum by (k8s_cluster, integration) (increase(alertmanager_notifications_failed_total{k8s_cluster=~\"$cluster\"}[1h]))",
-    "unit": "short",
-    "query_mode": "range",
+    "query": "sum by (k8s_cluster) (increase(alertmanager_notifications_failed_total{k8s_cluster=~\"$cluster\"}[$__range]))",
+    "unit": "failures",
+    "query_mode": "instant",
     "inputs": [
       "alertmanager_notifications_failed_total"
     ],

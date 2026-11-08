@@ -23,8 +23,8 @@ def board() -> Board:
                   "Ingested samples per second; compare before/after each collector family."),
                 p("Retained blocks", metric("prometheus_tsdb_storage_blocks_bytes"), "bytes",
                   "Compressed blocks only; WAL/head, metadata and compaction scratch require additional disk."),
-                p("Rule evaluation failures", f'rate({metric("prometheus_rule_evaluation_failures_total")}[$__rate_interval])', "ops",
-                  "Local alerts must remain independent of Grafana and the remote archive."),
+                p("Rule evaluation failures", f'sum by (k8s_cluster) (increase({metric("prometheus_rule_evaluation_failures_total")}[$__range]))', "failures",
+                  "Recording and alerting rule evaluations that failed. Local alerts must remain independent of Grafana and the remote archive. Counted over the selected range, per site; anything but zero is red.", "stat"),
             ],
             "Objectives": [
                 p("SLO window coverage", metric("homelab:slo_window_coverage_ratio"), "percentunit",
@@ -53,7 +53,7 @@ def board() -> Board:
                   "Garage's data volume on WSL-02, shared with that node. Under 10% alerts."),
                 p("Time since last upload", metric("homelab:unuploaded_block_age_seconds"), "s",
                   "Since each site's sidecar last uploaded a block. Climbs to about 2 h between blocks and resets; Archive lag is the one to read."),
-                p("Notification failures", f'sum by (k8s_cluster, integration) (rate({metric("alertmanager_notifications_failed_total")}[$__rate_interval]))', "ops",
-                  "Delivery failures. No active alerts is reassuring only when local evaluation, routing and external heartbeat delivery are functioning."),
+                p("Notification failures", f'sum by (k8s_cluster) (increase({metric("alertmanager_notifications_failed_total")}[$__range]))', "failures",
+                  "Delivery failures. No active alerts is reassuring only when local evaluation, routing and external heartbeat delivery are functioning. Counted over the selected range, per site; anything but zero is red.", "stat"),
             ],
         }, "Observability", sections=True)
