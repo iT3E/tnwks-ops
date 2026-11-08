@@ -1,3 +1,0 @@
-kind: Added
-body: 'CI: a nightly CI stats report (runs a day, CI time to result and flake rate, cache usage, stuck runs) that fails when the flake rate passes 2%, the cache passes 9 GB, or a run waits over an hour'
-time: 2026-11-08T00:53:29.553386607-08:00

@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.63.0 - 2026-11-08
+
+### Added
+
+* CI: a nightly CI stats report (runs a day, CI time to result and flake rate, cache usage, stuck runs) that fails when the flake rate passes 2%, the cache passes 9 GB, or a run waits over an hour
+
+### Fixed
+
+* CI stats: 20-minute timeout (a week of runs takes about 5 minutes to page) and lighter run pages
+
 ## v2.62.1 - 2026-11-08
 
 ### Fixed
