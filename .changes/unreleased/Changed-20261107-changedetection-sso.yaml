@@ -1,3 +1,0 @@
-kind: Changed
-body: 'changedetection: UI behind tnwks-auth through oauth2-proxy (admins only), /api/v1 on its own Ingress for API-key clients, docs/apps/changedetection.md (watches and the alert path).'
-time: 2026-11-07T22:50:00.000000-08:00

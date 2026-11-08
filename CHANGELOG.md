@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.61.0 - 2026-11-08
+
+### Changed
+
+* changedetection: UI behind tnwks-auth through oauth2-proxy (admins only), /api/v1 on its own Ingress for API-key clients, docs/apps/changedetection.md (watches and the alert path).
+
 ## v2.60.1 - 2026-11-08
 
 ### Fixed
