@@ -13,8 +13,11 @@ name: "CI"
 #
 # Privacy, secret scanning, the changelog check and the labeler stay separate
 # workflows: they run on every PR, and on events this one shouldn't (a PR
-# title edit, a label change). Terraform plans and Ansible host checks run on
-# their own runners against live systems and gate nothing.
+# title edit, a label change). Ansible host checks run on the sites' own
+# runners against live hosts and gate nothing.
+#
+# Terraform plans do gate, for the roots a PR touches: applies run on merge
+# (deploy.yaml), so a root that doesn't plan shouldn't merge.
 on:
   pull_request:
   push:
@@ -132,6 +135,20 @@ jobs:
       contents: read
     uses: ./.github/workflows/actionlint.yaml
 
+  # One plan per changed root (terraform.yaml), on that root's runner.
+  terraform:
+    needs: changes
+    if: needs.changes.outputs.terraform != '[]'
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/terraform.yaml
+    with:
+      roots: ${{ needs.changes.outputs.terraform }}
+      mode: plan
+    secrets:
+      TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+
   status:
     name: "Build Success"
     if: ${{ !cancelled() }}
@@ -144,6 +161,7 @@ jobs:
       - security_regressions
       - dependency_compatibility
       - workflows
+      - terraform
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions: {}

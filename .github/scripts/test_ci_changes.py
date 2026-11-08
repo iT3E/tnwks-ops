@@ -21,7 +21,7 @@ CONFIG = tomllib.loads((ROOT / ".github/ci/domains.toml").read_text())
 
 def on(files):
     out = ci_changes.evaluate(CONFIG, files)
-    return {k for k, v in out.items() if v is True}, {k: v for k, v in out.items() if isinstance(v, list)}
+    return {k for k, v in out.items() if v is True}, {k: [m["name"] for m in v] for k, v in out.items() if isinstance(v, list)}
 
 
 class Glob(unittest.TestCase):
@@ -77,6 +77,27 @@ class Domains(unittest.TestCase):
     def test_shared_action_plans_every_root_using_it(self):
         _, groups = on([".github/actions/terraform/action.yml"])
         self.assertEqual(groups["terraform"], ["cloudflare", "healthchecks", "mikrotik", "unifi"])
+
+    def test_terraform_workflow_plans_every_root(self):
+        _, groups = on([".github/workflows/terraform.yaml"])
+        self.assertEqual(groups["terraform"], sorted(CONFIG["groups"]["terraform"]))
+
+    def test_group_members_carry_their_fields(self):
+        out = ci_changes.evaluate(CONFIG, ["infrastructure/terraform/modules/mikrotik/main.tf"])
+        (member,) = out["terraform"]
+        self.assertEqual(member["name"], "mikrotik")
+        self.assertEqual(member["runner"], "tnwks-ops-runner")
+        self.assertEqual(member["lock"], "mikrotik-terraform")
+        self.assertNotIn("paths", member)
+        for name, spec in CONFIG["groups"]["terraform"].items():
+            for field in ("title", "root", "runner", "backend"):
+                self.assertIn(field, spec, f"{name} has no {field}")
+            self.assertIn(spec["backend"], ("local", "tfc-remote"), name)
+
+    def test_ignore_always_for_deploy(self):
+        out = ci_changes.evaluate(CONFIG, [".github/workflows/ci.yaml"], ignore_always=True)
+        self.assertEqual(out["terraform"], [])
+        self.assertFalse(out["kubernetes"])
 
     def test_ci_change_turns_everything_on(self):
         for path in [".github/ci/domains.toml", ".github/workflows/ci.yaml", "bin/ci-changes"]:
