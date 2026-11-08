@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.51.3 - 2026-11-08
+
+### Fixed
+
+* CI: a hung flate render no longer fails the required Build Success check. Each render attempt is capped at 2 minutes and retried once, with the process state and flate's debug tail printed first; the flate download retries transient errors.
+
 ## v2.51.2 - 2026-11-08
 
 ### Fixed
