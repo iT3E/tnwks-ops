@@ -1,15 +1,10 @@
-"""Standard HA setup for automatic statements or private PDF imports."""
+"""Import banked-kWh statements; utility sign-in belongs to upstream Pacific Power."""
 
 from __future__ import annotations
 
-import logging
-from typing import Any
-
-import aiohttp
 import voluptuous as vol
 from homeassistant.components.file_upload import process_uploaded_file
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers import selector
 
 from .bill import (
@@ -19,45 +14,24 @@ from .bill import (
     parse_bill_pdf,
     validate_replacement,
 )
-from .client import CreditClient
-from .const import (
-    CONF_ACCOUNT_SEQUENCE,
-    CONF_CUSTOMER_ID,
-    CONF_MODE,
-    CONF_SNAPSHOT,
-    DOMAIN,
-    MODE_BILL,
-    MODE_PORTAL,
-)
-from .portal import AccountInfo, PacificPowerApiError, PacificPowerAuthError
-
-_LOGGER = logging.getLogger(__name__)
+from .const import CONF_MODE, CONF_SNAPSHOT, DOMAIN, MODE_BILL
 
 
 class CreditConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Validate a real statement before creating or replacing an entry."""
+    """Keep credit imports separate from the maintained utility integration."""
 
-    VERSION = 1
-
-    def __init__(self) -> None:
-        self._credentials: dict[str, str] = {}
-        self._accounts: list[AccountInfo] = []
+    VERSION = 2
 
     async def async_step_user(self, user_input: dict | None = None) -> ConfigFlowResult:
-        """Choose the source without requiring an account for PDF imports."""
-        return self.async_show_menu(step_id="user", menu_options=["bill", "portal"])
+        return await self.async_step_bill(user_input)
 
     async def async_step_reconfigure(
         self, user_input: dict | None = None
     ) -> ConfigFlowResult:
-        """Import a newer bill or switch to automatic account checks."""
-        return self.async_show_menu(
-            step_id="reconfigure", menu_options=["bill", "portal"]
-        )
+        return await self.async_step_bill(user_input)
 
     async def async_step_reauth(self, entry_data: dict) -> ConfigFlowResult:
-        """Ask for credentials again after authentication fails."""
-        return await self.async_step_portal()
+        return await self.async_step_bill()
 
     def _existing_entry(self) -> ConfigEntry | None:
         if self.context.get("source") == "reauth":
@@ -67,23 +41,27 @@ class CreditConfigFlow(ConfigFlow, domain=DOMAIN):
         return None
 
     def _read_upload(self, file_id: str) -> CreditBalance:
-        """Run in an executor; always remove the uploaded PDF after parsing."""
+        """Always remove the PDF after parsing, including on failure."""
         with process_uploaded_file(self.hass, file_id) as path:
             if path.stat().st_size > MAX_PDF_BYTES:
                 raise InvalidBill("invalid_pdf")
             return parse_bill_pdf(path.read_bytes())
 
     async def async_step_bill(self, user_input: dict | None = None) -> ConfigFlowResult:
-        """Read a bill without retaining the original PDF or its text."""
+        """Read the recorded balance without retaining the document."""
         errors = {}
         if user_input is not None:
             try:
                 balance = await self.hass.async_add_executor_job(
                     self._read_upload, user_input["bill_pdf"]
                 )
-                return await self._finish(balance, {CONF_MODE: MODE_BILL})
-            except (InvalidBill, ValueError, OSError) as err:
-                errors["base"] = self._bill_error(err)
+                return await self._finish(balance)
+            except (ValueError, OSError) as err:
+                errors["base"] = (
+                    str(err)
+                    if str(err) in {"wrong_account", "older_bill"}
+                    else "invalid_bill"
+                )
         return self.async_show_form(
             step_id="bill",
             data_schema=vol.Schema(
@@ -92,121 +70,8 @@ class CreditConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_portal(
-        self, user_input: dict | None = None
-    ) -> ConfigFlowResult:
-        """Validate username/password sign-in without changing MFA settings."""
-        errors = {}
-        if user_input is not None:
-            self._credentials = {
-                CONF_USERNAME: user_input[CONF_USERNAME],
-                CONF_PASSWORD: user_input["credential"],
-            }
-            api = CreditClient(**self._credentials)
-            stage = "sign-in"
-            try:
-                await api.async_start()
-                await api.async_login()
-                stage = "user profile"
-                user = await api.async_get_user_info()
-                stage = "account discovery"
-                accounts = await api.async_get_accounts(user.get("webUserId", ""))
-                # A statement belongs to an account, not each of its agreements.
-                self._accounts = list(
-                    {(a.customer_idn, a.account_sequence): a for a in accounts}.values()
-                )
-                if len(self._accounts) == 1:
-                    account = self._accounts[0]
-                    stage = "statement lookup"
-                    balance = await api.async_latest_balance(account)
-                    return await self._finish(balance, self._portal_data(account))
-                if self._accounts:
-                    return await self.async_step_account()
-                errors["base"] = "no_accounts"
-            except PacificPowerAuthError:
-                errors["base"] = "invalid_auth"
-            except (PacificPowerApiError, aiohttp.ClientError, TimeoutError) as err:
-                errors["base"] = self._connection_error(stage, err)
-            except InvalidBill as err:
-                errors["base"] = self._bill_error(err)
-            finally:
-                await api.async_stop()
-        return self.async_show_form(
-            step_id="portal",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_USERNAME): selector.TextSelector(),
-                    vol.Required("credential"): selector.TextSelector(
-                        {"type": "password"}
-                    ),
-                }
-            ),
-            errors=errors,
-        )
-
-    async def async_step_account(
-        self, user_input: dict | None = None
-    ) -> ConfigFlowResult:
-        """Select among multiple accounts without putting addresses in entity IDs."""
-        errors = {}
-        options = {
-            str(i): f"Account ending {a.customer_idn[-4:]} / {a.account_sequence}"
-            for i, a in enumerate(self._accounts)
-        }
-        if user_input is not None and user_input.get("account") in options:
-            account = self._accounts[int(user_input["account"])]
-            api = CreditClient(**self._credentials)
-            stage = "sign-in"
-            try:
-                await api.async_start()
-                await api.async_login()
-                stage = "user profile"
-                await api.async_get_user_info()
-                stage = "statement lookup"
-                balance = await api.async_latest_balance(account)
-                return await self._finish(balance, self._portal_data(account))
-            except PacificPowerAuthError:
-                return await self.async_step_portal()
-            except (PacificPowerApiError, aiohttp.ClientError, TimeoutError) as err:
-                errors["base"] = self._connection_error(stage, err)
-            except InvalidBill as err:
-                errors["base"] = self._bill_error(err)
-            finally:
-                await api.async_stop()
-        return self.async_show_form(
-            step_id="account",
-            data_schema=vol.Schema({vol.Required("account"): vol.In(options)}),
-            errors=errors,
-        )
-
-    def _portal_data(self, account: AccountInfo) -> dict[str, Any]:
-        return {
-            CONF_MODE: MODE_PORTAL,
-            **self._credentials,
-            CONF_CUSTOMER_ID: account.customer_idn,
-            CONF_ACCOUNT_SEQUENCE: account.account_sequence,
-        }
-
-    @staticmethod
-    def _connection_error(stage: str, err: Exception) -> str:
-        # Our API exceptions contain fixed messages and endpoint/status only.
-        # HTTP-client exceptions can contain auth URLs, so log only their type.
-        detail = (
-            str(err) if isinstance(err, PacificPowerApiError) else type(err).__name__
-        )
-        _LOGGER.warning("Pacific Power setup failed during %s: %s", stage, detail)
-        return (
-            "statement_unavailable" if stage == "statement lookup" else "cannot_connect"
-        )
-
-    @staticmethod
-    def _bill_error(err: Exception) -> str:
-        return (
-            str(err) if str(err) in {"wrong_account", "older_bill"} else "invalid_bill"
-        )
-
-    async def _finish(self, balance: CreditBalance, source: dict) -> ConfigFlowResult:
-        data = {**source, CONF_SNAPSHOT: balance.as_dict()}
+    async def _finish(self, balance: CreditBalance) -> ConfigFlowResult:
+        data = {CONF_MODE: MODE_BILL, CONF_SNAPSHOT: balance.as_dict()}
         if entry := self._existing_entry():
             validate_replacement(CreditBalance(**entry.data[CONF_SNAPSHOT]), balance)
             return self.async_update_reload_and_abort(

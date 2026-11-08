@@ -108,6 +108,8 @@ spec:
               HASS_OIDC_AUTH_VERSION: v1.2.1
               # renovate: datasource=github-releases depName=blakeblackshear/frigate-hass-integration
               FRIGATE_INTEGRATION_VERSION: v5.15.6
+              # renovate: datasource=github-releases depName=nkcx/ha-pacific-power
+              PACIFIC_POWER_VERSION: v1.4.7
               # renovate: datasource=github-releases depName=dermotduffy/advanced-camera-card
               ADVANCED_CAMERA_CARD_VERSION: v8.1.0
               # renovate: datasource=github-releases depName=NemesisRE/kiosk-mode
@@ -328,13 +330,10 @@ spec:
         items:
           - { key: __init__.py, path: __init__.py }
           - { key: bill.py, path: bill.py }
-          - { key: client.py, path: client.py }
           - { key: config_flow.py, path: config_flow.py }
           - { key: const.py, path: const.py }
           - { key: coordinator.py, path: coordinator.py }
-          - { key: LICENSE, path: LICENSE }
           - { key: manifest.json, path: manifest.json }
-          - { key: portal.py, path: portal.py }
           - { key: sensor.py, path: sensor.py }
           - { key: strings.json, path: strings.json }
           - { key: en.json, path: translations/en.json }

@@ -1,8 +1,5 @@
-"""Offline tests against the pinned HA runtime; all bill data is synthetic."""
+"""Offline PDF-credit and migration tests; all statements are synthetic."""
 
-import base64
-import json
-import os
 import shutil
 import tempfile
 import unittest
@@ -10,13 +7,9 @@ from datetime import date
 from io import BytesIO
 from pathlib import Path
 from types import MappingProxyType
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-import aiohttp
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import padding, rsa
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from custom_components.pacific_power_credits.bill import (
     MAX_PDF_BYTES,
     InvalidBill,
@@ -24,21 +17,14 @@ from custom_components.pacific_power_credits.bill import (
     parse_bill_text,
     validate_replacement,
 )
-from custom_components.pacific_power_credits.client import CreditClient
 from custom_components.pacific_power_credits.config_flow import CreditConfigFlow
 from custom_components.pacific_power_credits.const import DOMAIN
 from custom_components.pacific_power_credits.coordinator import CreditCoordinator
-from custom_components.pacific_power_credits.portal import (
-    AccountInfo,
-    PacificPowerApiError,
-    PacificPowerAuthError,
-)
 from custom_components.pacific_power_credits.sensor import CreditSensor
 from homeassistant import bootstrap, loader
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.helpers.entity_registry import async_get as get_entity_registry
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
@@ -82,18 +68,19 @@ def pdf_bytes(text=TEXT):
     return output.getvalue()
 
 
-def entry(snapshot=None, mode="bill"):
-    snapshot = snapshot or parse_bill_text(TEXT)
-    data = {"mode": mode, "snapshot": snapshot.as_dict()}
-    if mode == "portal":
+def entry(version=2, retired_portal=False):
+    snapshot = parse_bill_text(TEXT)
+    data = {"mode": "bill", "snapshot": snapshot.as_dict()}
+    if retired_portal:
         data.update(
+            mode="portal",
             username="test@example.test",
             password=TEST_CREDENTIAL,
             customer_id="12345678",
             account_sequence="001",
         )
     return ConfigEntry(
-        version=1,
+        version=version,
         minor_version=1,
         domain=DOMAIN,
         title="Solar credits",
@@ -171,190 +158,6 @@ class BillTests(unittest.TestCase):
             )
 
 
-class ClientTests(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        self.client = CreditClient("test@example.test", TEST_CREDENTIAL)
-        self.client._web_user_id = "test-user"
-        self.account = AccountInfo("12345678", "001", "", "")
-
-    async def test_latest_statement_download_payload(self):
-        self.client._api_call = AsyncMock(
-            side_effect=[
-                {
-                    "getAccountInfoResponseBody": {
-                        "accountInfo": {"currentStatementDate": "2032-11-12"}
-                    }
-                },
-                {
-                    "getStatementPDFResponseBody": {
-                        "PDFContent": base64.b64encode(pdf_bytes()).decode()
-                    }
-                },
-            ]
-        )
-        result = await self.client.async_latest_balance(self.account)
-        self.assertEqual(result, parse_bill_text(TEXT))
-        self.assertEqual(
-            self.client._api_call.call_args_list[0].args,
-            (
-                "/api/account/getAccountInfo",
-                {
-                    "getAccountInfoRequestBody": {
-                        "accountRequest": {
-                            "customerIDN": "12345678",
-                            "accountSequence": "001",
-                        }
-                    }
-                },
-            ),
-        )
-        self.assertEqual(
-            self.client._api_call.call_args.args,
-            (
-                "/api/account-additional/getStatementPDF",
-                {
-                    "getStatementPDFRequestBody": {
-                        "webUserID": "test-user",
-                        "custAccountID": "12345678",
-                        "custAccountSeq": "001",
-                        "statementDate": "2032-11-12",
-                    }
-                },
-            ),
-        )
-
-    async def test_unchanged_statement_not_downloaded(self):
-        self.client._api_call = AsyncMock(
-            return_value={
-                "getAccountInfoResponseBody": {
-                    "accountInfo": {"currentStatementDate": "2032-11-12"}
-                }
-            }
-        )
-        previous = parse_bill_text(TEXT)
-        self.assertIs(
-            await self.client.async_latest_balance(self.account, previous), previous
-        )
-        self.assertEqual(self.client._api_call.call_count, 1)
-
-    async def test_missing_statement_date(self):
-        self.client._api_call = AsyncMock(return_value={})
-        with self.assertRaises(PacificPowerApiError):
-            await self.client.async_latest_balance(self.account)
-
-    async def test_account_details_are_not_billing_info(self):
-        # getAccountDetails serves the profile; the portal's bill card instead
-        # uses getAccountInfoResponseBody.accountInfo.currentStatementDate.
-        self.client._api_call = AsyncMock(
-            return_value={
-                "getAccountDetailsResponseBody": {
-                    "account": {"currentStatementDate": "2032-11-12"}
-                }
-            }
-        )
-        with self.assertRaisesRegex(
-            PacificPowerApiError, "Latest statement date unavailable"
-        ):
-            await self.client.async_latest_balance(self.account)
-        self.assertEqual(
-            self.client._api_call.call_args.args[0], "/api/account/getAccountInfo"
-        )
-
-    async def test_preserve_portal_statement_date_in_download_request(self):
-        portal_date = "2032-11-12T00:00:00.000-08:00"
-        self.client._api_call = AsyncMock(
-            side_effect=[
-                {
-                    "getAccountInfoResponseBody": {
-                        "accountInfo": {"currentStatementDate": portal_date}
-                    }
-                },
-                {
-                    "getStatementPDFResponseBody": {
-                        "PDFContent": base64.b64encode(pdf_bytes()).decode()
-                    }
-                },
-            ]
-        )
-        result = await self.client.async_latest_balance(self.account)
-        self.assertEqual(result.statement_date, "2032-11-12")
-        self.assertEqual(
-            self.client._api_call.call_args.args[1]["getStatementPDFRequestBody"][
-                "statementDate"
-            ],
-            portal_date,
-        )
-
-    async def test_encrypted_api_round_trip(self):
-        self.client._sign_key = rsa.generate_private_key(
-            public_exponent=65537, key_size=2048
-        )
-        self.client._aes_key = os.urandom(32)
-        iv = os.urandom(12)
-        encrypted = AESGCM(self.client._aes_key).encrypt(iv, b'{"ok":true}', None)
-        response = MagicMock()
-        response.status = 200
-        response.headers.getall.return_value = []
-        response.text = AsyncMock(
-            return_value=base64.b64encode(iv).decode()
-            + base64.b64encode(encrypted).decode()
-        )
-        self.client._session = MagicMock()
-        self.client._session.post.return_value.__aenter__ = AsyncMock(
-            return_value=response
-        )
-        self.client._session.post.return_value.__aexit__ = AsyncMock(return_value=False)
-        self.assertEqual(
-            await self.client._api_call("/api/user/me", {"request": "example"}),
-            {"ok": True},
-        )
-        request = self.client._session.post.call_args.kwargs
-        content = request["data"].decode()
-        plaintext = AESGCM(self.client._aes_key).decrypt(
-            base64.b64decode(content[:16]), base64.b64decode(content[16:]), None
-        )
-        self.assertEqual(json.loads(plaintext), {"request": "example"})
-        self.client._sign_key.public_key().verify(
-            base64.b64decode(request["headers"]["X-WCSSS-Content-Signature"]),
-            plaintext,
-            padding.PKCS1v15(),
-            hashes.SHA256(),
-        )
-        response.status = 400
-        response.text = AsyncMock(return_value="private-response-marker")
-        with self.assertRaises(PacificPowerApiError) as caught:
-            await self.client._api_call("/api/user/me", {})
-        self.assertNotIn("private-response-marker", str(caught.exception))
-
-    async def test_auth_redirect_restricted_to_utility_hosts(self):
-        for url in (
-            "http://csapps.pacificpower.net/login",
-            "https://other.example.test/login",
-        ):
-            with self.assertRaises(PacificPowerAuthError):
-                self.client._validate_auth_url(url)
-        self.client._validate_auth_url("https://login.csapps.pacificpower.net/signin")
-
-    async def test_bad_pdf_and_mismatched_bill_date(self):
-        for encoded in (
-            "not-base64!",
-            base64.b64encode(b"not-pdf").decode(),
-            base64.b64encode(pdf_bytes(TEXT.replace("Nov 12", "Oct 12"))).decode(),
-        ):
-            self.client._api_call = AsyncMock(
-                side_effect=[
-                    {
-                        "getAccountInfoResponseBody": {
-                            "accountInfo": {"currentStatementDate": "2032-11-12"}
-                        }
-                    },
-                    {"getStatementPDFResponseBody": {"PDFContent": encoded}},
-                ]
-            )
-            with self.assertRaises(InvalidBill):
-                await self.client.async_latest_balance(self.account)
-
-
 class HassTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -365,17 +168,10 @@ class HassTests(unittest.IsolatedAsyncioTestCase):
         await self.hass.async_stop()
         self.temp.cleanup()
 
-    async def test_imported_snapshot_survives_restart_without_network(self):
-        conf = entry()
-        with patch(
-            "custom_components.pacific_power_credits.coordinator.CreditClient"
-        ) as client:
-            coordinator = CreditCoordinator(self.hass, conf)
-            self.assertEqual(
-                await coordinator._async_update_data(), parse_bill_text(TEXT)
-            )
-            self.assertIsNone(coordinator.update_interval)
-            client.assert_not_called()
+    async def test_imported_snapshot_has_no_polling(self):
+        coordinator = CreditCoordinator(self.hass, entry())
+        self.assertEqual(await coordinator._async_update_data(), parse_bill_text(TEXT))
+        self.assertIsNone(coordinator.update_interval)
 
     async def test_sensor_units_date_and_no_grid_counter(self):
         coordinator = CreditCoordinator(self.hass, entry())
@@ -383,65 +179,13 @@ class HassTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sensor.native_value, 2450.5)
         self.assertEqual(sensor.native_unit_of_measurement, "kWh")
         self.assertIsNone(sensor.state_class)
-        self.assertEqual(
-            sensor.extra_state_attributes["expiry_billing_month"], "2033-03"
-        )
+        self.assertEqual(sensor.extra_state_attributes["source"], "bill")
         self.assertEqual(
             CreditSensor(coordinator, "statement_date").native_value, date(2032, 11, 12)
         )
         self.assertEqual(
             CreditSensor(coordinator, "expiry_billing_month").native_value, "2033-03"
         )
-
-    async def test_new_cloud_bill_persisted_and_session_closed(self):
-        conf = entry(mode="portal")
-        after = parse_bill_text(
-            TEXT.replace("Nov 12", "Dec 12").replace("2,450.5", "1500")
-        )
-        with (
-            patch(
-                "custom_components.pacific_power_credits.coordinator.CreditClient"
-            ) as cls,
-            patch.object(self.hass.config_entries, "async_update_entry") as update,
-        ):
-            api = cls.return_value
-            for name in (
-                "async_start",
-                "async_login",
-                "async_get_user_info",
-                "async_stop",
-            ):
-                setattr(api, name, AsyncMock())
-            api.async_latest_balance = AsyncMock(return_value=after)
-            coordinator = CreditCoordinator(self.hass, conf)
-            self.assertEqual(await coordinator._async_update_data(), after)
-            self.assertEqual(
-                update.call_args.kwargs["data"]["snapshot"], after.as_dict()
-            )
-            api.async_stop.assert_awaited_once()
-
-    async def test_cloud_failure_preserves_snapshot_and_closes_session(self):
-        for failure, expected in (
-            (InvalidBill("missing_credit"), UpdateFailed),
-            (PacificPowerAuthError("auth"), ConfigEntryAuthFailed),
-        ):
-            with patch(
-                "custom_components.pacific_power_credits.coordinator.CreditClient"
-            ) as cls:
-                api = cls.return_value
-                for name in (
-                    "async_start",
-                    "async_login",
-                    "async_get_user_info",
-                    "async_stop",
-                ):
-                    setattr(api, name, AsyncMock())
-                api.async_latest_balance = AsyncMock(side_effect=failure)
-                coordinator = CreditCoordinator(self.hass, entry(mode="portal"))
-                with self.assertRaises(expected):
-                    await coordinator._async_update_data()
-                self.assertEqual(coordinator.data.kwh, 2450.5)
-                api.async_stop.assert_awaited_once()
 
     async def test_upload_deleted_even_for_invalid_bill(self):
         from homeassistant.components.file_upload import FileUploadData
@@ -459,209 +203,169 @@ class HassTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse((directory / "upload-id").exists())
         self.assertFalse(self.hass.data["file_upload"].files)
 
-    async def test_pdf_setup_and_validation_errors(self):
+    async def test_import_errors_leave_existing_snapshot_unchanged(self):
         flow = CreditConfigFlow()
         flow.hass = self.hass
+        conf = entry()
         with (
-            patch.object(flow, "_read_upload", return_value=parse_bill_text(TEXT)),
             patch.object(
-                flow, "_finish", new=AsyncMock(return_value={"type": "create_entry"})
+                flow, "_read_upload", side_effect=InvalidBill("missing_credit")
             ),
-        ):
-            self.assertEqual(
-                (await flow.async_step_bill({"bill_pdf": "upload-id"}))["type"],
-                "create_entry",
-            )
-            self.assertEqual(flow._finish.call_args.args[1], {"mode": "bill"})
-        with patch.object(
-            flow, "_read_upload", side_effect=InvalidBill("missing_credit")
+            patch.object(flow, "_existing_entry", return_value=conf),
         ):
             result = await flow.async_step_bill({"bill_pdf": "upload-id"})
-            self.assertEqual(result["errors"], {"base": "invalid_bill"})
+        self.assertEqual(result["errors"], {"base": "invalid_bill"})
+        self.assertEqual(conf.data["snapshot"]["kwh"], 2450.5)
+        self.hass.config_entries.async_update_entry.assert_not_called()
 
-    async def test_reconfigure_import_removes_credentials(self):
+    async def test_reconfigure_accepts_only_same_account_newer_bill(self):
         flow = CreditConfigFlow()
         flow.hass = self.hass
         flow.context = {"source": "reconfigure"}
-        conf = entry(mode="portal")
+        conf = entry()
+        newer = parse_bill_text(
+            TEXT.replace("Nov 12", "Dec 12").replace("2,450.5", "1500")
+        )
         with (
             patch.object(flow, "_existing_entry", return_value=conf),
             patch.object(
                 flow, "async_update_reload_and_abort", return_value={"type": "abort"}
             ) as update,
         ):
-            await flow._finish(parse_bill_text(TEXT), {"mode": "bill"})
-            self.assertNotIn("password", update.call_args.kwargs["data"])
-            self.assertEqual(update.call_args.kwargs["data"]["mode"], "bill")
-
-    async def test_auth_failure_offers_import_instead_of_changing_mfa(self):
-        flow = CreditConfigFlow()
-        flow.hass = self.hass
-        with patch(
-            "custom_components.pacific_power_credits.config_flow.CreditClient"
-        ) as cls:
-            api = cls.return_value
-            api.async_start = AsyncMock()
-            api.async_login = AsyncMock(
-                side_effect=PacificPowerAuthError("verification required")
-            )
-            api.async_stop = AsyncMock()
-            result = await flow.async_step_portal(
-                {"username": "test@example.test", "credential": TEST_CREDENTIAL}
-            )
-            self.assertEqual(result["errors"], {"base": "invalid_auth"})
-            api.async_stop.assert_awaited_once()
-
-    async def test_statement_failure_is_distinguished_without_replacing_balance(self):
-        flow = CreditConfigFlow()
-        flow.hass = self.hass
-        conf = entry()
-        with (
-            patch(
-                "custom_components.pacific_power_credits.config_flow.CreditClient"
-            ) as cls,
-            patch.object(flow, "_existing_entry", return_value=conf),
-            patch.object(flow, "_finish", new=AsyncMock()) as finish,
-        ):
-            api = cls.return_value
-            api.async_start = AsyncMock()
-            api.async_stop = AsyncMock()
-            api.async_login = AsyncMock()
-            api.async_get_user_info = AsyncMock(return_value={"webUserId": "example"})
-            api.async_get_accounts = AsyncMock(
-                return_value=[AccountInfo("12345678", "001", "", "")]
-            )
-            api.async_latest_balance = AsyncMock(
-                side_effect=PacificPowerApiError("Latest statement date unavailable")
-            )
-            with self.assertLogs(
-                "custom_components.pacific_power_credits.config_flow", level="WARNING"
-            ) as logs:
-                result = await flow.async_step_portal(
-                    {"username": "test@example.test", "credential": TEST_CREDENTIAL}
+            await flow._finish(newer)
+            data = update.call_args.kwargs["data"]
+            self.assertEqual(data, {"mode": "bill", "snapshot": newer.as_dict()})
+            with self.assertRaisesRegex(InvalidBill, "wrong_account"):
+                await flow._finish(
+                    parse_bill_text(TEXT.replace("12345678", "87654321"))
                 )
-            self.assertEqual(result["errors"], {"base": "statement_unavailable"})
-            self.assertIn("statement lookup", " ".join(logs.output))
-            self.assertNotIn(TEST_CREDENTIAL, " ".join(logs.output))
-            self.assertNotIn("test@example.test", " ".join(logs.output))
-            self.assertEqual(conf.data["snapshot"]["kwh"], 2450.5)
-            finish.assert_not_awaited()
-            api.async_stop.assert_awaited_once()
-
-    async def test_http_error_diagnostic_excludes_auth_urls(self):
-        with self.assertLogs(
-            "custom_components.pacific_power_credits.config_flow", level="WARNING"
-        ) as logs:
-            code = CreditConfigFlow._connection_error(
-                "sign-in",
-                aiohttp.InvalidURL("https://example.test/?secret=private-marker"),
-            )
-        self.assertEqual(code, "cannot_connect")
-        self.assertIn("InvalidURL", " ".join(logs.output))
-        self.assertNotIn("private-marker", " ".join(logs.output))
 
 
 class LifecycleTests(unittest.IsolatedAsyncioTestCase):
-    async def test_actual_setup_entities_duplicate_and_reconfigure(self):
-        """Run the real HA flow manager and sensor platform, without any cloud calls."""
+    async def asyncSetUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.directory = Path(self.temp.name)
+        shutil.copytree(
+            Path("/src/custom_components/pacific_power_credits"),
+            self.directory / "custom_components" / "pacific_power_credits",
+        )
+        self.hass = HomeAssistant(self.temp.name)
+        loader.async_setup(self.hass)
+        self.hass.config.skip_pip = True
+        self.assertIsNotNone(
+            await bootstrap.async_from_config_dict(
+                {
+                    "homeassistant": {
+                        "latitude": 0,
+                        "longitude": 0,
+                        "time_zone": "UTC",
+                        "country": "US",
+                    },
+                    "http": {"server_port": 8123},
+                },
+                self.hass,
+            )
+        )
+
+    async def asyncTearDown(self):
+        await self.hass.async_stop()
+        self.temp.cleanup()
+
+    def upload(self, text=TEXT):
         from homeassistant.components.file_upload import FileUploadData
 
-        first_id, next_id, duplicate_id = (uuid4().hex for _ in range(3))
-        with tempfile.TemporaryDirectory() as directory:
-            source = Path("/src/custom_components/pacific_power_credits")
-            destination = (
-                Path(directory) / "custom_components" / "pacific_power_credits"
-            )
-            shutil.copytree(source, destination)
-            hass = HomeAssistant(directory)
-            loader.async_setup(hass)
-            hass.config.skip_pip = True
-            try:
-                self.assertIsNotNone(
-                    await bootstrap.async_from_config_dict(
-                        {
-                            "homeassistant": {
-                                "latitude": 0,
-                                "longitude": 0,
-                                "time_zone": "UTC",
-                                "country": "US",
-                            },
-                            "http": {"server_port": 8123},
-                        },
-                        hass,
-                    )
-                )
-                self.assertIn("http", hass.config.components)
-                result = await hass.config_entries.flow.async_init(
-                    DOMAIN, context={"source": "user"}
-                )
-                self.assertEqual(result["type"], "menu")
-                result = await hass.config_entries.flow.async_configure(
-                    result["flow_id"], {"next_step_id": "bill"}
-                )
-                self.assertEqual(result["step_id"], "bill")
-                upload_dir = Path(directory) / "upload"
-                (upload_dir / first_id).mkdir(parents=True)
-                (upload_dir / first_id / "bill.pdf").write_bytes(pdf_bytes())
-                hass.data["file_upload"] = FileUploadData(
-                    upload_dir, {first_id: "bill.pdf"}
-                )
-                result = await hass.config_entries.flow.async_configure(
-                    result["flow_id"], {"bill_pdf": first_id}
-                )
-                self.assertEqual(result["type"], "create_entry")
-                await hass.async_block_till_done()
-                conf = result["result"]
-                self.assertEqual(conf.state.value, "loaded")
-                states = [
-                    s
-                    for s in hass.states.async_all("sensor")
-                    if s.attributes.get("unit_of_measurement") == "kWh"
-                ]
-                self.assertEqual(len(states), 1)
-                self.assertEqual(states[0].state, "2450.5")
-                self.assertNotIn("state_class", states[0].attributes)
-                self.assertNotIn("12345678", states[0].entity_id)
+        file_id = uuid4().hex
+        directory = self.directory / "uploads"
+        (directory / file_id).mkdir(parents=True)
+        (directory / file_id / "bill.pdf").write_bytes(pdf_bytes(text))
+        if "file_upload" not in self.hass.data:
+            self.hass.data["file_upload"] = FileUploadData(directory, {})
+        self.hass.data["file_upload"].files[file_id] = "bill.pdf"
+        return file_id
 
-                # Updating through the real reconfigure flow reloads the integration.
-                result = await hass.config_entries.flow.async_init(
-                    DOMAIN, context={"source": "reconfigure", "entry_id": conf.entry_id}
-                )
-                result = await hass.config_entries.flow.async_configure(
-                    result["flow_id"], {"next_step_id": "bill"}
-                )
-                (upload_dir / next_id).mkdir()
-                (upload_dir / next_id / "bill.pdf").write_bytes(
-                    pdf_bytes(
-                        TEXT.replace("Nov 12", "Dec 12").replace("2,450.5", "1500")
-                    )
-                )
-                hass.data["file_upload"].files[next_id] = "bill.pdf"
-                result = await hass.config_entries.flow.async_configure(
-                    result["flow_id"], {"bill_pdf": next_id}
-                )
-                self.assertEqual(result["type"], "abort")
-                await hass.async_block_till_done()
-                self.assertEqual(hass.states.get(states[0].entity_id).state, "1500.0")
-                self.assertEqual(conf.data["snapshot"]["kwh"], 1500)
-                self.assertFalse((upload_dir / next_id).exists())
+    async def test_real_import_update_duplicate_migration_and_file_cleanup(self):
+        result = await self.hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": "user"}
+        )
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "bill")
+        self.assertEqual(
+            [str(key) for key in result["data_schema"].schema], ["bill_pdf"]
+        )
+        file_id = self.upload()
+        result = await self.hass.config_entries.flow.async_configure(
+            result["flow_id"], {"bill_pdf": file_id}
+        )
+        self.assertEqual(result["type"], "create_entry")
+        await self.hass.async_block_till_done()
+        conf = result["result"]
+        self.assertEqual(conf.state.value, "loaded")
+        self.assertEqual(conf.version, 2)
+        sensors = [
+            state
+            for state in self.hass.states.async_all("sensor")
+            if state.attributes.get("unit_of_measurement") == "kWh"
+        ]
+        self.assertEqual(len(sensors), 1)
+        entity_id = sensors[0].entity_id
+        self.assertEqual(sensors[0].state, "2450.5")
+        self.assertNotIn("state_class", sensors[0].attributes)
+        self.assertFalse((self.directory / "uploads" / file_id).exists())
 
-                # Duplicate account imports fail before adding another entry.
-                result = await hass.config_entries.flow.async_init(
-                    DOMAIN, context={"source": "user"}
-                )
-                result = await hass.config_entries.flow.async_configure(
-                    result["flow_id"], {"next_step_id": "bill"}
-                )
-                (upload_dir / duplicate_id).mkdir()
-                (upload_dir / duplicate_id / "bill.pdf").write_bytes(pdf_bytes())
-                hass.data["file_upload"].files[duplicate_id] = "bill.pdf"
-                result = await hass.config_entries.flow.async_configure(
-                    result["flow_id"], {"bill_pdf": duplicate_id}
-                )
-                self.assertEqual(result["reason"], "already_configured")
-            finally:
-                await hass.async_stop()
+        result = await self.hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": "reconfigure", "entry_id": conf.entry_id}
+        )
+        self.assertEqual(result["step_id"], "bill")
+        file_id = self.upload(
+            TEXT.replace("Nov 12", "Dec 12").replace("2,450.5", "1500")
+        )
+        result = await self.hass.config_entries.flow.async_configure(
+            result["flow_id"], {"bill_pdf": file_id}
+        )
+        self.assertEqual(result["reason"], "reconfigure_successful")
+        await self.hass.async_block_till_done()
+        self.assertEqual(self.hass.states.get(entity_id).state, "1500.0")
+        self.assertFalse((self.directory / "uploads" / file_id).exists())
+
+        result = await self.hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": "user"}
+        )
+        file_id = self.upload()
+        result = await self.hass.config_entries.flow.async_configure(
+            result["flow_id"], {"bill_pdf": file_id}
+        )
+        self.assertEqual(result["reason"], "already_configured")
+        self.assertFalse((self.directory / "uploads" / file_id).exists())
+
+        # Simulate upgrading the same registered entities from the retired mode.
+        old_unique_id = conf.unique_id
+        old_snapshot = dict(conf.data["snapshot"])
+        legacy = entry(version=1, retired_portal=True)
+        self.hass.config_entries.async_update_entry(
+            conf, version=1, data={**legacy.data, "snapshot": old_snapshot}
+        )
+        await self.hass.config_entries.async_reload(conf.entry_id)
+        await self.hass.async_block_till_done()
+        self.assertEqual(conf.state.value, "loaded")
+        self.assertEqual(conf.version, 2)
+        self.assertEqual(conf.unique_id, old_unique_id)
+        self.assertEqual(dict(conf.data), {"mode": "bill", "snapshot": old_snapshot})
+        self.assertEqual(conf.runtime_data.data.kwh, 1500)
+        self.assertEqual(self.hass.states.get(entity_id).state, "1500.0")
+        self.assertIsNone(conf.runtime_data.update_interval)
+        registry = get_entity_registry(self.hass)
+        unique_ids = {
+            entity.unique_id
+            for entity in registry.entities.values()
+            if entity.config_entry_id == conf.entry_id
+        }
+        self.assertEqual(
+            unique_ids,
+            {
+                f"{old_unique_id}_{key}"
+                for key in ("banked_energy", "statement_date", "expiry_billing_month")
+            },
+        )
 
 
 if __name__ == "__main__":
