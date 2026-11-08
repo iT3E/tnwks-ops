@@ -87,6 +87,26 @@ To run it locally:
 GH_TOKEN=$(gh auth token) python3 .github/scripts/ci-stats.py --repo iT3E/tnwks-ops --days 7
 ```
 
+## Bootstrap smoke
+
+[`bootstrap-smoke.yaml`](../../.github/workflows/bootstrap-smoke.yaml)
+runs every morning, and on a PR that changes it, to check that a fresh
+cluster still bootstraps from main:
+
+1. It boots a throwaway Talos-in-Docker cluster
+   ([home-operations/talosctl-cluster-action](https://github.com/home-operations/talosctl-cluster-action))
+   on the Talos and Kubernetes versions in `talos/wsl/versions.yaml`.
+2. It installs Flux from the committed
+   `kubernetes/clusters/wsl/flux-system/gotk-components.yaml`.
+3. It points Flux at the commit over HTTPS (the repo is public), as
+   `flux bootstrap` would, and applies `kubernetes/clusters/wsl/meta.yaml`.
+4. It waits for `cluster-meta` and every Helm, OCI and Git source to be
+   Ready.
+
+A failure means a site rebuild would stall at the same step: the API server
+rejects a Flux manifest, or a chart repository moved or died. The apps
+aren't reconciled, because they need the cluster's SOPS age key.
+
 ## Adding a check
 
 1. Add a `[domains.<name>]` entry to `.github/ci/domains.toml` with its

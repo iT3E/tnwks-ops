@@ -1,0 +1,3 @@
+kind: Added
+body: 'CI: a nightly bootstrap smoke boots a throwaway Talos-in-Docker cluster, installs Flux from main and waits for every Flux source to be Ready'
+time: 2026-11-08T00:59:12.858905312-08:00
