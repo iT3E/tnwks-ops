@@ -97,6 +97,9 @@ def resource(board: Board) -> dict:
                 data.transformation(dashboard.Transformation().group("organize").options({
                     "indexByName": {f"{panel.per_site}\\k8s_cluster": 0} | {site: i + 1 for i, site in enumerate(CLUSTERS)},
                     "renameByName": {f"{panel.per_site}\\k8s_cluster": LABELS[panel.per_site]}}))
+                # Rows in name order, so tables of the same things line up.
+                data.transformation(dashboard.Transformation().group("sortBy").options({
+                    "sort": [{"field": LABELS[panel.per_site]}]}))
             elif panel.kind == "table":
                 query.format(prom_model.PromQueryFormat.TABLE)
                 header = value_header(panel)

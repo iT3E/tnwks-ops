@@ -937,6 +937,19 @@
                       }
                     }
                   }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "App"
+                        }
+                      ]
+                    }
+                  }
                 }
               ],
               "queryOptions": {}
@@ -1993,6 +2006,19 @@
                       }
                     }
                   }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "App"
+                        }
+                      ]
+                    }
+                  }
                 }
               ],
               "queryOptions": {}
@@ -2199,6 +2225,19 @@
                       }
                     }
                   }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "App"
+                        }
+                      ]
+                    }
+                  }
                 }
               ],
               "queryOptions": {}
@@ -2324,6 +2363,19 @@
                       }
                     }
                   }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "App"
+                        }
+                      ]
+                    }
+                  }
                 }
               ],
               "queryOptions": {}
@@ -2447,6 +2499,19 @@
                       "renameByName": {
                         "app\\k8s_cluster": "App"
                       }
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "App"
+                        }
+                      ]
                     }
                   }
                 }
@@ -2612,6 +2677,19 @@
                       }
                     }
                   }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "App"
+                        }
+                      ]
+                    }
+                  }
                 }
               ],
               "queryOptions": {}
@@ -2773,6 +2851,19 @@
                       "renameByName": {
                         "app\\k8s_cluster": "App"
                       }
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "App"
+                        }
+                      ]
                     }
                   }
                 }

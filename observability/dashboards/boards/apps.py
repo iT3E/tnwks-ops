@@ -11,7 +11,7 @@ def board() -> Board:
               "Can users reach a usable application, and where is the request path failing?", {
             "User paths": [
                 p("Application probe state", metric("homelab:service_state"), "state",
-                  "Content probe to the in-cluster Service on its active site. This bypasses client DNS, ingress and sign-in; those paths need separate evidence.", "table"),
+                  "Content probe to the in-cluster Service on its active site. This bypasses client DNS, ingress and sign-in; those paths need separate evidence.", "table", per_site="app"),
                 p("HTTP requests", f'sum by (k8s_cluster, ingress) (rate({metric("nginx_ingress_controller_requests")}[$__rate_interval]))', "reqps",
                   "Rate counters before aggregation. Use the same scope when comparing the error numerator and total denominator.", link=NGINX),
                 p("HTTP 5xx fraction", f'sum by (k8s_cluster, ingress) (rate({metric("nginx_ingress_controller_requests", "status=~\"5..\"")}[$__rate_interval])) / sum by (k8s_cluster, ingress) (rate({metric("nginx_ingress_controller_requests")}[$__rate_interval]))', "percentunit",
@@ -21,7 +21,7 @@ def board() -> Board:
             ],
             "Shared-VIP names": [
                 p("Name state by site", metric("homelab:ingress_state"), "state",
-                  "Each site's collector uses every shared-VIP name as a client would: the router's DNS answer must be the name's VIP, TLS must verify, and that site's ingress must route the host (any answer but a 404 or 5xx). A pod reaches its own site's ingress for either VIP, so this is each site's readiness to serve the name.", "table"),
+                  "Each site's collector uses every shared-VIP name as a client would: the router's DNS answer must be the name's VIP, TLS must verify, and that site's ingress must route the host (any answer but a 404 or 5xx). A pod reaches its own site's ingress for either VIP, so this is each site's readiness to serve the name.", "table", per_site="name"),
                 p("Served by", f'max by (k8s_cluster, name, served_cluster) ({selector("homelab_ingress_served_by_info")})', "short",
                   "The site each ingress said served the request (its X-Homelab-Site header). It matches the observer's site, because each site's pods reach their own ingress.", "table", column=None),
                 p("Name certificate remaining", metric("homelab:ingress_cert_remaining_seconds"), "s",

@@ -12,7 +12,7 @@ def board() -> Board:
               "Can the other dashboards be trusted, and is monitoring itself sustainable?", {
             "Trust": coverage() + [
                 p("Collector source success", metric("homelab_collection_success"), "bool",
-                  "Collector-specific upstream success. HTTP scrape success can coexist with a blind collector.", "table", column="Source", words=("OK", "Failing")),
+                  "Collector-specific upstream success. HTTP scrape success can coexist with a blind collector.", "table", words=("OK", "Failing"), per_site="collector"),
                 p("Scrape failures", f'count by (k8s_cluster, job) ({metric("up")} == 0) or on (k8s_cluster) (0 * count by (k8s_cluster) ({metric("up")}))', "short",
                   "Failed targets per job; a site showing 0 has none. Compare with declared inventory to detect targets that disappeared from discovery.", "table"),
             ],
@@ -30,17 +30,17 @@ def board() -> Board:
                 p("SLO window coverage", metric("homelab:slo_window_coverage_ratio"), "percentunit",
                   "How much of the 14 d SLO window each site's Prometheus holds. Below 100%, every availability on this tab covers only that share of its window: incomplete, not wrong.", "stat"),
                 p("SLO availability", f'max by (k8s_cluster, slo) ({selector("pyrra_availability")})', "percentunit",
-                  "Good probe intervals over all of them in the window, per SLO and site (Pyrra, from slos.yaml). Targets are provisional until a full window exists; the Pyrra UI has burn rates.", "table"),
+                  "Good probe intervals over all of them in the window, per SLO and site (Pyrra, from slos.yaml). Targets are provisional until a full window exists; the Pyrra UI has burn rates.", "table", per_site="slo"),
                 # The same indicators over 28 days, at query time: through the Global
                 # datasource the archive (35 d) supplies what local retention lacks.
                 p("28-day availability", per_slo("avg by (k8s_cluster) (avg_over_time({sel}[28d]))"), "percentunit",
                   "Each SLO's indicator averaged over 28 days at query time, against the same targets as the 14-day Pyrra objectives. With the Global datasource the archive supplies the older weeks; read it with 28-day window coverage.",
-                  "table"),
+                  "table", per_site="slo"),
                 p("28-day window coverage", per_slo(f"clamp_max((time() - min by (k8s_cluster) (min_over_time(timestamp({{sel}})[28d:1h]))) / {LONG_WINDOW_SECONDS}, 1)"), "percentunit",
                   "How much of the 28 days the chosen datasource holds for each indicator, from its earliest sample (hourly resolution). Below 100% the 28-day availability covers only that share; Local can't exceed 15 days.",
-                  "table"),
+                  "table", per_site="slo"),
                 p("Error budget left", f'max by (k8s_cluster, slo) (1 - (1 - {selector("pyrra_availability")}) / (1 - {selector("pyrra_objective")}))', "percentunit",
-                  "Share of the allowed failures not yet used in the window. Negative means the objective is missed. Read with SLO window coverage.", "table"),
+                  "Share of the allowed failures not yet used in the window. Negative means the objective is missed. Read with SLO window coverage.", "table", per_site="slo"),
             ],
             "Archive and delivery": [
                 p("Archive state", metric("homelab:archive_state"), "state",
