@@ -92,11 +92,11 @@ UID, checked against the pinned Grafana. The Alerts board's Alertmanager tab is
 the per-site summary; this board is the per-instance detail.
 
 Both sites report on both sites, so the global view returns some series twice;
-`IDENTITY` in `dashboards.py` reduces those with `max`, which keeps the worst state
+`IDENTITY` in `observability/dashboards/queries.py` reduces those with `max`, which keeps the worst state
 and lets a real answer replace an observer's Unknown.
 
 A timeseries names its series by the labels its query keeps, from the first
-`by (...)` (`legend()` in `dashboards.py`), else by site, app and instance. Until
+`by (...)` (`legend()` in `observability/dashboards/model.py`), else by site, app and instance. Until
 2026-11-07 every panel used the fallback, so about twenty (HTTP requests by
 ingress, Cilium drops by reason, notifications by integration, ...) showed
 several series under one site name.
@@ -330,7 +330,7 @@ Site 2's Windows host reaches the router over Wi-Fi only; site 1's is wired.
 The Wi-Fi & LAN board's Site dependency tab measures that path from both ends:
 each host's NICs with a link and their negotiated rate and traffic
 (windows_exporter), and the site 2 host's signal, access point and association
-uptime as UniFi reports it (`SITE2_WIFI_CLIENT` in `observability/dashboards.py`,
+uptime as UniFi reports it (`SITE2_WIFI_CLIENT` in `observability/dashboards/queries.py`,
 its computer name; household clients are never named). A reassociation resets
 the uptime and interrupts the site tunnel and its BGP sessions, so read it with
 the Network board's History tab. First measured 2026-11-07: site 1 wired at
@@ -497,7 +497,7 @@ uses Home Assistant on the wall displays, so it needs no second Grafana.
   were rendered against synthetic answers: normal, a site lost, site 2's
   Internet probe failing, a failed app, partial cameras, and no answer.
 
-The isolated household Grafana that `dashboards.py` still generates (`House`,
+The isolated household Grafana that `observability/dashboards/boards/house.py` still generates (`House`,
 `kiosk_proxy.py`) is not deployed; this replaces it.
 
 ## Preview features

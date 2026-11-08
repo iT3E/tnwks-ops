@@ -5,8 +5,13 @@ boundary and offline acceptance tests. Cluster activation is tracked in
 [`observability-implementation.md`](../docs/operations/observability-implementation.md).
 Both WSL sites select the evidence collectors, shared PKI, recording rules and Thanos Query; Garage, Thanos Store and the Compactor run only on WSL-02. Site 1 serves the dashboards.
 
-`dashboards.py` uses the pinned official Grafana Foundation SDK to generate stable
-v2 resources: 12 operator dashboards and one household dashboard. `inventory.py`
+The `dashboards/` package uses the pinned official Grafana Foundation SDK to generate
+stable v2 resources: 12 operator dashboards and one household dashboard. Each board
+is one module under `dashboards/boards/` that declares its tabs and panels; `design.py`
+holds the visual vocabulary (state words and colours, table headers), `queries.py`
+the PromQL building blocks, `recipes.py` turns a panel into a visualization and
+`layout.py` a board into a dashboard resource. Adding a board is one module plus its
+entry in `boards/__init__.py`. `inventory.py`
 reads the existing failover catalogue and renders each cluster's Flux graph to
 find its actual expected CNPG clusters. Missing upstream data is Unknown; the
 collector cannot infer fencing or restore proof from workload readiness.
