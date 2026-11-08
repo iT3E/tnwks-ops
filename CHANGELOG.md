@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.58.1 - 2026-11-08
+
+### Fixed
+
+* Read Pacific Power statement dates from the billing account-info endpoint and report the failed setup stage without exposing account data.
+
 ## v2.58.0 - 2026-11-08
 
 ### Added
