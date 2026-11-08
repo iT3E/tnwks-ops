@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.49.0 - 2026-11-08
+
+### Added
+
+* home-assistant: House systems gains Devices, Backups, Storage and Away access, each recorded per site from its own share and combined in Home Assistant like the other six
+
 ## v2.48.0 - 2026-11-08
 
 ### Changed
