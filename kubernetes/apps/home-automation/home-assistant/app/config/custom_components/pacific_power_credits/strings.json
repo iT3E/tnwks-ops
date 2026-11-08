@@ -1,0 +1,70 @@
+{
+  "title": "Pacific Power Solar Credits",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pacific Power solar credits",
+        "description": "Track the remaining banked kWh on your statement. Choose how to read bills.",
+        "menu_options": {
+          "bill": "Import bill PDF",
+          "portal": "Sign in to Pacific Power"
+        }
+      },
+      "reconfigure": {
+        "title": "Update solar credits",
+        "description": "Import a new statement, or sign in for automatic checks. Importing a PDF switches automatic checks off.",
+        "menu_options": {
+          "bill": "Import bill PDF",
+          "portal": "Sign in to Pacific Power"
+        }
+      },
+      "bill": {
+        "title": "Import bill PDF",
+        "description": "Upload a downloaded Pacific Power statement. Only the credit balance, statement date, expiry billing month and an account fingerprint are retained. The PDF is deleted after reading. Import a new PDF when a new bill arrives.",
+        "data": {
+          "bill_pdf": "Bill PDF"
+        }
+      },
+      "portal": {
+        "title": "Sign in to Pacific Power",
+        "description": "Check for new statements every 12 hours. Your login is stored on the Home Assistant volume. Automatic sign-in currently supports username and password; if your account requires a verification code, use Import bill PDF and keep verification enabled.",
+        "data": {
+          "username": "Pacific Power username",
+          "credential": "Account password"
+        }
+      },
+      "account": {
+        "title": "Choose account",
+        "data": {
+          "account": "Account"
+        }
+      }
+    },
+    "error": {
+      "invalid_bill": "The PDF must be a Pacific Power bill with an unambiguous excess-power credit note, billing date, and account number. A missing note is not treated as zero.",
+      "wrong_account": "This bill belongs to a different account. Add it as a separate integration.",
+      "older_bill": "This bill is older than the recorded statement. Import a newer bill.",
+      "invalid_auth": "Pacific Power sign-in failed or requires an unsupported verification step. Check your login, or use Import bill PDF while keeping account verification enabled.",
+      "cannot_connect": "Unable to read the latest Pacific Power statement. Try again later or import its PDF.",
+      "no_accounts": "No metered Pacific Power account was found for this login."
+    },
+    "abort": {
+      "already_configured": "This account is already configured. Use Reconfigure to import a newer bill.",
+      "reauth_successful": "Authentication updated.",
+      "reconfigure_successful": "Credit source updated."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "banked_energy": {
+        "name": "Banked solar energy"
+      },
+      "statement_date": {
+        "name": "Credit statement date"
+      },
+      "expiry_billing_month": {
+        "name": "Credit expiry billing month"
+      }
+    }
+  }
+}

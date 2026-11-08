@@ -38,6 +38,20 @@ configMapGenerator:
   - name: home-assistant-scripts
     files:
       - scripts/prepare-config.sh
+  - name: home-assistant-pacific-power-credits
+    files:
+      - config/custom_components/pacific_power_credits/__init__.py
+      - config/custom_components/pacific_power_credits/bill.py
+      - config/custom_components/pacific_power_credits/client.py
+      - config/custom_components/pacific_power_credits/config_flow.py
+      - config/custom_components/pacific_power_credits/const.py
+      - config/custom_components/pacific_power_credits/coordinator.py
+      - config/custom_components/pacific_power_credits/LICENSE
+      - config/custom_components/pacific_power_credits/manifest.json
+      - config/custom_components/pacific_power_credits/portal.py
+      - config/custom_components/pacific_power_credits/sensor.py
+      - config/custom_components/pacific_power_credits/strings.json
+      - config/custom_components/pacific_power_credits/translations/en.json
 generatorOptions:
   disableNameSuffixHash: true
   # Jinja and shell, not Flux variables: never envsubst these. Per-cluster
