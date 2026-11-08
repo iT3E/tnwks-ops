@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..model import Board, p
-from ..queries import ACCESS_POINT, SITE2_WIFI_CLIENT, WINDOWS, metric, selector
+from ..queries import ACCESS_POINT, HOST, SITE2_WIFI_CLIENT, metric, selector, wifi
 
 
 def board() -> Board:
@@ -16,6 +16,9 @@ def board() -> Board:
                   "Negotiated uplink speed. A slow or errored uplink can masquerade as an RF problem.", "table", ACCESS_POINT),
                 p("Wi-Fi collector failures", f'sum by (k8s_cluster) (increase({metric("unpoller_prometheus_refresh_failures_total")}[$__range]))', "failures",
                   "Collector-specific failure evidence; HTTP scrape success does not prove the UniFi API refresh succeeded. Counted over the selected range, per site; anything but zero is red.", "stat"),
+                p("Clients with weak signal", f'count(max by (name) ({wifi("unpoller_client_radio_signal_db")}) < -70) or (0 * count({wifi("unpoller_client_radio_signal_db")}))', "short",
+                  "Wireless devices below -70 dBm at their access point, the whole house. Which ones, and their retries and satisfaction, are on Wi-Fi clients.",
+                  "stat", "tnwks-wifi-clients"),
             ],
             "Site dependency": [
                 p("Peer path success", metric("homelab_peer_probe_success"), "bool",
@@ -28,7 +31,7 @@ def board() -> Board:
                   "Each site's Windows host NICs with a link, at their negotiated rate (windows_exporter). Site 2's host reaches the router over Wi-Fi only, so its link rate changes with the radio.",
                   "table"),
                 p("Site host uplink traffic", f'sum by (k8s_cluster, instance, nic) (rate({selector("windows_net_bytes_total")}[$__rate_interval])) > 0', "Bps",
-                  "Traffic through each host NIC in use: everything the site sends or receives, the site tunnel included.", link=WINDOWS),
+                  "Traffic through each host NIC in use: everything the site sends or receives, the site tunnel included.", link=HOST),
                 p("Site 2 Wi-Fi signal", f'max by (ap_name, channel) ({selector("unpoller_client_radio_signal_db", f'name="{SITE2_WIFI_CLIENT}"')})', "dBm",
                   "The site 2 host's signal at its access point, as UniFi reports it (either site's poller). A change of AP or channel starts a new line."),
                 p("Site 2 Wi-Fi association", f'max by (ap_name) ({selector("unpoller_client_uptime_seconds", f'name="{SITE2_WIFI_CLIENT}"')})', "s",

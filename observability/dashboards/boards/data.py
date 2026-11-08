@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..model import Board, p
-from ..queries import WINDOWS, metric, selector
+from ..queries import HOST, metric, selector
 
 
 def board() -> Board:
@@ -55,6 +55,6 @@ def board() -> Board:
             ],
             "Storage": [
                 p("Windows disk free", metric("windows_logical_disk_free_bytes", 'volume=~"C:|E:"'), "bytes",
-                  "Physical Windows free capacity. WSL's virtual disk maximum is not an independent physical capacity budget.", link=WINDOWS),
+                  "Physical Windows free capacity. WSL's virtual disk maximum is not an independent physical capacity budget.", link=HOST),
             ],
         }, "Data", sections=True)

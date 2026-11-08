@@ -304,6 +304,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "State"
                       }
                     }
@@ -478,6 +483,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -523,6 +529,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Evidence age"
                       }
                     }
@@ -818,6 +829,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Cross-site observation"
                       }
                     }
@@ -1202,6 +1218,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -1246,7 +1263,12 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
-                        "area": "Area"
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category"
                       }
                     }
                   }
@@ -1376,6 +1398,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -1421,6 +1444,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Desired replicas"
                       }
                     }
@@ -1555,6 +1583,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -1600,6 +1629,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Ready replicas"
                       }
                     }
@@ -1780,6 +1814,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Overrides"
                       }
                     }
@@ -1932,6 +1971,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -1977,6 +2017,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Override creation age"
                       }
                     }
@@ -3168,6 +3213,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -3213,6 +3259,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Serving-state changes"
                       }
                     }
@@ -3347,6 +3398,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -3392,6 +3444,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Shared VIP route changes"
                       }
                     }
@@ -3526,6 +3583,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -3571,6 +3629,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "When"
                       }
                     }

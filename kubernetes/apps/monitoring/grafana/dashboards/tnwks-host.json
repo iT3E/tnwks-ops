@@ -1,0 +1,3151 @@
+{
+  "apiVersion": "dashboard.grafana.app/v2",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "tnwks-host"
+  },
+  "spec": {
+    "annotations": [],
+    "cursorSync": "Crosshair",
+    "elements": {
+      "about": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1,
+          "title": "About this view",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "text",
+            "version": "",
+            "spec": {
+              "options": {
+                "mode": "markdown",
+                "content": "Is this host short of CPU, memory, disk or network, and which?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md)"
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+              }
+            }
+          },
+          "description": "Purpose, scope and the interpretation of missing evidence."
+        }
+      },
+      "panel-1": {
+        "kind": "Panel",
+        "spec": {
+          "id": 2,
+          "title": "CPU busy",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "1 - avg by (instance) (rate(windows_cpu_time_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",mode=\"idle\"}[$__rate_interval]))",
+                        "instant": true,
+                        "legendFormat": "{{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Share of all logical processors doing work. Sustained above 80% leaves no room for a site failover.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "id": 3,
+          "title": "Run queue per core",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (instance) (avg_over_time(windows_system_processor_queue_length{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[5m])) / max by (instance) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+                        "instant": true,
+                        "legendFormat": "{{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Threads ready to run but waiting for a processor, per core, over 5 minutes. Sustained above 2 the CPU is the bottleneck, whatever the busy figure says.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-3": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4,
+          "title": "WSL VM CPU busy",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster) (1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Share of the WSL VM's processors (its .wslconfig limit, fewer than the host's) doing work, from the cluster nodes on this host. Near 100% while the host still has room, the VM's limit is the ceiling.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "id": 5,
+          "title": "CPU by mode",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (mode) (rate(windows_cpu_time_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",mode!=\"idle\"}[$__rate_interval])) / scalar(max by (instance) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}))",
+                        "instant": false,
+                        "legendFormat": "{{mode}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Busy time split by mode. The WSL VM's work is counted as privileged time here (measured 2026-11-07: about 2.5 busy VM cores inside 3.5 privileged host cores), so privileged far above user is the cluster, not Windows apps.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "id": 6,
+          "title": "Busiest cores",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "topk(5, max by (core) (1 - rate(windows_cpu_time_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",mode=\"idle\"}[$__rate_interval])))",
+                        "instant": false,
+                        "legendFormat": "{{core}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The five busiest logical processors. One core pinned near 100% while the total looks calm is a single-threaded bottleneck.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "id": 7,
+          "title": "Run queue",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (instance) (windows_system_processor_queue_length{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+                        "instant": false,
+                        "legendFormat": "{{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Threads waiting for a processor, sampled. Short spikes are normal; a raised floor is saturation.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "id": 8,
+          "title": "WSL CPU pressure",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster) (rate(node_pressure_cpu_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "homelab-wsl"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#3d71d9"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "homelab-wsl-02"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#a352cc"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Share of time at least one task in the WSL VM waited for a CPU (Linux PSI, read from the cluster nodes on this host). Rising pressure with a calm Windows CPU means WSL's processor limit, not the host, is the ceiling.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "id": 9,
+          "title": "Memory in use",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "1 - max by (instance) (windows_memory_available_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"}) / max by (instance) (windows_memory_physical_total_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+                        "instant": true,
+                        "legendFormat": "{{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Physical memory not available to new work. Standby cache counts as available, so this is what the host can still give out.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-9": {
+        "kind": "Panel",
+        "spec": {
+          "id": 10,
+          "title": "Commit charge",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (instance) (windows_memory_committed_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"}) / max by (instance) (windows_memory_commit_limit{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+                        "instant": true,
+                        "legendFormat": "{{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Memory promised to processes against RAM plus page file. At 100% Windows refuses new allocations and programs fail, WSL's VM included, however much RAM looks free.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-10": {
+        "kind": "Panel",
+        "spec": {
+          "id": 11,
+          "title": "Paging to disk",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (instance) (rate(windows_memory_swap_page_operations_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]))",
+                        "instant": true,
+                        "legendFormat": "{{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ops",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Pages read from or written to the page file per second. A steady stream is memory saturation: work waits on the disk instead of RAM.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-11": {
+        "kind": "Panel",
+        "spec": {
+          "id": 12,
+          "title": "Memory and commit",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (measure) (label_replace(1 - max by (instance) (windows_memory_available_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"}) / max by (instance) (windows_memory_physical_total_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"In use\", \"\", \"\") or label_replace(max by (instance) (windows_memory_committed_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"}) / max by (instance) (windows_memory_commit_limit{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"Commit charge\", \"\", \"\"))",
+                        "instant": false,
+                        "legendFormat": "{{measure}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Physical memory in use and commit charge over time. Commit climbing while use stays flat is memory reserved but untouched (WSL's VM reserves its whole limit).\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-12": {
+        "kind": "Panel",
+        "spec": {
+          "id": 13,
+          "title": "Page file traffic",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (instance) (rate(windows_memory_swap_page_operations_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]))",
+                        "instant": false,
+                        "legendFormat": "{{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ops",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Paging over time: line it up with slow disk or a busy CPU to see which came first.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-13": {
+        "kind": "Panel",
+        "spec": {
+          "id": 14,
+          "title": "WSL memory pressure",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster) (rate(node_pressure_memory_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "homelab-wsl"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#3d71d9"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "homelab-wsl-02"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#a352cc"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Share of time at least one task in the WSL VM stalled reclaiming memory (Linux PSI). Above a few percent the VM's memory limit is too tight for its pods.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-14": {
+        "kind": "Panel",
+        "spec": {
+          "id": 15,
+          "title": "Slowest volume latency",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (instance) (rate(windows_logical_disk_read_write_latency_seconds_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) / (rate(windows_logical_disk_reads_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) + rate(windows_logical_disk_writes_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval])))",
+                        "instant": true,
+                        "legendFormat": "{{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Average time per disk operation on the worst volume. An SSD normally answers in under 5 ms; sustained above 20 ms the disk is what's slow.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-15": {
+        "kind": "Panel",
+        "spec": {
+          "id": 16,
+          "title": "Busiest volume",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (instance) (clamp_min(1 - rate(windows_logical_disk_idle_seconds_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]), 0))",
+                        "instant": true,
+                        "legendFormat": "{{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Share of time the busiest volume had work in flight. An SSD serves many requests at once, so read it with latency and queue: busy alone isn't saturation.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-16": {
+        "kind": "Panel",
+        "spec": {
+          "id": 17,
+          "title": "Queued disk requests",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (instance) (avg_over_time(windows_logical_disk_requests_queued{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[5m]))",
+                        "instant": true,
+                        "legendFormat": "{{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Requests waiting for the disk, averaged over 5 minutes. Sustained above 2 per disk, with latency rising, is disk saturation.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-17": {
+        "kind": "Panel",
+        "spec": {
+          "id": 18,
+          "title": "Read latency by volume",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (volume) (rate(windows_logical_disk_read_latency_seconds_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) / rate(windows_logical_disk_reads_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]))",
+                        "instant": false,
+                        "legendFormat": "{{volume}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Average time per read. Spikes that line up with WSL I/O pressure are the slow disk the pods feel.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-18": {
+        "kind": "Panel",
+        "spec": {
+          "id": 19,
+          "title": "Write latency by volume",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (volume) (rate(windows_logical_disk_write_latency_seconds_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) / rate(windows_logical_disk_writes_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]))",
+                        "instant": false,
+                        "legendFormat": "{{volume}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Average time per write. Cached writes are fast until the cache fills; a step up under load is the disk catching up.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-19": {
+        "kind": "Panel",
+        "spec": {
+          "id": 20,
+          "title": "Queue depth by volume",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (volume) (windows_logical_disk_requests_queued{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"})",
+                        "instant": false,
+                        "legendFormat": "{{volume}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Requests waiting per volume, sampled.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-20": {
+        "kind": "Panel",
+        "spec": {
+          "id": 21,
+          "title": "Throughput by volume",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (volume) (rate(windows_logical_disk_read_bytes_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) + rate(windows_logical_disk_write_bytes_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]))",
+                        "instant": false,
+                        "legendFormat": "{{volume}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "Bps",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Bytes read and written per second. High throughput with low latency is a busy, healthy disk.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-21": {
+        "kind": "Panel",
+        "spec": {
+          "id": 22,
+          "title": "WSL I/O pressure",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster) (rate(node_pressure_io_stalled_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "homelab-wsl"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#3d71d9"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "homelab-wsl-02"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#a352cc"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Share of time every runnable task in the WSL VM stalled on I/O at once (Linux PSI, full). This is how slow disk feels from inside the cluster: all nodes share one virtual disk on the host.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-22": {
+        "kind": "Panel",
+        "spec": {
+          "id": 23,
+          "title": "Free space by volume",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (volume) (windows_logical_disk_free_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"} / windows_logical_disk_size_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"})",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{volume}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "k8s_cluster": 0,
+                        "client": 0,
+                        "app": 1,
+                        "db_cluster": 1
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
+                        "Value": "Free"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "Free",
+                          "desc": false
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Free"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "percentunit"
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Free share of each volume. Below 10% Windows and the VHDX that holds WSL's disk start to slow down; below 5% writes fail.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-23": {
+        "kind": "Panel",
+        "spec": {
+          "id": 24,
+          "title": "Busiest adapter",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (instance) (sum by (instance, nic) (rate(windows_net_bytes_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval])) / max by (instance, nic) (windows_net_current_bandwidth_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"} > 0))",
+                        "instant": true,
+                        "legendFormat": "{{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Traffic on the busiest adapter against its link speed. Near 100% the link is full; on Wi-Fi the link speed itself moves with the signal.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-24": {
+        "kind": "Panel",
+        "spec": {
+          "id": 25,
+          "title": "Received by adapter",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (nic) (rate(windows_net_bytes_received_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval])) > 0",
+                        "instant": false,
+                        "legendFormat": "{{nic}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "Bps",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Bytes received per second on each adapter in use.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-25": {
+        "kind": "Panel",
+        "spec": {
+          "id": 26,
+          "title": "Sent by adapter",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (nic) (rate(windows_net_bytes_sent_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval])) > 0",
+                        "instant": false,
+                        "legendFormat": "{{nic}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "Bps",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Bytes sent per second on each adapter in use.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-26": {
+        "kind": "Panel",
+        "spec": {
+          "id": 27,
+          "title": "Errors and discards by adapter",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum by (nic) (rate(windows_net_packets_received_errors_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]) + rate(windows_net_packets_outbound_errors_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]) + rate(windows_net_packets_received_discarded_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]) + rate(windows_net_packets_outbound_discarded_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval])) > 0",
+                        "instant": false,
+                        "legendFormat": "{{nic}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "pps",
+                  "links": [
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "None in range",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Packets dropped or damaged per second. Errors are the link (cable, radio, driver); discards are a full buffer. None is the normal state.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-27": {
+        "kind": "Panel",
+        "spec": {
+          "id": 28,
+          "title": "Link speed by adapter",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (nic) (windows_net_current_bandwidth_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"} > 0) * 8",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{nic}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "k8s_cluster": 0,
+                        "client": 0,
+                        "app": 1,
+                        "db_cluster": 1
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
+                        "Value": "Link speed"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Link speed"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "bps"
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Negotiated speed of each adapter with a link. A wired link that drops from 1 Gbit/s to 100 Mbit/s is a cable or port fault.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      }
+    },
+    "layout": {
+      "kind": "TabsLayout",
+      "spec": {
+        "tabs": [
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "RowsLayout",
+                "spec": {
+                  "rows": [
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-1"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-3"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 5,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-5"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-6"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-7"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Trends",
+                        "collapse": false
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "about"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 1,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "About this view",
+                        "collapse": true
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "CPU"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "RowsLayout",
+                "spec": {
+                  "rows": [
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-8"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-9"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-10"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 5,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-11"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-12"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-13"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Trends",
+                        "collapse": false
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Memory"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "RowsLayout",
+                "spec": {
+                  "rows": [
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-14"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-15"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-16"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 5,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-17"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-18"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-19"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-20"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-21"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Trends",
+                        "collapse": false
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-22"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Detail",
+                        "collapse": false
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Disk"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "RowsLayout",
+                "spec": {
+                  "rows": [
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-23"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 5,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-24"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-25"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-26"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Trends",
+                        "collapse": false
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-27"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Detail",
+                        "collapse": false
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Network"
+            }
+          }
+        ]
+      }
+    },
+    "links": [
+      {
+        "title": "Dashboards",
+        "type": "dashboards",
+        "icon": "",
+        "tooltip": "",
+        "tags": [
+          "tnwks"
+        ],
+        "asDropdown": true,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true
+      }
+    ],
+    "preload": false,
+    "tags": [
+      "tnwks",
+      "l3",
+      "hosts"
+    ],
+    "timeSettings": {
+      "from": "now-6h",
+      "to": "now",
+      "autoRefresh": "1m",
+      "autoRefreshIntervals": [
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h"
+      ],
+      "hideTimepicker": false,
+      "fiscalYearStartMonth": 0,
+      "timezone": "browser"
+    },
+    "title": "Host",
+    "variables": [
+      {
+        "kind": "DatasourceVariable",
+        "spec": {
+          "name": "datasource",
+          "pluginId": "prometheus",
+          "refresh": "never",
+          "regex": "/^(Global|Local|Site 1|Site 2)$/",
+          "current": {
+            "text": "Global",
+            "value": "prometheus-global"
+          },
+          "options": [],
+          "multi": false,
+          "includeAll": false,
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": true,
+          "label": "Metrics"
+        }
+      },
+      {
+        "kind": "CustomVariable",
+        "spec": {
+          "name": "cluster",
+          "query": "homelab-wsl,homelab-wsl-02",
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "multi": true,
+          "includeAll": true,
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": false,
+          "allValue": ".*",
+          "label": "Cluster"
+        }
+      },
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "name": "host",
+          "current": {
+            "text": "",
+            "value": ""
+          },
+          "hide": "dontHide",
+          "refresh": "onTimeRangeChanged",
+          "skipUrlSync": false,
+          "query": {
+            "kind": "DataQuery",
+            "group": "prometheus",
+            "version": "v0",
+            "spec": {
+              "qryType": 5,
+              "query": "label_values(windows_cpu_time_total{k8s_cluster=~\"$cluster\"}, instance)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            },
+            "datasource": {
+              "name": "${datasource}"
+            }
+          },
+          "regex": "",
+          "sort": "alphabeticalCaseInsensitiveAsc",
+          "options": [],
+          "multi": false,
+          "includeAll": false,
+          "allowCustomValue": false,
+          "label": "Host",
+          "regexApplyTo": "value",
+          "definition": "label_values(windows_cpu_time_total{k8s_cluster=~\"$cluster\"}, instance)"
+        }
+      }
+    ],
+    "description": "Is this host short of CPU, memory, disk or network, and which?",
+    "editable": false
+  }
+}

@@ -722,9 +722,129 @@
   {
     "dashboard": "tnwks-internet",
     "tab": "Traffic",
+    "title": "Top WAN devices now",
+    "expr": "topk(5, sum by (client) (wan:client_app_receive_bits:rate2m) + sum by (client) (wan:client_app_transmit_bits:rate2m))",
+    "unit": "bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-internet",
+    "tab": "Traffic",
     "title": "ISP radio collector",
     "expr": "unms_collector_success{k8s_cluster=~\"$cluster\"}",
     "unit": "bool",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "title": "Download now",
+    "expr": "wan:receive_bits:rate1m{k8s_cluster=~\"$cluster\"}",
+    "unit": "bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "title": "Upload now",
+    "expr": "wan:transmit_bits:rate1m{k8s_cluster=~\"$cluster\"}",
+    "unit": "bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "title": "Devices on the line",
+    "expr": "count(sum by (client) (label_replace(wan:client_app_receive_bits:rate2m, \"direction\", \"down\", \"\", \"\") or label_replace(wan:client_app_transmit_bits:rate2m, \"direction\", \"up\", \"\", \"\")) > 0)",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "title": "Download attributed",
+    "expr": "sum(wan:client_app_receive_bits:rate2m) / sum(wan:receive_bits:rate1m{k8s_cluster=~\"$cluster\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "title": "Top downloaders now",
+    "expr": "topk(10, sum by (client) (wan:client_app_receive_bits:rate2m)) > 0",
+    "unit": "bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "title": "Top uploaders now",
+    "expr": "topk(10, sum by (client) (wan:client_app_transmit_bits:rate2m)) > 0",
+    "unit": "bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "title": "Data in range by device",
+    "expr": "topk(10, sum by (client) (label_replace(avg_over_time(wan:client_app_receive_bits:rate2m[$__range]), \"direction\", \"down\", \"\", \"\") or label_replace(avg_over_time(wan:client_app_transmit_bits:rate2m[$__range]), \"direction\", \"up\", \"\", \"\")) * $__range_s / 8)",
+    "unit": "bytes",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "title": "Download by device",
+    "expr": "sum by (client) (wan:client_app_receive_bits:rate2m{client=~\"$client\"})",
+    "unit": "bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "title": "Upload by device",
+    "expr": "sum by (client) (wan:client_app_transmit_bits:rate2m{client=~\"$client\"})",
+    "unit": "bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "title": "Internet latency",
+    "expr": "max by (k8s_cluster) (smokeping:rtt_p90:rate1m{k8s_cluster=~\"$cluster\",role=\"internet\"})",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Apps and destinations",
+    "title": "Now: device, app and destination",
+    "expr": "label_replace(topk(15, sum by (client, app, as_name) (label_replace(wan:client_app_receive_bits:rate2m, \"direction\", \"down\", \"\", \"\") or label_replace(wan:client_app_transmit_bits:rate2m, \"direction\", \"up\", \"\", \"\"))), \"as_name\", \"$1\", \"as_name\", \"(?:- )?(.+)\")",
+    "unit": "bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Apps and destinations",
+    "title": "Data in range by destination",
+    "expr": "label_replace(topk(10, sum by (as_name) (label_replace(avg_over_time(wan:client_app_receive_bits:rate2m[$__range]), \"direction\", \"down\", \"\", \"\") or label_replace(avg_over_time(wan:client_app_transmit_bits:rate2m[$__range]), \"direction\", \"up\", \"\", \"\")) * $__range_s / 8), \"as_name\", \"$1\", \"as_name\", \"(?:- )?(.+)\")",
+    "unit": "bytes",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Apps and destinations",
+    "title": "Traffic by app",
+    "expr": "sum by (app) (label_replace(wan:client_app_receive_bits:rate2m{client=~\"$client\"}, \"direction\", \"down\", \"\", \"\") or label_replace(wan:client_app_transmit_bits:rate2m{client=~\"$client\"}, \"direction\", \"up\", \"\", \"\"))",
+    "unit": "bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Apps and destinations",
+    "title": "Traffic by destination",
+    "expr": "label_replace(topk(10, sum by (as_name) (label_replace(wan:client_app_receive_bits:rate2m{client=~\"$client\"}, \"direction\", \"down\", \"\", \"\") or label_replace(wan:client_app_transmit_bits:rate2m{client=~\"$client\"}, \"direction\", \"up\", \"\", \"\"))), \"as_name\", \"$1\", \"as_name\", \"(?:- )?(.+)\")",
+    "unit": "bps",
     "kiosk": false
   },
   {
@@ -749,6 +869,14 @@
     "title": "Wi-Fi collector failures",
     "expr": "sum by (k8s_cluster) (increase(unpoller_prometheus_refresh_failures_total{k8s_cluster=~\"$cluster\",source_site=\"\"}[$__range]))",
     "unit": "failures",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi",
+    "tab": "Access points",
+    "title": "Clients with weak signal",
+    "expr": "count(max by (name) (unpoller_client_radio_signal_db{source_site=\"\",wired=\"false\"}) < -70) or (0 * count(unpoller_client_radio_signal_db{source_site=\"\",wired=\"false\"}))",
+    "unit": "short",
     "kiosk": false
   },
   {
@@ -796,6 +924,110 @@
     "tab": "Site dependency",
     "title": "Site 2 Wi-Fi association",
     "expr": "max by (ap_name) (unpoller_client_uptime_seconds{k8s_cluster=~\"$cluster\",source_site=\"\",name=\"WSL-02\"})",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "title": "Wi-Fi clients",
+    "expr": "count(count by (name) (unpoller_client_uptime_seconds{source_site=\"\",wired=\"false\"}))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "title": "Weak signal",
+    "expr": "count(max by (name) (unpoller_client_radio_signal_db{source_site=\"\",wired=\"false\"}) < -70) or (0 * count(unpoller_client_radio_signal_db{source_site=\"\",wired=\"false\"}))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "title": "Low satisfaction",
+    "expr": "count(max by (name) (unpoller_client_satisfaction_ratio{source_site=\"\",wired=\"false\"}) < 0.8) or (0 * count(unpoller_client_satisfaction_ratio{source_site=\"\",wired=\"false\"}))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "title": "Roams in range",
+    "expr": "round(sum(increase(unpoller_client_roam_count_total{source_site=\"\",wired=\"false\"}[$__range])))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "title": "Weak signal clients",
+    "expr": "max by (name, ap_name, radio) (label_replace(label_replace(label_replace(unpoller_client_radio_signal_db{source_site=\"\",wired=\"false\"}, \"radio\", \"2.4 GHz\", \"radio\", \"ng\"), \"radio\", \"5 GHz\", \"radio\", \"na\"), \"radio\", \"6 GHz\", \"radio\", \"6e\")) < -70",
+    "unit": "dBm",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "title": "Low satisfaction clients",
+    "expr": "max by (name, ap_name) (unpoller_client_satisfaction_ratio{source_site=\"\",wired=\"false\"}) < 0.8",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "title": "Most retries",
+    "expr": "topk(10, sum by (name) (increase(unpoller_client_transmit_retries_total{source_site=\"\",wired=\"false\"}[$__range])) / (sum by (name) (increase(unpoller_client_transmit_packets_total{source_site=\"\",wired=\"false\"}[$__range])) + sum by (name) (increase(unpoller_client_transmit_retries_total{source_site=\"\",wired=\"false\"}[$__range]))) >= 0)",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "title": "Reconnects",
+    "expr": "sum by (name) (resets(unpoller_client_uptime_seconds{source_site=\"\",wired=\"false\"}[$__range])) > 0",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "title": "Signal",
+    "expr": "max by (name) (unpoller_client_radio_signal_db{source_site=\"\",wired=\"false\",name=~\"$client\"})",
+    "unit": "dBm",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "title": "Satisfaction",
+    "expr": "max by (name) (unpoller_client_satisfaction_ratio{source_site=\"\",wired=\"false\",name=~\"$client\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "title": "Retry rate",
+    "expr": "sum by (name) (increase(unpoller_client_transmit_retries_total{source_site=\"\",wired=\"false\",name=~\"$client\"}[10m])) / (sum by (name) (increase(unpoller_client_transmit_packets_total{source_site=\"\",wired=\"false\",name=~\"$client\"}[10m])) + sum by (name) (increase(unpoller_client_transmit_retries_total{source_site=\"\",wired=\"false\",name=~\"$client\"}[10m])))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "title": "Throughput",
+    "expr": "sum by (name) (rate(unpoller_client_receive_bytes_total{source_site=\"\",wired=\"false\",name=~\"$client\"}[10m]) + rate(unpoller_client_transmit_bytes_total{source_site=\"\",wired=\"false\",name=~\"$client\"}[10m]))",
+    "unit": "Bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "title": "Connected to",
+    "expr": "max by (name, ap_name, radio, channel) (label_replace(label_replace(label_replace(unpoller_client_uptime_seconds{source_site=\"\",wired=\"false\",name=~\"$client\"}, \"radio\", \"2.4 GHz\", \"radio\", \"ng\"), \"radio\", \"5 GHz\", \"radio\", \"na\"), \"radio\", \"6 GHz\", \"radio\", \"6e\"))",
     "unit": "s",
     "kiosk": false
   },
@@ -1058,6 +1290,30 @@
   {
     "dashboard": "tnwks-hosts",
     "tab": "Physical resources",
+    "title": "Host CPU busy",
+    "expr": "1 - avg by (k8s_cluster, instance) (rate(windows_cpu_time_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Physical resources",
+    "title": "Host disk latency",
+    "expr": "max by (k8s_cluster, instance) (rate(windows_logical_disk_read_write_latency_seconds_total{k8s_cluster=~\"$cluster\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) / (rate(windows_logical_disk_reads_total{k8s_cluster=~\"$cluster\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) + rate(windows_logical_disk_writes_total{k8s_cluster=~\"$cluster\",volume!~\"HarddiskVolume.+\"}[$__rate_interval])))",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Physical resources",
+    "title": "Host commit charge",
+    "expr": "max by (k8s_cluster, instance) (windows_memory_committed_bytes{k8s_cluster=~\"$cluster\"}) / max by (k8s_cluster, instance) (windows_memory_commit_limit{k8s_cluster=~\"$cluster\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Physical resources",
     "title": "Windows disk free",
     "expr": "windows_logical_disk_free_bytes{k8s_cluster=~\"$cluster\",volume=~\"C:|E:\"}",
     "unit": "bytes",
@@ -1085,6 +1341,222 @@
     "title": "Recovery readiness",
     "expr": "max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})",
     "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "CPU",
+    "title": "CPU busy",
+    "expr": "1 - avg by (instance) (rate(windows_cpu_time_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",mode=\"idle\"}[$__rate_interval]))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "CPU",
+    "title": "Run queue per core",
+    "expr": "max by (instance) (avg_over_time(windows_system_processor_queue_length{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[5m])) / max by (instance) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "CPU",
+    "title": "WSL VM CPU busy",
+    "expr": "max by (k8s_cluster) (1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "CPU",
+    "title": "CPU by mode",
+    "expr": "sum by (mode) (rate(windows_cpu_time_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",mode!=\"idle\"}[$__rate_interval])) / scalar(max by (instance) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "CPU",
+    "title": "Busiest cores",
+    "expr": "topk(5, max by (core) (1 - rate(windows_cpu_time_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",mode=\"idle\"}[$__rate_interval])))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "CPU",
+    "title": "Run queue",
+    "expr": "max by (instance) (windows_system_processor_queue_length{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "CPU",
+    "title": "WSL CPU pressure",
+    "expr": "max by (k8s_cluster) (rate(node_pressure_cpu_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Memory",
+    "title": "Memory in use",
+    "expr": "1 - max by (instance) (windows_memory_available_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"}) / max by (instance) (windows_memory_physical_total_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Memory",
+    "title": "Commit charge",
+    "expr": "max by (instance) (windows_memory_committed_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"}) / max by (instance) (windows_memory_commit_limit{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Memory",
+    "title": "Paging to disk",
+    "expr": "sum by (instance) (rate(windows_memory_swap_page_operations_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]))",
+    "unit": "ops",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Memory",
+    "title": "Memory and commit",
+    "expr": "max by (measure) (label_replace(1 - max by (instance) (windows_memory_available_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"}) / max by (instance) (windows_memory_physical_total_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"In use\", \"\", \"\") or label_replace(max by (instance) (windows_memory_committed_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"}) / max by (instance) (windows_memory_commit_limit{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"Commit charge\", \"\", \"\"))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Memory",
+    "title": "Page file traffic",
+    "expr": "sum by (instance) (rate(windows_memory_swap_page_operations_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]))",
+    "unit": "ops",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Memory",
+    "title": "WSL memory pressure",
+    "expr": "max by (k8s_cluster) (rate(node_pressure_memory_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "title": "Slowest volume latency",
+    "expr": "max by (instance) (rate(windows_logical_disk_read_write_latency_seconds_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) / (rate(windows_logical_disk_reads_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) + rate(windows_logical_disk_writes_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval])))",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "title": "Busiest volume",
+    "expr": "max by (instance) (clamp_min(1 - rate(windows_logical_disk_idle_seconds_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]), 0))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "title": "Queued disk requests",
+    "expr": "sum by (instance) (avg_over_time(windows_logical_disk_requests_queued{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[5m]))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "title": "Read latency by volume",
+    "expr": "max by (volume) (rate(windows_logical_disk_read_latency_seconds_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) / rate(windows_logical_disk_reads_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]))",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "title": "Write latency by volume",
+    "expr": "max by (volume) (rate(windows_logical_disk_write_latency_seconds_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) / rate(windows_logical_disk_writes_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]))",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "title": "Queue depth by volume",
+    "expr": "max by (volume) (windows_logical_disk_requests_queued{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "title": "Throughput by volume",
+    "expr": "sum by (volume) (rate(windows_logical_disk_read_bytes_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) + rate(windows_logical_disk_write_bytes_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]))",
+    "unit": "Bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "title": "WSL I/O pressure",
+    "expr": "max by (k8s_cluster) (rate(node_pressure_io_stalled_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "title": "Free space by volume",
+    "expr": "max by (volume) (windows_logical_disk_free_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"} / windows_logical_disk_size_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"})",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Network",
+    "title": "Busiest adapter",
+    "expr": "max by (instance) (sum by (instance, nic) (rate(windows_net_bytes_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval])) / max by (instance, nic) (windows_net_current_bandwidth_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"} > 0))",
+    "unit": "percentunit",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Network",
+    "title": "Received by adapter",
+    "expr": "sum by (nic) (rate(windows_net_bytes_received_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval])) > 0",
+    "unit": "Bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Network",
+    "title": "Sent by adapter",
+    "expr": "sum by (nic) (rate(windows_net_bytes_sent_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval])) > 0",
+    "unit": "Bps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Network",
+    "title": "Errors and discards by adapter",
+    "expr": "sum by (nic) (rate(windows_net_packets_received_errors_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]) + rate(windows_net_packets_outbound_errors_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]) + rate(windows_net_packets_received_discarded_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]) + rate(windows_net_packets_outbound_discarded_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval])) > 0",
+    "unit": "pps",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Network",
+    "title": "Link speed by adapter",
+    "expr": "max by (nic) (windows_net_current_bandwidth_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"} > 0) * 8",
+    "unit": "bps",
     "kiosk": false
   },
   {

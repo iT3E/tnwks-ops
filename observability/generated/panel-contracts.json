@@ -3146,6 +3146,37 @@
   {
     "dashboard": "tnwks-internet",
     "tab": "Traffic",
+    "panel": "Top WAN devices now",
+    "query": "topk(5, sum by (client) (wan:client_app_receive_bits:rate2m) + sum by (client) (wan:client_app_transmit_bits:rate2m))",
+    "unit": "bps",
+    "query_mode": "instant",
+    "inputs": [
+      "wan:client_app_receive_bits:rate2m",
+      "wan:client_app_transmit_bits:rate2m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:client_app_receive_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      },
+      {
+        "metric": "wan:client_app_transmit_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "No traffic seen by flow export",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-internet",
+    "tab": "Traffic",
     "panel": "ISP radio collector",
     "query": "unms_collector_success{k8s_cluster=~\"$cluster\"}",
     "unit": "bool",
@@ -3157,6 +3188,398 @@
       {
         "metric": "unms_collector_success",
         "producer": "UISP exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "panel": "Download now",
+    "query": "wan:receive_bits:rate1m{k8s_cluster=~\"$cluster\"}",
+    "unit": "bps",
+    "query_mode": "instant",
+    "inputs": [
+      "wan:receive_bits:rate1m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:receive_bits:rate1m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "panel": "Upload now",
+    "query": "wan:transmit_bits:rate1m{k8s_cluster=~\"$cluster\"}",
+    "unit": "bps",
+    "query_mode": "instant",
+    "inputs": [
+      "wan:transmit_bits:rate1m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:transmit_bits:rate1m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "panel": "Devices on the line",
+    "query": "count(sum by (client) (label_replace(wan:client_app_receive_bits:rate2m, \"direction\", \"down\", \"\", \"\") or label_replace(wan:client_app_transmit_bits:rate2m, \"direction\", \"up\", \"\", \"\")) > 0)",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "wan:client_app_receive_bits:rate2m",
+      "wan:client_app_transmit_bits:rate2m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:client_app_receive_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      },
+      {
+        "metric": "wan:client_app_transmit_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "panel": "Download attributed",
+    "query": "sum(wan:client_app_receive_bits:rate2m) / sum(wan:receive_bits:rate1m{k8s_cluster=~\"$cluster\"})",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "wan:client_app_receive_bits:rate2m",
+      "wan:receive_bits:rate1m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:client_app_receive_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      },
+      {
+        "metric": "wan:receive_bits:rate1m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "panel": "Top downloaders now",
+    "query": "topk(10, sum by (client) (wan:client_app_receive_bits:rate2m)) > 0",
+    "unit": "bps",
+    "query_mode": "instant",
+    "inputs": [
+      "wan:client_app_receive_bits:rate2m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:client_app_receive_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "No traffic seen by flow export",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "panel": "Top uploaders now",
+    "query": "topk(10, sum by (client) (wan:client_app_transmit_bits:rate2m)) > 0",
+    "unit": "bps",
+    "query_mode": "instant",
+    "inputs": [
+      "wan:client_app_transmit_bits:rate2m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:client_app_transmit_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "No traffic seen by flow export",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "panel": "Data in range by device",
+    "query": "topk(10, sum by (client) (label_replace(avg_over_time(wan:client_app_receive_bits:rate2m[$__range]), \"direction\", \"down\", \"\", \"\") or label_replace(avg_over_time(wan:client_app_transmit_bits:rate2m[$__range]), \"direction\", \"up\", \"\", \"\")) * $__range_s / 8)",
+    "unit": "bytes",
+    "query_mode": "instant",
+    "inputs": [
+      "wan:client_app_receive_bits:rate2m",
+      "wan:client_app_transmit_bits:rate2m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:client_app_receive_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      },
+      {
+        "metric": "wan:client_app_transmit_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "panel": "Download by device",
+    "query": "sum by (client) (wan:client_app_receive_bits:rate2m{client=~\"$client\"})",
+    "unit": "bps",
+    "query_mode": "range",
+    "inputs": [
+      "wan:client_app_receive_bits:rate2m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:client_app_receive_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "panel": "Upload by device",
+    "query": "sum by (client) (wan:client_app_transmit_bits:rate2m{client=~\"$client\"})",
+    "unit": "bps",
+    "query_mode": "range",
+    "inputs": [
+      "wan:client_app_transmit_bits:rate2m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:client_app_transmit_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Devices",
+    "panel": "Internet latency",
+    "query": "max by (k8s_cluster) (smokeping:rtt_p90:rate1m{k8s_cluster=~\"$cluster\",role=\"internet\"})",
+    "unit": "s",
+    "query_mode": "range",
+    "inputs": [
+      "smokeping:rtt_p90:rate1m"
+    ],
+    "sources": [
+      {
+        "metric": "smokeping:rtt_p90:rate1m",
+        "producer": "WAN recording rules from smokeping-prober",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Apps and destinations",
+    "panel": "Now: device, app and destination",
+    "query": "label_replace(topk(15, sum by (client, app, as_name) (label_replace(wan:client_app_receive_bits:rate2m, \"direction\", \"down\", \"\", \"\") or label_replace(wan:client_app_transmit_bits:rate2m, \"direction\", \"up\", \"\", \"\"))), \"as_name\", \"$1\", \"as_name\", \"(?:- )?(.+)\")",
+    "unit": "bps",
+    "query_mode": "instant",
+    "inputs": [
+      "wan:client_app_receive_bits:rate2m",
+      "wan:client_app_transmit_bits:rate2m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:client_app_receive_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      },
+      {
+        "metric": "wan:client_app_transmit_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "No traffic seen by flow export",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Apps and destinations",
+    "panel": "Data in range by destination",
+    "query": "label_replace(topk(10, sum by (as_name) (label_replace(avg_over_time(wan:client_app_receive_bits:rate2m[$__range]), \"direction\", \"down\", \"\", \"\") or label_replace(avg_over_time(wan:client_app_transmit_bits:rate2m[$__range]), \"direction\", \"up\", \"\", \"\")) * $__range_s / 8), \"as_name\", \"$1\", \"as_name\", \"(?:- )?(.+)\")",
+    "unit": "bytes",
+    "query_mode": "instant",
+    "inputs": [
+      "wan:client_app_receive_bits:rate2m",
+      "wan:client_app_transmit_bits:rate2m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:client_app_receive_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      },
+      {
+        "metric": "wan:client_app_transmit_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Apps and destinations",
+    "panel": "Traffic by app",
+    "query": "sum by (app) (label_replace(wan:client_app_receive_bits:rate2m{client=~\"$client\"}, \"direction\", \"down\", \"\", \"\") or label_replace(wan:client_app_transmit_bits:rate2m{client=~\"$client\"}, \"direction\", \"up\", \"\", \"\"))",
+    "unit": "bps",
+    "query_mode": "range",
+    "inputs": [
+      "wan:client_app_receive_bits:rate2m",
+      "wan:client_app_transmit_bits:rate2m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:client_app_receive_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      },
+      {
+        "metric": "wan:client_app_transmit_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wan-clients",
+    "tab": "Apps and destinations",
+    "panel": "Traffic by destination",
+    "query": "label_replace(topk(10, sum by (as_name) (label_replace(wan:client_app_receive_bits:rate2m{client=~\"$client\"}, \"direction\", \"down\", \"\", \"\") or label_replace(wan:client_app_transmit_bits:rate2m{client=~\"$client\"}, \"direction\", \"up\", \"\", \"\"))), \"as_name\", \"$1\", \"as_name\", \"(?:- )?(.+)\")",
+    "unit": "bps",
+    "query_mode": "range",
+    "inputs": [
+      "wan:client_app_receive_bits:rate2m",
+      "wan:client_app_transmit_bits:rate2m"
+    ],
+    "sources": [
+      {
+        "metric": "wan:client_app_receive_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
+        "availability": "configured"
+      },
+      {
+        "metric": "wan:client_app_transmit_bits:rate2m",
+        "producer": "WAN recording rules from router counters",
         "availability": "configured"
       }
     ],
@@ -3241,6 +3664,31 @@
     "missing": "Unknown \u2014 missing evidence",
     "query_error": "Grafana query error; never a healthy empty response",
     "runbook": "docs/network/unifi.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi",
+    "tab": "Access points",
+    "panel": "Clients with weak signal",
+    "query": "count(max by (name) (unpoller_client_radio_signal_db{source_site=\"\",wired=\"false\"}) < -70) or (0 * count(unpoller_client_radio_signal_db{source_site=\"\",wired=\"false\"}))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "unpoller_client_radio_signal_db"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_radio_signal_db",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/architecture.md",
     "owner": "homelab operator"
   },
   {
@@ -3391,6 +3839,349 @@
     "missing": "Unknown \u2014 missing evidence",
     "query_error": "Grafana query error; never a healthy empty response",
     "runbook": "docs/network/architecture.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "panel": "Wi-Fi clients",
+    "query": "count(count by (name) (unpoller_client_uptime_seconds{source_site=\"\",wired=\"false\"}))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "unpoller_client_uptime_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_uptime_seconds",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/unifi.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "panel": "Weak signal",
+    "query": "count(max by (name) (unpoller_client_radio_signal_db{source_site=\"\",wired=\"false\"}) < -70) or (0 * count(unpoller_client_radio_signal_db{source_site=\"\",wired=\"false\"}))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "unpoller_client_radio_signal_db"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_radio_signal_db",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/unifi.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "panel": "Low satisfaction",
+    "query": "count(max by (name) (unpoller_client_satisfaction_ratio{source_site=\"\",wired=\"false\"}) < 0.8) or (0 * count(unpoller_client_satisfaction_ratio{source_site=\"\",wired=\"false\"}))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "unpoller_client_satisfaction_ratio"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_satisfaction_ratio",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/unifi.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "panel": "Roams in range",
+    "query": "round(sum(increase(unpoller_client_roam_count_total{source_site=\"\",wired=\"false\"}[$__range])))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "unpoller_client_roam_count_total"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_roam_count_total",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/unifi.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "panel": "Weak signal clients",
+    "query": "max by (name, ap_name, radio) (label_replace(label_replace(label_replace(unpoller_client_radio_signal_db{source_site=\"\",wired=\"false\"}, \"radio\", \"2.4 GHz\", \"radio\", \"ng\"), \"radio\", \"5 GHz\", \"radio\", \"na\"), \"radio\", \"6 GHz\", \"radio\", \"6e\")) < -70",
+    "unit": "dBm",
+    "query_mode": "instant",
+    "inputs": [
+      "unpoller_client_radio_signal_db"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_radio_signal_db",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None below -70 dBm",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/unifi.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "panel": "Low satisfaction clients",
+    "query": "max by (name, ap_name) (unpoller_client_satisfaction_ratio{source_site=\"\",wired=\"false\"}) < 0.8",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "unpoller_client_satisfaction_ratio"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_satisfaction_ratio",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None below 80%",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/unifi.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "panel": "Most retries",
+    "query": "topk(10, sum by (name) (increase(unpoller_client_transmit_retries_total{source_site=\"\",wired=\"false\"}[$__range])) / (sum by (name) (increase(unpoller_client_transmit_packets_total{source_site=\"\",wired=\"false\"}[$__range])) + sum by (name) (increase(unpoller_client_transmit_retries_total{source_site=\"\",wired=\"false\"}[$__range]))) >= 0)",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "unpoller_client_transmit_packets_total",
+      "unpoller_client_transmit_retries_total"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_transmit_packets_total",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      },
+      {
+        "metric": "unpoller_client_transmit_retries_total",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/unifi.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "panel": "Reconnects",
+    "query": "sum by (name) (resets(unpoller_client_uptime_seconds{source_site=\"\",wired=\"false\"}[$__range])) > 0",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "unpoller_client_uptime_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_uptime_seconds",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/unifi.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "panel": "Signal",
+    "query": "max by (name) (unpoller_client_radio_signal_db{source_site=\"\",wired=\"false\",name=~\"$client\"})",
+    "unit": "dBm",
+    "query_mode": "range",
+    "inputs": [
+      "unpoller_client_radio_signal_db"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_radio_signal_db",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/unifi.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "panel": "Satisfaction",
+    "query": "max by (name) (unpoller_client_satisfaction_ratio{source_site=\"\",wired=\"false\",name=~\"$client\"})",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "unpoller_client_satisfaction_ratio"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_satisfaction_ratio",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/unifi.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "panel": "Retry rate",
+    "query": "sum by (name) (increase(unpoller_client_transmit_retries_total{source_site=\"\",wired=\"false\",name=~\"$client\"}[10m])) / (sum by (name) (increase(unpoller_client_transmit_packets_total{source_site=\"\",wired=\"false\",name=~\"$client\"}[10m])) + sum by (name) (increase(unpoller_client_transmit_retries_total{source_site=\"\",wired=\"false\",name=~\"$client\"}[10m])))",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "unpoller_client_transmit_packets_total",
+      "unpoller_client_transmit_retries_total"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_transmit_packets_total",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      },
+      {
+        "metric": "unpoller_client_transmit_retries_total",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/unifi.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "panel": "Throughput",
+    "query": "sum by (name) (rate(unpoller_client_receive_bytes_total{source_site=\"\",wired=\"false\",name=~\"$client\"}[10m]) + rate(unpoller_client_transmit_bytes_total{source_site=\"\",wired=\"false\",name=~\"$client\"}[10m]))",
+    "unit": "Bps",
+    "query_mode": "range",
+    "inputs": [
+      "unpoller_client_receive_bytes_total",
+      "unpoller_client_transmit_bytes_total"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_receive_bytes_total",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      },
+      {
+        "metric": "unpoller_client_transmit_bytes_total",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/unifi.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-wifi-clients",
+    "tab": "Clients",
+    "panel": "Connected to",
+    "query": "max by (name, ap_name, radio, channel) (label_replace(label_replace(label_replace(unpoller_client_uptime_seconds{source_site=\"\",wired=\"false\",name=~\"$client\"}, \"radio\", \"2.4 GHz\", \"radio\", \"ng\"), \"radio\", \"5 GHz\", \"radio\", \"na\"), \"radio\", \"6 GHz\", \"radio\", \"6e\"))",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "unpoller_client_uptime_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "unpoller_client_uptime_seconds",
+        "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/network/unifi.md",
     "owner": "homelab operator"
   },
   {
@@ -4252,6 +5043,99 @@
   {
     "dashboard": "tnwks-hosts",
     "tab": "Physical resources",
+    "panel": "Host CPU busy",
+    "query": "1 - avg by (k8s_cluster, instance) (rate(windows_cpu_time_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "windows_cpu_time_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_cpu_time_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Physical resources",
+    "panel": "Host disk latency",
+    "query": "max by (k8s_cluster, instance) (rate(windows_logical_disk_read_write_latency_seconds_total{k8s_cluster=~\"$cluster\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) / (rate(windows_logical_disk_reads_total{k8s_cluster=~\"$cluster\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) + rate(windows_logical_disk_writes_total{k8s_cluster=~\"$cluster\",volume!~\"HarddiskVolume.+\"}[$__rate_interval])))",
+    "unit": "s",
+    "query_mode": "range",
+    "inputs": [
+      "windows_logical_disk_read_write_latency_seconds_total",
+      "windows_logical_disk_reads_total",
+      "windows_logical_disk_writes_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_logical_disk_read_write_latency_seconds_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_reads_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_writes_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Physical resources",
+    "panel": "Host commit charge",
+    "query": "max by (k8s_cluster, instance) (windows_memory_committed_bytes{k8s_cluster=~\"$cluster\"}) / max by (k8s_cluster, instance) (windows_memory_commit_limit{k8s_cluster=~\"$cluster\"})",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "windows_memory_commit_limit",
+      "windows_memory_committed_bytes"
+    ],
+    "sources": [
+      {
+        "metric": "windows_memory_commit_limit",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_memory_committed_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-hosts",
+    "tab": "Physical resources",
     "panel": "Windows disk free",
     "query": "windows_logical_disk_free_bytes{k8s_cluster=~\"$cluster\",volume=~\"C:|E:\"}",
     "unit": "bytes",
@@ -4348,6 +5232,807 @@
       {
         "metric": "homelab_workload_desired_replicas",
         "producer": "read-only evidence collector",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "CPU",
+    "panel": "CPU busy",
+    "query": "1 - avg by (instance) (rate(windows_cpu_time_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",mode=\"idle\"}[$__rate_interval]))",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "windows_cpu_time_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_cpu_time_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "CPU",
+    "panel": "Run queue per core",
+    "query": "max by (instance) (avg_over_time(windows_system_processor_queue_length{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[5m])) / max by (instance) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "windows_cpu_logical_processor",
+      "windows_system_processor_queue_length"
+    ],
+    "sources": [
+      {
+        "metric": "windows_cpu_logical_processor",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_system_processor_queue_length",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "CPU",
+    "panel": "WSL VM CPU busy",
+    "query": "max by (k8s_cluster) (1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "node_cpu_seconds_total",
+      "windows_cpu_logical_processor"
+    ],
+    "sources": [
+      {
+        "metric": "node_cpu_seconds_total",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_logical_processor",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "CPU",
+    "panel": "CPU by mode",
+    "query": "sum by (mode) (rate(windows_cpu_time_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",mode!=\"idle\"}[$__rate_interval])) / scalar(max by (instance) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"}))",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "windows_cpu_logical_processor",
+      "windows_cpu_time_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_cpu_logical_processor",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_time_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "CPU",
+    "panel": "Busiest cores",
+    "query": "topk(5, max by (core) (1 - rate(windows_cpu_time_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",mode=\"idle\"}[$__rate_interval])))",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "windows_cpu_time_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_cpu_time_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "CPU",
+    "panel": "Run queue",
+    "query": "max by (instance) (windows_system_processor_queue_length{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "short",
+    "query_mode": "range",
+    "inputs": [
+      "windows_system_processor_queue_length"
+    ],
+    "sources": [
+      {
+        "metric": "windows_system_processor_queue_length",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "CPU",
+    "panel": "WSL CPU pressure",
+    "query": "max by (k8s_cluster) (rate(node_pressure_cpu_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "node_pressure_cpu_waiting_seconds_total",
+      "windows_cpu_logical_processor"
+    ],
+    "sources": [
+      {
+        "metric": "node_pressure_cpu_waiting_seconds_total",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_logical_processor",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Memory",
+    "panel": "Memory in use",
+    "query": "1 - max by (instance) (windows_memory_available_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"}) / max by (instance) (windows_memory_physical_total_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "windows_memory_available_bytes",
+      "windows_memory_physical_total_bytes"
+    ],
+    "sources": [
+      {
+        "metric": "windows_memory_available_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_memory_physical_total_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Memory",
+    "panel": "Commit charge",
+    "query": "max by (instance) (windows_memory_committed_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"}) / max by (instance) (windows_memory_commit_limit{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "windows_memory_commit_limit",
+      "windows_memory_committed_bytes"
+    ],
+    "sources": [
+      {
+        "metric": "windows_memory_commit_limit",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_memory_committed_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Memory",
+    "panel": "Paging to disk",
+    "query": "sum by (instance) (rate(windows_memory_swap_page_operations_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]))",
+    "unit": "ops",
+    "query_mode": "instant",
+    "inputs": [
+      "windows_memory_swap_page_operations_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_memory_swap_page_operations_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Memory",
+    "panel": "Memory and commit",
+    "query": "max by (measure) (label_replace(1 - max by (instance) (windows_memory_available_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"}) / max by (instance) (windows_memory_physical_total_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"In use\", \"\", \"\") or label_replace(max by (instance) (windows_memory_committed_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"}) / max by (instance) (windows_memory_commit_limit{k8s_cluster=~\"$cluster\",instance=~\"$host\"}), \"measure\", \"Commit charge\", \"\", \"\"))",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "windows_memory_available_bytes",
+      "windows_memory_commit_limit",
+      "windows_memory_committed_bytes",
+      "windows_memory_physical_total_bytes"
+    ],
+    "sources": [
+      {
+        "metric": "windows_memory_available_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_memory_commit_limit",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_memory_committed_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_memory_physical_total_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Memory",
+    "panel": "Page file traffic",
+    "query": "sum by (instance) (rate(windows_memory_swap_page_operations_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]))",
+    "unit": "ops",
+    "query_mode": "range",
+    "inputs": [
+      "windows_memory_swap_page_operations_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_memory_swap_page_operations_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Memory",
+    "panel": "WSL memory pressure",
+    "query": "max by (k8s_cluster) (rate(node_pressure_memory_waiting_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "node_pressure_memory_waiting_seconds_total",
+      "windows_cpu_logical_processor"
+    ],
+    "sources": [
+      {
+        "metric": "node_pressure_memory_waiting_seconds_total",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_logical_processor",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "panel": "Slowest volume latency",
+    "query": "max by (instance) (rate(windows_logical_disk_read_write_latency_seconds_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) / (rate(windows_logical_disk_reads_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) + rate(windows_logical_disk_writes_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval])))",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "windows_logical_disk_read_write_latency_seconds_total",
+      "windows_logical_disk_reads_total",
+      "windows_logical_disk_writes_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_logical_disk_read_write_latency_seconds_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_reads_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_writes_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "panel": "Busiest volume",
+    "query": "max by (instance) (clamp_min(1 - rate(windows_logical_disk_idle_seconds_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]), 0))",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "windows_logical_disk_idle_seconds_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_logical_disk_idle_seconds_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "panel": "Queued disk requests",
+    "query": "sum by (instance) (avg_over_time(windows_logical_disk_requests_queued{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[5m]))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "windows_logical_disk_requests_queued"
+    ],
+    "sources": [
+      {
+        "metric": "windows_logical_disk_requests_queued",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "panel": "Read latency by volume",
+    "query": "max by (volume) (rate(windows_logical_disk_read_latency_seconds_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) / rate(windows_logical_disk_reads_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]))",
+    "unit": "s",
+    "query_mode": "range",
+    "inputs": [
+      "windows_logical_disk_read_latency_seconds_total",
+      "windows_logical_disk_reads_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_logical_disk_read_latency_seconds_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_reads_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "panel": "Write latency by volume",
+    "query": "max by (volume) (rate(windows_logical_disk_write_latency_seconds_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) / rate(windows_logical_disk_writes_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]))",
+    "unit": "s",
+    "query_mode": "range",
+    "inputs": [
+      "windows_logical_disk_write_latency_seconds_total",
+      "windows_logical_disk_writes_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_logical_disk_write_latency_seconds_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_writes_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "panel": "Queue depth by volume",
+    "query": "max by (volume) (windows_logical_disk_requests_queued{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"})",
+    "unit": "short",
+    "query_mode": "range",
+    "inputs": [
+      "windows_logical_disk_requests_queued"
+    ],
+    "sources": [
+      {
+        "metric": "windows_logical_disk_requests_queued",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "panel": "Throughput by volume",
+    "query": "sum by (volume) (rate(windows_logical_disk_read_bytes_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) + rate(windows_logical_disk_write_bytes_total{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]))",
+    "unit": "Bps",
+    "query_mode": "range",
+    "inputs": [
+      "windows_logical_disk_read_bytes_total",
+      "windows_logical_disk_write_bytes_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_logical_disk_read_bytes_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_write_bytes_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "panel": "WSL I/O pressure",
+    "query": "max by (k8s_cluster) (rate(node_pressure_io_stalled_seconds_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])) and on (k8s_cluster) max by (k8s_cluster) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\",instance=~\"$host\"})",
+    "unit": "percentunit",
+    "query_mode": "range",
+    "inputs": [
+      "node_pressure_io_stalled_seconds_total",
+      "windows_cpu_logical_processor"
+    ],
+    "sources": [
+      {
+        "metric": "node_pressure_io_stalled_seconds_total",
+        "producer": "node-exporter (shared WSL kernel)",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_cpu_logical_processor",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Disk",
+    "panel": "Free space by volume",
+    "query": "max by (volume) (windows_logical_disk_free_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"} / windows_logical_disk_size_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\",volume!~\"HarddiskVolume.+\"})",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "windows_logical_disk_free_bytes",
+      "windows_logical_disk_size_bytes"
+    ],
+    "sources": [
+      {
+        "metric": "windows_logical_disk_free_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_size_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Network",
+    "panel": "Busiest adapter",
+    "query": "max by (instance) (sum by (instance, nic) (rate(windows_net_bytes_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval])) / max by (instance, nic) (windows_net_current_bandwidth_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"} > 0))",
+    "unit": "percentunit",
+    "query_mode": "instant",
+    "inputs": [
+      "windows_net_bytes_total",
+      "windows_net_current_bandwidth_bytes"
+    ],
+    "sources": [
+      {
+        "metric": "windows_net_bytes_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_net_current_bandwidth_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Network",
+    "panel": "Received by adapter",
+    "query": "sum by (nic) (rate(windows_net_bytes_received_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval])) > 0",
+    "unit": "Bps",
+    "query_mode": "range",
+    "inputs": [
+      "windows_net_bytes_received_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_net_bytes_received_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Network",
+    "panel": "Sent by adapter",
+    "query": "sum by (nic) (rate(windows_net_bytes_sent_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval])) > 0",
+    "unit": "Bps",
+    "query_mode": "range",
+    "inputs": [
+      "windows_net_bytes_sent_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_net_bytes_sent_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Network",
+    "panel": "Errors and discards by adapter",
+    "query": "sum by (nic) (rate(windows_net_packets_received_errors_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]) + rate(windows_net_packets_outbound_errors_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]) + rate(windows_net_packets_received_discarded_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval]) + rate(windows_net_packets_outbound_discarded_total{k8s_cluster=~\"$cluster\",instance=~\"$host\"}[$__rate_interval])) > 0",
+    "unit": "pps",
+    "query_mode": "range",
+    "inputs": [
+      "windows_net_packets_outbound_discarded_total",
+      "windows_net_packets_outbound_errors_total",
+      "windows_net_packets_received_discarded_total",
+      "windows_net_packets_received_errors_total"
+    ],
+    "sources": [
+      {
+        "metric": "windows_net_packets_outbound_discarded_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_net_packets_outbound_errors_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_net_packets_received_discarded_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_net_packets_received_errors_total",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None in range",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "docs/operations/grafana-resource-budget.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-host",
+    "tab": "Network",
+    "panel": "Link speed by adapter",
+    "query": "max by (nic) (windows_net_current_bandwidth_bytes{k8s_cluster=~\"$cluster\",instance=~\"$host\"} > 0) * 8",
+    "unit": "bps",
+    "query_mode": "instant",
+    "inputs": [
+      "windows_net_current_bandwidth_bytes"
+    ],
+    "sources": [
+      {
+        "metric": "windows_net_current_bandwidth_bytes",
+        "producer": "Windows exporter",
         "availability": "configured"
       }
     ],

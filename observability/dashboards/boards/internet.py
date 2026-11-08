@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..model import Board, p
-from ..queries import metric
+from ..queries import WAN_CLIENT, metric, wan
 
 
 def board() -> Board:
@@ -23,7 +23,10 @@ def board() -> Board:
                 p("Download", metric("wan:receive_bits:rate1m"), "bps",
                   "Measured WAN receive throughput. Current traffic is not the available speed of the connection."),
                 p("Upload", metric("wan:transmit_bits:rate1m"), "bps",
-                  "Measured WAN transmit throughput. Detailed traffic remains available at its stable dashboard UID.", link="wan-traffic"),
+                  "Measured WAN transmit throughput. Who is sending it is on WAN clients.", link="tnwks-wan-clients"),
+                p("Top WAN devices now", f'topk(5, sum by (client) ({wan("receive")}) + sum by (client) ({wan("transmit")}))', "bps",
+                  "The five devices moving the most Internet traffic now, both directions, from flow export. Click a row for its apps, destinations and history.",
+                  "table", WAN_CLIENT, empty="No traffic seen by flow export", column="Traffic", sort="desc"),
                 p("ISP radio collector", metric("unms_collector_success"), "bool",
                   "Whether the UISP exporter reached its controller. This is collector evidence, not the radio link's own health."),
             ],

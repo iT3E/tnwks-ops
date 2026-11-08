@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..model import Board, p
-from ..queries import WINDOWS, metric
+from ..queries import HOST, host_cpu_busy, metric
 
 
 def board() -> Board:
@@ -11,7 +11,14 @@ def board() -> Board:
               "Can the physical hosts sustain the workload and a site failure?", {
             "Physical resources": [
                 p("Windows available memory", metric("windows_memory_available_bytes"), "bytes",
-                  "Physical host availability. Do not add this to WSL MemAvailable, which overlaps the same memory.", link=WINDOWS),
+                  "Physical host availability. Do not add this to WSL MemAvailable, which overlaps the same memory.", link=HOST),
+                p("Host CPU busy", host_cpu_busy(), "percentunit",
+                  "Share of each Windows host's logical processors doing work. Click a line for that host's CPU, memory, disk and network detail.", link=HOST),
+                p("Host disk latency", f'max by (k8s_cluster, instance) (rate({metric("windows_logical_disk_read_write_latency_seconds_total", 'volume!~"HarddiskVolume.+"')}[$__rate_interval])'
+                  f' / (rate({metric("windows_logical_disk_reads_total", 'volume!~"HarddiskVolume.+"')}[$__rate_interval]) + rate({metric("windows_logical_disk_writes_total", 'volume!~"HarddiskVolume.+"')}[$__rate_interval])))', "s",
+                  "Average time per disk operation on each host's slowest volume. An SSD normally answers in under 5 ms; sustained above 20 ms the disk is what's slow. Click a line for the host's detail.", link=HOST),
+                p("Host commit charge", f'max by (k8s_cluster, instance) ({metric("windows_memory_committed_bytes")}) / max by (k8s_cluster, instance) ({metric("windows_memory_commit_limit")})', "percentunit",
+                  "Memory each host has promised against RAM plus page file. At 100% Windows refuses allocations and programs fail, WSL's VM included.", link=HOST),
                 p("Windows disk free", metric("windows_logical_disk_free_bytes", 'volume=~"C:|E:"'), "bytes",
                   "Physical free space remains authoritative even if an ext4 VHDX reports much more virtual space.", "table"),
                 p("Disk temperature", metric("smartctl_device_temperature"), "celsius",

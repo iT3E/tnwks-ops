@@ -543,7 +543,7 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/wan-traffic/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                      "url": "/d/tnwks-wan-clients/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
                     },
                     {
                       "title": "Runbook",
@@ -562,13 +562,216 @@
               }
             }
           },
-          "description": "Measured WAN transmit throughput. Detailed traffic remains available at its stable dashboard UID.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Measured WAN transmit throughput. Who is sending it is on WAN clients.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-7": {
         "kind": "Panel",
         "spec": {
           "id": 8,
+          "title": "Top WAN devices now",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "topk(5, sum by (client) (wan:client_app_receive_bits:rate2m) + sum by (client) (wan:client_app_transmit_bits:rate2m))",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{client}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "k8s_cluster": 0,
+                        "client": 0,
+                        "app": 1,
+                        "db_cluster": 1
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
+                        "Value": "Traffic"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "Traffic",
+                          "desc": true
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "No traffic seen by flow export",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Traffic"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "bps"
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Diagnose",
+                            "url": "/d/tnwks-wan-clients/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-client=${__data.fields.client:percentencode}"
+                          },
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "The five devices moving the most Internet traffic now, both directions, from flow export. Click a row for its apps, destinations and history.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "id": 9,
           "title": "ISP radio collector",
           "links": [],
           "data": {
@@ -813,6 +1016,33 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
+                                    "name": "panel-8"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Trends",
+                        "collapse": false
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
                                     "name": "panel-7"
                                   }
                                 }
@@ -822,8 +1052,8 @@
                             "fillScreen": false
                           }
                         },
-                        "collapse": false,
-                        "hideHeader": true
+                        "title": "Detail",
+                        "collapse": false
                       }
                     }
                   ]

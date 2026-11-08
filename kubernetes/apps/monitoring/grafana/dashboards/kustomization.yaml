@@ -48,9 +48,27 @@ configMapGenerator:
       kustomize.toolkit.fluxcd.io/substitute: disabled
     labels:
       grafana_dashboard: 'true'
+- name: grafana-tnwks-wan-clients
+  files:
+  - tnwks-wan-clients.json
+  options:
+    annotations:
+      grafana_folder: Network
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
 - name: grafana-tnwks-wifi
   files:
   - tnwks-wifi.json
+  options:
+    annotations:
+      grafana_folder: Network
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
+- name: grafana-tnwks-wifi-clients
+  files:
+  - tnwks-wifi-clients.json
   options:
     annotations:
       grafana_folder: Network
@@ -87,6 +105,15 @@ configMapGenerator:
 - name: grafana-tnwks-hosts
   files:
   - tnwks-hosts.json
+  options:
+    annotations:
+      grafana_folder: Hosts
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
+- name: grafana-tnwks-host
+  files:
+  - tnwks-host.json
   options:
     annotations:
       grafana_folder: Hosts

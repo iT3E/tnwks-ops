@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -78,7 +79,47 @@ def test_entity_links_open_the_clicked_series_and_keep_the_incident_time():
                     # Every entity label must survive the panel's own aggregation.
                     for label in entity.values():
                         assert label in panel.expr or "by (" not in panel.expr, (panel.title, label)
-    assert set(targets) == {"nginx", "200ac8fdbfbb74b39aff88118e4d1c2c", "IV0hu1m7z", "home-wifi"}
+    assert set(targets) == {"nginx", "200ac8fdbfbb74b39aff88118e4d1c2c", "home-wifi",
+                            "tnwks-host", "tnwks-wifi-clients", "tnwks-wan-clients"}
+
+
+def test_every_drilldown_lands_on_a_board_that_takes_its_variables():
+    """A link to a generated board names one of its pickers; nothing points at a retired UID."""
+    boards = {board.uid: board for board in catalogue()}
+    root = Path(__file__).resolve().parents[2]
+    pinned = {entry["uid"] for entry in json.loads(
+        (root / "kubernetes/apps/monitoring/grafana/upstream/catalogue.json").read_text())}
+    kept = {json.loads(path.read_text())["uid"]
+            for path in (root / "kubernetes/apps/monitoring/grafana/app/dashboard").glob("*.json")}
+    # Shipped by kube-prometheus-stack's own dashboards (its k8s-resources-node ConfigMap).
+    chart = {"200ac8fdbfbb74b39aff88118e4d1c2c"}
+    for board in boards.values():
+        for panels in board.tabs.values():
+            for panel in panels:
+                if not panel.link:
+                    continue
+                uid, entity = (panel.link, {}) if isinstance(panel.link, str) else panel.link
+                assert uid in set(boards) | pinned | kept | chart, (board.uid, panel.title, uid)
+                if uid in boards:
+                    pickers = {variable.name for variable in boards[uid].variables}
+                    assert set(entity) <= pickers, (board.uid, panel.title, set(entity) - pickers)
+
+
+def test_entity_pickers_read_label_values_from_the_board_datasource():
+    for board in catalogue():
+        if not board.variables:
+            continue
+        assert board.level == "l3", board.uid
+        spec = {v["spec"]["name"]: v["spec"] for v in resource(board)["spec"]["variables"]}
+        for variable in board.variables:
+            picker = spec[variable.name]
+            assert picker["query"]["spec"]["query"] == variable.query.strip()
+            assert picker["query"]["datasource"]["name"] == "${datasource}"
+            assert variable.query.startswith("label_values(")
+            assert picker["includeAll"] == variable.multi
+            # Every panel that filters on the picker uses it.
+        used = " ".join(panel.expr for panels in board.tabs.values() for panel in panels)
+        assert all(f"${variable.name}" in used for variable in board.variables), board.uid
 
 
 def test_live_audit_drops_private_labels_and_preserves_partial_query_failure():

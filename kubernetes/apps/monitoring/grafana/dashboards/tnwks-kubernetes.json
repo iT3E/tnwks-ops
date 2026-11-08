@@ -144,6 +144,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Ready"
                       }
                     }
@@ -342,6 +347,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Reconciling"
                       }
                     }
@@ -836,6 +846,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -881,6 +892,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "When"
                       }
                     }
@@ -1015,6 +1031,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -1060,6 +1077,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "When"
                       }
                     }
@@ -1194,6 +1216,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -1239,6 +1262,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "When"
                       }
                     }
@@ -1373,6 +1401,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -1418,6 +1447,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "When"
                       }
                     }

@@ -99,6 +99,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -143,7 +144,12 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
-                        "area": "Area"
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category"
                       }
                     }
                   }
@@ -667,6 +673,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "State"
                       }
                     }
@@ -1416,6 +1427,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -1461,6 +1473,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Weekly PVC drill age"
                       }
                     }
@@ -2357,6 +2374,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -2402,6 +2420,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "PVCs without a backup schedule"
                       }
                     }
@@ -2540,7 +2563,7 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/IV0hu1m7z/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-server=${__field.labels.instance:percentencode}"
+                      "url": "/d/tnwks-host/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-host=${__field.labels.instance:percentencode}"
                     },
                     {
                       "title": "Runbook",

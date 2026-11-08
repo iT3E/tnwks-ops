@@ -138,6 +138,24 @@ def main():
         assert params["var-ap"] == ["AP Test Room"], params
         navigation["entity"] = {"journey": "wi-fi to access point", "incident_time_preserved": True,
                                 "selected": params["var-ap"]}
+        # Domain -> diagnose board: a device row picks that device on WAN clients.
+        page.goto(f"{base}/d/tnwks-internet/view?{query}", wait_until="domcontentloaded")
+        page.get_by_role("tab", name="Traffic", exact=True).click(timeout=15000)
+        panel = page.get_by_test_id("data-testid Panel header Top WAN devices now")
+        panel.get_by_text("Test Laptop", exact=True).wait_for(timeout=15000)
+        panel.get_by_text("2 Mb/s", exact=True).click(timeout=15000)
+        diagnose = page.get_by_role("link", name="Diagnose", exact=True)
+        target = urllib.parse.urlparse(diagnose.get_attribute("href"))
+        params = urllib.parse.parse_qs(target.query)
+        assert target.path == "/d/tnwks-wan-clients/view", target
+        assert params["from"] == [str(incident_from)] and params["to"] == [str(incident_to)]
+        assert params["var-client"] == ["Test Laptop"], params
+        diagnose.click()
+        page.get_by_role("tab", name="Devices", exact=True).wait_for(timeout=15000)
+        # The picker took the device: the board opens on it, not on All.
+        page.get_by_test_id("data-testid Dashboard template variables Variable Value DropDown value link text Test Laptop").wait_for(timeout=15000)
+        navigation["diagnose"] = {"journey": "internet to WAN device", "incident_time_preserved": True,
+                                  "selected": params["var-client"]}
         browser.close()
     (out / "browser-results.json").write_text(json.dumps({"dashboards": results, "navigation": navigation,
         "page_errors": errors, "reloaded": retries}, indent=2) + "\n")

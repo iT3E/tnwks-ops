@@ -12,7 +12,10 @@ from kiosk_proxy import sanitize
 
 EMPTY_IS_NORMAL = {"Override creation age", "Needs attention",
                    "Current firing alerts", "Firing now", "Pending now",
-                   "PVCs without a backup schedule"}
+                   "PVCs without a backup schedule",
+                   # Worst-first lists on the diagnose boards: nobody on them is the good case.
+                   "Weak signal clients", "Low satisfaction clients", "Top downloaders now",
+                   "Top uploaders now", "Now: device, app and destination", "Top WAN devices now"}
 
 
 def test_sdk_generates_isolated_household_and_operator_resources():

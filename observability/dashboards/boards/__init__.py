@@ -9,6 +9,7 @@ from . import (
     data,
     home,
     homelab,
+    host,
     hosts,
     house,
     internet,
@@ -16,10 +17,13 @@ from . import (
     network,
     observability,
     sites,
+    wan_clients,
     wifi,
+    wifi_clients,
 )
 
-ORDER = (homelab, sites, data, network, internet, wifi, kubernetes, apps, home, hosts, observability, alerts, house)
+ORDER = (homelab, sites, data, network, internet, wan_clients, wifi, wifi_clients, kubernetes, apps, home, hosts, host,
+         observability, alerts, house)
 
 
 def catalogue() -> list[Board]:

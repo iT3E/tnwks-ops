@@ -97,15 +97,48 @@ NGINX = ("nginx", {"ingress": "ingress"})
 NODE = ("200ac8fdbfbb74b39aff88118e4d1c2c", {"cluster": "k8s_cluster", "node": "kubernetes_node"})
 
 
-WINDOWS = ("IV0hu1m7z", {"server": "instance"})
+# The diagnose boards (L3, boards/host.py, wifi_clients.py, wan_clients.py).
+HOST = ("tnwks-host", {"host": "instance"})
+WIFI_CLIENT = ("tnwks-wifi-clients", {"client": "name"})
+WAN_CLIENT = ("tnwks-wan-clients", {"client": "client"})
 
 
 ACCESS_POINT = ("home-wifi", {"ap": "name"})
 
 
 # The site 2 host, a UniFi Wi-Fi client (its Windows computer name, as in the
-# Ansible inventory). Household clients are never named on the boards.
+# Ansible inventory). No household device is named in the repository; the Wi-Fi
+# clients board reads names from UniFi at runtime.
 SITE2_WIFI_CLIENT = "WSL-02"
+
+
+def host_cpu_busy() -> str:
+    return f'1 - avg by (k8s_cluster, instance) (rate({selector("windows_cpu_time_total", 'mode="idle"')}[$__rate_interval]))'
+
+
+def host(name: str, extra: str = "") -> str:
+    """A Windows exporter series for the picked host (the Host board's $host)."""
+    return selector(name, 'instance=~"$host"' + ("," + extra if extra else ""))
+
+
+def wifi(name: str, extra: str = "") -> str:
+    """A UniFi client series, the poller's own copy (not the other site's federated one).
+    One controller sees the whole house, so these aren't per site: no site scope."""
+    return f'{name}{{source_site="",wired="false"{"," + extra if extra else ""}}}'
+
+
+def band(expr: str) -> str:
+    """UniFi's radio codes as the band a person would name."""
+    for code, words in (("ng", "2.4 GHz"), ("na", "5 GHz"), ("6e", "6 GHz")):
+        expr = f'label_replace({expr}, "radio", "{words}", "radio", "{code}")'
+    return expr
+
+
+def wan(direction: str, picked: bool = False) -> str:
+    """Per-client WAN bits/s from flow export (wan-latency.yaml rules), every device or
+    the picked ones ($client). The rules sum away the site label and only site 1's
+    router exports flows: no site scope."""
+    return f'wan:client_app_{direction}_bits:rate2m' + ('{client=~"$client"}' if picked else "")
 
 
 def worst(*sources: str) -> str:

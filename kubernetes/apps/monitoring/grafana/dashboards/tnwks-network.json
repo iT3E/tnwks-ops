@@ -144,6 +144,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Path"
                       }
                     }
@@ -1000,6 +1005,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Mesh"
                       }
                     }
@@ -1198,6 +1208,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "KVStoreMesh"
                       }
                     }
@@ -1523,6 +1538,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -1568,6 +1584,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Router uptime"
                       }
                     }
@@ -2390,6 +2411,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Link"
                       }
                     }
@@ -2542,6 +2568,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -2587,6 +2614,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Address pool use"
                       }
                     }
@@ -3007,6 +3039,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Upgrade"
                       }
                     }
@@ -3159,6 +3196,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -3204,6 +3242,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Router BGP session resets"
                       }
                     }
@@ -3338,6 +3381,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -3383,6 +3427,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Cilium BGP session changes"
                       }
                     }
@@ -3517,6 +3566,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -3562,6 +3612,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Path hop changes"
                       }
                     }
