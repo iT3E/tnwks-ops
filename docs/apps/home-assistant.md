@@ -78,8 +78,7 @@ app/
 │   ├── packages/*.yaml        # → /config/packages/
 │   ├── dashboards/*.yaml      # → /config/dashboards/
 │   ├── www/tnwks-kitchen/     # → /config/www/tnwks-kitchen/ (our own cards, /local/tnwks-kitchen/)
-│   ├── www/tnwks-security/    # → /config/www/tnwks-security/ (the alert schedule card)
-│   └── www/tnwks-energy/      # → /config/www/tnwks-energy/ (the distribution card)
+│   └── www/tnwks-security/    # → /config/www/tnwks-security/ (the alert schedule card)
 └── scripts/prepare-config.sh  # init container: installs custom integrations + cards
 ```
 
@@ -98,12 +97,7 @@ The sidebar, top to bottom:
   full controls, consumables. **Energy**: live power and the biggest loads,
   two weeks of use vs solar per inverter, the EV charger.
 - **Security** (`/home-security`): cameras and Frigate reviews.
-- **Energy** (`/home-energy`, `dashboards/energy.yaml`): the house meter
-  branching into the largest appliance loads, with readable values and
-  percentages. **Live** shows power; **Today** shows recorded kWh. Smaller
-  loads are grouped, and untracked usage is shown separately. Solar production
-  is a separate daily total, since its contribution to the house is not
-  metered. The history button opens the built-in Energy dashboard.
+- **Energy**: the built-in one (sources in `.storage/energy`, UI-owned).
 - **Monitoring** (`/home-monitoring`, everyone): Grafana in a frame, at its
   home page with its own navigation, so every Grafana dashboard is reachable
   without listing it here. It's signed in as the kiosk identity (a Grafana
@@ -118,27 +112,18 @@ The sidebar, top to bottom:
 
 UI-owned and set over the websocket API (not in git): `default_panel` in the
 frontend system data (`frontend/set_system_data`, key `core`) is `home-hub`; the
-built-in Overview (`/home`, the areas view), Energy (`/energy`), Map, Logbook and History are
+built-in Overview (`/home`, the areas view), Map, Logbook and History are
 hidden from the sidebar (`frontend/update_panel` `show_in_sidebar: false`,
 and `lovelace/dashboards/update` for Map). They still work by URL. A user can
 still pick their own default under Profile.
 
 ### Energy
 
-The distribution card (`www/tnwks-energy/energy-flow-card.js`) reads the same
-UI-owned energy preferences as the built-in dashboard. Appliance names stay
-in the registries/preferences, not in the card source. Live readings use the
-configured power sensors (W or kW). Today's readings use recorder changes
-from midnight in HA's timezone, refreshed every five minutes; the card shows
-the last recorded time. Solar production uses hourly statistics and is never
-drawn as solar-to-house consumption without an import/export meter. Tapping a
-house or appliance opens its normal entity details.
-
 The built-in Energy dashboard's sources and device breakdown are UI-owned
 (Settings > Dashboards > Energy, or `energy/get_prefs` / `energy/save_prefs`
-over HA's websocket API). [Home Assistant 2026.11](https://www.home-assistant.io/blog/2026/11/04/release-202611/)
-adds a **Home consumption** source, so Sense can supply the measured house total without a grid meter.
-Configure it with:
+over HA's websocket API). The built-in distribution card's **Home** circle
+uses Sense's whole-house consumption. This requires the **Home consumption**
+source added in Home Assistant 2026.11:
 
 | Setting                                    | Entity                            |
 | ------------------------------------------ | --------------------------------- |
@@ -152,20 +137,11 @@ usable measurements. Do not use whole-house consumption as grid import:
 adding solar to that would count solar consumption twice. Without measured
 grid flows, import/export, solar self-consumption and costs remain unknown.
 
-Move the whole-house Sense meter out of **Individual devices** when adding
-the Home consumption source. Remove `included_in_stat` references to that
-old device from the appliance entries, so appliances sit directly under the
-home total. Each appliance should have one energy sensor and its matching
-power sensor; use daily Sense energy counters, not daily plus weekly/monthly
-counters for the same device. For EV charging, prefer the Tesla Wall
-Connector's lifetime energy and total power sensors over Sense's estimated
-Electric Vehicle device, so the same charging is not counted twice.
-
-The existing Sense devices also include AC units, a washer, oven, stove top,
-pool pump and smaller loads. Add valid energy/power pairs to **Individual
-devices** to include them in the usage graphs and live power breakdown.
-Only add devices with recorded energy statistics. Leave unavailable sensors
-and unmeasured gas, water, batteries and tariffs unconfigured.
+The whole-house meter belongs in **Home consumption**, not **Individual
+devices**. The existing appliance entries sit directly under the home total;
+they do not need an extra whole-house device or `included_in_stat` references
+to one. Leave the optional home-source name unset so the circle uses the
+configured home name without truncation.
 
 After saving, `energy/validate` should return no issues, and the distribution
 card's Home value should follow Sense's whole-house energy statistics for the

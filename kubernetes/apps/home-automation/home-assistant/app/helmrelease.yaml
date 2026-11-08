@@ -314,14 +314,6 @@ spec:
             app:
               - path: /config/www/tnwks-security
                 readOnly: true
-      www-energy:
-        type: configMap
-        name: home-assistant-www-energy
-        advancedMounts:
-          home-assistant:
-            app:
-              - path: /config/www/tnwks-energy
-                readOnly: true
       scripts:
         type: configMap
         name: home-assistant-scripts

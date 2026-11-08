@@ -106,8 +106,6 @@ lovelace:
       type: module
     - url: /local/tnwks-security/person-alerts-card.js?v=2.0.0
       type: module
-    - url: /local/tnwks-energy/energy-flow-card.js?v=1.0.0
-      type: module
     - url: /local/kiosk-mode/kiosk-mode.js?v=15.0.0
       type: module
     # The robot vacuum's map card (rooms, zones, go-to); installed by
@@ -125,11 +123,6 @@ lovelace:
       filename: dashboards/house.yaml
       title: Home
       icon: mdi:home
-    home-energy:
-      mode: yaml
-      filename: dashboards/energy.yaml
-      title: Energy
-      icon: mdi:lightning-bolt
     home-monitoring:
       mode: yaml
       filename: dashboards/monitoring.yaml
