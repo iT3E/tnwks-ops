@@ -73,6 +73,20 @@ caller, for example `kubernetes / Render`.
   systems, so a host or runner being down shouldn't block a merge. Applies
   run on push to `main` in their own workflows.
 
+## CI stats
+
+[`ci-stats.yaml`](../../.github/workflows/ci-stats.yaml) runs every
+morning and writes a report to its job summary: runs a day by workflow and
+actor, CI's time to result per event, the flake rate (CI runs that passed
+only on a re-run), Actions cache usage, and runs waiting for over an hour.
+The run fails, so GitHub notifies the owner, when the flake rate is over 2%
+for the week, the cache is over 9 GB, or a run has waited for over an hour.
+To run it locally:
+
+```bash
+GH_TOKEN=$(gh auth token) python3 .github/scripts/ci-stats.py --repo iT3E/tnwks-ops --days 7
+```
+
 ## Adding a check
 
 1. Add a `[domains.<name>]` entry to `.github/ci/domains.toml` with its

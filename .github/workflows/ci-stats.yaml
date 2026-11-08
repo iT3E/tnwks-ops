@@ -1,0 +1,47 @@
+---
+name: "CI stats"
+
+# Nightly report on CI health (docs/operations/ci.md): runs a day by workflow
+# and actor, CI time to result and flake rate, Actions cache usage, and runs
+# stuck waiting. The job summary is the report. The run fails, so GitHub
+# notifies, when the flake rate is over 2% for 7 days, the cache is over
+# 9 GB, or a run has waited for over an hour.
+on:
+  schedule:
+    - cron: "17 14 * * *" # 06:17 Pacific (PST)
+  workflow_dispatch:
+    inputs:
+      days:
+        description: Days to look back
+        type: number
+        default: 7
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  stats:
+    name: stats
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      - name: Tests
+        run: python3 -m unittest discover -s .github/scripts -p 'test_ci_stats.py'
+
+      - name: Report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DAYS: ${{ inputs.days || 7 }}
+        run: python3 .github/scripts/ci-stats.py --days "$DAYS"
