@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.44.1 - 2026-11-08
+
+### Fixed
+
+* Restore the built-in Energy dashboard and distribution card, removing the custom flow view while retaining the measured Home circle and kWh total.
+
 ## v2.44.0 - 2026-11-08
 
 ### Changed
