@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.62.0 - 2026-11-08
+
+### Changed
+
+* CI: one Terraform action (.github/actions/terraform) replaces the runner, MikroTik and UniFi copies; endpoint overrides come in as tf-vars, and every root's plan summary lists moves.
+
 ## v2.61.0 - 2026-11-08
 
 ### Changed
