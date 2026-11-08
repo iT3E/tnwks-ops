@@ -7,27 +7,15 @@ name: "Actionlint"
 # moves.
 #
 # actionlint (with shellcheck on run: blocks, and .github/actionlint.yaml)
-# on the workflows, only when a PR touches them. zizmor (security audit,
-# config in .github/zizmor.yml) on the workflows and local actions, on PRs
-# and on main.
+# on the workflows, and zizmor (security audit, config in .github/zizmor.yml)
+# on the workflows and local actions, and the repo's own workflow conventions
+# (.github/scripts/workflow-conformance.py), whenever the workflows domain is
+# on.
 on:
-  pull_request:
-    paths: &paths
-      - ".github/workflows/**"
-      - ".github/actions/**"
-      - ".github/actionlint.yaml"
-      - ".github/zizmor.yml"
-  push:
-    branches: [main]
-    paths: *paths
+  # Called by ci.yaml when its domain in .github/ci/domains.toml changed.
+  workflow_call:
 
 permissions: {}
-
-concurrency:
-  # A new push to a PR cancels the run it supersedes. Pushes to main key on
-  # the commit, so every one of them is checked.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   actionlint:
@@ -55,3 +43,20 @@ jobs:
           advanced-security: false
           annotations: true
           version: 1.31.1
+
+  conformance:
+    name: conformance
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Timeouts, runner labels, SHA pins, permissions, checkout credentials,
+      # self-hosted jobs on PRs, and ci.yaml covering every domain.
+      - name: Workflow conventions
+        run: python3 .github/scripts/workflow-conformance.py

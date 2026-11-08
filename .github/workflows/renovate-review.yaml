@@ -20,7 +20,7 @@ name: "Renovate review"
 # owner (ori/awaiting-approval without owner/approved), and Build Success
 # passed on its head. It is picked up the moment the last of those becomes true:
 #   - the owner adds owner/review               (pull_request_target: labeled)
-#   - Build Success finishes                    (workflow_run: Kubernetes)
+#   - Build Success finishes                    (workflow_run: CI)
 #   - the owner removes ori/blocked             (pull_request_target: unlabeled)
 #   - the owner adds owner/approved             (pull_request_target: labeled)
 # A new push (Renovate's, or a migration commit from the agent) clears
@@ -38,10 +38,10 @@ on:
   pull_request_target: # zizmor: ignore[dangerous-triggers] no PR code is checked out or run
     types: [labeled, unlabeled, synchronize, reopened]
   workflow_run: # zizmor: ignore[dangerous-triggers] reads only the run's PR number
-    workflows: ["Kubernetes"]
+    workflows: ["CI"]
     types: [completed]
     # Only Renovate's PR branches can be eligible; without this every
-    # Kubernetes run (all PRs, every push to main) started a run here.
+    # CI run (all PRs, every push to main) started a run here.
     branches: ["renovate/**"]
   schedule:
     - cron: "0 16 * * *"

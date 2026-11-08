@@ -8,22 +8,14 @@ name: "Home Assistant"
 # drops YAML options between releases).
 
 on:
-  pull_request:
-    paths:
-      - "kubernetes/apps/home-automation/home-assistant/**"
-      - ".github/workflows/home-assistant.yaml"
+  # Called by ci.yaml when its domain in .github/ci/domains.toml changed.
+  workflow_call:
 
 permissions:
   contents: read
 
 env:
   APP: kubernetes/apps/home-automation/home-assistant/app
-
-concurrency:
-  # A new push to a PR cancels the run it supersedes. Pushes to main key on
-  # the commit, so every one of them is checked.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check-config:

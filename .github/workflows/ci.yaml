@@ -1,0 +1,160 @@
+---
+name: "CI"
+
+# The one entrypoint for the checks that gate a merge (docs/operations/ci.md).
+#
+#   changes        bin/ci-changes: which domains in .github/ci/domains.toml
+#                  this change touches
+#   <domain>       one job per domain, calling that domain's workflow_call
+#                  workflow, skipped when the domain is off
+#   Build Success  needs every job above; fails if any failed or was
+#                  cancelled. The required check, and what Renovate's
+#                  automerge waits on (.github/renovate/autoMerge.json5)
+#
+# Privacy, secret scanning, the changelog check and the labeler stay separate
+# workflows: they run on every PR, and on events this one shouldn't (a PR
+# title edit, a label change). Terraform plans and Ansible host checks run on
+# their own runners against live systems and gate nothing.
+on:
+  pull_request:
+  push:
+    branches: [main]
+    # Release commits (CHANGELOG.md + .changes/ only) carry nothing new to
+    # check: their fragments were checked in the PR that added them.
+    paths-ignore: [CHANGELOG.md, .changes/**]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  # A new push to a PR cancels the run it supersedes. Pushes to main key on
+  # the commit, so every one of them is checked.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      ansible: ${{ steps.domains.outputs.ansible }}
+      dependency_compatibility: ${{ steps.domains.outputs.dependency_compatibility }}
+      home_assistant: ${{ steps.domains.outputs.home_assistant }}
+      kubernetes: ${{ steps.domains.outputs.kubernetes }}
+      observability: ${{ steps.domains.outputs.observability }}
+      observability_rehearsals: ${{ steps.domains.outputs.observability_rehearsals }}
+      security_regressions: ${{ steps.domains.outputs.security_regressions }}
+      workflows: ${{ steps.domains.outputs.workflows }}
+      terraform: ${{ steps.domains.outputs.terraform }}
+    steps:
+      # Full history for the diff, without file contents (blob:none).
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Test bin/ci-changes
+        run: python3 -m unittest discover -s .github/scripts -p test_ci_changes.py
+
+      - name: Domains
+        id: domains
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          case "$EVENT" in
+            pull_request) bin/ci-changes --base "$PR_BASE" --head "$PR_HEAD" ;;
+            push) bin/ci-changes --base "$PUSH_BEFORE" --head "$SHA" ;;
+            *) bin/ci-changes --all ;;
+          esac | tee -a "$GITHUB_OUTPUT"
+
+  kubernetes:
+    needs: changes
+    if: needs.changes.outputs.kubernetes == 'true'
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/kubernetes.yaml
+
+  observability:
+    needs: changes
+    if: needs.changes.outputs.observability == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/observability.yaml
+    with:
+      rehearse: ${{ needs.changes.outputs.observability_rehearsals == 'true' }}
+
+  home_assistant:
+    needs: changes
+    if: needs.changes.outputs.home_assistant == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/home-assistant.yaml
+
+  ansible:
+    needs: changes
+    if: needs.changes.outputs.ansible == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ansible.yaml
+
+  security_regressions:
+    needs: changes
+    if: needs.changes.outputs.security_regressions == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/security-regressions.yaml
+
+  dependency_compatibility:
+    needs: changes
+    if: needs.changes.outputs.dependency_compatibility == 'true'
+    # GitHub checks every called job's permissions against these, including
+    # the scheduled-only `notify` job, which is skipped here.
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    uses: ./.github/workflows/dependency-compatibility.yaml
+
+  workflows:
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/actionlint.yaml
+
+  status:
+    name: "Build Success"
+    if: ${{ !cancelled() }}
+    needs:
+      - changes
+      - kubernetes
+      - observability
+      - home_assistant
+      - ansible
+      - security_regressions
+      - dependency_compatibility
+      - workflows
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Any job failed?
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$NEEDS"
+          failed="$(jq -r '[to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key] | join(", ")' <<<"$NEEDS")"
+          if [ -n "$failed" ]; then
+            echo "::error::failed or cancelled: $failed"
+            exit 1
+          fi

@@ -2,13 +2,8 @@
 name: Dependency compatibility
 
 on:
-  pull_request:
-    paths:
-      - .github/dependency-compatibility.json
-      - .github/scripts/dependency-compatibility*
-      - .github/scripts/test_dependency_compatibility.py
-      - .github/workflows/dependency-compatibility.yaml
-      - .github/renovate.json5
+  # Called by ci.yaml when its domain in .github/ci/domains.toml changed.
+  workflow_call:
   schedule:
     - cron: "17 18 * * 1"
   workflow_dispatch:
@@ -31,13 +26,16 @@ jobs:
           persist-credentials: false
       - name: Test compatibility signals and notification routing
         run: python3 -m unittest discover -s .github/scripts -p test_dependency_compatibility.py -v
+      # The upstream report and its issues belong to this workflow's own
+      # schedule and dispatch. Called from CI, the event is CI's (a push to
+      # main included), and only the tests run.
       - name: Inspect current upstream evidence
-        if: github.event_name != 'pull_request'
+        if: github.workflow == 'Dependency compatibility'
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/dependency-compatibility.py --report compatibility-report.json
       - name: Save report
-        if: github.event_name != 'pull_request'
+        if: github.workflow == 'Dependency compatibility'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dependency-compatibility
@@ -45,7 +43,7 @@ jobs:
           retention-days: 7
 
   notify:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.workflow == 'Dependency compatibility' && github.ref == 'refs/heads/main'
     needs: check
     runs-on: ubuntu-26.04
     timeout-minutes: 5

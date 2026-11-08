@@ -3,24 +3,15 @@ name: "Kubernetes"
 
 # Renders every Flux Kustomization and HelmRelease under kubernetes/ with flate
 # (charts are fetched and templated, values are schema-checked), and checks
-# that every container image a PR adds actually exists in its registry.
-# "Build Success" is the single status Renovate's automerge waits on
-# (.github/renovate/autoMerge.json5), so a dependency bump that doesn't render
-# or points at a missing tag never merges on its own.
+# that every container image a PR adds actually exists in its registry, and
+# comments the rendered diff on the PR. Called by ci.yaml, whose Build Success
+# needs it: a dependency bump that doesn't render or points at a missing tag
+# never merges on its own.
 on:
-  pull_request:
-  push:
-    branches: [main]
-    # Release commits (CHANGELOG.md + .changes/ only) carry nothing new to
-    # check: their fragments were checked in the PR that added them.
-    paths-ignore: [CHANGELOG.md, .changes/**]
-  workflow_dispatch:
+  # Called by ci.yaml when its domain in .github/ci/domains.toml changed.
+  workflow_call:
 
 permissions: {}
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # renovate: datasource=github-releases depName=home-operations/flate
@@ -180,8 +171,9 @@ jobs:
 
   # What the PR changes in the rendered manifests, per live cluster, as one
   # sticky PR comment (.github/scripts/flate-diff-comment.py). Reviewers and
-  # the Renovate reviewer read it; it gates nothing, so Build Success doesn't
-  # need it. Fork PRs get a read-only token, so they're skipped.
+  # the Renovate reviewer read it. It informs and never blocks: the step is
+  # continue-on-error, so a failed diff or comment leaves Build Success green.
+  # Fork PRs get a read-only token, so they're skipped.
   diff:
     name: "Rendered diff"
     if: >-
@@ -205,6 +197,7 @@ jobs:
           version: ${{ env.FLATE_VERSION }}
 
       - name: Diff and comment
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -221,18 +214,3 @@ jobs:
           path: ${{ runner.temp }}/flate-diff
           if-no-files-found: ignore
           retention-days: 7
-
-  status:
-    name: "Build Success"
-    if: ${{ !cancelled() }}
-    needs: [flate, images]
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    permissions: {}
-    steps:
-      - name: Any job failed?
-        env:
-          RESULTS: ${{ toJSON(needs.*.result) }}
-        run: |
-          echo "${RESULTS}"
-          if echo "${RESULTS}" | grep -qE '"(failure|cancelled)"'; then exit 1; fi

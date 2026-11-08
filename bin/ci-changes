@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Which CI domains a change touches (.github/ci/domains.toml).
+
+    bin/ci-changes --base <sha> --head <sha>   diff two commits
+    bin/ci-changes --all                       everything on (schedule, dispatch)
+    bin/ci-changes --files <file>              newline-separated paths (tests)
+
+Prints `<domain>=true|false` for each domain and `<group>=<JSON array>` for
+each group (the members whose paths matched), ready to append to
+$GITHUB_OUTPUT, plus `files=<count>`. A summary goes to stderr. A base that is
+missing, all zeros (a new branch) or not in the clone turns everything on,
+with a warning: running too much is the safe failure.
+
+Stdlib only, so it runs before any setup step.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+import tomllib
+from functools import lru_cache
+from pathlib import Path
+
+DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / ".github/ci/domains.toml"
+
+
+@lru_cache(maxsize=None)
+def glob_regex(pattern: str) -> re.Pattern[str]:
+    """GitHub path-filter glob to a regex: `*` within a segment, `**` across them."""
+    out, i = [], 0
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            out.append("(?:.*/)?")
+            i += 3
+        elif pattern.startswith("**", i):
+            out.append(".*")
+            i += 2
+        elif pattern[i] == "*":
+            out.append("[^/]*")
+            i += 1
+        elif pattern[i] == "?":
+            out.append("[^/]")
+            i += 1
+        else:
+            out.append(re.escape(pattern[i]))
+            i += 1
+    return re.compile("".join(out) + r"\Z")
+
+
+def matches(files: list[str], patterns: list[str]) -> bool:
+    return any(glob_regex(p).match(f) for f in files for p in patterns)
+
+
+def evaluate(config: dict, files: list[str] | None) -> dict[str, object]:
+    """files=None means everything changed."""
+    everything = files is None or matches(files, config.get("always", []))
+    out: dict[str, object] = {}
+    for name, domain in sorted(config.get("domains", {}).items()):
+        out[name] = everything or matches(files, domain["paths"])
+    for group, members in sorted(config.get("groups", {}).items()):
+        out[group] = [m for m, spec in sorted(members.items()) if everything or matches(files, spec["paths"])]
+    return out
+
+
+def changed_files(base: str | None, head: str) -> list[str] | None:
+    if not base or set(base) == {"0"}:
+        print("::warning::no base commit; running every domain", file=sys.stderr)
+        return None
+    result = subprocess.run(
+        ["git", "diff", "--name-only", "--no-renames", f"{base}...{head}"],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode != 0:
+        print(f"::warning::git diff {base}...{head} failed ({result.stderr.strip()}); running every domain", file=sys.stderr)
+        return None
+    return [line for line in result.stdout.splitlines() if line]
+
+
+def render(out: dict[str, object], files: list[str] | None) -> list[str]:
+    lines = [f"files={'all' if files is None else len(files)}"]
+    for key, value in out.items():
+        lines.append(f"{key}={json.dumps(value) if isinstance(value, list) else str(value).lower()}")
+    return lines
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--base")
+    source.add_argument("--all", action="store_true")
+    source.add_argument("--files", type=Path)
+    parser.add_argument("--head", default="HEAD")
+    args = parser.parse_args(argv)
+
+    config = tomllib.loads(args.config.read_text())
+    if args.all:
+        files = None
+    elif args.files:
+        files = [line for line in args.files.read_text().splitlines() if line]
+    else:
+        files = changed_files(args.base, args.head)
+
+    out = evaluate(config, files)
+    print("\n".join(render(out, files)))
+    on = [k for k, v in out.items() if v is True or (isinstance(v, list) and v)]
+    print(f"{'every' if files is None else len(files)} changed file(s); on: {', '.join(on) or 'nothing'}", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

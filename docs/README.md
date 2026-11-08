@@ -52,6 +52,7 @@ Talos access and break-glass: [`../talos/wsl/README.md`](../talos/wsl/README.md)
 | [`operations/windows-patching.md`](operations/windows-patching.md) | Windows Update on the WSL hosts (design): brakes, approval in git, armed windows, failover before patching, pre and post checks |
 | [`operations/renew-kubeconfig-cert.md`](operations/renew-kubeconfig-cert.md) | Renewing the kubeconfig client certificate |
 | [`operations/renovate.md`](operations/renovate.md) | Renovate tiers, and how impact/high PRs reach Ori's reviewer agent |
+| [`operations/ci.md`](operations/ci.md) | CI: the one entrypoint (`ci.yaml`), domains and the Build Success gate, adding a check |
 
 ## Development
 
