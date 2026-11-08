@@ -29,6 +29,7 @@ LABELS = {
     "app_version": "App version", "chart_version": "Chart", "release_status": "Release",
     "flux_kind": "Kind", "ready": "Ready", "kernel_version": "Kernel", "kubelet_version": "Kubelet",
     "os_image": "OS", "volume": "Volume", "collector": "Collector", "slo": "Objective",
+    "area": "Area",
 }
 
 
@@ -63,10 +64,11 @@ NEUTRAL = "text"
 # then how it got here, then the detail. role -> (row title, or None for no
 # header; most columns; row height; collapsed).
 SECTIONS = {
-    "headline": (None, 4, "short", False),
+    "headline": (None, 5, "short", False),
     "status": ("Status", 3, "standard", False),
     "trends": ("Trends", 2, "standard", False),
     "detail": ("Detail", 3, "standard", False),
+    "evidence": ("Evidence", 4, "short", True),
     "about": ("About this view", 1, "short", True),
 }
 

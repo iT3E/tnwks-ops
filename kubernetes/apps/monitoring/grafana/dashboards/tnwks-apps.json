@@ -143,6 +143,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "State"
                       }
                     }
@@ -624,6 +625,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "State"
                       }
                     }
@@ -851,7 +853,8 @@
                         "os_image": "OS",
                         "volume": "Volume",
                         "collector": "Collector",
-                        "slo": "Objective"
+                        "slo": "Objective",
+                        "area": "Area"
                       }
                     }
                   }
@@ -1013,6 +1016,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Name certificate remaining"
                       }
                     }
@@ -1180,6 +1184,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Health"
                       }
                     }
@@ -1685,6 +1690,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Certificate validity remaining"
                       }
                     }

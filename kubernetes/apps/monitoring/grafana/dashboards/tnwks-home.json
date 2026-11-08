@@ -896,7 +896,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 4,
+                            "maxColumnCount": 5,
                             "fillScreen": false
                           }
                         },

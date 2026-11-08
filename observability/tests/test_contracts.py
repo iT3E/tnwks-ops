@@ -10,7 +10,7 @@ from dashboards import CLUSTERS, NO_EVENTS, catalogue, generated, resource
 from inventory import inventory
 from kiosk_proxy import sanitize
 
-EMPTY_IS_NORMAL = {"Override creation age", "Workloads needing attention",
+EMPTY_IS_NORMAL = {"Override creation age", "Needs attention",
                    "Current firing alerts", "Firing now", "Pending now",
                    "PVCs without a backup schedule"}
 

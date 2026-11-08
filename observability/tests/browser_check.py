@@ -14,6 +14,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from dashboards import catalogue
 
 
+def open_evidence(page):
+    """Homelab folds its coverage panels into the Evidence row; open it as a person would."""
+    page.get_by_text("Needs attention", exact=True).filter(visible=True).first.wait_for(timeout=45000)
+    page.get_by_text("Evidence", exact=True).filter(visible=True).first.click()
+    page.get_by_text("Expected sites", exact=True).filter(visible=True).wait_for(timeout=45000)
+
+
 def main():
     base = os.environ.get("GRAFANA_TEST_URL", "http://127.0.0.1:13101")
     out = Path(os.environ.get("GRAFANA_TEST_ARTIFACTS", "observability/.cache/browser"))
@@ -80,7 +87,7 @@ def main():
             for bad in ["Visualization plugin not found", "Panel plugin not found", "An unexpected error happened", "Data source was not found"]:
                 assert bad not in body, (reference["uid"], bad)
         page.goto(f"{base}/d/home/view?var-datasource=prometheus-global", wait_until="domcontentloaded")
-        page.get_by_text("Expected sites", exact=True).filter(visible=True).wait_for(timeout=45000)
+        open_evidence(page)
         evidence = page.get_by_test_id("data-testid Panel header Site evidence")
         evidence.get_by_text("homelab-wsl-02", exact=True).wait_for(timeout=15000)
         evidence.get_by_text("Unknown", exact=True).wait_for(timeout=15000)
@@ -88,7 +95,7 @@ def main():
         page.screenshot(path=str(out / "homelab-desktop.png"), full_page=True, animations="disabled")
         page.set_viewport_size({"width": 768, "height": 1024})
         page.reload(wait_until="domcontentloaded")
-        page.get_by_text("Expected sites", exact=True).filter(visible=True).wait_for(timeout=45000)
+        open_evidence(page)
         page.get_by_test_id("data-testid Panel header Site evidence").get_by_text(
             "homelab-wsl-02", exact=True).wait_for(timeout=15000)
         page.screenshot(path=str(out / "homelab-tablet.png"), full_page=True, animations="disabled")
@@ -103,6 +110,7 @@ def main():
             ("var-cluster", "homelab-wsl"), ("var-cluster", "homelab-wsl-02"),
         ])
         page.goto(f"{base}/d/home/view?{query}", wait_until="domcontentloaded")
+        open_evidence(page)
         panel = page.get_by_test_id("data-testid Panel header Site evidence")
         panel.get_by_text("Reporting", exact=True).click(timeout=15000)
         diagnose = page.get_by_role("link", name="Diagnose", exact=True)

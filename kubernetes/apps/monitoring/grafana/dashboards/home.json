@@ -44,6 +44,1646 @@
         "kind": "Panel",
         "spec": {
           "id": 2,
+          "title": "Sites",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "((max(((label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 1)",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#c4302b"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#2f6bd0"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#6b6b6b"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#8a4fb5"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The worst of each site's evidence and every app's replicas: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "id": 3,
+          "title": "Network",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "((max(((label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 1)",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{hop}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#c4302b"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#2f6bd0"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#6b6b6b"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#8a4fb5"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/tnwks-network/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The worst of every hop between the router, BGP, the mesh and each site: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-3": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4,
+          "title": "Internet",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "((max(((label_replace((homelab:internet_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((homelab:internet_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((homelab:internet_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((homelab:internet_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((homelab:internet_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((homelab:internet_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((homelab:internet_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((homelab:internet_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((homelab:internet_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((homelab:internet_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((homelab:internet_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((homelab:internet_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 1)",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#c4302b"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#2f6bd0"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#6b6b6b"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#8a4fb5"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/tnwks-internet/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The worst of each site's Internet probe: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "id": 5,
+          "title": "Wi-Fi",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "((max(((label_replace((homelab:house_state{domain=\"wifi\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((homelab:house_state{domain=\"wifi\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((homelab:house_state{domain=\"wifi\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((homelab:house_state{domain=\"wifi\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((homelab:house_state{domain=\"wifi\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((homelab:house_state{domain=\"wifi\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((homelab:house_state{domain=\"wifi\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((homelab:house_state{domain=\"wifi\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((homelab:house_state{domain=\"wifi\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((homelab:house_state{domain=\"wifi\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((homelab:house_state{domain=\"wifi\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((homelab:house_state{domain=\"wifi\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 1)",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#c4302b"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#2f6bd0"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#6b6b6b"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#8a4fb5"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/tnwks-wifi/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The worst of the access points each site watches: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "id": 6,
+          "title": "Kubernetes",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "((max(((label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 3) * 4 + ((label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 2) * 3 + ((label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 0) * 2 + ((label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\")) == bool 1))) == bool 1)",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#c4302b"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#2f6bd0"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#6b6b6b"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#8a4fb5"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/tnwks-kubernetes/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The worst of every Flux resource's Ready condition: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "id": 7,
+          "title": "Data",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "((max(((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 1))) == bool 1)",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{namespace}} {{db_cluster}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#c4302b"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#2f6bd0"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#6b6b6b"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#8a4fb5"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/tnwks-data/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The worst of database backups, each app's recovery point and the databases outside CNPG: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "id": 8,
+          "title": "Recovery",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "((max(((label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 1)",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#c4302b"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#2f6bd0"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#6b6b6b"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#8a4fb5"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The worst of each warm app's readiness on its standby and its restore time: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "id": 9,
+          "title": "Apps",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "((max(((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 1)",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#c4302b"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#2f6bd0"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#6b6b6b"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#8a4fb5"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/tnwks-apps/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The worst of every app's probe and every shared name: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-9": {
+        "kind": "Panel",
+        "spec": {
+          "id": 10,
+          "title": "Home",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "((max(((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 3) * 4 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 2) * 3 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 0) * 2 + ((label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\",app=\"home-assistant\"})) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((homelab:mqtt_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\") or label_replace((homelab:house_state{domain=\"cameras\",cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"2\", \"\", \"\")) == bool 1))) == bool 1)",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#c4302b"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#2f6bd0"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#6b6b6b"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#8a4fb5"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/tnwks-home/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The worst of Home Assistant, MQTT and the cameras: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-10": {
+        "kind": "Panel",
+        "spec": {
+          "id": 11,
+          "title": "Observability",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "((max(((label_replace((homelab:archive_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((3 - 2 * homelab_collection_success{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((homelab:archive_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((3 - 2 * homelab_collection_success{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((homelab:archive_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((3 - 2 * homelab_collection_success{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((homelab:archive_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((3 - 2 * homelab_collection_success{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 4) * 3 + ((max(((label_replace((homelab:archive_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((3 - 2 * homelab_collection_success{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((homelab:archive_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((3 - 2 * homelab_collection_success{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((homelab:archive_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((3 - 2 * homelab_collection_success{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((homelab:archive_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((3 - 2 * homelab_collection_success{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 3) * 2 + ((max(((label_replace((homelab:archive_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((3 - 2 * homelab_collection_success{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 3) * 4 + ((label_replace((homelab:archive_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((3 - 2 * homelab_collection_success{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 2) * 3 + ((label_replace((homelab:archive_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((3 - 2 * homelab_collection_success{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 0) * 2 + ((label_replace((homelab:archive_state{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"0\", \"\", \"\") or label_replace((3 - 2 * homelab_collection_success{k8s_cluster=~\"$cluster\"}) != 4 != 5 != 6, \"source\", \"1\", \"\", \"\")) == bool 1))) == bool 1)",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "background",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Unknown",
+                          "color": "#6b6b6b"
+                        },
+                        "1": {
+                          "text": "Healthy",
+                          "color": "#1a7f37"
+                        },
+                        "2": {
+                          "text": "Degraded",
+                          "color": "#e5ac0e"
+                        },
+                        "3": {
+                          "text": "Failed",
+                          "color": "#c4302b"
+                        },
+                        "4": {
+                          "text": "Standby",
+                          "color": "#2f6bd0"
+                        },
+                        "5": {
+                          "text": "Not applicable",
+                          "color": "#6b6b6b"
+                        },
+                        "6": {
+                          "text": "Maintenance",
+                          "color": "#8a4fb5"
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/tnwks-observability/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The worst of the archive and every evidence collector: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-11": {
+        "kind": "Panel",
+        "spec": {
+          "id": 12,
+          "title": "Needs attention",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sort_desc(label_replace((max by (k8s_cluster) (homelab:site_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Site\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Workload\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:service_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Service\", \"\", \"\") or label_replace((max by (k8s_cluster, name) (homelab:ingress_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Name\", \"\", \"\") or label_replace((max by (k8s_cluster, hop) (homelab:network_path_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Network path\", \"\", \"\") or label_replace((3 - 2 * homelab_flux_resource_ready{k8s_cluster=~\"$cluster\"}) != 1, \"area\", \"Flux resource\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Recovery\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rto_state{k8s_cluster=~\"$cluster\"})) != 1 != 5, \"area\", \"Restore time\", \"\", \"\") or label_replace((max by (k8s_cluster, app) (homelab:app_rpo_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Backups\", \"\", \"\") or label_replace((max by (k8s_cluster, namespace, db_cluster) (homelab:database_backup_state{k8s_cluster=~\"$cluster\"})) != 1, \"area\", \"Database backup\", \"\", \"\") or label_replace((max by (k8s_cluster, workload, engine) (homelab:other_database_state{k8s_cluster=~\"$cluster\"})) != 1 != 4, \"area\", \"Database\", \"\", \"\"))",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "Value": "State"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "noValue": "Nothing needs attention",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "State"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "0": {
+                                "text": "Unknown",
+                                "color": "#6b6b6b",
+                                "index": 0
+                              },
+                              "1": {
+                                "text": "Healthy",
+                                "color": "#1a7f37",
+                                "index": 1
+                              },
+                              "2": {
+                                "text": "Degraded",
+                                "color": "#e5ac0e",
+                                "index": 2
+                              },
+                              "3": {
+                                "text": "Failed",
+                                "color": "#c4302b",
+                                "index": 3
+                              },
+                              "4": {
+                                "text": "Standby",
+                                "color": "#2f6bd0",
+                                "index": 4
+                              },
+                              "5": {
+                                "text": "Not applicable",
+                                "color": "#6b6b6b",
+                                "index": 5
+                              },
+                              "6": {
+                                "text": "Maintenance",
+                                "color": "#8a4fb5",
+                                "index": 6
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background",
+                          "mode": "basic"
+                        }
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Diagnose",
+                            "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                          },
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Everything not healthy right now, by area: sites, workloads, services, names, network paths, Flux resources, recovery, restore time, backups and databases. Standby and Not applicable are left out. Empty means nothing needs you.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-12": {
+        "kind": "Panel",
+        "spec": {
+          "id": 13,
+          "title": "Current firing alerts",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",severity!=\"none\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{cluster}} {{alertname}} {{severity}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true,
+                        "Value": true
+                      },
+                      "indexByName": {
+                        "k8s_cluster": 0,
+                        "app": 1,
+                        "db_cluster": 1
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "None",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Site"
+                    },
+                    "properties": [
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Diagnose",
+                            "url": "/d/tnwks-alerts/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                          },
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Current Prometheus rule state, excluding heartbeats; this is not a historical Alertmanager event list and does not show silence/inhibition state.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-13": {
+        "kind": "Panel",
+        "spec": {
+          "id": 14,
           "title": "Expected sites",
           "links": [],
           "data": {
@@ -120,10 +1760,10 @@
           "description": "Declared inventory survives the disappearance of a source. This is expected scope, not health.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-2": {
+      "panel-14": {
         "kind": "Panel",
         "spec": {
-          "id": 3,
+          "id": 15,
           "title": "Reporting sites",
           "links": [],
           "data": {
@@ -200,10 +1840,10 @@
           "description": "Distinct selected sites with fresh, successful evidence. Duplicate observations count once. Compare with Expected sites; partial results never certify fleet health.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-3": {
+      "panel-15": {
         "kind": "Panel",
         "spec": {
-          "id": 4,
+          "id": 16,
           "title": "Site evidence",
           "links": [],
           "data": {
@@ -303,6 +1943,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "State"
                       }
                     }
@@ -407,10 +2048,10 @@
           "description": "Measured site evidence, including explicit Unknown when an expected site stops reporting. Independent site probes distinguish unreachable from unobserved.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-4": {
+      "panel-16": {
         "kind": "Panel",
         "spec": {
-          "id": 5,
+          "id": 17,
           "title": "Evidence age",
           "links": [],
           "data": {
@@ -509,6 +2150,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Evidence age"
                       }
                     }
@@ -577,764 +2219,10 @@
           "description": "Age of the last successful Kubernetes inventory observation. A recent Prometheus scrape alone does not prove the collector is seeing its upstream.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-5": {
+      "panel-17": {
         "kind": "Panel",
         "spec": {
-          "id": 6,
-          "title": "Workloads needing attention",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "spec": {
-                        "expr": "sort_desc(max by (k8s_cluster, app) (homelab:workload_state{k8s_cluster=~\"$cluster\"}) != 4 != 1)",
-                        "format": "table",
-                        "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}}",
-                        "range": false
-                      },
-                      "datasource": {
-                        "name": "${datasource}"
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [
-                {
-                  "kind": "Transformation",
-                  "group": "organize",
-                  "spec": {
-                    "options": {
-                      "excludeByName": {
-                        "__name__": true,
-                        "Time": true,
-                        "__replica__": true,
-                        "alertstate": true,
-                        "cluster": true,
-                        "container": true,
-                        "endpoint": true,
-                        "instance": true,
-                        "job": true,
-                        "kind": true,
-                        "namespace": true,
-                        "observer_cluster": true,
-                        "pod": true,
-                        "prometheus": true,
-                        "service": true
-                      },
-                      "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
-                      },
-                      "renameByName": {
-                        "k8s_cluster": "Site",
-                        "app": "App",
-                        "db_cluster": "Database",
-                        "observer_cluster": "Observer",
-                        "alertname": "Alert",
-                        "severity": "Severity",
-                        "workload": "Workload",
-                        "tier": "Tier",
-                        "engine": "Engine",
-                        "cronjob": "Job",
-                        "kubernetes_node": "Node",
-                        "node": "Node",
-                        "hop": "Hop",
-                        "vip": "Shared VIP",
-                        "k8s_app": "Component",
-                        "component": "Component",
-                        "target_cluster": "Remote site",
-                        "served_cluster": "Served by",
-                        "routerboard_name": "Router",
-                        "version": "RouterOS",
-                        "name": "Name",
-                        "pool": "Pool",
-                        "current_firmware": "Installed firmware",
-                        "upgrade_firmware": "Available firmware",
-                        "host": "Host",
-                        "nic": "Adapter",
-                        "ap_name": "Access point",
-                        "resource": "Resource",
-                        "revision": "Revision",
-                        "app_version": "App version",
-                        "chart_version": "Chart",
-                        "release_status": "Release",
-                        "flux_kind": "Kind",
-                        "ready": "Ready",
-                        "kernel_version": "Kernel",
-                        "kubelet_version": "Kubelet",
-                        "os_image": "OS",
-                        "volume": "Volume",
-                        "collector": "Collector",
-                        "slo": "Objective",
-                        "Value": "State"
-                      }
-                    }
-                  }
-                }
-              ],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "table",
-            "version": "",
-            "spec": {
-              "options": {
-                "frameIndex": 0,
-                "showHeader": true,
-                "showTypeIcons": false,
-                "footer": {
-                  "show": false,
-                  "reducer": [],
-                  "countRows": false
-                },
-                "cellHeight": "sm"
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "value": null,
-                        "color": "#6b6b6b"
-                      }
-                    ]
-                  },
-                  "noValue": "All ready or standby",
-                  "custom": {
-                    "align": "auto",
-                    "inspect": false,
-                    "minWidth": 70
-                  }
-                },
-                "overrides": [
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "State"
-                    },
-                    "properties": [
-                      {
-                        "id": "unit",
-                        "value": "none"
-                      },
-                      {
-                        "id": "mappings",
-                        "value": [
-                          {
-                            "type": "value",
-                            "options": {
-                              "0": {
-                                "text": "Unknown",
-                                "color": "#6b6b6b",
-                                "index": 0
-                              },
-                              "1": {
-                                "text": "Healthy",
-                                "color": "#1a7f37",
-                                "index": 1
-                              },
-                              "2": {
-                                "text": "Degraded",
-                                "color": "#e5ac0e",
-                                "index": 2
-                              },
-                              "3": {
-                                "text": "Failed",
-                                "color": "#c4302b",
-                                "index": 3
-                              },
-                              "4": {
-                                "text": "Standby",
-                                "color": "#2f6bd0",
-                                "index": 4
-                              },
-                              "5": {
-                                "text": "Not applicable",
-                                "color": "#6b6b6b",
-                                "index": 5
-                              },
-                              "6": {
-                                "text": "Maintenance",
-                                "color": "#8a4fb5",
-                                "index": 6
-                              }
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "id": "custom.cellOptions",
-                        "value": {
-                          "type": "color-background",
-                          "mode": "basic"
-                        }
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-sites/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-          },
-          "description": "Apps not fully ready, from replica counts. Empty means every app is ready or a deliberate standby. This is workload evidence, not an end-to-end path check.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
-        }
-      },
-      "panel-6": {
-        "kind": "Panel",
-        "spec": {
-          "id": 7,
-          "title": "Current firing alerts",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "spec": {
-                        "expr": "label_replace(max by (cluster, alertname, severity) (ALERTS{cluster=~\"$cluster\",alertstate=\"firing\",severity!=\"none\"}), \"k8s_cluster\", \"$1\", \"cluster\", \"(.+)\")",
-                        "format": "table",
-                        "instant": true,
-                        "legendFormat": "{{cluster}} {{alertname}} {{severity}}",
-                        "range": false
-                      },
-                      "datasource": {
-                        "name": "${datasource}"
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [
-                {
-                  "kind": "Transformation",
-                  "group": "organize",
-                  "spec": {
-                    "options": {
-                      "excludeByName": {
-                        "__name__": true,
-                        "Time": true,
-                        "__replica__": true,
-                        "alertstate": true,
-                        "cluster": true,
-                        "container": true,
-                        "endpoint": true,
-                        "instance": true,
-                        "job": true,
-                        "kind": true,
-                        "namespace": true,
-                        "observer_cluster": true,
-                        "pod": true,
-                        "prometheus": true,
-                        "service": true,
-                        "Value": true
-                      },
-                      "indexByName": {
-                        "k8s_cluster": 0,
-                        "app": 1,
-                        "db_cluster": 1
-                      },
-                      "renameByName": {
-                        "k8s_cluster": "Site",
-                        "app": "App",
-                        "db_cluster": "Database",
-                        "observer_cluster": "Observer",
-                        "alertname": "Alert",
-                        "severity": "Severity",
-                        "workload": "Workload",
-                        "tier": "Tier",
-                        "engine": "Engine",
-                        "cronjob": "Job",
-                        "kubernetes_node": "Node",
-                        "node": "Node",
-                        "hop": "Hop",
-                        "vip": "Shared VIP",
-                        "k8s_app": "Component",
-                        "component": "Component",
-                        "target_cluster": "Remote site",
-                        "served_cluster": "Served by",
-                        "routerboard_name": "Router",
-                        "version": "RouterOS",
-                        "name": "Name",
-                        "pool": "Pool",
-                        "current_firmware": "Installed firmware",
-                        "upgrade_firmware": "Available firmware",
-                        "host": "Host",
-                        "nic": "Adapter",
-                        "ap_name": "Access point",
-                        "resource": "Resource",
-                        "revision": "Revision",
-                        "app_version": "App version",
-                        "chart_version": "Chart",
-                        "release_status": "Release",
-                        "flux_kind": "Kind",
-                        "ready": "Ready",
-                        "kernel_version": "Kernel",
-                        "kubelet_version": "Kubelet",
-                        "os_image": "OS",
-                        "volume": "Volume",
-                        "collector": "Collector",
-                        "slo": "Objective"
-                      }
-                    }
-                  }
-                }
-              ],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "table",
-            "version": "",
-            "spec": {
-              "options": {
-                "frameIndex": 0,
-                "showHeader": true,
-                "showTypeIcons": false,
-                "footer": {
-                  "show": false,
-                  "reducer": [],
-                  "countRows": false
-                },
-                "cellHeight": "sm"
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "noValue": "None",
-                  "custom": {
-                    "align": "auto",
-                    "inspect": false,
-                    "minWidth": 70
-                  }
-                },
-                "overrides": [
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "Site"
-                    },
-                    "properties": [
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-alerts/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-          },
-          "description": "Current Prometheus rule state, excluding heartbeats; this is not a historical Alertmanager event list and does not show silence/inhibition state.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
-        }
-      },
-      "panel-7": {
-        "kind": "Panel",
-        "spec": {
-          "id": 8,
-          "title": "Recovery evidence",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "spec": {
-                        "expr": "max by (k8s_cluster, app) (homelab:recovery_state{k8s_cluster=~\"$cluster\"})",
-                        "format": "table",
-                        "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}}",
-                        "range": false
-                      },
-                      "datasource": {
-                        "name": "${datasource}"
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [
-                {
-                  "kind": "Transformation",
-                  "group": "organize",
-                  "spec": {
-                    "options": {
-                      "excludeByName": {
-                        "__name__": true,
-                        "Time": true,
-                        "__replica__": true,
-                        "alertstate": true,
-                        "cluster": true,
-                        "container": true,
-                        "endpoint": true,
-                        "instance": true,
-                        "job": true,
-                        "kind": true,
-                        "namespace": true,
-                        "observer_cluster": true,
-                        "pod": true,
-                        "prometheus": true,
-                        "service": true
-                      },
-                      "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
-                      },
-                      "renameByName": {
-                        "k8s_cluster": "Site",
-                        "app": "App",
-                        "db_cluster": "Database",
-                        "observer_cluster": "Observer",
-                        "alertname": "Alert",
-                        "severity": "Severity",
-                        "workload": "Workload",
-                        "tier": "Tier",
-                        "engine": "Engine",
-                        "cronjob": "Job",
-                        "kubernetes_node": "Node",
-                        "node": "Node",
-                        "hop": "Hop",
-                        "vip": "Shared VIP",
-                        "k8s_app": "Component",
-                        "component": "Component",
-                        "target_cluster": "Remote site",
-                        "served_cluster": "Served by",
-                        "routerboard_name": "Router",
-                        "version": "RouterOS",
-                        "name": "Name",
-                        "pool": "Pool",
-                        "current_firmware": "Installed firmware",
-                        "upgrade_firmware": "Available firmware",
-                        "host": "Host",
-                        "nic": "Adapter",
-                        "ap_name": "Access point",
-                        "resource": "Resource",
-                        "revision": "Revision",
-                        "app_version": "App version",
-                        "chart_version": "Chart",
-                        "release_status": "Release",
-                        "flux_kind": "Kind",
-                        "ready": "Ready",
-                        "kernel_version": "Kernel",
-                        "kubelet_version": "Kubelet",
-                        "os_image": "OS",
-                        "volume": "Volume",
-                        "collector": "Collector",
-                        "slo": "Objective",
-                        "Value": "State"
-                      }
-                    }
-                  }
-                }
-              ],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "table",
-            "version": "",
-            "spec": {
-              "options": {
-                "frameIndex": 0,
-                "showHeader": true,
-                "showTypeIcons": false,
-                "footer": {
-                  "show": false,
-                  "reducer": [],
-                  "countRows": false
-                },
-                "cellHeight": "sm"
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "value": null,
-                        "color": "#6b6b6b"
-                      }
-                    ]
-                  },
-                  "noValue": "Unknown — missing evidence",
-                  "custom": {
-                    "align": "auto",
-                    "inspect": false,
-                    "minWidth": 70
-                  }
-                },
-                "overrides": [
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "State"
-                    },
-                    "properties": [
-                      {
-                        "id": "unit",
-                        "value": "none"
-                      },
-                      {
-                        "id": "mappings",
-                        "value": [
-                          {
-                            "type": "value",
-                            "options": {
-                              "0": {
-                                "text": "Unknown",
-                                "color": "#6b6b6b",
-                                "index": 0
-                              },
-                              "1": {
-                                "text": "Healthy",
-                                "color": "#1a7f37",
-                                "index": 1
-                              },
-                              "2": {
-                                "text": "Degraded",
-                                "color": "#e5ac0e",
-                                "index": 2
-                              },
-                              "3": {
-                                "text": "Failed",
-                                "color": "#c4302b",
-                                "index": 3
-                              },
-                              "4": {
-                                "text": "Standby",
-                                "color": "#2f6bd0",
-                                "index": 4
-                              },
-                              "5": {
-                                "text": "Not applicable",
-                                "color": "#6b6b6b",
-                                "index": 5
-                              },
-                              "6": {
-                                "text": "Maintenance",
-                                "color": "#8a4fb5",
-                                "index": 6
-                              }
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "id": "custom.cellOptions",
-                        "value": {
-                          "type": "color-background",
-                          "mode": "basic"
-                        }
-                      },
-                      {
-                        "id": "links",
-                        "value": [
-                          {
-                            "title": "Diagnose",
-                            "url": "/d/tnwks-data/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                          },
-                          {
-                            "title": "Runbook",
-                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                            "targetBlank": true
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-          },
-          "description": "Per-app prerequisites. Unknown fencing or untested recovery blocks a positive readiness conclusion. A dashboard never authorizes promotion.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
-        }
-      },
-      "panel-8": {
-        "kind": "Panel",
-        "spec": {
-          "id": 9,
-          "title": "Archive reachable",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "spec": {
-                        "expr": "homelab:archive_state{k8s_cluster=~\"$cluster\"}",
-                        "instant": true,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
-                        "range": false
-                      },
-                      "datasource": {
-                        "name": "${datasource}"
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "stat",
-            "version": "",
-            "spec": {
-              "options": {
-                "graphMode": "area",
-                "colorMode": "background",
-                "justifyMode": "auto",
-                "textMode": "auto",
-                "wideLayout": true,
-                "showPercentChange": false,
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "values": false
-                },
-                "percentChangeColorMode": "standard",
-                "orientation": "auto"
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "unit": "none",
-                  "mappings": [
-                    {
-                      "type": "value",
-                      "options": {
-                        "0": {
-                          "text": "Unknown",
-                          "color": "#6b6b6b"
-                        },
-                        "1": {
-                          "text": "Healthy",
-                          "color": "#1a7f37"
-                        },
-                        "2": {
-                          "text": "Degraded",
-                          "color": "#e5ac0e"
-                        },
-                        "3": {
-                          "text": "Failed",
-                          "color": "#c4302b"
-                        },
-                        "4": {
-                          "text": "Standby",
-                          "color": "#2f6bd0"
-                        },
-                        "5": {
-                          "text": "Not applicable",
-                          "color": "#6b6b6b"
-                        },
-                        "6": {
-                          "text": "Maintenance",
-                          "color": "#8a4fb5"
-                        }
-                      }
-                    }
-                  ],
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "value": null,
-                        "color": "#6b6b6b"
-                      }
-                    ]
-                  },
-                  "links": [
-                    {
-                      "title": "Diagnose",
-                      "url": "/d/tnwks-observability/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
-                    },
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/wsl/multi-site.md",
-                      "targetBlank": true
-                    }
-                  ],
-                  "noValue": "Unknown — missing evidence"
-                },
-                "overrides": []
-              }
-            }
-          },
-          "description": "The archive is hosted only on WSL-02. Its failure does not remove local 15-day metrics; older history becomes unavailable.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
-        }
-      },
-      "panel-9": {
-        "kind": "Panel",
-        "spec": {
-          "id": 10,
+          "id": 18,
           "title": "Observed state changes",
           "links": [],
           "data": {
@@ -1411,10 +2299,10 @@
           "description": "Sampled transitions in observed service state. This is supplementary evidence and can miss transitions during a monitoring gap.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-10": {
+      "panel-18": {
         "kind": "Panel",
         "spec": {
-          "id": 11,
+          "id": 19,
           "title": "Latest workload rollout",
           "links": [],
           "data": {
@@ -1513,6 +2401,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Latest workload rollout"
                       }
                     }
@@ -1577,10 +2466,10 @@
           "description": "Time since a workload Ready transition reported by Kubernetes. This is not necessarily its deployment or git revision time.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-11": {
+      "panel-19": {
         "kind": "Panel",
         "spec": {
-          "id": 12,
+          "id": 20,
           "title": "Available local history",
           "links": [],
           "data": {
@@ -1679,6 +2568,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Available local history"
                       }
                     }
@@ -1787,12 +2677,75 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
+                                    "name": "panel-3"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-5"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-6"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-7"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
                                     "name": "panel-8"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-9"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-10"
                                   }
                                 }
                               }
                             ],
-                            "maxColumnCount": 4,
+                            "maxColumnCount": 5,
                             "fillScreen": false
                           }
                         },
@@ -1814,7 +2767,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-3"
+                                    "name": "panel-11"
                                   }
                                 }
                               },
@@ -1823,16 +2776,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-5"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-7"
+                                    "name": "panel-12"
                                   }
                                 }
                               }
@@ -1852,14 +2796,14 @@
                           "kind": "AutoGridLayout",
                           "spec": {
                             "columnWidthMode": "narrow",
-                            "rowHeightMode": "standard",
+                            "rowHeightMode": "short",
                             "items": [
                               {
                                 "kind": "AutoGridLayoutItem",
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-4"
+                                    "name": "panel-13"
                                   }
                                 }
                               },
@@ -1868,17 +2812,35 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-6"
+                                    "name": "panel-14"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-15"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-16"
                                   }
                                 }
                               }
                             ],
-                            "maxColumnCount": 3,
+                            "maxColumnCount": 4,
                             "fillScreen": false
                           }
                         },
-                        "title": "Detail",
-                        "collapse": false
+                        "title": "Evidence",
+                        "collapse": true
                       }
                     },
                     {
@@ -1935,7 +2897,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-9"
+                                    "name": "panel-17"
                                   }
                                 }
                               }
@@ -1962,7 +2924,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-10"
+                                    "name": "panel-18"
                                   }
                                 }
                               },
@@ -1971,7 +2933,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-11"
+                                    "name": "panel-19"
                                   }
                                 }
                               }

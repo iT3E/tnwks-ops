@@ -303,6 +303,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "State"
                       }
                     }
@@ -509,6 +510,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Evidence age"
                       }
                     }
@@ -791,6 +793,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Cross-site observation"
                       }
                     }
@@ -976,6 +979,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "State"
                       }
                     }
@@ -1203,7 +1207,8 @@
                         "os_image": "OS",
                         "volume": "Volume",
                         "collector": "Collector",
-                        "slo": "Objective"
+                        "slo": "Objective",
+                        "area": "Area"
                       }
                     }
                   }
@@ -1365,6 +1370,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Desired replicas"
                       }
                     }
@@ -1531,6 +1537,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Ready replicas"
                       }
                     }
@@ -1698,6 +1705,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Overrides"
                       }
                     }
@@ -1882,6 +1890,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Override creation age"
                       }
                     }
@@ -2049,6 +2058,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "State"
                       }
                     }
@@ -2276,6 +2286,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Fencing evidence age"
                       }
                     }
@@ -2442,6 +2453,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Fence job age"
                       }
                     }
@@ -2609,6 +2621,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Lease authority"
                       }
                     }
@@ -2794,6 +2807,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Lease"
                       }
                     }
@@ -2978,6 +2992,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Last restore evidence"
                       }
                     }
@@ -3144,6 +3159,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Serving-state changes"
                       }
                     }
@@ -3310,6 +3326,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Shared VIP route changes"
                       }
                     }
@@ -3476,6 +3493,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "When"
                       }
                     }
@@ -3580,7 +3598,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 4,
+                            "maxColumnCount": 5,
                             "fillScreen": false
                           }
                         },

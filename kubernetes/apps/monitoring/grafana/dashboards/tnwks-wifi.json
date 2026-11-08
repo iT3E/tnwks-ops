@@ -142,6 +142,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "AP uptime"
                       }
                     }
@@ -312,6 +313,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "AP uplink"
                       }
                     }
@@ -765,6 +767,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Site host uplinks"
                       }
                     }
@@ -1094,6 +1097,7 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
+                        "area": "Area",
                         "Value": "Site 2 Wi-Fi association"
                       }
                     }

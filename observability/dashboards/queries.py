@@ -106,3 +106,25 @@ ACCESS_POINT = ("home-wifi", {"ap": "name"})
 # The site 2 host, a UniFi Wi-Fi client (its Windows computer name, as in the
 # Ansible inventory). Household clients are never named on the boards.
 SITE2_WIFI_CLIENT = "WSL-02"
+
+
+def worst(*sources: str) -> str:
+    """One state for many: Failed > Degraded > Unknown > Healthy over every source's
+    states. Standby, Not applicable and Maintenance don't count against it. Each
+    source is tagged, so `or` keeps series whose labels match another source's."""
+    tagged = " or ".join(f'label_replace(({source}) != 4 != 5 != 6, "source", "{i}", "", "")'
+                         for i, source in enumerate(sources))
+    states = f"({tagged})"
+    rank = (f"max(({states} == bool 3) * 4 + ({states} == bool 2) * 3"
+            f" + ({states} == bool 0) * 2 + ({states} == bool 1))")
+    return f"(({rank}) == bool 4) * 3 + (({rank}) == bool 3) * 2 + (({rank}) == bool 1)"
+
+
+def site_state() -> str:
+    """Each site's evidence once: the other observer's row for it is Unknown by design."""
+    return f'max by (k8s_cluster) ({selector("homelab:site_state")})'
+
+
+def house(domain: str) -> str:
+    """A site's own household domain state (house_records), scoped like an alert."""
+    return f'homelab:house_state{{domain="{domain}",{ALERT_SCOPE}}}'
