@@ -5010,7 +5010,7 @@
     "observation_budget_seconds": 180,
     "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
     "scope": "household aggregate only",
-    "missing": "Unknown \u2014 missing evidence",
+    "missing": "Unknown",
     "query_error": "Grafana query error; never a healthy empty response",
     "runbook": "docs/apps/home-assistant.md",
     "owner": "homelab operator"
@@ -5035,7 +5035,7 @@
     "observation_budget_seconds": 180,
     "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
     "scope": "household aggregate only",
-    "missing": "Unknown \u2014 missing evidence",
+    "missing": "Unknown",
     "query_error": "Grafana query error; never a healthy empty response",
     "runbook": "docs/apps/home-assistant.md",
     "owner": "homelab operator"
@@ -5060,7 +5060,7 @@
     "observation_budget_seconds": 180,
     "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
     "scope": "household aggregate only",
-    "missing": "Unknown \u2014 missing evidence",
+    "missing": "Unknown",
     "query_error": "Grafana query error; never a healthy empty response",
     "runbook": "docs/apps/home-assistant.md",
     "owner": "homelab operator"
@@ -5085,7 +5085,7 @@
     "observation_budget_seconds": 180,
     "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
     "scope": "household aggregate only",
-    "missing": "Unknown \u2014 missing evidence",
+    "missing": "Unknown",
     "query_error": "Grafana query error; never a healthy empty response",
     "runbook": "docs/apps/home-assistant.md",
     "owner": "homelab operator"
@@ -5110,7 +5110,7 @@
     "observation_budget_seconds": 180,
     "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
     "scope": "household aggregate only",
-    "missing": "Unknown \u2014 missing evidence",
+    "missing": "Unknown",
     "query_error": "Grafana query error; never a healthy empty response",
     "runbook": "docs/apps/home-assistant.md",
     "owner": "homelab operator"
@@ -5135,7 +5135,7 @@
     "observation_budget_seconds": 180,
     "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
     "scope": "household aggregate only",
-    "missing": "Unknown \u2014 missing evidence",
+    "missing": "Unknown",
     "query_error": "Grafana query error; never a healthy empty response",
     "runbook": "docs/apps/home-assistant.md",
     "owner": "homelab operator"

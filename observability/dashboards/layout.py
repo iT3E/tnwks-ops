@@ -45,7 +45,9 @@ def resource(board: Board) -> dict:
                .cursor_sync(model.DashboardCursorSync.CROSSHAIR)
                .time_settings(dashboard.TimeSettings().timezone("browser").from_val("now-6h")
                               .to("now").auto_refresh("1m")
-                              .auto_refresh_intervals(["1m", "5m", "15m", "30m", "1h"])))
+                              .auto_refresh_intervals(["1m", "5m", "15m", "30m", "1h"])
+                              # The household reads now, not a range: no picker to wander into.
+                              .hide_timepicker(board.kiosk)))
     datasource = "prometheus-house" if board.kiosk else "${datasource}"
     if not board.kiosk:
         builder.variable(dashboard.DatasourceVariable("datasource").label("Metrics")

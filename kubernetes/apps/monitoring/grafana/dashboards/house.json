@@ -144,13 +144,13 @@
                       }
                     ]
                   },
-                  "noValue": "Unknown — missing evidence"
+                  "noValue": "Unknown"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Upstream-approved aggregate Internet state. No observation or stale observation is Unknown."
+          "description": "Can the house reach the Internet right now? Grey (Unknown) means it can't tell right now, not that it's fine."
         }
       },
       "panel-2": {
@@ -257,13 +257,13 @@
                       }
                     ]
                   },
-                  "noValue": "Unknown — missing evidence"
+                  "noValue": "Unknown"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Aggregate Wi-Fi evidence. Working APs do not prove every client's experience; missing evidence remains Unknown."
+          "description": "Are the Wi-Fi access points up? A working access point doesn't promise every device is happy. Grey (Unknown) means it can't tell right now, not that it's fine."
         }
       },
       "panel-3": {
@@ -370,13 +370,13 @@
                       }
                     ]
                   },
-                  "noValue": "Unknown — missing evidence"
+                  "noValue": "Unknown"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Aggregate usable Home Assistant path; hardware-pinned integration limitations remain visible in operator diagnostics."
+          "description": "Is Home Assistant working, so lights, sensors and automations respond? Grey (Unknown) means it can't tell right now, not that it's fine."
         }
       },
       "panel-4": {
@@ -483,13 +483,13 @@
                       }
                     ]
                   },
-                  "noValue": "Unknown — missing evidence"
+                  "noValue": "Unknown"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Aggregate recording evidence. Missing persistence evidence cannot certify that cameras are recording."
+          "description": "Are the cameras recording? Grey (Unknown) means it can't tell right now, not that it's fine."
         }
       },
       "panel-5": {
@@ -596,13 +596,13 @@
                       }
                     ]
                   },
-                  "noValue": "Unknown — missing evidence"
+                  "noValue": "Unknown"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Aggregate app path evidence, with missing expected paths represented as Unknown."
+          "description": "Do the household apps open? Grey (Unknown) means it can't tell right now, not that it's fine."
         }
       },
       "panel-6": {
@@ -709,13 +709,13 @@
                       }
                     ]
                   },
-                  "noValue": "Unknown — missing evidence"
+                  "noValue": "Unknown"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Whether fresh approved aggregate evidence is available. This identity can query only the aggregate backend."
+          "description": "Is the house checking itself? If not, the other tiles can't be trusted. Grey (Unknown) means it can't tell right now, not that it's fine."
         }
       }
     },
@@ -727,77 +727,109 @@
             "kind": "TabsLayoutTab",
             "spec": {
               "layout": {
-                "kind": "AutoGridLayout",
+                "kind": "RowsLayout",
                 "spec": {
-                  "columnWidthMode": "narrow",
-                  "rowHeightMode": "short",
-                  "items": [
+                  "rows": [
                     {
-                      "kind": "AutoGridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "about"
-                        }
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-1"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-3"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-5"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-6"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 3,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
                       }
                     },
                     {
-                      "kind": "AutoGridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-1"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-2"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-3"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-4"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-5"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-6"
-                        }
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "about"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 1,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "About this view",
+                        "collapse": true
                       }
                     }
-                  ],
-                  "maxColumnCount": 3,
-                  "fillScreen": false
+                  ]
                 }
               },
               "title": "House"
@@ -824,7 +856,7 @@
         "30m",
         "1h"
       ],
-      "hideTimepicker": false,
+      "hideTimepicker": true,
       "fiscalYearStartMonth": 0,
       "timezone": "browser"
     },

@@ -170,9 +170,9 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-alerts / Alertmanager / Configuration loaded | `alertmanager_config_last_reload_successful` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-alerts / Alertmanager / Notifications sent | `alertmanager_notifications_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-alerts / Alertmanager / Failed notifications | `alertmanager_notifications_failed_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/external-monitoring.md) |
-| house / House / Internet | `homelab_house_state` (planned) | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/home-assistant.md) |
-| house / House / Wi-Fi | `homelab_house_state` (planned) | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/home-assistant.md) |
-| house / House / Home automation | `homelab_house_state` (planned) | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/home-assistant.md) |
-| house / House / Cameras | `homelab_house_state` (planned) | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/home-assistant.md) |
-| house / House / Apps | `homelab_house_state` (planned) | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/home-assistant.md) |
-| house / House / Monitoring | `homelab_house_state` (planned) | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/home-assistant.md) |
+| house / House / Internet | `homelab_house_state` (planned) | 180s | Unknown | [Runbook](../../docs/apps/home-assistant.md) |
+| house / House / Wi-Fi | `homelab_house_state` (planned) | 180s | Unknown | [Runbook](../../docs/apps/home-assistant.md) |
+| house / House / Home automation | `homelab_house_state` (planned) | 180s | Unknown | [Runbook](../../docs/apps/home-assistant.md) |
+| house / House / Cameras | `homelab_house_state` (planned) | 180s | Unknown | [Runbook](../../docs/apps/home-assistant.md) |
+| house / House / Apps | `homelab_house_state` (planned) | 180s | Unknown | [Runbook](../../docs/apps/home-assistant.md) |
+| house / House / Monitoring | `homelab_house_state` (planned) | 180s | Unknown | [Runbook](../../docs/apps/home-assistant.md) |

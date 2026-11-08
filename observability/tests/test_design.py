@@ -96,3 +96,16 @@ def test_operator_tabs_lead_with_the_answer():
             assert titles == sorted(titles, key=order.index), (board.uid, tab["spec"]["title"], titles)
             if "About this view" in titles:
                 assert rows[-1]["spec"]["title"] == "About this view" and rows[-1]["spec"]["collapse"] is True
+
+
+def test_house_is_a_wall_of_words():
+    """The household kiosk: every tile a state word on the wall grid, no time picker
+    to wander into, the About text folded away."""
+    house = next(board for board in catalogue() if board.kiosk)
+    spec = resource(house)["spec"]
+    assert spec["timeSettings"]["hideTimepicker"] is True
+    tiles = [panel for panels in house.tabs.values() for panel in panels]
+    assert tiles and all(panel.kind == "stat" and panel.unit == "state" and panel.role == "wall" for panel in tiles)
+    rows = spec["layout"]["spec"]["tabs"][0]["spec"]["layout"]["spec"]["rows"]
+    assert rows[0]["spec"]["layout"]["spec"]["maxColumnCount"] == SECTIONS["wall"][1]
+    assert rows[-1]["spec"]["title"] == "About this view" and rows[-1]["spec"]["collapse"] is True
