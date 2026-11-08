@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.45.0 - 2026-11-08
+
+### Changed
+
+* grafana: Apps, Hosts and Observability use fleet tables (probe and name state, recovery readiness, required replicas, collectors, the SLO tables); fleet rows are sorted by name so tables of the same things line up
+
 ## v2.44.1 - 2026-11-08
 
 ### Fixed
