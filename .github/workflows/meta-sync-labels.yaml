@@ -21,4 +21,4 @@ jobs:
     permissions:
       contents: read
       issues: write
-    uses: iT3E/github-workflows/.github/workflows/sync-labels.yaml@1068f74d6d3073cdaeb6cca44517bb90bebfdfea # feat/shared-actions (pre-release)
+    uses: iT3E/github-workflows/.github/workflows/sync-labels.yaml@272d2c317d9541e4ff9aead33c5f15049a6dea41 # feat/shared-actions (pre-release)

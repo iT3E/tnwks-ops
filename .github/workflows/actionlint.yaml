@@ -23,13 +23,13 @@ jobs:
     name: actionlint
     permissions:
       contents: read
-    uses: iT3E/github-workflows/.github/workflows/actionlint.yaml@1068f74d6d3073cdaeb6cca44517bb90bebfdfea # feat/shared-actions (pre-release)
+    uses: iT3E/github-workflows/.github/workflows/actionlint.yaml@272d2c317d9541e4ff9aead33c5f15049a6dea41 # feat/shared-actions (pre-release)
 
   zizmor:
     name: zizmor
     permissions:
       contents: read
-    uses: iT3E/github-workflows/.github/workflows/zizmor.yaml@1068f74d6d3073cdaeb6cca44517bb90bebfdfea # feat/shared-actions (pre-release)
+    uses: iT3E/github-workflows/.github/workflows/zizmor.yaml@272d2c317d9541e4ff9aead33c5f15049a6dea41 # feat/shared-actions (pre-release)
     with:
       runs-on: ubuntu-26.04
 
@@ -48,7 +48,7 @@ jobs:
       # Timeouts, runner labels, SHA pins, permissions, checkout credentials
       # and self-hosted jobs on PRs.
       - name: Workflow conventions
-        uses: iT3E/github-workflows/actions/workflow-conformance@1068f74d6d3073cdaeb6cca44517bb90bebfdfea # feat/shared-actions (pre-release)
+        uses: iT3E/github-workflows/actions/workflow-conformance@272d2c317d9541e4ff9aead33c5f15049a6dea41 # feat/shared-actions (pre-release)
 
       # This repo's own: ci.yaml covers every domain in .github/ci/domains.toml.
       - name: ci.yaml covers the domains
