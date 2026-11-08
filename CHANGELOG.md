@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.44.0 - 2026-11-08
+
+### Changed
+
+* grafana: Network and Data use fleet tables (path by hop, shared VIPs, CNPG role, backups, recovery point and restore time, one row each with a column per site); graph legends name the database; a cell with nothing at that site is a plain dash
+
 ## v2.43.0 - 2026-11-08
 
 ### Changed
