@@ -27,4 +27,4 @@ def board() -> Board:
                 p("ISP radio collector", metric("unms_collector_success"), "bool",
                   "Whether the UISP exporter reached its controller. This is collector evidence, not the radio link's own health."),
             ],
-        }, "Network")
+        }, "Network", sections=True)

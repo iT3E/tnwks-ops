@@ -13,8 +13,8 @@ from grafana_foundation_sdk.models import dashboardv2 as model
 
 from conventions import dashboard_link
 
-from .design import SCRAPE_COLUMNS, UNKNOWN_GREY
-from .model import Panel, value_header, value_mappings
+from .design import NEUTRAL, SCRAPE_COLUMNS, SITES, UNKNOWN_GREY, WHOLE, ZERO_BASED
+from .model import Panel, legend, value_header, value_mappings
 
 
 def visualization(panel: Panel, runbook: str | None = None):
@@ -67,7 +67,7 @@ def visualization(panel: Panel, runbook: str | None = None):
     if panel.kind == "stat":
         viz.reduce_options(common_builder.ReduceDataOptions().calcs(["lastNotNull"]).values(False))
         if panel.unit not in ("state", "coverage"):
-            viz.color_scheme(dashboard.FieldColor().mode(model.FieldColorModeId.FIXED).fixed_color("#5794f2"))
+            viz.color_scheme(dashboard.FieldColor().mode(model.FieldColorModeId.FIXED).fixed_color(NEUTRAL))
     if panel.kind == "timeseries":
         # The SDK leaves the legend off; without it a multi-series graph is unreadable.
         viz.legend(common_builder.VizLegendOptions().show_legend(True)
@@ -75,6 +75,18 @@ def visualization(panel: Panel, runbook: str | None = None):
                    .placement(common.LegendPlacement.BOTTOM).calcs(["lastNotNull", "max"]))
         viz.tooltip(common_builder.VizTooltipOptions().mode(common.TooltipDisplayMode.MULTI)
                     .sort(common.SortOrder.DESCENDING))
+        # Lines only where there's data: a point per sample turned a 1 degree
+        # step into a wall of markers.
+        viz.line_width(1).show_points(common.VisibilityMode.NEVER)
+        if panel.unit in ZERO_BASED:
+            viz.axis_soft_min(0)
+        if panel.unit in WHOLE:
+            viz.axis_soft_max(WHOLE[panel.unit])
+        if legend(panel) == "{{k8s_cluster}}":
+            # One series per site: each in its site's colour, on every board.
+            for site, colour in SITES.items():
+                viz.override_by_name(site, [model.DynamicConfigValue(
+                    id_val="color", value={"mode": "fixed", "fixedColor": colour})])
     if links:
         viz.data_links(links)
     return viz

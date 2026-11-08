@@ -82,4 +82,4 @@ def board() -> Board:
                   "State changes of each path hop (tunnel, router BGP, agents, mesh) per site in the range, sampled at each rule evaluation.",
                   "table", empty=NO_EVENTS),
             ],
-        }, "Network")
+        }, "Network", sections=True)

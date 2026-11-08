@@ -48,4 +48,4 @@ def board() -> Board:
                 p("Tunnel connections", metric("cloudflared_tunnel_ha_connections"), "short",
                   "Cloudflared connection evidence. This does not by itself certify the origin, identity provider or application content."),
             ],
-        }, "Apps")
+        }, "Apps", sections=True)

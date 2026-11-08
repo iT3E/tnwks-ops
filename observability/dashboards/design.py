@@ -49,3 +49,29 @@ NO_EVENTS = "None in range"
 SCRAPE_COLUMNS = ("__name__", "Time", "__replica__", "alertstate", "cluster", "container", "endpoint",
                   "instance", "job", "kind", "namespace", "observer_cluster", "pod", "prometheus",
                   "service")
+
+
+# Each site's colour, on graphs with one series per site. It never means good or
+# bad (that's STATE): blue and purple, both >= 3:1 on the dark and light themes.
+SITES = {"homelab-wsl": "#3d71d9", "homelab-wsl-02": "#a352cc"}
+
+# A number that isn't a state is the theme's text colour. A fixed blue on every
+# KPI read as a link, and a large coloured number reads as an alarm.
+NEUTRAL = "text"
+
+# A tab, top to bottom (notes: "Making Grafana beautiful", 3.4): the answer first,
+# then how it got here, then the detail. role -> (row title, or None for no
+# header; most columns; row height; collapsed).
+SECTIONS = {
+    "headline": (None, 4, "short", False),
+    "status": ("Status", 3, "standard", False),
+    "trends": ("Trends", 2, "standard", False),
+    "detail": ("Detail", 3, "standard", False),
+    "about": ("About this view", 1, "short", True),
+}
+
+# Units that count something nonnegative: their axis starts at zero, so a 1% wobble
+# isn't drawn as a cliff. Ratios also end at their whole.
+ZERO_BASED = {"short", "s", "ms", "bytes", "decbytes", "Bps", "bps", "binBps", "ops", "reqps",
+              "percentunit", "percent", "Mbits"}
+WHOLE = {"percentunit": 1, "percent": 100}

@@ -26,6 +26,8 @@ class Panel:
     column: str | None = ""
     # A bool's words for 1 and 0. A bare True/False never reaches the board.
     words: tuple[str, str] = ("Yes", "No")
+    # Its section in the tab (design.SECTIONS); empty means by kind: see role().
+    role: str = ""
 
 
 @dataclass(frozen=True)
@@ -38,11 +40,25 @@ class Board:
     tabs: dict[str, list[Panel]]
     folder: str
     kiosk: bool = False
+    # Lay tabs out in sections (headline, status, trends, detail) instead of one grid.
+    sections: bool = False
 
 
 def p(title: str, expr: str, unit: str, explanation: str, kind="timeseries", link=None,
-      empty="Unknown — missing evidence", column: str | None = "", words=("Yes", "No")):
-    return Panel(title, expr, unit, explanation, kind, link, empty=empty, column=column, words=words)
+      empty="Unknown — missing evidence", column: str | None = "", words=("Yes", "No"), role=""):
+    return Panel(title, expr, unit, explanation, kind, link, empty=empty, column=column, words=words, role=role)
+
+
+def role(panel: Panel) -> str:
+    """A stat is a headline; a table of states or yes/no answers is status; a graph
+    is a trend; any other table is detail."""
+    if panel.role:
+        return panel.role
+    if panel.kind == "stat":
+        return "headline"
+    if panel.kind == "table":
+        return "status" if panel.unit in ("state", "coverage", "bool") else "detail"
+    return "trends"
 
 
 def value_header(panel: Panel) -> str | None:

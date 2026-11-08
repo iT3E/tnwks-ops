@@ -23,4 +23,4 @@ def board() -> Board:
                 p("Recovery readiness", metric("homelab:recovery_state"), "state",
                   "Per warm app: could this site take it over (database, backup, restore drill, fence)? Not applicable where the app runs. Unknown until every prerequisite has evidence. This page does not promise all services fit or fail over.", "table"),
             ],
-        }, "Hosts")
+        }, "Hosts", sections=True)

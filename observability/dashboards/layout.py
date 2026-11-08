@@ -12,10 +12,31 @@ from grafana_foundation_sdk.models import prometheus as prom_model
 
 from conventions import OBSERVATION_BUDGET_SECONDS, runbook_path
 
-from .design import LABELS, SCRAPE_COLUMNS
-from .model import Board, legend, value_header
+from .design import LABELS, SCRAPE_COLUMNS, SECTIONS
+from .model import Board, legend, role, value_header
 from .queries import CLUSTERS
 from .recipes import visualization
+
+
+def rows(sections: dict[str, list[str]]):
+    """A tab as design.SECTIONS rows, each its own grid sized for what it holds.
+    A tab with one kind of content needs no section headers."""
+    filled = [name for name, keys in sections.items() if keys]
+    one = len([name for name in filled if name != "about"]) == 1
+    layout = dashboard.Rows()
+    for name in filled:
+        title, columns, height, collapsed = SECTIONS[name]
+        grid = (dashboard.AutoGrid().max_column_count(columns).column_width_mode("narrow")
+                .row_height_mode(height))
+        for key in sections[name]:
+            grid.with_item(key)
+        row = dashboard.Row().layout(grid).collapse(collapsed)
+        if title is None or (one and name != "about"):
+            row.hide_header(True)
+        else:
+            row.title(title)
+        layout.row(row)
+    return layout
 
 
 def resource(board: Board) -> dict:
@@ -48,8 +69,12 @@ def resource(board: Board) -> dict:
     for tab_name, panels in board.tabs.items():
         grid = (dashboard.AutoGrid().max_column_count(3).column_width_mode("narrow")
                 .row_height_mode("standard" if board.level == "l2" else "short"))
+        sections: dict[str, list[str]] = {name: [] for name in SECTIONS}
         if count == 0:
-            grid.with_item("about")
+            if board.sections:
+                sections["about"].append("about")
+            else:
+                grid.with_item("about")
         for panel in panels:
             count += 1
             key = f"panel-{count}"
@@ -83,7 +108,8 @@ def resource(board: Board) -> dict:
                        .visualization(visualization(panel, None if board.kiosk else runbook_path(board.domain, panel.title))))
             builder.element(key, element)
             grid.with_item(key)
-        tab_layout.tab(dashboard.Tab().title(tab_name).layout(grid))
+            sections[role(panel)].append(key)
+        tab_layout.tab(dashboard.Tab().title(tab_name).layout(rows(sections) if board.sections else grid))
     builder.layout(tab_layout)
     spec = json.loads(json.dumps(builder.build(), cls=JSONEncoder))
     return {"apiVersion": "dashboard.grafana.app/v2", "kind": "Dashboard",

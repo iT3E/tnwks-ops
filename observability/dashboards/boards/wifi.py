@@ -35,4 +35,4 @@ def board() -> Board:
                   "How long the site 2 host has been associated. A drop to zero is a reconnect or roam, which interrupts the site's tunnel and BGP sessions.",
                   "table"),
             ],
-        }, "Network")
+        }, "Network", sections=True)

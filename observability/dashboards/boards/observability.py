@@ -56,4 +56,4 @@ def board() -> Board:
                 p("Notification failures", f'sum by (k8s_cluster, integration) (rate({metric("alertmanager_notifications_failed_total")}[$__rate_interval]))', "ops",
                   "Delivery failures. No active alerts is reassuring only when local evaluation, routing and external heartbeat delivery are functioning."),
             ],
-        }, "Observability")
+        }, "Observability", sections=True)

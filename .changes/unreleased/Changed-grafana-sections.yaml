@@ -1,0 +1,4 @@
+---
+kind: Changed
+body: "grafana: operator tabs are laid out answer first (headline, status, trends, detail) with About folded away; site colours on per-site graphs, neutral KPI numbers, zero-based axes"
+time: 2026-11-08T00:32:29.000000000Z

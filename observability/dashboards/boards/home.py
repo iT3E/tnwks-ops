@@ -27,4 +27,4 @@ def board() -> Board:
                 p("MQTT connected clients", metric("homelab_mqtt_clients_connected"), "short",
                   "From the broker's retained $SYS/broker/clients/connected, read by each site's collector. A sudden drop is clients disconnecting, not the broker restarting."),
             ],
-        }, "Home")
+        }, "Home", sections=True)
