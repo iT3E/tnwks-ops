@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.60.0 - 2026-11-08
+
+### Added
+
+* Grafana grades each site's WSL VM next to its Windows host (WSL CPU, memory, disk space and I/O stall on the Hosts tile and Host state rows), adds a WSL VM tab to Host (CPU, memory, swap and disk against the .wslconfig limits, and pressure stall) and WSL VM CPU and memory graphs to Hosts & Capacity
+
 ## v2.59.0 - 2026-11-08
 
 ### Changed
