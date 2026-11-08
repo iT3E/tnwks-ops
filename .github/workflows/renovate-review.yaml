@@ -62,7 +62,7 @@ env:
 jobs:
   select:
     name: "Select"
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-slim
     timeout-minutes: 10
     if: >-
       (github.event_name == 'pull_request_target' &&

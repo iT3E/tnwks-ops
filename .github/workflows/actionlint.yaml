@@ -46,7 +46,7 @@ jobs:
 
   conformance:
     name: conformance
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     permissions:
       contents: read

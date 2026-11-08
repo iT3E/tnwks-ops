@@ -1,0 +1,3 @@
+kind: Changed
+body: 'CI: jobs that only call the GitHub API or run a few seconds of jq or Python (Changes, Build Success, conformance, Renovate review Select, compatibility notify) run on ubuntu-slim.'
+time: 2026-11-08T12:15:00.000000-08:00
