@@ -20,6 +20,9 @@ on:
     types: [opened, synchronize, reopened, edited]
   push:
     branches: ["main"]
+    # Release commits (CHANGELOG.md + .changes/ only) carry nothing new to
+    # check: their fragments were checked in the PR that added them.
+    paths-ignore: [CHANGELOG.md, .changes/**]
 
 permissions: {}
 
