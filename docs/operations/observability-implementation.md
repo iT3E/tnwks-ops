@@ -116,6 +116,40 @@ tuppr) carry a runbook instead; Telegram links those to the Alerts board for the
 site that raised them, at Grafana's address beside Alertmanager's external URL. `tests/browser_check.py` clicks both
 hops in a disposable Grafana and checks the target, time range and selection.
 
+### Design system
+
+The boards share one visual vocabulary, set in code and held by
+`tests/test_design.py`; nothing is styled in the UI. `observability/dashboards/design.py`
+has the tokens, `recipes.py` turns a declared panel into a visualization,
+`layout.py` places it.
+
+- **State is a word on a colour, and colour means state.** `STATE` maps 0–6 to
+  Unknown, Healthy, Degraded, Failed, Standby, Not applicable and Maintenance.
+  A stat colours its tile, a table its cell (Grafana's white or black text keeps
+  4.5:1 on each). The base colour is grey, so a value without a mapping can't
+  read as healthy. Other numbers are the neutral text colour. A series takes its
+  site's colour (`SITES`: 3:1 on both themes, none of them a state colour).
+- **Answer first.** A sectioned tab runs headline (stats), status (state
+  tables), trends (graphs) and detail (other tables), each a row with its own
+  auto grid (`SECTIONS`): five tiles across, tables two across (at three they cut
+  off columns), About folded at the end. A panel's section follows from its kind
+  and unit (`role()`); `role=` overrides it.
+- **Fleet tables.** `per_site="<label>"` turns a per-site table into one row per
+  value of the label and a column per site (`groupingToMatrix`, rows sorted,
+  sites in `CLUSTERS` order). The series must be unique by the label and site. A
+  pair with no series is an uncoloured dash, and a fleet table has no per-row
+  Diagnose link.
+- **Words, not codes.** Headers come from `LABELS` (a raw label name fails the
+  tests), booleans are words (`words=`), and a value's unit, mappings and links
+  sit on its own column only. A label a row doesn't have is a dash: Grafana would
+  print the panel's empty-state words in the cell.
+- **Zero is normal.** The `failures` unit is a per-site count over the selected
+  range, neutral at zero and red from one, where a graph drew a flat line on an
+  empty axis. Graphs of zero-based units start at 0; ratios stop at 100%.
+
+A new panel is a `p()` call. A new label needs a `LABELS` entry; a state metric
+takes `unit="state"`.
+
 ## What the state panels are based on
 
 | State | Source | Today |
@@ -522,6 +556,10 @@ Grafana's flag evaluation API that each one is on, and runs the browser check
 of every board, tab and reference. The stable fallback is deleting a line:
 nothing generated depends on a flag. Flags change between Grafana releases, so
 a version bump reruns the rehearsal before it ships.
+
+`grafana.visualDesignRefresh` was rendered both ways on 2026-11-07, Homelab and
+Sites in both themes: it changes the navigation's highlight and some spacing,
+not the boards, so it stays off.
 
 ## Following rollout work
 
