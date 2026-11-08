@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.59.0 - 2026-11-08
+
+### Changed
+
+* CI: one entrypoint, ci.yaml. bin/ci-changes picks the domains a change touches (.github/ci/domains.toml), each domain's workflow runs through workflow_call, and Build Success needs all of them, so Observability, Home Assistant, Ansible lint, security regressions and the workflow linters now gate merges too. A conformance check enforces timeouts, runner labels, SHA pins and ci.yaml coverage.
+
 ## v2.58.1 - 2026-11-08
 
 ### Fixed

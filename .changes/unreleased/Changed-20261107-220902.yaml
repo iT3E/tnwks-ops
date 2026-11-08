@@ -1,3 +1,0 @@
-kind: Changed
-body: "CI: one entrypoint, ci.yaml. bin/ci-changes picks the domains a change touches (.github/ci/domains.toml), each domain's workflow runs through workflow_call, and Build Success needs all of them, so Observability, Home Assistant, Ansible lint, security regressions and the workflow linters now gate merges too. A conformance check enforces timeouts, runner labels, SHA pins and ci.yaml coverage."
-time: 2026-11-07T22:09:02.917838004-08:00
