@@ -41,3 +41,34 @@ spec:
         memory: 128Mi
       limits:
         memory: 1Gi
+  postRenderers:
+    # KopiurBackupStale, minus the standby site. An app with a standby has a
+    # policy on both sites but a schedule only where it runs (<APP>_BACKUP_SUSPEND),
+    # so the standby's last success (from before a switchover) ages past 48h and
+    # the chart's rule fires on a policy that isn't meant to run. The collector's
+    # homelab_app_backup_scheduled is 0 for exactly those; with no collector the
+    # series is missing and the rule fires as before. The never-succeeded clause
+    # is the chart's, unchanged. The test op stops the patch from landing on
+    # another rule if a chart upgrade reorders them: the upgrade fails instead.
+    - kustomize:
+        patches:
+          - target:
+              group: monitoring.coreos.com
+              version: v1
+              kind: PrometheusRule
+              name: kopiur-controller
+            patch: |-
+              - op: test
+                path: /spec/groups/0/rules/1/alert
+                value: KopiurBackupStale
+              - op: replace
+                path: /spec/groups/0/rules/1/expr
+                value: |-
+                  (
+                    time() - kopiur_policy_last_backup_success_timestamp_seconds > 172800
+                    unless on (k8s_cluster, namespace, policy)
+                      (max by (k8s_cluster, namespace, policy) (homelab_app_backup_scheduled) == 0)
+                  ) or (
+                    label_replace(kopiur_snapshot_consecutive_failures, "policy", "$1", "name", "(.*)") > 0
+                    unless on (namespace, policy, repository) kopiur_policy_last_backup_success_timestamp_seconds
+                  )

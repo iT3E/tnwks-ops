@@ -173,7 +173,9 @@ kubectl -n networking get cronjob unifi-gdrive-copy
 
 Alerts: `PostgresBackupStale` (no base backup in 30 h, per CNPG cluster), `PostgresWALArchivingStalled` (archiving failing for 15 min),
 `LastFailedArchiveTime` (cnpg rules); kopiur's own PrometheusRule (failed or
-stale snapshots); `KubeJobFailed` for the credentials CronJob. The desktop
+stale snapshots; `KopiurBackupStale` is patched in the HelmRelease to skip a
+policy whose schedule is suspended on a standby site, from the collector's
+`homelab_app_backup_scheduled`); `KubeJobFailed` for the credentials CronJob. The desktop
 timers have no alert yet: check the journal.
 
 ## Restoring
