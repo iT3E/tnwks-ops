@@ -180,6 +180,18 @@
                 "overrides": [
                   {
                     "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
                       "id": "byName",
                       "options": "Site"
                     },
@@ -308,6 +320,18 @@
                   }
                 },
                 "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
                   {
                     "matcher": {
                       "id": "byType",
@@ -689,6 +713,18 @@
                 "overrides": [
                   {
                     "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
                       "id": "byName",
                       "options": "State"
                     },
@@ -956,6 +992,18 @@
                   {
                     "matcher": {
                       "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
                       "options": "number"
                     },
                     "properties": [
@@ -1100,6 +1148,18 @@
                   }
                 },
                 "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
                   {
                     "matcher": {
                       "id": "byType",
@@ -1425,6 +1485,18 @@
                 "overrides": [
                   {
                     "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
                       "id": "byName",
                       "options": "Weekly PVC drill age"
                     },
@@ -1566,6 +1638,18 @@
                   }
                 },
                 "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
                   {
                     "matcher": {
                       "id": "byType",
@@ -1779,6 +1863,18 @@
                   {
                     "matcher": {
                       "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
                       "options": "number"
                     },
                     "properties": [
@@ -1923,6 +2019,18 @@
                   }
                 },
                 "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
                   {
                     "matcher": {
                       "id": "byType",
@@ -2136,6 +2244,18 @@
                   {
                     "matcher": {
                       "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
                       "options": "number"
                     },
                     "properties": [
@@ -2304,6 +2424,18 @@
                   }
                 },
                 "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
                   {
                     "matcher": {
                       "id": "byName",

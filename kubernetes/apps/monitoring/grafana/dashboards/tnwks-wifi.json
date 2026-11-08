@@ -180,6 +180,18 @@
                 "overrides": [
                   {
                     "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
                       "id": "byName",
                       "options": "AP uptime"
                     },
@@ -349,6 +361,18 @@
                   }
                 },
                 "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
                   {
                     "matcher": {
                       "id": "byName",
@@ -805,6 +829,18 @@
                 "overrides": [
                   {
                     "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
                       "id": "byName",
                       "options": "Site host uplinks"
                     },
@@ -1133,6 +1169,18 @@
                   }
                 },
                 "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
                   {
                     "matcher": {
                       "id": "byName",

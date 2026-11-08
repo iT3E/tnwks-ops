@@ -38,6 +38,10 @@ def visualization(panel: Panel, runbook: str | None = None):
         # defaults they reach the label columns too (a RouterOS version read
         # "7.25 s", and every cell was an underlined link).
         viz.min_width(70)
+        # The panel's empty-state words are its noValue, and Grafana prints noValue in every
+        # empty cell too: a Flux row in Needs attention read "Nothing needs attention" under
+        # App. A label a row doesn't have is a dash.
+        viz.override_by_field_type("string", [model.DynamicConfigValue(id_val="noValue", value="—")])
         header = value_header(panel)
         properties = [model.DynamicConfigValue(id_val="unit", value=unit)]
         if value_mappings(panel):

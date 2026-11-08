@@ -1430,6 +1430,18 @@
                 "overrides": [
                   {
                     "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
                       "id": "byName",
                       "options": "State"
                     },
@@ -1651,6 +1663,18 @@
                   }
                 },
                 "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
                   {
                     "matcher": {
                       "id": "byName",
@@ -1990,6 +2014,18 @@
                 "overrides": [
                   {
                     "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
                       "id": "byName",
                       "options": "State"
                     },
@@ -2186,6 +2222,18 @@
                   }
                 },
                 "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
                   {
                     "matcher": {
                       "id": "byName",
@@ -2439,6 +2487,18 @@
                 "overrides": [
                   {
                     "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
                       "id": "byName",
                       "options": "Latest workload rollout"
                     },
@@ -2604,6 +2664,18 @@
                   }
                 },
                 "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
                   {
                     "matcher": {
                       "id": "byName",
