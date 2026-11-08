@@ -42,7 +42,11 @@ def test_operator_links_preserve_multiple_sites_and_time_without_exposing_operat
             spec = element["spec"]
             if spec["vizConfig"]["group"] == "text":
                 continue
-            links = spec["vizConfig"]["spec"]["fieldConfig"]["defaults"].get("links", [])
+            config = spec["vizConfig"]["spec"]["fieldConfig"]
+            # A table's links sit on its value (or site) column, not the defaults.
+            links = config["defaults"].get("links", []) + [
+                link for override in config.get("overrides", []) for prop in override["properties"]
+                if prop["id"] == "links" for link in prop["value"]]
             if board.kiosk:
                 assert not links
             else:

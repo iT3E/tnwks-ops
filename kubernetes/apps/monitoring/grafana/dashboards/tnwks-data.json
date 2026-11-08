@@ -94,20 +94,55 @@
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
-                        "service": true
+                        "service": true,
+                        "Value": true
                       },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "k8s_cluster": 0,
+                        "app": 1,
+                        "db_cluster": 1
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective"
                       }
                     }
                   }
@@ -134,14 +169,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -149,7 +176,26 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Site"
+                    },
+                    "properties": [
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -220,10 +266,46 @@
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "Role"
                       }
                     }
                   }
@@ -250,14 +332,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "bool",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -265,7 +339,48 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Role"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "1": {
+                                "text": "Replica",
+                                "index": 0
+                              },
+                              "0": {
+                                "text": "Primary",
+                                "index": 1
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -317,15 +432,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -393,15 +508,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -488,9 +603,45 @@
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
                         "Value": "State"
                       }
                     }
@@ -518,49 +669,15 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
-                  "mappings": [
-                    {
-                      "type": "value",
-                      "options": {
-                        "0": {
-                          "text": "Unknown",
-                          "color": "#6b6b6b"
-                        },
-                        "1": {
-                          "text": "Healthy",
-                          "color": "#1a7f37"
-                        },
-                        "2": {
-                          "text": "Degraded",
-                          "color": "#e5ac0e"
-                        },
-                        "3": {
-                          "text": "Failed",
-                          "color": "#c4302b"
-                        },
-                        "4": {
-                          "text": "Standby",
-                          "color": "#2f6bd0"
-                        },
-                        "5": {
-                          "text": "Not applicable",
-                          "color": "#6b6b6b"
-                        },
-                        "6": {
-                          "text": "Maintenance",
-                          "color": "#8a4fb5"
-                        }
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
                       }
-                    }
-                  ],
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                      "targetBlank": true
-                    }
-                  ],
+                    ]
+                  },
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -576,11 +693,70 @@
                     },
                     "properties": [
                       {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "0": {
+                                "text": "Unknown",
+                                "color": "#6b6b6b",
+                                "index": 0
+                              },
+                              "1": {
+                                "text": "Healthy",
+                                "color": "#1a7f37",
+                                "index": 1
+                              },
+                              "2": {
+                                "text": "Degraded",
+                                "color": "#e5ac0e",
+                                "index": 2
+                              },
+                              "3": {
+                                "text": "Failed",
+                                "color": "#c4302b",
+                                "index": 3
+                              },
+                              "4": {
+                                "text": "Standby",
+                                "color": "#2f6bd0",
+                                "index": 4
+                              },
+                              "5": {
+                                "text": "Not applicable",
+                                "color": "#6b6b6b",
+                                "index": 5
+                              },
+                              "6": {
+                                "text": "Maintenance",
+                                "color": "#8a4fb5",
+                                "index": 6
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
                         "id": "custom.cellOptions",
                         "value": {
                           "type": "color-background",
                           "mode": "basic"
                         }
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+                            "targetBlank": true
+                          }
+                        ]
                       }
                     ]
                   }
@@ -636,15 +812,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -724,17 +900,52 @@
                         "service": true
                       },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "k8s_cluster": 0,
+                        "app": 1,
+                        "db_cluster": 1
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "Base backup age"
                       }
                     }
                   }
@@ -761,14 +972,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "s",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -776,7 +979,30 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Base backup age"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -847,9 +1073,45 @@
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
                         "Value": "State"
                       }
                     }
@@ -877,49 +1139,15 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
-                  "mappings": [
-                    {
-                      "type": "value",
-                      "options": {
-                        "0": {
-                          "text": "Unknown",
-                          "color": "#6b6b6b"
-                        },
-                        "1": {
-                          "text": "Healthy",
-                          "color": "#1a7f37"
-                        },
-                        "2": {
-                          "text": "Degraded",
-                          "color": "#e5ac0e"
-                        },
-                        "3": {
-                          "text": "Failed",
-                          "color": "#c4302b"
-                        },
-                        "4": {
-                          "text": "Standby",
-                          "color": "#2f6bd0"
-                        },
-                        "5": {
-                          "text": "Not applicable",
-                          "color": "#6b6b6b"
-                        },
-                        "6": {
-                          "text": "Maintenance",
-                          "color": "#8a4fb5"
-                        }
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
                       }
-                    }
-                  ],
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                      "targetBlank": true
-                    }
-                  ],
+                    ]
+                  },
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -935,11 +1163,70 @@
                     },
                     "properties": [
                       {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "0": {
+                                "text": "Unknown",
+                                "color": "#6b6b6b",
+                                "index": 0
+                              },
+                              "1": {
+                                "text": "Healthy",
+                                "color": "#1a7f37",
+                                "index": 1
+                              },
+                              "2": {
+                                "text": "Degraded",
+                                "color": "#e5ac0e",
+                                "index": 2
+                              },
+                              "3": {
+                                "text": "Failed",
+                                "color": "#c4302b",
+                                "index": 3
+                              },
+                              "4": {
+                                "text": "Standby",
+                                "color": "#2f6bd0",
+                                "index": 4
+                              },
+                              "5": {
+                                "text": "Not applicable",
+                                "color": "#6b6b6b",
+                                "index": 5
+                              },
+                              "6": {
+                                "text": "Maintenance",
+                                "color": "#8a4fb5",
+                                "index": 6
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
                         "id": "custom.cellOptions",
                         "value": {
                           "type": "color-background",
                           "mode": "basic"
                         }
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+                            "targetBlank": true
+                          }
+                        ]
                       }
                     ]
                   }
@@ -995,15 +1282,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -1083,17 +1370,52 @@
                         "service": true
                       },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "k8s_cluster": 0,
+                        "app": 1,
+                        "db_cluster": 1
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "Weekly PVC drill age"
                       }
                     }
                   }
@@ -1120,14 +1442,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "s",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -1135,7 +1449,30 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Weekly PVC drill age"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -1206,9 +1543,45 @@
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
                         "Value": "State"
                       }
                     }
@@ -1236,49 +1609,15 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
-                  "mappings": [
-                    {
-                      "type": "value",
-                      "options": {
-                        "0": {
-                          "text": "Unknown",
-                          "color": "#6b6b6b"
-                        },
-                        "1": {
-                          "text": "Healthy",
-                          "color": "#1a7f37"
-                        },
-                        "2": {
-                          "text": "Degraded",
-                          "color": "#e5ac0e"
-                        },
-                        "3": {
-                          "text": "Failed",
-                          "color": "#c4302b"
-                        },
-                        "4": {
-                          "text": "Standby",
-                          "color": "#2f6bd0"
-                        },
-                        "5": {
-                          "text": "Not applicable",
-                          "color": "#6b6b6b"
-                        },
-                        "6": {
-                          "text": "Maintenance",
-                          "color": "#8a4fb5"
-                        }
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
                       }
-                    }
-                  ],
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                      "targetBlank": true
-                    }
-                  ],
+                    ]
+                  },
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -1294,11 +1633,70 @@
                     },
                     "properties": [
                       {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "0": {
+                                "text": "Unknown",
+                                "color": "#6b6b6b",
+                                "index": 0
+                              },
+                              "1": {
+                                "text": "Healthy",
+                                "color": "#1a7f37",
+                                "index": 1
+                              },
+                              "2": {
+                                "text": "Degraded",
+                                "color": "#e5ac0e",
+                                "index": 2
+                              },
+                              "3": {
+                                "text": "Failed",
+                                "color": "#c4302b",
+                                "index": 3
+                              },
+                              "4": {
+                                "text": "Standby",
+                                "color": "#2f6bd0",
+                                "index": 4
+                              },
+                              "5": {
+                                "text": "Not applicable",
+                                "color": "#6b6b6b",
+                                "index": 5
+                              },
+                              "6": {
+                                "text": "Maintenance",
+                                "color": "#8a4fb5",
+                                "index": 6
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
                         "id": "custom.cellOptions",
                         "value": {
                           "type": "color-background",
                           "mode": "basic"
                         }
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+                            "targetBlank": true
+                          }
+                        ]
                       }
                     ]
                   }
@@ -1366,17 +1764,52 @@
                         "service": true
                       },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "k8s_cluster": 0,
+                        "app": 1,
+                        "db_cluster": 1
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "Backup age by app"
                       }
                     }
                   }
@@ -1403,14 +1836,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "s",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -1418,7 +1843,30 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Backup age by app"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -1489,9 +1937,45 @@
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
                         "Value": "State"
                       }
                     }
@@ -1519,49 +2003,15 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
-                  "mappings": [
-                    {
-                      "type": "value",
-                      "options": {
-                        "0": {
-                          "text": "Unknown",
-                          "color": "#6b6b6b"
-                        },
-                        "1": {
-                          "text": "Healthy",
-                          "color": "#1a7f37"
-                        },
-                        "2": {
-                          "text": "Degraded",
-                          "color": "#e5ac0e"
-                        },
-                        "3": {
-                          "text": "Failed",
-                          "color": "#c4302b"
-                        },
-                        "4": {
-                          "text": "Standby",
-                          "color": "#2f6bd0"
-                        },
-                        "5": {
-                          "text": "Not applicable",
-                          "color": "#6b6b6b"
-                        },
-                        "6": {
-                          "text": "Maintenance",
-                          "color": "#8a4fb5"
-                        }
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
                       }
-                    }
-                  ],
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                      "targetBlank": true
-                    }
-                  ],
+                    ]
+                  },
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -1577,11 +2027,70 @@
                     },
                     "properties": [
                       {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "0": {
+                                "text": "Unknown",
+                                "color": "#6b6b6b",
+                                "index": 0
+                              },
+                              "1": {
+                                "text": "Healthy",
+                                "color": "#1a7f37",
+                                "index": 1
+                              },
+                              "2": {
+                                "text": "Degraded",
+                                "color": "#e5ac0e",
+                                "index": 2
+                              },
+                              "3": {
+                                "text": "Failed",
+                                "color": "#c4302b",
+                                "index": 3
+                              },
+                              "4": {
+                                "text": "Standby",
+                                "color": "#2f6bd0",
+                                "index": 4
+                              },
+                              "5": {
+                                "text": "Not applicable",
+                                "color": "#6b6b6b",
+                                "index": 5
+                              },
+                              "6": {
+                                "text": "Maintenance",
+                                "color": "#8a4fb5",
+                                "index": 6
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
                         "id": "custom.cellOptions",
                         "value": {
                           "type": "color-background",
                           "mode": "basic"
                         }
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+                            "targetBlank": true
+                          }
+                        ]
                       }
                     ]
                   }
@@ -1649,17 +2158,52 @@
                         "service": true
                       },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "k8s_cluster": 0,
+                        "app": 1,
+                        "db_cluster": 1
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "Last drill duration"
                       }
                     }
                   }
@@ -1686,14 +2230,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "s",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -1701,7 +2237,30 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Last drill duration"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -1765,17 +2324,52 @@
                         "service": true
                       },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "k8s_cluster": 0,
+                        "app": 1,
+                        "db_cluster": 1
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "PVCs without a backup schedule"
                       }
                     }
                   }
@@ -1802,14 +2396,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Every PVC is scheduled on a site",
                   "custom": {
                     "align": "auto",
@@ -1817,7 +2403,30 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "PVCs without a backup schedule"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/backups.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -1869,15 +2478,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {

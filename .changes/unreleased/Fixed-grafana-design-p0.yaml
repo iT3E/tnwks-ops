@@ -1,0 +1,4 @@
+---
+kind: Fixed
+body: "grafana: a state tile with no answer is grey, not green; tables show words and named columns, with units and links on the value column only; graphs show their legends"
+time: 2026-11-08T00:13:51.000000000Z
