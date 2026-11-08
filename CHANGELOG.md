@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.41.0 - 2026-11-08
+
+### Changed
+
+* Add an Energy distribution view with readable house-to-appliance branches, live power, daily recorded energy and separate solar production.
+
 ## v2.40.0 - 2026-11-08
 
 ### Changed
