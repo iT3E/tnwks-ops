@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.66.1 - 2026-11-08
+
+### Fixed
+
+* CI: the Home Assistant check caches the installed custom integrations by pinned version, so GitHub archive and release outages no longer fail it unless a version changed.
+
 ## v2.66.0 - 2026-11-08
 
 ### Changed

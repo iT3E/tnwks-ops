@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'CI: the Home Assistant check caches the installed custom integrations by pinned version, so GitHub archive and release outages no longer fail it unless a version changed.'
-time: 2026-11-08T12:30:00.000000-08:00
