@@ -1,0 +1,3 @@
+kind: Changed
+body: 'CI: CodeQL moves to an advanced-setup workflow that scans Python and the workflows on changes that touch them, and weekly on main, instead of seven languages on every PR and push.'
+time: 2026-11-07T21:38:04.478917553-08:00
