@@ -166,8 +166,9 @@ list is the good case ("None below -70 dBm"), not missing evidence.
 
 Homelab's Hosts tile is the worst of `homelab:host_state` (`host_records()` in
 `observability/rules.py`): each Windows host's resources graded from
-`homelab:host_usage`, the measured value. Each site scrapes only its own host, so
-these are per site with no observer duplicates. A host whose exporter is down
+`homelab:host_usage`, the measured value. Site 1's Prometheus scrapes both hosts'
+exporters (measured 2026-11-08), so it alone observes them; `IDENTITY` reduces a
+second observer's copy like the other states. A host whose exporter is down
 reads Unknown on every resource.
 
 | Resource | Measured | Degraded | Failed |

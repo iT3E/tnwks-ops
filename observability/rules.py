@@ -85,7 +85,8 @@ def bands(value, degraded, failed, higher_is_better=True):
 def host_records():
     """Each Windows host's resources as states (Homelab's Hosts tile, L1): the USE
     signals that bite on these hosts, banded. A host whose exporter is down has
-    Unknown (0) rows; each site scrapes only its own host."""
+    Unknown (0) rows. Site 1's Prometheus scrapes both hosts today; a second
+    observer would be reduced like the other states (IDENTITY)."""
     by = "k8s_cluster, instance"
     volumes = 'volume!~"HarddiskVolume.+"'
     expected = f'max by ({by}) (up{{job="windows-exporter"}})'

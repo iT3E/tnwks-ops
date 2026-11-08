@@ -34,6 +34,7 @@ IDENTITY = {
     "homelab:other_database_state": ("workload", "engine"),
     "homelab:app_rto_state": ("app",),
     "homelab:app_backup_age_seconds": ("app",),
+    "homelab:host_state": ("instance", "resource"),
     "homelab_expected_database_info": ("namespace", "db_cluster", "app"),
     "homelab_expected_workload_info": ("app", "tier", "kind", "workload"),
 }
