@@ -1,0 +1,3 @@
+kind: Fixed
+body: Read Pacific Power statement dates from the billing account-info endpoint and report the failed setup stage without exposing account data.
+time: 2026-11-07T21:59:23.22417745-08:00
