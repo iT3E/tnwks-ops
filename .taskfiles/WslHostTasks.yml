@@ -42,8 +42,8 @@ tasks:
         msg: "no {{.WINDOWS_SSH_KEY}}; run task wsl-host:sshd first"
       - sh: test -d "{{.HOME}}/.ansible/collections-tnwks-ops/ansible_collections/ansible/windows"
         msg: "collections missing; run task ansible:init first"
-      - sh: command -v x86_64-w64-mingw32-gcc && command -v 7z && command -v unzip
-        msg: "the Coral detector role builds on the controller: sudo apt-get install -y gcc-mingw-w64-x86-64 p7zip-full unzip"
+      - sh: docker info >/dev/null 2>&1 && command -v 7z && command -v unzip
+        msg: "the Coral detector role builds on the controller: it needs Docker (the shim toolchain image) and sudo apt-get install -y p7zip-full unzip"
 
   windows-apply:
     desc: Apply the Windows host playbook (Coral detector service, monitoring agents, ...)

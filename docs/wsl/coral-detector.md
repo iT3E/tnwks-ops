@@ -95,9 +95,12 @@ frigate pod (worker-2)                 Windows host DESKTOP-HKE05KI
   libusb 1.0.30 (VS2022/MS64), installed next to it as `libusbreal.dll`
   (1.0.30 also cut the delegate load from 15s to 2s against the bundled
   1.0.26). `gen-def.sh` writes the export list from the real DLL;
-  `build.sh` builds it with mingw-w64 on the controller. The build is
-  reproducible (no PE timestamp, fixed image base), so the role only copies
-  a new shim when its source changes. After a libusb bump, regenerate the
+  `build.sh` builds it with mingw-w64 inside a pinned toolchain image
+  (`shim/Dockerfile`: digest-pinned Ubuntu 24.04, packages from a fixed
+  Ubuntu snapshot), so CI and the workstation build the same bytes whatever
+  their own OS ships. The build is reproducible (no PE timestamp, fixed
+  image base), so the role only copies a new shim when its source or
+  toolchain changes. After a libusb bump, regenerate the
   `.def` and update `coral_detector_libusb_*` in the role defaults.
 
 ## Several Corals
@@ -138,8 +141,8 @@ event-log source removed.
 
 ## Apply, check, verify
 
-Prerequisites on the controller (WSL): `uv`, `sudo apt-get install -y
-gcc-mingw-w64-x86-64 p7zip-full unzip`, and the sshd bootstrap from
+Prerequisites on the controller (WSL): `uv`, Docker, `sudo apt-get install -y
+p7zip-full unzip`, and the sshd bootstrap from
 [windows-ansible.md](windows-ansible.md).
 
 ```bash

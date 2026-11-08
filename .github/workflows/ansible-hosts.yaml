@@ -51,10 +51,7 @@ jobs:
         github.event.pull_request.head.repo.full_name == github.repository &&
         github.event.pull_request.user.login == 'iT3E')
     name: plan
-    # Stays on 24.04: the Coral libusb shim's pinned hash is what 24.04's
-    # mingw produces (26.04 builds a different binary). Moves once the shim
-    # builds in a digest-pinned container.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -117,14 +114,13 @@ jobs:
           echo "$sites" | jq .
           echo "sites=$sites" >> "$GITHUB_OUTPUT"
 
-      # The controller play builds the libusb shim with mingw-w64 and unpacks
-      # the pinned downloads. Done here, where apt works; the runner gets the
-      # result and the play finds everything in place (creates:, checksums).
-      # The controller cache (the Coral libusb shim built with mingw-w64, the
-      # pinned Windows downloads) only changes with the three roles that fill
-      # it and the play. Restored from the Actions cache, a run needs neither
-      # the 115 MB of compilers nor GitHub's Ubuntu mirror, whose downloads
-      # stalled whole runs on 2026-11-06.
+      # The controller play builds the libusb shim (in its pinned toolchain
+      # image, shim/Dockerfile) and unpacks the pinned downloads. Done here,
+      # where Docker and apt work; the runner gets the result and the play
+      # finds everything in place (creates:, checksums). The controller cache
+      # only changes with the three roles that fill it and the play. Restored
+      # from the Actions cache, a run skips the toolchain image and GitHub's
+      # Ubuntu mirror, whose downloads stalled whole runs on 2026-11-06.
       - name: Restore the controller cache
         id: controller-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -138,10 +134,12 @@ jobs:
         # archive.ubuntu.com instead of GitHub's Azure mirror.
         timeout-minutes: 10
         run: |
+          # The runner image usually has both already.
+          if command -v 7z && command -v unzip; then exit 0; fi
           apt_opts=(-o Acquire::http::Timeout=30 -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60)
           for attempt in 1 2 3; do
             if sudo timeout 150 apt-get "${apt_opts[@]}" install -y --no-install-recommends \
-                gcc-mingw-w64-x86-64 p7zip-full unzip; then
+                p7zip-full unzip; then
               exit 0
             fi
             echo "::warning::apt-get install attempt ${attempt} failed or stalled; switching to archive.ubuntu.com"

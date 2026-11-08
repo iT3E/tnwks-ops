@@ -69,7 +69,7 @@ Keep the service's restricted bind address, firewall, unprivileged account,
 and disabled model upload. A security fix that needs a newer runtime or
 another backend takes priority over keeping the old stack.
 
-## Why the Ubuntu runner PR is still blocked
+## The Coral shim's pinned toolchain
 
 Frigate reaches the Windows service over ZMQ. The service then reaches the
 USB Coral through `tflite_runtime`, `edgetpu.dll`, and the libusb shim; the
@@ -77,11 +77,14 @@ network hop does not remove the shim. Its installed checksum matches
 `coral_detector_shim_sha256`. The shim avoids UsbDk, which conflicts with
 the Z-Stick's usbipd path; see [Coral detector](../wsl/coral-detector.md).
 
-The controller play still builds that shim with the runner's MinGW
-toolchain and asserts its pinned output hash. Ubuntu 26.04 produces
-different bytes from 24.04, so #1710 requires a reproducible pinned build
-toolchain or a coordinated toolchain migration. Deleting the shim or only
-changing its expected hash would break that contract.
+The controller play builds that shim inside a pinned toolchain image
+(`shim/Dockerfile`: digest-pinned Ubuntu 24.04, mingw-w64 from a fixed
+Ubuntu snapshot) and asserts its pinned output hash. The runner's own OS no
+longer matters: Ubuntu 26.04's MinGW would produce different bytes, but it
+isn't used. A toolchain move (new snapshot or Ubuntu release) changes the
+DLL, so it is a deliberate PR that re-pins the hash and is verified on the
+detector. Deleting the shim or only changing its expected hash would break
+that contract.
 
 References: [LinuxServer's UniFi database support](https://docs.linuxserver.io/images/docker-unifi-network-application/#setting-up-your-external-database),
 [NumPy's ABI change](https://numpy.org/doc/stable/release/2.0.0-notes.html),

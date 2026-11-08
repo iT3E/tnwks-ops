@@ -143,9 +143,10 @@ Two workflows:
 
 How a run goes:
 
-1. **plan** (`ubuntu-24.04`, no secrets): reads the `site_*` groups and their
+1. **plan** (`ubuntu-26.04`, no secrets): reads the `site_*` groups and their
    `ci_runner` from the inventory, one matrix entry per site. It runs the
-   controller play (downloads, the Coral libusb shim built with mingw-w64)
+   controller play (downloads, the Coral libusb shim built in its pinned
+   toolchain image)
    and uploads `~/.cache/tnwks-ops` as an artifact, so the runner needs no
    compiler.
 2. **run** (`runs-on: <ci_runner>`, one at a time per site, sites side by

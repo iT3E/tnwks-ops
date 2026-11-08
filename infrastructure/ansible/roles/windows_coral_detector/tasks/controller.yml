@@ -2,7 +2,8 @@
 # Controller side (localhost, runs for real in check mode too: it only fills
 # the local cache). Downloads every pinned artifact, checks its SHA-256,
 # extracts what the host needs and builds the libusb shim. Needs unzip, 7z
-# (p7zip-full) and mingw-w64 (gcc-mingw-w64-x86-64) on the controller.
+# (p7zip-full) and Docker on the controller (the shim's toolchain is an
+# image, shim/Dockerfile).
 
 - name: Cache directories
   ansible.builtin.file:
@@ -98,6 +99,6 @@
     that: coral_detector_shim_stat.stat.checksum == coral_detector_shim_sha256
     fail_msg: >-
       libusb shim sha256 {{ coral_detector_shim_stat.stat.checksum }}, expected
-      {{ coral_detector_shim_sha256 }}: a different mingw-w64 or changed shim
-      source. Update coral_detector_shim_sha256 only for a source change.
+      {{ coral_detector_shim_sha256 }}: a changed shim source or toolchain
+      (shim/Dockerfile). Update coral_detector_shim_sha256 with that change.
     quiet: true
