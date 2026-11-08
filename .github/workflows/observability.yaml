@@ -63,3 +63,12 @@ jobs:
         run: |
           uv run --project observability playwright install --with-deps chromium
           uv run --project observability python observability/rehearse_grafana.py --browser --renderer
+      - name: Fixture screenshots
+        # Synthetic fixture data only; live screenshots (observability/screenshot.py) stay local.
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: grafana-fixture-screenshots
+          path: observability/.cache/browser
+          if-no-files-found: ignore
+          retention-days: 14

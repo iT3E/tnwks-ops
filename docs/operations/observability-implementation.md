@@ -148,7 +148,16 @@ has the tokens, `recipes.py` turns a declared panel into a visualization,
   empty axis. Graphs of zero-based units start at 0; ratios stop at 100%.
 
 A new panel is a `p()` call. A new label needs a `LABELS` entry; a state metric
-takes `unit="state"`.
+takes `unit="state"`. A new site is an entry in `CLUSTERS` and a colour in `SITES`
+(`test_a_third_site_is_one_more_entry`).
+
+To look at a change before it merges, `observability/screenshot.py --out <dir>`
+screenshots every board tab (dark at 1600 px, Homelab light, House at 412 px)
+from this checkout in a throwaway pinned Grafana, read-only against site 1's
+Thanos Query (`--boards` to pick, `--toggles` to try a feature flag). Those
+show real access point, camera and host names, so they stay off GitHub and it
+refuses an output directory inside the repo. CI's browser rehearsal keeps its
+fixture screenshots as the `grafana-fixture-screenshots` artifact.
 
 ## What the state panels are based on
 

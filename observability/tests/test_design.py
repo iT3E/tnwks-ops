@@ -129,3 +129,25 @@ def test_a_missing_label_is_a_dash_not_the_empty_state():
         overrides = spec["vizConfig"]["spec"]["fieldConfig"]["overrides"]
         assert {"matcher": {"id": "byType", "options": "string"},
                 "properties": [{"id": "noValue", "value": "—"}]} in overrides, panel.title
+
+
+def test_a_third_site_is_one_more_entry(monkeypatch):
+    """Adding a site is CLUSTERS and its SITES colour: the cluster picker, the fleet tables'
+    columns and the per-site graph colours follow without touching a board."""
+    from dashboards import layout, recipes
+
+    third = "homelab-site-3"
+    monkeypatch.setattr(layout, "CLUSTERS", (*CLUSTERS, third))
+    monkeypatch.setattr(recipes, "SITES", SITES | {third: "#c2620a"})
+    board = next(b for b in catalogue() if b.uid == "tnwks-sites")
+    spec = resource(board)["spec"]
+    cluster = next(v for v in spec["variables"] if v["spec"]["name"] == "cluster")
+    assert cluster["spec"]["query"].split(",")[-1] == third
+    elements = [e["spec"] for e in spec["elements"].values() if e["kind"] == "Panel"]
+    fleet = next(e for e in elements if e["title"] == "Workload state")
+    order = fleet["data"]["spec"]["transformations"][1]["spec"]["options"]["indexByName"]
+    assert order[third] == len(CLUSTERS) + 1
+    graph = next(e for e in elements if e["title"] == "Ready nodes")
+    colours = {o["matcher"]["options"]: o["properties"][0]["value"]["fixedColor"]
+               for o in graph["vizConfig"]["spec"]["fieldConfig"]["overrides"]}
+    assert colours[third] == "#c2620a"
