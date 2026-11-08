@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.56.0 - 2026-11-08
+
+### Changed
+
+* CI: same-repo Renovate PRs get Terraform plans instead of waiting for approval; Terraform providers, modules and the CLI wait 3 days after release before Renovate opens a PR.
+
 ## v2.55.0 - 2026-11-08
 
 ### Changed
