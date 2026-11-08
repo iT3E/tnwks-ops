@@ -75,8 +75,23 @@ spec:
             port: *port
     ingress:
       internal:
+        # Keep the original Ingress name (nameOverride equal to the release
+        # name leaves it bare). With a second ingress the chart would rename
+        # this one to changedetection-internal, and Helm creates before it
+        # deletes, so ingress-nginx's webhook rejects the duplicate host+path.
+        nameOverride: changedetection
         className: nginx-internal
         annotations:
+          # tnwks-auth login via oauth2-proxy, admins only. changedetection has
+          # no login of its own enabled, so this is the only gate on the UI.
+          # OAUTH2_PROXY_URL: in-cluster on homelab-wsl; homelab-wsl-02 asks
+          # homelab-wsl's over the LAN (it has no oauth2-proxy of its own).
+          nginx.ingress.kubernetes.io/auth-url: "${OAUTH2_PROXY_URL:=http://oauth2-proxy.auth.svc.cluster.local:80}/oauth2/auth?allowed_groups=admins"
+          nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.${INTERNAL_DOMAIN}/oauth2/start?rd=$scheme://$host$escaped_request_uri"
+          # Cognito-backed sessions are split across multiple cookies; the
+          # subrequest header chunk overflows nginx's default 4k buffer.
+          nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+          nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
           # Through the Service's ClusterIP, not the pod endpoints: on the site
           # where the app is at 0, only Cilium knows the other site's backends.
           nginx.ingress.kubernetes.io/service-upstream: "true"
@@ -88,3 +103,27 @@ spec:
                 service:
                   identifier: app
                   port: http
+        # The controller's default cert (*.internal.tnwks.us) covers the
+        # host; listing it makes nginx redirect plain http to https.
+        tls:
+          - hosts:
+              - *internalHost
+      # /api/v1 skips oauth2-proxy: the REST API (watch management by scripts and
+      # Ori) can't do a browser login. changedetection checks its own
+      # x-api-key on every call there ("API access token security check"
+      # on in Settings > API) and answers 403 without it.
+      api:
+        className: nginx-internal
+        annotations:
+          nginx.ingress.kubernetes.io/service-upstream: "true"
+        hosts:
+          - host: *internalHost
+            paths:
+              - path: /api/v1
+                pathType: Prefix
+                service:
+                  identifier: app
+                  port: http
+        tls:
+          - hosts:
+              - *internalHost
