@@ -36,7 +36,17 @@ def test_table_values_are_named_and_formatted_on_their_own_column():
         assert "unit" not in config["defaults"], (panel.title, "a unit on the defaults reaches label columns")
         assert "links" not in config["defaults"], (panel.title, "links on the defaults underline every cell")
         assert "mappings" not in config["defaults"], panel.title
-        organize = spec["data"]["spec"]["transformations"][0]["spec"]["options"]
+        transformations = spec["data"]["spec"]["transformations"]
+        if panel.per_site:
+            # A fleet table: rows by the label, a column per site, the row header named.
+            assert [t["group"] for t in transformations] == ["groupingToMatrix", "organize"], panel.title
+            matrix, organize = (t["spec"] for t in transformations)
+            assert matrix["options"]["columnField"] == "k8s_cluster", panel.title
+            assert organize["options"]["renameByName"] == {
+                f"{panel.per_site}\\k8s_cluster": LABELS[panel.per_site]}, panel.title
+            assert [o["matcher"] for o in config["overrides"]] == [{"id": "byType", "options": "number"}], panel.title
+            continue
+        organize = transformations[0]["spec"]["options"]
         header = value_header(panel)
         if header is None:
             assert organize["excludeByName"]["Value"] is True, panel.title

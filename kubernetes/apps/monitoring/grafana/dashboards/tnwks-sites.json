@@ -912,75 +912,28 @@
               "transformations": [
                 {
                   "kind": "Transformation",
+                  "group": "groupingToMatrix",
+                  "spec": {
+                    "options": {
+                      "rowField": "app",
+                      "columnField": "k8s_cluster",
+                      "valueField": "Value",
+                      "emptyValue": "empty"
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
                   "group": "organize",
                   "spec": {
                     "options": {
-                      "excludeByName": {
-                        "__name__": true,
-                        "Time": true,
-                        "__replica__": true,
-                        "alertstate": true,
-                        "cluster": true,
-                        "container": true,
-                        "endpoint": true,
-                        "instance": true,
-                        "job": true,
-                        "kind": true,
-                        "namespace": true,
-                        "observer_cluster": true,
-                        "pod": true,
-                        "prometheus": true,
-                        "service": true
-                      },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "app\\k8s_cluster": 0,
+                        "homelab-wsl": 1,
+                        "homelab-wsl-02": 2
                       },
                       "renameByName": {
-                        "k8s_cluster": "Site",
-                        "app": "App",
-                        "db_cluster": "Database",
-                        "observer_cluster": "Observer",
-                        "alertname": "Alert",
-                        "severity": "Severity",
-                        "workload": "Workload",
-                        "tier": "Tier",
-                        "engine": "Engine",
-                        "cronjob": "Job",
-                        "kubernetes_node": "Node",
-                        "node": "Node",
-                        "hop": "Hop",
-                        "vip": "Shared VIP",
-                        "k8s_app": "Component",
-                        "component": "Component",
-                        "target_cluster": "Remote site",
-                        "served_cluster": "Served by",
-                        "routerboard_name": "Router",
-                        "version": "RouterOS",
-                        "name": "Name",
-                        "pool": "Pool",
-                        "current_firmware": "Installed firmware",
-                        "upgrade_firmware": "Available firmware",
-                        "host": "Host",
-                        "nic": "Adapter",
-                        "ap_name": "Access point",
-                        "resource": "Resource",
-                        "revision": "Revision",
-                        "app_version": "App version",
-                        "chart_version": "Chart",
-                        "release_status": "Release",
-                        "flux_kind": "Kind",
-                        "ready": "Ready",
-                        "kernel_version": "Kernel",
-                        "kubelet_version": "Kubelet",
-                        "os_image": "OS",
-                        "volume": "Volume",
-                        "collector": "Collector",
-                        "slo": "Objective",
-                        "area": "Area",
-                        "Value": "State"
+                        "app\\k8s_cluster": "App"
                       }
                     }
                   }
@@ -1026,8 +979,8 @@
                 "overrides": [
                   {
                     "matcher": {
-                      "id": "byName",
-                      "options": "State"
+                      "id": "byType",
+                      "options": "number"
                     },
                     "properties": [
                       {
@@ -1085,6 +1038,10 @@
                           "type": "color-background",
                           "mode": "basic"
                         }
+                      },
+                      {
+                        "id": "noValue",
+                        "value": "—"
                       },
                       {
                         "id": "links",
@@ -1991,75 +1948,28 @@
               "transformations": [
                 {
                   "kind": "Transformation",
+                  "group": "groupingToMatrix",
+                  "spec": {
+                    "options": {
+                      "rowField": "app",
+                      "columnField": "k8s_cluster",
+                      "valueField": "Value",
+                      "emptyValue": "empty"
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
                   "group": "organize",
                   "spec": {
                     "options": {
-                      "excludeByName": {
-                        "__name__": true,
-                        "Time": true,
-                        "__replica__": true,
-                        "alertstate": true,
-                        "cluster": true,
-                        "container": true,
-                        "endpoint": true,
-                        "instance": true,
-                        "job": true,
-                        "kind": true,
-                        "namespace": true,
-                        "observer_cluster": true,
-                        "pod": true,
-                        "prometheus": true,
-                        "service": true
-                      },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "app\\k8s_cluster": 0,
+                        "homelab-wsl": 1,
+                        "homelab-wsl-02": 2
                       },
                       "renameByName": {
-                        "k8s_cluster": "Site",
-                        "app": "App",
-                        "db_cluster": "Database",
-                        "observer_cluster": "Observer",
-                        "alertname": "Alert",
-                        "severity": "Severity",
-                        "workload": "Workload",
-                        "tier": "Tier",
-                        "engine": "Engine",
-                        "cronjob": "Job",
-                        "kubernetes_node": "Node",
-                        "node": "Node",
-                        "hop": "Hop",
-                        "vip": "Shared VIP",
-                        "k8s_app": "Component",
-                        "component": "Component",
-                        "target_cluster": "Remote site",
-                        "served_cluster": "Served by",
-                        "routerboard_name": "Router",
-                        "version": "RouterOS",
-                        "name": "Name",
-                        "pool": "Pool",
-                        "current_firmware": "Installed firmware",
-                        "upgrade_firmware": "Available firmware",
-                        "host": "Host",
-                        "nic": "Adapter",
-                        "ap_name": "Access point",
-                        "resource": "Resource",
-                        "revision": "Revision",
-                        "app_version": "App version",
-                        "chart_version": "Chart",
-                        "release_status": "Release",
-                        "flux_kind": "Kind",
-                        "ready": "Ready",
-                        "kernel_version": "Kernel",
-                        "kubelet_version": "Kubelet",
-                        "os_image": "OS",
-                        "volume": "Volume",
-                        "collector": "Collector",
-                        "slo": "Objective",
-                        "area": "Area",
-                        "Value": "State"
+                        "app\\k8s_cluster": "App"
                       }
                     }
                   }
@@ -2105,8 +2015,8 @@
                 "overrides": [
                   {
                     "matcher": {
-                      "id": "byName",
-                      "options": "State"
+                      "id": "byType",
+                      "options": "number"
                     },
                     "properties": [
                       {
@@ -2166,6 +2076,10 @@
                         }
                       },
                       {
+                        "id": "noValue",
+                        "value": "—"
+                      },
+                      {
                         "id": "links",
                         "value": [
                           {
@@ -2220,74 +2134,28 @@
               "transformations": [
                 {
                   "kind": "Transformation",
+                  "group": "groupingToMatrix",
+                  "spec": {
+                    "options": {
+                      "rowField": "app",
+                      "columnField": "k8s_cluster",
+                      "valueField": "Value",
+                      "emptyValue": "empty"
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
                   "group": "organize",
                   "spec": {
                     "options": {
-                      "excludeByName": {
-                        "__name__": true,
-                        "Time": true,
-                        "__replica__": true,
-                        "alertstate": true,
-                        "cluster": true,
-                        "container": true,
-                        "endpoint": true,
-                        "instance": true,
-                        "job": true,
-                        "kind": true,
-                        "namespace": true,
-                        "observer_cluster": true,
-                        "pod": true,
-                        "prometheus": true,
-                        "service": true
-                      },
                       "indexByName": {
-                        "k8s_cluster": 0,
-                        "app": 1,
-                        "db_cluster": 1
+                        "app\\k8s_cluster": 0,
+                        "homelab-wsl": 1,
+                        "homelab-wsl-02": 2
                       },
                       "renameByName": {
-                        "k8s_cluster": "Site",
-                        "app": "App",
-                        "db_cluster": "Database",
-                        "observer_cluster": "Observer",
-                        "alertname": "Alert",
-                        "severity": "Severity",
-                        "workload": "Workload",
-                        "tier": "Tier",
-                        "engine": "Engine",
-                        "cronjob": "Job",
-                        "kubernetes_node": "Node",
-                        "node": "Node",
-                        "hop": "Hop",
-                        "vip": "Shared VIP",
-                        "k8s_app": "Component",
-                        "component": "Component",
-                        "target_cluster": "Remote site",
-                        "served_cluster": "Served by",
-                        "routerboard_name": "Router",
-                        "version": "RouterOS",
-                        "name": "Name",
-                        "pool": "Pool",
-                        "current_firmware": "Installed firmware",
-                        "upgrade_firmware": "Available firmware",
-                        "host": "Host",
-                        "nic": "Adapter",
-                        "ap_name": "Access point",
-                        "resource": "Resource",
-                        "revision": "Revision",
-                        "app_version": "App version",
-                        "chart_version": "Chart",
-                        "release_status": "Release",
-                        "flux_kind": "Kind",
-                        "ready": "Ready",
-                        "kernel_version": "Kernel",
-                        "kubelet_version": "Kubelet",
-                        "os_image": "OS",
-                        "volume": "Volume",
-                        "collector": "Collector",
-                        "slo": "Objective",
-                        "area": "Area",
-                        "Value": "Fencing evidence age"
+                        "app\\k8s_cluster": "App"
                       }
                     }
                   }
@@ -2324,13 +2192,17 @@
                 "overrides": [
                   {
                     "matcher": {
-                      "id": "byName",
-                      "options": "Fencing evidence age"
+                      "id": "byType",
+                      "options": "number"
                     },
                     "properties": [
                       {
                         "id": "unit",
                         "value": "s"
+                      },
+                      {
+                        "id": "noValue",
+                        "value": "—"
                       },
                       {
                         "id": "links",
@@ -2387,74 +2259,28 @@
               "transformations": [
                 {
                   "kind": "Transformation",
+                  "group": "groupingToMatrix",
+                  "spec": {
+                    "options": {
+                      "rowField": "app",
+                      "columnField": "k8s_cluster",
+                      "valueField": "Value",
+                      "emptyValue": "empty"
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
                   "group": "organize",
                   "spec": {
                     "options": {
-                      "excludeByName": {
-                        "__name__": true,
-                        "Time": true,
-                        "__replica__": true,
-                        "alertstate": true,
-                        "cluster": true,
-                        "container": true,
-                        "endpoint": true,
-                        "instance": true,
-                        "job": true,
-                        "kind": true,
-                        "namespace": true,
-                        "observer_cluster": true,
-                        "pod": true,
-                        "prometheus": true,
-                        "service": true
-                      },
                       "indexByName": {
-                        "k8s_cluster": 0,
-                        "app": 1,
-                        "db_cluster": 1
+                        "app\\k8s_cluster": 0,
+                        "homelab-wsl": 1,
+                        "homelab-wsl-02": 2
                       },
                       "renameByName": {
-                        "k8s_cluster": "Site",
-                        "app": "App",
-                        "db_cluster": "Database",
-                        "observer_cluster": "Observer",
-                        "alertname": "Alert",
-                        "severity": "Severity",
-                        "workload": "Workload",
-                        "tier": "Tier",
-                        "engine": "Engine",
-                        "cronjob": "Job",
-                        "kubernetes_node": "Node",
-                        "node": "Node",
-                        "hop": "Hop",
-                        "vip": "Shared VIP",
-                        "k8s_app": "Component",
-                        "component": "Component",
-                        "target_cluster": "Remote site",
-                        "served_cluster": "Served by",
-                        "routerboard_name": "Router",
-                        "version": "RouterOS",
-                        "name": "Name",
-                        "pool": "Pool",
-                        "current_firmware": "Installed firmware",
-                        "upgrade_firmware": "Available firmware",
-                        "host": "Host",
-                        "nic": "Adapter",
-                        "ap_name": "Access point",
-                        "resource": "Resource",
-                        "revision": "Revision",
-                        "app_version": "App version",
-                        "chart_version": "Chart",
-                        "release_status": "Release",
-                        "flux_kind": "Kind",
-                        "ready": "Ready",
-                        "kernel_version": "Kernel",
-                        "kubelet_version": "Kubelet",
-                        "os_image": "OS",
-                        "volume": "Volume",
-                        "collector": "Collector",
-                        "slo": "Objective",
-                        "area": "Area",
-                        "Value": "Fence job age"
+                        "app\\k8s_cluster": "App"
                       }
                     }
                   }
@@ -2491,13 +2317,17 @@
                 "overrides": [
                   {
                     "matcher": {
-                      "id": "byName",
-                      "options": "Fence job age"
+                      "id": "byType",
+                      "options": "number"
                     },
                     "properties": [
                       {
                         "id": "unit",
                         "value": "s"
+                      },
+                      {
+                        "id": "noValue",
+                        "value": "—"
                       },
                       {
                         "id": "links",
@@ -2554,75 +2384,28 @@
               "transformations": [
                 {
                   "kind": "Transformation",
+                  "group": "groupingToMatrix",
+                  "spec": {
+                    "options": {
+                      "rowField": "app",
+                      "columnField": "k8s_cluster",
+                      "valueField": "Value",
+                      "emptyValue": "empty"
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
                   "group": "organize",
                   "spec": {
                     "options": {
-                      "excludeByName": {
-                        "__name__": true,
-                        "Time": true,
-                        "__replica__": true,
-                        "alertstate": true,
-                        "cluster": true,
-                        "container": true,
-                        "endpoint": true,
-                        "instance": true,
-                        "job": true,
-                        "kind": true,
-                        "namespace": true,
-                        "observer_cluster": true,
-                        "pod": true,
-                        "prometheus": true,
-                        "service": true
-                      },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "app\\k8s_cluster": 0,
+                        "homelab-wsl": 1,
+                        "homelab-wsl-02": 2
                       },
                       "renameByName": {
-                        "k8s_cluster": "Site",
-                        "app": "App",
-                        "db_cluster": "Database",
-                        "observer_cluster": "Observer",
-                        "alertname": "Alert",
-                        "severity": "Severity",
-                        "workload": "Workload",
-                        "tier": "Tier",
-                        "engine": "Engine",
-                        "cronjob": "Job",
-                        "kubernetes_node": "Node",
-                        "node": "Node",
-                        "hop": "Hop",
-                        "vip": "Shared VIP",
-                        "k8s_app": "Component",
-                        "component": "Component",
-                        "target_cluster": "Remote site",
-                        "served_cluster": "Served by",
-                        "routerboard_name": "Router",
-                        "version": "RouterOS",
-                        "name": "Name",
-                        "pool": "Pool",
-                        "current_firmware": "Installed firmware",
-                        "upgrade_firmware": "Available firmware",
-                        "host": "Host",
-                        "nic": "Adapter",
-                        "ap_name": "Access point",
-                        "resource": "Resource",
-                        "revision": "Revision",
-                        "app_version": "App version",
-                        "chart_version": "Chart",
-                        "release_status": "Release",
-                        "flux_kind": "Kind",
-                        "ready": "Ready",
-                        "kernel_version": "Kernel",
-                        "kubelet_version": "Kubelet",
-                        "os_image": "OS",
-                        "volume": "Volume",
-                        "collector": "Collector",
-                        "slo": "Objective",
-                        "area": "Area",
-                        "Value": "Lease authority"
+                        "app\\k8s_cluster": "App"
                       }
                     }
                   }
@@ -2659,8 +2442,8 @@
                 "overrides": [
                   {
                     "matcher": {
-                      "id": "byName",
-                      "options": "Lease authority"
+                      "id": "byType",
+                      "options": "number"
                     },
                     "properties": [
                       {
@@ -2684,6 +2467,10 @@
                             }
                           }
                         ]
+                      },
+                      {
+                        "id": "noValue",
+                        "value": "—"
                       },
                       {
                         "id": "links",
@@ -2740,75 +2527,28 @@
               "transformations": [
                 {
                   "kind": "Transformation",
+                  "group": "groupingToMatrix",
+                  "spec": {
+                    "options": {
+                      "rowField": "app",
+                      "columnField": "k8s_cluster",
+                      "valueField": "Value",
+                      "emptyValue": "empty"
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
                   "group": "organize",
                   "spec": {
                     "options": {
-                      "excludeByName": {
-                        "__name__": true,
-                        "Time": true,
-                        "__replica__": true,
-                        "alertstate": true,
-                        "cluster": true,
-                        "container": true,
-                        "endpoint": true,
-                        "instance": true,
-                        "job": true,
-                        "kind": true,
-                        "namespace": true,
-                        "observer_cluster": true,
-                        "pod": true,
-                        "prometheus": true,
-                        "service": true
-                      },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "app\\k8s_cluster": 0,
+                        "homelab-wsl": 1,
+                        "homelab-wsl-02": 2
                       },
                       "renameByName": {
-                        "k8s_cluster": "Site",
-                        "app": "App",
-                        "db_cluster": "Database",
-                        "observer_cluster": "Observer",
-                        "alertname": "Alert",
-                        "severity": "Severity",
-                        "workload": "Workload",
-                        "tier": "Tier",
-                        "engine": "Engine",
-                        "cronjob": "Job",
-                        "kubernetes_node": "Node",
-                        "node": "Node",
-                        "hop": "Hop",
-                        "vip": "Shared VIP",
-                        "k8s_app": "Component",
-                        "component": "Component",
-                        "target_cluster": "Remote site",
-                        "served_cluster": "Served by",
-                        "routerboard_name": "Router",
-                        "version": "RouterOS",
-                        "name": "Name",
-                        "pool": "Pool",
-                        "current_firmware": "Installed firmware",
-                        "upgrade_firmware": "Available firmware",
-                        "host": "Host",
-                        "nic": "Adapter",
-                        "ap_name": "Access point",
-                        "resource": "Resource",
-                        "revision": "Revision",
-                        "app_version": "App version",
-                        "chart_version": "Chart",
-                        "release_status": "Release",
-                        "flux_kind": "Kind",
-                        "ready": "Ready",
-                        "kernel_version": "Kernel",
-                        "kubelet_version": "Kubelet",
-                        "os_image": "OS",
-                        "volume": "Volume",
-                        "collector": "Collector",
-                        "slo": "Objective",
-                        "area": "Area",
-                        "Value": "Lease"
+                        "app\\k8s_cluster": "App"
                       }
                     }
                   }
@@ -2845,8 +2585,8 @@
                 "overrides": [
                   {
                     "matcher": {
-                      "id": "byName",
-                      "options": "Lease"
+                      "id": "byType",
+                      "options": "number"
                     },
                     "properties": [
                       {
@@ -2870,6 +2610,10 @@
                             }
                           }
                         ]
+                      },
+                      {
+                        "id": "noValue",
+                        "value": "—"
                       },
                       {
                         "id": "links",
@@ -2926,74 +2670,28 @@
               "transformations": [
                 {
                   "kind": "Transformation",
+                  "group": "groupingToMatrix",
+                  "spec": {
+                    "options": {
+                      "rowField": "app",
+                      "columnField": "k8s_cluster",
+                      "valueField": "Value",
+                      "emptyValue": "empty"
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
                   "group": "organize",
                   "spec": {
                     "options": {
-                      "excludeByName": {
-                        "__name__": true,
-                        "Time": true,
-                        "__replica__": true,
-                        "alertstate": true,
-                        "cluster": true,
-                        "container": true,
-                        "endpoint": true,
-                        "instance": true,
-                        "job": true,
-                        "kind": true,
-                        "namespace": true,
-                        "observer_cluster": true,
-                        "pod": true,
-                        "prometheus": true,
-                        "service": true
-                      },
                       "indexByName": {
-                        "k8s_cluster": 0,
-                        "app": 1,
-                        "db_cluster": 1
+                        "app\\k8s_cluster": 0,
+                        "homelab-wsl": 1,
+                        "homelab-wsl-02": 2
                       },
                       "renameByName": {
-                        "k8s_cluster": "Site",
-                        "app": "App",
-                        "db_cluster": "Database",
-                        "observer_cluster": "Observer",
-                        "alertname": "Alert",
-                        "severity": "Severity",
-                        "workload": "Workload",
-                        "tier": "Tier",
-                        "engine": "Engine",
-                        "cronjob": "Job",
-                        "kubernetes_node": "Node",
-                        "node": "Node",
-                        "hop": "Hop",
-                        "vip": "Shared VIP",
-                        "k8s_app": "Component",
-                        "component": "Component",
-                        "target_cluster": "Remote site",
-                        "served_cluster": "Served by",
-                        "routerboard_name": "Router",
-                        "version": "RouterOS",
-                        "name": "Name",
-                        "pool": "Pool",
-                        "current_firmware": "Installed firmware",
-                        "upgrade_firmware": "Available firmware",
-                        "host": "Host",
-                        "nic": "Adapter",
-                        "ap_name": "Access point",
-                        "resource": "Resource",
-                        "revision": "Revision",
-                        "app_version": "App version",
-                        "chart_version": "Chart",
-                        "release_status": "Release",
-                        "flux_kind": "Kind",
-                        "ready": "Ready",
-                        "kernel_version": "Kernel",
-                        "kubelet_version": "Kubelet",
-                        "os_image": "OS",
-                        "volume": "Volume",
-                        "collector": "Collector",
-                        "slo": "Objective",
-                        "area": "Area",
-                        "Value": "Last restore evidence"
+                        "app\\k8s_cluster": "App"
                       }
                     }
                   }
@@ -3030,13 +2728,17 @@
                 "overrides": [
                   {
                     "matcher": {
-                      "id": "byName",
-                      "options": "Last restore evidence"
+                      "id": "byType",
+                      "options": "number"
                     },
                     "properties": [
                       {
                         "id": "unit",
                         "value": "s"
+                      },
+                      {
+                        "id": "noValue",
+                        "value": "—"
                       },
                       {
                         "id": "links",
@@ -3634,7 +3336,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 3,
+                            "maxColumnCount": 2,
                             "fillScreen": false
                           }
                         },
@@ -3688,7 +3390,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 3,
+                            "maxColumnCount": 2,
                             "fillScreen": false
                           }
                         },
@@ -3764,7 +3466,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 3,
+                            "maxColumnCount": 2,
                             "fillScreen": false
                           }
                         },
@@ -3818,7 +3520,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 3,
+                            "maxColumnCount": 2,
                             "fillScreen": false
                           }
                         },
@@ -3876,7 +3578,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 3,
+                            "maxColumnCount": 2,
                             "fillScreen": false
                           }
                         },
@@ -3921,7 +3623,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 3,
+                            "maxColumnCount": 2,
                             "fillScreen": false
                           }
                         },
@@ -3979,7 +3681,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 3,
+                            "maxColumnCount": 2,
                             "fillScreen": false
                           }
                         },

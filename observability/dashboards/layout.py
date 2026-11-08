@@ -87,7 +87,17 @@ def resource(board: Board) -> dict:
             else:
                 query.range()
             data = dashboard.QueryGroup().target(dashboard.Target().ref_id("A").query(query))
-            if panel.kind == "table":
+            if panel.kind == "table" and panel.per_site:
+                query.format(prom_model.PromQueryFormat.TABLE)
+                # Rows by the label, a column per site: which site has what, at a glance.
+                data.transformation(dashboard.Transformation().group("groupingToMatrix").options({
+                    "rowField": panel.per_site, "columnField": "k8s_cluster", "valueField": "Value",
+                    # No series for a pair: blank, as the row table had no row.
+                    "emptyValue": "empty"}))
+                data.transformation(dashboard.Transformation().group("organize").options({
+                    "indexByName": {f"{panel.per_site}\\k8s_cluster": 0} | {site: i + 1 for i, site in enumerate(CLUSTERS)},
+                    "renameByName": {f"{panel.per_site}\\k8s_cluster": LABELS[panel.per_site]}}))
+            elif panel.kind == "table":
                 query.format(prom_model.PromQueryFormat.TABLE)
                 header = value_header(panel)
                 hidden = dict.fromkeys(SCRAPE_COLUMNS, True) | ({} if header else {"Value": True})

@@ -1449,7 +1449,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 3,
+                            "maxColumnCount": 2,
                             "fillScreen": false
                           }
                         },
@@ -1628,7 +1628,7 @@
                                 }
                               }
                             ],
-                            "maxColumnCount": 3,
+                            "maxColumnCount": 2,
                             "fillScreen": false
                           }
                         },
