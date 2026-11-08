@@ -47,16 +47,9 @@ jobs:
           persist-credentials: false
 
       - name: Install flate
-        run: |
-          set -euo pipefail
-          base="https://github.com/home-operations/flate/releases/download/v${FLATE_VERSION}"
-          tarball="flate_${FLATE_VERSION}_linux_amd64.tar.gz"
-          # Release downloads from GitHub occasionally fail (curl 22) in CI.
-          curl -fsSLO --retry 5 --retry-all-errors --retry-delay 3 "${base}/${tarball}"
-          curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 "${base}/${tarball}.sha256" \
-            | awk '{print $1"  '"${tarball}"'"}' | sha256sum -c -
-          tar -xzf "${tarball}" flate
-          sudo install -m 0755 flate /usr/local/bin/flate
+        uses: ./.github/actions/setup-flate
+        with:
+          version: ${{ env.FLATE_VERSION }}
 
       # -p kubernetes renders every app once, MS-01-only ones included. When
       # both clusters define a Flux Kustomization with the same name (frigate
@@ -184,6 +177,50 @@ jobs:
           fi
           echo "::error::image not found or not pullable: ${IMAGE}"
           exit 1
+
+  # What the PR changes in the rendered manifests, per live cluster, as one
+  # sticky PR comment (.github/scripts/flate-diff-comment.py). Reviewers and
+  # the Renovate reviewer read it; it gates nothing, so Build Success doesn't
+  # need it. Fork PRs get a read-only token, so they're skipped.
+  diff:
+    name: "Rendered diff"
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install flate
+        uses: ./.github/actions/setup-flate
+        with:
+          version: ${{ env.FLATE_VERSION }}
+
+      - name: Diff and comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 .github/scripts/flate-diff-comment.py
+
+      - name: Full diff
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flate-diff
+          path: ${{ runner.temp }}/flate-diff
+          if-no-files-found: ignore
+          retention-days: 7
 
   status:
     name: "Build Success"
