@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.39.0 - 2026-11-08
+
+### Changed
+
+* grafana: operator tabs are laid out answer first (headline, status, trends, detail) with About folded away; site colours on per-site graphs, neutral KPI numbers, zero-based axes
+
 ## v2.38.6 - 2026-11-08
 
 ### Fixed
