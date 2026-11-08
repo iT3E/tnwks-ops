@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""Post a PR's rendered Kubernetes changes, per live cluster, as one sticky comment.
+"""Write a PR's rendered Kubernetes changes, per live cluster, as one comment body.
 
-Runs `flate diff all` (through bin/flate-guard) for each live cluster's
-entrypoint against the PR's base branch, and creates or updates a single
-comment marked with MARKER. A PR with no rendered changes gets no comment,
-or has its existing one updated to say so. flate skips Secret objects, so
-no Secret data reaches the comment.
+Runs `flate diff all` (through flate-guard, from github-workflows'
+setup-flate) for each live cluster's entrypoint against the PR's base branch,
+and writes $RUNNER_TEMP/flate-diff/comment.md, starting with MARKER. It sets
+the step output `changes` (true when any cluster renders differently);
+kubernetes.yaml posts the body with github-workflows' sticky-comment, which
+creates the comment only when there are changes. flate skips Secret objects,
+so no Secret data reaches the comment.
 
-Environment: BASE_REF, PR, REPO, RUN_URL, GH_TOKEN, and RUNNER_TEMP (where
-the full per-cluster diffs are written for the artifact upload).
+Environment: BASE_REF, RUN_URL, RUNNER_TEMP (where the comment body and the
+full per-cluster diffs are written, for the artifact upload) and
+GITHUB_OUTPUT.
 """
 from __future__ import annotations
 
@@ -29,7 +32,7 @@ FENCE = "````"
 def render(cluster: str, base: str, out: Path) -> str:
     result = subprocess.run(
         [
-            "bin/flate-guard", "diff", "all", "--no-progress",
+            "flate-guard", "diff", "all", "--no-progress",
             "-p", f"kubernetes/clusters/{cluster}",
             "--base", f"origin/{base}",
             "-o", "github",
@@ -70,33 +73,19 @@ def body(diffs: dict[str, str], base: str, run_url: str) -> str:
     return "\n".join(parts) + "\n"
 
 
-def gh(*args: str) -> str:
-    return subprocess.run(["gh", "api", *args], capture_output=True, text=True, check=True).stdout
-
-
 def main() -> None:
-    base, pr, repo, run_url = (os.environ[k] for k in ("BASE_REF", "PR", "REPO", "RUN_URL"))
+    base, run_url = (os.environ[k] for k in ("BASE_REF", "RUN_URL"))
     out = Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())) / "flate-diff"
     out.mkdir(parents=True, exist_ok=True)
 
     diffs = {cluster: render(cluster, base, out) for cluster in CLUSTERS}
-    existing = gh(
-        f"repos/{repo}/issues/{pr}/comments", "--paginate", "--jq",
-        f'.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("{MARKER}"))) | .id',
-    ).split()
-
-    if not any(diffs.values()) and not existing:
-        print("No rendered changes; no comment.")
-        return
-
-    text = out / "comment.md"
-    text.write_text(body(diffs, base, run_url))
-    if existing:
-        gh("-X", "PATCH", f"repos/{repo}/issues/comments/{existing[0]}", "-F", f"body=@{text}")
-        print(f"Updated comment {existing[0]}.")
-    else:
-        gh(f"repos/{repo}/issues/{pr}/comments", "-F", f"body=@{text}")
-        print("Created the comment.")
+    changes = any(diffs.values())
+    (out / "comment.md").write_text(body(diffs, base, run_url))
+    print("Rendered changes." if changes else "No rendered changes.")
+    output = os.environ.get("GITHUB_OUTPUT")
+    if output:
+        with open(output, "a") as f:
+            f.write(f"changes={'true' if changes else 'false'}\n")
 
 
 if __name__ == "__main__":

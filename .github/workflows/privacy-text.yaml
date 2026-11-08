@@ -30,6 +30,6 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
-    uses: iT3E/github-workflows/.github/workflows/privacy-text.yaml@317dd05ec8f5988a9a6f799a2119aba537b4bb16 # v1.4.2
+    uses: iT3E/github-workflows/.github/workflows/privacy-text.yaml@6abfc744ca16e7464b47890ccf230e00aa8670cd # v1.8.0
     secrets:
       PRIVACY_TERMS: ${{ secrets.PRIVACY_TERMS }}

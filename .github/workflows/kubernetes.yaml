@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-26.04
     # A render takes well under a minute. Without a limit, a hung flate holds
     # the job (and the required check) for GitHub's 6-hour default. 15 leaves
-    # room for a couple of hung attempts (bin/flate-guard: 2 minutes each,
+    # room for a couple of hung attempts (flate-guard: 2 minutes each,
     # retried once).
     timeout-minutes: 15
     permissions:
@@ -38,7 +38,7 @@ jobs:
           persist-credentials: false
 
       - name: Install flate
-        uses: ./.github/actions/setup-flate
+        uses: iT3E/github-workflows/actions/setup-flate@6abfc744ca16e7464b47890ccf230e00aa8670cd # v1.8.0
         with:
           version: ${{ env.FLATE_VERSION }}
 
@@ -48,7 +48,7 @@ jobs:
       # cluster also gets its own run below. flate aliases the flux-system
       # GitRepository to this checkout because its URL matches the origin
       # remote, so a cluster entrypoint renders this PR's tree.
-      # bin/flate-guard caps each attempt at 2 minutes (a render takes 1-10 s)
+      # flate-guard (installed by setup-flate) caps each attempt at 2 minutes (a render takes 1-10 s)
       # and retries a hang once, printing the process state and the tail of
       # flate's debug log first. A bare 5-minute timeout used to fail the
       # required check about 2% of the time on main with no evidence.
@@ -56,13 +56,13 @@ jobs:
       # on their own below (homelab-wsl-02), or their cluster-settings would
       # replace homelab-wsl's in this render.
       - name: Render all Kustomizations and HelmReleases
-        run: bin/flate-guard test all --no-progress -p kubernetes --krmignore .github/flate/all.krmignore
+        run: flate-guard test all --no-progress -p kubernetes --krmignore .github/flate/all.krmignore
 
       - name: Render the live cluster (wsl) from its entrypoint
-        run: bin/flate-guard test all --no-progress -p kubernetes/clusters/wsl
+        run: flate-guard test all --no-progress -p kubernetes/clusters/wsl
 
       - name: Render homelab-wsl-02 from its entrypoint
-        run: bin/flate-guard test all --no-progress -p kubernetes/clusters/wsl-02
+        run: flate-guard test all --no-progress -p kubernetes/clusters/wsl-02
 
       # A Flux Alert event source only matches one namespace, so every
       # namespace with a HelmRelease needs its own entry, or its failures
@@ -170,8 +170,9 @@ jobs:
           exit 1
 
   # What the PR changes in the rendered manifests, per live cluster, as one
-  # sticky PR comment (.github/scripts/flate-diff-comment.py). Reviewers and
-  # the Renovate reviewer read it. It informs and never blocks: the step is
+  # sticky PR comment (.github/scripts/flate-diff-comment.py writes it,
+  # github-workflows' sticky-comment posts it). Reviewers and the Renovate
+  # reviewer read it. It informs and never blocks: both steps are
   # continue-on-error, so a failed diff or comment leaves Build Success green.
   # Fork PRs get a read-only token, so they're skipped.
   diff:
@@ -192,19 +193,28 @@ jobs:
           persist-credentials: false
 
       - name: Install flate
-        uses: ./.github/actions/setup-flate
+        uses: iT3E/github-workflows/actions/setup-flate@6abfc744ca16e7464b47890ccf230e00aa8670cd # v1.8.0
         with:
           version: ${{ env.FLATE_VERSION }}
 
-      - name: Diff and comment
+      - name: Diff
+        id: diff
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ github.token }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
-          PR: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: python3 .github/scripts/flate-diff-comment.py
+
+      # A PR with no rendered changes gets no comment, or has its existing one
+      # updated to say so.
+      - name: Comment
+        if: steps.diff.outcome == 'success'
+        continue-on-error: true
+        uses: iT3E/github-workflows/actions/sticky-comment@6abfc744ca16e7464b47890ccf230e00aa8670cd # v1.8.0
+        with:
+          marker: "<!-- flate-diff -->"
+          body-file: ${{ runner.temp }}/flate-diff/comment.md
+          only-update: ${{ steps.diff.outputs.changes != 'true' }}
 
       - name: Full diff
         if: ${{ !cancelled() }}

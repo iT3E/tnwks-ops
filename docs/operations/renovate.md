@@ -137,7 +137,7 @@ instead of starting a second review (while the gateway still has it in memory).
 | Labels `impact/critical`, `ori/awaiting-approval`, `owner/approved` | `.github/labels.yaml` | Critical tier: Renovate or the agent sets the first, the agent sets the second, only the owner sets the third. A new push clears the last two |
 | OpenClaw hook | `~/.openclaw/openclaw.json` on the WSL host, `hooks.*` | `allowedAgentIds: ["renovate"]`, no caller session keys. Token copy in `~/.openclaw/credentials/openclaw-hooks.env` |
 | OpenClaw agent `renovate` | `agents.entries.renovate`, workspace `~/.openclaw/workspace-renovate` | Tools: `exec`, `process`, `read` only. Its `AGENTS.md` is the review contract |
-| Rendered diff comment | `.github/workflows/kubernetes.yaml` (`Rendered diff`), `.github/scripts/flate-diff-comment.py` | One sticky comment per PR (`<!-- flate-diff -->`, from `github-actions[bot]`) with `flate diff` against the base branch for `wsl` and `wsl-02`. Secrets aren't rendered. The review starts from it: what a chart bump actually changes in the manifests |
+| Rendered diff comment | `.github/workflows/kubernetes.yaml` (`Rendered diff`), `.github/scripts/flate-diff-comment.py` (the body; github-workflows' `sticky-comment` posts it) | One sticky comment per PR (`<!-- flate-diff -->`, from `github-actions[bot]`) with `flate diff` against the base branch for `wsl` and `wsl-02`. Secrets aren't rendered. The review starts from it: what a chart bump actually changes in the manifests |
 
 The OpenClaw pieces live outside this repo, on the WSL host. If they are
 rebuilt, recreate the agent and the `hooks` block above, and put the same

@@ -34,10 +34,11 @@ trap cleanup EXIT
 git worktree add --quiet --detach "${tmp}/base" "${base}"
 
 # flate occasionally hangs rendering a cluster in CI (#1650, #1670): no
-# output until killed, while a rerun takes seconds. bin/flate-guard caps each
-# attempt (RENDER_TIMEOUT, default 2m), prints diagnostics on a hang and
-# retries once.
-guard="${root}/bin/flate-guard"
+# output until killed, while a rerun takes seconds. flate-guard (installed
+# next to flate by github-workflows' setup-flate) caps each attempt
+# (RENDER_TIMEOUT, default 2m), prints diagnostics on a hang and retries
+# once. Without it (a workstation), flate runs directly.
+guard="$(command -v flate-guard || command -v flate)"
 
 # DIR [WORKTREE]: the images flate renders for that cluster, as a JSON array
 # on stdout. Returns 1 if some releases failed (the list is then partial) and
