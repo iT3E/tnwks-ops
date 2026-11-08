@@ -13,7 +13,7 @@ on:
     paths:
       - "infrastructure/terraform/environments/prod/unifi/**"
       - "infrastructure/terraform/modules/unifi/**"
-      - ".github/actions/unifi-terraform/**"
+      - ".github/actions/terraform/**"
       - ".github/workflows/unifi-*.yaml"
 
 permissions: {}
@@ -36,7 +36,7 @@ jobs:
       contains(fromJSON('["iT3E", "renovate[bot]"]'), github.event.pull_request.user.login)
     name: "UniFi Plan"
     # homelab-wsl's runner: the controller API is in-cluster there
-    # (unifi.networking.svc.cluster.local, .github/actions/unifi-terraform).
+    # (unifi.networking.svc.cluster.local, the tf-vars below).
     runs-on: tnwks-ops-homelab-wsl
     timeout-minutes: 20
     permissions:
@@ -51,8 +51,11 @@ jobs:
 
       - name: Plan
         id: tf
-        uses: ./.github/actions/unifi-terraform
+        uses: ./.github/actions/terraform
         with:
+          root: prod/unifi
+          # In-cluster: the runner shares the WSL cluster with the controller.
+          tf-vars: TF_VAR_unifi_url=https://unifi.networking.svc.cluster.local:8443
           mode: plan
           tf-api-token: ${{ secrets.TF_API_TOKEN }}
 

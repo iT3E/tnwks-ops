@@ -102,14 +102,14 @@ paths = [
 paths = [
   "infrastructure/terraform/environments/prod/cloudflare/**",
   "infrastructure/terraform/modules/cloudflare/**",
-  ".github/actions/runner-terraform/**",
+  ".github/actions/terraform/**",
 ]
 
 [groups.terraform.healthchecks]
 paths = [
   "infrastructure/terraform/environments/prod/healthchecks/**",
   "infrastructure/terraform/modules/healthchecks/**",
-  ".github/actions/runner-terraform/**",
+  ".github/actions/terraform/**",
 ]
 
 [groups.terraform.mikrotik]
@@ -117,12 +117,12 @@ paths = [
   "infrastructure/terraform/environments/prod/mikrotik/**",
   "infrastructure/terraform/modules/mikrotik/**",
   "infrastructure/mikrotik/**",
-  ".github/actions/mikrotik-terraform/**",
+  ".github/actions/terraform/**",
 ]
 
 [groups.terraform.unifi]
 paths = [
   "infrastructure/terraform/environments/prod/unifi/**",
   "infrastructure/terraform/modules/unifi/**",
-  ".github/actions/unifi-terraform/**",
+  ".github/actions/terraform/**",
 ]

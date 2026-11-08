@@ -10,7 +10,7 @@ on:
     paths:
       - "infrastructure/terraform/environments/prod/cloudflare/**"
       - "infrastructure/terraform/modules/cloudflare/**"
-      - ".github/actions/runner-terraform/**"
+      - ".github/actions/terraform/**"
       - ".github/workflows/cloudflare-*.yaml"
 
 permissions: {}
@@ -45,7 +45,7 @@ jobs:
 
       - name: Plan
         id: tf
-        uses: ./.github/actions/runner-terraform
+        uses: ./.github/actions/terraform
         with:
           root: prod/cloudflare
           mode: plan
