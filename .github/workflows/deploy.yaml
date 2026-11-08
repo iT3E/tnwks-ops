@@ -61,8 +61,13 @@ jobs:
   terraform:
     needs: changes
     if: needs.changes.outputs.terraform != '[]' && needs.changes.outputs.terraform != ''
+    # GitHub checks every called job's permissions against these when the run
+    # starts, skipped jobs included, so this covers the plan jobs' PR comment
+    # (startup_failure without it). The apply job's own block keeps its token
+    # at contents: read.
     permissions:
       contents: read
+      pull-requests: write
     uses: ./.github/workflows/terraform.yaml
     with:
       roots: ${{ needs.changes.outputs.terraform }}
