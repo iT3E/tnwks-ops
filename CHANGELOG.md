@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.62.1 - 2026-11-08
+
+### Fixed
+
+* Runners: homelab-wsl's ops runner registers as tnwks-ops-runner-homelab-wsl with both of its labels, so jobs that need the homelab-wsl site (UniFi plans and applies) get a runner again; the labels added in place never reached GitHub.
+
 ## v2.62.0 - 2026-11-08
 
 ### Changed
