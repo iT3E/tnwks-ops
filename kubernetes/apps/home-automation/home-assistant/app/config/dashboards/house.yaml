@@ -274,7 +274,7 @@ views:
           - type: button
             name: Energy dashboard
             icon: mdi:chart-bar
-            tap_action: { action: navigate, navigation_path: /energy }
+            tap_action: { action: navigate, navigation_path: /home-energy }
             grid_options: { columns: full, rows: 1 }
 
       - type: grid

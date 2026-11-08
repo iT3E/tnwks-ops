@@ -25,6 +25,7 @@ configMapGenerator:
       - config/packages/robovac.yaml
   - name: home-assistant-dashboards
     files:
+      - config/dashboards/energy.yaml
       - config/dashboards/house.yaml
       - config/dashboards/kitchen.yaml
       - config/dashboards/monitoring.yaml
@@ -35,6 +36,9 @@ configMapGenerator:
   - name: home-assistant-www-security
     files:
       - config/www/tnwks-security/person-alerts-card.js
+  - name: home-assistant-www-energy
+    files:
+      - config/www/tnwks-energy/energy-flow-card.js
   - name: home-assistant-scripts
     files:
       - scripts/prepare-config.sh

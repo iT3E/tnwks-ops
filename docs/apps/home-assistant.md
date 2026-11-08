@@ -78,7 +78,8 @@ app/
 │   ├── packages/*.yaml        # → /config/packages/
 │   ├── dashboards/*.yaml      # → /config/dashboards/
 │   ├── www/tnwks-kitchen/     # → /config/www/tnwks-kitchen/ (our own cards, /local/tnwks-kitchen/)
-│   └── www/tnwks-security/    # → /config/www/tnwks-security/ (the alert schedule card)
+│   ├── www/tnwks-security/    # → /config/www/tnwks-security/ (the alert schedule card)
+│   └── www/tnwks-energy/      # → /config/www/tnwks-energy/ (the distribution card)
 └── scripts/prepare-config.sh  # init container: installs custom integrations + cards
 ```
 
@@ -97,7 +98,12 @@ The sidebar, top to bottom:
   full controls, consumables. **Energy**: live power and the biggest loads,
   two weeks of use vs solar per inverter, the EV charger.
 - **Security** (`/home-security`): cameras and Frigate reviews.
-- **Energy**: the built-in one (sources in `.storage/energy`, UI-owned).
+- **Energy** (`/home-energy`, `dashboards/energy.yaml`): the house meter
+  branching into the largest appliance loads, with readable values and
+  percentages. **Live** shows power; **Today** shows recorded kWh. Smaller
+  loads are grouped, and untracked usage is shown separately. Solar production
+  is a separate daily total, since its contribution to the house is not
+  metered. The history button opens the built-in Energy dashboard.
 - **Monitoring** (`/home-monitoring`, everyone): Grafana in a frame, at its
   home page with its own navigation, so every Grafana dashboard is reachable
   without listing it here. It's signed in as the kiosk identity (a Grafana
@@ -112,12 +118,21 @@ The sidebar, top to bottom:
 
 UI-owned and set over the websocket API (not in git): `default_panel` in the
 frontend system data (`frontend/set_system_data`, key `core`) is `home-hub`; the
-built-in Overview (`/home`, the areas view), Map, Logbook and History are
+built-in Overview (`/home`, the areas view), Energy (`/energy`), Map, Logbook and History are
 hidden from the sidebar (`frontend/update_panel` `show_in_sidebar: false`,
 and `lovelace/dashboards/update` for Map). They still work by URL. A user can
 still pick their own default under Profile.
 
 ### Energy
+
+The distribution card (`www/tnwks-energy/energy-flow-card.js`) reads the same
+UI-owned energy preferences as the built-in dashboard. Appliance names stay
+in the registries/preferences, not in the card source. Live readings use the
+configured power sensors (W or kW). Today's readings use recorder changes
+from midnight in HA's timezone, refreshed every five minutes; the card shows
+the last recorded time. Solar production uses hourly statistics and is never
+drawn as solar-to-house consumption without an import/export meter. Tapping a
+house or appliance opens its normal entity details.
 
 The built-in Energy dashboard's sources and device breakdown are UI-owned
 (Settings > Dashboards > Energy, or `energy/get_prefs` / `energy/save_prefs`
