@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.51.1 - 2026-11-08
+
+### Fixed
+
+* Grafana host states are reduced across observing Prometheuses like the other states, so a second observer can't duplicate Host rows; docs corrected on which site scrapes the Windows hosts
+
 ## v2.51.0 - 2026-11-08
 
 ### Changed

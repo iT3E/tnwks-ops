@@ -1,3 +1,0 @@
-kind: Fixed
-body: Grafana host states are reduced across observing Prometheuses like the other states, so a second observer can't duplicate Host rows; docs corrected on which site scrapes the Windows hosts
-time: 2026-11-07T20:52:17.945299668-08:00
