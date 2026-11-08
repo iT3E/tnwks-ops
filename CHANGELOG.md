@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.64.0 - 2026-11-08
+
+### Added
+
+* CI: a nightly bootstrap smoke boots a throwaway Talos-in-Docker cluster, installs Flux from main and waits for every Flux source to be Ready
+
+### Changed
+
+* Renovate: third-party container digest updates open on Mondays only, instead of one PR and CI run per re-pushed tag
+
 ## v2.63.0 - 2026-11-08
 
 ### Added
