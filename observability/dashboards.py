@@ -92,6 +92,11 @@ class Panel:
     # Empty: the labels of the query's first aggregation (see legend()).
     legend: str = ""
     empty: str = "Unknown — missing evidence"
+    # A table's value column header: empty means the panel title; None hides a
+    # value that only says "this row exists" (an _info series, a firing alert).
+    column: str | None = ""
+    # A bool's words for 1 and 0. A bare True/False never reaches the board.
+    words: tuple[str, str] = ("Yes", "No")
 
 
 @dataclass(frozen=True)
@@ -107,8 +112,56 @@ class Board:
 
 
 def p(title: str, expr: str, unit: str, explanation: str, kind="timeseries", link=None,
-      empty="Unknown — missing evidence"):
-    return Panel(title, expr, unit, explanation, kind, link, empty=empty)
+      empty="Unknown — missing evidence", column: str | None = "", words=("Yes", "No")):
+    return Panel(title, expr, unit, explanation, kind, link, empty=empty, column=column, words=words)
+
+
+# Table headers for the labels the boards return (live, 2026-11-07). A label
+# without one shows its raw name; test_design fails on that.
+LABELS = {
+    "k8s_cluster": "Site", "app": "App", "db_cluster": "Database", "observer_cluster": "Observer",
+    "alertname": "Alert", "severity": "Severity", "workload": "Workload", "tier": "Tier",
+    "engine": "Engine", "cronjob": "Job", "kubernetes_node": "Node", "node": "Node", "hop": "Hop",
+    "vip": "Shared VIP", "k8s_app": "Component", "component": "Component",
+    "target_cluster": "Remote site", "served_cluster": "Served by", "routerboard_name": "Router",
+    "version": "RouterOS", "name": "Name", "pool": "Pool", "current_firmware": "Installed firmware",
+    "upgrade_firmware": "Available firmware", "host": "Host", "nic": "Adapter",
+    "ap_name": "Access point", "resource": "Resource", "revision": "Revision",
+    "app_version": "App version", "chart_version": "Chart", "release_status": "Release",
+    "flux_kind": "Kind", "ready": "Ready", "kernel_version": "Kernel", "kubelet_version": "Kubelet",
+    "os_image": "OS", "volume": "Volume", "collector": "Collector", "slo": "Objective",
+}
+# A state panel with no answer must not inherit a healthy colour: the base
+# threshold is Unknown's grey (a stat with no value is painted with it).
+UNKNOWN_GREY = "#6b6b6b"
+
+
+def value_header(panel: Panel) -> str | None:
+    """The value column's header, or None when the column is hidden."""
+    if panel.unit in ("state", "coverage"):
+        return "State"
+    if panel.unit == "dateTimeAsIso":
+        return "When"
+    if panel.column is None:
+        return None
+    return panel.column or panel.title
+
+
+def mapping(options: dict[str, tuple[str, str | None]]) -> list[dict]:
+    """A raw value-mapping list for overrides: value -> (text, colour or None)."""
+    return [{"type": "value", "options": {
+        value: ({"text": text, "color": colour, "index": i} if colour else {"text": text, "index": i})
+        for i, (value, (text, colour)) in enumerate(options.items())}}]
+
+
+def value_mappings(panel: Panel) -> list[dict]:
+    if panel.unit == "state":
+        return mapping({k: (v.text, v.color) for k, v in STATE.items()})
+    if panel.unit == "coverage":
+        return mapping({"0": ("Unknown", UNKNOWN_GREY), "1": ("Reporting", "#2f6bd0")})
+    if panel.unit == "bool":
+        return mapping({"1": (panel.words[0], None), "0": (panel.words[1], None)})
+    return []
 
 
 def legend(panel: Panel) -> str:
@@ -189,7 +242,7 @@ def catalogue() -> list[Board]:
                   "table", "tnwks-sites", empty="All ready or standby"),
                 p("Current firing alerts", alerts("firing"), "short",
                   "Current Prometheus rule state, excluding heartbeats; this is not a historical Alertmanager event list and does not show silence/inhibition state.",
-                  "table", "tnwks-alerts", empty=NO_ALERTS),
+                  "table", "tnwks-alerts", empty=NO_ALERTS, column=None),
                 p("Recovery evidence", metric("homelab:recovery_state"), "state",
                   "Per-app prerequisites. Unknown fencing or untested recovery blocks a positive readiness conclusion. A dashboard never authorizes promotion.", "table", "tnwks-data"),
                 p("Archive reachable", metric("homelab:archive_state"), "state",
@@ -210,19 +263,19 @@ def catalogue() -> list[Board]:
                 p("Ready nodes", f'sum by (k8s_cluster) ({metric("kube_node_status_condition", "condition=\"Ready\",status=\"true\"")})', "short",
                   "Ready nodes per Kubernetes cluster. These nested Talos nodes share the Windows/WSL host's physical CPU, RAM and disk."),
                 p("Cross-site observation", metric("homelab_peer_probe_success"), "bool",
-                  "Fresh bounded probes from one site to the other. Observer identity is retained; this is connectivity evidence, not the remote site's internal condition.", "table"),
+                  "Fresh bounded probes from one site to the other. Observer identity is retained; this is connectivity evidence, not the remote site's internal condition.", "table", words=("Observed", "Not observed")),
             ],
             "Placement": [
                 p("Workload state", metric("homelab:workload_state"), "state",
                   "Per app and site, from replica counts: ready, degraded, failed, or a deliberate standby at zero replicas. A site that stops reporting shows Unknown.", "table"),
                 p("Declared placement", metric("homelab_expected_workload_info"), "short",
-                  "Expected app/site/tier inventory independent of discovery. Standbys and hardware-pinned applications remain visible.", "table"),
+                  "Expected app/site/tier inventory independent of discovery. Standbys and hardware-pinned applications remain visible.", "table", column=None),
                 p("Desired replicas", metric("homelab_workload_desired_replicas"), "short",
                   "Effective workload desired replicas from the local Kubernetes API, separate from git's default placement.", "table"),
                 p("Ready replicas", metric("homelab_workload_ready_replicas"), "short",
                   "Observed readiness. Ready replicas do not prove the global ingress is serving this site.", "table"),
                 p("Runtime overrides present", metric("homelab_site_override_present"), "bool",
-                  "Presence of flux-system/site-overrides. Raw contents and secret-like values are never exposed.", "table"),
+                  "Presence of flux-system/site-overrides. Raw contents and secret-like values are never exposed.", "table", column="Overrides", words=("Present", "None")),
                 p("Override creation age", f'time() - {metric("homelab_site_override_created_timestamp_seconds")}', "s",
                   "Age of creation, not last modification. Consult structured operation events for when a particular override changed.", "table",
                   empty="No overrides"),
@@ -235,9 +288,9 @@ def catalogue() -> list[Board]:
                 p("Fence job age", f'time() - {metric("homelab_fence_job_last_success_timestamp_seconds")}', "s",
                   "Last successful fleet fence Job. It may succeed with unreadable leases, so this never establishes per-app fencing.", "table"),
                 p("Lease authority reachable", metric("homelab_lease_authority_reachable"), "bool",
-                  "The current TXT lookup returned a recognized site or none. Reachability does not prove a former primary was fenced.", "table"),
+                  "The current TXT lookup returned a recognized site or none. Reachability does not prove a former primary was fenced.", "table", column="Lease authority", words=("Reachable", "Unreachable")),
                 p("Lease blocks this site", metric("homelab_site_lease_blocks_local"), "bool",
-                  "One means the lease prohibits this site from serving the app. Zero alone cannot authorize promotion.", "table"),
+                  "One means the lease prohibits this site from serving the app. Zero alone cannot authorize promotion.", "table", column="Lease", words=("Blocks this site", "Clear")),
                 p("Last restore evidence", f'time() - {metric("homelab_restore_last_success_timestamp_seconds")}', "s",
                   "Per-app restore evidence, not one successful fleet CronJob. Missing per-app results remain Unknown.", "table"),
             ],
@@ -257,9 +310,9 @@ def catalogue() -> list[Board]:
               "Are databases healthy, and can each application's data actually be recovered?", {
             "Databases": [
                 p("Expected databases", metric("homelab_expected_database_info"), "short",
-                  "Expected database inventory by site/namespace/db_cluster. The Kubernetes site label is never overloaded with the CNPG name.", "table"),
+                  "Expected database inventory by site/namespace/db_cluster. The Kubernetes site label is never overloaded with the CNPG name.", "table", column=None),
                 p("CNPG role: in recovery", metric("homelab:database_in_recovery"), "bool",
-                  "PostgreSQL's observed recovery state. Zero means primary role, not fencing proof. Same-name databases at two sites stay distinct.", "table"),
+                  "PostgreSQL's observed recovery state. Zero means primary role, not fencing proof. Same-name databases at two sites stay distinct.", "table", column="Role", words=("Replica", "Primary")),
                 p("Connections", f'sum by (k8s_cluster, namespace, db_cluster) ({metric("homelab:database_connections")})', "short",
                   "Observed database connections; compare against the configured limit and wait/transaction evidence."),
                 p("Replay timestamp lag", metric("homelab:database_replay_lag_seconds"), "s",
@@ -308,7 +361,7 @@ def catalogue() -> list[Board]:
               "Where does the path from the router through FRR/Cilium to a service fail?", {
             "Paths": [
                 p("Site path probes", metric("homelab_peer_probe_success"), "bool",
-                  "Cross-site probe success from each observer. Read with transport and endpoint evidence; a BGP Established session alone is insufficient.", "table"),
+                  "Cross-site probe success from each observer. Read with transport and endpoint evidence; a BGP Established session alone is insufficient.", "table", column="Path", words=("Up", "Down")),
                 # The router, seen by homelab-wsl's mktxp: not scoped to $cluster.
                 p("Site tunnel traffic", 'sum by (interface) (rate(mktxp_peer_rx_total{interface=~"wg-site[0-9]+"}[5m]))', "Bps",
                   "Received on the router's WireGuard interface for each site's distro. Missing series mean the router isn't observed, not an idle tunnel."),
@@ -317,15 +370,15 @@ def catalogue() -> list[Board]:
                 p("Path by hop", metric("homelab:network_path_state"), "state",
                   "Per site: the WireGuard tunnel to the router (handshake within 180 s), the router's BGP session with the distro's FRR, the Cilium agents' sessions with the distro, and the mesh (the site's agents and its KVStoreMesh both have the other cluster ready). Unknown when the router or the agents aren't observed.", "table"),
                 p("Shared VIP routes", metric("homelab:shared_vip_route"), "bool",
-                  "Which site the router sends each shared VIP to (1): the preferred site while its BGP session is up, else the other. Inferred from the router's live sessions and the declared local preference, not read from its route table. A client behind a site (its pods, the WSL host) reaches that site's own ingress either way.", "table"),
+                  "Which site the router sends each shared VIP to (1): the preferred site while its BGP session is up, else the other. Inferred from the router's live sessions and the declared local preference, not read from its route table. A client behind a site (its pods, the WSL host) reaches that site's own ingress either way.", "table", column="Carries the VIP", words=("Yes", "—")),
                 p("Routes received per site", 'max by (k8s_cluster) (homelab:router_bgp_prefixes{k8s_cluster=~"$cluster"})', "short",
                   "Prefixes the router accepted from each site's FRR (its node, pod and shared-VIP routes). Zero with an established session means the site announces nothing.", "stat"),
                 p("Cilium drops", f'sum by (k8s_cluster, reason) (rate({metric("cilium_drop_count_total")}[5m]))', "pps",
                   "Agent drop counters, with bounded labels. Cilium metrics activation belongs to the post-network-release integration."),
                 p("Mesh connectivity", metric("cilium_clustermesh_remote_cluster_readiness_status"), "bool",
-                  "Each Cilium agent's readiness for the other cluster, through its own site's KVStoreMesh cache.", "table"),
+                  "Each Cilium agent's readiness for the other cluster, through its own site's KVStoreMesh cache.", "table", column="Mesh", words=("Connected", "Disconnected")),
                 p("KVStoreMesh remote cluster", f'max by (k8s_cluster, target_cluster) ({selector("cilium_kvstoremesh_remote_cluster_readiness_status")})', "bool",
-                  "Whether the site's clustermesh-apiserver (KVStoreMesh) has the other cluster's state synchronized. While it's down, agents keep serving the last cached state.", "table"),
+                  "Whether the site's clustermesh-apiserver (KVStoreMesh) has the other cluster's state synchronized. While it's down, agents keep serving the last cached state.", "table", column="KVStoreMesh", words=("Ready", "Not ready")),
                 p("Mesh sync errors", f'sum by (k8s_cluster, scope) (rate({selector("cilium_kvstoremesh_kvstore_sync_errors_total")}[$__rate_interval]))', "ops",
                   "KVStoreMesh errors writing the other cluster's nodes, services and identities into the local cache. Any is worth a look; persistent ones leave stale cross-site endpoints."),
                 p("Mesh remote failures", f'max by (k8s_cluster, target_cluster) ({selector("cilium_kvstoremesh_remote_cluster_failures")})', "short",
@@ -353,7 +406,7 @@ def catalogue() -> list[Board]:
                   "Packets dropped per interface, received or sent: queues full or the frame refused. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed."),
                 p("Interface link", 'max by (name) (mktxp_interface_running) and on (name) (max by (name) (mktxp_interface_disabled) == 0)', "bool",
                   "Whether each enabled interface is running. A port with nothing plugged in is false here, which is only a problem for a port that should be in use. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed.",
-                  "table"),
+                  "table", column="Link", words=("Up", "Down")),
                 p("Address pool use", 'max by (pool) (mktxp_ip_pool_used) / max by (pool) (mktxp_ip_pool_total)', "percentunit",
                   "Share of each DHCP address pool leased. A full pool refuses new clients on that VLAN. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed.",
                   "table"),
@@ -365,7 +418,7 @@ def catalogue() -> list[Board]:
                   "Traffic matched by each filter rule that drops, in bytes per second as mktxp counts it. The rule name is its chain, action and Terraform comment. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed."),
                 p("Firmware upgrade", 'max by (routerboard_name, current_firmware, upgrade_firmware) (mktxp_routerboard_firmware_upgrade_available)', "bool",
                   "Whether the RouterBOOT firmware is behind the installed RouterOS. It's upgraded from the router, followed by a reboot. Only site 1's mktxp observes the router, so the site filter doesn't apply; no series means the router isn't observed.",
-                  "table"),
+                  "table", column="Upgrade", words=("Available", "Up to date")),
             ],
             "History": [
                 p("Router BGP session resets", f'max by (k8s_cluster, routerboard_name, name) (resets({selector("mktxp_bgp_uptime")}[$__range])) > 0', "short",
@@ -433,9 +486,9 @@ def catalogue() -> list[Board]:
               "Is desired state reconciling, and which resource or controller is blocking it?", {
             "Reconciliation": [
                 p("Flux resource readiness", metric("homelab_flux_resource_ready"), "bool",
-                  "Current Ready conditions read from the API with revision/suspension shown separately. A live controller process can still fail reconciliation.", "table"),
+                  "Current Ready conditions read from the API with revision/suspension shown separately. A live controller process can still fail reconciliation.", "table", column="Ready", words=("Ready", "Not ready")),
                 p("Suspended resources", metric("homelab_flux_resource_suspended"), "bool",
-                  "Declared suspension; do not report deliberate suspension as a controller crash.", "table"),
+                  "Declared suspension; do not report deliberate suspension as a controller crash.", "table", column="Reconciling", words=("Suspended", "Active")),
                 p("Reconcile failures", f'sum by (k8s_cluster, controller) (rate({metric("controller_runtime_reconcile_total", "result=\"error\"")}[5m]))', "ops",
                   "Controller process metrics supplement the CR Ready state; controller PodMonitor access needs explicit network-policy integration."),
             ],
@@ -484,7 +537,7 @@ def catalogue() -> list[Board]:
                 p("Name state by site", metric("homelab:ingress_state"), "state",
                   "Each site's collector uses every shared-VIP name as a client would: the router's DNS answer must be the name's VIP, TLS must verify, and that site's ingress must route the host (any answer but a 404 or 5xx). A pod reaches its own site's ingress for either VIP, so this is each site's readiness to serve the name.", "table"),
                 p("Served by", f'max by (k8s_cluster, name, served_cluster) ({selector("homelab_ingress_served_by_info")})', "short",
-                  "The site each ingress said served the request (its X-Homelab-Site header). It matches the observer's site, because each site's pods reach their own ingress.", "table"),
+                  "The site each ingress said served the request (its X-Homelab-Site header). It matches the observer's site, because each site's pods reach their own ingress.", "table", column=None),
                 p("Name certificate remaining", metric("homelab:ingress_cert_remaining_seconds"), "s",
                   "Certificate the client saw for each name, per site. Under 14 days alerts; cert-manager renews at 30.", "table"),
             ],
@@ -493,7 +546,7 @@ def catalogue() -> list[Board]:
             "Analytics": [
                 p("Analytics health", f'max by (k8s_cluster, component) ({selector("plausible_health")})', "bool",
                   "Plausible's health API per component (Postgres, ClickHouse, sessions, the sites cache), polled by its exporter. The Plausible probe on User paths is the independent check.",
-                  "table"),
+                  "table", column="Health", words=("Up", "Down")),
                 p("Visitors today", f'max by (k8s_cluster, site_id) ({selector("plausible_visitors")})', "short",
                   "Unique visitors per tracked site so far today (Plausible's day period, in the site's time zone). It resets at midnight, so read it as a running count."),
                 p("Page views today", f'max by (k8s_cluster, site_id) ({selector("plausible_pageviews")})', "short",
@@ -552,7 +605,7 @@ def catalogue() -> list[Board]:
               "Can the other dashboards be trusted, and is monitoring itself sustainable?", {
             "Trust": coverage() + [
                 p("Collector source success", metric("homelab_collection_success"), "bool",
-                  "Collector-specific upstream success. HTTP scrape success can coexist with a blind collector.", "table"),
+                  "Collector-specific upstream success. HTTP scrape success can coexist with a blind collector.", "table", column="Source", words=("OK", "Failing")),
                 p("Scrape failures", f'count by (k8s_cluster, job) ({metric("up")} == 0) or on (k8s_cluster) (0 * count by (k8s_cluster) ({metric("up")}))', "short",
                   "Failed targets per job; a site showing 0 has none. Compare with declared inventory to detect targets that disappeared from discovery.", "table"),
             ],
@@ -602,10 +655,10 @@ def catalogue() -> list[Board]:
             "Current": [
                 p("Firing now", alerts("firing"), "short",
                   "Current Prometheus firing state, independent of the dashboard historical time selection, excluding heartbeats. Follow the rule's dashboard/runbook annotation for diagnosis.",
-                  "table", empty=NO_ALERTS),
+                  "table", empty=NO_ALERTS, column=None),
                 p("Pending now", alerts("pending"), "short",
                   "Pending is not yet firing. Alertmanager silencing/inhibition and notification state are viewed through the per-site Alertmanager links.",
-                  "table", empty=NO_ALERTS),
+                  "table", empty=NO_ALERTS, column=None),
             ],
             "Alertmanager": [
                 p("Alerts in Alertmanager", f'sum by (k8s_cluster, state) ({selector("alertmanager_alerts")})', "short",
@@ -613,7 +666,7 @@ def catalogue() -> list[Board]:
                 p("Active silences", f'max by (k8s_cluster) ({selector("alertmanager_silences", "state=\"active\"")})', "short",
                   "Silences in force. A forgotten silence hides real alerts; check each one has an end time and a reason.", "stat"),
                 p("Configuration loaded", f'min by (k8s_cluster) ({selector("alertmanager_config_last_reload_successful")})', "bool",
-                  "Whether each Alertmanager's last configuration reload succeeded. A failed reload keeps the previous routes and receivers.", "stat"),
+                  "Whether each Alertmanager's last configuration reload succeeded. A failed reload keeps the previous routes and receivers.", "stat", words=("Loaded", "Failed")),
                 p("Notifications sent", f'sum by (k8s_cluster, integration) (increase({selector("alertmanager_notifications_total")}[1h]))', "short",
                   "Notification attempts per integration in the last hour."),
                 p("Failed notifications", f'sum by (k8s_cluster, integration) (increase({metric("alertmanager_notifications_failed_total")}[1h]))', "short",
@@ -642,32 +695,8 @@ def catalogue() -> list[Board]:
 def visualization(panel: Panel, runbook: str | None = None):
     cls = {"stat": stat.Visualization, "table": table.Visualization,
            "timeseries": timeseries.Visualization}[panel.kind]
-    viz = cls().unit("short" if panel.unit in ("state", "coverage") else panel.unit).no_value(panel.empty)
-    if panel.unit == "state":
-        viz.mappings([model.ValueMap(options=STATE)])
-    if panel.unit == "coverage":
-        viz.mappings([model.ValueMap(options={
-            "0": model.ValueMappingResult(text="Unknown", color="#6b6b6b"),
-            "1": model.ValueMappingResult(text="Reporting", color="#2f6bd0"),
-        })])
-    if panel.kind == "table":
-        viz.min_width(70)
-    # Colored text failed WCAG contrast for most states on the light theme
-    # (Degraded 2.0:1). State cells and stats are colored backgrounds instead:
-    # Grafana writes white text on the dark ones (5.1-5.5:1, the STATE palette)
-    # and black on amber (10.2:1). The word carries the state, never the color.
-    if panel.kind == "table" and panel.unit in ("state", "coverage"):
-        viz.override_by_name("State", [model.DynamicConfigValue(
-            id_val="custom.cellOptions", value={"type": "color-background", "mode": "basic"})])
-    if panel.kind == "stat" and panel.unit in ("state", "coverage"):
-        viz.color_mode(common.BigValueColorMode.BACKGROUND)
-    if panel.kind == "stat":
-        viz.reduce_options(common_builder.ReduceDataOptions().calcs(["lastNotNull"]).values(False))
-        if panel.unit not in ("state", "coverage"):
-            viz.color_scheme(dashboard.FieldColor().mode(model.FieldColorModeId.FIXED).fixed_color("#5794f2"))
-    if panel.kind == "timeseries":
-        viz.legend(common_builder.VizLegendOptions().display_mode(common.LegendDisplayMode.TABLE)
-                   .placement(common.LegendPlacement.BOTTOM).calcs(["lastNotNull", "max"]))
+    unit = "none" if panel.unit in ("state", "coverage", "bool") else panel.unit
+    viz = cls().no_value(panel.empty)
     links = []
     if panel.link:
         uid, entity = (panel.link, None) if isinstance(panel.link, str) else panel.link
@@ -676,6 +705,51 @@ def visualization(panel: Panel, runbook: str | None = None):
         links.append(model.DataLink(title="Diagnose", url=dashboard_link(uid, entity, panel.kind == "table")))
     if runbook:
         links.append(model.DataLink(title="Runbook", url=f'https://github.com/iT3E/tnwks-ops/blob/main/{runbook}', target_blank=True))
+    if panel.unit in ("state", "coverage"):
+        viz.thresholds(dashboard.ThresholdsConfig().mode(model.ThresholdsMode.ABSOLUTE)
+                       .steps([model.Threshold(value=None, color=UNKNOWN_GREY)]))
+    if panel.kind == "table":
+        # Unit, words, colour and links belong to the value column alone: on the
+        # defaults they reach the label columns too (a RouterOS version read
+        # "7.25 s", and every cell was an underlined link).
+        viz.min_width(70)
+        header = value_header(panel)
+        properties = [model.DynamicConfigValue(id_val="unit", value=unit)]
+        if value_mappings(panel):
+            properties.append(model.DynamicConfigValue(id_val="mappings", value=value_mappings(panel)))
+        # Colored text failed WCAG contrast for most states on the light theme
+        # (Degraded 2.0:1). State cells are colored backgrounds instead: Grafana
+        # writes white text on the dark ones (5.1-5.5:1, the STATE palette) and
+        # black on amber (10.2:1). The word carries the state, never the color.
+        if panel.unit in ("state", "coverage"):
+            properties.append(model.DynamicConfigValue(
+                id_val="custom.cellOptions", value={"type": "color-background", "mode": "basic"}))
+        link_property = model.DynamicConfigValue(
+            id_val="links", value=[json.loads(json.dumps(link, cls=JSONEncoder)) for link in links])
+        if header:
+            viz.override_by_name(header, properties + ([link_property] if links else []))
+        elif links:
+            # No value column: the row's site carries the links.
+            viz.override_by_name("Site", [link_property])
+        return viz
+    viz.unit(unit)
+    if value_mappings(panel):
+        viz.mappings([model.ValueMap(options={
+            value: model.ValueMappingResult(text=result["text"], color=result.get("color"))
+            for value, result in value_mappings(panel)[0]["options"].items()})])
+    if panel.kind == "stat" and panel.unit in ("state", "coverage"):
+        viz.color_mode(common.BigValueColorMode.BACKGROUND)
+    if panel.kind == "stat":
+        viz.reduce_options(common_builder.ReduceDataOptions().calcs(["lastNotNull"]).values(False))
+        if panel.unit not in ("state", "coverage"):
+            viz.color_scheme(dashboard.FieldColor().mode(model.FieldColorModeId.FIXED).fixed_color("#5794f2"))
+    if panel.kind == "timeseries":
+        # The SDK leaves the legend off; without it a multi-series graph is unreadable.
+        viz.legend(common_builder.VizLegendOptions().show_legend(True)
+                   .display_mode(common.LegendDisplayMode.TABLE)
+                   .placement(common.LegendPlacement.BOTTOM).calcs(["lastNotNull", "max"]))
+        viz.tooltip(common_builder.VizTooltipOptions().mode(common.TooltipDisplayMode.MULTI)
+                    .sort(common.SortOrder.DESCENDING))
     if links:
         viz.data_links(links)
     return viz
@@ -725,13 +799,16 @@ def resource(board: Board) -> dict:
             data = dashboard.QueryGroup().target(dashboard.Target().ref_id("A").query(query))
             if panel.kind == "table":
                 query.format(prom_model.PromQueryFormat.TABLE)
+                header = value_header(panel)
+                hidden = dict.fromkeys(SCRAPE_COLUMNS, True) | ({} if header else {"Value": True})
                 data.transformation(dashboard.Transformation().group("organize").options({
-                    "excludeByName": dict.fromkeys(SCRAPE_COLUMNS, True),
-                    "indexByName": {"Value": 0, "k8s_cluster": 1, "app": 2, "db_cluster": 2},
-                    "renameByName": {"k8s_cluster": "Site", "db_cluster": "Database",
-                                     "app": "App", "observer_cluster": "Observer",
-                                     "Value": {"state": "State", "coverage": "State",
-                                               "dateTimeAsIso": "When"}.get(panel.unit, "Value")},
+                    "excludeByName": hidden,
+                    # A state or yes/no is the answer you scan for: first, where a narrow panel
+                    # can't clip it. Other values follow the thing they describe.
+                    "indexByName": ({"Value": 0, "k8s_cluster": 1, "app": 2, "db_cluster": 2}
+                                    if panel.unit in ("state", "coverage", "bool")
+                                    else {"k8s_cluster": 0, "app": 1, "db_cluster": 1}),
+                    "renameByName": LABELS | ({"Value": header} if header else {}),
                 }))
             description = panel.description
             if not board.kiosk:

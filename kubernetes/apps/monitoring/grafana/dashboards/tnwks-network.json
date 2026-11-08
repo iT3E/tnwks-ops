@@ -104,10 +104,46 @@
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "Path"
                       }
                     }
                   }
@@ -134,14 +170,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "bool",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -149,7 +177,48 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Path"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "1": {
+                                "text": "Up",
+                                "index": 0
+                              },
+                              "0": {
+                                "text": "Down",
+                                "index": 1
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -201,15 +270,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -296,9 +365,45 @@
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
                         "Value": "State"
                       }
                     }
@@ -326,49 +431,15 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
-                  "mappings": [
-                    {
-                      "type": "value",
-                      "options": {
-                        "0": {
-                          "text": "Unknown",
-                          "color": "#6b6b6b"
-                        },
-                        "1": {
-                          "text": "Healthy",
-                          "color": "#1a7f37"
-                        },
-                        "2": {
-                          "text": "Degraded",
-                          "color": "#e5ac0e"
-                        },
-                        "3": {
-                          "text": "Failed",
-                          "color": "#c4302b"
-                        },
-                        "4": {
-                          "text": "Standby",
-                          "color": "#2f6bd0"
-                        },
-                        "5": {
-                          "text": "Not applicable",
-                          "color": "#6b6b6b"
-                        },
-                        "6": {
-                          "text": "Maintenance",
-                          "color": "#8a4fb5"
-                        }
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
                       }
-                    }
-                  ],
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
+                    ]
+                  },
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -384,11 +455,70 @@
                     },
                     "properties": [
                       {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "0": {
+                                "text": "Unknown",
+                                "color": "#6b6b6b",
+                                "index": 0
+                              },
+                              "1": {
+                                "text": "Healthy",
+                                "color": "#1a7f37",
+                                "index": 1
+                              },
+                              "2": {
+                                "text": "Degraded",
+                                "color": "#e5ac0e",
+                                "index": 2
+                              },
+                              "3": {
+                                "text": "Failed",
+                                "color": "#c4302b",
+                                "index": 3
+                              },
+                              "4": {
+                                "text": "Standby",
+                                "color": "#2f6bd0",
+                                "index": 4
+                              },
+                              "5": {
+                                "text": "Not applicable",
+                                "color": "#6b6b6b",
+                                "index": 5
+                              },
+                              "6": {
+                                "text": "Maintenance",
+                                "color": "#8a4fb5",
+                                "index": 6
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
                         "id": "custom.cellOptions",
                         "value": {
                           "type": "color-background",
                           "mode": "basic"
                         }
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                            "targetBlank": true
+                          }
+                        ]
                       }
                     ]
                   }
@@ -463,10 +593,46 @@
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "Carries the VIP"
                       }
                     }
                   }
@@ -493,14 +659,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "bool",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -508,7 +666,48 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Carries the VIP"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "1": {
+                                "text": "Yes",
+                                "index": 0
+                              },
+                              "0": {
+                                "text": "—",
+                                "index": 1
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -640,15 +839,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -735,10 +934,46 @@
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "Mesh"
                       }
                     }
                   }
@@ -765,14 +1000,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "bool",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -780,7 +1007,48 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Mesh"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "1": {
+                                "text": "Connected",
+                                "index": 0
+                              },
+                              "0": {
+                                "text": "Disconnected",
+                                "index": 1
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -851,10 +1119,46 @@
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "KVStoreMesh"
                       }
                     }
                   }
@@ -881,14 +1185,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "bool",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -896,7 +1192,48 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "KVStoreMesh"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "1": {
+                                "text": "Ready",
+                                "index": 0
+                              },
+                              "0": {
+                                "text": "Not ready",
+                                "index": 1
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -948,15 +1285,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -1024,15 +1361,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -1112,17 +1449,52 @@
                         "service": true
                       },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "k8s_cluster": 0,
+                        "app": 1,
+                        "db_cluster": 1
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "Router uptime"
                       }
                     }
                   }
@@ -1149,14 +1521,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "s",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -1164,7 +1528,30 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Router uptime"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -1216,15 +1603,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -1292,15 +1679,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -1368,15 +1755,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -1444,15 +1831,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -1520,15 +1907,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -1596,15 +1983,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -1672,15 +2059,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -1748,15 +2135,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -1843,10 +2230,46 @@
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "Link"
                       }
                     }
                   }
@@ -1873,14 +2296,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "bool",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -1888,7 +2303,48 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Link"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "1": {
+                                "text": "Up",
+                                "index": 0
+                              },
+                              "0": {
+                                "text": "Down",
+                                "index": 1
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -1952,17 +2408,52 @@
                         "service": true
                       },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "k8s_cluster": 0,
+                        "app": 1,
+                        "db_cluster": 1
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "Address pool use"
                       }
                     }
                   }
@@ -1989,14 +2480,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "percentunit",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -2004,7 +2487,30 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Address pool use"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "percentunit"
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -2056,15 +2562,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -2132,15 +2638,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -2208,15 +2714,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -2303,10 +2809,46 @@
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "Upgrade"
                       }
                     }
                   }
@@ -2333,14 +2875,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "bool",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "Unknown — missing evidence",
                   "custom": {
                     "align": "auto",
@@ -2348,7 +2882,48 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Upgrade"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "1": {
+                                "text": "Available",
+                                "index": 0
+                              },
+                              "0": {
+                                "text": "Up to date",
+                                "index": 1
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -2412,17 +2987,52 @@
                         "service": true
                       },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "k8s_cluster": 0,
+                        "app": 1,
+                        "db_cluster": 1
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "Router BGP session resets"
                       }
                     }
                   }
@@ -2449,14 +3059,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "None in range",
                   "custom": {
                     "align": "auto",
@@ -2464,7 +3066,30 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Router BGP session resets"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -2528,17 +3153,52 @@
                         "service": true
                       },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "k8s_cluster": 0,
+                        "app": 1,
+                        "db_cluster": 1
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "Cilium BGP session changes"
                       }
                     }
                   }
@@ -2565,14 +3225,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "None in range",
                   "custom": {
                     "align": "auto",
@@ -2580,7 +3232,30 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Cilium BGP session changes"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -2644,17 +3319,52 @@
                         "service": true
                       },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "k8s_cluster": 0,
+                        "app": 1,
+                        "db_cluster": 1
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "Value": "Path hop changes"
                       }
                     }
                   }
@@ -2681,14 +3391,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "None in range",
                   "custom": {
                     "align": "auto",
@@ -2696,7 +3398,30 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Path hop changes"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },

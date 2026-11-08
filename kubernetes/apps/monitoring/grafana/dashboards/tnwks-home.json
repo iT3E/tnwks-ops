@@ -85,15 +85,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -161,15 +161,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -237,15 +237,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -327,7 +327,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
+                  "unit": "none",
                   "mappings": [
                     {
                       "type": "value",
@@ -363,6 +363,15 @@
                       }
                     }
                   ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
                   "links": [
                     {
                       "title": "Runbook",
@@ -424,15 +433,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -514,7 +523,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
+                  "unit": "none",
                   "mappings": [
                     {
                       "type": "value",
@@ -550,6 +559,15 @@
                       }
                     }
                   ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
                   "links": [
                     {
                       "title": "Runbook",
@@ -611,15 +629,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {

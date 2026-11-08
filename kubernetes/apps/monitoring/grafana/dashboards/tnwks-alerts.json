@@ -94,20 +94,55 @@
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
-                        "service": true
+                        "service": true,
+                        "Value": true
                       },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "k8s_cluster": 0,
+                        "app": 1,
+                        "db_cluster": 1
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective"
                       }
                     }
                   }
@@ -134,14 +169,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "None",
                   "custom": {
                     "align": "auto",
@@ -149,7 +176,26 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Site"
+                    },
+                    "properties": [
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -210,20 +256,55 @@
                         "observer_cluster": true,
                         "pod": true,
                         "prometheus": true,
-                        "service": true
+                        "service": true,
+                        "Value": true
                       },
                       "indexByName": {
-                        "Value": 0,
-                        "k8s_cluster": 1,
-                        "app": 2,
-                        "db_cluster": 2
+                        "k8s_cluster": 0,
+                        "app": 1,
+                        "db_cluster": 1
                       },
                       "renameByName": {
                         "k8s_cluster": "Site",
-                        "db_cluster": "Database",
                         "app": "App",
+                        "db_cluster": "Database",
                         "observer_cluster": "Observer",
-                        "Value": "Value"
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective"
                       }
                     }
                   }
@@ -250,14 +331,6 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
-                  "links": [
-                    {
-                      "title": "Runbook",
-                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
-                      "targetBlank": true
-                    }
-                  ],
                   "noValue": "None",
                   "custom": {
                     "align": "auto",
@@ -265,7 +338,26 @@
                     "minWidth": 70
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Site"
+                    },
+                    "properties": [
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Runbook",
+                            "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/observability-implementation.md",
+                            "targetBlank": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           },
@@ -317,15 +409,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -487,7 +579,20 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "bool",
+                  "unit": "none",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "1": {
+                          "text": "Loaded"
+                        },
+                        "0": {
+                          "text": "Failed"
+                        }
+                      }
+                    }
+                  ],
                   "color": {
                     "mode": "fixed",
                     "fixedColor": "#5794f2"
@@ -553,15 +658,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {
@@ -629,15 +734,15 @@
                 "legend": {
                   "displayMode": "table",
                   "placement": "bottom",
-                  "showLegend": false,
+                  "showLegend": true,
                   "calcs": [
                     "lastNotNull",
                     "max"
                   ]
                 },
                 "tooltip": {
-                  "mode": "single",
-                  "sort": "asc"
+                  "mode": "multi",
+                  "sort": "desc"
                 }
               },
               "fieldConfig": {

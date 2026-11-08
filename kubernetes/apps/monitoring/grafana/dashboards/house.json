@@ -99,7 +99,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
+                  "unit": "none",
                   "mappings": [
                     {
                       "type": "value",
@@ -135,6 +135,15 @@
                       }
                     }
                   ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -203,7 +212,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
+                  "unit": "none",
                   "mappings": [
                     {
                       "type": "value",
@@ -239,6 +248,15 @@
                       }
                     }
                   ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -307,7 +325,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
+                  "unit": "none",
                   "mappings": [
                     {
                       "type": "value",
@@ -343,6 +361,15 @@
                       }
                     }
                   ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -411,7 +438,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
+                  "unit": "none",
                   "mappings": [
                     {
                       "type": "value",
@@ -447,6 +474,15 @@
                       }
                     }
                   ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -515,7 +551,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
+                  "unit": "none",
                   "mappings": [
                     {
                       "type": "value",
@@ -551,6 +587,15 @@
                       }
                     }
                   ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
@@ -619,7 +664,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
+                  "unit": "none",
                   "mappings": [
                     {
                       "type": "value",
@@ -655,6 +700,15 @@
                       }
                     }
                   ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
                   "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
