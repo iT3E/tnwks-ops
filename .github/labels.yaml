@@ -8,19 +8,27 @@
   color: "72ccf3"
   description: >-
     Changes made in the github directory
+- name: area/home-assistant
+  color: "72ccf3"
+  description: >-
+    Changes made to the Home Assistant app
 - name: area/kubernetes
   color: "72ccf3"
   description: >-
     Changes made in the kubernetes directory
-# Name must match .github/labeler.yaml
-- name: area/templates
+# Names must match .github/labeler.yaml
+- name: area/observability
   color: "72ccf3"
   description: >-
-    Changes made in the tmpl directory
+    Changes made in the observability directory
+- name: area/talos
+  color: "72ccf3"
+  description: >-
+    Changes made in the talos directory
 - name: area/terraform
   color: "72ccf3"
   description: >-
-    Changes made in the terraform directory
+    Changes made in the infrastructure/terraform directory
 # Renovate
 - name: renovate/ansible
   color: "ffc300"
