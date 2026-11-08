@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.65.0 - 2026-11-08
+
+### Changed
+
+* CI: Terraform plans for every root run from ci.yaml as one matrix and gate Build Success; applies run from the new deploy.yaml. Adding a root is one entry in .github/ci/domains.toml
+
 ## v2.64.0 - 2026-11-08
 
 ### Added
