@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.53.0 - 2026-11-08
+
+### Changed
+
+* CI: hosted jobs run on ubuntu-26.04, every job has a timeout, superseded PR runs cancel in nine more workflows, uv caches save from main only, and the labeler tags terraform, talos and observability changes.
+
 ## v2.52.1 - 2026-11-08
 
 ### Fixed
