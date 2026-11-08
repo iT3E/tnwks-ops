@@ -12,7 +12,7 @@ name: "Privacy (comments)"
 # privacy.yaml; this stays a separate workflow so a skipped run here never
 # stands in for the required privacy check on a PR head.
 on:
-  issue_comment:
+  issue_comment: # zizmor: ignore[dangerous-triggers] no PR code is checked out or run; comment text is only read as data
     types: [created, edited]
   pull_request_review_comment:
     types: [created, edited]

@@ -21,7 +21,8 @@ runs:
       env:
         SOPS_VERSION: v3.13.3
         SOPS_SHA256: e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b
-      run: |
+      # Appends a fixed runner-temp dir that holds only the checksum-verified sops.
+      run: | # zizmor: ignore[github-env]
         mkdir -p "$RUNNER_TEMP/bin"
         curl -fsSL -o "$RUNNER_TEMP/bin/sops" \
           "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64"
@@ -41,19 +42,20 @@ runs:
       env:
         EDGEOS_VIA_TUNNEL: "1"
         EDGEOS_SSH_KEY_FILE: ${{ runner.temp }}/edgeos_ssh_key
+        MODE: ${{ inputs.mode }}
       run: |
         rc_all=0
         : > "$RUNNER_TEMP/edgeos.md"
         for d in infrastructure/edgeos/*/device.json; do
           dev="$(basename "$(dirname "$d")")"
           set +e
-          infrastructure/edgeos/tools/edgeos-sync.py "${{ inputs.mode }}" "$dev" > "$RUNNER_TEMP/$dev.out" 2>&1
+          infrastructure/edgeos/tools/edgeos-sync.py "$MODE" "$dev" > "$RUNNER_TEMP/$dev.out" 2>&1
           rc=$?
           set -e
           cat "$RUNNER_TEMP/$dev.out"
           { echo "**${dev}**"; echo '```'; cat "$RUNNER_TEMP/$dev.out"; echo '```'; } >> "$RUNNER_TEMP/edgeos.md"
           # plan exits 2 when there are changes.
-          if [ "$rc" -ne 0 ] && ! { [ "${{ inputs.mode }}" = plan ] && [ "$rc" -eq 2 ]; }; then rc_all=1; fi
+          if [ "$rc" -ne 0 ] && ! { [ "$MODE" = plan ] && [ "$rc" -eq 2 ]; }; then rc_all=1; fi
         done
         cat "$RUNNER_TEMP/edgeos.md" >> "$GITHUB_STEP_SUMMARY"
         {
