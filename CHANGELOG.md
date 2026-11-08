@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.51.0 - 2026-11-08
+
+### Changed
+
+* Grafana navigation: a click on data goes one level down in one click and names where (Open Internet, Open Host); runbooks moved to each panel's header; every board's top bar links up to Homelab and its domain board and down to its diagnose boards; Needs attention rows open their own area's board; Homelab gains a Hosts tile from a new per-host state (CPU, memory commit, disk latency, disk space)
+
 ## v2.50.0 - 2026-11-08
 
 ### Added

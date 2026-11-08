@@ -1,3 +1,0 @@
-kind: Changed
-body: 'Grafana navigation: a click on data goes one level down in one click and names where (Open Internet, Open Host); runbooks moved to each panel''s header; every board''s top bar links up to Homelab and its domain board and down to its diagnose boards; Needs attention rows open their own area''s board; Homelab gains a Hosts tile from a new per-host state (CPU, memory commit, disk latency, disk space)'
-time: 2026-11-07T20:43:07.775290214-08:00
