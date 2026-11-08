@@ -72,8 +72,8 @@
       {
         "name": "config-changedetection-0",
         "policy": "changedetection",
-        "uid": 1000,
-        "gid": 1000,
+        "uid": 568,
+        "gid": 568,
         "create": {
           "capacity": "1Gi",
           "storageClass": "local-path"
