@@ -289,7 +289,7 @@
               }
             }
           },
-          "description": "Each host's resources, graded: CPU busy over 15 minutes (Degraded above 85%, Failed above 95%), RAM in use over 15 minutes (90%, 97%), latency of the slowest busy volume (50 ms, 200 ms) and the fullest volume's free space (below 10%, 5%). Unknown when the host's exporter is down. Click a row for that host's detail.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Each host's resources, graded: CPU busy over 15 minutes (Degraded above 85%, Failed above 95%), RAM in use over 15 minutes (90%, 97%), latency of the slowest busy volume (50 ms, 200 ms) and the fullest volume's free space (below 10%, 5%); and its WSL VM's CPU (85%, 95%), memory (90%, 97%), disk space (below 10%, 5%) and I/O stall (10%, 25% of the time). Unknown when the host's exporter is down. Click a row for that host's detail.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-2": {
@@ -642,6 +642,180 @@
         "kind": "Panel",
         "spec": {
           "id": 7,
+          "title": "WSL VM CPU busy",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster, instance) ((max by (k8s_cluster) (1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval])))) * on (k8s_cluster) group_left (instance) (0 * max by (k8s_cluster, instance) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\"}) + 1))",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "links": [
+                    {
+                      "title": "Open Host",
+                      "url": "/d/tnwks-host/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-host=${__field.labels.instance:percentencode}",
+                      "oneClick": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Share of each site's WSL VM processors (its .wslconfig limit, fewer than the host's) doing work. Full while its host has room, the VM's limit is the ceiling. Click a line for that host's detail (its WSL VM tab).\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "id": 8,
+          "title": "WSL VM memory in use",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster, instance) ((max by (k8s_cluster) (1 - node_memory_MemAvailable_bytes{k8s_cluster=~\"$cluster\"} / node_memory_MemTotal_bytes{k8s_cluster=~\"$cluster\"})) * on (k8s_cluster) group_left (instance) (0 * max by (k8s_cluster, instance) (windows_cpu_logical_processor{k8s_cluster=~\"$cluster\"}) + 1))",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "links": [
+                    {
+                      "title": "Open Host",
+                      "url": "/d/tnwks-host/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-host=${__field.labels.instance:percentencode}",
+                      "oneClick": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Share of each site's WSL VM memory (its .wslconfig limit) not available to new work; page cache counts as available. Click a line for that host's detail (its WSL VM tab).\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "id": 9,
           "title": "Windows disk free",
           "links": [
             {
@@ -819,10 +993,10 @@
           "description": "Physical free space remains authoritative even if an ext4 VHDX reports much more virtual space.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-7": {
+      "panel-9": {
         "kind": "Panel",
         "spec": {
-          "id": 8,
+          "id": 10,
           "title": "Disk temperature",
           "links": [
             {
@@ -897,10 +1071,10 @@
           "description": "SMART device temperature where published. Missing SMART data is a collection gap, not a passing disk test.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-8": {
+      "panel-10": {
         "kind": "Panel",
         "spec": {
-          "id": 9,
+          "id": 11,
           "title": "Required app replicas",
           "links": [
             {
@@ -1043,10 +1217,10 @@
           "description": "Current placement demand. Full survivor-fit evidence also needs measured requests/peaks, storage placement and pinned hardware.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-9": {
+      "panel-11": {
         "kind": "Panel",
         "spec": {
-          "id": 10,
+          "id": 12,
           "title": "Recovery readiness",
           "links": [
             {
@@ -1359,7 +1533,25 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
+                                    "name": "panel-6"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
                                     "name": "panel-7"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-9"
                                   }
                                 }
                               }
@@ -1386,7 +1578,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-6"
+                                    "name": "panel-8"
                                   }
                                 }
                               }
@@ -1453,7 +1645,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-9"
+                                    "name": "panel-11"
                                   }
                                 }
                               }
@@ -1480,7 +1672,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-8"
+                                    "name": "panel-10"
                                   }
                                 }
                               }

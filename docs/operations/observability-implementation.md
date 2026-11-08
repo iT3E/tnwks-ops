@@ -155,7 +155,7 @@ board's panels:
 
 | Board | Picker | Reached from | Answers |
 | --- | --- | --- | --- |
-| Host (`tnwks-host`) | one Windows host | Hosts & Capacity's Host state rows and host graphs, Wi-Fi's host uplink traffic, Databases' disk free | USE per resource: a tab each for CPU, memory, disk and network, busy (utilization), queued or paging (saturation) and errors, with the WSL VM's own CPU and Linux pressure stall (PSI) beside the Windows view |
+| Host (`tnwks-host`) | one Windows host | Hosts & Capacity's Host state rows and host graphs, Wi-Fi's host uplink traffic, Databases' disk free | USE per resource: a tab each for CPU, memory, disk and network, busy (utilization), queued or paging (saturation) and errors; and a WSL VM tab: the VM's CPU, memory, swap and disk against its `.wslconfig` limits, and Linux pressure stall (PSI) |
 | Wi-Fi clients (`tnwks-wifi-clients`) | wireless devices | Wi-Fi's "Clients with weak signal" | worst-first tables (weak signal, low satisfaction, most retries, reconnects) over every device; graphs of signal, satisfaction, retry rate and throughput for the picked ones; where each is associated |
 | WAN clients (`tnwks-wan-clients`) | devices from flow export | Internet's Upload and "Top WAN devices now" | top downloaders and uploaders now, data per device and per destination over the range, and Internet latency beside per-device upload, crosshair-synced, to line a spike up with its sender |
 
@@ -171,12 +171,22 @@ exporters (measured 2026-11-08), so it alone observes them; `IDENTITY` reduces a
 second observer's copy like the other states. A host whose exporter is down
 reads Unknown on every resource.
 
+The `WSL ...` resources are the host's WSL VM. Each site grades its own, from the
+node-exporter on its cluster's nodes (Talos-in-Docker nodes all read the VM's
+kernel), and labels the rows with its host's name (`WINDOWS_HOST_NAME` in
+cluster-settings), so they need nothing from the other site. Its node-exporters
+down, they read Unknown.
+
 | Resource | Measured | Degraded | Failed |
 | --- | --- | --- | --- |
 | CPU | busy share of all logical processors, over 15 minutes | above 85% | above 95% |
 | Memory | share of RAM not available to new work (standby cache counts as available), over 15 minutes | above 90% | above 97% |
 | Disk latency | seconds per operation on the slowest volume doing over 1 operation a second, over 15 minutes (an idle disk is 0) | above 50 ms | above 200 ms |
 | Disk space | free share of the fullest volume (`HarddiskVolume*` system partitions excluded) | below 10% | below 5% |
+| WSL CPU | busy share of the VM's processors (its `.wslconfig` limit), over 15 minutes | above 85% | above 95% |
+| WSL memory | share of the VM's memory not available to new work (page cache counts as available), over 15 minutes | above 90% | above 97% |
+| WSL disk space | free share of the VM's ext4 disk (the nodes' `/var`) against its virtual size; the Windows volume holding the VHDX is Disk space | below 10% | below 5% |
+| WSL I/O stall | share of time every runnable task in the VM stalled on I/O (PSI full), over 15 minutes; under 1% in the week to 2026-11-08 | above 10% | above 25% |
 
 Measured 2026-11-07, and why some queries look the way they do:
 

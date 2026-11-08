@@ -228,7 +228,15 @@ spec:
         and (rate(windows_logical_disk_reads_total{volume!~"HarddiskVolume.+"}[15m]) + rate(windows_logical_disk_writes_total{volume!~"HarddiskVolume.+"}[15m]))
         > 1) or on (k8s_cluster, instance) (0 * max by (k8s_cluster, instance) (windows_logical_disk_reads_total)),
         "resource", "Disk latency", "", "") or label_replace(min by (k8s_cluster, instance) (windows_logical_disk_free_bytes{volume!~"HarddiskVolume.+"}
-        / windows_logical_disk_size_bytes), "resource", "Disk space", "", "")
+        / windows_logical_disk_size_bytes), "resource", "Disk space", "", "") or label_replace(label_replace(max
+        by (k8s_cluster) (1 - avg by (k8s_cluster, instance) (rate(node_cpu_seconds_total{mode="idle",k8s_cluster="${CLUSTER_NAME}"}[15m]))),
+        "instance", "${WINDOWS_HOST_NAME}", "", ""), "resource", "WSL CPU", "", "") or label_replace(label_replace(max
+        by (k8s_cluster) (1 - avg_over_time(node_memory_MemAvailable_bytes{k8s_cluster="${CLUSTER_NAME}"}[15m])
+        / node_memory_MemTotal_bytes{k8s_cluster="${CLUSTER_NAME}"}), "instance", "${WINDOWS_HOST_NAME}", "", ""),
+        "resource", "WSL memory", "", "") or label_replace(label_replace(min by (k8s_cluster) (node_filesystem_avail_bytes{mountpoint="/var",k8s_cluster="${CLUSTER_NAME}"}
+        / node_filesystem_size_bytes{mountpoint="/var",k8s_cluster="${CLUSTER_NAME}"}), "instance", "${WINDOWS_HOST_NAME}",
+        "", ""), "resource", "WSL disk space", "", "") or label_replace(label_replace(max by (k8s_cluster) (rate(node_pressure_io_stalled_seconds_total{k8s_cluster="${CLUSTER_NAME}"}[15m])),
+        "instance", "${WINDOWS_HOST_NAME}", "", ""), "resource", "WSL I/O stall", "", "")
     - record: homelab:host_state
       expr: label_replace((((homelab:host_usage{resource="CPU"}) <= bool 0.85) + 2 * ((homelab:host_usage{resource="CPU"})
         > bool 0.85) * ((homelab:host_usage{resource="CPU"}) <= bool 0.95) + 3 * ((homelab:host_usage{resource="CPU"})
@@ -243,7 +251,23 @@ spec:
         "", "") or label_replace((((homelab:host_usage{resource="Disk space"}) >= bool 0.1) + 2 * ((homelab:host_usage{resource="Disk
         space"}) < bool 0.1) * ((homelab:host_usage{resource="Disk space"}) >= bool 0.05) + 3 * ((homelab:host_usage{resource="Disk
         space"}) < bool 0.05)) or on (k8s_cluster, instance) (0 * max by (k8s_cluster, instance) (up{job="windows-exporter"})),
-        "resource", "Disk space", "", "")
+        "resource", "Disk space", "", "") or label_replace((((homelab:host_usage{resource="WSL CPU"}) <= bool 0.85)
+        + 2 * ((homelab:host_usage{resource="WSL CPU"}) > bool 0.85) * ((homelab:host_usage{resource="WSL CPU"})
+        <= bool 0.95) + 3 * ((homelab:host_usage{resource="WSL CPU"}) > bool 0.95)) or on (k8s_cluster, instance)
+        (0 * label_replace(max by (k8s_cluster) (up{job="node-exporter",k8s_cluster="${CLUSTER_NAME}"}), "instance",
+        "${WINDOWS_HOST_NAME}", "", "")), "resource", "WSL CPU", "", "") or label_replace((((homelab:host_usage{resource="WSL
+        memory"}) <= bool 0.9) + 2 * ((homelab:host_usage{resource="WSL memory"}) > bool 0.9) * ((homelab:host_usage{resource="WSL
+        memory"}) <= bool 0.97) + 3 * ((homelab:host_usage{resource="WSL memory"}) > bool 0.97)) or on (k8s_cluster,
+        instance) (0 * label_replace(max by (k8s_cluster) (up{job="node-exporter",k8s_cluster="${CLUSTER_NAME}"}),
+        "instance", "${WINDOWS_HOST_NAME}", "", "")), "resource", "WSL memory", "", "") or label_replace((((homelab:host_usage{resource="WSL
+        disk space"}) >= bool 0.1) + 2 * ((homelab:host_usage{resource="WSL disk space"}) < bool 0.1) * ((homelab:host_usage{resource="WSL
+        disk space"}) >= bool 0.05) + 3 * ((homelab:host_usage{resource="WSL disk space"}) < bool 0.05)) or on (k8s_cluster,
+        instance) (0 * label_replace(max by (k8s_cluster) (up{job="node-exporter",k8s_cluster="${CLUSTER_NAME}"}),
+        "instance", "${WINDOWS_HOST_NAME}", "", "")), "resource", "WSL disk space", "", "") or label_replace((((homelab:host_usage{resource="WSL
+        I/O stall"}) <= bool 0.1) + 2 * ((homelab:host_usage{resource="WSL I/O stall"}) > bool 0.1) * ((homelab:host_usage{resource="WSL
+        I/O stall"}) <= bool 0.25) + 3 * ((homelab:host_usage{resource="WSL I/O stall"}) > bool 0.25)) or on (k8s_cluster,
+        instance) (0 * label_replace(max by (k8s_cluster) (up{job="node-exporter",k8s_cluster="${CLUSTER_NAME}"}),
+        "instance", "${WINDOWS_HOST_NAME}", "", "")), "resource", "WSL I/O stall", "", "")
     - alert: ObservabilityEvidenceStale
       expr: (homelab_collection_success == 0) or (time() - homelab_collection_last_success_timestamp_seconds > 180)
       for: 5m

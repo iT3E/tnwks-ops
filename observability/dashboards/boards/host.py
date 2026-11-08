@@ -28,6 +28,11 @@ def latency(kind: str) -> str:
             f' / rate({host(f"windows_logical_disk_{operations}_total", VOLUMES)}[$__rate_interval]))')
 
 
+def vm(expr: str) -> str:
+    """The WSL VM on this host: any node's figure (they all read the VM's kernel)."""
+    return f'max by (k8s_cluster) ({expr}) {ON_HOST}'
+
+
 def board() -> Board:
     cores = f'max by (instance) ({host("windows_cpu_logical_processor")})'
     return Board("tnwks-host", "Host", "hosts", "l3",
@@ -37,16 +42,12 @@ def board() -> Board:
                   "Share of all logical processors doing work. Sustained above 80% leaves no room for a site failover.", "stat"),
                 p("Run queue per core", f'max by (instance) (avg_over_time({host("windows_system_processor_queue_length")}[5m])) / {cores}', "short",
                   "Threads ready to run but waiting for a processor, per core, over 5 minutes. Sustained above 2 the CPU is the bottleneck, whatever the busy figure says.", "stat"),
-                p("WSL VM CPU busy", f'max by (k8s_cluster) (1 - avg by (k8s_cluster, instance) (rate({selector("node_cpu_seconds_total", 'mode="idle"')}[$__rate_interval]))) {ON_HOST}', "percentunit",
-                  "Share of the WSL VM's processors (its .wslconfig limit, fewer than the host's) doing work, from the cluster nodes on this host. Near 100% while the host still has room, the VM's limit is the ceiling.", "stat"),
                 p("CPU by mode", f'sum by (mode) (rate({host("windows_cpu_time_total", 'mode!="idle"')}[$__rate_interval])) / scalar({cores})', "percentunit",
                   "Busy time split by mode. The WSL VM's work is counted as privileged time here (measured 2026-11-07: about 2.5 busy VM cores inside 3.5 privileged host cores), so privileged far above user is the cluster, not Windows apps."),
                 p("Busiest cores", f'topk(5, max by (core) (1 - rate({host("windows_cpu_time_total", 'mode="idle"')}[$__rate_interval])))', "percentunit",
                   "The five busiest logical processors. One core pinned near 100% while the total looks calm is a single-threaded bottleneck."),
                 p("Run queue", f'max by (instance) ({host("windows_system_processor_queue_length")})', "short",
                   "Threads waiting for a processor, sampled. Short spikes are normal; a raised floor is saturation."),
-                p("WSL CPU pressure", pressure("cpu"), "percentunit",
-                  "Share of time at least one task in the WSL VM waited for a CPU (Linux PSI, read from the cluster nodes on this host). Rising pressure with a calm Windows CPU means WSL's processor limit, not the host, is the ceiling."),
             ],
             "Memory": [
                 p("Memory in use", f'1 - max by (instance) ({host("windows_memory_available_bytes")}) / max by (instance) ({host("windows_memory_physical_total_bytes")})', "percentunit",
@@ -61,8 +62,6 @@ def board() -> Board:
                   "Physical memory in use and commit charge over time. The gap between them is memory promised but untouched, most of it the WSL VM's reservation; a step down in commit charge is the page file growing."),
                 p("Page file traffic", f'sum by (instance) (rate({host("windows_memory_swap_page_operations_total")}[$__rate_interval]))', "ops",
                   "Paging over time: line it up with slow disk or a busy CPU to see which came first."),
-                p("WSL memory pressure", pressure("memory"), "percentunit",
-                  "Share of time at least one task in the WSL VM stalled reclaiming memory (Linux PSI). Above a few percent the VM's memory limit is too tight for its pods."),
             ],
             "Disk": [
                 p("Slowest volume latency", f'max by (instance) (rate({host("windows_logical_disk_read_write_latency_seconds_total", VOLUMES)}[$__rate_interval])'
@@ -80,10 +79,29 @@ def board() -> Board:
                   "Requests waiting per volume, sampled."),
                 p("Throughput by volume", f'sum by (volume) (rate({host("windows_logical_disk_read_bytes_total", VOLUMES)}[$__rate_interval]) + rate({host("windows_logical_disk_write_bytes_total", VOLUMES)}[$__rate_interval]))', "Bps",
                   "Bytes read and written per second. High throughput with low latency is a busy, healthy disk."),
-                p("WSL I/O pressure", pressure("io", "stalled"), "percentunit",
-                  "Share of time every runnable task in the WSL VM stalled on I/O at once (Linux PSI, full). This is how slow disk feels from inside the cluster: all nodes share one virtual disk on the host."),
                 p("Free space by volume", f'max by (volume) ({host("windows_logical_disk_free_bytes", VOLUMES)} / {host("windows_logical_disk_size_bytes", VOLUMES)})', "percentunit",
                   "Free share of each volume. Below 10% Windows and the VHDX that holds WSL's disk start to slow down; below 5% writes fail.", "table", column="Free", sort="asc"),
+            ],
+            "WSL VM": [
+                p("VM CPU busy", f'max by (k8s_cluster) (1 - avg by (k8s_cluster, instance) (rate({selector("node_cpu_seconds_total", 'mode="idle"')}[$__rate_interval]))) {ON_HOST}', "percentunit",
+                  "Share of the WSL VM's processors (its .wslconfig limit, fewer than the host's) doing work, from the cluster nodes on this host. Near 100% while the host still has room, the VM's limit is the ceiling.", "stat"),
+                p("VM memory in use", vm(f'1 - avg_over_time({selector("node_memory_MemAvailable_bytes")}[5m]) / {selector("node_memory_MemTotal_bytes")}'), "percentunit",
+                  "Share of the VM's memory (its .wslconfig limit) not available to new work; page cache counts as available. Windows sees the VM commit its whole limit whatever this says.", "stat"),
+                p("VM swap used", vm(f'1 - {selector("node_memory_SwapFree_bytes")} / ({selector("node_memory_SwapTotal_bytes")} > 0)'), "percentunit",
+                  "Share of the VM's swap (.wslconfig swap=) in use. A little is normal; a share that keeps climbing with memory pressure is the VM short of memory.", "stat"),
+                p("VM disk used", vm(f'1 - {selector("node_filesystem_avail_bytes", 'mountpoint="/var"')} / {selector("node_filesystem_size_bytes", 'mountpoint="/var"')}'), "percentunit",
+                  "Share of the VM's ext4 disk (the nodes' /var, where pods' volumes live) in use, against its virtual size. The Windows volume holding the VHDX usually fills first: see Free space by volume.", "stat"),
+                p("VM memory", f'max by (measure) (label_replace({vm(f"{selector("node_memory_MemTotal_bytes")} - {selector("node_memory_MemAvailable_bytes")}")}, "measure", "In use", "", "")'
+                  f' or label_replace({vm(f"{selector("node_memory_Cached_bytes")} + {selector("node_memory_Buffers_bytes")}")}, "measure", "Page cache", "", "")'
+                  f' or label_replace({vm(f"{selector("node_memory_SwapTotal_bytes")} - {selector("node_memory_SwapFree_bytes")}")}, "measure", "Swap used", "", "")'
+                  f' or label_replace({vm(selector("node_memory_MemTotal_bytes"))}, "measure", "Limit", "", ""))', "bytes",
+                  "Memory in use, page cache (given back on demand) and swap in use, against the VM's limit."),
+                p("VM CPU pressure", pressure("cpu"), "percentunit",
+                  "Share of time at least one task in the WSL VM waited for a CPU (Linux PSI, read from the cluster nodes on this host). Rising pressure with a calm Windows CPU means WSL's processor limit, not the host, is the ceiling."),
+                p("VM memory pressure", pressure("memory"), "percentunit",
+                  "Share of time at least one task in the WSL VM stalled reclaiming memory (Linux PSI). Above a few percent the VM's memory limit is too tight for its pods."),
+                p("VM I/O pressure", pressure("io", "stalled"), "percentunit",
+                  "Share of time every runnable task in the WSL VM stalled on I/O at once (Linux PSI, full). This is how slow disk feels from inside the cluster: all nodes share one virtual disk on the host."),
             ],
             "Network": [
                 p("Busiest adapter", f'max by (instance) (sum by (instance, nic) (rate({host("windows_net_bytes_total")}[$__rate_interval])) / max by (instance, nic) ({host("windows_net_current_bandwidth_bytes")} > 0))', "percentunit",
