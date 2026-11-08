@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from dashboards import LABELS, UNKNOWN_GREY, catalogue, resource, value_header  # noqa: E402
+from dashboards import LABELS, UNKNOWN_GREY, catalogue, resource, value_header
 
 
 def panels():
@@ -49,8 +49,8 @@ def test_booleans_are_words():
         if panel.unit != "bool":
             continue
         config = spec["vizConfig"]["spec"]["fieldConfig"]
-        mappings = config["defaults"].get("mappings") or [
-            prop["value"] for o in config["overrides"] for prop in o["properties"] if prop["id"] == "mappings"][0]
+        mappings = config["defaults"].get("mappings") or next(
+            prop["value"] for o in config["overrides"] for prop in o["properties"] if prop["id"] == "mappings")
         texts = {v["text"] for v in mappings[0]["options"].values()}
         assert not texts & {"True", "False", "1", "0"}, (panel.title, texts)
 
