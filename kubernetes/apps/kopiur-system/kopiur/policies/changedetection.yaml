@@ -17,9 +17,10 @@ spec:
   credentialProjection:
     enabled: true
   mover:
+    # Match the app: watch.json and new history files are private (0600).
     securityContext:
-      runAsUser: 1000
-      runAsGroup: 1000
+      runAsUser: 568
+      runAsGroup: 568
   retention:
     keepLatest: 3
     keepDaily: 7

@@ -81,8 +81,9 @@ backup (2026-11-07 01:00 UTC) and WAL stay under `cnpg/homelab-wsl/`.
 | finance-sync | `production/finance-sync-state` | The rollback copy, on homelab-wsl only: the state the jobs feeding Firefly kept as files until 2026-11-02. It now lives in Postgres (`finance-sync-pg`), so failover and the standby restore don't copy this PVC (`docs/apps/finance-sync.md`) |
 
 The mover must run as the app's user (`mover.securityContext`): kopia fails
-the snapshot on any file it can't read. Home Assistant is 568 (its `.storage`
-has 0600 files), Firefly 33 (www-data), the others (including finance-sync) 1000.
+the snapshot on any file it can't read. Home Assistant and changedetection are
+568 (their private files use 0600), Firefly 33 (www-data), the others (including
+finance-sync) 1000.
 
 To add one: copy a policy file, change the name, namespace, PVC and user, add the
 namespace to `allowedNamespaces` in `repository/clusterrepository.yaml` if it is
