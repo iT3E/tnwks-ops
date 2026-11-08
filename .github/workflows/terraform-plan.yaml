@@ -26,9 +26,12 @@ jobs:
   # PR's author and source repo rather than github.actor, which is whoever
   # triggered this particular event.
   terraform:
+    # Renovate's branches live in this repo, and its Terraform bumps wait 3
+    # days after release before a PR opens (.github/renovate.json5), so its
+    # PRs are trusted to plan too.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.user.login == 'iT3E'
+      contains(fromJSON('["iT3E", "renovate[bot]"]'), github.event.pull_request.user.login)
     name: "Terraform Plan"
     runs-on: ubuntu-26.04
     timeout-minutes: 20
@@ -59,7 +62,7 @@ jobs:
   terraform-manual-approval:
     if: >-
       github.event.pull_request.head.repo.full_name != github.repository ||
-      github.event.pull_request.user.login != 'iT3E'
+      !contains(fromJSON('["iT3E", "renovate[bot]"]'), github.event.pull_request.user.login)
     name: "Terraform Plan External User"
     environment:
       name: external-contributions

@@ -1,0 +1,3 @@
+kind: Changed
+body: 'CI: same-repo Renovate PRs get Terraform plans instead of waiting for approval; Terraform providers, modules and the CLI wait 3 days after release before Renovate opens a PR.'
+time: 2026-11-07T21:46:56.802830317-08:00
