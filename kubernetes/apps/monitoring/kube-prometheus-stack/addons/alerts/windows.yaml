@@ -39,33 +39,16 @@ spec:
             summary: "Windows host memory above 95%"
             description: "{{ $labels.instance }} memory at {{ $value | humanizePercentage }} — risk of OOM"
 
-        # Commit charge vs commit limit (RAM + page file). This, not RAM %, is
-        # what makes Windows fail allocations: at the limit it grows the
-        # system-managed C:\pagefile.sys (stalls) and then refuses new commit,
-        # so apps crash or hang. Baseline 2026-10-30..11-01: median 89.6%,
-        # max 94.8%, mostly vmmemWSL (~39 GB commit). That share is the fixed VM
-        # size from .wslconfig: it does not move with cluster load, and
-        # restarting WSL frees nothing lasting. Task Manager's "in use" counts
-        # physical RAM, so it can read 46 GB while commit reads 70. Same
-        # alertname for both severities so the critical inhibits the warning.
-        - alert: WindowsHostCommitHigh
-          expr: windows_memory_committed_bytes{job="windows-exporter"} / windows_memory_commit_limit{job="windows-exporter"} > 0.95
-          for: 15m
-          labels:
-            severity: warning
-          annotations:
-            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $externalLabels.cluster }}"
-            summary: "Windows host commit charge above 95% of the commit limit"
-            description: >-
-              {{ $labels.instance }} has committed
-              {{ with printf "round(windows_memory_committed_bytes{instance='%s'} / 2^30, 0.1)" $labels.instance | query }}{{ . | first | value }}{{ end }} GiB
-              of its {{ with printf "round(windows_memory_commit_limit{instance='%s'} / 2^30, 0.1)" $labels.instance | query }}{{ . | first | value }}{{ end }} GiB
-              commit limit (RAM + page file) for 15m. Near the limit Windows grows
-              the page file, then new allocations fail and apps crash or hang.
-              vmmemWSL holds a fixed share set by .wslconfig, so the swing is usually
-              desktop apps. Check Committed in Task Manager, not memory in use. Close
-              apps or raise the page file size.
-
+        # Commit charge vs commit limit (RAM + the page file's current size).
+        # At the limit Windows refuses new commit and apps crash or hang. Most
+        # of the commit is vmmemWSL (~39 GB): the fixed VM size from .wslconfig,
+        # committed whatever the VM touches, so commit reads ~90% while RAM in
+        # use reads ~70%. The page file is automatically managed and grows when
+        # commit nears the limit (site 1: 73.9 -> 76.9 GiB in the week to
+        # 2026-11-08), so only commit pinned at the limit matters: the file
+        # can't keep up or is at its cap. A 95% warning fired ~3h that week
+        # with nothing short and was removed; RAM shortage is
+        # WindowsHostHighMemory and WindowsHostPaging.
         - alert: WindowsHostCommitHigh
           expr: windows_memory_committed_bytes{job="windows-exporter"} / windows_memory_commit_limit{job="windows-exporter"} > 0.98
           for: 5m
@@ -78,9 +61,11 @@ spec:
               {{ $labels.instance }} has committed
               {{ with printf "round(windows_memory_committed_bytes{instance='%s'} / 2^30, 0.1)" $labels.instance | query }}{{ . | first | value }}{{ end }} GiB
               of its {{ with printf "round(windows_memory_commit_limit{instance='%s'} / 2^30, 0.1)" $labels.instance | query }}{{ . | first | value }}{{ end }} GiB
-              commit limit (RAM + page file) for 5m. Allocations are about to fail;
-              apps and the WSL VM (the whole cluster) can crash. Close desktop apps
-              now. Restarting WSL stops the whole cluster and its commit returns.
+              commit limit (RAM + page file) for 5m: the page file isn't growing
+              to keep up (or is at its cap), so allocations are failing; apps and
+              the WSL VM (the whole cluster) can crash. Close desktop apps now, then
+              give the page file a fixed minimum size. Restarting WSL stops the
+              whole cluster and its commit returns.
 
         # Real swapping: sustained page-outs to the page file while available
         # memory (free + standby) is low. Pages written alone happen in the

@@ -213,10 +213,10 @@ groups:
       and on (k8s_cluster) (max by (k8s_cluster) (homelab_observer_info)))) < bool 1), "domain", "away", "", "")
   - record: homelab:host_usage
     expr: label_replace(1 - avg by (k8s_cluster, instance) (rate(windows_cpu_time_total{mode="idle"}[15m])), "resource",
-      "CPU", "", "") or label_replace(max by (k8s_cluster, instance) (windows_memory_committed_bytes) / max by (k8s_cluster,
-      instance) (windows_memory_commit_limit), "resource", "Memory commit", "", "") or label_replace(max by (k8s_cluster,
-      instance) (rate(windows_logical_disk_read_write_latency_seconds_total{volume!~"HarddiskVolume.+"}[15m]) /
-      (rate(windows_logical_disk_reads_total{volume!~"HarddiskVolume.+"}[15m]) + rate(windows_logical_disk_writes_total{volume!~"HarddiskVolume.+"}[15m]))
+      "CPU", "", "") or label_replace(1 - max by (k8s_cluster, instance) (avg_over_time(windows_memory_available_bytes[15m]))
+      / max by (k8s_cluster, instance) (windows_memory_physical_total_bytes), "resource", "Memory", "", "") or label_replace(max
+      by (k8s_cluster, instance) (rate(windows_logical_disk_read_write_latency_seconds_total{volume!~"HarddiskVolume.+"}[15m])
+      / (rate(windows_logical_disk_reads_total{volume!~"HarddiskVolume.+"}[15m]) + rate(windows_logical_disk_writes_total{volume!~"HarddiskVolume.+"}[15m]))
       and (rate(windows_logical_disk_reads_total{volume!~"HarddiskVolume.+"}[15m]) + rate(windows_logical_disk_writes_total{volume!~"HarddiskVolume.+"}[15m]))
       > 1) or on (k8s_cluster, instance) (0 * max by (k8s_cluster, instance) (windows_logical_disk_reads_total)),
       "resource", "Disk latency", "", "") or label_replace(min by (k8s_cluster, instance) (windows_logical_disk_free_bytes{volume!~"HarddiskVolume.+"}
@@ -225,18 +225,17 @@ groups:
     expr: label_replace((((homelab:host_usage{resource="CPU"}) <= bool 0.85) + 2 * ((homelab:host_usage{resource="CPU"})
       > bool 0.85) * ((homelab:host_usage{resource="CPU"}) <= bool 0.95) + 3 * ((homelab:host_usage{resource="CPU"})
       > bool 0.95)) or on (k8s_cluster, instance) (0 * max by (k8s_cluster, instance) (up{job="windows-exporter"})),
-      "resource", "CPU", "", "") or label_replace((((homelab:host_usage{resource="Memory commit"}) <= bool 0.9)
-      + 2 * ((homelab:host_usage{resource="Memory commit"}) > bool 0.9) * ((homelab:host_usage{resource="Memory
-      commit"}) <= bool 0.97) + 3 * ((homelab:host_usage{resource="Memory commit"}) > bool 0.97)) or on (k8s_cluster,
-      instance) (0 * max by (k8s_cluster, instance) (up{job="windows-exporter"})), "resource", "Memory commit",
-      "", "") or label_replace((((homelab:host_usage{resource="Disk latency"}) <= bool 0.05) + 2 * ((homelab:host_usage{resource="Disk
-      latency"}) > bool 0.05) * ((homelab:host_usage{resource="Disk latency"}) <= bool 0.2) + 3 * ((homelab:host_usage{resource="Disk
-      latency"}) > bool 0.2)) or on (k8s_cluster, instance) (0 * max by (k8s_cluster, instance) (up{job="windows-exporter"})),
-      "resource", "Disk latency", "", "") or label_replace((((homelab:host_usage{resource="Disk space"}) >= bool
-      0.1) + 2 * ((homelab:host_usage{resource="Disk space"}) < bool 0.1) * ((homelab:host_usage{resource="Disk
-      space"}) >= bool 0.05) + 3 * ((homelab:host_usage{resource="Disk space"}) < bool 0.05)) or on (k8s_cluster,
-      instance) (0 * max by (k8s_cluster, instance) (up{job="windows-exporter"})), "resource", "Disk space", "",
-      "")
+      "resource", "CPU", "", "") or label_replace((((homelab:host_usage{resource="Memory"}) <= bool 0.9) + 2 * ((homelab:host_usage{resource="Memory"})
+      > bool 0.9) * ((homelab:host_usage{resource="Memory"}) <= bool 0.97) + 3 * ((homelab:host_usage{resource="Memory"})
+      > bool 0.97)) or on (k8s_cluster, instance) (0 * max by (k8s_cluster, instance) (up{job="windows-exporter"})),
+      "resource", "Memory", "", "") or label_replace((((homelab:host_usage{resource="Disk latency"}) <= bool 0.05)
+      + 2 * ((homelab:host_usage{resource="Disk latency"}) > bool 0.05) * ((homelab:host_usage{resource="Disk latency"})
+      <= bool 0.2) + 3 * ((homelab:host_usage{resource="Disk latency"}) > bool 0.2)) or on (k8s_cluster, instance)
+      (0 * max by (k8s_cluster, instance) (up{job="windows-exporter"})), "resource", "Disk latency", "", "") or
+      label_replace((((homelab:host_usage{resource="Disk space"}) >= bool 0.1) + 2 * ((homelab:host_usage{resource="Disk
+      space"}) < bool 0.1) * ((homelab:host_usage{resource="Disk space"}) >= bool 0.05) + 3 * ((homelab:host_usage{resource="Disk
+      space"}) < bool 0.05)) or on (k8s_cluster, instance) (0 * max by (k8s_cluster, instance) (up{job="windows-exporter"})),
+      "resource", "Disk space", "", "")
   - alert: ObservabilityEvidenceStale
     expr: (homelab_collection_success == 0) or (time() - homelab_collection_last_success_timestamp_seconds > 180)
     for: 5m

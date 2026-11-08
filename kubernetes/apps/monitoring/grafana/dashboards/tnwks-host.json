@@ -782,7 +782,7 @@
               }
             }
           },
-          "description": "Memory promised to processes against RAM plus page file. At 100% Windows refuses new allocations and programs fail, WSL's VM included, however much RAM looks free.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Memory promised to processes against RAM plus the page file's current size. Usually high here: the WSL VM commits its whole .wslconfig memory however little it touches. Near 100% an automatically managed page file grows and the limit moves with it, so this isn't graded; trouble is commit pinned at the limit (the page file can't keep up or is at its cap), when allocations fail.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-10": {
@@ -941,7 +941,7 @@
               }
             }
           },
-          "description": "Physical memory in use and commit charge over time. Commit climbing while use stays flat is memory reserved but untouched (WSL's VM reserves its whole limit).\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Physical memory in use and commit charge over time. The gap between them is memory promised but untouched, most of it the WSL VM's reservation; a step down in commit charge is the page file growing.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-12": {

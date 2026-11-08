@@ -100,9 +100,13 @@ def host_records():
     values = {
         # Sustained, not a spike: 15 minutes.
         "CPU": (f'1 - avg by ({by}) (rate(windows_cpu_time_total{{mode="idle"}}[15m]))', 0.85, 0.95, False),
-        # Memory promised against RAM plus page file: at 100% allocations fail.
-        "Memory commit": (f'max by ({by}) (windows_memory_committed_bytes) / max by ({by}) (windows_memory_commit_limit)',
-                   0.90, 0.97, False),
+        # RAM not available to new work (standby cache counts as available), over
+        # 15 minutes. Not commit charge: its limit is RAM plus the page file's
+        # current size, and an automatically managed page file grows when commit
+        # nears it, so commit read 93% of a limit that kept moving while 70% of
+        # RAM was in use (the WSL VM commits its whole .wslconfig memory).
+        "Memory": ((f'1 - max by ({by}) (avg_over_time(windows_memory_available_bytes[15m]))'
+                   f' / max by ({by}) (windows_memory_physical_total_bytes)'), 0.90, 0.97, False),
         "Disk latency": (latency, 0.05, 0.2, False),
         "Disk space": (f'min by ({by}) (windows_logical_disk_free_bytes{{{volumes}}} / windows_logical_disk_size_bytes)',
                        0.10, 0.05, True),
@@ -718,13 +722,17 @@ def host_fixtures():
         return {"series": f'{name}{{k8s_cluster="one",instance="one",{labels}}}', "values": values}
 
     return [
-        {"name": "host states: half-busy CPU, memory promised past 90%, slow and nearly full disk, a host gone", "interval": "1m",
+        {"name": "host states: half-busy CPU, RAM 93% in use, slow and nearly full disk, a host gone", "interval": "1m",
          "input_series": [
              {"series": 'up{job="windows-exporter",k8s_cluster="one",instance="one"}', "values": "1+0x30"},
              # Two cores, each idle half of every second: 50% busy.
              series("windows_cpu_time_total", 'mode="idle",core="0"', "0+30x30"),
              series("windows_cpu_time_total", 'mode="idle",core="1"', "0+30x30"),
-             series("windows_memory_committed_bytes", "", "93+0x30"),
+             # 93% of RAM in use. Commit charge isn't graded: promised past its
+             # limit or not, it doesn't move the state.
+             series("windows_memory_available_bytes", "", "7+0x30"),
+             series("windows_memory_physical_total_bytes", "", "100+0x30"),
+             series("windows_memory_committed_bytes", "", "99+0x30"),
              series("windows_memory_commit_limit", "", "100+0x30"),
              # C: does 10 operations a second at 100 ms each; a hidden partition is
              # full and slow, and doesn't count.
@@ -742,9 +750,9 @@ def host_fixtures():
              {"series": 'up{job="windows-exporter",k8s_cluster="two",instance="two"}', "values": "0+0x30"},
          ], "promql_expr_test": [
              {"expr": "homelab:host_state", "eval_time": "20m", "exp_samples": [
-                 state("one", "CPU", 1), state("one", "Memory commit", 2), state("one", "Disk latency", 2),
+                 state("one", "CPU", 1), state("one", "Memory", 2), state("one", "Disk latency", 2),
                  state("one", "Disk space", 3),
-                 state("two", "CPU", 0), state("two", "Memory commit", 0), state("two", "Disk latency", 0),
+                 state("two", "CPU", 0), state("two", "Memory", 0), state("two", "Disk latency", 0),
                  state("two", "Disk space", 0)]},
          ]},
         {"name": "host states: an idle disk isn't a slow one", "interval": "1m",

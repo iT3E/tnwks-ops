@@ -52,12 +52,13 @@ def board() -> Board:
                 p("Memory in use", f'1 - max by (instance) ({host("windows_memory_available_bytes")}) / max by (instance) ({host("windows_memory_physical_total_bytes")})', "percentunit",
                   "Physical memory not available to new work. Standby cache counts as available, so this is what the host can still give out.", "stat"),
                 p("Commit charge", f'max by (instance) ({host("windows_memory_committed_bytes")}) / max by (instance) ({host("windows_memory_commit_limit")})', "percentunit",
-                  "Memory promised to processes against RAM plus page file. At 100% Windows refuses new allocations and programs fail, WSL's VM included, however much RAM looks free.", "stat"),
+                  "Memory promised to processes against RAM plus the page file's current size. Usually high here: the WSL VM commits its whole .wslconfig memory however little it touches. "
+                  "Near 100% an automatically managed page file grows and the limit moves with it, so this isn't graded; trouble is commit pinned at the limit (the page file can't keep up or is at its cap), when allocations fail.", "stat"),
                 p("Paging to disk", f'sum by (instance) (rate({host("windows_memory_swap_page_operations_total")}[$__rate_interval]))', "ops",
                   "Pages read from or written to the page file per second. A steady stream is memory saturation: work waits on the disk instead of RAM.", "stat"),
                 p("Memory and commit", f'max by (measure) (label_replace(1 - max by (instance) ({host("windows_memory_available_bytes")}) / max by (instance) ({host("windows_memory_physical_total_bytes")}), "measure", "In use", "", "")'
                   f' or label_replace(max by (instance) ({host("windows_memory_committed_bytes")}) / max by (instance) ({host("windows_memory_commit_limit")}), "measure", "Commit charge", "", ""))', "percentunit",
-                  "Physical memory in use and commit charge over time. Commit climbing while use stays flat is memory reserved but untouched (WSL's VM reserves its whole limit)."),
+                  "Physical memory in use and commit charge over time. The gap between them is memory promised but untouched, most of it the WSL VM's reservation; a step down in commit charge is the page file growing."),
                 p("Page file traffic", f'sum by (instance) (rate({host("windows_memory_swap_page_operations_total")}[$__rate_interval]))', "ops",
                   "Paging over time: line it up with slow disk or a busy CPU to see which came first."),
                 p("WSL memory pressure", pressure("memory"), "percentunit",
