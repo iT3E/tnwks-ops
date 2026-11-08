@@ -29,7 +29,8 @@ LABELS = {
     "app_version": "App version", "chart_version": "Chart", "release_status": "Release",
     "flux_kind": "Kind", "ready": "Ready", "kernel_version": "Kernel", "kubelet_version": "Kubelet",
     "os_image": "OS", "volume": "Volume", "collector": "Collector", "slo": "Objective",
-    "area": "Area",
+    "area": "Area", "radio": "Band", "channel": "Channel", "client": "Device",
+    "as_name": "Destination", "category": "Category",
 }
 
 

@@ -33,12 +33,17 @@ class Handler(BaseHTTPRequestHandler):
             data = ["k8s_cluster", "app", "domain"]
         elif "/label/" in path.path:
             data = ["homelab-wsl", "homelab-wsl-02"]
+            if "/label/client/" in path.path:
+                data = ["Test Laptop"]
         elif path.path.endswith("query_range"):
             data = {"resultType": "matrix", "result": []}
         elif "unpoller_device_uptime_seconds" in query:
             # A device name with spaces: entity links must encode the clicked row.
             data["result"] = [{"metric": {"k8s_cluster": "homelab-wsl", "name": "AP Test Room"},
                                "value": [time.time(), "86400"]}]
+        elif "wan:client_app" in query:
+            # A device from flow export: a diagnose link must carry it to WAN clients.
+            data["result"] = [{"metric": {"client": "Test Laptop"}, "value": [time.time(), "2000000"]}]
         elif "homelab" in query:
             if query.startswith("count("):
                 count = "2" if "homelab_expected_site_info" in query else "1"

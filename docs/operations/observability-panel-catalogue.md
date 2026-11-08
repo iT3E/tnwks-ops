@@ -96,16 +96,45 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-internet / Experience / Packet loss | `smokeping:loss_ratio:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-internet / Traffic / Download | `wan:receive_bits:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-internet / Traffic / Upload | `wan:transmit_bits:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-internet / Traffic / Top WAN devices now | `wan:client_app_receive_bits:rate2m`<br>`wan:client_app_transmit_bits:rate2m` | 180s | No traffic seen by flow export | [Runbook](../../docs/network/architecture.md) |
 | tnwks-internet / Traffic / ISP radio collector | `unms_collector_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wan-clients / Devices / Download now | `wan:receive_bits:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wan-clients / Devices / Upload now | `wan:transmit_bits:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wan-clients / Devices / Devices on the line | `wan:client_app_receive_bits:rate2m`<br>`wan:client_app_transmit_bits:rate2m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wan-clients / Devices / Download attributed | `wan:client_app_receive_bits:rate2m`<br>`wan:receive_bits:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wan-clients / Devices / Top downloaders now | `wan:client_app_receive_bits:rate2m` | 180s | No traffic seen by flow export | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wan-clients / Devices / Top uploaders now | `wan:client_app_transmit_bits:rate2m` | 180s | No traffic seen by flow export | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wan-clients / Devices / Data in range by device | `wan:client_app_receive_bits:rate2m`<br>`wan:client_app_transmit_bits:rate2m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wan-clients / Devices / Download by device | `wan:client_app_receive_bits:rate2m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wan-clients / Devices / Upload by device | `wan:client_app_transmit_bits:rate2m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wan-clients / Devices / Internet latency | `smokeping:rtt_p90:rate1m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wan-clients / Apps and destinations / Now: device, app and destination | `wan:client_app_receive_bits:rate2m`<br>`wan:client_app_transmit_bits:rate2m` | 180s | No traffic seen by flow export | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wan-clients / Apps and destinations / Data in range by destination | `wan:client_app_receive_bits:rate2m`<br>`wan:client_app_transmit_bits:rate2m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wan-clients / Apps and destinations / Traffic by app | `wan:client_app_receive_bits:rate2m`<br>`wan:client_app_transmit_bits:rate2m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wan-clients / Apps and destinations / Traffic by destination | `wan:client_app_receive_bits:rate2m`<br>`wan:client_app_transmit_bits:rate2m` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-wifi / Access points / AP uptime | `unpoller_device_uptime_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/unifi.md) |
 | tnwks-wifi / Access points / AP uplink | `unpoller_device_uplink_speed_mbps` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/unifi.md) |
 | tnwks-wifi / Access points / Wi-Fi collector failures | `unpoller_prometheus_refresh_failures_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/unifi.md) |
+| tnwks-wifi / Access points / Clients with weak signal | `unpoller_client_radio_signal_db` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-wifi / Site dependency / Peer path success | `homelab_peer_probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-wifi / Site dependency / Peer path duration | `homelab_peer_probe_duration_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-wifi / Site dependency / Site host uplinks | `windows_net_current_bandwidth_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-wifi / Site dependency / Site host uplink traffic | `windows_net_bytes_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-wifi / Site dependency / Site 2 Wi-Fi signal | `unpoller_client_radio_signal_db` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
 | tnwks-wifi / Site dependency / Site 2 Wi-Fi association | `unpoller_client_uptime_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/architecture.md) |
+| tnwks-wifi-clients / Clients / Wi-Fi clients | `unpoller_client_uptime_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/unifi.md) |
+| tnwks-wifi-clients / Clients / Weak signal | `unpoller_client_radio_signal_db` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/unifi.md) |
+| tnwks-wifi-clients / Clients / Low satisfaction | `unpoller_client_satisfaction_ratio` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/unifi.md) |
+| tnwks-wifi-clients / Clients / Roams in range | `unpoller_client_roam_count_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/unifi.md) |
+| tnwks-wifi-clients / Clients / Weak signal clients | `unpoller_client_radio_signal_db` | 180s | None below -70 dBm | [Runbook](../../docs/network/unifi.md) |
+| tnwks-wifi-clients / Clients / Low satisfaction clients | `unpoller_client_satisfaction_ratio` | 180s | None below 80% | [Runbook](../../docs/network/unifi.md) |
+| tnwks-wifi-clients / Clients / Most retries | `unpoller_client_transmit_packets_total`<br>`unpoller_client_transmit_retries_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/unifi.md) |
+| tnwks-wifi-clients / Clients / Reconnects | `unpoller_client_uptime_seconds` | 180s | None in range | [Runbook](../../docs/network/unifi.md) |
+| tnwks-wifi-clients / Clients / Signal | `unpoller_client_radio_signal_db` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/unifi.md) |
+| tnwks-wifi-clients / Clients / Satisfaction | `unpoller_client_satisfaction_ratio` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/unifi.md) |
+| tnwks-wifi-clients / Clients / Retry rate | `unpoller_client_transmit_packets_total`<br>`unpoller_client_transmit_retries_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/unifi.md) |
+| tnwks-wifi-clients / Clients / Throughput | `unpoller_client_receive_bytes_total`<br>`unpoller_client_transmit_bytes_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/unifi.md) |
+| tnwks-wifi-clients / Clients / Connected to | `unpoller_client_uptime_seconds` | 180s | Unknown — missing evidence | [Runbook](../../docs/network/unifi.md) |
 | tnwks-kubernetes / Reconciliation / Flux resource readiness | `homelab_flux_resource_ready` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/cluster-upgrades.md) |
 | tnwks-kubernetes / Reconciliation / Suspended resources | `homelab_flux_resource_suspended` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/cluster-upgrades.md) |
 | tnwks-kubernetes / Reconciliation / Reconcile failures | `controller_runtime_reconcile_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/cluster-upgrades.md) |
@@ -138,10 +167,40 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-home / Automation / MQTT broker | `homelab_observer_info`<br>`probe_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/home-assistant.md) |
 | tnwks-home / Automation / MQTT connected clients | `homelab_mqtt_clients_connected` | 180s | Unknown — missing evidence | [Runbook](../../docs/apps/home-assistant.md) |
 | tnwks-hosts / Physical resources / Windows available memory | `windows_memory_available_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-hosts / Physical resources / Host CPU busy | `windows_cpu_time_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-hosts / Physical resources / Host disk latency | `windows_logical_disk_read_write_latency_seconds_total`<br>`windows_logical_disk_reads_total`<br>`windows_logical_disk_writes_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-hosts / Physical resources / Host commit charge | `windows_memory_commit_limit`<br>`windows_memory_committed_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
 | tnwks-hosts / Physical resources / Windows disk free | `windows_logical_disk_free_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
 | tnwks-hosts / Physical resources / Disk temperature | `smartctl_device_temperature` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
 | tnwks-hosts / Survivor fit / Required app replicas | `homelab_workload_desired_replicas` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
 | tnwks-hosts / Survivor fit / Recovery readiness | `homelab_expected_workload_info`<br>`homelab_recovery_prerequisite_state`<br>`homelab_workload_desired_replicas` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / CPU / CPU busy | `windows_cpu_time_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / CPU / Run queue per core | `windows_cpu_logical_processor`<br>`windows_system_processor_queue_length` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / CPU / WSL VM CPU busy | `node_cpu_seconds_total`<br>`windows_cpu_logical_processor` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / CPU / CPU by mode | `windows_cpu_logical_processor`<br>`windows_cpu_time_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / CPU / Busiest cores | `windows_cpu_time_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / CPU / Run queue | `windows_system_processor_queue_length` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / CPU / WSL CPU pressure | `node_pressure_cpu_waiting_seconds_total`<br>`windows_cpu_logical_processor` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Memory / Memory in use | `windows_memory_available_bytes`<br>`windows_memory_physical_total_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Memory / Commit charge | `windows_memory_commit_limit`<br>`windows_memory_committed_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Memory / Paging to disk | `windows_memory_swap_page_operations_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Memory / Memory and commit | `windows_memory_available_bytes`<br>`windows_memory_commit_limit`<br>`windows_memory_committed_bytes`<br>`windows_memory_physical_total_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Memory / Page file traffic | `windows_memory_swap_page_operations_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Memory / WSL memory pressure | `node_pressure_memory_waiting_seconds_total`<br>`windows_cpu_logical_processor` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Disk / Slowest volume latency | `windows_logical_disk_read_write_latency_seconds_total`<br>`windows_logical_disk_reads_total`<br>`windows_logical_disk_writes_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Disk / Busiest volume | `windows_logical_disk_idle_seconds_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Disk / Queued disk requests | `windows_logical_disk_requests_queued` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Disk / Read latency by volume | `windows_logical_disk_read_latency_seconds_total`<br>`windows_logical_disk_reads_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Disk / Write latency by volume | `windows_logical_disk_write_latency_seconds_total`<br>`windows_logical_disk_writes_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Disk / Queue depth by volume | `windows_logical_disk_requests_queued` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Disk / Throughput by volume | `windows_logical_disk_read_bytes_total`<br>`windows_logical_disk_write_bytes_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Disk / WSL I/O pressure | `node_pressure_io_stalled_seconds_total`<br>`windows_cpu_logical_processor` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Disk / Free space by volume | `windows_logical_disk_free_bytes`<br>`windows_logical_disk_size_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Network / Busiest adapter | `windows_net_bytes_total`<br>`windows_net_current_bandwidth_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Network / Received by adapter | `windows_net_bytes_received_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Network / Sent by adapter | `windows_net_bytes_sent_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Network / Errors and discards by adapter | `windows_net_packets_outbound_discarded_total`<br>`windows_net_packets_outbound_errors_total`<br>`windows_net_packets_received_discarded_total`<br>`windows_net_packets_received_errors_total` | 180s | None in range | [Runbook](../../docs/operations/grafana-resource-budget.md) |
+| tnwks-host / Network / Link speed by adapter | `windows_net_current_bandwidth_bytes` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/grafana-resource-budget.md) |
 | tnwks-observability / Trust / Expected sites | `homelab_expected_site_info` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Trust / Reporting sites | `homelab_collection_last_success_timestamp_seconds`<br>`homelab_collection_success` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Trust / Site evidence | `homelab_collection_last_success_timestamp_seconds`<br>`homelab_collection_success`<br>`homelab_expected_site_info` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |

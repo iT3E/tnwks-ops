@@ -98,6 +98,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -143,6 +144,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "AP uptime"
                       }
                     }
@@ -281,6 +287,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -326,6 +333,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "AP uplink"
                       }
                     }
@@ -503,6 +515,90 @@
         "kind": "Panel",
         "spec": {
           "id": 5,
+          "title": "Clients with weak signal",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "count(max by (name) (unpoller_client_radio_signal_db{source_site=\"\",wired=\"false\"}) < -70) or (0 * count(unpoller_client_radio_signal_db{source_site=\"\",wired=\"false\"}))",
+                        "instant": true,
+                        "legendFormat": "{{name}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/tnwks-wifi-clients/view?from=${__from}&to=${__to}&${cluster:queryparam}&var-datasource=${datasource:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/network/architecture.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Wireless devices below -70 dBm at their access point, the whole house. Which ones, and their retries and satisfaction, are on Wi-Fi clients.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "id": 6,
           "title": "Peer path success",
           "links": [],
           "data": {
@@ -591,10 +687,10 @@
           "description": "Correlate site 2 connectivity loss with AP/uplink and WireGuard/BGP observations. This does not identify individual household clients.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-5": {
+      "panel-6": {
         "kind": "Panel",
         "spec": {
-          "id": 6,
+          "id": 7,
           "title": "Peer path duration",
           "links": [],
           "data": {
@@ -671,10 +767,10 @@
           "description": "Bounded transport probe duration; one sample does not measure line-rate Wi-Fi performance.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-6": {
+      "panel-7": {
         "kind": "Panel",
         "spec": {
-          "id": 7,
+          "id": 8,
           "title": "Site host uplinks",
           "links": [],
           "data": {
@@ -729,6 +825,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -774,6 +871,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Site host uplinks"
                       }
                     }
@@ -850,10 +952,10 @@
           "description": "Each site's Windows host NICs with a link, at their negotiated rate (windows_exporter). Site 2's host reaches the router over Wi-Fi only, so its link rate changes with the radio.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-7": {
+      "panel-8": {
         "kind": "Panel",
         "spec": {
-          "id": 8,
+          "id": 9,
           "title": "Site host uplink traffic",
           "links": [],
           "data": {
@@ -912,7 +1014,7 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/IV0hu1m7z/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-server=${__field.labels.instance:percentencode}"
+                      "url": "/d/tnwks-host/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-host=${__field.labels.instance:percentencode}"
                     },
                     {
                       "title": "Runbook",
@@ -934,10 +1036,10 @@
           "description": "Traffic through each host NIC in use: everything the site sends or receives, the site tunnel included.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-8": {
+      "panel-9": {
         "kind": "Panel",
         "spec": {
-          "id": 9,
+          "id": 10,
           "title": "Site 2 Wi-Fi signal",
           "links": [],
           "data": {
@@ -1013,10 +1115,10 @@
           "description": "The site 2 host's signal at its access point, as UniFi reports it (either site's poller). A change of AP or channel starts a new line.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-9": {
+      "panel-10": {
         "kind": "Panel",
         "spec": {
-          "id": 10,
+          "id": 11,
           "title": "Site 2 Wi-Fi association",
           "links": [],
           "data": {
@@ -1071,6 +1173,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -1116,6 +1219,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Site 2 Wi-Fi association"
                       }
                     }
@@ -1221,6 +1329,15 @@
                                     "name": "panel-3"
                                   }
                                 }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4"
+                                  }
+                                }
                               }
                             ],
                             "maxColumnCount": 5,
@@ -1321,15 +1438,6 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-4"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
                                     "name": "panel-5"
                                   }
                                 }
@@ -1339,7 +1447,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-7"
+                                    "name": "panel-6"
                                   }
                                 }
                               },
@@ -1349,6 +1457,15 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-8"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-9"
                                   }
                                 }
                               }
@@ -1375,7 +1492,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-6"
+                                    "name": "panel-7"
                                   }
                                 }
                               },
@@ -1384,7 +1501,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-9"
+                                    "name": "panel-10"
                                   }
                                 }
                               }

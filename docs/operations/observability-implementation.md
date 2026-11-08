@@ -105,7 +105,8 @@ Every hop keeps the incident's time range. Homelab's panels link to their domain
 board with the selected sites and datasource (L1 → domain). Domain panels with an
 entity board link to it on the clicked series or row instead: an ingress to the
 NGINX board (ingress-nginx's own), a node to the mixin's Node (Pods), a Windows
-host to its exporter board, an access point to Home Wi-Fi (domain → entity).
+host to Host, a Wi-Fi device to Wi-Fi clients, a WAN device to WAN clients, an
+access point to Home Wi-Fi (domain → entity; see "Diagnose boards" below).
 Telegram alerts open their `dashboard_url` from an hour before the alert started
 to now, or to 15 minutes after it resolved. Every alert that reaches a person has
 one: its domain board, scoped to the site the alert is about (generated alerts'
@@ -113,8 +114,64 @@ one: its domain board, scoped to the site the alert is about (generated alerts'
 (`$externalLabels.cluster`). `tests/test_alert_links.py` fails on an alert
 without one. The charts' own rules (kube-prometheus mixins, Kopiur,
 tuppr) carry a runbook instead; Telegram links those to the Alerts board for the
-site that raised them, at Grafana's address beside Alertmanager's external URL. `tests/browser_check.py` clicks both
-hops in a disposable Grafana and checks the target, time range and selection.
+site that raised them, at Grafana's address beside Alertmanager's external URL. `tests/browser_check.py` clicks the
+hops in a disposable Grafana (Homelab to Sites, an access point to Home Wi-Fi, a
+WAN device to WAN clients) and checks the target, time range and selection.
+`test_every_drilldown_lands_on_a_board_that_takes_its_variables` fails on a link
+to a UID nothing deploys, or one that sets a picker the target doesn't have.
+
+### Diagnose boards
+
+The L3 boards answer "which one, and why" once a domain board says where.
+Each has an entity picker (`variables=`, `Variable` in `model.py`: the values of
+one label from Prometheus over the selected range) and is reached from the domain
+board's panels:
+
+| Board | Picker | Reached from | Answers |
+| --- | --- | --- | --- |
+| Host (`tnwks-host`) | one Windows host | Hosts & Capacity's host graphs, Wi-Fi's host uplink traffic, Databases' disk free | USE per resource: a tab each for CPU, memory, disk and network, busy (utilization), queued or paging (saturation) and errors, with the WSL VM's own CPU and Linux pressure stall (PSI) beside the Windows view |
+| Wi-Fi clients (`tnwks-wifi-clients`) | wireless devices | Wi-Fi's "Clients with weak signal" | worst-first tables (weak signal, low satisfaction, most retries, reconnects) over every device; graphs of signal, satisfaction, retry rate and throughput for the picked ones; where each is associated |
+| WAN clients (`tnwks-wan-clients`) | devices from flow export | Internet's Upload and "Top WAN devices now" | top downloaders and uploaders now, data per device and per destination over the range, and Internet latency beside per-device upload, crosshair-synced, to line a spike up with its sender |
+
+The worst-first tables ignore the picker so they always cover everything; the
+graphs follow it, and a click on a table row picks that entity
+(`sort="asc"|"desc"` orders a row table by its value). A diagnose board's empty
+list is the good case ("None below -70 dBm"), not missing evidence.
+
+Measured 2026-11-07, and why some queries look the way they do:
+
+- **Windows counts the WSL VM's CPU as privileged time.** About 2.5 busy VM cores
+  showed inside 3.5 privileged host cores, so Host's CPU busy covers the
+  cluster. The VM has fewer processors than the host (its `.wslconfig` limit), so
+  Host also shows the VM's own busy share and CPU pressure: the VM can be full
+  while the host has room.
+- **Commit charge** (memory promised against RAM plus page file) is the memory
+  limit that bites on these hosts, not physical use: site 1 read 93% and peaked
+  at 99% while 72% of RAM was in use. At 100% Windows refuses allocations.
+- **Disk latency** is the latency counter's rate over the operation counter's
+  (`windows_logical_disk_*_latency_seconds_total`), seconds per operation, on
+  real volumes only (`HarddiskVolume*` are the hidden system partitions).
+- **UniFi refreshes every 2 minutes**, so client rates use a 10-minute window,
+  not `$__rate_interval` (2 minutes, too few samples to make a rate). Retry rate
+  is retries / (packets + retries), as UniFi shows it: retries over attempts
+  read 350% on a near-idle device.
+- **Client names aren't per site.** One controller sees the whole house, and only
+  the poller's own copy (`source_site=""`) is read, so the Wi-Fi clients board
+  ignores the site picker. WAN clients does too: the flow rules sum the site
+  label away and only site 1's router exports flows.
+- **Flow export doesn't see everything.** WAN clients' "Download attributed" is
+  the share of the line's download that flows put a device to; it read 35%, so
+  per-device numbers are a ranking, not an account.
+
+Device names are runtime data from UniFi and the router's DHCP leases. The
+repository never names a household device: the boards hold queries, and the
+pickers fill in when someone signed in to Grafana opens them. Screenshots of
+these boards stay off GitHub, as with every live render.
+
+The kept classic boards stay for now: Home Wi-Fi has the access points' radio
+detail (channel use, airtime) the L3 boards don't, and WAN Traffic and the
+Windows exporter board can be retired once the diagnose boards have been used
+through an incident.
 
 ### Design system
 
@@ -380,7 +437,7 @@ The Wi-Fi & LAN board's Site dependency tab measures that path from both ends:
 each host's NICs with a link and their negotiated rate and traffic
 (windows_exporter), and the site 2 host's signal, access point and association
 uptime as UniFi reports it (`SITE2_WIFI_CLIENT` in `observability/dashboards/queries.py`,
-its computer name; household clients are never named). A reassociation resets
+its computer name; no household device is named in the repository). A reassociation resets
 the uptime and interrupts the site tunnel and its BGP sessions, so read it with
 the Network board's History tab. First measured 2026-11-07: site 1 wired at
 1 Gbit/s, site 2 on Wi-Fi at 300 Mbit/s and -72 dBm on channel 149.

@@ -31,6 +31,19 @@ class Panel:
     # A fleet table: one row per value of this label, one column per site (each
     # series must be unique by it and the site). Empty: one row per series.
     per_site: str = ""
+    # A row table's order by its value: "desc" puts the worst-first list's worst on top.
+    sort: str = ""
+
+
+@dataclass(frozen=True)
+class Variable:
+    """An entity picker on an L3 board: the values of one label, from Prometheus."""
+    name: str
+    label: str
+    # label_values(<series selector>, <label>): the series must carry the label.
+    query: str
+    # Many at once (and All), or exactly one entity.
+    multi: bool = True
 
 
 @dataclass(frozen=True)
@@ -45,12 +58,16 @@ class Board:
     kiosk: bool = False
     # Lay tabs out in sections (headline, status, trends, detail) instead of one grid.
     sections: bool = False
+    # Entity pickers after the site picker (L3 boards).
+    variables: tuple[Variable, ...] = ()
 
 
 def p(title: str, expr: str, unit: str, explanation: str, kind="timeseries", link=None,
-      empty="Unknown — missing evidence", column: str | None = "", words=("Yes", "No"), role="", per_site=""):
+      empty="Unknown — missing evidence", column: str | None = "", words=("Yes", "No"), role="", per_site="",
+      sort=""):
+    assert sort in ("", "asc", "desc"), (title, sort)
     return Panel(title, expr, unit, explanation, kind, link, empty=empty, column=column, words=words, role=role,
-                 per_site=per_site)
+                 per_site=per_site, sort=sort)
 
 
 def role(panel: Panel) -> str:

@@ -102,7 +102,7 @@
                   "links": [
                     {
                       "title": "Diagnose",
-                      "url": "/d/IV0hu1m7z/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-server=${__field.labels.instance:percentencode}"
+                      "url": "/d/tnwks-host/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-host=${__field.labels.instance:percentencode}"
                     },
                     {
                       "title": "Runbook",
@@ -128,6 +128,260 @@
         "kind": "Panel",
         "spec": {
           "id": 3,
+          "title": "Host CPU busy",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "1 - avg by (k8s_cluster, instance) (rate(windows_cpu_time_total{k8s_cluster=~\"$cluster\",mode=\"idle\"}[$__rate_interval]))",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/tnwks-host/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-host=${__field.labels.instance:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Share of each Windows host's logical processors doing work. Click a line for that host's CPU, memory, disk and network detail.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-3": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4,
+          "title": "Host disk latency",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster, instance) (rate(windows_logical_disk_read_write_latency_seconds_total{k8s_cluster=~\"$cluster\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) / (rate(windows_logical_disk_reads_total{k8s_cluster=~\"$cluster\",volume!~\"HarddiskVolume.+\"}[$__rate_interval]) + rate(windows_logical_disk_writes_total{k8s_cluster=~\"$cluster\",volume!~\"HarddiskVolume.+\"}[$__rate_interval])))",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/tnwks-host/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-host=${__field.labels.instance:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Average time per disk operation on each host's slowest volume. An SSD normally answers in under 5 ms; sustained above 20 ms the disk is what's slow. Click a line for the host's detail.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "id": 5,
+          "title": "Host commit charge",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (k8s_cluster, instance) (windows_memory_committed_bytes{k8s_cluster=~\"$cluster\"}) / max by (k8s_cluster, instance) (windows_memory_commit_limit{k8s_cluster=~\"$cluster\"})",
+                        "instant": false,
+                        "legendFormat": "{{k8s_cluster}} {{instance}}",
+                        "range": true
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "links": [
+                    {
+                      "title": "Diagnose",
+                      "url": "/d/tnwks-host/view?from=${__from}&to=${__to}&var-datasource=${datasource:percentencode}&var-host=${__field.labels.instance:percentencode}"
+                    },
+                    {
+                      "title": "Runbook",
+                      "url": "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/grafana-resource-budget.md",
+                      "targetBlank": true
+                    }
+                  ],
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Memory each host has promised against RAM plus page file. At 100% Windows refuses allocations and programs fail, WSL's VM included.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "id": 6,
           "title": "Windows disk free",
           "links": [],
           "data": {
@@ -182,6 +436,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -227,6 +482,11 @@
                         "collector": "Collector",
                         "slo": "Objective",
                         "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
                         "Value": "Windows disk free"
                       }
                     }
@@ -303,10 +563,10 @@
           "description": "Physical free space remains authoritative even if an ext4 VHDX reports much more virtual space.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-3": {
+      "panel-6": {
         "kind": "Panel",
         "spec": {
-          "id": 4,
+          "id": 7,
           "title": "Disk temperature",
           "links": [],
           "data": {
@@ -382,10 +642,10 @@
           "description": "SMART device temperature where published. Missing SMART data is a collection gap, not a passing disk test.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-4": {
+      "panel-7": {
         "kind": "Panel",
         "spec": {
-          "id": 5,
+          "id": 8,
           "title": "Required app replicas",
           "links": [],
           "data": {
@@ -532,10 +792,10 @@
           "description": "Current placement demand. Full survivor-fit evidence also needs measured requests/peaks, storage placement and pinned hardware.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-5": {
+      "panel-8": {
         "kind": "Panel",
         "spec": {
-          "id": 6,
+          "id": 9,
           "title": "Recovery readiness",
           "links": [],
           "data": {
@@ -798,7 +1058,34 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
+                                    "name": "panel-2"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
                                     "name": "panel-3"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-6"
                                   }
                                 }
                               }
@@ -825,7 +1112,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-2"
+                                    "name": "panel-5"
                                   }
                                 }
                               }
@@ -892,7 +1179,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-5"
+                                    "name": "panel-8"
                                   }
                                 }
                               }
@@ -919,7 +1206,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-4"
+                                    "name": "panel-7"
                                   }
                                 }
                               }

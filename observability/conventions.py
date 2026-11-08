@@ -11,6 +11,7 @@ RUNBOOKS = {
     "home": "docs/apps/home-assistant.md",
     "hosts": "docs/operations/grafana-resource-budget.md",
     "observability": "docs/operations/observability-implementation.md",
+    "wifi": "docs/network/unifi.md",
 }
 PANEL_RUNBOOKS = {
     "Windows disk free": "docs/operations/grafana-resource-budget.md",

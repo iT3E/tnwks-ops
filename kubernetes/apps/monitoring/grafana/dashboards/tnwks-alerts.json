@@ -99,6 +99,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -143,7 +144,12 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
-                        "area": "Area"
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category"
                       }
                     }
                   }
@@ -274,6 +280,7 @@
                       },
                       "indexByName": {
                         "k8s_cluster": 0,
+                        "client": 0,
                         "app": 1,
                         "db_cluster": 1
                       },
@@ -318,7 +325,12 @@
                         "volume": "Volume",
                         "collector": "Collector",
                         "slo": "Objective",
-                        "area": "Area"
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category"
                       }
                     }
                   }
