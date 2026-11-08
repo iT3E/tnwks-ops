@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.45.1 - 2026-11-08
+
+### Fixed
+
+* grafana: a table row without one of the columns shows a dash there, not the panel's empty-state words (a Flux row under Needs attention read "Nothing needs attention" as its app)
+
 ## v2.45.0 - 2026-11-08
 
 ### Changed

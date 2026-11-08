@@ -1,4 +1,0 @@
----
-kind: Fixed
-body: "grafana: a table row without one of the columns shows a dash there, not the panel's empty-state words (a Flux row under Needs attention read \"Nothing needs attention\" as its app)"
-time: 2026-11-08T01:57:22.000000000Z
