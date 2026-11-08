@@ -28,6 +28,9 @@ class Panel:
     words: tuple[str, str] = ("Yes", "No")
     # Its section in the tab (design.SECTIONS); empty means by kind: see role().
     role: str = ""
+    # A fleet table: one row per value of this label, one column per site (each
+    # series must be unique by it and the site). Empty: one row per series.
+    per_site: str = ""
 
 
 @dataclass(frozen=True)
@@ -45,8 +48,9 @@ class Board:
 
 
 def p(title: str, expr: str, unit: str, explanation: str, kind="timeseries", link=None,
-      empty="Unknown — missing evidence", column: str | None = "", words=("Yes", "No"), role=""):
-    return Panel(title, expr, unit, explanation, kind, link, empty=empty, column=column, words=words, role=role)
+      empty="Unknown — missing evidence", column: str | None = "", words=("Yes", "No"), role="", per_site=""):
+    return Panel(title, expr, unit, explanation, kind, link, empty=empty, column=column, words=words, role=role,
+                 per_site=per_site)
 
 
 def role(panel: Panel) -> str:

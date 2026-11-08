@@ -49,8 +49,17 @@ def visualization(panel: Panel, runbook: str | None = None):
         if panel.unit in ("state", "coverage"):
             properties.append(model.DynamicConfigValue(
                 id_val="custom.cellOptions", value={"type": "color-background", "mode": "basic"}))
+        if panel.per_site:
+            # Every site column is a value: style them all by type, whatever the sites are.
+            assert not panel.link, (panel.title, "a fleet table's row has no single entity to open")
         link_property = model.DynamicConfigValue(
             id_val="links", value=[json.loads(json.dumps(link, cls=JSONEncoder)) for link in links])
+        if panel.per_site:
+            # A pair with no series isn't at that site: a dash, not the panel's missing-evidence
+            # words (a state that is genuinely Unknown still says so).
+            properties.append(model.DynamicConfigValue(id_val="noValue", value="—"))
+            viz.override_by_field_type("number", properties + ([link_property] if links else []))
+            return viz
         if header:
             viz.override_by_name(header, properties + ([link_property] if links else []))
         elif links:

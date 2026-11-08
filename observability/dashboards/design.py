@@ -68,9 +68,10 @@ SECTIONS = {
     # The household wall: touchable tiles, three across on a tablet, one on a phone (tall
     # filled a phone screen with a single tile).
     "wall": (None, 3, "standard", False),
-    "status": ("Status", 3, "standard", False),
+    # Tables two across: at three, a site column or the last label was cut off.
+    "status": ("Status", 2, "standard", False),
     "trends": ("Trends", 2, "standard", False),
-    "detail": ("Detail", 3, "standard", False),
+    "detail": ("Detail", 2, "standard", False),
     "evidence": ("Evidence", 4, "short", True),
     "about": ("About this view", 1, "short", True),
 }
