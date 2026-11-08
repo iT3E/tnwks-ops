@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.51.2 - 2026-11-08
+
+### Fixed
+
+* Grafana's Hosts tile grades memory on RAM in use instead of commit charge, which sat near its limit because the WSL VM commits its whole memory and the page file grows on demand; the 95% WindowsHostCommitHigh warning is removed, the 98% critical stays
+
 ## v2.51.1 - 2026-11-08
 
 ### Fixed
