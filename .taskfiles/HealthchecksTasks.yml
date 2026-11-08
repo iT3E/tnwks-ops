@@ -4,7 +4,7 @@ version: "3"
 ## ---------------------------------------------------------------------------------------------------------------------
 ## healthchecks.io off-site heartbeats (environments/prod/healthchecks).
 ##
-## CI plans on the PR and applies on merge (healthchecks-{plan,apply}.yaml on
+## CI plans on the PR and applies on merge (.github/workflows/terraform.yaml on
 ## the self-hosted runner). These tasks are break-glass, against the same TFC
 ## state (tnwks-healthchecks-prod, execution mode local).
 ## See docs/operations/external-monitoring.md.

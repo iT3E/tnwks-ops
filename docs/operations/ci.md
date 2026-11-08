@@ -14,7 +14,8 @@ changes ──┬─ kubernetes ──────────────┐
           ├─ ansible ─────────────────┼─ Build Success
           ├─ security_regressions ────┤
           ├─ dependency_compatibility ┤
-          └─ workflows ───────────────┘
+          ├─ workflows ───────────────┤
+          └─ terraform (per root) ────┘
 ```
 
 ## How a run decides what to check
@@ -68,10 +69,46 @@ caller, for example `kubernetes / Render`.
 
 - **Privacy, secret scanning, changelog, labeler.** These run on every PR, and
   on events `ci.yaml` shouldn't react to: a title edit, a label change.
-- **Terraform plans** (`*-plan.yaml`) and **Ansible host checks**
-  (`ansible-hosts.yaml`). They run on self-hosted runners against live
-  systems, so a host or runner being down shouldn't block a merge. Applies
-  run on push to `main` in their own workflows.
+- **Ansible host checks** (`ansible-hosts.yaml`) and **EdgeOS**
+  (`edgeos-{plan,apply}.yaml`). They run on self-hosted runners against
+  live hosts, so a host being down shouldn't block a merge. Ansible applies
+  per site on push, schedule and dispatch.
+
+## Terraform: plan in CI, apply in Deploy
+
+Every root under `infrastructure/terraform/environments/prod/` is a
+`[groups.terraform.<name>]` entry in `domains.toml`: its paths (the root and
+the modules it calls), the runner, the backend and any endpoint override.
+`bin/ci-changes` prints the roots a change touched as a JSON list, and
+[`terraform.yaml`](../../.github/workflows/terraform.yaml) runs one matrix
+job per root:
+
+| Field | Meaning |
+| --- | --- |
+| `title` | Check name, e.g. `terraform / Plan MikroTik` |
+| `root` | Path under `environments/` |
+| `runner` | `ubuntu-26.04` or a self-hosted label from `.github/actionlint.yaml` |
+| `backend` | `local` (TFC state, plan on the runner, `.github/actions/terraform`) or `tfc-remote` (plan and apply in Terraform Cloud) |
+| `workspace` | The TFC workspace, `tfc-remote` only |
+| `lock` | Concurrency group a root's plans and applies share, for roots that must never overlap (one device, one state lock) |
+| `tf_vars` | `TF_VAR_<name>=<value>` lines, endpoint overrides that only hold on the runner. Never secrets |
+| `enabled_var` | A repository variable that must be `true` for the root to run |
+
+- **Plan.** `ci.yaml`'s `terraform` job, on a PR. A root's plan posts a
+  sticky comment and gates Build Success: a plan that can't run (the
+  runner, the device or TFC is down) blocks the merge, because merging
+  would apply it. Only the owner's and Renovate's same-repo PRs plan on
+  their own. Anyone else's waits in the `external-contributions`
+  environment, and then only `tfc-remote` roots plan: other code never runs
+  on the self-hosted runners.
+- **Apply.** [`deploy.yaml`](../../.github/workflows/deploy.yaml), on push
+  to `main`: the roots the push changed, in the `prod` environment (main
+  only), one run at a time per root in merge order, never cancelled. CI's
+  own files don't trigger an apply (`--ignore-always`). To re-apply by
+  hand, dispatch Deploy with `roots` (comma-separated names, empty for all).
+
+Adding a root is one `domains.toml` entry. The conformance job checks that
+`ci.yaml` has a `terraform` job for the group.
 
 ## CI stats
 

@@ -54,7 +54,7 @@ the stock `alertmanager.rules` select.
   in `infrastructure/terraform/environments/prod/healthchecks`, state in
   Terraform Cloud `tnwks-healthchecks-prod` (execution mode local, so runs
   execute on the runner, not in TFC). CI plans on the PR and applies on merge
-  on the self-hosted `tnwks-ops-runner` (`healthchecks-{plan,apply}.yaml`,
+  on the self-hosted `tnwks-ops-runner` (`terraform.yaml`, root `healthchecks`,
   [`docs/network/ci.md`](../network/ci.md)). `task healthchecks:plan` /
   `task healthchecks:apply` from the desktop are for break-glass only.
   `task healthchecks:status` lists each check's status and last ping.
@@ -92,7 +92,7 @@ Integrations and API keys can't be created through the API.
    `aws-init` apply. Then `task healthchecks:init` and
    `task healthchecks:apply`.
 5. Merge. Flux rolls out the Alertmanager change (Reloader restarts it on the
-   ConfigMap and Secret), and `mikrotik-apply.yaml` adds the router scheduler
+   ConfigMap and Secret), and the MikroTik apply adds the router scheduler
    (`task mikrotik:apply` by hand if CI is down). All three checks leave the
    "new" state on their first ping.
 

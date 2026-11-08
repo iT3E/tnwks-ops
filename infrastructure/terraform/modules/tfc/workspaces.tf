@@ -64,7 +64,7 @@ resource "tfe_workspace_settings" "tnwks-unifi-prod_workspace_settings" {
 }
 
 # healthchecks.io is a public API, but the key is read from SOPS with the CI
-# age key on the self-hosted runner (healthchecks-{plan,apply}.yaml), so
+# age key on the self-hosted runner (terraform.yaml), so
 # execution is local, like the MikroTik and UniFi workspaces.
 resource "tfe_workspace" "tnwks-healthchecks-prod" {
   name              = "tnwks-healthchecks-prod"
@@ -79,7 +79,7 @@ resource "tfe_workspace_settings" "tnwks-healthchecks-prod_workspace_settings" {
 }
 
 # Cloudflare is a public API, but the credentials are read from SOPS with the
-# CI age key on the self-hosted runner (cloudflare-{plan,apply}.yaml), so
+# CI age key on the self-hosted runner (terraform.yaml), so
 # execution is local. Renamed from tnwks-cloudflare-prod_old and moved into
 # this project on 2026-11-04; same workspace, so the state is unchanged.
 resource "tfe_workspace" "tnwks-cloudflare-prod" {

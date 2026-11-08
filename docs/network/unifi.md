@@ -10,7 +10,7 @@ and its configuration (site settings, the WLAN, each AP) is Terraform in
 | Controller UI | `https://unifi.internal.tnwks.us`: Cognito login (oauth2-proxy), then the controller's local login (`admin_username` in SOPS) |
 | Controller API | `https://10.5.0.206:8443` (VIP, desktop only) for local Terraform; `unifi.networking.svc.cluster.local:8443` for CI and unpoller |
 | Inform URL the APs use | `http://unifi:8080/inform` (router record `unifi` -> `10.10.91.112`, WSL-02, since 2026-11-06) |
-| Configuration | `environments/prod/unifi` + `modules/unifi`: planned on the PR and applied on merge by `unifi-{plan,apply}.yaml` on the self-hosted runner ([`ci.md`](ci.md)). State in TFC workspace `tnwks-unifi-prod`. `task unifi:*` for bootstrap and break-glass |
+| Configuration | `environments/prod/unifi` + `modules/unifi`: planned on the PR and applied on merge by `terraform.yaml` (root `unifi`) on the self-hosted runner ([`ci.md`](ci.md)). State in TFC workspace `tnwks-unifi-prod`. `task unifi:*` for bootstrap and break-glass |
 | Secrets | `environments/prod/unifi/secrets.sops.yaml`: controller logins, device SSH, SSID, passphrase, AP MACs |
 | Metrics | `monitoring/unpoller` (local controller user `unifipoller`); AP pings in `monitoring/smokeping-prober` (role `ap`); SW03 AP ports via `monitoring/snmp-exporter` |
 | Dashboard and alerts | Grafana "Home Wi-Fi" (`grafana/app/dashboard/home-wifi.json`); `kube-prometheus-stack/addons/alerts/wifi.yaml` |
@@ -217,7 +217,7 @@ and 6-9.
 
 ## Day to day
 
-- Change Wi-Fi settings in Terraform through a PR: `unifi-plan.yaml` posts
+- Change Wi-Fi settings in Terraform through a PR: the `terraform / Plan UniFi` job posts
   the plan summary, merging applies it. A change made in the UI shows up as
   drift on the next plan. `task unifi:plan` / `task unifi:apply` from the
   desktop do the same by hand, against the same state, when CI is down.

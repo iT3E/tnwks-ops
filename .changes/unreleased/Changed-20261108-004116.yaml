@@ -1,0 +1,3 @@
+kind: Changed
+body: 'CI: Terraform plans for every root run from ci.yaml as one matrix and gate Build Success; applies run from the new deploy.yaml. Adding a root is one entry in .github/ci/domains.toml'
+time: 2026-11-08T00:41:16.150349906-08:00

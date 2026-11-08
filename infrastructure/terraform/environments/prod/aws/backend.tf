@@ -1,7 +1,7 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 ## BACKEND
 ## Terraform Cloud remote backend. Runs are driven by
-## .github/workflows/terraform-{plan,apply}.yaml on changes under this directory.
+## .github/workflows/terraform.yaml on changes under this directory.
 ## ---------------------------------------------------------------------------------------------------------------------
 
 terraform {
