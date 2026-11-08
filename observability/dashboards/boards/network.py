@@ -19,9 +19,9 @@ def board() -> Board:
             ],
             "BGP and mesh": [
                 p("Path by hop", metric("homelab:network_path_state"), "state",
-                  "Per site: the WireGuard tunnel to the router (handshake within 180 s), the router's BGP session with the distro's FRR, the Cilium agents' sessions with the distro, and the mesh (the site's agents and its KVStoreMesh both have the other cluster ready). Unknown when the router or the agents aren't observed.", "table"),
+                  "Per site: the WireGuard tunnel to the router (handshake within 180 s), the router's BGP session with the distro's FRR, the Cilium agents' sessions with the distro, and the mesh (the site's agents and its KVStoreMesh both have the other cluster ready). Unknown when the router or the agents aren't observed.", "table", per_site="hop"),
                 p("Shared VIP routes", metric("homelab:shared_vip_route"), "bool",
-                  "Which site the router sends each shared VIP to (1): the preferred site while its BGP session is up, else the other. Inferred from the router's live sessions and the declared local preference, not read from its route table. A client behind a site (its pods, the WSL host) reaches that site's own ingress either way.", "table", column="Carries the VIP", words=("Yes", "—")),
+                  "Which site the router sends each shared VIP to (1): the preferred site while its BGP session is up, else the other. Inferred from the router's live sessions and the declared local preference, not read from its route table. A client behind a site (its pods, the WSL host) reaches that site's own ingress either way.", "table", words=("Yes", "—"), per_site="vip"),
                 p("Routes received per site", 'max by (k8s_cluster) (homelab:router_bgp_prefixes{k8s_cluster=~"$cluster"})', "short",
                   "Prefixes the router accepted from each site's FRR (its node, pod and shared-VIP routes). Zero with an established session means the site announces nothing.", "stat"),
                 p("Cilium drops", f'sum by (k8s_cluster, reason) (rate({metric("cilium_drop_count_total")}[5m]))', "pps",

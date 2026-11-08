@@ -1,0 +1,4 @@
+---
+kind: Changed
+body: "grafana: Network and Data use fleet tables (path by hop, shared VIPs, CNPG role, backups, recovery point and restore time, one row each with a column per site); graph legends name the database; a cell with nothing at that site is a plain dash"
+time: 2026-11-08T01:35:27.000000000Z

@@ -58,6 +58,12 @@ def visualization(panel: Panel, runbook: str | None = None):
             # A pair with no series isn't at that site: a dash, not the panel's missing-evidence
             # words (a state that is genuinely Unknown still says so).
             properties.append(model.DynamicConfigValue(id_val="noValue", value="—"))
+            # ...and without a state colour: a grey dash read as Unknown.
+            blank = [{"type": "special", "options": {"match": match, "result": {"text": "—", "color": "transparent"}}}
+                     for match in ("empty", "null")]
+            for prop in properties:
+                if prop.id_val == "mappings":
+                    prop.value = prop.value + blank
             viz.override_by_field_type("number", properties + ([link_property] if links else []))
             return viz
         if header:
