@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'CI: Deploy starts on a push to main (its Terraform caller now grants what terraform.yaml''s plan jobs declare), and CI no longer plans Terraform on pushes to main, where every root waited on the approval environment.'
-time: 2026-11-08T11:45:00.000000-08:00

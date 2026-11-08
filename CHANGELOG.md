@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.65.1 - 2026-11-08
+
+### Fixed
+
+* CI: Deploy starts on a push to main (its Terraform caller now grants what terraform.yaml's plan jobs declare), and CI no longer plans Terraform on pushes to main, where every root waited on the approval environment.
+
 ## v2.65.0 - 2026-11-08
 
 ### Changed
