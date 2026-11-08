@@ -518,8 +518,9 @@ app shares the daily schedule and the weekly drill, so no app overrides them yet
 ## Household view
 
 The household's view (L0) is a **House systems** section on Home Assistant's
-Home dashboard: six words (Internet, Wi-Fi, Automation, Cameras, Apps,
-Monitoring), each Healthy, Degraded, Failed or Unknown. The household already
+Home dashboard: ten words (Internet, Wi-Fi, Automation, Cameras, Apps,
+Devices, Backups, Storage, Away access, Monitoring), each Healthy, Degraded,
+Failed or Unknown. The household already
 uses Home Assistant on the wall displays, so it needs no second Grafana.
 
 - **Each site certifies its own share.** `homelab:house_state{domain}`
@@ -529,11 +530,19 @@ uses Home Assistant on the wall displays, so it needs no second Grafana.
   whole day drops out, so a disabled camera doesn't count, and an exporter that
   stops reporting leaves no row, so it reads Unknown); Home Assistant where
   it's active; the worst of the apps active there; whether its own collector
-  reports. A site has no row for something it has no part in.
+  reports. Since 2026-11-07 also: the worst of its apps' recovery points and
+  database backups (Backups); of the devices Home Assistant had today, the share
+  available now, under 95% Degraded and under half Failed, where the worst week
+  kept 96.7% (Devices: lights, switches, sensors, climate, locks, covers, fans,
+  media players, the vacuum; not automations or helpers); its fullest Windows
+  drive, under 10% free Degraded, under 5% Failed (Storage); and the Cloudflare
+  tunnel's edge connections, 4 normally (Away access). A site has no row for
+  something it has no part in.
 - **Home Assistant combines the sites**
   (`config/packages/house_systems.yaml`). It asks Thanos Query, on whichever
   site it runs, once a minute. Internet takes the best site (one line; site 2's
-  Wi-Fi isn't the house's Internet). Wi-Fi, Automation and Cameras take the
+  Wi-Fi isn't the house's Internet), and so does Away access (one tunnel is
+  enough). Wi-Fi, Automation, Cameras, Devices, Backups and Storage take the
   worst site with a part in them, Unknown when none has. Apps is Unknown when a
   site is missing. Monitoring is Degraded when some sites report, Failed when
   none do.

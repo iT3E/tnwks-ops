@@ -96,7 +96,37 @@ def house_records():
     aps_now = "count(max by (name) (unpoller_device_uptime_seconds > 0))"
     aps_day = "count(max by (name) (max_over_time(unpoller_device_uptime_seconds[1d]) > 0))"
     active = f"(homelab:service_state != 4 {own})"
+
+    def rank(states):
+        # Failed > Degraded > Unknown > Healthy as 4..1, then back to a state.
+        return (f"max((({states}) == bool 3) * 4 + (({states}) == bool 2) * 3"
+                f" + (({states}) == bool 0) * 2 + (({states}) == bool 1))")
+
+    def rank_state(name):
+        return f"({name} == bool 4) * 3 + ({name} == bool 3) * 2 + ({name} == bool 1)"
+
+    def bands(value, degraded, failed, higher_is_better=True):
+        # 1 at or past `degraded`, 2 between, 3 past `failed`.
+        if higher_is_better:
+            return (f"(({value}) >= bool {degraded}) + 2 * (({value}) < bool {degraded}) * (({value}) >= bool {failed})"
+                    f" + 3 * (({value}) < bool {failed})")
+        return (f"(({value}) <= bool {degraded}) + 2 * (({value}) > bool {degraded}) * (({value}) <= bool {failed})"
+                f" + 3 * (({value}) > bool {failed})")
+
+    # Backups: every app's recovery point and every database backup this site
+    # takes. A site that backs nothing up has no part.
+    backups = (f'label_replace((homelab:app_rpo_state {own}), "kind", "app", "", "")'
+               f' or label_replace((homelab:database_backup_state != 4 != 5 {own}), "kind", "database", "", "")')
+    # Smart devices: of the devices Home Assistant had available at some point
+    # today, the share available now (95% normal: the worst week seen kept
+    # 96.7%). Automations, scripts and helpers aren't devices.
+    devices = 'homeassistant_entity_available{domain=~"light|switch|binary_sensor|sensor|climate|lock|cover|fan|media_player|vacuum"}'
+    devices_now = f"count(max by (entity) ({devices}) == 1)"
+    devices_day = f"count(max by (entity) (max_over_time({devices}[1d])) == 1)"
+    # Storage: the fullest Windows drive the site's disks live on (C:, E:).
+    free = f'min((windows_logical_disk_free_bytes{{volume=~"C:|E:"}} / windows_logical_disk_size_bytes) {own})'
     return {
+        "homelab:house_backups_rank": rank(backups),
         # Worst over the apps this site serves: Failed > Degraded > Unknown >
         # Healthy. A reporting site serving none has nothing failing (1), so
         # every reporting site has an apps row and a missing one stands out.
@@ -111,6 +141,12 @@ def house_records():
             domain("(homelab:house_apps_rank == bool 4) * 3 + (homelab:house_apps_rank == bool 3) * 2"
                    " + (homelab:house_apps_rank == bool 1)", "apps"),
             domain(f"3 - 2 * max(homelab:site_reporting {own})", "monitoring"),
+            domain(rank_state("homelab:house_backups_rank"), "backups"),
+            domain(f"({bands(f'{devices_now} / {devices_day}', 0.95, 0.5)} or (0 * {devices_day} + 3))"
+                   f" and on () count({devices})", "devices"),
+            domain(bands(free, 0.10, 0.05), "storage"),
+            # Away access: the Cloudflare tunnel's connections to the edge (4 normally).
+            domain(bands(f"max(cloudflared_tunnel_ha_connections {own})", 4, 1), "away"),
         ]),
     }
 
@@ -683,6 +719,53 @@ def house_fixtures():
              {"expr": "homelab:house_state", "eval_time": "10m", "exp_samples": [
                  state("apps", 1), state("cameras", 3), state("internet", 3), state("monitoring", 3),
                  state("wifi", 3)]},
+         ]},
+        {"name": "household view: backups, smart devices, storage and away access", "interval": "1m",
+         "input_series": [
+             own,
+             # One app's recovery point is degraded; databases fine; a replica's N/A ignored.
+             {"series": 'homelab:app_rpo_state{k8s_cluster="one",app="a"}', "values": "1+0x10"},
+             {"series": 'homelab:app_rpo_state{k8s_cluster="one",app="b"}', "values": "2+0x10"},
+             {"series": 'homelab:database_backup_state{k8s_cluster="one",db_cluster="d"}', "values": "1+0x10"},
+             {"series": 'homelab:database_backup_state{k8s_cluster="one",db_cluster="r"}', "values": "5+0x10"},
+             # The other site's failing backup isn't this site's share.
+             {"series": 'homelab:app_rpo_state{k8s_cluster="two",app="c"}', "values": "3+0x10"},
+             # 20 devices up today; one drops (95%: fine). An automation going away isn't a device.
+             *[{"series": f'homeassistant_entity_available{{domain="sensor",entity="sensor.d{i}"}}', "values": "1+0x10"}
+               for i in range(19)],
+             {"series": 'homeassistant_entity_available{domain="light",entity="light.d19"}', "values": "1 1 0 0 0 0 0 0 0 0 0"},
+             {"series": 'homeassistant_entity_available{domain="automation",entity="automation.x"}', "values": "1 1 0 0 0 0 0 0 0 0 0"},
+             # The fuller drive is 8% free: degraded.
+             {"series": 'windows_logical_disk_free_bytes{k8s_cluster="one",volume="C:"}', "values": "50+0x10"},
+             {"series": 'windows_logical_disk_size_bytes{k8s_cluster="one",volume="C:"}', "values": "100+0x10"},
+             {"series": 'windows_logical_disk_free_bytes{k8s_cluster="one",volume="E:"}', "values": "8+0x10"},
+             {"series": 'windows_logical_disk_size_bytes{k8s_cluster="one",volume="E:"}', "values": "100+0x10"},
+             {"series": 'cloudflared_tunnel_ha_connections{k8s_cluster="one"}', "values": "4+0x10"},
+         ], "promql_expr_test": [
+             {"expr": 'homelab:house_state{domain=~"backups|devices|storage|away"}', "eval_time": "10m", "exp_samples": [
+                 state("away", 1), state("backups", 2), state("devices", 1), state("storage", 2)]},
+         ]},
+        {"name": "household view: backups, devices, storage and away access failing", "interval": "1m",
+         "input_series": [
+             own,
+             {"series": 'homelab:app_rpo_state{k8s_cluster="one",app="a"}', "values": "3+0x10"},
+             # Half the devices are gone, then all of them.
+             *[{"series": f'homeassistant_entity_available{{domain="switch",entity="switch.d{i}"}}',
+                "values": "1 1 0 0 0 0 0 0 0 0 0"} for i in range(4)],
+             {"series": 'windows_logical_disk_free_bytes{k8s_cluster="one",volume="C:"}', "values": "3+0x10"},
+             {"series": 'windows_logical_disk_size_bytes{k8s_cluster="one",volume="C:"}', "values": "100+0x10"},
+             {"series": 'cloudflared_tunnel_ha_connections{k8s_cluster="one"}', "values": "4 4 2 0 0 0 0 0 0 0 0"},
+         ], "promql_expr_test": [
+             {"expr": 'homelab:house_state{domain=~"backups|devices|storage|away"}', "eval_time": "10m", "exp_samples": [
+                 state("away", 3), state("backups", 3), state("devices", 3), state("storage", 3)]},
+         ]},
+        {"name": "household view: no part in the new domains", "interval": "1m",
+         "input_series": [
+             own,
+             {"series": 'homelab:app_rpo_state{k8s_cluster="two",app="c"}', "values": "3+0x10"},
+             {"series": 'cloudflared_tunnel_ha_connections{k8s_cluster="two"}', "values": "4+0x10"},
+         ], "promql_expr_test": [
+             {"expr": 'homelab:house_state{domain=~"backups|devices|storage|away"}', "eval_time": "10m", "exp_samples": []},
          ]},
         {"name": "household view: a blind source is Unknown, not Failed", "interval": "1m",
          "input_series": [

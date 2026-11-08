@@ -1,5 +1,5 @@
 ---
-# House systems: the household view of the monitoring (L0), six plain states
+# House systems: the household view of the monitoring (L0), ten plain states
 # for the Home dashboard. docs/operations/observability-implementation.md,
 # "Household view".
 #
@@ -9,8 +9,10 @@
 # them here. Only these aggregates reach HA: no hosts, cameras or people.
 #   internet               the best site: one Internet line, and site 2's own
 #                          Wi-Fi trouble isn't the house's Internet
+#   away                   the best site: one tunnel is enough to reach home
 #   wifi, automation,      the worst site that has a part in it; none at all
-#   cameras                is Unknown
+#   cameras, backups,      is Unknown
+#   devices, storage
 #   apps                   the worst site, and Unknown when a site is missing
 #   monitoring             how many sites report, of those expected
 rest:
@@ -61,6 +63,34 @@ rest:
                 | map(attribute='value') | map('last') | map('int') | first | default(0) -%}
           {{ 'Failed' if 3 in s else 'Degraded' if 2 in s
              else 'Unknown' if (not s or 0 in s or s | length < sites) else 'Healthy' }}
+      - name: House backups
+        unique_id: house_backups
+        icon: mdi:backup-restore
+        value_template: >-
+          {%- set s = value_json.data.result | selectattr('metric.domain', 'eq', 'backups')
+                | map(attribute='value') | map('last') | map('int') | list -%}
+          {{ 'Unknown' if not s else 'Failed' if 3 in s else 'Degraded' if 2 in s else 'Unknown' if 0 in s else 'Healthy' }}
+      - name: House smart devices
+        unique_id: house_devices
+        icon: mdi:devices
+        value_template: >-
+          {%- set s = value_json.data.result | selectattr('metric.domain', 'eq', 'devices')
+                | map(attribute='value') | map('last') | map('int') | list -%}
+          {{ 'Unknown' if not s else 'Failed' if 3 in s else 'Degraded' if 2 in s else 'Unknown' if 0 in s else 'Healthy' }}
+      - name: House storage
+        unique_id: house_storage
+        icon: mdi:harddisk
+        value_template: >-
+          {%- set s = value_json.data.result | selectattr('metric.domain', 'eq', 'storage')
+                | map(attribute='value') | map('last') | map('int') | list -%}
+          {{ 'Unknown' if not s else 'Failed' if 3 in s else 'Degraded' if 2 in s else 'Unknown' if 0 in s else 'Healthy' }}
+      - name: House away access
+        unique_id: house_away
+        icon: mdi:earth-arrow-right
+        value_template: >-
+          {%- set s = value_json.data.result | selectattr('metric.domain', 'eq', 'away')
+                | map(attribute='value') | map('last') | map('int') | list -%}
+          {{ 'Healthy' if 1 in s else 'Degraded' if 2 in s else 'Failed' if 3 in s else 'Unknown' }}
       - name: House monitoring
         unique_id: house_monitoring
         icon: mdi:chart-timeline-variant

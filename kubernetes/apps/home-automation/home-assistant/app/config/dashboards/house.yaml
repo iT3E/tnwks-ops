@@ -117,7 +117,7 @@ views:
             grid_options: { columns: 6 }
           - { type: tile, entity: sensor.tesla_wall_connector_status, name: EV charger, icon: mdi:ev-station, tap_action: { action: navigate, navigation_path: /home-hub/energy }, grid_options: { columns: 6 } }
 
-      # The monitoring in six words (packages/house_systems.yaml): Healthy,
+      # The monitoring in ten words (packages/house_systems.yaml): Healthy,
       # Degraded, Failed or Unknown. A tap opens the monitoring (admins only).
       - type: grid
         cards:
@@ -125,11 +125,15 @@ views:
             heading: House systems
             icon: mdi:shield-home
             tap_action: { action: navigate, navigation_path: /home-monitoring }
-          - &sys { type: tile, entity: sensor.house_internet, name: Internet, vertical: true, grid_options: { columns: 4, rows: 2 } }
+          - &sys { type: tile, entity: sensor.house_internet, name: Internet, vertical: true, grid_options: { columns: 3, rows: 2 } }
           - { <<: *sys, entity: sensor.house_wi_fi, name: Wi-Fi }
           - { <<: *sys, entity: sensor.house_home_automation, name: Automation }
           - { <<: *sys, entity: sensor.house_cameras, name: Cameras }
           - { <<: *sys, entity: sensor.house_apps, name: Apps }
+          - { <<: *sys, entity: sensor.house_smart_devices, name: Devices }
+          - { <<: *sys, entity: sensor.house_backups, name: Backups }
+          - { <<: *sys, entity: sensor.house_storage, name: Storage }
+          - { <<: *sys, entity: sensor.house_away_access, name: Away access }
           - { <<: *sys, entity: sensor.house_monitoring, name: Monitoring }
 
       - type: grid
