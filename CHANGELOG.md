@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.52.0 - 2026-11-08
+
+### Changed
+
+* CI: release commits no longer re-run Kubernetes, secret-scan, privacy and the release workflow, and Renovate review only wakes for Kubernetes runs on Renovate branches. About 3,700 of last month's 12,800 runs had nothing new to check.
+
 ## v2.51.3 - 2026-11-08
 
 ### Fixed

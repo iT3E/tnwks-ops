@@ -1,3 +1,0 @@
-kind: Changed
-body: 'CI: release commits no longer re-run Kubernetes, secret-scan, privacy and the release workflow, and Renovate review only wakes for Kubernetes runs on Renovate branches. About 3,700 of last month''s 12,800 runs had nothing new to check.'
-time: 2026-11-07T21:36:03.112561204-08:00
