@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.40.0 - 2026-11-08
+
+### Changed
+
+* grafana: the Homelab board leads with a domain wall (one rolled-up state per area, each opening its board), a Needs attention list of everything not healthy by area, and folds the coverage evidence into a collapsed row
+
 ## v2.39.0 - 2026-11-08
 
 ### Changed
