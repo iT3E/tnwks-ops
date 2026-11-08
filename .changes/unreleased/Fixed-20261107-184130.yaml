@@ -1,3 +1,0 @@
-kind: Fixed
-body: Run changedetection backups and switchover movers as the app user so private watch and history files remain readable.
-time: 2026-11-07T18:41:30.15159509-08:00

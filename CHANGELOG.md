@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.48.0 - 2026-11-08
+
+### Changed
+
+* grafana: state tiles are solid colour instead of a gradient; every board passes an axe colour-contrast check in both themes
+
+### Fixed
+
+* Run changedetection backups and switchover movers as the app user so private watch and history files remain readable.
+
 ## v2.47.0 - 2026-11-08
 
 ### Added

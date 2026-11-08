@@ -1,4 +1,0 @@
----
-kind: Changed
-body: "grafana: state tiles are solid colour instead of a gradient; every board passes an axe colour-contrast check in both themes"
-time: 2026-11-08T02:41:36.000000000Z
