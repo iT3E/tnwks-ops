@@ -1,0 +1,71 @@
+---
+name: "Deploy"
+
+# The push-to-main counterpart of ci.yaml: applies what the push changed
+# (docs/operations/ci.md). Today that's the Terraform roots in
+# .github/ci/domains.toml, through terraform.yaml in apply mode, each in the
+# prod environment and its own never-cancelled concurrency group. Ansible
+# applies per site in ansible-hosts.yaml (push, schedule, dispatch); EdgeOS in
+# edgeos-apply.yaml.
+on:
+  push:
+    branches: [main]
+    paths-ignore: [CHANGELOG.md, .changes/**, docs/**]
+  workflow_dispatch:
+    inputs:
+      roots:
+        description: Terraform roots to apply, comma-separated (empty = every root)
+        type: string
+        required: false
+
+permissions: {}
+
+jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      terraform: ${{ steps.domains.outputs.terraform }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      # `always` paths (CI's own files) don't apply anything here: a root
+      # applies when its own paths changed.
+      - name: Domains
+        id: domains
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+          ROOTS: ${{ inputs.roots }}
+        run: |
+          if [ "$EVENT" = push ]; then
+            bin/ci-changes --ignore-always --base "$BEFORE" --head "$SHA" | tee "$RUNNER_TEMP/out"
+          else
+            bin/ci-changes --all | tee "$RUNNER_TEMP/out"
+          fi
+          terraform="$(sed -n 's/^terraform=//p' "$RUNNER_TEMP/out")"
+          if [ -n "$ROOTS" ]; then
+            terraform="$(jq -c --arg want "$ROOTS" '($want | split(",") | map(gsub("^ +| +$"; ""))) as $w | map(select(.name | IN($w[])))' <<<"$terraform")"
+          fi
+          echo "terraform=$terraform" | tee -a "$GITHUB_OUTPUT"
+
+  terraform:
+    needs: changes
+    if: needs.changes.outputs.terraform != '[]' && needs.changes.outputs.terraform != ''
+    permissions:
+      contents: read
+    uses: ./.github/workflows/terraform.yaml
+    with:
+      roots: ${{ needs.changes.outputs.terraform }}
+      mode: apply
+    secrets:
+      TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}

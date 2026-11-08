@@ -49,11 +49,10 @@ task talos:status:wsl
 task talos:reset:wsl       # destroy + recreate
 task talos:destroy:wsl
 
-# Terraform — the local task targets Cloudflare *only*, break-glass: CI
-# applies Cloudflare on merge (cloudflare-{plan,apply}.yaml). AWS state is in
-# Terraform Cloud (workspace tnwks-ops-aws-prod) and is driven by the
-# .github/workflows/terraform-{plan,apply}.yaml on PRs/pushes touching
-# infrastructure/terraform/environments/prod/aws/** or modules/aws/**.
+# Terraform — the local task targets Cloudflare *only*, break-glass: CI plans
+# every root a PR touches (ci.yaml) and applies it on merge (deploy.yaml),
+# both through .github/workflows/terraform.yaml. AWS runs in Terraform Cloud
+# (workspace tnwks-ops-aws-prod).
 task terraform:plan
 task terraform:apply
 
@@ -124,21 +123,25 @@ system actually owns the change:
 
 - **Terraform AWS (`infrastructure/terraform/environments/prod/aws/**`,
   `infrastructure/terraform/modules/aws/**`)** —
-  the PR triggers a speculative plan via
-  `.github/workflows/terraform-plan.yaml` (Terraform Cloud workspace
-  `tnwks-ops-aws-prod`); the plan summary is posted as a PR comment with
-  a run link. Squash-merging triggers `terraform-apply.yaml`, which creates
-  and confirms a real run in the same workspace with no manual approval:
+  the PR's `terraform / Plan AWS` job (`ci.yaml` → `terraform.yaml`) runs
+  a speculative plan in Terraform Cloud (workspace `tnwks-ops-aws-prod`);
+  the plan summary is posted as a PR comment with a run link, and Build
+  Success needs it. Squash-merging triggers `deploy.yaml`, whose
+  `Apply AWS` job creates and confirms a real run in the same workspace
+  with no manual approval:
   the `prod` GitHub environment only allows deployments from protected
   branches, so merging to `main` is the gate. Validate via the run link or
-  the TFC UI. Plans run automatically only for the owner's same-repo PRs;
-  anything else waits in the `external-contributions` environment.
+  the TFC UI. Plans run automatically only for the owner's and Renovate's
+  same-repo PRs; anything else waits in the `external-contributions`
+  environment (AWS only: other roots never plan on a third party's PR).
 
 - **Terraform MikroTik, UniFi, healthchecks.io, Cloudflare
   (`infrastructure/terraform/environments/prod/{mikrotik,unifi,healthchecks,cloudflare}/**`
-  and their `modules/`)** — plan on the PR and apply on merge on the
-  self-hosted `tnwks-ops-runner` (`<svc>-{plan,apply}.yaml`; state in TFC
-  with local execution). See `docs/network/ci.md`. The local
+  and their `modules/`)** — plan on the PR (gating Build Success) and apply
+  on merge on the root's self-hosted runner, through the same
+  `terraform.yaml` matrix (state in TFC with local execution). Each root's
+  runner, lock and endpoint overrides are its entry in
+  `.github/ci/domains.toml`. See `docs/network/ci.md`. The local
   `task <svc>:apply` / `task terraform:apply` targets are break-glass only.
 
 - **Ansible (`infrastructure/ansible/**`)** — the host playbooks
@@ -274,14 +277,15 @@ and `task aws:ra-profile`; see
 - `infrastructure/terraform/environments/prod/aws/` — thin root module that
   calls `modules/aws`. Cognito user pools (auth for ingresses), SES and the
   supporting IAM, driven by **Terraform Cloud** workspace
-  `tnwks-ops-aws-prod` via the GitHub Actions in `.github/workflows/terraform-{plan,apply}.yaml`.
-  PRs from non-`iT3E` actors require approval in the `external-contributions`
+  `tnwks-ops-aws-prod` via `.github/workflows/terraform.yaml` (planned from
+  `ci.yaml`, applied from `deploy.yaml`).
+  PRs from anyone but the owner and Renovate require approval in the `external-contributions`
   environment before plan runs. Provider assumes
   `arn:aws:iam::654654262098:role/tnwks-org-init-role`; ACM for Cognito
   custom domains uses an aliased `us_east_1` provider (Cognito custom
   domains require us-east-1 ACM regardless of pool region).
 - `infrastructure/terraform/environments/prod/cloudflare/` — DNS + zone/account-level
-  config, planned and applied by `cloudflare-{plan,apply}.yaml` on the
+  config, planned and applied by `terraform.yaml` on the
   self-hosted runner (`task terraform:{plan,apply}` is break-glass).
 - `infrastructure/terraform/environments/bootstrap/{aws-init,aws-identity}/` — org
   bootstrap and Identity Center. CLI/VCS driven, not wired into CI.

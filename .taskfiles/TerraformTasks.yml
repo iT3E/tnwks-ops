@@ -4,7 +4,7 @@ version: "3"
 ## ---------------------------------------------------------------------------------------------------------------------
 ## Cloudflare (environments/prod/cloudflare).
 ##
-## CI plans on the PR and applies on merge (cloudflare-{plan,apply}.yaml on the
+## CI plans on the PR and applies on merge (.github/workflows/terraform.yaml on the
 ## self-hosted runner). These tasks are break-glass, against the same TFC state
 ## (tnwks-cloudflare-prod, execution mode local).
 ## ---------------------------------------------------------------------------------------------------------------------

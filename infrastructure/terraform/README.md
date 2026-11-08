@@ -45,8 +45,8 @@ module conventions.
    | --- | --- | --- | --- |
    | `tnwks-ops-aws-init` | `environments/bootstrap/aws-init` | local | CLI, by hand |
    | `tnwks-ops-aws-identity` | `environments/bootstrap/aws-identity` | remote | API/CLI, by hand |
-   | `tnwks-ops-aws-prod` | `environments/prod/aws` | remote | `.github/workflows/terraform-{plan,apply}.yaml` |
-   | `tnwks-cloudflare-prod` | `environments/prod/cloudflare` | local | `.github/workflows/cloudflare-{plan,apply}.yaml` (self-hosted runner) |
+   | `tnwks-ops-aws-prod` | `environments/prod/aws` | remote | `.github/workflows/terraform.yaml` |
+   | `tnwks-cloudflare-prod` | `environments/prod/cloudflare` | local | `.github/workflows/terraform.yaml` (self-hosted runner) |
 
    None of these workspaces currently has a VCS connection; runs are created by
    the GitHub Actions workflows (prod) or from the CLI.
@@ -72,7 +72,7 @@ module conventions.
 ### AWS prod account
 
 9. Apply `environments/prod/aws` (Cognito, SES, supporting IAM). Runs
-   automatically on PR merge via `.github/workflows/terraform-{plan,apply}.yaml`.
+   automatically on PR merge via `.github/workflows/terraform.yaml` (`deploy.yaml`).
 
 ## CLI usage
 

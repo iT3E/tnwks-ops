@@ -142,7 +142,7 @@
       addLabels: ["impact/high"],
     },
     {
-      // AWS applies on merge (terraform-apply.yaml); every bump needs a plan.
+      // Roots apply on merge (deploy.yaml); every bump needs a plan.
       description: "Terraform: always reviewed",
       matchManagers: ["terraform"],
       matchFileNames: ["!/^(talos/ms-01|kubernetes/clusters/ms-01|kubernetes/apps/(kube-system/cilium|monitoring/thanos|monitoring/vector/agent|production/uisp|storage/rook-ceph|tools/node-feature-discovery|databases/cloudnative-pg/cluster-backup))//"],

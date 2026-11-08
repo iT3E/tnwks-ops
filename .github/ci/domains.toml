@@ -91,38 +91,92 @@ paths = [
   ".github/zizmor.yml",
 ]
 
-# Groups list which of their members changed, as a JSON array for a matrix.
+# Groups list which of their members changed, as a JSON array of objects for
+# a matrix: each member's fields except `paths`, plus `name`.
+#
+# Terraform roots, planned in ci.yaml and applied in deploy.yaml through
+# .github/workflows/terraform.yaml. Fields:
+#   root         path under infrastructure/terraform/environments
+#   title        for job names and the PR comment
+#   runner       runs-on label
+#   backend      local (.github/actions/terraform; state in TFC, run on the
+#                runner) or tfc-remote (runs in TFC: workspace)
+#   lock         concurrency group shared by plans and applies, for roots
+#                where they must never overlap (one device, local state lock).
+#                Without one, plans key on the PR and applies on the root.
+#   tf_vars      endpoint overrides that only hold on the runner
+#   enabled_var  repository variable that must be "true" to run
+# Adding a root is one entry here.
+
 [groups.terraform.aws]
+title = "AWS"
+root = "prod/aws"
+runner = "ubuntu-26.04"
+backend = "tfc-remote"
+workspace = "tnwks-ops-aws-prod"
 paths = [
   "infrastructure/terraform/environments/prod/aws/**",
   "infrastructure/terraform/modules/aws/**",
+  ".github/actions/tfc-speculative-plan/**",
+  ".github/workflows/terraform.yaml",
 ]
 
 [groups.terraform.cloudflare]
+title = "Cloudflare"
+root = "prod/cloudflare"
+runner = "tnwks-ops-runner"
+backend = "local"
+lock = "cloudflare-terraform"
 paths = [
   "infrastructure/terraform/environments/prod/cloudflare/**",
   "infrastructure/terraform/modules/cloudflare/**",
   ".github/actions/terraform/**",
+  ".github/workflows/terraform.yaml",
 ]
 
 [groups.terraform.healthchecks]
+title = "Healthchecks"
+root = "prod/healthchecks"
+runner = "tnwks-ops-runner"
+backend = "local"
+lock = "healthchecks-terraform"
 paths = [
   "infrastructure/terraform/environments/prod/healthchecks/**",
   "infrastructure/terraform/modules/healthchecks/**",
   ".github/actions/terraform/**",
+  ".github/workflows/terraform.yaml",
 ]
 
+# The router's REST API is VPN-only: the runner's wireproxy sidecar exposes it
+# on 127.0.0.1 (docs/network/ci.md).
 [groups.terraform.mikrotik]
+title = "MikroTik"
+root = "prod/mikrotik"
+runner = "tnwks-ops-runner"
+backend = "local"
+lock = "mikrotik-terraform"
+tf_vars = "TF_VAR_routeros_url=https://127.0.0.1:8443"
 paths = [
   "infrastructure/terraform/environments/prod/mikrotik/**",
   "infrastructure/terraform/modules/mikrotik/**",
   "infrastructure/mikrotik/**",
   ".github/actions/terraform/**",
+  ".github/workflows/terraform.yaml",
 ]
 
+# The controller is in-cluster on homelab-wsl, so only that site's runner
+# reaches its Service.
 [groups.terraform.unifi]
+title = "UniFi"
+root = "prod/unifi"
+runner = "tnwks-ops-homelab-wsl"
+backend = "local"
+lock = "unifi-terraform"
+tf_vars = "TF_VAR_unifi_url=https://unifi.networking.svc.cluster.local:8443"
+enabled_var = "UNIFI_TERRAFORM_ENABLED"
 paths = [
   "infrastructure/terraform/environments/prod/unifi/**",
   "infrastructure/terraform/modules/unifi/**",
   ".github/actions/terraform/**",
+  ".github/workflows/terraform.yaml",
 ]

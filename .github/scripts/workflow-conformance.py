@@ -14,8 +14,8 @@ Fails (exit 1) with a GitHub annotation per violation:
   commit SHA, and docker:// images to a digest;
 - every workflow sets top-level `permissions`;
 - every actions/checkout sets `persist-credentials: false`;
-- ci.yaml covers .github/ci/domains.toml: each domain is an output of
-  `changes` and a job gated on it, and Build Success needs every job.
+- ci.yaml covers .github/ci/domains.toml: each domain and group is an output
+  of `changes` and a job gated on it, and Build Success needs every job.
 
 Reads YAML through `yq -o=json` (on GitHub's runner images) to stay stdlib.
 """
@@ -114,7 +114,9 @@ def check_action(path: Path) -> None:
 
 def check_ci(root: Path) -> None:
     path = root / ".github/workflows/ci.yaml"
-    domains = set(tomllib.loads((root / ".github/ci/domains.toml").read_text()).get("domains", {}))
+    config = tomllib.loads((root / ".github/ci/domains.toml").read_text())
+    domains = set(config.get("domains", {}))
+    groups = set(config.get("groups", {}))
     jobs = load(path)["jobs"]
     outputs = set((jobs.get("changes") or {}).get("outputs", {}))
     gate = next((j for j in jobs.values() if j.get("name") == "Build Success"), None)
@@ -132,6 +134,14 @@ def check_ci(root: Path) -> None:
             err(path, f"domain {d}: no job named {d}")
         elif f"needs.changes.outputs.{d} == 'true'" not in str(job.get("if", "")):
             err(path, f"job {d}: not gated on needs.changes.outputs.{d}")
+    for g in sorted(groups):
+        job = jobs.get(g)
+        if g not in outputs:
+            err(path, f"group {g}: not an output of the changes job")
+        if job is None:
+            err(path, f"group {g}: no job named {g}")
+        elif f"needs.changes.outputs.{g} != '[]'" not in str(job.get("if", "")):
+            err(path, f"job {g}: not gated on needs.changes.outputs.{g} != '[]'")
     missing = sorted(set(jobs) - {gate_id} - needs)
     if missing:
         err(path, f"Build Success doesn't need: {', '.join(missing)}")

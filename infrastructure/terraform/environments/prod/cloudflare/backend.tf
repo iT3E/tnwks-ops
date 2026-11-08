@@ -2,7 +2,7 @@
 ## BACKEND
 ## Terraform Cloud holds the state; runs execute where Terraform is invoked
 ## (workspace execution mode `local`), which is the self-hosted
-## tnwks-ops-runner: cloudflare-plan.yaml on PRs, cloudflare-apply.yaml on
+## tnwks-ops-runner: terraform.yaml plans on PRs (ci.yaml), applies on
 ## merge. `task terraform:plan|apply` is break-glass only.
 ## ---------------------------------------------------------------------------------------------------------------------
 

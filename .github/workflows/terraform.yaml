@@ -1,0 +1,213 @@
+---
+name: "Terraform"
+
+# Plans (called by ci.yaml on a PR) or applies (called by deploy.yaml on a push
+# to main) the Terraform roots a change touched: one matrix entry per root,
+# from [groups.terraform.<name>] in .github/ci/domains.toml. Each root's
+# runner, backend, endpoint overrides and lock come from there, so adding a
+# root is one entry (docs/operations/ci.md).
+#
+# Logs are public: local roots print only counts and addresses
+# (.github/actions/terraform); AWS plans and applies run in Terraform Cloud.
+on:
+  workflow_call:
+    inputs:
+      roots:
+        description: JSON array of root objects from bin/ci-changes
+        type: string
+        required: true
+      mode:
+        description: plan or apply
+        type: string
+        required: true
+    secrets:
+      TF_API_TOKEN:
+        required: true
+
+permissions: {}
+
+env:
+  TF_CLOUD_ORGANIZATION: "tnwks-ops"
+
+jobs:
+  # Trusted: a same-repo PR opened by the owner or Renovate (whose Terraform
+  # bumps wait 3 days after release, .github/renovate.json5). Keyed on the
+  # PR's author and source repo, not github.actor. Nothing else runs on the
+  # self-hosted runners or with the token.
+  plan:
+    if: >-
+      inputs.mode == 'plan' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(fromJSON('["iT3E", "renovate[bot]"]'), github.event.pull_request.user.login)
+    name: Plan ${{ matrix.title }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.roots) }}
+    # Roots with a lock never plan while they apply (one device, local state
+    # lock); the rest key on the PR.
+    concurrency:
+      group: ${{ matrix.lock || format('terraform-plan-{0}-{1}', matrix.name, github.event.pull_request.number) }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Plan
+        id: tf
+        if: matrix.backend == 'local' && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
+        uses: ./.github/actions/terraform
+        with:
+          root: ${{ matrix.root }}
+          mode: plan
+          tf-vars: ${{ matrix.tf_vars }}
+          tf-api-token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Comment
+        if: steps.tf.outcome == 'success'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          NAME: ${{ matrix.name }}
+          TITLE: ${{ matrix.title }}
+          SUMMARY: ${{ steps.tf.outputs.summary }}
+        with:
+          script: |
+            const marker = `<!-- ${process.env.NAME}-plan -->`;
+            const body = `${marker}\n#### ${process.env.TITLE} Plan\n${process.env.SUMMARY}\n\n[Run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo, issue_number: context.issue.number });
+            const prev = comments.find(c => c.body.startsWith(marker));
+            if (prev) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: prev.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }
+
+      # Posts its own comment.
+      - name: Plan in Terraform Cloud
+        if: matrix.backend == 'tfc-remote'
+        uses: ./.github/actions/tfc-speculative-plan
+        env:
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+        with:
+          workspace: ${{ matrix.workspace }}
+          github-token: ${{ github.token }}
+
+  # Everyone else waits for a reviewer in the external-contributions
+  # environment, and only Terraform Cloud roots plan then: fork or third-party
+  # code never runs on the self-hosted runners. Fork PRs receive no secrets,
+  # so for them even an approved plan can't reach Terraform Cloud; this gates
+  # same-repo branches from other collaborators. `deployment: false`: the
+  # environment is only an approval gate.
+  plan-approval:
+    if: >-
+      inputs.mode == 'plan' && (
+        github.event.pull_request.head.repo.full_name != github.repository ||
+        !contains(fromJSON('["iT3E", "renovate[bot]"]'), github.event.pull_request.user.login))
+    name: Plan ${{ matrix.title }} (approval)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    environment:
+      name: external-contributions
+      deployment: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.roots) }}
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Self-hosted root
+        if: matrix.backend != 'tfc-remote'
+        env:
+          TITLE: ${{ matrix.title }}
+        run: echo "::notice::${TITLE} plans only on the owner's and Renovate's PRs (self-hosted runner)"
+
+      - name: Checkout
+        if: matrix.backend == 'tfc-remote'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Plan in Terraform Cloud
+        if: matrix.backend == 'tfc-remote'
+        uses: ./.github/actions/tfc-speculative-plan
+        env:
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+        with:
+          workspace: ${{ matrix.workspace }}
+          github-token: ${{ github.token }}
+
+  # No reviewer gate: merging to main is the approval. The prod environment
+  # only accepts deployments from protected branches (main), so an apply
+  # can't run from any other ref.
+  apply:
+    if: inputs.mode == 'apply'
+    name: Apply ${{ matrix.title }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    environment:
+      name: prod
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.roots) }}
+    # Strictly one at a time per root, in merge order, never cancelled.
+    concurrency:
+      group: ${{ matrix.lock || format('terraform-apply-{0}', matrix.name) }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Plan and apply
+        if: matrix.backend == 'local' && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
+        uses: ./.github/actions/terraform
+        with:
+          root: ${{ matrix.root }}
+          mode: apply
+          tf-vars: ${{ matrix.tf_vars }}
+          tf-api-token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Upload configuration to Terraform Cloud
+        id: upload
+        if: matrix.backend == 'tfc-remote'
+        uses: hashicorp/tfc-workflows-github/actions/upload-configuration@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
+        env:
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+        with:
+          workspace: ${{ matrix.workspace }}
+          directory: "infrastructure/terraform"
+
+      - name: Create the apply run
+        id: run
+        if: matrix.backend == 'tfc-remote'
+        uses: hashicorp/tfc-workflows-github/actions/create-run@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
+        env:
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+        with:
+          workspace: ${{ matrix.workspace }}
+          configuration_version: ${{ steps.upload.outputs.configuration_version_id }}
+
+      - name: Apply
+        if: matrix.backend == 'tfc-remote' && fromJSON(steps.run.outputs.payload).data.attributes.actions.IsConfirmable
+        uses: hashicorp/tfc-workflows-github/actions/apply-run@8e08d1ba957673f5fbf971a22b3219639dc45661 # v1.3.2
+        env:
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+        with:
+          run: ${{ steps.run.outputs.run_id }}
+          comment: "Apply Run from GitHub Actions CI ${{ github.sha }}"
