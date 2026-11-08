@@ -109,6 +109,18 @@
       "matchDatasources": ["docker"],
       "matchPackageNames": ["ghcr.io/berriai/litellm"],
       "allowedVersions": "/^v\\d+\\.\\d+\\.\\d+$/"
+    },
+    {
+      // Base images (python, busybox, mosquitto) re-push the same tag several
+      // times a week, and each re-push was its own digest PR and CI run (14
+      // in the 30 days to 2026-11-08). Open them on Monday only: a PR that's
+      // still open keeps moving to the newest digest. Our own images
+      // (ghcr.io/it3e/*) aren't held.
+      "description": "Container digest updates: open on Mondays",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["digest"],
+      "matchPackageNames": ["!/^ghcr\\.io\\/it3e\\//"],
+      "schedule": ["before 7am on monday"]
     }
   ],
   "pre-commit": {

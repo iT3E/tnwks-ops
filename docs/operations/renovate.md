@@ -63,6 +63,13 @@ negation as their package matcher. Terraform, ImmichFrame and the Flux CLI
 rules can't match an `it3e` image, so they are left as they are. A third
 party's 0.x minor or major still gets `impact/high`.
 
+**Third-party digest updates open on Mondays.** Base images such as
+`python`, `busybox` and `eclipse-mosquitto` re-push the same tag several
+times a week. Each re-push was its own digest PR and CI run (14 in the 30
+days to 2026-11-08), so a rule in `renovate.json5` lets them open only
+before 7am on Mondays. A digest PR that's still open keeps moving to the
+newest digest. Our own images aren't held.
+
 The whole chain behind these PRs runs without a hand merge: a Renovate
 dependency merge in an app repo releases a patch by itself, the release
 builds `:<version>`, and the PR here automerges. Template and CI-only
