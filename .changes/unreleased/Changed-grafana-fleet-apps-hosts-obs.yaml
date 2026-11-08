@@ -1,0 +1,4 @@
+---
+kind: Changed
+body: "grafana: Apps, Hosts and Observability use fleet tables (probe and name state, recovery readiness, required replicas, collectors, the SLO tables); fleet rows are sorted by name so tables of the same things line up"
+time: 2026-11-08T01:45:29.000000000Z

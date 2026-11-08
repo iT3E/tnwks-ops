@@ -39,8 +39,8 @@ def test_table_values_are_named_and_formatted_on_their_own_column():
         transformations = spec["data"]["spec"]["transformations"]
         if panel.per_site:
             # A fleet table: rows by the label, a column per site, the row header named.
-            assert [t["group"] for t in transformations] == ["groupingToMatrix", "organize"], panel.title
-            matrix, organize = (t["spec"] for t in transformations)
+            assert [t["group"] for t in transformations] == ["groupingToMatrix", "organize", "sortBy"], panel.title
+            matrix, organize, _ = (t["spec"] for t in transformations)
             assert matrix["options"]["columnField"] == "k8s_cluster", panel.title
             assert organize["options"]["renameByName"] == {
                 f"{panel.per_site}\\k8s_cluster": LABELS[panel.per_site]}, panel.title

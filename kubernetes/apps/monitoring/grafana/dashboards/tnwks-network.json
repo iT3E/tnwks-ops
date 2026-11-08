@@ -367,6 +367,19 @@
                       }
                     }
                   }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "Hop"
+                        }
+                      ]
+                    }
+                  }
                 }
               ],
               "queryOptions": {}
@@ -571,6 +584,19 @@
                       "renameByName": {
                         "vip\\k8s_cluster": "Shared VIP"
                       }
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "Shared VIP"
+                        }
+                      ]
                     }
                   }
                 }

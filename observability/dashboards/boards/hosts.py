@@ -19,8 +19,8 @@ def board() -> Board:
             ],
             "Survivor fit": [
                 p("Required app replicas", f'sum by (k8s_cluster, app) ({metric("homelab_workload_desired_replicas")})', "short",
-                  "Current placement demand. Full survivor-fit evidence also needs measured requests/peaks, storage placement and pinned hardware.", "table"),
+                  "Current placement demand. Full survivor-fit evidence also needs measured requests/peaks, storage placement and pinned hardware.", "table", per_site="app"),
                 p("Recovery readiness", metric("homelab:recovery_state"), "state",
-                  "Per warm app: could this site take it over (database, backup, restore drill, fence)? Not applicable where the app runs. Unknown until every prerequisite has evidence. This page does not promise all services fit or fail over.", "table"),
+                  "Per warm app: could this site take it over (database, backup, restore drill, fence)? Not applicable where the app runs. Unknown until every prerequisite has evidence. This page does not promise all services fit or fail over.", "table", per_site="app"),
             ],
         }, "Hosts", sections=True)
