@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.47.0 - 2026-11-08
+
+### Added
+
+* observability: screenshot.py renders every board from a checkout against live data in a throwaway Grafana (read-only, output kept out of the repo); CI keeps the browser rehearsal's fixture screenshots as an artifact; a test shows a third site is one CLUSTERS entry and one colour
+
 ## v2.46.0 - 2026-11-08
 
 ### Changed
