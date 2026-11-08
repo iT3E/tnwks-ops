@@ -46,4 +46,4 @@ def board() -> Board:
                   "When each node's Talos, kubelet and kernel versions were first seen in the range, at 5-minute resolution. Two rows for one node mean it was upgraded, and the later row is when.",
                   "table"),
             ],
-        }, "Kubernetes")
+        }, "Kubernetes", sections=True)

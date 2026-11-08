@@ -57,4 +57,4 @@ def board() -> Board:
                 p("Windows disk free", metric("windows_logical_disk_free_bytes", 'volume=~"C:|E:"'), "bytes",
                   "Physical Windows free capacity. WSL's virtual disk maximum is not an independent physical capacity budget.", link=WINDOWS),
             ],
-        }, "Data")
+        }, "Data", sections=True)

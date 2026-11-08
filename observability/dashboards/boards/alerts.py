@@ -30,4 +30,4 @@ def board() -> Board:
                 p("Failed notifications", f'sum by (k8s_cluster, integration) (increase({metric("alertmanager_notifications_failed_total")}[1h]))', "short",
                   "Failures during the window, not a definitive end-to-end notification receipt check."),
             ],
-        }, "Observability")
+        }, "Observability", sections=True)

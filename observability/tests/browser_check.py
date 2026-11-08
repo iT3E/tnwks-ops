@@ -60,7 +60,10 @@ def main():
             body = page.locator("body").inner_text()
             for bad in ["Visualization plugin not found", "Panel plugin not found", "An unexpected error happened"]:
                 assert bad not in body, (board.uid, bad)
-            assert "Unknown" in body or "No data" in body or "Expected sites" in body
+            # The first tab's panels rendered (the About text that once satisfied a
+            # word check is folded away in a sectioned board).
+            first_tab = next(iter(board.tabs.values()))
+            assert any(panel.title in body for panel in first_tab), (board.uid, "no panel rendered")
             for tab in board.tabs:
                 button = page.get_by_role("tab", name=tab, exact=True)
                 assert button.count() == 1, (board.uid, "missing tab", tab)

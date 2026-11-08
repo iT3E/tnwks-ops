@@ -57,4 +57,4 @@ def board() -> Board:
                   "When each tracked workload's Available condition last changed in the range, from Kubernetes: a scale to or from zero, or a rollout that lost availability.",
                   "table", empty=NO_EVENTS),
             ],
-        }, "Sites & Failover")
+        }, "Sites & Failover", sections=True)

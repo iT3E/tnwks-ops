@@ -31,4 +31,4 @@ def board() -> Board:
                 p("Available local history", metric("homelab:local_history_seconds"), "s",
                   "Observed earliest retained sample, not configured retention. New persistent storage accumulates history gradually.", "table"),
             ],
-        }, "Overview")
+        }, "Overview", sections=True)

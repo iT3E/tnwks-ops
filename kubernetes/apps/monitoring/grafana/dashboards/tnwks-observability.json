@@ -102,7 +102,7 @@
                   "unit": "short",
                   "color": {
                     "mode": "fixed",
-                    "fixedColor": "#5794f2"
+                    "fixedColor": "text"
                   },
                   "links": [
                     {
@@ -182,7 +182,7 @@
                   "unit": "short",
                   "color": {
                     "mode": "fixed",
-                    "fixedColor": "#5794f2"
+                    "fixedColor": "text"
                   },
                   "links": [
                     {
@@ -995,7 +995,11 @@
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
-                  "custom": {}
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
                 },
                 "overrides": []
               }
@@ -1071,7 +1075,11 @@
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
-                  "custom": {}
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
                 },
                 "overrides": []
               }
@@ -1147,7 +1155,11 @@
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
-                  "custom": {}
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
                 },
                 "overrides": []
               }
@@ -1223,7 +1235,11 @@
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
-                  "custom": {}
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
                 },
                 "overrides": []
               }
@@ -1294,7 +1310,7 @@
                   "unit": "percentunit",
                   "color": {
                     "mode": "fixed",
-                    "fixedColor": "#5794f2"
+                    "fixedColor": "text"
                   },
                   "links": [
                     {
@@ -2163,7 +2179,11 @@
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
-                  "custom": {}
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
                 },
                 "overrides": []
               }
@@ -2239,7 +2259,11 @@
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
-                  "custom": {}
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
                 },
                 "overrides": []
               }
@@ -2315,7 +2339,12 @@
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
-                  "custom": {}
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
+                  }
                 },
                 "overrides": []
               }
@@ -2391,7 +2420,11 @@
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
-                  "custom": {}
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
                 },
                 "overrides": []
               }
@@ -2467,7 +2500,11 @@
                     }
                   ],
                   "noValue": "Unknown — missing evidence",
-                  "custom": {}
+                  "custom": {
+                    "lineWidth": 1,
+                    "showPoints": "never",
+                    "axisSoftMin": 0
+                  }
                 },
                 "overrides": []
               }
@@ -2485,77 +2522,145 @@
             "kind": "TabsLayoutTab",
             "spec": {
               "layout": {
-                "kind": "AutoGridLayout",
+                "kind": "RowsLayout",
                 "spec": {
-                  "columnWidthMode": "narrow",
-                  "rowHeightMode": "standard",
-                  "items": [
+                  "rows": [
                     {
-                      "kind": "AutoGridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "about"
-                        }
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-1"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 4,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
                       }
                     },
                     {
-                      "kind": "AutoGridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-1"
-                        }
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-3"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-5"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 3,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Status",
+                        "collapse": false
                       }
                     },
                     {
-                      "kind": "AutoGridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-2"
-                        }
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-6"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 3,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Detail",
+                        "collapse": false
                       }
                     },
                     {
-                      "kind": "AutoGridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-3"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-4"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-5"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-6"
-                        }
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "about"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 1,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "About this view",
+                        "collapse": true
                       }
                     }
-                  ],
-                  "maxColumnCount": 3,
-                  "fillScreen": false
+                  ]
                 }
               },
               "title": "Trust"
@@ -2565,50 +2670,64 @@
             "kind": "TabsLayoutTab",
             "spec": {
               "layout": {
-                "kind": "AutoGridLayout",
+                "kind": "RowsLayout",
                 "spec": {
-                  "columnWidthMode": "narrow",
-                  "rowHeightMode": "standard",
-                  "items": [
+                  "rows": [
                     {
-                      "kind": "AutoGridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-7"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-8"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-9"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-10"
-                        }
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-7"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-8"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-9"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-10"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
                       }
                     }
-                  ],
-                  "maxColumnCount": 3,
-                  "fillScreen": false
+                  ]
                 }
               },
               "title": "Cost"
@@ -2618,59 +2737,91 @@
             "kind": "TabsLayoutTab",
             "spec": {
               "layout": {
-                "kind": "AutoGridLayout",
+                "kind": "RowsLayout",
                 "spec": {
-                  "columnWidthMode": "narrow",
-                  "rowHeightMode": "standard",
-                  "items": [
+                  "rows": [
                     {
-                      "kind": "AutoGridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-11"
-                        }
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-11"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 4,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
                       }
                     },
                     {
-                      "kind": "AutoGridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-12"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-13"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-14"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-15"
-                        }
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-12"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-13"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-14"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-15"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 3,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Detail",
+                        "collapse": false
                       }
                     }
-                  ],
-                  "maxColumnCount": 3,
-                  "fillScreen": false
+                  ]
                 }
               },
               "title": "Objectives"
@@ -2680,68 +2831,100 @@
             "kind": "TabsLayoutTab",
             "spec": {
               "layout": {
-                "kind": "AutoGridLayout",
+                "kind": "RowsLayout",
                 "spec": {
-                  "columnWidthMode": "narrow",
-                  "rowHeightMode": "standard",
-                  "items": [
+                  "rows": [
                     {
-                      "kind": "AutoGridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-16"
-                        }
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-16"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 4,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
                       }
                     },
                     {
-                      "kind": "AutoGridLayoutItem",
+                      "kind": "RowsLayoutRow",
                       "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-17"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-18"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-19"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-20"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
-                          "name": "panel-21"
-                        }
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-17"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-18"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-19"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-20"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-21"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Trends",
+                        "collapse": false
                       }
                     }
-                  ],
-                  "maxColumnCount": 3,
-                  "fillScreen": false
+                  ]
                 }
               },
               "title": "Archive and delivery"
