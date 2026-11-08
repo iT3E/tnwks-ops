@@ -1,4 +1,0 @@
----
-kind: Fixed
-body: Update Home Assistant to 2026.11.0 for measured whole-house consumption on the Energy dashboard and document the Sense, solar and EV meter setup.
-time: 2026-11-07T15:18:00-08:00

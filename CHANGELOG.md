@@ -3,6 +3,13 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.38.6 - 2026-11-08
+
+### Fixed
+
+* Update Home Assistant to 2026.11.0 for measured whole-house consumption on the Energy dashboard and document the Sense, solar and EV meter setup.
+* grafana: a state tile with no answer is grey, not green; tables show words and named columns, with units and links on the value column only; graphs show their legends
+
 ## v2.38.5 - 2026-11-07
 
 ### Fixed
