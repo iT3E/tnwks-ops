@@ -1228,10 +1228,10 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "rate(prometheus_rule_evaluation_failures_total{k8s_cluster=~\"$cluster\"}[$__rate_interval])",
-                        "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
-                        "range": true
+                        "expr": "sum by (k8s_cluster) (increase(prometheus_rule_evaluation_failures_total{k8s_cluster=~\"$cluster\"}[$__range]))",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": false
                       },
                       "datasource": {
                         "name": "${datasource}"
@@ -1248,27 +1248,45 @@
           },
           "vizConfig": {
             "kind": "VizConfig",
-            "group": "timeseries",
+            "group": "stat",
             "version": "",
             "spec": {
               "options": {
-                "legend": {
-                  "displayMode": "table",
-                  "placement": "bottom",
-                  "showLegend": true,
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
                   "calcs": [
-                    "lastNotNull",
-                    "max"
-                  ]
+                    "lastNotNull"
+                  ],
+                  "values": false
                 },
-                "tooltip": {
-                  "mode": "multi",
-                  "sort": "desc"
-                }
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "ops",
+                  "unit": "short",
+                  "decimals": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "text"
+                      },
+                      {
+                        "value": 1,
+                        "color": "#c4302b"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
                   "links": [
                     {
                       "title": "Runbook",
@@ -1276,18 +1294,13 @@
                       "targetBlank": true
                     }
                   ],
-                  "noValue": "Unknown — missing evidence",
-                  "custom": {
-                    "lineWidth": 1,
-                    "showPoints": "never",
-                    "axisSoftMin": 0
-                  }
+                  "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Local alerts must remain independent of Grafana and the remote archive.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Recording and alerting rule evaluations that failed. Local alerts must remain independent of Grafana and the remote archive. Counted over the selected range, per site; anything but zero is red.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-11": {
@@ -2429,10 +2442,10 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "sum by (k8s_cluster, integration) (rate(alertmanager_notifications_failed_total{k8s_cluster=~\"$cluster\"}[$__rate_interval]))",
-                        "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{integration}}",
-                        "range": true
+                        "expr": "sum by (k8s_cluster) (increase(alertmanager_notifications_failed_total{k8s_cluster=~\"$cluster\"}[$__range]))",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": false
                       },
                       "datasource": {
                         "name": "${datasource}"
@@ -2449,27 +2462,45 @@
           },
           "vizConfig": {
             "kind": "VizConfig",
-            "group": "timeseries",
+            "group": "stat",
             "version": "",
             "spec": {
               "options": {
-                "legend": {
-                  "displayMode": "table",
-                  "placement": "bottom",
-                  "showLegend": true,
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
                   "calcs": [
-                    "lastNotNull",
-                    "max"
-                  ]
+                    "lastNotNull"
+                  ],
+                  "values": false
                 },
-                "tooltip": {
-                  "mode": "multi",
-                  "sort": "desc"
-                }
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "ops",
+                  "unit": "short",
+                  "decimals": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "text"
+                      },
+                      {
+                        "value": 1,
+                        "color": "#c4302b"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
                   "links": [
                     {
                       "title": "Runbook",
@@ -2477,18 +2508,13 @@
                       "targetBlank": true
                     }
                   ],
-                  "noValue": "Unknown — missing evidence",
-                  "custom": {
-                    "lineWidth": 1,
-                    "showPoints": "never",
-                    "axisSoftMin": 0
-                  }
+                  "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Delivery failures. No active alerts is reassuring only when local evaluation, routing and external heartbeat delivery are functioning.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Delivery failures. No active alerts is reassuring only when local evaluation, routing and external heartbeat delivery are functioning. Counted over the selected range, per site; anything but zero is red.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       }
     },
@@ -2658,6 +2684,33 @@
                           "kind": "AutoGridLayout",
                           "spec": {
                             "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-10"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 5,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
                             "rowHeightMode": "standard",
                             "items": [
                               {
@@ -2686,23 +2739,14 @@
                                     "name": "panel-9"
                                   }
                                 }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-10"
-                                  }
-                                }
                               }
                             ],
                             "maxColumnCount": 2,
                             "fillScreen": false
                           }
                         },
-                        "collapse": false,
-                        "hideHeader": true
+                        "title": "Trends",
+                        "collapse": false
                       }
                     }
                   ]
@@ -2829,6 +2873,15 @@
                                     "name": "panel-16"
                                   }
                                 }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-21"
+                                  }
+                                }
                               }
                             ],
                             "maxColumnCount": 5,
@@ -2881,15 +2934,6 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-20"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-21"
                                   }
                                 }
                               }

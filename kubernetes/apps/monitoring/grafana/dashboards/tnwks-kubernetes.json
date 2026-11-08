@@ -454,10 +454,10 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "sum by (k8s_cluster, controller) (rate(controller_runtime_reconcile_total{k8s_cluster=~\"$cluster\",result=\"error\"}[5m]))",
-                        "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{controller}}",
-                        "range": true
+                        "expr": "sum by (k8s_cluster) (increase(controller_runtime_reconcile_total{k8s_cluster=~\"$cluster\",result=\"error\"}[$__range]))",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": false
                       },
                       "datasource": {
                         "name": "${datasource}"
@@ -474,27 +474,45 @@
           },
           "vizConfig": {
             "kind": "VizConfig",
-            "group": "timeseries",
+            "group": "stat",
             "version": "",
             "spec": {
               "options": {
-                "legend": {
-                  "displayMode": "table",
-                  "placement": "bottom",
-                  "showLegend": true,
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
                   "calcs": [
-                    "lastNotNull",
-                    "max"
-                  ]
+                    "lastNotNull"
+                  ],
+                  "values": false
                 },
-                "tooltip": {
-                  "mode": "multi",
-                  "sort": "desc"
-                }
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "ops",
+                  "unit": "short",
+                  "decimals": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "text"
+                      },
+                      {
+                        "value": 1,
+                        "color": "#c4302b"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
                   "links": [
                     {
                       "title": "Runbook",
@@ -502,18 +520,13 @@
                       "targetBlank": true
                     }
                   ],
-                  "noValue": "Unknown — missing evidence",
-                  "custom": {
-                    "lineWidth": 1,
-                    "showPoints": "never",
-                    "axisSoftMin": 0
-                  }
+                  "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Controller process metrics supplement the CR Ready state; controller PodMonitor access needs explicit network-policy integration.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Controller reconciles that returned an error. Controller process metrics supplement the CR Ready state; controller PodMonitor access needs explicit network-policy integration. Counted over the selected range, per site; anything but zero is red.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-4": {
@@ -1500,6 +1513,33 @@
                           "kind": "AutoGridLayout",
                           "spec": {
                             "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-3"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 5,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
                             "rowHeightMode": "standard",
                             "items": [
                               {
@@ -1526,33 +1566,6 @@
                           }
                         },
                         "title": "Status",
-                        "collapse": false
-                      }
-                    },
-                    {
-                      "kind": "RowsLayoutRow",
-                      "spec": {
-                        "layout": {
-                          "kind": "AutoGridLayout",
-                          "spec": {
-                            "columnWidthMode": "narrow",
-                            "rowHeightMode": "standard",
-                            "items": [
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-3"
-                                  }
-                                }
-                              }
-                            ],
-                            "maxColumnCount": 2,
-                            "fillScreen": false
-                          }
-                        },
-                        "title": "Trends",
                         "collapse": false
                       }
                     },

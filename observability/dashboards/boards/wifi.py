@@ -14,8 +14,8 @@ def board() -> Board:
                   "AP inventory/uptime. Device-only identifiers; household client names/MACs are excluded.", "table", ACCESS_POINT),
                 p("AP uplink", f'max by (k8s_cluster, name) ({metric("unpoller_device_uplink_speed_mbps")})', "Mbits",
                   "Negotiated uplink speed. A slow or errored uplink can masquerade as an RF problem.", "table", ACCESS_POINT),
-                p("Wi-Fi collector failures", f'sum by (k8s_cluster) (increase({metric("unpoller_prometheus_refresh_failures_total")}[15m]))', "short",
-                  "Collector-specific failure evidence; HTTP scrape success does not prove the UniFi API refresh succeeded."),
+                p("Wi-Fi collector failures", f'sum by (k8s_cluster) (increase({metric("unpoller_prometheus_refresh_failures_total")}[$__range]))', "failures",
+                  "Collector-specific failure evidence; HTTP scrape success does not prove the UniFi API refresh succeeded. Counted over the selected range, per site; anything but zero is red.", "stat"),
             ],
             "Site dependency": [
                 p("Peer path success", metric("homelab_peer_probe_success"), "bool",

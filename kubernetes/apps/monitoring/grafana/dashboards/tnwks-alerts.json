@@ -741,10 +741,10 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "sum by (k8s_cluster, integration) (increase(alertmanager_notifications_failed_total{k8s_cluster=~\"$cluster\"}[1h]))",
-                        "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{integration}}",
-                        "range": true
+                        "expr": "sum by (k8s_cluster) (increase(alertmanager_notifications_failed_total{k8s_cluster=~\"$cluster\"}[$__range]))",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": false
                       },
                       "datasource": {
                         "name": "${datasource}"
@@ -761,27 +761,45 @@
           },
           "vizConfig": {
             "kind": "VizConfig",
-            "group": "timeseries",
+            "group": "stat",
             "version": "",
             "spec": {
               "options": {
-                "legend": {
-                  "displayMode": "table",
-                  "placement": "bottom",
-                  "showLegend": true,
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
                   "calcs": [
-                    "lastNotNull",
-                    "max"
-                  ]
+                    "lastNotNull"
+                  ],
+                  "values": false
                 },
-                "tooltip": {
-                  "mode": "multi",
-                  "sort": "desc"
-                }
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
               },
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "decimals": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "text"
+                      },
+                      {
+                        "value": 1,
+                        "color": "#c4302b"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
                   "links": [
                     {
                       "title": "Runbook",
@@ -789,18 +807,13 @@
                       "targetBlank": true
                     }
                   ],
-                  "noValue": "Unknown — missing evidence",
-                  "custom": {
-                    "lineWidth": 1,
-                    "showPoints": "never",
-                    "axisSoftMin": 0
-                  }
+                  "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Failures during the window, not a definitive end-to-end notification receipt check.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Delivery failures, not a definitive end-to-end notification receipt check. Counted over the selected range, per site; anything but zero is red.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       }
     },
@@ -917,6 +930,15 @@
                                     "name": "panel-5"
                                   }
                                 }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-7"
+                                  }
+                                }
                               }
                             ],
                             "maxColumnCount": 5,
@@ -951,15 +973,6 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-6"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-7"
                                   }
                                 }
                               }

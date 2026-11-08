@@ -1283,10 +1283,10 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "increase(cnpg_pg_stat_archiver_failed_count{k8s_cluster=~\"$cluster\",source_site=\"\"}[1h])",
-                        "instant": false,
-                        "legendFormat": "{{k8s_cluster}} {{app}} {{instance}}",
-                        "range": true
+                        "expr": "sum by (k8s_cluster) (increase(cnpg_pg_stat_archiver_failed_count{k8s_cluster=~\"$cluster\",source_site=\"\"}[$__range]))",
+                        "instant": true,
+                        "legendFormat": "{{k8s_cluster}}",
+                        "range": false
                       },
                       "datasource": {
                         "name": "${datasource}"
@@ -1303,27 +1303,45 @@
           },
           "vizConfig": {
             "kind": "VizConfig",
-            "group": "timeseries",
+            "group": "stat",
             "version": "",
             "spec": {
               "options": {
-                "legend": {
-                  "displayMode": "table",
-                  "placement": "bottom",
-                  "showLegend": true,
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
                   "calcs": [
-                    "lastNotNull",
-                    "max"
-                  ]
+                    "lastNotNull"
+                  ],
+                  "values": false
                 },
-                "tooltip": {
-                  "mode": "multi",
-                  "sort": "desc"
-                }
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
               },
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
+                  "decimals": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "text"
+                      },
+                      {
+                        "value": 1,
+                        "color": "#c4302b"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
                   "links": [
                     {
                       "title": "Runbook",
@@ -1331,18 +1349,13 @@
                       "targetBlank": true
                     }
                   ],
-                  "noValue": "Unknown — missing evidence",
-                  "custom": {
-                    "lineWidth": 1,
-                    "showPoints": "never",
-                    "axisSoftMin": 0
-                  }
+                  "noValue": "Unknown — missing evidence"
                 },
                 "overrides": []
               }
             }
           },
-          "description": "Failed WAL archiving attempts in the selected window. Idle WAL age alone is not a failure.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Failed WAL archiving attempts. Idle WAL age alone is not a failure. Counted over the selected range, per site; anything but zero is red.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-10": {
@@ -2765,6 +2778,33 @@
                           "kind": "AutoGridLayout",
                           "spec": {
                             "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-9"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 5,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
                             "rowHeightMode": "standard",
                             "items": [
                               {
@@ -2782,33 +2822,6 @@
                           }
                         },
                         "title": "Status",
-                        "collapse": false
-                      }
-                    },
-                    {
-                      "kind": "RowsLayoutRow",
-                      "spec": {
-                        "layout": {
-                          "kind": "AutoGridLayout",
-                          "spec": {
-                            "columnWidthMode": "narrow",
-                            "rowHeightMode": "standard",
-                            "items": [
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-9"
-                                  }
-                                }
-                              }
-                            ],
-                            "maxColumnCount": 2,
-                            "fillScreen": false
-                          }
-                        },
-                        "title": "Trends",
                         "collapse": false
                       }
                     },

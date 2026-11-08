@@ -15,8 +15,8 @@ def board() -> Board:
                   "Current Ready conditions read from the API with revision/suspension shown separately. A live controller process can still fail reconciliation.", "table", column="Ready", words=("Ready", "Not ready")),
                 p("Suspended resources", metric("homelab_flux_resource_suspended"), "bool",
                   "Declared suspension; do not report deliberate suspension as a controller crash.", "table", column="Reconciling", words=("Suspended", "Active")),
-                p("Reconcile failures", f'sum by (k8s_cluster, controller) (rate({metric("controller_runtime_reconcile_total", "result=\"error\"")}[5m]))', "ops",
-                  "Controller process metrics supplement the CR Ready state; controller PodMonitor access needs explicit network-policy integration."),
+                p("Reconcile failures", f'sum by (k8s_cluster) (increase({metric("controller_runtime_reconcile_total", "result=\"error\"")}[$__range]))', "failures",
+                  "Controller reconciles that returned an error. Controller process metrics supplement the CR Ready state; controller PodMonitor access needs explicit network-policy integration. Counted over the selected range, per site; anything but zero is red.", "stat"),
             ],
             "Workloads": [
                 p("Unready workloads", " - ".join(

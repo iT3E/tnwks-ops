@@ -27,7 +27,7 @@ def board() -> Board:
                   "Whether each Alertmanager's last configuration reload succeeded. A failed reload keeps the previous routes and receivers.", "stat", words=("Loaded", "Failed")),
                 p("Notifications sent", f'sum by (k8s_cluster, integration) (increase({selector("alertmanager_notifications_total")}[1h]))', "short",
                   "Notification attempts per integration in the last hour."),
-                p("Failed notifications", f'sum by (k8s_cluster, integration) (increase({metric("alertmanager_notifications_failed_total")}[1h]))', "short",
-                  "Failures during the window, not a definitive end-to-end notification receipt check."),
+                p("Failed notifications", f'sum by (k8s_cluster) (increase({metric("alertmanager_notifications_failed_total")}[$__range]))', "failures",
+                  "Delivery failures, not a definitive end-to-end notification receipt check. Counted over the selected range, per site; anything but zero is red.", "stat"),
             ],
         }, "Observability", sections=True)
