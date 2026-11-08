@@ -91,3 +91,16 @@ jobs:
             echo "::error::Home Assistant check_config found problems (see log above)."
             exit 1
           fi
+
+      - name: Solar credit integration tests
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+            -v "$PWD/$APP/config/custom_components:/src/custom_components:ro" \
+            -v "$PWD/$APP/tests:/tests:ro" \
+            --entrypoint /bin/bash "$IMAGE" -c '
+              set -euo pipefail
+              python3 -m venv --system-site-packages /tmp/test-env
+              /tmp/test-env/bin/python -c "import json, subprocess, sys; requirements=json.load(open(\"/src/custom_components/pacific_power_credits/manifest.json\"))[\"requirements\"]; subprocess.run([sys.executable, \"-m\", \"pip\", \"install\", \"--disable-pip-version-check\", *requirements], check=True)"
+              cd /src
+              PYTHONPATH=/src /tmp/test-env/bin/python -m unittest discover -s /tests -v
+            '

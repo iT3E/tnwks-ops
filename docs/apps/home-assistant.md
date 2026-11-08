@@ -148,6 +148,58 @@ card's Home value should follow Sense's whole-house energy statistics for the
 selected period. The live Home value uses the Sense power sensor. No pod
 restart is needed for energy preference changes.
 
+### Pacific Power solar credit bank
+
+`config/custom_components/pacific_power_credits/` is a local integration,
+mounted read-only from ConfigMaps. Add **Pacific Power Solar Credits** under
+Settings > Devices & services. It exposes three sensors on the **Pacific
+Power** device:
+
+- **Banked solar energy**: the remaining kWh stated on the bill.
+- **Credit statement date**: the billing date associated with that balance.
+- **Credit expiry billing month**: `YYYY-MM`, because the statement promises
+  availability until a billing month, not a particular day.
+
+Setup offers two sources:
+
+- **Import bill PDF** reads a downloaded Pacific Power statement through HA's
+  file-upload form, extracts the excess-power credit note, then deletes the
+  uploaded PDF. Use **Reconfigure > Import bill PDF** for each new bill. No
+  utility credentials are required. Only the balance, dates and a hashed
+  account fingerprint are saved on the private HA volume.
+- **Sign in to Pacific Power** discovers the account and reads its latest
+  statement using the portal's read-only billing endpoints. It checks every
+  12 hours and downloads the PDF only when the statement date changes.
+  Credentials and account selectors stay in HA's UI-owned config entry;
+  neither belongs in git. Username/password sign-in is supported. Accounts
+  that require an additional verification code can use PDF import without
+  disabling verification. **Reconfigure** also changes the source; switching
+  to PDF import removes the stored login and stops polling.
+
+The parser accepts the bill's “excess power … KWH available for future use
+until your billing in MM/YYYY” note. A missing or ambiguous note is an error,
+never an assumed zero. An unrelated account or an older statement cannot
+replace the saved balance. A failed automatic refresh marks the entities
+unavailable and retains the last verified snapshot for recovery; it does not
+erase the bank. Expiry does not automatically zero the balance: a new bill
+must confirm the result. The balance reflects the latest bill, not unbilled
+activity since that statement.
+
+The bank is a remaining balance, so it has no energy-counter state class and
+must not be selected as **Return to grid** or **Home consumption**. Grid
+exports require their own meter statistics. Installing this integration does
+not change dashboards or Energy sources.
+
+Portal authentication is adapted from the MIT-licensed
+[`nkcx/ha-pacific-power`](https://github.com/nkcx/ha-pacific-power), revision
+`2bb31dbca0b776f29247ce1e14c6047297a4e62c`; its license is retained beside the
+source. The credit parser and billing calls are local additions. The protocol
+is unofficial and may need changes if Pacific Power changes its website.
+`app/tests/test_pacific_power_credits.py` exercises synthetic bills, encrypted
+requests, failed refreshes, file cleanup and the real HA config-flow lifecycle
+against the pinned container image. Actual bills and account data must never
+be committed as fixtures.
+
 ### Robot vacuum
 
 A Roborock S5 (`roborock.vacuum.s5`) on the Mi Home app, at the DHCP lease
