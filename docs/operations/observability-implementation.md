@@ -174,7 +174,7 @@ reads Unknown on every resource.
 | Resource | Measured | Degraded | Failed |
 | --- | --- | --- | --- |
 | CPU | busy share of all logical processors, over 15 minutes | above 85% | above 95% |
-| Memory commit | committed memory over the commit limit (RAM plus page file) | above 90% | above 97% |
+| Memory | share of RAM not available to new work (standby cache counts as available), over 15 minutes | above 90% | above 97% |
 | Disk latency | seconds per operation on the slowest volume doing over 1 operation a second, over 15 minutes (an idle disk is 0) | above 50 ms | above 200 ms |
 | Disk space | free share of the fullest volume (`HarddiskVolume*` system partitions excluded) | below 10% | below 5% |
 
@@ -185,9 +185,19 @@ Measured 2026-11-07, and why some queries look the way they do:
   cluster. The VM has fewer processors than the host (its `.wslconfig` limit), so
   Host also shows the VM's own busy share and CPU pressure: the VM can be full
   while the host has room.
-- **Commit charge** (memory promised against RAM plus page file) is the memory
-  limit that bites on these hosts, not physical use: site 1 read 93% and peaked
-  at 99% while 72% of RAM was in use. At 100% Windows refuses allocations.
+- **Memory is graded on RAM in use, not commit charge** (changed 2026-11-08).
+  Commit charge is memory promised against RAM plus the page file's *current*
+  size. The WSL VM commits its whole `.wslconfig` memory (site 1: 38.8 GB
+  committed, 16.8 GB resident), so commit reads high: 93% of the limit while 70%
+  of RAM was in use, and the page file barely touched (under 1% of 13 GB used).
+  The page file is automatically managed and grows when commit nears the limit:
+  site 1's limit rose from 73.9 to 76.9 GiB over the week before. A commit
+  graded against a moving limit was Degraded most of the time for no shortage.
+  Host still shows commit charge, and `WindowsHostCommitHigh` (critical, above
+  98% for 5 minutes) catches the one real case: commit pinned at the limit
+  because the page file can't keep up or has reached its cap. One large
+  allocation (qmd's 32 GiB GPU reservation in WSL) can fail before the file
+  grows; a fixed minimum page file size is the fix if that recurs.
 - **Disk latency** is the latency counter's rate over the operation counter's
   (`windows_logical_disk_*_latency_seconds_total`), seconds per operation, on
   real volumes only (`HarddiskVolume*` are the hidden system partitions).

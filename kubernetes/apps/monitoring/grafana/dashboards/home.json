@@ -793,7 +793,7 @@
               }
             }
           },
-          "description": "The worst of each Windows host's CPU, memory commit, disk latency and free space: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "The worst of each Windows host's CPU, memory in use, disk latency and free space: Failed, then Degraded, then Unknown, then Healthy. Standby and Not applicable don't count. Open it for the board that explains it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-7": {
