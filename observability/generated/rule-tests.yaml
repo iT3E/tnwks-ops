@@ -798,6 +798,128 @@ tests:
       value: 3
     - labels: homelab:house_state{domain="wifi"}
       value: 3
+- name: 'household view: backups, smart devices, storage and away access'
+  interval: 1m
+  input_series:
+  - *id001
+  - series: homelab:app_rpo_state{k8s_cluster="one",app="a"}
+    values: 1+0x10
+  - series: homelab:app_rpo_state{k8s_cluster="one",app="b"}
+    values: 2+0x10
+  - series: homelab:database_backup_state{k8s_cluster="one",db_cluster="d"}
+    values: 1+0x10
+  - series: homelab:database_backup_state{k8s_cluster="one",db_cluster="r"}
+    values: 5+0x10
+  - series: homelab:app_rpo_state{k8s_cluster="two",app="c"}
+    values: 3+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d0"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d1"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d2"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d3"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d4"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d5"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d6"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d7"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d8"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d9"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d10"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d11"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d12"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d13"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d14"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d15"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d16"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d17"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="sensor",entity="sensor.d18"}
+    values: 1+0x10
+  - series: homeassistant_entity_available{domain="light",entity="light.d19"}
+    values: 1 1 0 0 0 0 0 0 0 0 0
+  - series: homeassistant_entity_available{domain="automation",entity="automation.x"}
+    values: 1 1 0 0 0 0 0 0 0 0 0
+  - series: windows_logical_disk_free_bytes{k8s_cluster="one",volume="C:"}
+    values: 50+0x10
+  - series: windows_logical_disk_size_bytes{k8s_cluster="one",volume="C:"}
+    values: 100+0x10
+  - series: windows_logical_disk_free_bytes{k8s_cluster="one",volume="E:"}
+    values: 8+0x10
+  - series: windows_logical_disk_size_bytes{k8s_cluster="one",volume="E:"}
+    values: 100+0x10
+  - series: cloudflared_tunnel_ha_connections{k8s_cluster="one"}
+    values: 4+0x10
+  promql_expr_test:
+  - expr: homelab:house_state{domain=~"backups|devices|storage|away"}
+    eval_time: 10m
+    exp_samples:
+    - labels: homelab:house_state{domain="away"}
+      value: 1
+    - labels: homelab:house_state{domain="backups"}
+      value: 2
+    - labels: homelab:house_state{domain="devices"}
+      value: 1
+    - labels: homelab:house_state{domain="storage"}
+      value: 2
+- name: 'household view: backups, devices, storage and away access failing'
+  interval: 1m
+  input_series:
+  - *id001
+  - series: homelab:app_rpo_state{k8s_cluster="one",app="a"}
+    values: 3+0x10
+  - series: homeassistant_entity_available{domain="switch",entity="switch.d0"}
+    values: 1 1 0 0 0 0 0 0 0 0 0
+  - series: homeassistant_entity_available{domain="switch",entity="switch.d1"}
+    values: 1 1 0 0 0 0 0 0 0 0 0
+  - series: homeassistant_entity_available{domain="switch",entity="switch.d2"}
+    values: 1 1 0 0 0 0 0 0 0 0 0
+  - series: homeassistant_entity_available{domain="switch",entity="switch.d3"}
+    values: 1 1 0 0 0 0 0 0 0 0 0
+  - series: windows_logical_disk_free_bytes{k8s_cluster="one",volume="C:"}
+    values: 3+0x10
+  - series: windows_logical_disk_size_bytes{k8s_cluster="one",volume="C:"}
+    values: 100+0x10
+  - series: cloudflared_tunnel_ha_connections{k8s_cluster="one"}
+    values: 4 4 2 0 0 0 0 0 0 0 0
+  promql_expr_test:
+  - expr: homelab:house_state{domain=~"backups|devices|storage|away"}
+    eval_time: 10m
+    exp_samples:
+    - labels: homelab:house_state{domain="away"}
+      value: 3
+    - labels: homelab:house_state{domain="backups"}
+      value: 3
+    - labels: homelab:house_state{domain="devices"}
+      value: 3
+    - labels: homelab:house_state{domain="storage"}
+      value: 3
+- name: 'household view: no part in the new domains'
+  interval: 1m
+  input_series:
+  - *id001
+  - series: homelab:app_rpo_state{k8s_cluster="two",app="c"}
+    values: 3+0x10
+  - series: cloudflared_tunnel_ha_connections{k8s_cluster="two"}
+    values: 4+0x10
+  promql_expr_test:
+  - expr: homelab:house_state{domain=~"backups|devices|storage|away"}
+    eval_time: 10m
+    exp_samples: []
 - name: 'household view: a blind source is Unknown, not Failed'
   interval: 1m
   input_series:

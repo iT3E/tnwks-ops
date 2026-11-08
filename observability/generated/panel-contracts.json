@@ -157,8 +157,38 @@
     ],
     "sources": [
       {
+        "metric": "barman_cloud_cloudnative_pg_io_last_available_backup_timestamp",
+        "producer": "CNPG Barman Cloud plugin",
+        "availability": "configured"
+      },
+      {
+        "metric": "cloudflared_tunnel_ha_connections",
+        "producer": "cloudflared",
+        "availability": "configured"
+      },
+      {
+        "metric": "cnpg_pg_replication_in_recovery",
+        "producer": "CloudNativePG PostgreSQL exporter",
+        "availability": "configured"
+      },
+      {
         "metric": "frigate_camera_fps",
         "producer": "Frigate",
+        "availability": "configured"
+      },
+      {
+        "metric": "homeassistant_entity_available",
+        "producer": "Home Assistant Prometheus integration",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_app_backup_scheduled",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_app_recovery_objective_seconds",
+        "producer": "read-only evidence collector",
         "availability": "configured"
       },
       {
@@ -168,6 +198,11 @@
       },
       {
         "metric": "homelab_collection_success",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_expected_database_info",
         "producer": "read-only evidence collector",
         "availability": "configured"
       },
@@ -197,6 +232,11 @@
         "availability": "configured"
       },
       {
+        "metric": "kopiur_policy_last_backup_success_timestamp_seconds",
+        "producer": "Kopiur controller (PVC backups and restores)",
+        "availability": "configured"
+      },
+      {
         "metric": "probe_success",
         "producer": "evidence collector probes",
         "availability": "configured"
@@ -204,6 +244,16 @@
       {
         "metric": "unpoller_device_uptime_seconds",
         "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_free_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_size_bytes",
+        "producer": "Windows exporter",
         "availability": "configured"
       }
     ],
@@ -428,8 +478,38 @@
     ],
     "sources": [
       {
+        "metric": "barman_cloud_cloudnative_pg_io_last_available_backup_timestamp",
+        "producer": "CNPG Barman Cloud plugin",
+        "availability": "configured"
+      },
+      {
+        "metric": "cloudflared_tunnel_ha_connections",
+        "producer": "cloudflared",
+        "availability": "configured"
+      },
+      {
+        "metric": "cnpg_pg_replication_in_recovery",
+        "producer": "CloudNativePG PostgreSQL exporter",
+        "availability": "configured"
+      },
+      {
         "metric": "frigate_camera_fps",
         "producer": "Frigate",
+        "availability": "configured"
+      },
+      {
+        "metric": "homeassistant_entity_available",
+        "producer": "Home Assistant Prometheus integration",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_app_backup_scheduled",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_app_recovery_objective_seconds",
+        "producer": "read-only evidence collector",
         "availability": "configured"
       },
       {
@@ -439,6 +519,11 @@
       },
       {
         "metric": "homelab_collection_success",
+        "producer": "read-only evidence collector",
+        "availability": "configured"
+      },
+      {
+        "metric": "homelab_expected_database_info",
         "producer": "read-only evidence collector",
         "availability": "configured"
       },
@@ -468,6 +553,11 @@
         "availability": "configured"
       },
       {
+        "metric": "kopiur_policy_last_backup_success_timestamp_seconds",
+        "producer": "Kopiur controller (PVC backups and restores)",
+        "availability": "configured"
+      },
+      {
         "metric": "probe_success",
         "producer": "evidence collector probes",
         "availability": "configured"
@@ -475,6 +565,16 @@
       {
         "metric": "unpoller_device_uptime_seconds",
         "producer": "UniFi Poller (exclude federated copies)",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_free_bytes",
+        "producer": "Windows exporter",
+        "availability": "configured"
+      },
+      {
+        "metric": "windows_logical_disk_size_bytes",
+        "producer": "Windows exporter",
         "availability": "configured"
       }
     ],
