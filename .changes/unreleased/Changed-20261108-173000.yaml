@@ -1,3 +1,0 @@
-kind: Changed
-body: 'CI: setup-flate (with flate-guard), the Terraform plan/apply action, the sticky PR comment, zizmor and the workflow conventions check come from iT3E/github-workflows; the local copies are gone. Every github-workflows pin moves to the same release.'
-time: 2026-11-08T17:30:00.000000-08:00

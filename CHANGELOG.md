@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.68.0 - 2026-11-08
+
+### Changed
+
+* CI: setup-flate (with flate-guard), the Terraform plan/apply action, the sticky PR comment, zizmor and the workflow conventions check come from iT3E/github-workflows; the local copies are gone. Every github-workflows pin moves to the same release.
+
 ## v2.67.0 - 2026-11-08
 
 ### Changed
