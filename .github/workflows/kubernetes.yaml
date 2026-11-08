@@ -38,7 +38,7 @@ jobs:
           persist-credentials: false
 
       - name: Install flate
-        uses: iT3E/github-workflows/actions/setup-flate@272d2c317d9541e4ff9aead33c5f15049a6dea41 # feat/shared-actions (pre-release)
+        uses: iT3E/github-workflows/actions/setup-flate@6abfc744ca16e7464b47890ccf230e00aa8670cd # v1.8.0
         with:
           version: ${{ env.FLATE_VERSION }}
 
@@ -193,7 +193,7 @@ jobs:
           persist-credentials: false
 
       - name: Install flate
-        uses: iT3E/github-workflows/actions/setup-flate@272d2c317d9541e4ff9aead33c5f15049a6dea41 # feat/shared-actions (pre-release)
+        uses: iT3E/github-workflows/actions/setup-flate@6abfc744ca16e7464b47890ccf230e00aa8670cd # v1.8.0
         with:
           version: ${{ env.FLATE_VERSION }}
 
@@ -210,7 +210,7 @@ jobs:
       - name: Comment
         if: steps.diff.outcome == 'success'
         continue-on-error: true
-        uses: iT3E/github-workflows/actions/sticky-comment@272d2c317d9541e4ff9aead33c5f15049a6dea41 # feat/shared-actions (pre-release)
+        uses: iT3E/github-workflows/actions/sticky-comment@6abfc744ca16e7464b47890ccf230e00aa8670cd # v1.8.0
         with:
           marker: "<!-- flate-diff -->"
           body-file: ${{ runner.temp }}/flate-diff/comment.md
