@@ -54,7 +54,7 @@ jobs:
     # Stays on 24.04: the Coral libusb shim's pinned hash is what 24.04's
     # mingw produces (26.04 builds a different binary). Moves once the shim
     # builds in a digest-pinned container.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
       contents: read
