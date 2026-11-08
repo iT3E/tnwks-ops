@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.43.0 - 2026-11-08
+
+### Changed
+
+* grafana: Sites & Failover shows each app once with a column per site (workload state, readiness, leases, fencing, restores); status and detail tables sit two across so no column is cut off
+
 ## v2.42.0 - 2026-11-08
 
 ### Changed

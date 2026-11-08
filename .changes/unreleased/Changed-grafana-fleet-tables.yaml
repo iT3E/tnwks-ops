@@ -1,4 +1,0 @@
----
-kind: Changed
-body: "grafana: Sites & Failover shows each app once with a column per site (workload state, readiness, leases, fencing, restores); status and detail tables sit two across so no column is cut off"
-time: 2026-11-08T01:23:26.000000000Z
