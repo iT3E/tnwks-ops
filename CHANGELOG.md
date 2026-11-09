@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.69.1 - 2026-11-09
+
+### Fixed
+
+* mealie: escape the nginx variable in mealie-embed's snippet so Flux's substitution doesn't reject the Ingress
+
 ## v2.69.0 - 2026-11-09
 
 ### Changed
