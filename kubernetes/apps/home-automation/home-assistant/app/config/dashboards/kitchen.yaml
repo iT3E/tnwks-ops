@@ -22,6 +22,13 @@
 # and Coming up -> Calendar). Any event opens its details; a planned meal also
 # offers "Open in Mealie" (recipe slug from mealie.get_mealplan).
 #
+# Mealie: `url` is the public address, for links opened outside HA. On the
+# tablet Mealie opens in a frame inside HA instead, signed in as the kiosk
+# identity: `embed` is mealie-embed's /kiosk-login with the kiosk user's
+# Mealie API token (HASS_MEALIE_EMBED_URL, home-assistant-secret;
+# production/mealie/app/ingress-embed.yaml). Cognito's login page won't load
+# in a frame, so a password or OIDC login there isn't possible.
+#
 # One HA view holds everything: kitchen-pages-card draws the header, the big
 # tabs and each tab's cards as pages that stay mounted, so switching tabs is
 # instant (an HA view change rebuilt every card and refetched its data). The
@@ -84,7 +91,7 @@ views:
                     calendar: calendar.mealie_dinner
                     days: 3
                     tap_page: meals
-                    mealie: &mealie { url: "https://recipes.tnwks.us", group: home, entry: 01M69Q1P5QTVNB7W0BJF1KDXAM }
+                    mealie: &mealie { url: "https://recipes.tnwks.us", embed: !env_var HASS_MEALIE_EMBED_URL, group: home, entry: 01M69Q1P5QTVNB7W0BJF1KDXAM }
                   - type: custom:kitchen-todo-card
                     entity: todo.shopping_list
                     title: Groceries

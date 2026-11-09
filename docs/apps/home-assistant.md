@@ -559,15 +559,22 @@ meal adds **Open in Mealie**, which opens the recipe (slug from
 `mealie.get_mealplan`; `mealie.entry` in the card config is the Mealie config
 entry id), and the Meals tab has **Open Mealie** for the planner. On the
 tablet Mealie opens full screen inside the kiosk, in a frame with Recipes and
-Close buttons, signed in as Mealie's local `kitchen` user (household
-Family, can organize; password in Ori's credentials store, not in git), because
-"Login with tnwks" sends the frame to Cognito, whose login page refuses to
-load in a frame. Mealie's `TOKEN_TIME` is 720 hours so that session survives
-quiet weeks; if it lapses, sign in again with that user (the tablet's
-launcher, the Apolosign calendar app, can't pin
-shortcuts, so Chrome offers no PWA install there, and Chrome would take the
-screen from the kiosk). Elsewhere links leave HA, so an installed Mealie PWA
-on a phone catches them.
+Close buttons (the tablet's launcher can't pin a Mealie PWA, and Chrome would
+take the screen from the kiosk). The frame is signed in as the kiosk identity:
+Mealie's user `kiosk@...` was created by an OIDC login through Cognito (group
+`viewers`, so not an admin; household Family, can organize), and the frame
+opens `mealie-embed.<internal domain>/kiosk-login` with that user's long-lived
+Mealie API token (`mealie.embed` in the card config, from
+`HASS_MEALIE_EMBED_URL` in home-assistant-secret). That host sets Mealie's
+session cookie to the token and redirects to the recipe or planner, so the
+frame never shows a login, and it refuses Mealie's password and OIDC logins
+(`production/mealie/app/ingress-embed.yaml`). A login inside the frame isn't
+possible anyway: Cognito's login page sends `X-Frame-Options: DENY`. Like the
+Grafana kiosk URL, any HA user can read the token from the dashboard config.
+It expires 2031-11-07. To revoke it, delete the `wall-display-embed` token on
+Mealie's kiosk user; disabling `kiosk@` in Cognito alone doesn't stop it.
+Elsewhere links leave HA for the public Mealie address, so an installed Mealie
+PWA on a phone catches them.
 
 Theme and mode belong to whoever picks them, and nobody else's screen
 changes. The wall display (the HA app that has shown the dashboard in kiosk

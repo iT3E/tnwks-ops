@@ -5,3 +5,4 @@ namespace: production
 resources:
   - ./secrets.sops.yaml
   - ./helmrelease.yaml
+  - ./ingress-embed.yaml

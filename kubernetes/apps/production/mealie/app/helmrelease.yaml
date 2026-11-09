@@ -85,11 +85,10 @@ spec:
                 value: "${TIMEZONE}"
               - name: ALLOW_SIGNUP
                 value: "false"
-              # Sessions last TOKEN_TIME hours and slide while used. The
-              # kitchen wall display signs in once as the local `kitchen`
-              # user (password login; Cognito's login page refuses to load
-              # in HA's frame), so 48h (the default) would sign it out after
-              # a quiet weekend.
+              # Sessions last TOKEN_TIME hours and slide while used (48h by
+              # default). The kitchen wall display doesn't depend on it any
+              # more: its frame signs in as the kiosk user with an API token
+              # through mealie-embed (ingress-embed.yaml).
               - name: TOKEN_TIME
                 value: "720"
               - name: BASE_URL

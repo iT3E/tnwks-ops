@@ -73,7 +73,8 @@ spec:
         # about untrusted Ingress authors, and Ingresses here only come from
         # git). grafana-embed needs a configuration-snippet to clear the
         # oauth2-proxy identity headers and refuse /login; there's no
-        # non-snippet way to drop request headers per Ingress.
+        # non-snippet way to drop request headers per Ingress. mealie-embed
+        # uses one for its /kiosk-login redirect and to refuse logins.
         allow-snippet-annotations: "true"
         annotations-risk-level: "Critical"
         # nginx's own resolver (auth-url to another site's oauth2-proxy by
