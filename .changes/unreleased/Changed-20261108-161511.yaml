@@ -1,3 +1,0 @@
-kind: Changed
-body: 'mealie: mealie-embed host for the wall display''s frame, signed in as the kiosk identity (an OIDC-created Mealie user) with its API token; HA''s Mealie frame uses it instead of the local kitchen user'
-time: 2026-11-08T16:15:11.465108798-08:00

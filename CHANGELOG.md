@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.69.0 - 2026-11-09
+
+### Changed
+
+* mealie: mealie-embed host for the wall display's frame, signed in as the kiosk identity (an OIDC-created Mealie user) with its API token; HA's Mealie frame uses it instead of the local kitchen user
+
 ## v2.68.1 - 2026-11-08
 
 ### Fixed
