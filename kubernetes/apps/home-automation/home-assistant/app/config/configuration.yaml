@@ -104,7 +104,7 @@ lovelace:
       type: module
     # /local is cached for weeks: the ?v= is what makes browsers (and the
     # kitchen display) fetch a new copy. Bump it with every change to the file.
-    - url: /local/tnwks-kitchen/kitchen-cards.js?v=1.13.0
+    - url: /local/tnwks-kitchen/kitchen-cards.js?v=1.13.1
       type: module
     - url: /local/tnwks-security/person-alerts-card.js?v=2.0.0
       type: module
