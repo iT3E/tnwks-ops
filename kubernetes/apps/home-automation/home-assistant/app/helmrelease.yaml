@@ -139,7 +139,9 @@ spec:
               - name: HASS_INTERNAL_URL
                 value: "https://hass.${INTERNAL_DOMAIN}"
               # HASS_GRAFANA_URL (the Monitoring dashboard's frame, with the
-              # kiosk JWT) comes from home-assistant-secret.
+              # kiosk JWT) and HASS_MEALIE_EMBED_URL (the wall display's Mealie
+              # frame, with the kiosk user's Mealie API token) come from
+              # home-assistant-secret.
               # Public app-client ID (cognito_home_assistant_client_id output
               # of the AWS workspace), like the onboard client's.
               - name: HASS_OIDC_CLIENT_ID

@@ -113,6 +113,7 @@ jobs:
             -e HASS_EXTERNAL_URL=https://hass.example.test \
             -e HASS_INTERNAL_URL=https://hass.internal.example.test \
             -e HASS_GRAFANA_URL=https://grafana.internal.example.test/ \
+            -e HASS_MEALIE_EMBED_URL=https://mealie-embed.internal.example.test/kiosk-login?t=ci \
             -e HASS_OIDC_CLIENT_ID=ci \
             -e HASS_OIDC_DISCOVERY_URL=https://idp.example.test/.well-known/openid-configuration \
             -e FRIGATE_UI_URL=https://frigate.example.test \

@@ -579,6 +579,11 @@
       "vip": "10.10.95.200"
     },
     {
+      "name": "mealie-embed",
+      "host": "mealie-embed.internal.tnwks.us",
+      "vip": "10.10.95.10"
+    },
+    {
       "name": "playwright-mcp",
       "host": "playwright-mcp.internal.tnwks.us",
       "vip": "10.10.95.200"
