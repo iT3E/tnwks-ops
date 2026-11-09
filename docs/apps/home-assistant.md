@@ -708,6 +708,29 @@ calendar), `calendar.mealie_breakfast`, `_lunch`, `_dinner` and `_snack`
 connected" or "not set up yet" note until its entity exists; the Notes card on
 Home stays hidden instead.
 
+The Lists tab's lists are made, renamed and deleted on the display (cards
+1.13.0). "+ List" makes a Local To-do list, and "Edit list" changes its name,
+emoji, place in the row and whether its items track expiry dates, or deletes
+it. The tablet's kiosk user isn't an admin, so it can't start a config flow or
+edit the registries. These go through our integration
+`custom_components/kitchen_lists` instead (`kitchen_lists:` in
+`configuration.yaml`): its services `kitchen_lists.create`, `.update`,
+`.delete` and `.restore` are open to any user, and `sensor.kitchen_lists`
+(attribute `lists`, in order) is what the card reads. The settings are kept in
+`.storage/kitchen_lists`, so they're UI-owned like the lists. The first start
+seeded Groceries, Things to do and Someday. Groceries, Notes, the routines,
+rewards and screensaver albums lists can't be deleted. A deleted list that had items is kept
+(the last 10), and `kitchen_lists.restore` (optionally with its `title`)
+brings one back as a new Local To-do list. Groceries is the Shopping List
+integration, which has no dates or notes, so it can't track expiry.
+
+Items: the circle checks one off, and tapping the text opens it to rename it,
+add notes, set or clear its expiry date, or delete it. "Reorder" shows arrows
+that move an item up or down (`todo/item/move`). On an expiry list the add box
+has a date field. An item shows "Expires Thu", turns amber the day before, and
+turns red with a "1" badge on its list once the date has passed. It stays
+until someone checks it off or deletes it; nothing removes it by itself.
+
 `calendar.family` is a Remote Calendar entry pointing at the Google Family
 calendar's secret iCal address (UI-owned, so the URL stays out of git).
 Remote Calendar only re-downloads once a day, so

@@ -326,6 +326,15 @@ spec:
             prepare-config:
               - path: /scripts
                 readOnly: true
+      # Our own integration behind the Lists tab's list editing.
+      kitchen-lists:
+        type: configMap
+        name: home-assistant-kitchen-lists
+        advancedMounts:
+          home-assistant:
+            app:
+              - path: /config/custom_components/kitchen_lists
+                readOnly: true
       pacific-power-credits:
         type: configMap
         name: home-assistant-pacific-power-credits

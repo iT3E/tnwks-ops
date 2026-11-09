@@ -38,6 +38,14 @@ configMapGenerator:
   - name: home-assistant-scripts
     files:
       - scripts/prepare-config.sh
+  - name: home-assistant-kitchen-lists
+    files:
+      - config/custom_components/kitchen_lists/__init__.py
+      - config/custom_components/kitchen_lists/const.py
+      - config/custom_components/kitchen_lists/manager.py
+      - config/custom_components/kitchen_lists/manifest.json
+      - config/custom_components/kitchen_lists/sensor.py
+      - config/custom_components/kitchen_lists/services.yaml
   - name: home-assistant-pacific-power-credits
     files:
       - config/custom_components/pacific_power_credits/__init__.py

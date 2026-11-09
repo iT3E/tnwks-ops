@@ -1,0 +1,69 @@
+create:
+  name: Create list
+  description: Make a new Local To-do list and add it to the wall display's Lists tab. Returns its entity_id.
+  fields:
+    title:
+      name: Name
+      required: true
+      example: Fridge
+      selector:
+        text:
+    icon:
+      name: Emoji
+      example: "🧊"
+      selector:
+        text:
+    expiry:
+      name: Track expiry dates
+      default: false
+      selector:
+        boolean:
+update:
+  name: Change list
+  description: Rename a list, change its emoji or expiry setting, or move it in the row. A to-do list not on the tab yet is added.
+  fields:
+    entity_id:
+      name: List
+      required: true
+      selector:
+        entity:
+          domain: todo
+    title:
+      name: Name
+      selector:
+        text:
+    icon:
+      name: Emoji
+      selector:
+        text:
+    expiry:
+      name: Track expiry dates
+      selector:
+        boolean:
+    position:
+      name: Position
+      description: 0 is the first list.
+      selector:
+        number:
+          min: 0
+          max: 20
+          mode: box
+delete:
+  name: Delete list
+  description: Delete a Local To-do list and its items. A list with items is kept for restore; the display's own lists can't be deleted.
+  fields:
+    entity_id:
+      name: List
+      required: true
+      selector:
+        entity:
+          domain: todo
+restore:
+  name: Restore list
+  description: Bring back the last deleted list, or the last one with this name, with its items.
+  fields:
+    title:
+      name: Name
+      example: Fridge
+      selector:
+        text:

@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.12.3";
+const VERSION = "1.13.0";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -1823,6 +1823,15 @@ const SHEET_CSS = `
   .lb { font-size:13px; color:var(--sub); text-transform:uppercase; letter-spacing:.06em; margin:14px 0 8px; }
   input.tx { width:100%; background:var(--card2); border:1px solid var(--line); border-radius:14px; color:var(--txt); font:inherit; font-size:18px; padding:14px 16px; outline:none; }
   input.tx:focus { border-color:var(--accent); }
+  textarea.tx { display:block; width:100%; background:var(--card2); border:1px solid var(--line); border-radius:14px; color:var(--txt); font:inherit; font-size:16px;
+    padding:12px 16px; outline:none; resize:none; }
+  textarea.tx:focus { border-color:var(--accent); }
+  input.tx[disabled] { opacity:.6; }
+  .dline { display:flex; align-items:center; gap:14px; }
+  .dline input.tx { width:auto; flex:none; font-size:17px; padding:11px 14px; }
+  .dline b { font-weight:500; font-size:16px; color:var(--sub); }
+  .dline b.bad { color:var(--danger); }
+  .step button[disabled] { opacity:.3; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chips button { padding:10px 14px; border-radius:14px; background:var(--card2); font-size:15px; color:var(--sub); display:flex; align-items:center; gap:8px; }
   .chips button.on { background:var(--accent); color:var(--ink); font-weight:500; }
@@ -3241,17 +3250,32 @@ const LIST_CSS = `
   .tabs button { padding:9px 14px; border-radius:14px; background:var(--card2); font-size:15px; color:var(--sub); }
   .tabs button.on { background:var(--accent); color:var(--ink); font-weight:500; }
   .tabs button b { font-weight:500; margin-left:4px; opacity:.8; }
+  .tabs button em { font-style:normal; font-weight:700; font-size:12px; margin-left:6px; padding:1px 7px; border-radius:9px; background:var(--danger); color:#1a0606; }
+  .tabs button.new { color:var(--sub); border:1.5px dashed var(--line); background:none; }
   form.add { display:flex; gap:8px; margin-bottom:10px; }
   form.add input { flex:1; min-width:0; background:var(--card2); border:1px solid var(--line); border-radius:12px; color:var(--txt);
     font:inherit; font-size:16px; padding:12px 14px; outline:none; }
   form.add input:focus { border-color:var(--accent); }
+  form.add input.due { flex:none; width:158px; padding:12px 10px; font-size:15px; color:var(--sub); }
+  form.add input.due.set { color:var(--txt); }
   form.add button { padding:0 18px; border-radius:12px; background:var(--accent); color:var(--ink); font-weight:500; font-size:15px; display:grid; place-items:center; }
-  .li { display:flex; gap:12px; align-items:center; width:100%; background:var(--card2); border-radius:14px; padding:12px 14px; margin-bottom:6px; font-size:17px; min-height:56px; }
+  .bar { display:flex; align-items:center; gap:8px; margin:0 2px 8px; font-size:13px; color:var(--sub); min-height:34px; }
+  .bar span { flex:1; }
+  .bar button { padding:7px 12px; border-radius:10px; background:var(--card2); color:var(--sub); font-size:14px; }
+  .bar button.on { background:var(--accent); color:var(--ink); font-weight:500; }
+  .li { display:flex; align-items:stretch; width:100%; background:var(--card2); border-radius:14px; margin-bottom:6px; font-size:17px; min-height:56px; }
+  .li .ck { flex:none; display:grid; place-items:center; padding:0 12px 0 14px; }
   .li .c { width:26px; height:26px; border-radius:50%; border:2.5px solid var(--sub); flex:none; display:grid; place-items:center; font-size:14px; }
-  .li .t { flex:1; min-width:0; }
+  .li .t { flex:1; min-width:0; padding:12px 14px 12px 0; display:flex; flex-direction:column; justify-content:center; overflow-wrap:anywhere; }
   .li .t i { display:block; font-style:normal; font-size:13px; color:var(--sub); margin-top:2px; }
-  .li.done { opacity:.5; min-height:44px; padding:8px 14px; font-size:15px; }
-  .li.done .t { text-decoration:line-through; }
+  .li.soon .t i { color:var(--acct); }
+  .li.exp { box-shadow:inset 4px 0 0 var(--danger); }
+  .li.exp .t i { color:var(--danger); font-weight:500; }
+  .li .mv { flex:none; width:52px; display:grid; place-items:center; font-size:18px; color:var(--sub); border-left:1px solid var(--line); }
+  .li .mv[disabled] { opacity:.25; pointer-events:none; }
+  .li.moving { outline:2px solid var(--accent); }
+  .li.done { opacity:.5; min-height:44px; font-size:15px; }
+  .li.done .t { text-decoration:line-through; padding:8px 14px 8px 0; }
   .li.done .c { border:0; background:var(--ok); color:#111; }
   .li.pending { opacity:.35; }
   .li .c { transition:background-color .2s, border-color .2s; }
@@ -3273,10 +3297,184 @@ const fmtDue = (s) => {
   return `Due ${d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}${s.length === 10 ? "" : ` ${fmtTime(d)}`}`;
 };
 
+// To-do entity features (TodoListEntityFeature): only offer what a list can do.
+// Groceries (the Shopping List integration) has no dates or notes.
+const TODO_F = { CREATE: 1, DELETE: 2, UPDATE: 4, MOVE: 8, DUE: 16, DESC: 64 };
+const todoFeatures = (hass, e) => Number(hass.states[e]?.attributes?.supported_features || 0);
+const LISTS_ENTITY = "sensor.kitchen_lists";
+const LIST_EMOJI = ["📝", "🛒", "✅", "💭", "🧊", "🥫", "🍎", "🥦", "🧀", "🥛", "🍞", "🍳", "🧺", "🧹", "🧰", "🔧", "🏠", "🚐", "🏕️", "🎁",
+  "🎄", "🎂", "📚", "💊", "🐱", "🐶", "🌱", "✈️", "💡", "⭐"];
+
+// Expiry lists: an item's due date is when it expires. Past it, the row turns
+// red and stays until someone checks it off or deletes it.
+const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function daysLeft(s, now = new Date()) {
+  if (!s) return null;
+  const d = new Date(`${s.slice(0, 10)}T00:00:00`);
+  const t = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((d - t) / MS_DAY);
+}
+function fmtExpiry(s, now = new Date()) {
+  const n = daysLeft(s, now);
+  if (n == null) return "";
+  const d = new Date(`${s.slice(0, 10)}T00:00:00`);
+  const md = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (n < -1) return `Expired ${md}`;
+  if (n === -1) return "Expired yesterday";
+  if (n === 0) return "Expires today";
+  if (n === 1) return "Expires tomorrow";
+  if (n < 7) return `Expires ${fmtDay(d)}`;
+  return `Expires ${md}`;
+}
+
+/** Edit one item: name, notes, expiry date, delete. Fields the list can't store are left out. */
+function itemEditor(card, entity, item, list) {
+  const f = todoFeatures(card._hass, entity);
+  const canName = f & TODO_F.UPDATE, canDesc = f & TODO_F.DESC, canDel = f & TODO_F.DELETE;
+  const canDue = !!(f & TODO_F.DUE) && !!list.expiry;
+  const st = { summary: item.summary, description: item.description || "", due: (item.due || "").slice(0, 10) };
+  let armed = false;
+  const quick = [["Today", 0], ["Tomorrow", 1], ["3 days", 3], ["1 week", 7], ["2 weeks", 14], ["1 month", 30]];
+  const sheet = openSheet({
+    render() {
+      const n = daysLeft(st.due);
+      return `<div class="tt">${list.icon || "📝"} Edit item</div>
+        <input class="tx" name="summary" value="${esc(st.summary)}" placeholder="Item" autocomplete="off" autocapitalize="sentences" enterkeyhint="done" ${canName ? "" : "disabled"}>
+        ${canDesc ? `<div class="lb">Notes</div><textarea class="tx" name="description" rows="2" placeholder="Anything to remember about it">${esc(st.description)}</textarea>` : ""}
+        ${canDue ? `<div class="lb">Expires</div>
+          <div class="dline"><input class="tx" type="date" name="due" value="${esc(st.due)}" style="color-scheme:${Theme.mode === "light" ? "light" : "dark"}"><b class="${n != null && n < 0 ? "bad" : ""}">${st.due ? esc(fmtExpiry(st.due)) : "No date"}</b></div>
+          <div class="chips" style="margin-top:8px">${quick.map(([l, d]) => `<button data-action="quick" data-days="${d}">${l}</button>`).join("")}${st.due ? `<button data-action="nodue">No date</button>` : ""}</div>` : ""}
+        <div class="acts">${canDel ? `<button class="del ${armed ? "arm" : ""}" data-action="delete">${armed ? "Tap again to delete" : "Delete"}</button>` : ""}
+          <button data-action="cancel">Cancel</button><button class="go" data-action="save" ${st.summary.trim() ? "" : "disabled"}>Save</button></div>`;
+    },
+    onInput(t, s) {
+      if (t.name in st) {
+        st[t.name] = t.value;
+        s.update();
+      }
+    },
+    onAction(a, d, s) {
+      if (a !== "delete") armed = false;
+      if (a === "quick") {
+        st.due = isoDay(addDays(new Date(), Number(d.days)));
+        s.update();
+        const inp = s.root.querySelector("input[name=due]");
+        if (inp) inp.value = st.due;
+        return;
+      }
+      if (a === "nodue") {
+        st.due = "";
+        s.update();
+        const inp = s.root.querySelector("input[name=due]");
+        if (inp) inp.value = "";
+        return;
+      }
+      if (a === "delete") {
+        if (!armed) armed = true;
+        else {
+          card._removeItem(entity, item.uid);
+          return s.close();
+        }
+      } else if (a === "save") {
+        const data = { item: item.uid };
+        const name = st.summary.trim();
+        if (!name) return;
+        if (canName && name !== item.summary) data.rename = name;
+        if (canDesc && st.description.trim() !== (item.description || "")) data.description = st.description.trim() || null;
+        if (canDue && st.due !== (item.due || "").slice(0, 10)) data.due_date = st.due || null;
+        if (Object.keys(data).length > 1) card._call("todo", "update_item", data, { entity_id: entity });
+        return s.close();
+      }
+      s.update();
+    },
+  });
+  return sheet;
+}
+
+/** New list, or a list's settings: name, emoji, expiry dates, its place in the row, delete. */
+function listEditor(card, list) {
+  const lists = card._lists();
+  const idx = list ? lists.findIndex((l) => l.entity_id === list.entity_id) : -1;
+  const canExpiry = list ? !!(todoFeatures(card._hass, list.entity_id) & TODO_F.DUE) : true;
+  const st = { title: list?.title || "", icon: list?.icon || "📝", expiry: !!list?.expiry, pos: idx };
+  const count = list ? (card._subs.items[list.entity_id] || []).length : 0;
+  let armed = false, busy = false;
+  const sheet = openSheet({
+    render() {
+      const emo = LIST_EMOJI.map((e) => `<button class="${st.icon === e ? "on" : ""}" data-action="emoji" data-key="${e}">${e}</button>`).join("");
+      const del = list && !list.protected
+        ? `<button class="del ${armed ? "arm" : ""}" data-action="delete">${armed ? `Delete ${esc(list.title)}${count ? ` and its ${count} item${count === 1 ? "" : "s"}` : ""}?` : "Delete list"}</button>`
+        : "";
+      return `<div class="tt">${st.icon} ${list ? "List settings" : "New list"}</div>
+        <input class="tx" name="title" value="${esc(st.title)}" placeholder="List name (e.g. Fridge)" maxlength="40" autocomplete="off" autocapitalize="sentences" enterkeyhint="done">
+        <div class="lb">Icon</div><div class="emo">${emo}</div>
+        ${canExpiry ? `<div class="lb">Expiry dates</div><div class="seg3"><button class="${st.expiry ? "" : "on"}" data-action="expiry" data-on="0">Off</button><button class="${st.expiry ? "on" : ""}" data-action="expiry" data-on="1">⏳ Track expiry</button></div>
+          <div class="hint">Items get an expiry date and turn red once it's passed.</div>` : `<div class="hint">This list can't store dates, so it can't track expiry.</div>`}
+        ${list && lists.length > 1 ? `<div class="lb">Place in the row</div><div class="step"><button data-action="pos" data-key="-1" ${st.pos <= 0 ? "disabled" : ""}>◀</button><b>${st.pos + 1} of ${lists.length}</b><button data-action="pos" data-key="1" ${st.pos >= lists.length - 1 ? "disabled" : ""}>▶</button></div>` : ""}
+        ${list?.protected ? `<div class="hint">The display uses this list, so it can't be deleted here.</div>` : ""}
+        <div class="acts">${del}<button data-action="cancel">Cancel</button><button class="go" data-action="save" ${st.title.trim() && !busy ? "" : "disabled"}>${list ? "Save" : "Add list"}</button></div>`;
+    },
+    onInput(t, s) {
+      if (t.name === "title") {
+        st.title = t.value;
+        s.update();
+      }
+    },
+    onAction(a, d, s) {
+      if (busy) return;
+      if (a !== "delete") armed = false;
+      if (a === "emoji") st.icon = d.key;
+      else if (a === "expiry") st.expiry = d.on === "1";
+      else if (a === "pos") st.pos = Math.max(0, Math.min(lists.length - 1, st.pos + Number(d.key)));
+      else if (a === "delete") {
+        if (!armed) armed = true;
+        else {
+          busy = true;
+          card._call("kitchen_lists", "delete", { entity_id: list.entity_id }).then(() => {
+            toast(`Deleted ${list.title}`);
+            s.close();
+          }, () => {
+            busy = false;
+            s.update();
+          });
+        }
+      } else if (a === "save") {
+        const title = st.title.trim();
+        if (!title) return;
+        busy = true;
+        let p;
+        if (!list) {
+          p = card._call("kitchen_lists", "create", { title, icon: st.icon, expiry: st.expiry }, undefined, true).then((res) => {
+            const e = res?.response?.entity_id;
+            if (e) card._pick(e);
+          });
+        } else {
+          const data = { entity_id: list.entity_id };
+          if (title !== list.title) data.title = title;
+          if (st.icon !== list.icon) data.icon = st.icon;
+          if (canExpiry && st.expiry !== !!list.expiry) data.expiry = st.expiry;
+          if (st.pos !== idx) data.position = st.pos;
+          p = Object.keys(data).length > 1 ? card._call("kitchen_lists", "update", data) : Promise.resolve();
+        }
+        p.then(() => s.close(), () => {
+          busy = false;
+          s.update();
+        });
+      }
+      s.update();
+    },
+  });
+  if (!list) setTimeout(() => sheet.root.querySelector("input.tx")?.focus(), 250);
+  return sheet;
+}
+
 /**
  * The Lists tab, like the Apolosign To-dos screen: a chip per list with its
- * count, an add box, big tap-to-check rows, and a Completed section with
- * Clear. Lists that don't exist in HA yet are named in the footer.
+ * count, an add box, big rows (the circle checks one off, the text opens it
+ * to edit), a Reorder mode with arrows, and a Completed section with Clear.
+ * The lists and their settings come from sensor.kitchen_lists (the
+ * kitchen_lists integration); "+ List" and "Edit list" go through its
+ * services, since the tablet's user can't make lists in HA itself.
  * The add box is built once (re-rendering it would eat what's being typed);
  * only the chips and rows are redrawn.
  */
@@ -3290,17 +3488,83 @@ class ListsCard extends KitchenCard {
     this._subs.close();
   }
   shouldRender(h) {
-    this._subs.sync(h, (this.config.lists || []).map((l) => l.entity));
+    this._subs.sync(h, this._lists(h).map((l) => l.entity_id));
     return true;
+  }
+  /** The tab's lists, in order: sensor.kitchen_lists, or a `lists:` config without it. */
+  _lists(h = this._hass) {
+    const src = h?.states[this.config.entity || LISTS_ENTITY];
+    if (src) return src.attributes.lists || [];
+    return (this.config.lists || []).map((l) => ({ entity_id: l.entity, title: l.title, icon: l.icon, expiry: !!l.expiry, protected: true }));
+  }
+  get _manage() {
+    return !!this._hass?.states[this.config.entity || LISTS_ENTITY];
+  }
+  _pick(e) {
+    // A list just made shows up in hass a moment after the service returns.
+    this._want = { e, until: Date.now() + 10000 };
+    this._cur = e;
+    this._showDone = false;
+    this._moving = false;
+    this._queue(true);
+  }
+  /** A service call; a refusal or failure shows as a toast and rejects. */
+  _call(domain, service, data, target, response) {
+    return this._hass.callService(domain, service, data, target, false, !!response).catch((err) => {
+      toast(err?.message || String(err));
+      throw err;
+    });
+  }
+  _removeItem(e, uid) {
+    const l = this._subs.items[e];
+    if (l) this._subs.items[e] = l.filter((i) => i.uid !== uid);
+    this._queue(true);
+    this._call("todo", "remove_item", { item: uid }, { entity_id: e });
+  }
+  /** Move an open item one place up or down (HA's todo/item/move puts it after previous_uid). */
+  _move(uid, dir) {
+    const e = this._cur;
+    const all = this._subs.items[e] || [];
+    const open = all.filter((i) => i.status === "needs_action");
+    const i = open.findIndex((x) => x.uid === uid);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= open.length) return;
+    const prev = dir < 0 ? open[i - 2]?.uid : open[i + 1].uid;
+    // Show it moved now; the subscription confirms it a moment later.
+    const re = [...open];
+    re.splice(j, 0, re.splice(i, 1)[0]);
+    this._subs.items[e] = [...re, ...all.filter((x) => x.status !== "needs_action")];
+    this._lastMoved = uid;
+    this._queue(true);
+    const msg = { type: "todo/item/move", entity_id: e, uid };
+    if (prev) msg.previous_uid = prev;
+    this._hass.callWS(msg).catch((err) => toast(err?.message || "Couldn't move that."));
   }
   action(a, d, ev, el) {
     const e = this._cur;
     if (a === "list") {
-      this._cur = d.entity;
-      this._showDone = false;
+      if (d.entity !== e) this._pick(d.entity);
+      return;
+    } else if (a === "new-list") {
+      return listEditor(this, null);
+    } else if (a === "edit-list") {
+      const l = this._lists().find((x) => x.entity_id === e);
+      if (l) listEditor(this, l);
+      return;
+    } else if (a === "edit") {
+      const it = (this._subs.items[e] || []).find((x) => x.uid === d.uid);
+      const l = this._lists().find((x) => x.entity_id === e);
+      if (it && l && !this._moving) itemEditor(this, e, it, l);
+      return;
+    } else if (a === "up" || a === "down") {
+      return this._move(d.uid, a === "up" ? -1 : 1);
+    } else if (a === "reorder") {
+      this._moving = !this._moving;
+      this._lastMoved = null;
     } else if (a === "done" || a === "undo") {
       // Let the row slide out before the list redraws without it.
-      el?.classList.add("leaving");
+      const row = el?.closest(".li");
+      row?.classList.add("leaving");
       if (a === "done" && el) FX.burst(...FX.at(el.querySelector(".c") || el), "#4cd17a", 8);
       setTimeout(() => this._hass.callService("todo", "update_item", { item: d.uid, status: a === "done" ? "completed" : "needs_action" }, { entity_id: e }), 260);
       return;
@@ -3312,16 +3576,22 @@ class ListsCard extends KitchenCard {
   }
   _build() {
     this.shadowRoot.innerHTML = `<style>${BASE_CSS}${this.css}</style><div class="card"><div class="tabs"></div>
-      <form class="add"><input enterkeyhint="done" autocomplete="off" autocapitalize="sentences"><button type="submit">Add</button></form>
+      <form class="add"><input class="what" enterkeyhint="done" autocomplete="off" autocapitalize="sentences"><input class="due" type="date" aria-label="Expires"><button type="submit">Add</button></form>
       <div class="items"></div><div class="foot"></div></div>`;
     const f = this.shadowRoot.querySelector("form");
+    const due = f.querySelector("input.due");
+    due.addEventListener("input", () => due.classList.toggle("set", !!due.value));
     f.addEventListener("submit", (ev) => {
       ev.preventDefault();
-      const inp = f.querySelector("input");
+      const inp = f.querySelector("input.what");
       const v = inp.value.trim();
       if (!v || !this._cur) return;
-      this._hass.callService("todo", "add_item", { item: v }, { entity_id: this._cur });
+      const data = { item: v };
+      if (due.style.display !== "none" && due.value) data.due_date = due.value;
+      this._call("todo", "add_item", data, { entity_id: this._cur });
       inp.value = "";
+      due.value = "";
+      due.classList.remove("set");
     });
     this._built = true;
   }
@@ -3334,40 +3604,68 @@ class ListsCard extends KitchenCard {
   }
   paint() {
     if (!this._built) this._build();
-    const all = (this.config.lists || []).map((l) => ({ ...l, st: this._hass.states[l.entity] }));
+    const all = this._lists().map((l) => ({ ...l, st: this._hass.states[l.entity_id] }));
     const lists = all.filter((l) => l.st);
     const missing = all.filter((l) => !l.st);
     const form = this.shadowRoot.querySelector("form");
-    this._set(".foot", missing.length ? `Not set up yet: ${missing.map((l) => esc(l.title)).join(", ")}. Add each as a Local To-do list in Home Assistant.` : "");
+    const manage = this._manage;
+    this._set(".foot", missing.length ? `Not set up yet: ${missing.map((l) => esc(l.title)).join(", ")}.` : "");
+    const newChip = manage ? `<button class="new" data-action="new-list">+ List</button>` : "";
     if (!lists.length) {
       form.style.display = "none";
-      this._set(".tabs", "");
-      this._set(".items", `<div class="empty">No lists yet.</div>`);
+      this._set(".tabs", newChip);
+      this._set(".items", `<div class="empty">No lists yet.${manage ? " Tap + List to make one." : ""}</div>`);
       return;
     }
     form.style.display = "";
-    if (!lists.some((l) => l.entity === this._cur)) this._cur = lists[0].entity;
-    const cur = lists.find((l) => l.entity === this._cur);
-    form.querySelector("input").placeholder = `Add to ${cur.title}…`;
+    const want = this._want;
+    if (want && (lists.some((l) => l.entity_id === want.e) || Date.now() > want.until)) {
+      if (Date.now() <= want.until) this._cur = want.e;
+      this._want = null;
+    }
+    if (!lists.some((l) => l.entity_id === this._cur)) this._cur = lists[0].entity_id;
+    const cur = lists.find((l) => l.entity_id === this._cur);
+    const f = todoFeatures(this._hass, cur.entity_id);
+    const expiry = !!cur.expiry && !!(f & TODO_F.DUE);
+    form.querySelector("input.what").placeholder = `Add to ${cur.title}…`;
+    const dueIn = form.querySelector("input.due");
+    dueIn.style.display = expiry ? "" : "none";
+    dueIn.style.colorScheme = Theme.mode === "light" ? "light" : "dark";
+    const now = new Date();
     this._set(".tabs", lists
       .map((l) => {
-        const n = (this._subs.items[l.entity] || []).filter((i) => i.status === "needs_action").length;
-        return `<button class="${l.entity === this._cur ? "on" : ""}" data-action="list" data-entity="${l.entity}">${l.icon || ""} ${esc(l.title)}${n ? `<b>${n}</b>` : ""}</button>`;
+        const its = this._subs.items[l.entity_id] || [];
+        const open = its.filter((i) => i.status === "needs_action");
+        const x = l.expiry ? open.filter((i) => i.due && daysLeft(i.due, now) < 0).length : 0;
+        return `<button class="${l.entity_id === this._cur ? "on" : ""}" data-action="list" data-entity="${l.entity_id}">${esc(l.icon || "")} ${esc(l.title)}${open.length ? `<b>${open.length}</b>` : ""}${x ? `<em>${x}</em>` : ""}</button>`;
       })
-      .join(""));
+      .join("") + newChip);
     const items = this._subs.items[this._cur];
     if (!items) return this._set(".items", `<div class="empty">Loading…</div>`);
     const open = items.filter((i) => i.status === "needs_action");
     const done = items.filter((i) => i.status === "completed");
+    const canMove = !!(f & TODO_F.MOVE) && open.length > 1;
+    if (!canMove) this._moving = false;
+    const moving = this._moving;
     this._seen = this._seen || {};
     const seen = this._seen[this._cur];
     this._seen[this._cur] = new Set(items.map((i) => i.uid));
-    const row = (i, isDone) => {
-      const sub = [i.description, fmtDue(i.due)].filter(Boolean).map(esc).join(" · ");
-      return `<button class="li ${isDone ? "done" : ""} ${seen && !seen.has(i.uid) ? "enter" : ""}" data-action="${isDone ? "undo" : "done"}" data-uid="${esc(i.uid)}"><div class="c">${isDone ? "✓" : ""}</div><div class="t">${esc(i.summary)}${sub && !isDone ? `<i>${sub}</i>` : ""}</div></button>`;
+    const row = (i, isDone, n) => {
+      const left = expiry && i.due ? daysLeft(i.due, now) : null;
+      const when = expiry ? fmtExpiry(i.due, now) : fmtDue(i.due);
+      const sub = [i.description, when].filter(Boolean).map(esc).join(" · ");
+      const cls = [isDone ? "done" : "", seen && !seen.has(i.uid) ? "enter" : "", !isDone && left != null ? (left < 0 ? "exp" : left <= 1 ? "soon" : "") : "",
+        moving && this._lastMoved === i.uid ? "moving" : ""].filter(Boolean).join(" ");
+      const arrows = moving && !isDone
+        ? `<button class="mv" data-action="up" data-uid="${esc(i.uid)}" aria-label="Move up" ${n === 0 ? "disabled" : ""}>▲</button><button class="mv" data-action="down" data-uid="${esc(i.uid)}" aria-label="Move down" ${n === open.length - 1 ? "disabled" : ""}>▼</button>`
+        : "";
+      return `<div class="li ${cls}"><button class="ck" data-action="${isDone ? "undo" : "done"}" data-uid="${esc(i.uid)}" aria-label="${isDone ? "Not done" : "Done"}"><div class="c">${isDone ? "✓" : ""}</div></button><button class="t" data-action="edit" data-uid="${esc(i.uid)}">${esc(i.summary)}${sub && !isDone ? `<i>${sub}</i>` : ""}</button>${arrows}</div>`;
     };
-    let html = open.length ? open.map((i) => row(i, false)).join("") : `<div class="empty">Nothing on ${esc(cur.title)}. Add something above.</div>`;
-    if (done.length) {
+    const tools = [canMove ? `<button class="${moving ? "on" : ""}" data-action="reorder">${moving ? "Done" : "↕ Reorder"}</button>` : "", manage ? `<button data-action="edit-list">✎ Edit list</button>` : ""].join("");
+    const hint = moving ? "Use the arrows to move items" : expiry ? "Tap an item to change it or its expiry date" : "Tap an item to change it";
+    let html = `<div class="bar"><span>${open.length ? hint : ""}</span>${tools}</div>`;
+    html += open.length ? open.map((i, n) => row(i, false, n)).join("") : `<div class="empty">Nothing on ${esc(cur.title)}. Add something above.</div>`;
+    if (done.length && !moving) {
       html += `<div class="ch"><button data-action="show-done">Completed (${done.length}) ${this._showDone ? "▴" : "▾"}</button><button data-action="clear">Clear</button></div>`;
       if (this._showDone) html += done.map((i) => row(i, true)).join("");
     }
@@ -4483,7 +4781,7 @@ const CARDS = {
   "kitchen-meals-card": [MealsCard, "Kitchen meals", "The next few dinners from a meal plan calendar"],
   "kitchen-chips-card": [ChipsCard, "Kitchen status chips", "A row of house status tiles"],
   "kitchen-calendar-card": [CalendarCard, "Kitchen calendar", "Family, week, month and list views with a person filter"],
-  "kitchen-lists-card": [ListsCard, "Kitchen lists", "Several to-do lists with add, check off and clear"],
+  "kitchen-lists-card": [ListsCard, "Kitchen lists", "The Lists tab: lists made, edited and deleted on the display, items with edit, reorder and expiry dates"],
   "kitchen-notes-card": [NotesCard, "Kitchen notes", "Sticky notes from a to-do list"],
   "kitchen-meal-week-card": [MealWeekCard, "Kitchen meal week", "This week's meal plan, a column per meal"],
   "kitchen-pages-card": [PagesCard, "Kitchen pages", "The whole display: header, tabs and every tab's cards, switched instantly"],
