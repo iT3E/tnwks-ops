@@ -45,9 +45,10 @@
 #   todo.kitchen_rewards, todo.kitchen_stars_log
 #                         the rewards and the log of stars spent, taken away
 #                         or given by hand (Local To-do lists, UI-owned)
-#   todo.things_to_do, todo.someday, todo.notes
-#                         extra Local To-do lists (UI-owned); todo.shopping_list
-#                         (Groceries) is the Shopping List integration
+#   todo.groceries, todo.things_to_do, todo.someday, todo.notes
+#                         Local To-do lists (UI-owned). Groceries moved off the
+#                         Shopping List integration (todo.shopping_list, kept
+#                         but off the tab) on 2026-11-08 so items take dates
 #   sensor.kitchen_lists  the Lists tab's lists and their settings (the git-owned
 #                         kitchen_lists integration; the lists themselves and
 #                         their settings are UI-owned, made on the display)
@@ -96,7 +97,7 @@ views:
                     tap_page: meals
                     mealie: &mealie { url: "https://recipes.tnwks.us", embed: !env_var HASS_MEALIE_EMBED_URL, group: home, entry: 01M69Q1P5QTVNB7W0BJF1KDXAM }
                   - type: custom:kitchen-todo-card
-                    entity: todo.shopping_list
+                    entity: todo.groceries
                     title: Groceries
                     max: 4
                     tap_page: lists

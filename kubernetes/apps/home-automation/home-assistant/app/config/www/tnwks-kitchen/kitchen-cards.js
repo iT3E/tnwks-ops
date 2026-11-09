@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.13.1";
+const VERSION = "1.13.2";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -2448,7 +2448,7 @@ class HeaderCard extends KitchenCard {
       const n = this._events.filter((e) => e.allDay || e.end > now).length;
       if (n) parts.push(`${n} ${n === this._events.length ? "" : "more "}event${n === 1 ? "" : "s"} today`);
     }
-    const todo = this._hass.states[this.config.list || "todo.shopping_list"];
+    const todo = this._hass.states[this.config.list || "todo.groceries"];
     const k = Number(todo?.state);
     if (k > 0) parts.push(`${k} to buy`);
     return `<div class="greet">${hi}${parts.length ? ` <span>${parts.join(" · ")}</span>` : ""}</div>`;
@@ -3334,7 +3334,11 @@ function fmtExpiry(s, now = new Date()) {
 function itemEditor(card, entity, item, list) {
   const f = todoFeatures(card._hass, entity);
   const canName = f & TODO_F.UPDATE, canDesc = f & TODO_F.DESC, canDel = f & TODO_F.DELETE;
-  const canDue = !!(f & TODO_F.DUE) && !!list.expiry;
+  // Any list that can store dates gets the date field; on an expiry list it's
+  // the expiry date, elsewhere a due date.
+  const canDue = !!(f & TODO_F.DUE);
+  const exp = !!list.expiry;
+  const fmtWhen = (d) => (exp ? fmtExpiry(d) : fmtDue(d));
   const st = { summary: item.summary, description: item.description || "", due: (item.due || "").slice(0, 10) };
   let armed = false;
   const quick = [["Today", 0], ["Tomorrow", 1], ["3 days", 3], ["1 week", 7], ["2 weeks", 14], ["1 month", 30]];
@@ -3344,8 +3348,8 @@ function itemEditor(card, entity, item, list) {
       return `<div class="tt">${list.icon || "📝"} Edit item</div>
         <input class="tx" name="summary" value="${esc(st.summary)}" placeholder="Item" autocomplete="off" autocapitalize="sentences" enterkeyhint="done" ${canName ? "" : "disabled"}>
         ${canDesc ? `<div class="lb">Notes</div><textarea class="tx" name="description" rows="2" placeholder="Anything to remember about it">${esc(st.description)}</textarea>` : ""}
-        ${canDue ? `<div class="lb">Expires</div>
-          <div class="dline"><input class="tx" type="date" name="due" value="${esc(st.due)}" style="color-scheme:${Theme.mode === "light" ? "light" : "dark"}"><b class="${n != null && n < 0 ? "bad" : ""}">${st.due ? esc(fmtExpiry(st.due)) : "No date"}</b></div>
+        ${canDue ? `<div class="lb">${exp ? "Expires" : "Due date"}</div>
+          <div class="dline"><input class="tx" type="date" name="due" value="${esc(st.due)}" style="color-scheme:${Theme.mode === "light" ? "light" : "dark"}"><b class="${exp && n != null && n < 0 ? "bad" : ""}">${st.due ? esc(fmtWhen(st.due)) : "No date"}</b></div>
           <div class="chips" style="margin-top:8px">${quick.map(([l, d]) => `<button data-action="quick" data-days="${d}">${l}</button>`).join("")}${st.due ? `<button data-action="nodue">No date</button>` : ""}</div>` : ""}
         <div class="acts">${canDel ? `<button class="del ${armed ? "arm" : ""}" data-action="delete">${armed ? "Tap again to delete" : "Delete"}</button>` : ""}
           <button data-action="cancel">Cancel</button><button class="go" data-action="save" ${st.summary.trim() ? "" : "disabled"}>Save</button></div>`;
@@ -3670,7 +3674,7 @@ class ListsCard extends KitchenCard {
       return `<div class="li ${cls}"><button class="ck" data-action="${isDone ? "undo" : "done"}" data-uid="${esc(i.uid)}" aria-label="${isDone ? "Not done" : "Done"}"><div class="c">${isDone ? "✓" : ""}</div></button><button class="t" data-action="edit" data-uid="${esc(i.uid)}">${esc(i.summary)}${sub && !isDone ? `<i>${sub}</i>` : ""}</button>${arrows}</div>`;
     };
     const tools = [canMove ? `<button class="${moving ? "on" : ""}" data-action="reorder">${moving ? "Done" : "↕ Reorder"}</button>` : "", manage ? `<button data-action="edit-list">✎ Edit list</button>` : ""].join("");
-    const hint = moving ? "Use the arrows to move items" : expiry ? "Tap an item to change it or its expiry date" : "Tap an item to change it";
+    const hint = moving ? "Use the arrows to move items" : expiry ? "Tap an item to change it or its expiry date" : f & TODO_F.DUE ? "Tap an item to change it or add a date" : "Tap an item to change it";
     let html = `<div class="bar"><span>${open.length ? hint : ""}</span>${tools}</div>`;
     html += open.length ? open.map((i, n) => row(i, false, n)).join("") : `<div class="empty">Nothing on ${esc(cur.title)}. Add something above.</div>`;
     if (done.length && !moving) {
