@@ -13,6 +13,9 @@
 # out. The cookie is SameSite=None + Partitioned, the attributes Mealie itself
 # uses inside a frame, so its own logout can clear it.
 #
+# Flux substitutes dollar-brace variables in this file (postBuild), so the
+# snippet's one nginx variable in braces is escaped with a double dollar.
+#
 # Internal ingress only. Every client reaches it as the same SNAT address, so
 # instead of an allowlist the password and OIDC logins are refused here: a
 # request without a valid token can't sign in on this host.
@@ -27,7 +30,7 @@ metadata:
       if ($uri ~* "^/(login|api/auth/(token|oauth|reverse-proxy))") { return 403; }
       set $kiosk_login "";
       if ($uri = "/kiosk-login") { set $kiosk_login "1"; }
-      if ($arg_t ~ "^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$") { set $kiosk_login "${kiosk_login}t"; }
+      if ($arg_t ~ "^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$") { set $kiosk_login "$${kiosk_login}t"; }
       set $kiosk_next "/g/home";
       if ($arg_next ~ "^(/[A-Za-z0-9_-][A-Za-z0-9/_-]*)$") { set $kiosk_next $1; }
       if ($kiosk_login = "1") { return 400; }
