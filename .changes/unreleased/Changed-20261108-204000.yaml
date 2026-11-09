@@ -1,3 +1,0 @@
-kind: Changed
-body: Groceries on the wall display is a Local To-do list, so its items take notes and expiry dates, and every list that can store dates offers a date in the item editor. The old Shopping List integration list stays in HA but leaves the Lists tab.
-time: 2026-11-08T20:40:00.000000000-08:00

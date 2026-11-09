@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.72.0 - 2026-11-09
+
+### Changed
+
+* Groceries on the wall display is a Local To-do list, so its items take notes and expiry dates, and every list that can store dates offers a date in the item editor. The old Shopping List integration list stays in HA but leaves the Lists tab.
+
 ## v2.71.1 - 2026-11-09
 
 ### Fixed
