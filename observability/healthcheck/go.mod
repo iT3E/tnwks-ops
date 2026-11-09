@@ -2,7 +2,7 @@ module observability-healthcheck
 
 go 1.23.0
 
-require cel.dev/cel-go v0.32.0
+require cel.dev/cel-go v0.33.2
 
 require (
 	cel.dev/expr v0.25.1 // indirect
