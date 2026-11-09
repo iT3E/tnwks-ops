@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.71.1 - 2026-11-09
+
+### Fixed
+
+* The wall display's Lists and Notes buttons no longer balloon when touched (rows stretched while scrolling, Add grew huge), and tapping the open list's tab opens its settings.
+
 ## v2.71.0 - 2026-11-09
 
 ### Added
