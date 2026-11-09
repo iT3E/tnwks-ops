@@ -718,8 +718,8 @@ edit the registries. These go through our integration
 `.delete` and `.restore` are open to any user, and `sensor.kitchen_lists`
 (attribute `lists`, in order) is what the card reads. The settings are kept in
 `.storage/kitchen_lists`, so they're UI-owned like the lists. The first start
-seeded Groceries, Things to do and Someday. Groceries, Notes, the routines
-and the rewards lists can't be deleted. A deleted list's items are kept (the
+seeded Groceries, Things to do and Someday. Groceries, Notes, the routines,
+rewards and screensaver albums lists can't be deleted. A deleted list's items are kept (the
 last 10 lists), and `kitchen_lists.restore` (optionally with its `title`)
 brings one back as a new Local To-do list. Groceries is the Shopping List
 integration, which has no dates or notes, so it can't track expiry.

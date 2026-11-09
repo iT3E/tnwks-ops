@@ -26,6 +26,7 @@ PROTECTED = frozenset(
         "todo.kitchen_routines",
         "todo.kitchen_rewards",
         "todo.kitchen_stars_log",
+        "todo.screensaver_albums",
     }
 )
 
