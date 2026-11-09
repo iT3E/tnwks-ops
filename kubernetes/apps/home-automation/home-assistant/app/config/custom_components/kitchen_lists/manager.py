@@ -226,7 +226,7 @@ class KitchenLists:
         self._changed()
 
     async def async_delete(self, entity_id: str) -> None:
-        """Delete a Local To-do list and its items; keep a copy for restore."""
+        """Delete a Local To-do list; if it had items, keep a copy for restore."""
         if entity_id in PROTECTED:
             raise ServiceValidationError("That list is part of the display and can't be deleted.")
         ent = er.async_get(self.hass).async_get(entity_id)
@@ -237,17 +237,19 @@ class KitchenLists:
             items = [_item_dict(i) for i in self._entity(entity_id).todo_items or []]
         except ServiceValidationError:
             items = []
-        self.deleted.append(
-            {
-                "entity_id": entity_id,
-                "title": meta["title"],
-                "icon": meta.get("icon") or DEFAULT_ICON,
-                "expiry": bool(meta.get("expiry")),
-                "deleted_at": dt_util.utcnow().isoformat(),
-                "items": items,
-            }
-        )
-        self.deleted = self.deleted[-KEEP_DELETED:]
+        # An empty list has nothing worth bringing back.
+        if items:
+            self.deleted.append(
+                {
+                    "entity_id": entity_id,
+                    "title": meta["title"],
+                    "icon": meta.get("icon") or DEFAULT_ICON,
+                    "expiry": bool(meta.get("expiry")),
+                    "deleted_at": dt_util.utcnow().isoformat(),
+                    "items": items,
+                }
+            )
+            self.deleted = self.deleted[-KEEP_DELETED:]
         await self.hass.config_entries.async_remove(ent.config_entry_id)
         # The registry listener drops it too; this covers a list not on the tab.
         self.lists = [x for x in self.lists if x["entity_id"] != entity_id]

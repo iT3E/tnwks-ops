@@ -146,6 +146,14 @@ class KitchenListsTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ServiceValidationError, "no deleted list"):
             await self.call("restore", {})
 
+        # An empty list leaves nothing to restore.
+        await self.call("create", {"title": "Empty one"})
+        await self.hass.async_block_till_done()
+        await self.call("delete", {"entity_id": "todo.empty_one"})
+        await self.hass.async_block_till_done()
+        with self.assertRaisesRegex(ServiceValidationError, "no deleted list"):
+            await self.call("restore", {})
+
     async def test_expiry_needs_dates_and_settings_persist(self):
         # A to-do list that isn't on the tab yet is added by update.
         await self.call("create", {"title": "Pantry"})

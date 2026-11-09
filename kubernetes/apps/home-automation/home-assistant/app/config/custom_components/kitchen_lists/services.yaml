@@ -50,7 +50,7 @@ update:
           mode: box
 delete:
   name: Delete list
-  description: Delete a Local To-do list and its items. A copy is kept for restore; the display's own lists can't be deleted.
+  description: Delete a Local To-do list and its items. A list with items is kept for restore; the display's own lists can't be deleted.
   fields:
     entity_id:
       name: List
