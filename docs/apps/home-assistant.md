@@ -169,6 +169,11 @@ statistic appears after the first nonzero export reading. Use a range that
 includes the utility's published dates, such as Week. Keep Sense in **Home
 consumption** and both SolarEdge statistics in **Solar production**.
 
+Some non-AMI accounts return missing-data rows without any kWh values. Upstream
+can record these as zero; those statistics must not be connected as measured
+grid flows. Leave the integration disabled through Devices & services when
+that happens, keeping the saved login for a future upstream fix.
+
 ### Pacific Power solar credit bank
 
 Upstream does not expose the remaining banked-kWh balance. The small local
@@ -184,13 +189,45 @@ The existing **Pacific Power** credit device keeps its three sensors:
 - **Credit expiry billing month**: `YYYY-MM`, because expiry is a billing
   month rather than an exact day.
 
-Only the balance, dates and a hashed account fingerprint are saved on the
+Only energy quantities, dates and a hashed account fingerprint are saved on the
 private HA volume. The uploaded PDF is deleted after reading, including on
 errors. A missing or ambiguous excess-power note is unknown, never an assumed
 zero. Older statements and different accounts cannot replace the saved
 balance. Expiry does not automatically zero the bank: a new statement must
 confirm the result. The balance reflects the imported bill, not subsequent
 unbilled activity, and has no grid-energy-counter state class.
+
+The **Home → Energy** tab has a **Pacific Power solar credits** card showing
+the statement balance, statement date and expiry billing month. When the PDF
+has an unambiguous import/export meter pair, it also shows that billing
+period's imported and exported kWh and their net difference. The parser checks
+the register differences against each meter multiplier and the printed kWh;
+it retains only quantities and period dates, never meter identifiers. Missing
+or inconsistent optional meter rows stay unknown while the confirmed credit
+balance remains usable. Reimport an existing PDF through **Reconfigure** to
+populate this extra detail. The built-in `/energy` panel has a generated layout
+with no supported slot for an additional credit card; its original cards and
+sources are unchanged.
+
+Other routes to a running balance are:
+
+- **Meter registers:** [Pacific Power's guide](https://www.pacificpower.net/content/dam/pcorp/documents/en/pacificpower/savings-energy-choices/customer-generation/PP_Reading_Your_Customer_Generation_Meter.pdf)
+  identifies register 14 as imported energy and 24 as exported energy. Compare
+  new readings with the corresponding readings at the statement boundary,
+  applying the meter's multiplier and units. Net export since that boundary
+  is exports minus imports; it can estimate the unbilled change to the credit
+  bank before expiry or other billing adjustments. Register readings and
+  multipliers must be verified for the installed meter before automating this.
+- **Solar and load measurements:** without a battery, net export equals solar
+  generation minus total house consumption over exactly the same interval.
+  This does not recover gross imports and exports. Sense must measure total
+  load for this equation: mains clamps without solar monitoring may instead
+  see the net grid flow. [Sense solar monitoring](https://help.sense.com/hc/en-us/articles/46999508677011-Managing-Solar-Detection-On-Your-Sense-Home-Energy-Monitor)
+  supports solar sensors and newer algorithmic estimates. Neither absent
+  solar fields nor missing inverter samples may be treated as measured zero.
+
+The card deliberately shows billed figures until a complete, verified source
+supports a running estimate. A credit bank is not a cumulative export meter.
 
 Config-entry migration preserves the snapshot and sensor identities while
 removing the retired custom billing credentials and polling mode. Import and

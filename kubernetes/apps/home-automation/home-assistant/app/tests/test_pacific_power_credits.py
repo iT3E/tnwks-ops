@@ -37,6 +37,10 @@ NOTE = (
 TEXT = (
     "PACIFIC POWER\nBILLING DATE: Nov 12, 2032\nACCOUNT NUMBER: 12345678-001 0\n" + NOTE
 )
+METERING = (
+    "\n98765432M Oct 10, 2032 Nov 10, 2032 31 100 130 20.0 600 kwh\n"
+    "98765432S Oct 10, 2032 Nov 10, 2032 200 240 20.0 -800 kwh\n"
+)
 
 
 def pdf_bytes(text=TEXT):
@@ -102,8 +106,55 @@ class BillTests(unittest.TestCase):
         self.assertNotIn("12345678", str(value.as_dict()))
         self.assertEqual(
             set(value.as_dict()),
-            {"kwh", "statement_date", "expiry_month", "account_hash"},
+            {
+                "kwh",
+                "statement_date",
+                "expiry_month",
+                "account_hash",
+                "bill_import_kwh",
+                "bill_export_kwh",
+                "service_period_start",
+                "service_period_end",
+            },
         )
+
+    def test_billed_grid_flows_check_multiplier_and_keep_no_meter_id(self):
+        value = parse_bill_pdf(pdf_bytes(TEXT + METERING))
+        self.assertEqual(value.bill_import_kwh, 600)
+        self.assertEqual(value.bill_export_kwh, 800)
+        self.assertEqual(value.service_period_start, "2032-10-10")
+        self.assertEqual(value.service_period_end, "2032-11-10")
+        self.assertNotIn("98765432", str(value.as_dict()))
+        self.assertEqual(parse_bill_text(TEXT + METERING * 2), value)
+        self.assertEqual(
+            parse_bill_text(TEXT + METERING.replace("600 kwh", "600\nkwh")), value
+        )
+
+    def test_missing_or_invalid_metering_keeps_credit_but_no_invented_flows(self):
+        for table in (
+            "",
+            METERING.replace("600 kwh", "601 kwh"),
+            METERING.replace("-800", "800"),
+            METERING.replace(" 240 ", " 150 "),
+            METERING.replace("Nov 10, 2032 200", "Nov 09, 2032 200"),
+            METERING.replace("Nov 10, 2032", "Dec 10, 2032"),
+            METERING + METERING.replace("-800", "-900"),
+            METERING + METERING.replace("98765432", "98765433"),
+            METERING.replace("98765432S", "98765433S"),
+        ):
+            with self.subTest(table=table):
+                value = parse_bill_text(TEXT + table)
+                self.assertEqual(value.kwh, 2450.5)
+                self.assertIsNone(value.bill_import_kwh)
+                self.assertIsNone(value.bill_export_kwh)
+
+    def test_explicit_zero_export_and_old_snapshot_compatibility(self):
+        value = parse_bill_text(TEXT + METERING.replace("240 20.0 -800", "200 20.0 -0"))
+        self.assertEqual(value.bill_export_kwh, 0)
+        from custom_components.pacific_power_credits.bill import CreditBalance
+
+        old = CreditBalance(100, "2032-11-12", "2033-03", "example-hash")
+        self.assertIsNone(old.bill_import_kwh)
 
     def test_pdf_text_extraction(self):
         self.assertEqual(parse_bill_pdf(pdf_bytes()), parse_bill_text(TEXT))
@@ -317,7 +368,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(result["step_id"], "bill")
         file_id = self.upload(
-            TEXT.replace("Nov 12", "Dec 12").replace("2,450.5", "1500")
+            TEXT.replace("Nov 12", "Dec 12").replace("2,450.5", "1500") + METERING
         )
         result = await self.hass.config_entries.flow.async_configure(
             result["flow_id"], {"bill_pdf": file_id}
@@ -325,6 +376,12 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["reason"], "reconfigure_successful")
         await self.hass.async_block_till_done()
         self.assertEqual(self.hass.states.get(entity_id).state, "1500.0")
+        self.assertEqual(
+            self.hass.states.get(entity_id).attributes["bill_import_kwh"], 600
+        )
+        self.assertEqual(
+            self.hass.states.get(entity_id).attributes["bill_export_kwh"], 800
+        )
         self.assertFalse((self.directory / "uploads" / file_id).exists())
 
         result = await self.hass.config_entries.flow.async_init(
