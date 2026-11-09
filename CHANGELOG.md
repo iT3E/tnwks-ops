@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.70.0 - 2026-11-09
+
+### Added
+
+* Show statement-backed solar credits and checked billing-period grid energy on the Home energy tab.
+
 ## v2.69.1 - 2026-11-09
 
 ### Fixed
