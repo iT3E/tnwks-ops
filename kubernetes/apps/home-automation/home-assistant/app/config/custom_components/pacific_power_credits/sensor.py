@@ -75,4 +75,8 @@ class CreditSensor(CoordinatorEntity[CreditCoordinator], SensorEntity):
             "statement_date": self.coordinator.data.statement_date,
             "expiry_billing_month": self.coordinator.data.expiry_month,
             "source": self.coordinator.entry.data[CONF_MODE],
+            "bill_import_kwh": self.coordinator.data.bill_import_kwh,
+            "bill_export_kwh": self.coordinator.data.bill_export_kwh,
+            "service_period_start": self.coordinator.data.service_period_start,
+            "service_period_end": self.coordinator.data.service_period_end,
         }

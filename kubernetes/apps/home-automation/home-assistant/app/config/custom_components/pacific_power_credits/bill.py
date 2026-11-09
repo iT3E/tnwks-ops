@@ -29,6 +29,14 @@ _BILL_DATE = re.compile(
     r"BILLING\s+DATE\s*:\s*(\w+\s+\d{1,2},?\s+\d{4})", re.IGNORECASE
 )
 _ACCOUNT = re.compile(r"ACCOUNT\s+NUMBER\s*:\s*(\d+\s*-\s*\d+)", re.IGNORECASE)
+_NUMBER = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
+_DATE = r"[A-Za-z]+\s+\d{1,2},?\s+\d{4}"
+_METER_ROW = re.compile(
+    rf"(?<!\w)(?P<meter>\d+[A-Za-z]?)\s+(?P<start>{_DATE})\s+(?P<end>{_DATE})\s+"
+    rf"(?:\d{{1,3}}\s+)?(?P<previous>{_NUMBER})\s+(?P<current>{_NUMBER})\s+"
+    rf"(?P<multiplier>{_NUMBER})\s+(?P<usage>-?{_NUMBER})\s*kwh\b",
+    re.IGNORECASE,
+)
 
 
 class InvalidBill(ValueError):
@@ -43,10 +51,66 @@ class CreditBalance:
     statement_date: str
     expiry_month: str
     account_hash: str
+    bill_import_kwh: float | None = None
+    bill_export_kwh: float | None = None
+    service_period_start: str | None = None
+    service_period_end: str | None = None
 
     def as_dict(self) -> dict:
         """Return the snapshot persisted on the private HA volume."""
         return asdict(self)
+
+
+def _calendar_date(value: str) -> date:
+    value = re.sub(r"\s+", " ", value.replace(",", "")).strip()
+    for fmt in ("%b %d %Y", "%B %d %Y"):
+        try:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError("invalid_date")
+
+
+def _metering(text: str, statement: date) -> dict:
+    """Accept only one checked import/export pair; optional data may be unknown.
+
+    Use the signed, billed kWh amounts, checking the register delta and meter
+    multiplier. Never assume a register itself is kWh, or retain a meter ID.
+    """
+    rows = set()
+    for match in _METER_ROW.finditer(text):
+        try:
+            start, end = _calendar_date(match["start"]), _calendar_date(match["end"])
+        except ValueError:
+            return {}
+        previous, current, multiplier, usage = (
+            Decimal(match[key].replace(",", ""))
+            for key in ("previous", "current", "multiplier", "usage")
+        )
+        if (
+            not start < end <= statement
+            or multiplier <= 0
+            or current < previous
+            or (current - previous) * multiplier != abs(usage)
+        ):
+            return {}
+        rows.add((start, end, usage.is_signed(), abs(usage), match["meter"]))
+    if len(rows) != 2:
+        return {}
+    imported = [row for row in rows if not row[2]]
+    exported = [row for row in rows if row[2]]
+    if len(imported) != 1 or len(exported) != 1 or imported[0][:2] != exported[0][:2]:
+        return {}
+    if re.sub(r"[A-Za-z]$", "", imported[0][4]) != re.sub(
+        r"[A-Za-z]$", "", exported[0][4]
+    ):
+        return {}
+    return {
+        "bill_import_kwh": float(imported[0][3]),
+        "bill_export_kwh": float(exported[0][3]),
+        "service_period_start": imported[0][0].isoformat(),
+        "service_period_end": imported[0][1].isoformat(),
+    }
 
 
 def parse_bill_text(text: str) -> CreditBalance:
@@ -88,6 +152,7 @@ def parse_bill_text(text: str) -> CreditBalance:
         statement_date=statement.isoformat(),
         expiry_month=expiry.strftime("%Y-%m"),
         account_hash=sha256(accounts.pop().encode()).hexdigest(),
+        **_metering(text, statement),
     )
 
 

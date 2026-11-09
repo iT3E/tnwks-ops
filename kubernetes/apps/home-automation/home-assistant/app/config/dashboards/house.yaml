@@ -283,6 +283,41 @@ views:
 
       - type: grid
         cards:
+          - type: markdown
+            title: Pacific Power solar credits
+            entity_id: sensor.pacific_power_banked_solar_energy
+            content: |-
+              {% set bank = 'sensor.pacific_power_banked_solar_energy' %}
+              {% if is_number(states(bank)) %}
+              ## {{ '{:,.1f}'.format(states(bank) | float) }} kWh banked
+
+              Statement: **{{ state_attr(bank, 'statement_date') }}**
+
+              Available until your **{{ state_attr(bank, 'expiry_billing_month') }} billing**.
+
+              {% set imported = state_attr(bank, 'bill_import_kwh') %}
+              {% set exported = state_attr(bank, 'bill_export_kwh') %}
+              {% if imported is number and exported is number %}
+              **Last billed period:** {{ state_attr(bank, 'service_period_start') }} to {{ state_attr(bank, 'service_period_end') }}
+
+              | Grid energy | kWh |
+              | :--- | ---: |
+              | Imported | {{ '{:,.1f}'.format(imported) }} |
+              | Exported | {{ '{:,.1f}'.format(exported) }} |
+              | {{ 'Net surplus' if exported >= imported else 'Net grid use' }} | {{ '{:,.1f}'.format((exported - imported) | abs) }} |
+
+              Net energy = exports − imports.
+              {% endif %}
+
+              Statement balance; unbilled activity is not included.
+              {% set expiry = state_attr(bank, 'expiry_billing_month') %}
+              {% if expiry and now().strftime('%Y-%m') > expiry %}
+              **The expiry billing month has passed. Import a new statement to confirm the remaining credits.**
+              {% endif %}
+              {% else %}
+              No statement balance available. Import a bill through **Pacific Power Solar Credits** in Settings → Devices & services.
+              {% endif %}
+            grid_options: { columns: full }
           - type: heading
             heading: Two weeks
             icon: mdi:chart-bar
