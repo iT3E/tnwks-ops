@@ -12,7 +12,7 @@
  * this file changes.
  */
 
-const VERSION = "1.13.0";
+const VERSION = "1.13.1";
 
 // The HA app keeps this module in memory until the page reloads, but HA hands
 // the page a new dashboard config live, including right after a restart. An
@@ -1920,7 +1920,10 @@ function ripple(e) {
   const size = Math.max(r.width, r.height) * 2.2;
   const s = document.createElement("span");
   s.className = "rip";
-  s.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - r.left - size / 2}px;top:${e.clientY - r.top - size / 2}px`;
+  // Positioned inline too: in a card whose CSS lacks MOTION_CSS the ripple
+  // otherwise becomes a huge flex/grid item and stretches the button
+  // (a list row grew to 4,000 px tall while scrolling, 1.13.0).
+  s.style.cssText = `position:absolute;pointer-events:none;width:${size}px;height:${size}px;left:${e.clientX - r.left - size / 2}px;top:${e.clientY - r.top - size / 2}px`;
   b.appendChild(s);
   setTimeout(() => s.remove(), 600);
 }
@@ -3544,6 +3547,11 @@ class ListsCard extends KitchenCard {
     const e = this._cur;
     if (a === "list") {
       if (d.entity !== e) this._pick(d.entity);
+      else if (this._manage) {
+        // Tapping the list that's already open opens its settings.
+        const l = this._lists().find((x) => x.entity_id === e);
+        if (l) listEditor(this, l);
+      }
       return;
     } else if (a === "new-list") {
       return listEditor(this, null);
@@ -3575,7 +3583,7 @@ class ListsCard extends KitchenCard {
     this._queue();
   }
   _build() {
-    this.shadowRoot.innerHTML = `<style>${BASE_CSS}${this.css}</style><div class="card"><div class="tabs"></div>
+    this.shadowRoot.innerHTML = `<style>${BASE_CSS}${MOTION_CSS}${this.css}</style><div class="card"><div class="tabs"></div>
       <form class="add"><input class="what" enterkeyhint="done" autocomplete="off" autocapitalize="sentences"><input class="due" type="date" aria-label="Expires"><button type="submit">Add</button></form>
       <div class="items"></div><div class="foot"></div></div>`;
     const f = this.shadowRoot.querySelector("form");
@@ -3700,7 +3708,7 @@ class NotesCard extends ListsCard {
     setTimeout(() => this._hass.callService("todo", "update_item", { item: d.uid, status: "completed" }, { entity_id: this.config.entity }), 260);
   }
   _build() {
-    this.shadowRoot.innerHTML = `<style>${BASE_CSS}${this.css}</style><div class="card"><div class="h"><span class="ttl"></span></div>
+    this.shadowRoot.innerHTML = `<style>${BASE_CSS}${MOTION_CSS}${this.css}</style><div class="card"><div class="h"><span class="ttl"></span></div>
       <div class="items"></div>
       ${this.config.add === false ? "" : `<form class="add" style="margin:10px 0 0"><input enterkeyhint="done" autocomplete="off" autocapitalize="sentences"><button type="submit">Post</button></form>`}</div>`;
     this._built = true;
