@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.71.0 - 2026-11-09
+
+### Added
+
+* Edit, reorder and delete items on the wall display's Lists tab, give a list expiry dates, and make, rename and delete lists from the display (kitchen_lists integration).
+
 ## v2.70.0 - 2026-11-09
 
 ### Added
