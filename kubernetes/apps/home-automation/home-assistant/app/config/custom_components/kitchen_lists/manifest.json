@@ -1,0 +1,13 @@
+{
+  "domain": "kitchen_lists",
+  "name": "Kitchen lists",
+  "after_dependencies": ["local_todo", "shopping_list"],
+  "codeowners": [],
+  "config_flow": false,
+  "dependencies": ["todo"],
+  "documentation": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/home-assistant.md",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "requirements": [],
+  "version": "1.0.0"
+}

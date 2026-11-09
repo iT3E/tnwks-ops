@@ -48,6 +48,9 @@
 #   todo.things_to_do, todo.someday, todo.notes
 #                         extra Local To-do lists (UI-owned); todo.shopping_list
 #                         (Groceries) is the Shopping List integration
+#   sensor.kitchen_lists  the Lists tab's lists and their settings (the git-owned
+#                         kitchen_lists integration; the lists themselves and
+#                         their settings are UI-owned, made on the display)
 title: Wall display
 
 kiosk_mode:
@@ -181,11 +184,12 @@ views:
           - path: lists
             title: Lists
             cards:
+              # Which lists, their names, emoji, order and expiry setting come
+              # from sensor.kitchen_lists (custom_components/kitchen_lists,
+              # .storage/kitchen_lists): "+ List" and "Edit list" on the tab
+              # change them, so there's nothing to list here.
               - type: custom:kitchen-lists-card
-                lists:
-                  - { entity: todo.shopping_list, title: Groceries, icon: "🛒" }
-                  - { entity: todo.things_to_do, title: Things to do, icon: "✅" }
-                  - { entity: todo.someday, title: Someday, icon: "💭" }
+                entity: sensor.kitchen_lists
               - type: custom:kitchen-notes-card
                 entity: todo.notes
                 title: Notes

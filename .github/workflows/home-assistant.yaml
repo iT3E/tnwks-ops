@@ -129,7 +129,7 @@ jobs:
             exit 1
           fi
 
-      - name: Solar credit integration tests
+      - name: Custom integration tests (solar credits, kitchen lists)
         run: |
           docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
             -v "$PWD/$APP/config/custom_components:/src/custom_components:ro" \

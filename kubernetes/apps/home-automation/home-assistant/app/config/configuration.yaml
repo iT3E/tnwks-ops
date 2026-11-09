@@ -49,6 +49,7 @@ recorder:
   exclude:
     entities:
       - sensor.kitchen_routines
+      - sensor.kitchen_lists
 
 # Entity states as Prometheus metrics at /api/prometheus, scraped by
 # kube-prometheus-stack (the ServiceMonitor in helmrelease.yaml). One-way:
@@ -60,6 +61,7 @@ prometheus:
   filter:
     exclude_entities:
       - sensor.kitchen_routines
+      - sensor.kitchen_lists
 
 # SSO against the tnwks-auth Cognito pool (hass-oidc-auth; app client in
 # infrastructure/terraform/modules/aws/cognito.tf). Public client + PKCE.
@@ -102,7 +104,7 @@ lovelace:
       type: module
     # /local is cached for weeks: the ?v= is what makes browsers (and the
     # kitchen display) fetch a new copy. Bump it with every change to the file.
-    - url: /local/tnwks-kitchen/kitchen-cards.js?v=1.12.3
+    - url: /local/tnwks-kitchen/kitchen-cards.js?v=1.13.0
       type: module
     - url: /local/tnwks-security/person-alerts-card.js?v=2.0.0
       type: module
@@ -144,6 +146,12 @@ sonos:
     hosts:
       - 10.10.91.125
       - 10.10.91.144
+
+# The wall display's Lists tab: services to create, change, delete and
+# restore lists (the tablet's kiosk user isn't an admin, so it can't start a
+# Local To-do config flow itself), and sensor.kitchen_lists with each list's
+# name, emoji, order and expiry setting (custom_components/kitchen_lists).
+kitchen_lists:
 
 # Automations, scripts and scenes are split by owner: the ones under
 # packages/ are git-owned (read-only in the UI), and these three files on
