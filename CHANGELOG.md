@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.72.1 - 2026-11-09
+
+### Fixed
+
+* Migrate the healthcheck CEL imports to cel.dev/cel-go for the upstream module rename.
+
 ## v2.72.0 - 2026-11-09
 
 ### Changed
