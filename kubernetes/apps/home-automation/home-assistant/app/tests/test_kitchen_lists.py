@@ -84,7 +84,7 @@ class KitchenListsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             self.lists(),
             [
-                ("todo.shopping_list", "Groceries", "🛒", False, True),
+                ("todo.groceries", "Groceries", "🛒", True, True),
                 ("todo.things_to_do", "Things to do", "✅", False, False),
                 ("todo.someday", "Someday", "💭", False, False),
             ],
@@ -122,7 +122,7 @@ class KitchenListsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.lists()[-1][0], "todo.fridge")
 
         with self.assertRaisesRegex(ServiceValidationError, "part of the display"):
-            await self.call("delete", {"entity_id": "todo.shopping_list"})
+            await self.call("delete", {"entity_id": "todo.groceries"})
         with self.assertRaisesRegex(ServiceValidationError, "part of the display"):
             await self.call("delete", {"entity_id": "todo.kitchen_routines"})
 
@@ -132,7 +132,7 @@ class KitchenListsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.hass.config_entries.async_entries("local_todo"), [])
         self.assertIsNone(er.async_get(self.hass).async_get("todo.fridge"))
         self.assertFalse((self.directory / ".storage" / "local_todo.fridge.ics").exists())
-        self.assertEqual([x[0] for x in self.lists()], ["todo.shopping_list", "todo.things_to_do", "todo.someday"])
+        self.assertEqual([x[0] for x in self.lists()], ["todo.groceries", "todo.things_to_do", "todo.someday"])
 
         r = await self.call("restore", {}, True)
         await self.hass.async_block_till_done()
@@ -166,6 +166,22 @@ class KitchenListsTests(unittest.IsolatedAsyncioTestCase):
         await self.hass.async_stop()
         await self.start()
         self.assertEqual(self.lists(), before)
+
+    async def test_other_integrations_list_only_leaves_the_tab(self):
+        r = await self.hass.config_entries.flow.async_init("shopping_list", context={"source": "user"}, data={})
+        self.assertEqual(r["type"], "create_entry")
+        await self.hass.async_block_till_done()
+        await self.todo("add_item", "todo.shopping_list", {"item": "Cat food"})
+        await self.call("update", {"entity_id": "todo.shopping_list", "title": "Groceries (old)"})
+        self.assertIn("todo.shopping_list", [x[0] for x in self.lists()])
+        await self.call("delete", {"entity_id": "todo.shopping_list"})
+        await self.hass.async_block_till_done()
+        self.assertNotIn("todo.shopping_list", [x[0] for x in self.lists()])
+        self.assertEqual([i["summary"] for i in await self.items("todo.shopping_list")], ["Cat food"])
+        with self.assertRaisesRegex(ServiceValidationError, "no deleted list"):
+            await self.call("restore", {})
+        with self.assertRaisesRegex(ServiceValidationError, "Only lists made here"):
+            await self.call("delete", {"entity_id": "todo.shopping_list"})
 
     async def test_list_removed_in_ha_leaves_the_tab(self):
         await self.call("create", {"title": "Hardware store"})
