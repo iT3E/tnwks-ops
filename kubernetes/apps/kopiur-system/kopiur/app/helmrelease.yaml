@@ -45,9 +45,10 @@ spec:
     # KopiurBackupStale, minus the standby site. An app with a standby has a
     # policy on both sites but a schedule only where it runs (<APP>_BACKUP_SUSPEND),
     # so the standby's last success (from before a switchover) ages past 48h and
-    # the chart's rule fires on a policy that isn't meant to run. The collector's
-    # homelab_app_backup_scheduled is 0 for exactly those; with no collector the
-    # series is missing and the rule fires as before. The never-succeeded clause
+    # the chart's rule fires on a policy that isn't meant to run. Same for a
+    # policy no schedule names on any site (unifi-mongo only moves a PVC in a
+    # failover). The collector's homelab_app_backup_scheduled is 0 for exactly
+    # those; with no collector the series is missing and the rule fires as before. The never-succeeded clause
     # is the chart's, unchanged. The test op stops the patch from landing on
     # another rule if a chart upgrade reorders them: the upgrade fails instead.
     - kustomize:
