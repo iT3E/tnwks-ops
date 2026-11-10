@@ -78,13 +78,12 @@ network hop does not remove the shim. Its installed checksum matches
 the Z-Stick's usbipd path; see [Coral detector](../wsl/coral-detector.md).
 
 The controller play builds that shim inside a pinned toolchain image
-(`shim/Dockerfile`: digest-pinned Ubuntu 24.04, mingw-w64 from a fixed
+(`shim/Dockerfile`: digest-pinned Ubuntu 26.04, mingw-w64 from a fixed
 Ubuntu snapshot) and asserts its pinned output hash. The runner's own OS no
-longer matters: Ubuntu 26.04's MinGW would produce different bytes, but it
-isn't used. A toolchain move (new snapshot or Ubuntu release) changes the
-DLL, so it is a deliberate PR that re-pins the hash and is verified on the
-detector. Deleting the shim or only changing its expected hash would break
-that contract.
+longer matters: its MinGW, from the live archive, isn't used. A toolchain
+move (new snapshot or Ubuntu release) changes the DLL, so it is a deliberate
+PR that re-pins the hash and is verified on the detector. Deleting the
+shim or only changing its expected hash would break that contract.
 
 References: [LinuxServer's UniFi database support](https://docs.linuxserver.io/images/docker-unifi-network-application/#setting-up-your-external-database),
 [NumPy's ABI change](https://numpy.org/doc/stable/release/2.0.0-notes.html),

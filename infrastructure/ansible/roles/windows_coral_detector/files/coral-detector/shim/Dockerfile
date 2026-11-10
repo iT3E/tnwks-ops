@@ -16,6 +16,6 @@ RUN apt-get update \
   && apt-get update --snapshot 20261101T000000Z \
   && apt-get install -y --no-install-recommends --snapshot 20261101T000000Z \
     gcc-mingw-w64-x86-64-win32=13.2.0-6ubuntu1+26.1 \
-    binutils-mingw-w64-x86-64=2.41.90.20240122-1ubuntu1+11.4 \
-    mingw-w64-x86-64-dev=11.0.1-3build1 \
+    binutils-mingw-w64-x86-64=2.45.90.20260125-1ubuntu1+13.3 \
+    mingw-w64-x86-64-dev=13.0.0-2ubuntu1 \
   && rm -rf /var/lib/apt/lists/*
