@@ -168,8 +168,10 @@ def house_records():
         return (f"((({now}) >= bool ({day})) + 2 * (({now}) < bool ({day})) "
                 f"or (0 * ({day}) + 3)) and on () ({source})")
 
-    cameras_now = "count(frigate_camera_fps > 0)"
-    cameras_day = "count(max_over_time(frigate_camera_fps[1d]) > 0)"
+    # By camera, not by series: a Frigate pod with a new IP is a new instance
+    # label, and the old series would count as a camera gone for a day.
+    cameras_now = "count(max by (camera_name) (frigate_camera_fps > 0))"
+    cameras_day = "count(max by (camera_name) (max_over_time(frigate_camera_fps[1d]) > 0))"
     aps_now = "count(max by (name) (unpoller_device_uptime_seconds > 0))"
     aps_day = "count(max by (name) (max_over_time(unpoller_device_uptime_seconds[1d]) > 0))"
     active = f"(homelab:service_state != 4 {own})"
@@ -838,10 +840,10 @@ def house_fixtures():
              {"series": service % ("one", "broken"), "values": "1+0x10"},
              {"series": service % ("two", "elsewhere"), "values": "1+0x10"},
              # Three cameras worked today, two do now, one has been off all along.
-             {"series": 'frigate_camera_fps{camera="a"}', "values": "5+0x10"},
-             {"series": 'frigate_camera_fps{camera="b"}', "values": "5+0x10"},
-             {"series": 'frigate_camera_fps{camera="c"}', "values": "5 5 0 0 0 0 0 0 0 0 0"},
-             {"series": 'frigate_camera_fps{camera="off"}', "values": "0+0x10"},
+             {"series": 'frigate_camera_fps{camera_name="a"}', "values": "5+0x10"},
+             {"series": 'frigate_camera_fps{camera_name="b"}', "values": "5+0x10"},
+             {"series": 'frigate_camera_fps{camera_name="c"}', "values": "5 5 0 0 0 0 0 0 0 0 0"},
+             {"series": 'frigate_camera_fps{camera_name="off"}', "values": "0+0x10"},
              # Every AP that was up is up.
              {"series": 'unpoller_device_uptime_seconds{name="ap1"}', "values": "100+60x10"},
              {"series": 'unpoller_device_uptime_seconds{name="ap2",source_site="two"}', "values": "100+60x10"},
@@ -856,7 +858,7 @@ def house_fixtures():
          "input_series": [
              own,
              {"series": 'probe_success{k8s_cluster="one",observability_target="internet"}', "values": "0+0x10"},
-             {"series": 'frigate_camera_fps{camera="a"}', "values": "5 5 0 0 0 0 0 0 0 0 0"},
+             {"series": 'frigate_camera_fps{camera_name="a"}', "values": "5 5 0 0 0 0 0 0 0 0 0"},
              # The AP is reported, and down.
              {"series": 'unpoller_device_uptime_seconds{name="ap1"}', "values": "100 160 0 0 0 0 0 0 0 0 0"},
              {"series": 'homelab_collection_success{k8s_cluster="one",collector="workloads"}', "values": "0+0x10"},
@@ -914,12 +916,34 @@ def house_fixtures():
          ], "promql_expr_test": [
              {"expr": 'homelab:house_state{domain=~"backups|devices|storage|away"}', "eval_time": "10m", "exp_samples": []},
          ]},
+        {"name": "household view: a Frigate pod with a new IP is the same cameras", "interval": "1m",
+         "input_series": [
+             own,
+             {"series": 'frigate_camera_fps{camera_name="a",instance="10.0.0.1:5000"}', "values": "5 5 _ _ _ _ _ _ _ _ _"},
+             {"series": 'frigate_camera_fps{camera_name="b",instance="10.0.0.1:5000"}', "values": "5 5 _ _ _ _ _ _ _ _ _"},
+             {"series": 'frigate_camera_fps{camera_name="a",instance="10.0.0.2:5000"}', "values": "_ _ 5 5 5 5 5 5 5 5 5"},
+             {"series": 'frigate_camera_fps{camera_name="b",instance="10.0.0.2:5000"}', "values": "_ _ 5 5 5 5 5 5 5 5 5"},
+         ], "promql_expr_test": [
+             {"expr": 'homelab:house_state{domain="cameras"}', "eval_time": "10m", "exp_samples": [state("cameras", 1)]},
+         ]},
+        {"name": "household view: a camera added today is one more camera, not a gap", "interval": "1m",
+         "input_series": [
+             own,
+             {"series": 'frigate_camera_fps{camera_name="a",instance="10.0.0.1:5000"}', "values": "5 5 5 _ _ _ _ _ _ _ _"},
+             # Frigate restarts with the new camera, on a new IP; it streams once
+             # it's set up.
+             {"series": 'frigate_camera_fps{camera_name="a",instance="10.0.0.2:5000"}', "values": "_ _ _ 5 5 5 5 5 5 5 5"},
+             {"series": 'frigate_camera_fps{camera_name="new",instance="10.0.0.2:5000"}', "values": "_ _ _ 0 0 5 5 5 5 5 5"},
+         ], "promql_expr_test": [
+             {"expr": 'homelab:house_state{domain="cameras"}', "eval_time": "4m", "exp_samples": [state("cameras", 1)]},
+             {"expr": 'homelab:house_state{domain="cameras"}', "eval_time": "10m", "exp_samples": [state("cameras", 1)]},
+         ]},
         {"name": "household view: a blind source is Unknown, not Failed", "interval": "1m",
          "input_series": [
              own,
              # Both exporters stop reporting: the site that runs UniFi Poller is
              # lost, Frigate's scrape fails. What they watch may be fine.
-             {"series": 'frigate_camera_fps{camera="a"}', "values": "5 5 _ _ _ _ _ _ _ _ _"},
+             {"series": 'frigate_camera_fps{camera_name="a"}', "values": "5 5 _ _ _ _ _ _ _ _ _"},
              {"series": 'unpoller_device_uptime_seconds{name="ap1",source_site="two"}', "values": "100 160 _ _ _ _ _ _ _ _ _"},
          ], "promql_expr_test": [
              {"expr": 'homelab:house_state{domain=~"wifi|cameras"}', "eval_time": "10m", "exp_samples": []},
