@@ -183,11 +183,12 @@ groups:
       > 0)))) or (0 * (count(max by (name) (max_over_time(unpoller_device_uptime_seconds[1d]) > 0))) + 3)) and on
       () (count(unpoller_device_uptime_seconds)), "domain", "wifi", "", "") or label_replace(max(homelab:service_state{app="home-assistant"}
       != 4 and on (k8s_cluster) (max by (k8s_cluster) (homelab_observer_info))), "domain", "automation", "", "")
-      or label_replace((((count(frigate_camera_fps > 0)) >= bool (count(max_over_time(frigate_camera_fps[1d]) >
-      0))) + 2 * ((count(frigate_camera_fps > 0)) < bool (count(max_over_time(frigate_camera_fps[1d]) > 0))) or
-      (0 * (count(max_over_time(frigate_camera_fps[1d]) > 0)) + 3)) and on () (count(frigate_camera_fps)), "domain",
-      "cameras", "", "") or label_replace((homelab:house_apps_rank == bool 4) * 3 + (homelab:house_apps_rank ==
-      bool 3) * 2 + (homelab:house_apps_rank == bool 1), "domain", "apps", "", "") or label_replace(3 - 2 * max(homelab:site_reporting
+      or label_replace((((count(max by (camera_name) (frigate_camera_fps > 0))) >= bool (count(max by (camera_name)
+      (max_over_time(frigate_camera_fps[1d]) > 0)))) + 2 * ((count(max by (camera_name) (frigate_camera_fps > 0)))
+      < bool (count(max by (camera_name) (max_over_time(frigate_camera_fps[1d]) > 0)))) or (0 * (count(max by (camera_name)
+      (max_over_time(frigate_camera_fps[1d]) > 0))) + 3)) and on () (count(frigate_camera_fps)), "domain", "cameras",
+      "", "") or label_replace((homelab:house_apps_rank == bool 4) * 3 + (homelab:house_apps_rank == bool 3) * 2
+      + (homelab:house_apps_rank == bool 1), "domain", "apps", "", "") or label_replace(3 - 2 * max(homelab:site_reporting
       and on (k8s_cluster) (max by (k8s_cluster) (homelab_observer_info))), "domain", "monitoring", "", "") or label_replace((homelab:house_backups_rank
       == bool 4) * 3 + (homelab:house_backups_rank == bool 3) * 2 + (homelab:house_backups_rank == bool 1), "domain",
       "backups", "", "") or label_replace((((count(max by (entity) (homeassistant_entity_available{domain=~"light|switch|binary_sensor|sensor|climate|lock|cover|fan|media_player|vacuum"})

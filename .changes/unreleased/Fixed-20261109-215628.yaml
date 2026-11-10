@@ -1,0 +1,3 @@
+kind: Fixed
+body: Household cameras state counts distinct cameras, so a Frigate pod with a new IP no longer shows Degraded for a day
+time: 2026-11-09T21:56:28.703053423-08:00

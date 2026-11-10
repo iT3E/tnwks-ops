@@ -738,13 +738,13 @@ tests:
     values: 1+0x10
   - series: homelab_expected_workload_info{k8s_cluster="two",app="elsewhere"}
     values: 1+0x10
-  - series: frigate_camera_fps{camera="a"}
+  - series: frigate_camera_fps{camera_name="a"}
     values: 5+0x10
-  - series: frigate_camera_fps{camera="b"}
+  - series: frigate_camera_fps{camera_name="b"}
     values: 5+0x10
-  - series: frigate_camera_fps{camera="c"}
+  - series: frigate_camera_fps{camera_name="c"}
     values: 5 5 0 0 0 0 0 0 0 0 0
-  - series: frigate_camera_fps{camera="off"}
+  - series: frigate_camera_fps{camera_name="off"}
     values: 0+0x10
   - series: unpoller_device_uptime_seconds{name="ap1"}
     values: 100+60x10
@@ -776,7 +776,7 @@ tests:
   - *id001
   - series: probe_success{k8s_cluster="one",observability_target="internet"}
     values: 0+0x10
-  - series: frigate_camera_fps{camera="a"}
+  - series: frigate_camera_fps{camera_name="a"}
     values: 5 5 0 0 0 0 0 0 0 0 0
   - series: unpoller_device_uptime_seconds{name="ap1"}
     values: 100 160 0 0 0 0 0 0 0 0 0
@@ -920,11 +920,29 @@ tests:
   - expr: homelab:house_state{domain=~"backups|devices|storage|away"}
     eval_time: 10m
     exp_samples: []
+- name: 'household view: a Frigate pod with a new IP is the same cameras'
+  interval: 1m
+  input_series:
+  - *id001
+  - series: frigate_camera_fps{camera_name="a",instance="10.0.0.1:5000"}
+    values: 5 5 _ _ _ _ _ _ _ _ _
+  - series: frigate_camera_fps{camera_name="b",instance="10.0.0.1:5000"}
+    values: 5 5 _ _ _ _ _ _ _ _ _
+  - series: frigate_camera_fps{camera_name="a",instance="10.0.0.2:5000"}
+    values: _ _ 5 5 5 5 5 5 5 5 5
+  - series: frigate_camera_fps{camera_name="b",instance="10.0.0.2:5000"}
+    values: _ _ 5 5 5 5 5 5 5 5 5
+  promql_expr_test:
+  - expr: homelab:house_state{domain="cameras"}
+    eval_time: 10m
+    exp_samples:
+    - labels: homelab:house_state{domain="cameras"}
+      value: 1
 - name: 'household view: a blind source is Unknown, not Failed'
   interval: 1m
   input_series:
   - *id001
-  - series: frigate_camera_fps{camera="a"}
+  - series: frigate_camera_fps{camera_name="a"}
     values: 5 5 _ _ _ _ _ _ _ _ _
   - series: unpoller_device_uptime_seconds{name="ap1",source_site="two"}
     values: 100 160 _ _ _ _ _ _ _ _ _
