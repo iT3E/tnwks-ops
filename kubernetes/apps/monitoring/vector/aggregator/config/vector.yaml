@@ -28,10 +28,14 @@ transforms:
     inputs:
       - kubernetes_source
     source: |
-      # Standardize 'app' index
-      .custom_app_name = .pod_labels."app.kubernetes.io/name" || .pod_labels.app || .pod_labels."k8s-app" || "unknown"
-      # Drop pod_labels
-      del(.pod_labels)
+      # The 'app' label. kubernetes_logs puts pod labels under .kubernetes,
+      # not at the top level (reading .pod_labels made every stream "unknown").
+      .custom_app_name = .kubernetes.pod_labels."app.kubernetes.io/name" || .kubernetes.pod_labels.app || .kubernetes.pod_labels."k8s-app" || "unknown"
+      # Drop the label maps: they repeat on every line. The pod name stays
+      # (.kubernetes.pod_name), and a Job pod's name starts with its Job's.
+      del(.kubernetes.pod_labels)
+      del(.kubernetes.node_labels)
+      del(.kubernetes.namespace_labels)
 
 # Sinks
 sinks:
