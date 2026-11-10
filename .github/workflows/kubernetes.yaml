@@ -56,7 +56,7 @@ jobs:
       # renders as its own cluster, so homelab-wsl-02's cluster-settings no
       # longer replace homelab-wsl's here (0.7 also dropped --krmignore).
       - name: Render all Kustomizations and HelmReleases
-        run: flate-guard test all --no-progress -p kubernetes
+        run: flate-guard test all --no-progress -p kubernetes/apps
 
       - name: Render the live cluster (wsl) from its entrypoint
         run: flate-guard test all --no-progress -p kubernetes/clusters/wsl
