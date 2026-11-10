@@ -71,6 +71,8 @@ data:
   MQTT_LB_ADDR: "10.5.0.203"
   FLOW_COLLECTOR_LB_ADDR: "10.5.0.204"
   VECTOR_LB_ADDR: "10.5.0.205"
+  # vector-agent ships only Job pods' logs here (see vector/agent/config).
+  VECTOR_AGENT_POD_SELECTOR: "batch.kubernetes.io/job-name"
   UNIFI_LB_ADDR: "10.5.0.206"
   # Peer services: reached by homelab-wsl-02 through the LAN bridge
   # (ports 8554 and 4000, admitted only from WSL-02).

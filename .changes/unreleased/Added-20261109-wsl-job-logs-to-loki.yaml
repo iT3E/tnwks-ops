@@ -1,0 +1,3 @@
+kind: Added
+body: "Job pods' logs go to Loki on both WSL clusters (vector-agent with a Job-only pod selector), so a failed CronJob's output outlives its pod; homelab-wsl-02 gets its own Loki and vector-aggregator."
+time: 2026-11-09T17:52:05-08:00

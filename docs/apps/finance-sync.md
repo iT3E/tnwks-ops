@@ -61,10 +61,9 @@ latest rotated token back), then revert to image 0.1.3 with the PVC mounted.
   non-zero on real failures (the exit-code table is in its README).
 - `FinanceSyncStale` (no successful sync in 26 h), `FinanceAmazonEnrichStale`
   (8 days) and `FinanceSyncNeverSucceeded` in `app/prometheusrule.yaml`.
-- The sync pushes three alerts to Alertmanager itself (pod logs are not
-  shipped to Loki on this cluster, and the Jobs keep only the last 3 runs'
-  logs, so nothing can be grepped later). Labels and summaries carry no
-  account or institution names; those stay in the Job log.
+- The sync pushes three alerts to Alertmanager itself, so a problem pages
+  without anyone reading logs. Labels and summaries carry no account or
+  institution names; those stay in the Job log (in the site's Loki, below).
   - `FinanceReconciliationDrift`: a balance was off by $100 or more and was
     corrected. **Routed to the `null` receiver** (not sent to Telegram): it
     mostly fires on timing, when a bank balance moves before its transactions
@@ -80,8 +79,12 @@ latest rotated token back), then revert to image 0.1.3 with the PVC mounted.
   - `FinanceRefreshTimeout`: the wait for bank refreshes timed out. With
     "already fresh" institutions in the same run it's the signature of an old
     bug (waiting on institutions that were already fresh).
-- Logs: `kubectl -n production logs job/<job>` for the last 3 runs. Anything
-  that needs a longer history should be an alert, not a grep.
+- Logs: in the site's Loki for its 14-day retention (Grafana Explore, Loki
+  datasource): `{namespace="production", app="finance-sync"}`, then
+  `| json | kubernetes_pod_name =~ "finance-sync-amazon.*"` for one job. The
+  WSL clusters delete a finished pod within about 20 s
+  (`terminated-pod-gc-threshold`), so `kubectl logs job/<job>` only works
+  while the Job runs; the vector agent ships Job pods' logs before that.
 
 ## Running one by hand
 
