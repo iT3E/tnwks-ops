@@ -1,0 +1,3 @@
+kind: Changed
+body: The Coral detector's libusb shim builds on Ubuntu 26.04 with its mingw-w64 packages (binutils 2.45.90, mingw-w64 13.0.0); the shim's pinned hash moves with it.
+time: 2026-11-09T19:03:37.0861152-08:00

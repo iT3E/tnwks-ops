@@ -7,7 +7,7 @@
 # toolchain produces coral_detector_shim_sha256 in the role defaults. Moving
 # to another toolchain (a new snapshot or Ubuntu release) changes the DLL:
 # re-pin that hash in the same PR and verify the detector after the apply.
-FROM docker.io/library/ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
+FROM docker.io/library/ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c
 
 # ca-certificates comes from the live archive (snapshot.ubuntu.com is
 # https-only); it doesn't take part in the build.
@@ -16,6 +16,6 @@ RUN apt-get update \
   && apt-get update --snapshot 20261101T000000Z \
   && apt-get install -y --no-install-recommends --snapshot 20261101T000000Z \
     gcc-mingw-w64-x86-64-win32=13.2.0-6ubuntu1+26.1 \
-    binutils-mingw-w64-x86-64=2.41.90.20240122-1ubuntu1+11.4 \
-    mingw-w64-x86-64-dev=11.0.1-3build1 \
+    binutils-mingw-w64-x86-64=2.45.90.20260125-1ubuntu1+13.3 \
+    mingw-w64-x86-64-dev=13.0.0-2ubuntu1 \
   && rm -rf /var/lib/apt/lists/*
