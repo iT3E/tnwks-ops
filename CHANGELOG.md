@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.75.3 - 2026-11-10
+
+### Fixed
+
+* MikroTik DNS: allowlist click.redditmail.com and its CNAME target thirdparty.bnc.lt so links in Reddit emails resolve
+
 ## v2.75.2 - 2026-11-10
 
 ### Fixed
