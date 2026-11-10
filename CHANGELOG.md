@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.72.2 - 2026-11-10
+
+### Fixed
+
+* KopiurBackupStale no longer fires on a Kopiur policy that no schedule uses on any site (unifi-mongo, which only moves a PVC in a site failover): the observability collector reports it as unscheduled.
+
 ## v2.72.1 - 2026-11-09
 
 ### Fixed
