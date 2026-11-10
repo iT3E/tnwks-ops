@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Home Assistant: the camera card no longer breaks after a version bump. Its resource URL gets a ?v= cache-buster, and Renovate moves ?v= with the version for every installed card (camera, kiosk mode, vacuum map).'
-time: 2026-11-09T19:36:07.991811212-08:00

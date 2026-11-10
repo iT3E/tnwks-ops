@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.75.1 - 2026-11-10
+
+### Fixed
+
+* Home Assistant: the camera card no longer breaks after a version bump. Its resource URL gets a ?v= cache-buster, and Renovate moves ?v= with the version for every installed card (camera, kiosk mode, vacuum map).
+
 ## v2.75.0 - 2026-11-10
 
 ### Changed
