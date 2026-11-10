@@ -348,7 +348,12 @@ class Collector:
         """Which Kopiur policy backs up each app's PVC on this site, and whether a
         running schedule uses it (1) or none does (0: suspended on a standby, or
         never scheduled). The rules join it with Kopiur's last success per policy,
-        so an app's backup age is its oldest scheduled PVC, not its freshest."""
+        so an app's backup age is its oldest scheduled PVC, not its freshest.
+
+        A policy that no inventory PVC uses and no running schedule names (e.g.
+        unifi-mongo, which only moves a PVC in a site failover) gets a 0 row with
+        app="none", so KopiurBackupStale leaves it alone. Never a 1 row: the app
+        backup-age and RPO rules count those, and they need a real app."""
         by_namespace: dict[str, list] = {}
         for app in self.inventory["apps"]:
             if app.get("pvcs") and self.cluster in app["clusters"]:
@@ -364,11 +369,17 @@ class Collector:
                 for source in policy.get("spec", {}).get("sources", []):
                     if (source.get("pvc") or {}).get("name"):
                         by_pvc[source["pvc"]["name"]] = policy["metadata"]["name"]
+            covered = set()
             for app in apps:
                 for pvc in app["pvcs"]:
                     policy = by_pvc.get(pvc)
+                    covered.add(policy)
                     metrics.add("homelab_app_backup_scheduled", int(policy in running), app=app["name"],
                                 namespace=namespace, pvc=pvc, policy=policy or "none", **labels)
+            for pvc, policy in by_pvc.items():
+                if policy not in covered and policy not in running:
+                    metrics.add("homelab_app_backup_scheduled", 0, app="none",
+                                namespace=namespace, pvc=pvc, policy=policy, **labels)
 
     def flux(self, metrics: Metrics, labels: dict):
         for group, version, plural, kind in [

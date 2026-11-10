@@ -502,6 +502,31 @@ def test_backup_schedules_and_drill_duration_per_app(small_inventory):
     assert 'homelab_restore_last_duration_seconds{app="test",k8s_cluster="one",observer_cluster="one"} 300' in out
 
 
+def test_unscheduled_policy_outside_inventory_is_zero_and_never_an_app(small_inventory):
+    # Like unifi-mongo: a policy only a site failover uses. No schedule names it
+    # and no inventory PVC uses it, so it gets a 0 row (KopiurBackupStale skips
+    # it) under app="none". A scheduled one outside the inventory gets no row:
+    # a 1 would count as an app's backup in the RPO rules.
+    small_inventory["apps"][0]["pvcs"] = ["data"]
+
+    class Api(FakeApi):
+        def get(self, path):
+            if path.endswith("/snapshotpolicies"):
+                return {"items": [{"metadata": {"name": name}, "spec": {"sources": [{"pvc": {"name": pvc}}]}}
+                                  for name, pvc in (("test", "data"), ("failover-only", "mongo"),
+                                                    ("extra", "scratch"))]}
+            if path.endswith("/snapshotschedules"):
+                return {"items": [{"spec": {"policyRef": {"name": name}, "schedule": {"suspend": False}}}
+                                  for name in ("test", "extra")]}
+            return super().get(path)
+
+    out = Collector(Api(), small_inventory, "one", clock=lambda: 1000).collect().decode()
+    assert ('homelab_app_backup_scheduled{app="none",k8s_cluster="one",namespace="apps",observer_cluster="one",'
+            'policy="failover-only",pvc="mongo"} 0') in out
+    assert 'policy="extra"' not in out
+    assert 'policy="test",pvc="data"} 1' in out
+
+
 def test_probe_needs_every_expected_string_and_other_databases_are_expected(small_inventory, monkeypatch):
     import collector
 
