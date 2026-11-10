@@ -81,16 +81,47 @@
 
 # --- binaries ----------------------------------------------------------------
 
-- name: Binaries (uv, Edge TPU runtime, libusb and its shim)
+# A running detector has edgetpu.dll and both libusb DLLs loaded, and Windows
+# won't overwrite a loaded DLL ("being used by another process"): a new shim
+# failed the apply that way. So a dry run of the copy comes first, and when
+# it would change a file the running detectors stop. "Services are running"
+# and the restart handler start them again.
+- name: Binaries that would change (dry run)
   ansible.windows.win_copy:
     src: "{{ coral_detector_cache }}/{{ item.src }}"
     dest: '{{ coral_detector_root }}\bin\{{ item.dest }}'
-  loop:
+  check_mode: true
+  loop: &coral_detector_binaries
     - { src: uv/uv.exe, dest: uv.exe }
     - { src: "{{ coral_detector_edgetpu_dll }}", dest: edgetpu.dll }
     - { src: libusb/libusb-1.0.dll, dest: libusbreal.dll }
     - src: "shim-{{ coral_detector_shim_id }}/libusb-1.0.dll"
       dest: libusb-1.0.dll
+  loop_control:
+    label: "{{ item.dest }}"
+  register: coral_detector_binaries_dry_run
+
+- name: Detector services, to stop before a binary changes
+  ansible.windows.win_service_info:
+    name: "{{ coral_detector_service_prefix }}*"
+  register: coral_detector_binary_holders
+  when: coral_detector_binaries_dry_run is changed  # noqa: no-handler (must run before the copy)
+
+- name: Stop the running detectors so their DLLs can be replaced
+  ansible.windows.win_service:
+    name: "{{ item }}"
+    state: stopped
+  loop: >-
+    {{ coral_detector_binary_holders.services | default([])
+       | selectattr('state', 'equalto', 'started') | map(attribute='name')
+       | select('match', '^' ~ (coral_detector_service_prefix | regex_escape) ~ '(-\d+)?$') | list }}
+  when: coral_detector_binaries_dry_run is changed  # noqa: no-handler (must run before the copy)
+
+- name: Binaries (uv, Edge TPU runtime, libusb and its shim)
+  ansible.windows.win_copy:
+    src: "{{ coral_detector_cache }}/{{ item.src }}"
+    dest: '{{ coral_detector_root }}\bin\{{ item.dest }}'
+  loop: *coral_detector_binaries
   loop_control:
     label: "{{ item.dest }}"
   notify: Restart coral detectors

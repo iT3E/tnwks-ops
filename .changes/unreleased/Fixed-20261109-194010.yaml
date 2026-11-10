@@ -1,0 +1,3 @@
+kind: Fixed
+body: The Windows host apply stops the Coral detectors before it replaces a DLL they have loaded, so a new libusb shim (or Edge TPU runtime) no longer fails with "being used by another process".
+time: 2026-11-09T19:40:10.807709162-08:00
