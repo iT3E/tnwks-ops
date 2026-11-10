@@ -3,7 +3,8 @@
 # KubeJobFailed; these catch the job that silently stops running (suspended by
 # mistake, schedule broken, the image can't be pulled before a pod exists).
 # Reconciliation drift is pushed to Alertmanager by the sync itself
-# (FinanceReconciliationDrift), since pod logs aren't shipped to Loki here.
+# (FinanceReconciliationDrift), so it pages without anyone reading the Job's
+# log (in Loki; docs/apps/finance-sync.md).
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:

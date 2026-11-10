@@ -47,6 +47,12 @@ resources:
   # Its own Grafana, so losing site 1 doesn't lose the dashboards (patched below).
   - ../../../apps/monitoring/grafana/ks.yaml
   - ../../../apps/monitoring/grafana/dashboards-ks.yaml
+  # Job pods' logs (VECTOR_AGENT_POD_SELECTOR): agent -> vector-aggregator ->
+  # this site's Loki, so a failed CronJob's output outlives its pod. Its own
+  # Loki, like its own Grafana: site 1 may be the thing that's down.
+  - ../../../apps/monitoring/loki/ks.yaml
+  - ../../../apps/monitoring/vector/ks.yaml
+  - ../../../apps/monitoring/vector/ks-agent.yaml
   # Follows the UniFi controller (UNIFI_REPLICAS).
   - ../../../apps/monitoring/unpoller/ks.yaml
   # Certificates: cert-manager with the Let's Encrypt DNS-01 issuers, and the

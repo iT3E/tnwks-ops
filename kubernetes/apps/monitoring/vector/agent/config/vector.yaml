@@ -8,6 +8,17 @@ sources:
   kubernetes_logs:
     type: kubernetes_logs
     use_apiserver_cache: true
+    # Which pods to ship. Empty (MS-01) is every pod. The WSL clusters set
+    # VECTOR_AGENT_POD_SELECTOR to batch.kubernetes.io/job-name, Job pods
+    # only: their nodes and PVCs share one virtual disk, and
+    # terminated-pod-gc-threshold=1 (talos/wsl/cluster-config.yaml) deletes a
+    # finished pod and its logs within about 20s, so Loki is the only place a
+    # failed CronJob's output survives. Long-running pods keep `kubectl logs`.
+    extra_label_selector: "${VECTOR_AGENT_POD_SELECTOR:=}"
+    # Look for new log files every 2s, not the default 60s: a Job pod can
+    # start, fail and be collected inside a minute. Vector keeps reading a
+    # file it has open after the kubelet deletes it.
+    glob_minimum_cooldown_ms: 2000
 
 # Sinks
 sinks:

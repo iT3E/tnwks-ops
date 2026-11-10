@@ -9,9 +9,9 @@ resources:
   - ../../../apps/kube-system/cilium/ks.yaml
   - ../../../apps/storage/rook-ceph/rook-ceph-operator
   - ../../../apps/storage/rook-ceph/cluster
-  # MS-01-only: thanos + the vector pod-log agent. thanos needs a Rook S3
-  # bucket. (loki and vector-aggregator are in the shared monitoring
-  # kustomization.)
+  # thanos is MS-01-only: it needs a Rook S3 bucket. The vector pod-log agent
+  # ships every pod here (the WSL clusters ship Job pods only). (loki and
+  # vector-aggregator are in the shared monitoring kustomization.)
   - ../../../apps/monitoring/thanos/ks.yaml
   - ../../../apps/monitoring/vector/ks-agent.yaml
   # node-feature-discovery is MS-01-only too — needed for hardware-aware
