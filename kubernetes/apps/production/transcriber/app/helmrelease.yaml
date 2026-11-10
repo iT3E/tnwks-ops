@@ -130,7 +130,7 @@ spec:
             dependsOn: site-lease-gate
             image: &image
               repository: ghcr.io/it3e/tnwks-transcriber
-              tag: 0.3.0@sha256:12cb5fd7e58c50b77a5486b4ebff2924d81b8fccccf24e6561e95163a22ae2f0
+              tag: 0.3.3@sha256:0afa186e32de3587aea78d216c600454cc9e66434b76ce11a40485ce2f2dfc2a
             args:
               - selfcheck
             envFrom: &envFrom
