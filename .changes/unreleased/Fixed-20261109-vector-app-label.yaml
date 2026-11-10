@@ -1,0 +1,3 @@
+kind: Fixed
+body: "Pod logs in Loki carry the app label again (vector-aggregator read pod labels from the wrong path, so every stream was app=\"unknown\"), and the repeated label maps are dropped from each line."
+time: 2026-11-09T18:03:35-08:00
