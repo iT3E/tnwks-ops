@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.75.4 - 2026-11-10
+
+### Fixed
+
+* Household cameras state counts distinct cameras, so a Frigate pod with a new IP no longer shows Degraded for a day
+
 ## v2.75.3 - 2026-11-10
 
 ### Fixed
