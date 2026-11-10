@@ -105,7 +105,7 @@
   ansible.windows.win_service_info:
     name: "{{ coral_detector_service_prefix }}*"
   register: coral_detector_binary_holders
-  when: coral_detector_binaries_dry_run is changed
+  when: coral_detector_binaries_dry_run is changed  # noqa: no-handler (must run before the copy)
 
 - name: Stop the running detectors so their DLLs can be replaced
   ansible.windows.win_service:
@@ -115,7 +115,7 @@
     {{ coral_detector_binary_holders.services | default([])
        | selectattr('state', 'equalto', 'started') | map(attribute='name')
        | select('match', '^' ~ (coral_detector_service_prefix | regex_escape) ~ '(-\d+)?$') | list }}
-  when: coral_detector_binaries_dry_run is changed
+  when: coral_detector_binaries_dry_run is changed  # noqa: no-handler (must run before the copy)
 
 - name: Binaries (uv, Edge TPU runtime, libusb and its shim)
   ansible.windows.win_copy:
