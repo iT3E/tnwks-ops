@@ -1,7 +1,7 @@
 ---
 name: "Kubernetes"
 
-# Renders every Flux Kustomization and HelmRelease under kubernetes/ with flate
+# Renders every Flux Kustomization and HelmRelease of each live cluster with flate
 # (charts are fetched and templated, values are schema-checked), and checks
 # that every container image a PR adds actually exists in its registry, and
 # comments the rendered diff on the PR. Called by ci.yaml, whose Build Success
@@ -42,22 +42,20 @@ jobs:
         with:
           version: ${{ env.FLATE_VERSION }}
 
-      # -p kubernetes renders every app once, MS-01-only ones included. When
-      # both clusters define a Flux Kustomization with the same name (frigate
-      # has a WSL overlay), only one of them renders here, so the live
-      # cluster also gets its own run below. flate aliases the flux-system
-      # GitRepository to this checkout because its URL matches the origin
-      # remote, so a cluster entrypoint renders this PR's tree.
+      # Each live cluster renders from its own entrypoint. flate aliases the
+      # flux-system GitRepository to this checkout because its URL matches
+      # the origin remote, so an entrypoint renders this PR's tree.
+      # There is no whole-tree render (-p kubernetes): flate 0.7 refuses it
+      # here, because kubernetes/apps and a cluster overlay both define a
+      # Kustomization with the same name (frigate on wsl, alertmanager on
+      # wsl-02). kubernetes/apps alone doesn't render either: without a
+      # cluster's postBuild substitution, ${VAR} values stay literal. MS-01
+      # isn't live and its entrypoint has known render failures, so its
+      # apps aren't gated; the image check below still lists what renders.
       # flate-guard (installed by setup-flate) caps each attempt at 2 minutes (a render takes 1-10 s)
       # and retries a hang once, printing the process state and the tail of
       # flate's debug log first. A bare 5-minute timeout used to fail the
       # required check about 2% of the time on main with no evidence.
-      # Since flate 0.7 each cluster entrypoint under kubernetes/clusters
-      # renders as its own cluster, so homelab-wsl-02's cluster-settings no
-      # longer replace homelab-wsl's here (0.7 also dropped --krmignore).
-      - name: Render all Kustomizations and HelmReleases
-        run: flate-guard test all --no-progress -p kubernetes/apps
-
       - name: Render the live cluster (wsl) from its entrypoint
         run: flate-guard test all --no-progress -p kubernetes/clusters/wsl
 
