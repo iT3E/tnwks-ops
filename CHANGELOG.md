@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.73.1 - 2026-11-10
+
+### Fixed
+
+* Pod logs in Loki carry the app label again (vector-aggregator read pod labels from the wrong path, so every stream was app="unknown"), and the repeated label maps are dropped from each line.
+
 ## v2.73.0 - 2026-11-10
 
 ### Added
