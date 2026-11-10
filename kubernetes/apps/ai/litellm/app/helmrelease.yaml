@@ -68,7 +68,7 @@ spec:
               # Renovate only follows the plain ones (.github/renovate).
               # Since v1.104 the proxy refuses to start on an unset, empty or
               # public (sk-1234) master key; LITELLM_MASTER_KEY below is fine.
-              tag: v1.106.6@sha256:37e2dafb088a7723beb998590682957386dfc83ffea1848486f8e0e5cfac0b06
+              tag: v1.108.4@sha256:17921779153960f086e2660994cc398fc76ed65c531765177803b9ae0a25d97a
             args:
               - --config
               - /etc/litellm/config.yaml
@@ -164,7 +164,7 @@ spec:
           ensure-keys:
             image:
               repository: ghcr.io/berriai/litellm
-              tag: v1.106.6@sha256:37e2dafb088a7723beb998590682957386dfc83ffea1848486f8e0e5cfac0b06
+              tag: v1.108.4@sha256:17921779153960f086e2660994cc398fc76ed65c531765177803b9ae0a25d97a
             command:
               - python3
               - /scripts/ensure_keys.py
