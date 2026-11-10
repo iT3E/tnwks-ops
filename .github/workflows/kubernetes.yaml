@@ -52,11 +52,11 @@ jobs:
       # and retries a hang once, printing the process state and the tail of
       # flate's debug log first. A bare 5-minute timeout used to fail the
       # required check about 2% of the time on main with no evidence.
-      # .github/flate/all.krmignore keeps out cluster entrypoints that render
-      # on their own below (homelab-wsl-02), or their cluster-settings would
-      # replace homelab-wsl's in this render.
+      # Since flate 0.7 each cluster entrypoint under kubernetes/clusters
+      # renders as its own cluster, so homelab-wsl-02's cluster-settings no
+      # longer replace homelab-wsl's here (0.7 also dropped --krmignore).
       - name: Render all Kustomizations and HelmReleases
-        run: flate-guard test all --no-progress -p kubernetes --krmignore .github/flate/all.krmignore
+        run: flate-guard test all --no-progress -p kubernetes
 
       - name: Render the live cluster (wsl) from its entrypoint
         run: flate-guard test all --no-progress -p kubernetes/clusters/wsl
