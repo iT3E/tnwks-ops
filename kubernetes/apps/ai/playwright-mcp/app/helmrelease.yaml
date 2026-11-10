@@ -42,7 +42,7 @@ spec:
             # these args add the HTTP transport (/mcp, plus legacy /sse).
             image:
               repository: mcr.microsoft.com/playwright/mcp
-              tag: v0.0.83
+              tag: v0.0.85
             args:
               - --port=8000
               - --host=0.0.0.0
