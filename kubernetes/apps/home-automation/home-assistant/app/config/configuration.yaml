@@ -99,20 +99,28 @@ lovelace:
   # Frontend resources are git-owned too; the card files themselves are
   # installed by scripts/prepare-config.sh.
   resource_mode: yaml
+  # /local is cached for weeks: the ?v= is what makes browsers (and the
+  # kitchen display) fetch a new copy. Without it a display keeps the old
+  # entry file, which then asks for chunk files the new version renamed
+  # ("Failed to fetch dynamically imported module").
   resources:
-    - url: /local/advanced-camera-card/advanced-camera-card.js
+    # Cards installed by prepare-config.sh: the comment lets Renovate bump
+    # ?v= in the same PR as the version in helmrelease.yaml
+    # (.github/renovate.json5, the cache-bust manager).
+    # renovate: datasource=github-releases depName=dermotduffy/advanced-camera-card cache-bust
+    - url: /local/advanced-camera-card/advanced-camera-card.js?v=8.2.0
       type: module
-    # /local is cached for weeks: the ?v= is what makes browsers (and the
-    # kitchen display) fetch a new copy. Bump it with every change to the file.
+    # renovate: datasource=github-releases depName=NemesisRE/kiosk-mode cache-bust
+    - url: /local/kiosk-mode/kiosk-mode.js?v=15.0.0
+      type: module
+    # The robot vacuum's map card (rooms, zones, go-to).
+    # renovate: datasource=github-releases depName=PiotrMachowski/lovelace-xiaomi-vacuum-map-card cache-bust
+    - url: /local/xiaomi-vacuum-map-card/xiaomi-vacuum-map-card.js?v=2.4.1
+      type: module
+    # Our own cards: bump ?v= with every change to the file.
     - url: /local/tnwks-kitchen/kitchen-cards.js?v=1.13.2
       type: module
     - url: /local/tnwks-security/person-alerts-card.js?v=2.0.0
-      type: module
-    - url: /local/kiosk-mode/kiosk-mode.js?v=15.0.0
-      type: module
-    # The robot vacuum's map card (rooms, zones, go-to); installed by
-    # prepare-config.sh, so bump ?v= with XIAOMI_VACUUM_MAP_CARD_VERSION.
-    - url: /local/xiaomi-vacuum-map-card/xiaomi-vacuum-map-card.js?v=2.4.1
       type: module
   dashboards:
     home-security:

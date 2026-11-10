@@ -156,6 +156,22 @@
         "datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( registryUrl=(?<registryUrl>\\S+))?\\n.*?[\"']?(?<currentValue>[^\"'\\s]+)[\"']?\\n"
       ],
       "datasourceTemplate": "{{#if datasource}}{{{datasource}}}{{else}}github-releases{{/if}}"
+    },
+    {
+      // Home Assistant card resources: the ?v= cache-buster on the URL must
+      // move with the card version in helmrelease.yaml, or browsers keep the
+      // old entry file and 404 on the new version's chunks. Same depName, so
+      // both land in one PR. The trailing "cache-bust" keeps the generic
+      // manager above from also matching these comments.
+      "customType": "regex",
+      "description": "Bump ?v= on Home Assistant Lovelace resources with their card version",
+      "managerFilePatterns": [
+        "/kubernetes/apps/home-automation/home-assistant/app/config/configuration\\.yaml$/"
+      ],
+      "matchStrings": [
+        "datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) cache-bust\\n\\s*- url: \\S+\\?v=(?<currentValue>[^\\s\"']+)\\n"
+      ],
+      "extractVersionTemplate": "^v?(?<version>.+)$"
     }
   ]
 }
