@@ -126,7 +126,7 @@ spec:
             dependsOn: site-lease-gate
             image:
               repository: ghcr.io/it3e/tnwks-finance-sync
-              tag: 0.2.0@sha256:663dfbbd0a474c22172adf8888971940ddaf4ef1f2a33d2429f1f41f39bf953e
+              tag: 0.2.3@sha256:5b6eb117f39f7cb4739f4d19449241479538a5d09c3f4d82fca824cbfa62d750
             args:
             - selfcheck
             envFrom:
@@ -150,7 +150,7 @@ spec:
           app:
             image:
               repository: ghcr.io/it3e/tnwks-finance-sync
-              tag: 0.2.0@sha256:663dfbbd0a474c22172adf8888971940ddaf4ef1f2a33d2429f1f41f39bf953e
+              tag: 0.2.3@sha256:5b6eb117f39f7cb4739f4d19449241479538a5d09c3f4d82fca824cbfa62d750
             args:
             - sync
             envFrom:
@@ -231,7 +231,7 @@ spec:
             dependsOn: site-lease-gate
             image:
               repository: ghcr.io/it3e/tnwks-finance-sync
-              tag: 0.2.0@sha256:663dfbbd0a474c22172adf8888971940ddaf4ef1f2a33d2429f1f41f39bf953e
+              tag: 0.2.3@sha256:5b6eb117f39f7cb4739f4d19449241479538a5d09c3f4d82fca824cbfa62d750
             args:
             - selfcheck
             envFrom:
@@ -255,7 +255,7 @@ spec:
           app:
             image:
               repository: ghcr.io/it3e/tnwks-finance-sync
-              tag: 0.2.0@sha256:663dfbbd0a474c22172adf8888971940ddaf4ef1f2a33d2429f1f41f39bf953e
+              tag: 0.2.3@sha256:5b6eb117f39f7cb4739f4d19449241479538a5d09c3f4d82fca824cbfa62d750
             args:
             - amazon-enrich
             envFrom:
