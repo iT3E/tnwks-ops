@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.75.0 - 2026-11-10
+
+### Changed
+
+* The Coral detector's libusb shim builds on Ubuntu 26.04 with its mingw-w64 packages (binutils 2.45.90, mingw-w64 13.0.0); the shim's pinned hash moves with it.
+
 ## v2.74.0 - 2026-11-10
 
 ### Changed
