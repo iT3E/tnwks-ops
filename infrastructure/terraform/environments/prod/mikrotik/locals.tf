@@ -782,6 +782,19 @@ locals {
         match_subdomain = true
         comment         = "allowlist: X/Twitter link shortener"
       }
+      # Reddit's email links go through click.redditmail.com, a CNAME to
+      # Branch.io's thirdparty.bnc.lt. The adlists block both names, so both
+      # get an exact-name override. The rest of bnc.lt stays blocked.
+      allow_click_redditmail_com = {
+        name    = "click.redditmail.com"
+        type    = "FWD"
+        comment = "allowlist: Reddit email link redirector"
+      }
+      allow_thirdparty_bnc_lt = {
+        name    = "thirdparty.bnc.lt"
+        type    = "FWD"
+        comment = "allowlist: Branch.io target of click.redditmail.com"
+      }
     }
     adlists = [
       "https://raw.githubusercontent.com/PolishFiltersTeam/KADhosts/master/KADhosts.txt",
