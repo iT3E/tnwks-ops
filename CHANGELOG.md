@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.73.0 - 2026-11-10
+
+### Added
+
+* Job pods' logs go to Loki on both WSL clusters (vector-agent with a Job-only pod selector), so a failed CronJob's output outlives its pod; homelab-wsl-02 gets its own Loki and vector-aggregator.
+
 ## v2.72.2 - 2026-11-10
 
 ### Fixed
