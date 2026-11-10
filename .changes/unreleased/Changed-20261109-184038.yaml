@@ -1,3 +1,0 @@
-kind: Changed
-body: Kubernetes CI renders each live cluster from its own entrypoint and no longer renders the whole tree, which flate 0.7 refuses for this layout; flate moves to 0.7.3.
-time: 2026-11-09T18:40:38.656884993-08:00

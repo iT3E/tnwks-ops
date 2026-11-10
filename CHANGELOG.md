@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.74.0 - 2026-11-10
+
+### Changed
+
+* Kubernetes CI renders each live cluster from its own entrypoint and no longer renders the whole tree, which flate 0.7 refuses for this layout; flate moves to 0.7.3.
+
 ## v2.73.1 - 2026-11-10
 
 ### Fixed
