@@ -926,6 +926,18 @@ def house_fixtures():
          ], "promql_expr_test": [
              {"expr": 'homelab:house_state{domain="cameras"}', "eval_time": "10m", "exp_samples": [state("cameras", 1)]},
          ]},
+        {"name": "household view: a camera added today is one more camera, not a gap", "interval": "1m",
+         "input_series": [
+             own,
+             {"series": 'frigate_camera_fps{camera_name="a",instance="10.0.0.1:5000"}', "values": "5 5 5 _ _ _ _ _ _ _ _"},
+             # Frigate restarts with the new camera, on a new IP; it streams once
+             # it's set up.
+             {"series": 'frigate_camera_fps{camera_name="a",instance="10.0.0.2:5000"}', "values": "_ _ _ 5 5 5 5 5 5 5 5"},
+             {"series": 'frigate_camera_fps{camera_name="new",instance="10.0.0.2:5000"}', "values": "_ _ _ 0 0 5 5 5 5 5 5"},
+         ], "promql_expr_test": [
+             {"expr": 'homelab:house_state{domain="cameras"}', "eval_time": "4m", "exp_samples": [state("cameras", 1)]},
+             {"expr": 'homelab:house_state{domain="cameras"}', "eval_time": "10m", "exp_samples": [state("cameras", 1)]},
+         ]},
         {"name": "household view: a blind source is Unknown, not Failed", "interval": "1m",
          "input_series": [
              own,
