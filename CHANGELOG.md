@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.75.2 - 2026-11-10
+
+### Fixed
+
+* The Windows host apply stops the Coral detectors before it replaces a DLL they have loaded, so a new libusb shim (or Edge TPU runtime) no longer fails with "being used by another process".
+
 ## v2.75.1 - 2026-11-10
 
 ### Fixed
