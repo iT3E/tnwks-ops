@@ -32,7 +32,7 @@ spec:
       containers:
         - name: raines-things-api
           # A release, by digest: what runs only changes through git.
-          image: ghcr.io/it3e/tnwks-raines-things-api:0.1.1@sha256:5786337abf91fdcbd7de4e2be3a86d66f1c82438610226da80f1caffcc8490bc
+          image: ghcr.io/it3e/tnwks-raines-things-api:0.1.2@sha256:e27e74f5ea60f7302f1f2ce6bd06b0fc7e0fafe5c4352ad51483e4c4347cc57a
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
