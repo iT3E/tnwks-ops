@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'MikroTik DNS: allowlist click.redditmail.com and its CNAME target thirdparty.bnc.lt so links in Reddit emails resolve'
+time: 2026-11-09T21:08:50.36752854-08:00
