@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.84.0 - 2026-11-11
+
+### Added
+
+* LiteLLM: Claude Opus on the Anthropic API as the model claude-opus-plan, with its credential from litellm-secret
+
 ## v2.83.0 - 2026-11-11
 
 ### Added
