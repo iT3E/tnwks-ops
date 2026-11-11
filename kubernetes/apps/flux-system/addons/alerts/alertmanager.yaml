@@ -41,6 +41,14 @@ spec:
     - kind: HelmRelease
       namespace: ai
       name: "*"
+    # The agent platform (kubernetes/apps/ai/agents): its namespaces differ
+    # from their directory, and its sources sit next to their releases.
+    - kind: HelmRelease
+      namespace: agent-sandbox-system
+      name: "*"
+    - kind: GitRepository
+      namespace: agent-sandbox-system
+      name: "*"
     - kind: HelmRelease
       namespace: auth
       name: "*"

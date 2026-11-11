@@ -1,0 +1,55 @@
+---
+# The trust domain of the main personal agent. A trust domain shares no
+# process, volume or credential with another one (docs/apps/agent-platform.md).
+# Pods here meet the `restricted` Pod Security level.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agents-main
+  labels:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    agents.home.arpa/trust-domain: main
+---
+# Deny by default. The sandbox pods (openshell.ai/managed-by) are left out:
+# their sandbox gateway gives each one its own policies when it makes it
+# (the workload gets no egress, the supervisor carries the approved egress).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: agents-main
+spec:
+  podSelector:
+    matchExpressions:
+      - key: openshell.ai/managed-by
+        operator: DoesNotExist
+  policyTypes: ["Ingress", "Egress"]
+---
+# DNS for the other pods, through Cilium's DNS proxy, so an egress policy
+# here can name host names (toFQDNs).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: agents-main
+spec:
+  endpointSelector:
+    matchExpressions:
+      - key: openshell.ai/managed-by
+        operator: DoesNotExist
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"

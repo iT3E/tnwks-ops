@@ -3,6 +3,36 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.80.0 - 2026-11-11
+
+### Added
+
+* LiteLLM: a key in keys.json can set a spend limit (max_budget, budget_duration), and the agent platform has one key alias for each trust domain
+
+## v2.79.0 - 2026-11-11
+
+### Added
+
+* CI: a disposable Alloy rehearsal runs the pinned Alloy with the monitoring HelmRelease's config and checks that every component is healthy
+
+## v2.78.0 - 2026-11-11
+
+### Added
+
+* Add the agent platform's trust-domain namespaces on homelab-wsl (agents-main, agents-finance, agents-workflows and agents-pilot), each with the restricted Pod Security level and a network policy that denies by default.
+
+## v2.77.1 - 2026-11-11
+
+### Fixed
+
+* Agent Sandbox controller: remove the chart's helm.sh/chart and app.kubernetes.io/version labels after render, so its objects install with the chart built per tag and the image pinned by digest
+
+## v2.77.0 - 2026-11-11
+
+### Added
+
+* Run the Agent Sandbox controller on homelab-wsl, in its own namespace with the restricted Pod Security level, as the first part of the agent platform.
+
 ## v2.76.1 - 2026-11-11
 
 ### Fixed

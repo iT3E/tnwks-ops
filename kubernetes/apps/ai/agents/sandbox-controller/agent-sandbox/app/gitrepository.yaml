@@ -1,0 +1,17 @@
+---
+# Upstream publishes the chart in its repository only (helm/), not to a chart
+# registry, so Flux reads it at the release tag, as for local-path-provisioner.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: agent-sandbox
+spec:
+  interval: 30m
+  url: https://github.com/kubernetes-sigs/agent-sandbox
+  ref:
+    tag: v1.0.10
+  ignore: |
+    # exclude all
+    /*
+    # include the chart
+    !/helm

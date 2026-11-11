@@ -5,9 +5,14 @@ when the keys Secret changes, so this runs again).
 KEYS_FILE is a JSON list from a SOPS Secret:
   [{"alias": "transcriber", "key": "sk-...", "models": ["claude-sonnet"]}]
 
+An entry may also set a spend limit: "max_budget" (US dollars) and
+"budget_duration" (how often the spend resets, such as "30d"). LiteLLM then
+refuses the key's calls once its spend reaches the limit.
+
 For each entry the key is created (POST /key/generate with that exact key
-value) or, if it exists, updated (models, alias). Keys LiteLLM has that are
-not in the file are left alone. Key values are never logged.
+value) or, if it exists, updated (models, alias, and the limit when the entry
+sets one). Keys LiteLLM has that are not in the file are left alone. Key
+values are never logged.
 """
 
 import json
@@ -22,6 +27,8 @@ URL = os.environ.get("LITELLM_URL", "http://127.0.0.1:4000").rstrip("/")
 MASTER = os.environ["LITELLM_MASTER_KEY"]
 KEYS_FILE = os.environ.get("KEYS_FILE", "/keys/keys.json")
 RECHECK_SECONDS = int(os.environ.get("RECHECK_SECONDS", "21600"))
+# Optional fields of an entry that go to LiteLLM as they are.
+BUDGET_FIELDS = ("max_budget", "budget_duration")
 
 
 def call(method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
@@ -56,6 +63,9 @@ def wait_ready() -> None:
 def ensure(entry: dict) -> str:
     key, alias, models = entry["key"], entry["alias"], entry.get("models", [])
     spec = {"key": key, "key_alias": alias, "models": models, "metadata": {"managed_by": "tnwks-ops"}}
+    for field in BUDGET_FIELDS:
+        if field in entry:
+            spec[field] = entry[field]
     status, _ = call("GET", "/key/info?" + urllib.parse.urlencode({"key": key}))
     if status == 200:
         status, body = call("POST", "/key/update", spec)
@@ -66,7 +76,10 @@ def ensure(entry: dict) -> str:
     if status != 200:
         detail = str(body.get("error") or body.get("detail") or body)[:200]
         raise RuntimeError(f"{alias}: {verb[:-1]} failed ({status}): {detail}")
-    return f"{alias}: {verb} (models: {', '.join(models) or 'all'})"
+    budget = ""
+    if "max_budget" in entry:
+        budget = f", budget: {entry['max_budget']} USD per {entry.get('budget_duration', 'key lifetime')}"
+    return f"{alias}: {verb} (models: {', '.join(models) or 'all'}{budget})"
 
 
 def run_once() -> bool:

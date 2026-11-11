@@ -1,8 +1,8 @@
 # LiteLLM
 
-An OpenAI-compatible proxy in `ai` (WSL), `litellm.ai.svc.cluster.local:4000`,
-in front of local models (Ollama on the WSL host) and Claude Sonnet on AWS
-Bedrock. Manifests: `kubernetes/apps/ai/litellm/`. Its state (keys, spend)
+An OpenAI-compatible proxy in `ai` (WSL),
+`litellm-app.ai.svc.cluster.local:4000`, in front of local models (Ollama on
+the WSL host) and Claude Sonnet on AWS Bedrock. Manifests: `kubernetes/apps/ai/litellm/`. Its state (keys, spend)
 is the cnpg `litellm` database.
 
 | Model | Backend |
@@ -59,11 +59,16 @@ Each app gets its own LiteLLM virtual key, limited to the models it needs.
 Keys are declared, not created by hand:
 
 - `app/secret-keys.sops.yaml` holds `keys.json`, a list of
-  `{"alias", "key", "models"}`.
+  `{"alias", "key", "models"}`. An entry may also set a spend limit:
+  `"max_budget"` (US dollars) and `"budget_duration"` (when the spend
+  resets, such as `"30d"`). LiteLLM refuses the key's calls once it has spent
+  the limit, and counts the spend in its database.
 - The `ensure-keys` sidecar (`app/scripts/ensure_keys.py`) creates each key
-  with that exact value, or updates its models if it exists, then re-checks
-  every 6 hours. Keys not in the list are left alone. Reloader restarts the
-  pod when the Secret changes, so an edit applies on the next reconcile.
+  with that exact value, or updates its models (and its limit, when the entry
+  sets one) if it exists, then re-checks every 6 hours. Keys not in the list
+  are left alone. Removing a limit from an entry doesn't remove it from the
+  key: change it in the admin UI. Reloader restarts the pod when the Secret
+  changes, so an edit applies on the next reconcile.
 - The app gets the same value in its own Secret.
 
 | Alias | Models | Used by |
@@ -72,3 +77,23 @@ Keys are declared, not created by hand:
 
 To add one: generate a value (`sk-<app>-` and random hex), add the entry to
 `keys.json`, and put the value in the app's Secret.
+
+### Keys of the agent platform
+
+Each trust domain of the agent platform (`docs/apps/agent-platform.md`) gets
+one key of its own, with a model list and a spend limit, and no key serves two
+trust domains. The agents of a trust domain call
+`http://litellm-app.ai.svc.cluster.local:4000` with it (the chart names the
+Service `litellm-app`).
+
+| Alias | Trust domain (namespace) |
+| --- | --- |
+| `agents-main` | `agents-main` |
+| `agents-finance` | `agents-finance` |
+| `agents-workflows` | `agents-workflows` |
+| `agents-pilot` | `agents-pilot` |
+
+The owner adds each entry to `keys.json`, with its value (`sk-agents-<name>-`
+and random hex), its models and its limit, when the agent of that trust
+domain is ready to use it. The same value goes in that trust domain's own
+Secret, next to the agent's manifests.
