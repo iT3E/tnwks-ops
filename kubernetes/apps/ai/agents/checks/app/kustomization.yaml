@@ -1,0 +1,13 @@
+---
+# The checks of the agent platform, the same in each trust domain: each
+# <name>/checks/ks.yaml applies this directory to its own namespace.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./rbac.yaml
+  - ./networkpolicy.yaml
+  - ./cronjobs.yaml
+configMapGenerator:
+  - name: platform-checks
+    files:
+      - platform_checks.py=./scripts/platform_checks.py

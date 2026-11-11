@@ -1,0 +1,256 @@
+---
+# The two checks of each trust domain (scripts/platform_checks.py). A failed
+# check fails its Job; the Job pod's log goes to Loki.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: platform-check-isolation
+  labels: &labels
+    app.kubernetes.io/name: platform-checks
+    app.kubernetes.io/component: isolation
+spec:
+  schedule: "17 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels: *labels
+        spec:
+          restartPolicy: Never
+          serviceAccountName: platform-checks
+          automountServiceAccountToken: false
+          securityContext: &podSecurity
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            fsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            # The OpenShell CLI is a release binary in no image: fetch the
+            # pinned release and check it, as litellm's signing helper is.
+            # Keep it at the chart version of the sandbox gateways.
+            - name: fetch-cli
+              image: &python docker.io/library/python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
+              command:
+                - python3
+                - -c
+                - |
+                  import hashlib, io, os, tarfile, urllib.request
+                  url = ("https://github.com/NVIDIA/OpenShell/releases/download/v%s/"
+                         "openshell-x86_64-unknown-linux-musl.tar.gz" % os.environ["CLI_VERSION"])
+                  data = urllib.request.urlopen(url, timeout=120).read()
+                  got = hashlib.sha256(data).hexdigest()
+                  if got != os.environ["CLI_SHA256"]:
+                      raise SystemExit("openshell CLI checksum mismatch: " + got)
+                  with tarfile.open(fileobj=io.BytesIO(data)) as t:
+                      member = t.getmember("openshell")
+                      with open("/tools/openshell", "wb") as f:
+                          f.write(t.extractfile(member).read())
+                  os.chmod("/tools/openshell", 0o755)
+                  print("openshell CLI", os.environ["CLI_VERSION"], "ok")
+              env:
+                - name: CLI_VERSION
+                  value: "0.1.7"
+                - name: CLI_SHA256
+                  value: "5c1adfcae797eac9b2e8b9280c66c1f75e4e84d9e31ce6938c5b994314ef6098"
+              securityContext: &containerSecurity
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              resources: &resources
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              volumeMounts:
+                - name: tools
+                  mountPath: /tools
+          containers:
+            - name: check
+              image: *python
+              command:
+                - python3
+                - /scripts/platform_checks.py
+                - isolation
+              env:
+                - name: OWN_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: TRUST_DOMAIN_NAMESPACES
+                  value: agents-main agents-finance agents-workflows agents-pilot
+                - name: HOME
+                  value: /tmp/home
+                - name: XDG_CONFIG_HOME
+                  value: /tmp/home/.config
+                - name: XDG_STATE_HOME
+                  value: /tmp/home/.local/state
+                - name: OPENSHELL_GATEWAY
+                  value: own
+                - name: NO_COLOR
+                  value: "1"
+              securityContext: *containerSecurity
+              resources: *resources
+              volumeMounts: &mounts
+                - name: tools
+                  mountPath: /tools
+                  readOnly: true
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: client-tls
+                  mountPath: /client-tls
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes: &volumes
+            - name: tools
+              emptyDir: {}
+            - name: tmp
+              emptyDir: {}
+            - name: scripts
+              configMap:
+                name: platform-checks
+            # The client certificate of this trust domain's sandbox gateway
+            # (cert-manager), the one its agent pod uses.
+            - name: client-tls
+              secret:
+                secretName: openshell-client-tls
+                defaultMode: 0440
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: platform-check-probe
+  labels: &labels
+    app.kubernetes.io/name: platform-checks
+    app.kubernetes.io/component: probe
+spec:
+  schedule: "47 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels: *labels
+        spec:
+          restartPolicy: Never
+          serviceAccountName: platform-checks
+          # Reads the pods of the probe sandbox (rbac.yaml).
+          automountServiceAccountToken: true
+          securityContext: &podSecurity
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            fsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            # The same as in platform-check-isolation.
+            - name: fetch-cli
+              image: &python docker.io/library/python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
+              command:
+                - python3
+                - -c
+                - |
+                  import hashlib, io, os, tarfile, urllib.request
+                  url = ("https://github.com/NVIDIA/OpenShell/releases/download/v%s/"
+                         "openshell-x86_64-unknown-linux-musl.tar.gz" % os.environ["CLI_VERSION"])
+                  data = urllib.request.urlopen(url, timeout=120).read()
+                  got = hashlib.sha256(data).hexdigest()
+                  if got != os.environ["CLI_SHA256"]:
+                      raise SystemExit("openshell CLI checksum mismatch: " + got)
+                  with tarfile.open(fileobj=io.BytesIO(data)) as t:
+                      member = t.getmember("openshell")
+                      with open("/tools/openshell", "wb") as f:
+                          f.write(t.extractfile(member).read())
+                  os.chmod("/tools/openshell", 0o755)
+                  print("openshell CLI", os.environ["CLI_VERSION"], "ok")
+              env:
+                - name: CLI_VERSION
+                  value: "0.1.7"
+                - name: CLI_SHA256
+                  value: "5c1adfcae797eac9b2e8b9280c66c1f75e4e84d9e31ce6938c5b994314ef6098"
+              securityContext: &containerSecurity
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              resources: &resources
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              volumeMounts:
+                - name: tools
+                  mountPath: /tools
+          containers:
+            - name: check
+              image: *python
+              command:
+                - python3
+                - /scripts/platform_checks.py
+                - probe
+              env:
+                - name: OWN_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: TRUST_DOMAIN_NAMESPACES
+                  value: agents-main agents-finance agents-workflows agents-pilot
+                - name: HOME
+                  value: /tmp/home
+                - name: XDG_CONFIG_HOME
+                  value: /tmp/home/.config
+                - name: XDG_STATE_HOME
+                  value: /tmp/home/.local/state
+                - name: OPENSHELL_GATEWAY
+                  value: own
+                - name: NO_COLOR
+                  value: "1"
+                # The image of the probe sandbox: it needs python3.
+                - name: PROBE_IMAGE
+                  value: *python
+              securityContext: *containerSecurity
+              resources: *resources
+              volumeMounts: &mounts
+                - name: tools
+                  mountPath: /tools
+                  readOnly: true
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: client-tls
+                  mountPath: /client-tls
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes: &volumes
+            - name: tools
+              emptyDir: {}
+            - name: tmp
+              emptyDir: {}
+            - name: scripts
+              configMap:
+                name: platform-checks
+            # The client certificate of this trust domain's sandbox gateway
+            # (cert-manager), the one its agent pod uses.
+            - name: client-tls
+              secret:
+                secretName: openshell-client-tls
+                defaultMode: 0440
