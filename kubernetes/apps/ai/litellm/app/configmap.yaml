@@ -34,6 +34,14 @@ data:
         litellm_params:
           model: bedrock/converse/us.anthropic.claude-sonnet-5-5
           aws_region_name: us-east-1
+      # Claude Opus on the Anthropic API, for the agent platform
+      # (docs/apps/litellm.md). Its credential is ANTHROPIC_PLAN_TOKEN in
+      # litellm-secret. No key in keys.json lists this model: until one
+      # does, only the master key can call it.
+      - model_name: claude-opus-plan
+        litellm_params:
+          model: anthropic/claude-opus-5-5
+          api_key: os.environ/ANTHROPIC_PLAN_TOKEN
 
     general_settings:
       master_key: os.environ/LITELLM_MASTER_KEY
