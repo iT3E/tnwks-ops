@@ -15,7 +15,8 @@ spec:
     kind: GitRepository
     name: flux-system
   dependsOn:
-    # The Sandbox CRDs: the chart checks for them before it installs.
+    # The Sandbox CRDs: the gateway makes Sandbox records. The chart's own
+    # check for them is off (app/helmrelease.yaml), so this gives the order.
     - name: agent-sandbox
     # The Issuer and Certificate CRDs.
     - name: cert-manager

@@ -33,6 +33,12 @@ spec:
     # certificate and the client certificate (Secret openshell-client-tls:
     # ca.crt, tls.crt, tls.key), and renews them. The client certificate is
     # what a caller in this namespace mounts to use the gateway.
+    # The chart stops the render when the cluster serves no Sandbox API.
+    # Flux gives the same order (ks.yaml dependsOn agent-sandbox, which waits
+    # for its CRDs), and CI renders offline, where the check always fails.
+    agentSandbox:
+      preflight:
+        enabled: false
     certManager:
       enabled: true
       # The chart always adds this namespace's service names. Its default
