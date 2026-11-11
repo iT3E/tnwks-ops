@@ -57,8 +57,55 @@ spec:
             }
           }
 
-          // Frontend traces -> Tempo over OTLP gRPC. tls.insecure because this
-          // is an in-cluster plaintext hop.
+          // ---------------------------------------------------------------
+          // OTLP/HTTP receiver for the agent platform's traces
+          // (docs/apps/agent-platform.md). Each span goes through
+          // drop_text first, so no prompt, model output, tool input or
+          // output, or memory text reaches Tempo. The receiver has no
+          // ingress; agent pods reach it through their own egress policy.
+          // ---------------------------------------------------------------
+          otelcol.receiver.otlp "agents" {
+            http {
+              endpoint = "0.0.0.0:4318"
+            }
+
+            output {
+              traces = [otelcol.processor.transform.drop_text.input]
+            }
+          }
+
+          // Removes the text attributes of the OpenTelemetry conventions for
+          // generative AI (old and new names), of OpenInference, and of agent
+          // memory, from spans and span events. Every attribute of an event
+          // named gen_ai.* or memory.* goes too: those events carry messages.
+          // Token counts, model names, timings and tool names stay. The
+          // CronJob trace-filter-check sends a span with a marker text in
+          // each of these places every day and fails if Tempo has it.
+          otelcol.processor.transform "drop_text" {
+            error_mode = "ignore"
+
+            trace_statements {
+              context    = "span"
+              statements = [
+                `delete_matching_keys(attributes, "^(gen_ai\\.(prompt|completion|input\\.messages|output\\.messages|system_instructions|tool\\.call\\.arguments|tool\\.call\\.result)|input\\.value|output\\.value|llm\\.(input|output)_messages|memory\\.(query|results|content))(\\..*)?$")`,
+              ]
+            }
+
+            trace_statements {
+              context    = "spanevent"
+              statements = [
+                `delete_matching_keys(attributes, "^(gen_ai\\.(prompt|completion|input\\.messages|output\\.messages|system_instructions|tool\\.call\\.arguments|tool\\.call\\.result)|input\\.value|output\\.value|llm\\.(input|output)_messages|memory\\.(query|results|content))(\\..*)?$")`,
+                `delete_matching_keys(attributes, ".*") where IsMatch(name, "^(gen_ai|memory)\\.")`,
+              ]
+            }
+
+            output {
+              traces = [otelcol.exporter.otlp.tempo.input]
+            }
+          }
+
+          // Frontend and agent traces -> Tempo over OTLP gRPC. tls.insecure
+          // because this is an in-cluster plaintext hop.
           otelcol.exporter.otlp "tempo" {
             client {
               endpoint = "tempo.monitoring.svc.cluster.local:4317"
@@ -75,6 +122,11 @@ spec:
         - name: faro
           port: 12347
           targetPort: 12347
+          protocol: TCP
+        # The agent platform's traces (otelcol.receiver.otlp "agents").
+        - name: otlp-http
+          port: 4318
+          targetPort: 4318
           protocol: TCP
 
       resources:

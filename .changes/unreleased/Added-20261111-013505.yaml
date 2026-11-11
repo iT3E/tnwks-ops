@@ -1,0 +1,3 @@
+kind: Added
+body: 'Alloy: an OTLP/HTTP receiver for the agent platform''s traces, with a filter that removes the text attributes of a conversation before Tempo, and a daily test span (trace-filter-check)'
+time: 2026-11-11T01:35:05.743311126-08:00
