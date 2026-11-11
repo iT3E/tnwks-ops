@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.81.0 - 2026-11-11
+
+### Added
+
+* Run one OpenShell sandbox gateway in each agent trust domain on homelab-wsl, with certificates from cert-manager and a network policy that lets in its own namespace only.
+
 ## v2.80.0 - 2026-11-11
 
 ### Added
