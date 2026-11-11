@@ -1,3 +1,0 @@
-kind: Added
-body: 'LiteLLM: a key in keys.json can set a spend limit (max_budget, budget_duration), and the agent platform has one key alias for each trust domain'
-time: 2026-11-11T01:28:07.110937189-08:00
