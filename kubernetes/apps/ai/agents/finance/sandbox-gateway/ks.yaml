@@ -1,0 +1,26 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The sandbox gateway (OpenShell) of the trust domain agents-finance: it makes
+# the sandboxes of this domain and holds their policies and providers.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-finance-sandbox-gateway
+  namespace: flux-system
+spec:
+  targetNamespace: agents-finance
+  path: ./kubernetes/apps/ai/agents/finance/sandbox-gateway/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    # The Sandbox CRDs: the gateway makes Sandbox records. The chart's own
+    # check for them is off (app/helmrelease.yaml), so this gives the order.
+    - name: agent-sandbox
+    # The Issuer and Certificate CRDs.
+    - name: cert-manager
+  wait: true
+  interval: 30m
+  retryInterval: 1m
+  timeout: 10m

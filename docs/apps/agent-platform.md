@@ -34,6 +34,39 @@ directory name.
 - The label `agents.home.arpa/trust-domain` names the trust domain of a
   namespace.
 
+## Sandbox gateways
+
+Each trust domain runs its own [OpenShell](https://github.com/NVIDIA/OpenShell)
+gateway (`<name>/sandbox-gateway/`), so no trust domain can list, reach or
+use the sandboxes and providers of another. It makes the sandboxes of its
+domain in its own namespace, through the sandbox controller.
+
+| What a caller in the trust domain uses | Value |
+| --- | --- |
+| Gateway address | `https://openshell.agents-<name>.svc.cluster.local:8080` |
+| Client certificate | Secret `openshell-client-tls` in the same namespace: `ca.crt`, `tls.crt`, `tls.key` |
+| Server name in the certificate | `openshell.agents-<name>.svc.cluster.local` (also the short forms) |
+
+- **Chart:** `oci://ghcr.io/nvidia/openshell/helm-chart`, from an
+  `OCIRepository` in each namespace. The gateway, supervisor and sandbox
+  images follow the chart version. The four copies move in one Renovate PR.
+- **Certificates:** cert-manager (`certManager.enabled`) makes a certificate
+  authority for each gateway (a self-signed `Issuer`, then a CA `Issuer`),
+  the server certificate and the client certificate, valid for a year and
+  renewed 30 days before they end. The chart's hook makes only the signing
+  key of the sandbox tokens. The key that encrypts provider credentials is a
+  Secret the chart makes once and keeps (`helm.sh/resource-policy: keep`).
+- **Telemetry:** off (`server.telemetryEnabled: false`); the chart's default
+  sends it from the gateway and the sandbox supervisors.
+- **Storage:** the gateway's SQLite database (1 GiB) and each sandbox
+  workspace (2 GiB) are on `${STORAGE_CLASS_DEFAULT}`.
+- **Network policy:** `sandbox-gateway` lets only pods of its own namespace
+  reach port 8080: the callers of the trust domain and the supervisors of its
+  sandboxes. The listener accepts a connection with no client certificate and
+  checks each call, and a service that a sandbox exposes through the gateway
+  needs no certificate, so this policy is what keeps other trust domains out.
+  The gateway reaches the API server and the pods of its own namespace.
+
 ## Sandbox controller
 
 [Agent Sandbox](https://github.com/kubernetes-sigs/agent-sandbox) makes the
