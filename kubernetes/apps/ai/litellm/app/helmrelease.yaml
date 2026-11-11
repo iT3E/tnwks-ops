@@ -90,6 +90,12 @@ spec:
                   secretKeyRef:
                     name: litellm-secret
                     key: LITELLM_MASTER_KEY
+              # The credential of the claude-opus-plan model (configmap.yaml).
+              - name: ANTHROPIC_PLAN_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: litellm-secret
+                    key: ANTHROPIC_PLAN_TOKEN
               # Bedrock credentials: boto3 reads them from the aws-credentials
               # sidecar, which serves the EC2 metadata API on localhost.
               - name: AWS_EC2_METADATA_SERVICE_ENDPOINT

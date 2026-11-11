@@ -1,0 +1,3 @@
+kind: Added
+body: 'LiteLLM: Claude Opus on the Anthropic API as the model claude-opus-plan, with its credential from litellm-secret'
+time: 2026-11-11T10:45:00.000000000-08:00

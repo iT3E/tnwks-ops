@@ -2,13 +2,14 @@
 
 An OpenAI-compatible proxy in `ai` (WSL),
 `litellm-app.ai.svc.cluster.local:4000`, in front of local models (Ollama on
-the WSL host) and Claude Sonnet on AWS Bedrock. Manifests: `kubernetes/apps/ai/litellm/`. Its state (keys, spend)
+the WSL host), Claude Sonnet on AWS Bedrock and Claude Opus on the Anthropic API. Manifests: `kubernetes/apps/ai/litellm/`. Its state (keys, spend)
 is the cnpg `litellm` database.
 
 | Model | Backend |
 | --- | --- |
 | `gemma3:12b`, `llama3.1:8b`, `qwen3:8b` | Ollama on the WSL host's GPU (`OLLAMA_BASE_URL`) |
 | `claude-sonnet` | Bedrock, `us.anthropic.claude-sonnet-5-5` (Converse API, us-east-1) |
+| `claude-opus-plan` | Anthropic API, `claude-opus-5-5`, with the token of the owner's Claude plan |
 
 ## Prompt caching
 
@@ -32,6 +33,36 @@ conversation only writes its new turns. Other providers are untouched
 Check it in the spend logs (`/spend/logs?summarize=false`):
 `metadata.usage_object` has `cache_creation_input_tokens` (writes) and
 `cache_read_input_tokens` (reads) per request.
+
+## Claude on the Anthropic API
+
+`claude-opus-plan` calls the Anthropic API with a token of the owner's Claude
+plan, so its use counts against the plan and not against Bedrock. It is here
+for the agent platform (`docs/apps/agent-platform.md`), as a first test: no
+key in `keys.json` lists the model, so only the master key can call it.
+
+- The token is `ANTHROPIC_PLAN_TOKEN` in `app/secret.sops.yaml`. The owner
+  makes it with `claude setup-token` and adds it with
+  `sops kubernetes/apps/ai/litellm/app/secret.sops.yaml`. Reloader restarts
+  the pod when the Secret changes.
+- The pod needs the value to start, like the other values of that Secret.
+- LiteLLM sends a plan token as a bearer token with the OAuth beta header;
+  an API key in the same place goes out as `x-api-key`. Nothing else in the
+  entry changes between the two.
+- Anthropic decides whether it serves a plan token from a client that is not
+  one of its own apps, and it can change that. A refused call comes back as
+  an error from this model only.
+
+Test it from a workstation, with the master key in a variable and never on
+the screen:
+
+```sh
+kubectl -n ai port-forward svc/litellm-app 4000:4000 &
+KEY=$(kubectl -n ai get secret litellm-secret -o jsonpath='{.data.LITELLM_MASTER_KEY}' | base64 -d)
+curl -s localhost:4000/v1/chat/completions \
+  -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+  -d '{"model":"claude-opus-plan","max_tokens":32,"messages":[{"role":"user","content":"Say ok"}]}'
+```
 
 ## Bedrock credentials
 
