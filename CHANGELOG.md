@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.78.0 - 2026-11-11
+
+### Added
+
+* Add the agent platform's trust-domain namespaces on homelab-wsl (agents-main, agents-finance, agents-workflows and agents-pilot), each with the restricted Pod Security level and a network policy that denies by default.
+
 ## v2.77.1 - 2026-11-11
 
 ### Fixed
