@@ -1,3 +1,0 @@
-kind: Added
-body: Add the agent platform's trust-domain namespaces on homelab-wsl (agents-main, agents-finance, agents-workflows and agents-pilot), each with the restricted Pod Security level and a network policy that denies by default.
-time: 2026-11-11T01:13:44.782840084-08:00
