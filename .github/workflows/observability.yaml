@@ -14,7 +14,7 @@ permissions:
 
 # Two tiers. `contracts` checks generated resources, schemas and rules
 # whenever the observability domain is on (validate_health.py scans all of
-# kubernetes/). `rehearsals` stands up disposable Garage/Thanos and Grafana
+# kubernetes/). `rehearsals` stands up disposable Garage/Thanos, Alloy and Grafana
 # (browser and renderer), about two minutes, and runs only when what they
 # read changed (the observability_rehearsals domain, passed as `rehearse`).
 jobs:
@@ -84,6 +84,8 @@ jobs:
         run: uv sync --project observability --locked --python 3.13
       - name: Disposable Garage and Thanos acceptance
         run: uv run --project observability python observability/rehearse_archive.py
+      - name: Disposable Alloy config acceptance
+        run: uv run --project observability python observability/rehearse_alloy.py
       - name: Disposable Grafana provisioning and browser acceptance
         run: |
           uv run --project observability playwright install --with-deps chromium
