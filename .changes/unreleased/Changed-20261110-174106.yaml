@@ -1,3 +1,0 @@
-kind: Changed
-body: changedetection alerts post straight to the War Room as the Alertmanager bot, with no LLM summarizer in the path
-time: 2026-11-10T17:41:06.147480292-08:00
