@@ -172,6 +172,19 @@
         "datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) cache-bust\\n\\s*- url: \\S+\\?v=(?<currentValue>[^\\s\"']+)\\n"
       ],
       "extractVersionTemplate": "^v?(?<version>.+)$"
+    },
+    {
+      // The observability contracts and rehearsals run these pins, and most
+      // mirror a manifest pin (Grafana, the renderer, Thanos, Garage, Caddy).
+      // Each is spelled like its manifest, so both land in one PR and the
+      // validators that compare them stay green.
+      "customType": "regex",
+      "description": "Image pins in observability/versions.py",
+      "managerFilePatterns": ["/^observability/versions\\.py$/"],
+      "matchStrings": [
+        "= \"(?<depName>[a-z0-9./_-]+):(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[a-f0-9]{64})\""
+      ],
+      "datasourceTemplate": "docker"
     }
   ]
 }

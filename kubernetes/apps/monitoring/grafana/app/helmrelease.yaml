@@ -38,10 +38,13 @@ spec:
     - name: ingress-nginx-internal
       namespace: networking
   values:
+    # The digest goes in `tag`, not the chart's `sha` key: Renovate updates
+    # tag@digest together but doesn't know `sha`, so a bump left the old
+    # digest pinned. observability/versions.py mirrors this pin and Renovate
+    # moves both in one PR (observability/validate_grafana.py checks they match).
     image:
       repository: grafana/grafana
-      tag: 13.3.1
-      sha: 0615ec4fbd4072004b7d86b46ded63013a74b7d6eb1119273dd89e8fa25c13cf
+      tag: 13.3.1@sha256:0615ec4fbd4072004b7d86b46ded63013a74b7d6eb1119273dd89e8fa25c13cf
     # Which site runs it (docs/wsl/multi-site.md, "Switching an app"). A warm
     # app: homelab-wsl at 1, homelab-wsl-02 at 0 with a replica of grafana-pg.
     replicas: ${GRAFANA_REPLICAS:=1}
@@ -369,9 +372,10 @@ spec:
       # Runs on both sites, idle on the standby: the chart can't set 0 replicas
       # (it drops a zero and falls back to 1).
       existingSecret: grafana-renderer-auth
+      # repository is the chart default, spelled out so Renovate sees the pin.
       image:
-        tag: v5.12.10
-        sha: a7970b826f6e477461e02bf5463d92634e9ad27d525e4e50296978a2e592d2d7
+        repository: grafana/grafana-image-renderer
+        tag: v5.12.10@sha256:a7970b826f6e477461e02bf5463d92634e9ad27d525e4e50296978a2e592d2d7
         pullPolicy: IfNotPresent
       env:
         SERVER_ADDR: "0.0.0.0:8081"

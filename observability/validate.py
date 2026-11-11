@@ -11,7 +11,7 @@ from pathlib import Path
 import yaml
 
 from generate import ROOT
-from versions import THANOS
+from versions import CADDY, GARAGE, THANOS
 
 
 def main():
@@ -68,6 +68,11 @@ def main():
                 print(f"Helm schema/render passed: {obj['metadata']['name']}")
     garage = yaml.safe_load((ROOT / "kubernetes/apps/monitoring/garage/app/helmrelease.yaml").read_text())
     pod = garage["spec"]["values"]["controllers"]["garage"]["pod"]
+    # The rehearsal runs the versions.py pins; they must be what the site deploys.
+    controller = garage["spec"]["values"]["controllers"]["garage"]
+    images = {name: f"{c['image']['repository']}:{c['image']['tag']}"
+              for group in ("initContainers", "containers") for name, c in controller[group].items()}
+    assert images == {"credentials": CADDY, "app": GARAGE, "tls": CADDY}, images
     assert pod["nodeSelector"] == {"kubernetes.io/hostname": "${OBSERVABILITY_ARCHIVE_NODE:=homelab-wsl-02-worker-1}"}
     for cluster in ["wsl", "wsl-02"]:
         graph = subprocess.run(command + ["--load-restrictor=LoadRestrictionsNone",
