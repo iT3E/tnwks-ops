@@ -7,6 +7,6 @@
   "documentation": "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/home-assistant.md",
   "integration_type": "service",
   "iot_class": "local_push",
-  "requirements": ["pypdf==7.0.0", "fonttools==4.68.0"],
+  "requirements": ["pypdf==7.0.1", "fonttools==4.68.0"],
   "version": "1.2.0"
 }
