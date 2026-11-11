@@ -56,3 +56,21 @@ spec:
         memory: 64Mi
       limits:
         memory: 256Mi
+  # The chart's common labels put two values in label values that the API
+  # server refuses: helm.sh/chart gets the chart version, which Flux makes
+  # 0.1.4+<commit> for reconcileStrategy Revision, and
+  # app.kubernetes.io/version gets image.tag, which holds the digest. Remove
+  # both from each object that has them. Nothing selects on either label (the
+  # selectors use name and instance), so the objects are otherwise as the
+  # chart renders them. If a chart release drops one of these labels, the
+  # remove fails and the upgrade stops: delete that op.
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              labelSelector: helm.sh/chart
+            patch: |-
+              - op: remove
+                path: /metadata/labels/helm.sh~1chart
+              - op: remove
+                path: /metadata/labels/app.kubernetes.io~1version

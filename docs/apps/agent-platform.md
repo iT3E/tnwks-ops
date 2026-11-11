@@ -26,6 +26,11 @@ the cluster.
 - The controller image is pinned by tag and digest. The tag must match the
   `GitRepository` tag: Renovate opens one PR for each, and both are patch
   updates that merge when CI is green.
+- The chart puts its version and `image.tag` in two labels (`helm.sh/chart`,
+  `app.kubernetes.io/version`). Neither value is a valid label value here:
+  Flux gives the chart the version `0.1.4+<commit>` for each tag, and the tag
+  holds the digest. A `postRenderers` patch in the HelmRelease removes both
+  labels; no selector uses them.
 - The namespace has the `restricted` Pod Security level and a policy that
   denies by default. The controller reaches the API server and DNS only.
 
