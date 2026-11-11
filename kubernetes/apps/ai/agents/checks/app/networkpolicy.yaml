@@ -1,0 +1,42 @@
+---
+# The check pods may try the sandbox gateway of every trust domain, so that
+# the isolation check tests each gateway's own policy: only the gateway of
+# this namespace may answer. They also fetch the OpenShell CLI release and
+# read the pods of this namespace. Nothing calls them.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: platform-checks
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: platform-checks
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: openshell
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+          matchExpressions:
+            - key: io.kubernetes.pod.namespace
+              operator: In
+              values:
+                - agents-main
+                - agents-finance
+                - agents-workflows
+                - agents-pilot
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    # The CLI release (GitHub redirects downloads to its asset host).
+    - toFQDNs:
+        - matchName: github.com
+        - matchName: release-assets.githubusercontent.com
+        - matchName: objects.githubusercontent.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    - toEntities:
+        - kube-apiserver

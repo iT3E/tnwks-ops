@@ -96,3 +96,25 @@ charts make have no cluster label; they stay local because Cilium 1.19 sets
 `clustermesh.policyDefaultLocalCluster: true` by default, and the Cilium
 HelmRelease (`kubernetes/apps/kube-system/cilium/app/helmrelease.yaml`) does
 not change it.
+
+## Checks
+
+Two CronJobs in each trust domain test the boundaries every day
+(`checks/app/`, shared by the trust domains; each `<name>/checks/ks.yaml`
+applies it to its namespace). A failed check fails its Job, and the Job
+pod's log goes to Loki.
+
+| CronJob | Schedule | What must hold |
+| --- | --- | --- |
+| `platform-check-isolation` | 04:17 | The check pod connects to its own sandbox gateway and to no other trust domain's gateway, and its client certificate works there (`sandbox list`) |
+| `platform-check-probe` | 04:47 | A new sandbox of the domain reaches nothing that no sandbox policy names: the API server, the internet, its own gateway, the model gateway and the metadata address, direct or through the sandbox proxy. It holds no service account token. The probe also logs the node of each pod of the sandbox, then deletes it |
+
+- The check pods may try every trust domain's gateway on port 8080, so the
+  isolation check tests each gateway's own policy, not the check pod's.
+- The OpenShell CLI is a release binary, fetched by an init container at a
+  pinned version and checked against its SHA-256. Move `CLI_VERSION` and
+  `CLI_SHA256` (`checks/app/cronjobs.yaml`, both CronJobs) with the chart
+  version of the sandbox gateways; Renovate doesn't track them.
+- The probe reads the pods of its sandbox through a Role that can get and
+  list pods in its own namespace, and nothing more.
+- To run one now: `kubectl -n agents-<name> create job --from=cronjob/platform-check-isolation check-now`.

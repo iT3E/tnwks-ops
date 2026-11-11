@@ -1,0 +1,3 @@
+kind: Added
+body: 'Add daily checks to each agent trust domain on homelab-wsl: one tests that only its own sandbox gateway answers it, and one probes the network of a new sandbox.'
+time: 2026-11-11T01:21:49.09340356-08:00

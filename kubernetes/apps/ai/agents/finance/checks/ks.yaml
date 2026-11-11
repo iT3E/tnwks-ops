@@ -1,0 +1,24 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The checks of the agent platform in agents-finance: the isolation check
+# and the sandbox probe, as CronJobs. The app is shared by every trust domain
+# (kubernetes/apps/ai/agents/checks/app).
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-finance-checks
+  namespace: flux-system
+spec:
+  targetNamespace: agents-finance
+  path: ./kubernetes/apps/ai/agents/checks/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    # The client certificate, and a gateway to check.
+    - name: agents-finance-sandbox-gateway
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
