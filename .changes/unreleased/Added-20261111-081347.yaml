@@ -1,0 +1,3 @@
+kind: Added
+body: 'CI: a disposable Alloy rehearsal runs the pinned Alloy with the monitoring HelmRelease''s config and checks that every component is healthy'
+time: 2026-11-11T08:13:47.588259471-08:00
