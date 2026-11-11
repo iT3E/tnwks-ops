@@ -1,3 +1,0 @@
-kind: Added
-body: Run one OpenShell sandbox gateway in each agent trust domain on homelab-wsl, with certificates from cert-manager and a network policy that lets in its own namespace only.
-time: 2026-11-11T01:17:03.962533864-08:00
