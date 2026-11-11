@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.83.0 - 2026-11-11
+
+### Added
+
+* Add daily checks to each agent trust domain on homelab-wsl: one tests that only its own sandbox gateway answers it, and one probes the network of a new sandbox.
+
 ## v2.82.0 - 2026-11-11
 
 ### Added
