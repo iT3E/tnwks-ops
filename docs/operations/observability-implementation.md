@@ -702,6 +702,36 @@ a version bump reruns the rehearsal before it ships.
 Sites in both themes: it changes the navigation's highlight and some spacing,
 not the boards, so it stays off.
 
+## Agent traces
+
+The agent platform sends its traces to Alloy on homelab-wsl over OTLP/HTTP:
+`http://alloy.monitoring.svc.cluster.local:4318` (the `otelcol.receiver.otlp
+"agents"` block of `kubernetes/apps/monitoring/alloy/app/helmrelease.yaml`).
+No ingress serves that port. Alloy forwards each span to Tempo.
+
+- **Text filter.** Before Tempo, `otelcol.processor.transform "drop_text"`
+  removes the attributes that carry the text of a conversation, on spans and
+  on span events: the generative AI conventions (`gen_ai.input.messages`,
+  `gen_ai.output.messages`, `gen_ai.system_instructions`,
+  `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result`, and the older
+  `gen_ai.prompt*` and `gen_ai.completion*`), OpenInference (`input.value`,
+  `output.value`, `llm.input_messages*`, `llm.output_messages*`) and agent
+  memory (`memory.query`, `memory.results`, `memory.content`). An event named
+  `gen_ai.*` or `memory.*` loses every attribute. Token counts, model and tool
+  names and timings stay.
+- **Send agents to Alloy only.** Tempo also takes OTLP (4317, 4318), and a
+  span sent there skips the filter. An agent's egress policy names Alloy's
+  pods, not Tempo's.
+- **Test span.** The CronJob `trace-filter-check` (monitoring, 05:27 each day,
+  `scripts/trace_filter_check.py`) sends a span with a new marker text in each
+  removed attribute and event, reads the trace from Tempo, and fails when the
+  marker is there or a kept attribute is missing. A failed run raises
+  `KubeJobFailed`. To run it now:
+  `kubectl -n monitoring create job --from=cronjob/trace-filter-check check-now`.
+- The filter removes known names. A new attribute with text, from a new
+  product release, passes until it's added here: the trace test of each agent
+  image release checks for that.
+
 ## Following rollout work
 
 Access, recovery, review and drills are in

@@ -4,3 +4,9 @@ kind: Kustomization
 namespace: monitoring
 resources:
   - ./helmrelease.yaml
+  - ./trace-filter-check.yaml
+configMapGenerator:
+  # The test span of the agent trace receiver (trace-filter-check.yaml).
+  - name: trace-filter-check
+    files:
+      - trace_filter_check.py=./scripts/trace_filter_check.py
