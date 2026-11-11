@@ -7,3 +7,9 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ./sandbox-controller
+  # One directory and one namespace (agents-<name>) for each trust domain.
+  - ./main
+  - ./finance
+  - ./workflows
+  # The pilot of a personal agent on test accounts, with the same parts.
+  - ./pilot
