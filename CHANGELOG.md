@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.82.0 - 2026-11-11
+
+### Added
+
+* Alloy: an OTLP/HTTP receiver for the agent platform's traces, with a filter that removes the text attributes of a conversation before Tempo, and a daily test span (trace-filter-check)
+
 ## v2.81.0 - 2026-11-11
 
 ### Added
