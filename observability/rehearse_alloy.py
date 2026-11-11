@@ -83,7 +83,7 @@ def main():
                 print(f"{component}: {state}")
             print(f"Alloy loaded the config: {len(states)} components healthy")
         except Exception:
-            logs = subprocess.run(["docker", "logs", name], capture_output=True, text=True)
+            logs = subprocess.run(["docker", "logs", name], check=False, capture_output=True, text=True)
             print(logs.stdout[-4000:], logs.stderr[-4000:])
             raise
         finally:
