@@ -1,0 +1,36 @@
+---
+# The sandbox gateway and its certificate hook (app.kubernetes.io/instance:
+# openshell). Its listener takes a connection with no client certificate and
+# checks each call, so only this namespace may connect: the callers of this
+# trust domain and the supervisors of its sandboxes. Sandbox pods never carry
+# this label; the guard keeps it that way.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: sandbox-gateway
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/instance: openshell
+    matchExpressions:
+      - key: openshell.ai/managed-by
+        operator: DoesNotExist
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  egress:
+    # Sandboxes, policies, secrets and exec, through the API server.
+    - toEntities:
+        - kube-apiserver
+    # The sandbox pods of this namespace (SSH and the supervisor link).
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-main
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}

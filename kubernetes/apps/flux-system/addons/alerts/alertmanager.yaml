@@ -50,6 +50,30 @@ spec:
       namespace: agent-sandbox-system
       name: "*"
     - kind: HelmRelease
+      namespace: agents-main
+      name: "*"
+    - kind: OCIRepository
+      namespace: agents-main
+      name: "*"
+    - kind: HelmRelease
+      namespace: agents-finance
+      name: "*"
+    - kind: OCIRepository
+      namespace: agents-finance
+      name: "*"
+    - kind: HelmRelease
+      namespace: agents-workflows
+      name: "*"
+    - kind: OCIRepository
+      namespace: agents-workflows
+      name: "*"
+    - kind: HelmRelease
+      namespace: agents-pilot
+      name: "*"
+    - kind: OCIRepository
+      namespace: agents-pilot
+      name: "*"
+    - kind: HelmRelease
       namespace: auth
       name: "*"
     - kind: HelmRelease

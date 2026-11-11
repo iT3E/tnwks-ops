@@ -1,0 +1,48 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+# One sandbox gateway for this trust domain (docs/apps/agent-platform.md).
+# Its sandboxes run in this namespace. The images follow the chart version.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: openshell
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: openshell
+  interval: 30m
+  maxHistory: 2
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  values:
+    server:
+      # The chart's default sends anonymous telemetry from the gateway and the
+      # sandbox supervisors.
+      telemetryEnabled: false
+      # The gateway database (SQLite, 1 GiB) and each sandbox workspace (2 GiB).
+      dataStorageClass: ${STORAGE_CLASS_DEFAULT}
+      workspaceStorageClass: ${STORAGE_CLASS_DEFAULT}
+    # cert-manager makes this gateway's own certificate authority, its server
+    # certificate and the client certificate (Secret openshell-client-tls:
+    # ca.crt, tls.crt, tls.key), and renews them. The client certificate is
+    # what a caller in this namespace mounts to use the gateway.
+    certManager:
+      enabled: true
+      # The chart always adds this namespace's service names. Its default
+      # list also names an `openshell` namespace, which isn't ours.
+      serverDnsNames: []
+    # 40 to 145 MiB in use on a test cluster (the agent platform design,
+    # RUN-012). The chart sets nothing.
+    resources:
+      requests:
+        cpu: 10m
+        memory: 128Mi
+      limits:
+        memory: 512Mi
