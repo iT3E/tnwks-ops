@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.79.0 - 2026-11-11
+
+### Added
+
+* CI: a disposable Alloy rehearsal runs the pinned Alloy with the monitoring HelmRelease's config and checks that every component is healthy
+
 ## v2.78.0 - 2026-11-11
 
 ### Added
