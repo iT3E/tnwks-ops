@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.77.1 - 2026-11-11
+
+### Fixed
+
+* Agent Sandbox controller: remove the chart's helm.sh/chart and app.kubernetes.io/version labels after render, so its objects install with the chart built per tag and the image pinned by digest
+
 ## v2.77.0 - 2026-11-11
 
 ### Added

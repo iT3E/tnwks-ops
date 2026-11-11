@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Agent Sandbox controller: remove the chart''s helm.sh/chart and app.kubernetes.io/version labels after render, so its objects install with the chart built per tag and the image pinned by digest'
-time: 2026-11-11T08:05:50.816793146-08:00
