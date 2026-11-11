@@ -3,8 +3,8 @@
 Watches web pages and sends an alert when they change, at
 `https://changedetection.internal.tnwks.us` (LAN and admin VPN only,
 `nginx-internal`). Today it watches the AI labs' misalignment-report pages.
-An alert goes to a single-purpose OpenClaw agent, which posts a short summary
-to the owner's Telegram.
+An alert posts the new entry titles straight to the War Room on Telegram, with
+no LLM in the path.
 
 Manifests: `kubernetes/apps/production/changedetection/`, image
 `ghcr.io/dgtlmoon/changedetection.io` in `app/helmrelease.yaml`. It runs on
@@ -46,39 +46,30 @@ logging in. No NetworkPolicy limits that today.
 ## Alerts
 
 Each watch sends its alert through Apprise (the notification library built into
-changedetection) as a JSON POST to the OpenClaw gateway's `/hooks/agent` on the
-WSL desktop (`10.10.91.142:18789`, through the Windows portproxy). The
-notification URL is a `json://` URL whose `:key=value` parameters turn
-Apprise's payload into the hook's own payload (`agentId`, `channel`, `to`,
-`accountId`, `name`) and whose `+Authorization` parameter carries the hook
-token. The gateway runs the agent `watcher` (a small model, `web_fetch` as its
-only tool), which reads the new lines, opens the items and replies with a
-two-to-three-line summary per item, or stays silent.
+changedetection) to Telegram, as the Alertmanager bot, into the War Room (the
+same group and bot as the cluster alerts). The notification URL is
+`tgram://<bot token>/<War Room chat ID>/`. The bot token is
+`telegram_bot_token` in `kubernetes/apps/monitoring/alertmanager/app/secrets.sops.yaml`,
+and the chat ID is `chat_id` in that app's `config/alertmanager.yml`.
 
-The notification body is the agent's input:
+The message is changedetection's own text, with no LLM in between:
 
 ```
-changedetection alert
-watch: {{watch_title}}
-url: {{watch_url}}
-mode: all | misalignment-only
-added:
+title: 👁️ {{watch_title}}
+body:
+{{watch_title}} changed
+{{watch_url}}
+
+New:
 {{diff_added}}
 ```
 
-`mode: misalignment-only` tells the agent to drop posts that aren't about
-model misalignment (for general research pages); `mode: all` reports every
-new item.
+So an alert is the list of new entry titles and the page to open, and costs no
+tokens. Two watches that change in the same check send two messages.
 
-Pieces outside git, for a rebuild:
-
-- OpenClaw agent `watcher` (`agents.entries.watcher` in the gateway config),
-  workspace `~/.openclaw/workspace-watcher` (its `AGENTS.md` is the contract for
-  the alert format above), and `watcher` in `hooks.allowedAgentIds`.
-- The hook token, shared with the other hook callers. It sits in clear text in
-  each watch's notification URL in the datastore (and so in its backups), and it
-  travels over plain HTTP on the LAN. Rotating `hooks.token` means updating
-  every watch's notification URL.
+The bot token sits in clear text in each watch's notification URL in the
+datastore (and so in its backups). Rotating the Alertmanager bot token means
+updating every watch's notification URL as well as the SOPS Secret.
 
 ## Watches
 
@@ -87,12 +78,14 @@ XPath filter), sorts and de-duplicates the lines, and alerts on added lines
 only. So a reordered list or an edited date doesn't alert, and a removed post
 doesn't either.
 
-| Watch | URL | Filter | Mode |
-| --- | --- | --- | --- |
-| OpenAI misalignment reports | `https://alignment.openai.com/misalignment-reports/` | `a.report-title` | all |
-| Anthropic Alignment Science blog | `https://alignment.anthropic.com/` | `a.note h3` | misalignment-only |
-| Anthropic research | `https://www.anthropic.com/research` | `xpath://a[starts-with(@href,"/research/")]` | misalignment-only |
-| METR blog | `https://metr.org/blog/` | `.blog-post-card .card-title` | misalignment-only |
+| Watch | URL | Filter |
+| --- | --- | --- |
+| OpenAI misalignment reports | `https://alignment.openai.com/misalignment-reports/` | `a.report-title` |
+| Anthropic Alignment Science blog | `https://alignment.anthropic.com/` | `a.note h3` |
+| Anthropic research | `https://www.anthropic.com/research` | `xpath://a[starts-with(@href,"/research/")]` |
+| METR blog | `https://metr.org/blog/` | `.blog-post-card .card-title` |
+
+Every new title alerts, whatever its topic.
 
 OpenAI is the only lab with a dedicated misalignment-report section (since
 2026-09-16). Its RSS feed (`alignment.openai.com/rss.xml`) carries the blog
@@ -113,5 +106,5 @@ Hacker News) are the upstream examples.
   is 403 without the key, and 200 with `-H "x-api-key: <key>"`.
 - Alert path: a temporary watch on `https://httpbin.org/uuid` with the same
   notification URL, then `GET /api/v1/watch/<uuid>?recheck=1`, then delete it.
-  The gateway log line `hook agent run completed` for agent `watcher` shows
-  `delivered: true`, and the message arrives on Telegram.
+  The watch's `notification_alert_count` goes up with `last_notification_error`
+  false, and the message arrives in the War Room.
