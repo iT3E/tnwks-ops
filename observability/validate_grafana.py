@@ -13,7 +13,7 @@ import yaml
 from versions import GRAFANA, RENDERER
 
 ROOT = Path(__file__).resolve().parents[1]
-CHART_SHA256 = "bfba0d92aa35f10aebc73368167308d563558693e0a7665d31fe92f59f186738"
+CHART_SHA256 = "08fcc1f997fa8545c7e6132242c57fba902d103c9d5ebbe42063beafa00ed3df"
 
 
 def main():
