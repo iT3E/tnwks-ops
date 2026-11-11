@@ -31,6 +31,8 @@ CLIENT_TLS = os.environ.get("CLIENT_TLS_DIR", "/client-tls")
 PROBE_IMAGE = os.environ.get("PROBE_IMAGE", "")
 SANDBOX = os.environ.get("PROBE_SANDBOX", "platform-probe")
 PORT = 8080
+# The model gateway (docs/apps/litellm.md). No sandbox policy names it.
+MODEL_GATEWAY = os.environ.get("MODEL_GATEWAY", "litellm-app.ai.svc.cluster.local")
 failures = 0
 
 
@@ -105,11 +107,11 @@ def http(url):
 out = {
     "Kubernetes API, direct": tcp(os.environ.get("KUBERNETES_SERVICE_HOST", "kubernetes.default.svc"), 443),
     "internet, direct": tcp("1.1.1.1", 443),
-    "own sandbox gateway, direct": tcp("GATEWAY", 8080),
-    "model gateway, direct": tcp("litellm.ai.svc.cluster.local", 4000),
+    "own sandbox gateway, direct": tcp("GATEWAY_IP", 8080),
+    "model gateway, direct": tcp("MODEL_GATEWAY_IP", 4000),
     "metadata address, direct": tcp("169.254.169.254", 80),
     "internet, through the sandbox proxy": http("https://example.com/"),
-    "model gateway, through the sandbox proxy": http("http://litellm.ai.svc.cluster.local:4000/health/liveliness"),
+    "model gateway, through the sandbox proxy": http("http://MODEL_GATEWAY:4000/health/liveliness"),
     "service account token": "present" if os.path.exists("/var/run/secrets/kubernetes.io/serviceaccount/token") else "blocked: absent",
 }
 print("PROBE " + json.dumps(out))
@@ -147,7 +149,11 @@ def probe() -> None:
     try:
         result = None
         deadline = time.monotonic() + 300
-        code = PROBE.replace("GATEWAY", gateway(OWN))
+        # The direct probes use addresses: the sandbox resolves no names, so a
+        # name would test DNS only. The check pod resolves them.
+        code = (PROBE.replace("MODEL_GATEWAY_IP", socket.gethostbyname(MODEL_GATEWAY))
+                .replace("MODEL_GATEWAY", MODEL_GATEWAY)
+                .replace("GATEWAY_IP", socket.gethostbyname(gateway(OWN))))
         while time.monotonic() < deadline:
             result = cli("sandbox", "exec", "--name", SANDBOX, "--no-tty", "--",
                          "python3", "-c", code, timeout=120)
