@@ -40,8 +40,8 @@ spec:
   values:
     image:
       repository: grafana/grafana
-      tag: 13.3.0
-      sha: 488984b716c0862639f91a698adbe2862677a5a07bad42da5f03f3030883b205
+      tag: 13.3.1
+      sha: 0615ec4fbd4072004b7d86b46ded63013a74b7d6eb1119273dd89e8fa25c13cf
     # Which site runs it (docs/wsl/multi-site.md, "Switching an app"). A warm
     # app: homelab-wsl at 1, homelab-wsl-02 at 0 with a replica of grafana-pg.
     replicas: ${GRAFANA_REPLICAS:=1}
