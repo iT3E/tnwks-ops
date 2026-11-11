@@ -1,0 +1,3 @@
+kind: Added
+body: 'MikroTik: VLANs take extra_addresses; temporary 192.168.1.1/24 on seccam-610 and HTTP from the desktop to 192.168.1.108, to set up the replacement east camera at its factory default'
+time: 2026-11-11T15:57:44.000000000-08:00

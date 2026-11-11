@@ -80,7 +80,12 @@ locals {
     seccam-610 = {
       vlan_id = 610
       address = "10.10.60.1/24"
-      comment = "seccam-610"
+      # TEMPORARY (2026-11): the replacement east camera sits at its factory
+      # default 192.168.1.108 (gateway 192.168.1.1) and does not ask for DHCP.
+      # This gives it its gateway so the desktop can reach its web UI (rule in
+      # 140) to set it up. Remove both once it is on DHCP.
+      extra_addresses = ["192.168.1.1/24"]
+      comment         = "seccam-610"
       dhcp = {
         pool_start    = "10.10.60.30"
         pool_end      = "10.10.60.100"
@@ -436,6 +441,16 @@ locals {
           dst_address_list = "security_cameras"
           protocol         = "udp"
           dst_port         = "554"
+        },
+        # TEMPORARY (2026-11): HTTP from the desktop to the replacement east
+        # camera at its factory default, to set it up. Remove with the
+        # seccam-610 extra address once it is on DHCP.
+        {
+          comment          = "TEMP: desktop to new camera web UI (setup)"
+          src_address_list = "frigate"
+          dst_address      = "192.168.1.108"
+          protocol         = "tcp"
+          dst_port         = "80"
         },
       ]
     }

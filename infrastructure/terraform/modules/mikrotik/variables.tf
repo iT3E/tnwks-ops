@@ -115,15 +115,18 @@ variable "vlans" {
 
     vlan_id  - 802.1q tag
     address  - router SVI address in CIDR form
+    extra_addresses - further router addresses on the same SVI, in CIDR form
+               (e.g. a device's factory-default subnet while it is set up)
     comment  - human label carried into RouterOS comments
     enabled  - false keeps the definition in git without provisioning it
     dhcp     - null disables DHCP for the VLAN, otherwise a pool/lease config
   EOT
   type = map(object({
-    vlan_id = number
-    address = string
-    comment = optional(string)
-    enabled = optional(bool, true)
+    vlan_id         = number
+    address         = string
+    extra_addresses = optional(list(string), [])
+    comment         = optional(string)
+    enabled         = optional(bool, true)
     dhcp = optional(object({
       pool_start    = string
       pool_end      = string

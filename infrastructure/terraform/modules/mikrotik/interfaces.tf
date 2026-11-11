@@ -103,6 +103,20 @@ resource "routeros_ip_address" "svi" {
   comment   = coalesce(each.value.comment, each.key)
 }
 
+# Further addresses on an SVI, keyed "<zone>/<cidr>" so adding or removing one
+# leaves the others alone.
+resource "routeros_ip_address" "svi_extra" {
+  for_each = merge([
+    for zone, v in local.active_vlans : {
+      for a in v.extra_addresses : "${zone}/${a}" => { zone = zone, address = a, comment = v.comment }
+    }
+  ]...)
+
+  address   = each.value.address
+  interface = routeros_interface_vlan.svi[each.value.zone].name
+  comment   = "${coalesce(each.value.comment, each.value.zone)} extra"
+}
+
 # --- WAN ---------------------------------------------------------------------
 # VyOS had eth0 as `address dhcp` facing the cable modem. The transit path to
 # the EdgeRouter is a VLAN SVI (transit-10), handled above.
