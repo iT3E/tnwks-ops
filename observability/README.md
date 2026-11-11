@@ -90,6 +90,11 @@ environment, then review and commit generated files together with the source.
 Never hand-edit generated dashboard JSON, copied exporter code, rule fixtures or
 Thanos HelmReleases. Image updates must update `versions.py` and regenerated
 resources; do not merge a generated-only dependency bump that fails this check.
+Renovate tracks `versions.py` itself (a regex manager in `.github/renovate.json5`).
+Each pin is spelled like the manifest that deploys it, so Renovate bumps the
+pin and every manifest copy in one PR. Keep that spelling when you add one.
+The Grafana contract renders the chart version the HelmRelease names, checked
+against the HelmRepository index digest, so a chart bump needs nothing here.
 
 `storage-preflight.ps1 -Site wsl` is read-only and reports physical Windows drive
 headroom, memory and the backing drive of registered WSL images. It never attaches,

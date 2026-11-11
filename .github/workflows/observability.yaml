@@ -53,18 +53,16 @@ jobs:
             -o "$RUNNER_TEMP/observability-app-template.tgz"
           uv run --project observability python observability/validate.py \
             --chart "$RUNNER_TEMP/observability-app-template.tgz"
+      # Renders the chart version the HelmRelease names, fetched from its
+      # HelmRepository and checked against the index digest.
       - name: Render maintained Grafana and authenticated renderer
-        run: |
-          curl -fsSL https://github.com/grafana-community/helm-charts/releases/download/grafana-14.4.1/grafana-14.4.1.tgz \
-            -o "$RUNNER_TEMP/observability-grafana.tgz"
-          uv run --project observability python observability/validate_grafana.py \
-            --chart "$RUNNER_TEMP/observability-grafana.tgz"
+        run: uv run --project observability python observability/validate_grafana.py
       - name: Recording rules and failure fixtures
         run: |
+          image=$(python3 -I -c "import runpy; print(runpy.run_path('observability/versions.py')['PROMETHEUS'])")
           docker run --rm --network none --entrypoint /bin/promtool \
             --mount type=bind,src="$PWD/observability/generated",dst=/rules,readonly \
-            prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2 \
-            test rules /rules/rule-tests.yaml
+            "$image" test rules /rules/rule-tests.yaml
 
   rehearsals:
     if: inputs.rehearse

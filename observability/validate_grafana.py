@@ -5,7 +5,10 @@ import hashlib
 import json
 import re
 import subprocess
+import tarfile
 import tempfile
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 import yaml
@@ -13,16 +16,37 @@ import yaml
 from versions import GRAFANA, RENDERER
 
 ROOT = Path(__file__).resolve().parents[1]
-CHART_SHA256 = "08fcc1f997fa8545c7e6132242c57fba902d103c9d5ebbe42063beafa00ed3df"
+Loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
+
+def fetch_chart(release, dest):
+    """Download the chart version the HelmRelease names from its HelmRepository,
+    checked against the digest the repository's index publishes for it, so
+    Renovate's chart bump alone moves what this renders."""
+    spec = release["spec"]["chart"]["spec"]
+    source = ROOT / "kubernetes/flux/meta/helm" / f"{spec['sourceRef']['name']}.yaml"
+    url = yaml.safe_load(source.read_text())["spec"]["url"].rstrip("/")
+    with urllib.request.urlopen(f"{url}/index.yaml", timeout=60) as response:
+        index = yaml.load(response.read(), Loader=Loader)
+    entry = next(e for e in index["entries"][spec["chart"]] if e["version"] == spec["version"])
+    with urllib.request.urlopen(urllib.parse.urljoin(f"{url}/", entry["urls"][0]), timeout=60) as response:
+        data = response.read()
+    assert hashlib.sha256(data).hexdigest() == entry["digest"], f"{spec['chart']} {spec['version']} digest"
+    dest.write_bytes(data)
+    return dest
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--chart", required=True, type=Path)
+    parser.add_argument("--chart", type=Path, help="local chart .tgz (default: fetch the HelmRelease's version)")
     args = parser.parse_args()
-    assert hashlib.sha256(args.chart.read_bytes()).hexdigest() == CHART_SHA256
     path = ROOT / "kubernetes/apps/monitoring/grafana/app"
     release = yaml.safe_load((path / "helmrelease.yaml").read_text())
+    workdir = tempfile.TemporaryDirectory()
+    chart = args.chart or fetch_chart(release, Path(workdir.name) / "grafana.tgz")
+    with tarfile.open(chart) as archive:
+        meta = yaml.safe_load(archive.extractfile("grafana/Chart.yaml"))
+    assert meta["version"] == release["spec"]["chart"]["spec"]["version"], meta["version"]
     remediation = release["spec"]["upgrade"]["remediation"]
     assert remediation["retries"] == 0 and not remediation["remediateLastFailure"]
     params = {"STORAGE_CLASS_DEFAULT": "local-path", "INTERNAL_DOMAIN": "example.invalid",
@@ -33,7 +57,7 @@ def main():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as file:
         file.write(values)
         file.flush()
-        rendered = subprocess.check_output(["helm", "template", "grafana", str(args.chart),
+        rendered = subprocess.check_output(["helm", "template", "grafana", str(chart),
             "--namespace", "monitoring", "--values", file.name], text=True)
     objects = [obj for obj in yaml.safe_load_all(rendered) if obj]
     deployments = {obj["metadata"]["name"]: obj for obj in objects if obj["kind"] == "Deployment"}

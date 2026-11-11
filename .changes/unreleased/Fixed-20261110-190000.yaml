@@ -1,0 +1,3 @@
+kind: Fixed
+body: Renovate bumps Grafana's image digest, the image renderer and the observability version pins together, so a Grafana update no longer keeps the old digest or fails the observability contract
+time: 2026-11-10T19:00:00.000000000-08:00

@@ -34,6 +34,8 @@
         "kubernetes/apps/monitoring/**",
         "kubernetes/apps/production/**",
         "kubernetes/apps/selfhosted/**",
+        // Mirrors of monitoring image pins; same tier, or a mixed PR stalls.
+        "observability/versions.py",
       ],
       matchUpdateTypes: ["patch", "digest"],
       automerge: true,
@@ -50,6 +52,8 @@
         "kubernetes/apps/monitoring/**",
         "kubernetes/apps/production/**",
         "kubernetes/apps/selfhosted/**",
+        // Mirrors of monitoring image pins; same tier, or a mixed PR stalls.
+        "observability/versions.py",
       ],
       matchUpdateTypes: ["minor"],
       matchCurrentVersion: "!/^v?0\\./",
@@ -116,6 +120,7 @@
         "!kubernetes/apps/monitoring/**",
         "!kubernetes/apps/production/**",
         "!kubernetes/apps/selfhosted/**",
+        "!observability/versions.py",
         "!.github/workflows/**",
         "!infrastructure/ansible/requirements.yml",
         "!.pre-commit-config.yaml",
