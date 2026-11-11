@@ -10,6 +10,29 @@ these parts.
 | Part | Namespace | Manifests |
 | --- | --- | --- |
 | Sandbox controller (Agent Sandbox) | `agent-sandbox-system` | `sandbox-controller/` |
+| Trust domain of the main personal agent | `agents-main` | `main/` |
+| Trust domain of the finance agent | `agents-finance` | `finance/` |
+| Trust domain of the workflow agents | `agents-workflows` | `workflows/` |
+| Pilot of a personal agent, on test accounts | `agents-pilot` | `pilot/` |
+
+## Trust domains
+
+Each trust domain directory has a `namespace.yaml` and a `kustomization.yaml`
+that lists its apps. The namespace of each app comes from `targetNamespace`
+in its `ks.yaml`, so the namespace (`agents-<name>`) differs from the
+directory name.
+
+- **Pod Security:** each namespace enforces the `restricted` level.
+- **Default deny:** a `NetworkPolicy` denies ingress and egress for every pod
+  but the sandbox pods (label `openshell.ai/managed-by`). The sandbox gateway
+  gives each sandbox its own policies when it makes it: the workload pod gets
+  no egress, and its supervisor carries the egress that the sandbox policy
+  approves.
+- **DNS:** a `CiliumNetworkPolicy` lets the other pods resolve names through
+  Cilium's DNS proxy, so a policy here can allow a host name (`toFQDNs`).
+- Each app adds its own allow rules next to its manifests.
+- The label `agents.home.arpa/trust-domain` names the trust domain of a
+  namespace.
 
 ## Sandbox controller
 
