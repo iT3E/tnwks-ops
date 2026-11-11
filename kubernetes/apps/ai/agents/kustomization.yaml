@@ -1,0 +1,9 @@
+---
+# The agent platform (docs/apps/agent-platform.md). One directory and one
+# namespace for each trust domain, and one for the sandbox controller of the
+# cluster. Listed by homelab-wsl's app list only, not through ../kustomization.yaml,
+# so no other cluster gets these parts.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./sandbox-controller

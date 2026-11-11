@@ -1,0 +1,22 @@
+---
+# The Agent Sandbox controller, one for the cluster. Pods here meet the
+# `restricted` Pod Security level, and the network policy below denies by
+# default; agent-sandbox/app/networkpolicy.yaml lets the controller reach
+# the API server and DNS.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agent-sandbox-system
+  labels:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: agent-sandbox-system
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]

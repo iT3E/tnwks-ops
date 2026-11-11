@@ -1,0 +1,58 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: agent-sandbox
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: ./helm
+      # The chart keeps one version number across releases, so build it again
+      # for each new tag of the GitRepository.
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: agent-sandbox
+  maxHistory: 2
+  install:
+    crds: Create
+    remediation:
+      retries: 3
+  upgrade:
+    # Helm leaves crds/ alone on upgrade; a new release can change them.
+    crds: CreateReplace
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  values:
+    # namespace.yaml owns the namespace and its Pod Security level.
+    namespace:
+      create: false
+      name: agent-sandbox-system
+    image:
+      repository: registry.k8s.io/agent-sandbox/agent-sandbox-controller
+      # The same release as the GitRepository tag (the chart and the CRDs).
+      tag: v1.0.10@sha256:594f4853913bca2b336d0267fe0978445f1aaa5837ed23797e48e745c8d6b610
+    # The `restricted` level of the namespace. The image runs as a non-root
+    # user (distroless nonroot).
+    podSecurityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+    # 25 MiB in use on a test cluster (the agent platform design, RUN-012).
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        memory: 256Mi

@@ -1,0 +1,20 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# Agent Sandbox: the controller that makes the pods of a Sandbox record, and
+# its CRDs. The sandbox gateway of each trust domain depends on it.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agent-sandbox
+  namespace: flux-system
+spec:
+  targetNamespace: agent-sandbox-system
+  path: ./kubernetes/apps/ai/agents/sandbox-controller/agent-sandbox/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: true # the sandbox gateways need its CRDs
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
