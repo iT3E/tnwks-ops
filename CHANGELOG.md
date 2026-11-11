@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.76.1 - 2026-11-11
+
+### Fixed
+
+* Renovate bumps Grafana's image digest, the image renderer and the observability version pins together, so a Grafana update no longer keeps the old digest or fails the observability contract
+
 ## v2.76.0 - 2026-11-11
 
 ### Changed
