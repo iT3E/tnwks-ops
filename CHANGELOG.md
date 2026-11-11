@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.77.0 - 2026-11-11
+
+### Added
+
+* Run the Agent Sandbox controller on homelab-wsl, in its own namespace with the restricted Pod Security level, as the first part of the agent platform.
+
 ## v2.76.1 - 2026-11-11
 
 ### Fixed
