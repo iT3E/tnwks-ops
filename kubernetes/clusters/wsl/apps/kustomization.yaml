@@ -24,6 +24,9 @@ kind: Kustomization
 resources:
   # Shared namespaces — used as-is
   - ../../../apps/ai
+  # The agent platform (docs/apps/agent-platform.md): this cluster only, so it
+  # is listed here and not in apps/ai/kustomization.yaml, which MS-01 reads.
+  - ../../../apps/ai/agents
   - ../../../apps/auth
   - ../../../apps/cache
   - ../../../apps/cert-manager
