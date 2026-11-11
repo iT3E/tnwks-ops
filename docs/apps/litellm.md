@@ -45,8 +45,7 @@ key in `keys.json` lists the model, so only the master key can call it.
   makes it with `claude setup-token` and adds it with
   `sops kubernetes/apps/ai/litellm/app/secret.sops.yaml`. Reloader restarts
   the pod when the Secret changes.
-- The variable is optional in the pod. Without the value the pod starts, and
-  only this model's calls fail.
+- The pod needs the value to start, like the other values of that Secret.
 - LiteLLM sends a plan token as a bearer token with the OAuth beta header;
   an API key in the same place goes out as `x-api-key`. Nothing else in the
   entry changes between the two.
