@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.91.0 - 2026-11-12
+
+### Added
+
+* tools: a runner scale set for the checks of a private docs repo, with no Docker
+
 ## v2.90.1 - 2026-11-12
 
 ### Fixed
