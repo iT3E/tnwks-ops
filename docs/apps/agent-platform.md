@@ -242,6 +242,18 @@ the sandbox plugin copies the workspace only.
 - **Client certificate** of the sandbox gateway: Secret
   `openshell-client-tls`, copied by the `prepare` init container into the
   directory the CLI reads.
+- **Stopped sandboxes.** When the sandbox gateway starts again (a node
+  restart, a new release), it stops the sandboxes it had, and the product
+  doesn't start a stopped one. The `sandbox-start` container
+  (`agent/config/scripts/sandbox-start.sh`) waits at most 5 minutes for the
+  gateway when the pod starts, then each minute starts every sandbox of the
+  product (names `oc-`) in phase `Stopped`, with the CLI and the client
+  certificate above. It logs one line for each start,
+  `sandbox-start name=<name> result=ok|failed`, and nothing else. To check:
+  `kubectl -n agents-pilot logs deploy/agent -c sandbox-start`, and
+  `kubectl -n agents-pilot get sandboxes.agents.x-k8s.io` shows each one
+  `Ready`. A sandbox stopped by hand starts again within a minute; delete it
+  to keep it down.
 - **Network policy.** No pod comes in. Out: the model gateway, the sandbox
   gateway of this namespace, alloy, and
   `api.telegram.org`. The Signal daemon takes the agent pod only (and the

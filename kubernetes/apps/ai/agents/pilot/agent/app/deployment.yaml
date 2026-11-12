@@ -38,9 +38,11 @@ spec:
       # of the product checks that the gateway owns the state before it
       # reads it, and it can only see the gateway process in the same PID
       # namespace ("run this command inside the Gateway container or with a
-      # shared PID namespace"). Both containers run the same image, as the
-      # same user, with the same secret env, so neither sees more than it
-      # holds already. The restricted Pod Security level allows it.
+      # shared PID namespace"). The containers run the same image, as the
+      # same user. The backup container has the same secret env as the
+      # gateway, so it sees no more than it holds already; the sandbox-start
+      # container has none, but it can see the processes of the others. The
+      # restricted Pod Security level allows it.
       shareProcessNamespace: true
       # The second worker. The state volume (local-path) stays on the node of
       # the first start.
@@ -267,6 +269,27 @@ spec:
               subPath: tmp
             - name: user-config
               mountPath: /home/node/.config
+        # The sandbox-start container (scripts/sandbox-start.sh in ../config):
+        # it starts each sandbox of the product that the sandbox gateway left
+        # stopped, when the pod starts and then each minute. The client
+        # certificate of the sandbox gateway is all it uses, so it gets no
+        # secret env.
+        - name: sandbox-start
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "/scripts/sandbox-start.sh"]
+          resources: *small
+          securityContext: *containerSecurity
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
+              readOnly: true
       volumes:
         - name: state
           persistentVolumeClaim:
