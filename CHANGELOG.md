@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.91.1 - 2026-11-12
+
+### Fixed
+
+* agents: the daily backup of the pilot agent runs in the PID namespace of its gateway, after the gateway is ready; the agent fetches no hosted model catalog and no helper binaries
+
 ## v2.91.0 - 2026-11-12
 
 ### Added
