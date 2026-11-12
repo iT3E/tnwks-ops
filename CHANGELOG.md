@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.91.2 - 2026-11-12
+
+### Fixed
+
+* agents: the pilot agent starts each of its sandboxes that the sandbox gateway left stopped, when the pod starts and then each minute
+
 ## v2.91.1 - 2026-11-12
 
 ### Fixed
