@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'agents: the pilot agent starts each of its sandboxes that the sandbox gateway left stopped, when the pod starts and then each minute'
+time: 2026-11-12T23:00:00.000000000Z

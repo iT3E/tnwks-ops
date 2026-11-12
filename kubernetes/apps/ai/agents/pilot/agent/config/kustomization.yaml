@@ -16,3 +16,4 @@ configMapGenerator:
     files:
       - archive-state.sh=./scripts/archive-state.sh
       - daily-backup.sh=./scripts/daily-backup.sh
+      - sandbox-start.sh=./scripts/sandbox-start.sh
