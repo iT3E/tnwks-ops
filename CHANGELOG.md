@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.88.1 - 2026-11-12
+
+### Fixed
+
+* Agent platform probe: find the two pods of the probe sandbox through its Sandbox record while it runs, require both running, and log each pod with its node
+
 ## v2.88.0 - 2026-11-12
 
 ### Added
