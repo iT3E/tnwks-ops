@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.88.0 - 2026-11-12
+
+### Added
+
+* The model bridge of the agent platform in the ai namespace on homelab-wsl: one replica with the restricted settings and a read-only root file system, the Service model-bridge on port 8080, and a network policy that lets in the model gateway pods only and lets out the API of the vendor only
+
 ## v2.87.0 - 2026-11-12
 
 ### Changed
