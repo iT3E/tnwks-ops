@@ -145,7 +145,7 @@ pod's log goes to Loki.
 | CronJob | Schedule | What must hold |
 | --- | --- | --- |
 | `platform-check-isolation` | 04:17 | The check pod connects to its own sandbox gateway and to no other trust domain's gateway, and its client certificate works there (`sandbox list`) |
-| `platform-check-probe` | 04:47 | A new sandbox of the domain reaches nothing that no sandbox policy names: the API server, the internet, its own gateway, the model gateway and the metadata address, direct or through the sandbox proxy. It holds no service account token. The probe also logs the node of each pod of the sandbox, then deletes it |
+| `platform-check-probe` | 04:47 | A new sandbox of the domain reaches nothing that no sandbox policy names: the API server, the internet, its own gateway, the model gateway and the metadata address, direct or through the sandbox proxy. It holds no service account token. While the sandbox runs, its two pods (workload and supervisor) must be found running; the probe logs each pod with its node, then deletes the sandbox |
 
 - The check pods may try every trust domain's gateway on port 8080, so the
   isolation check tests each gateway's own policy, not the check pod's.
@@ -153,6 +153,12 @@ pod's log goes to Loki.
   pinned version and checked against its SHA-256. Move `CLI_VERSION` and
   `CLI_SHA256` (`checks/app/cronjobs.yaml`, both CronJobs) with the chart
   version of the sandbox gateways; Renovate doesn't track them.
-- The probe reads the pods of its sandbox through a Role that can get and
-  list pods in its own namespace, and nothing more.
+- The probe finds the pods of its sandbox through the `Sandbox` record
+  (label `openshell.ai/sandbox-name`), whose `openshell.ai/sandbox-id` the
+  two pods carry in lower case as `openshell.ai/boundary-pair`. A Role lets
+  it get and list `Sandbox` records and pods in its own namespace, and
+  nothing more.
+- Nothing places the two pods of a sandbox: the scheduler picks each node
+  on its own, so they can share a node. The probe logs `nodes` and
+  `different_nodes` and doesn't fail on one node.
 - To run one now: `kubectl -n agents-<name> create job --from=cronjob/platform-check-isolation check-now`.
