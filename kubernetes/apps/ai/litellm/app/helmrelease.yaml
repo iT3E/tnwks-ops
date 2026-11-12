@@ -90,12 +90,24 @@ spec:
                   secretKeyRef:
                     name: litellm-secret
                     key: LITELLM_MASTER_KEY
-              # The credential of the claude-opus-plan model (configmap.yaml).
-              - name: ANTHROPIC_PLAN_TOKEN
+              # The bridge key of each trust domain, for the claude-opus-bridge-*
+              # entries (configmap.yaml). The model bridge holds the same values
+              # in model-bridge-secret.
+              - name: BRIDGE_KEY_MAIN
                 valueFrom:
                   secretKeyRef:
                     name: litellm-secret
-                    key: ANTHROPIC_PLAN_TOKEN
+                    key: BRIDGE_KEY_MAIN
+              - name: BRIDGE_KEY_FINANCE
+                valueFrom:
+                  secretKeyRef:
+                    name: litellm-secret
+                    key: BRIDGE_KEY_FINANCE
+              - name: BRIDGE_KEY_WORKFLOWS
+                valueFrom:
+                  secretKeyRef:
+                    name: litellm-secret
+                    key: BRIDGE_KEY_WORKFLOWS
               # Bedrock credentials: boto3 reads them from the aws-credentials
               # sidecar, which serves the EC2 metadata API on localhost.
               - name: AWS_EC2_METADATA_SERVICE_ENDPOINT

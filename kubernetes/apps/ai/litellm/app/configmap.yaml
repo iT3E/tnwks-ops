@@ -3,11 +3,13 @@
 # passed via `--config`. The three local models proxy to Ollama running
 # natively on the WSL host (see OLLAMA_BASE_URL in cluster-settings; Flux
 # substitutes it). claude-sonnet is Bedrock, through the Converse API, with
-# credentials from the aws-credentials sidecar (helmrelease.yaml).
+# credentials from the aws-credentials sidecar (helmrelease.yaml). The
+# claude-opus-* entries and model_group_alias serve the agent platform.
 #
-# Secrets (master key, DB URL) are NOT in this ConfigMap; litellm resolves them
-# at runtime from env vars via the `os.environ/<VAR>` indirection, and those
-# env vars are sourced from the sops Secret / reflected CNPG secret.
+# Secrets (master key, DB URL, bridge keys) are NOT in this ConfigMap; litellm
+# resolves them at runtime from env vars via the `os.environ/<VAR>`
+# indirection, and those env vars are sourced from the sops Secret /
+# reflected CNPG secret.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -34,14 +36,49 @@ data:
         litellm_params:
           model: bedrock/converse/us.anthropic.claude-sonnet-5-5
           aws_region_name: us-east-1
-      # Claude Opus on the Anthropic API, for the agent platform
-      # (docs/apps/litellm.md). Its credential is ANTHROPIC_PLAN_TOKEN in
-      # litellm-secret. No key in keys.json lists this model: until one
-      # does, only the master key can call it.
-      - model_name: claude-opus-plan
+      # The agent platform (docs/apps/litellm.md, "The agent platform").
+      # Agents never call these entries by name: each trust domain calls its
+      # own name in router_settings.model_group_alias below, and its key
+      # lists that name only.
+      #
+      # Claude Opus on the Claude plan, through the model bridge: one entry
+      # for each trust domain, each with the bridge key of that trust domain
+      # (sent as x-api-key; the bridge knows the trust domain by it).
+      - model_name: claude-opus-bridge-main
         litellm_params:
           model: anthropic/claude-opus-5-5
-          api_key: os.environ/ANTHROPIC_PLAN_TOKEN
+          api_base: http://model-bridge.ai.svc.cluster.local:8080
+          api_key: os.environ/BRIDGE_KEY_MAIN
+      - model_name: claude-opus-bridge-finance
+        litellm_params:
+          model: anthropic/claude-opus-5-5
+          api_base: http://model-bridge.ai.svc.cluster.local:8080
+          api_key: os.environ/BRIDGE_KEY_FINANCE
+      - model_name: claude-opus-bridge-workflows
+        litellm_params:
+          model: anthropic/claude-opus-5-5
+          api_base: http://model-bridge.ai.svc.cluster.local:8080
+          api_key: os.environ/BRIDGE_KEY_WORKFLOWS
+      # Claude Opus on Bedrock (cross-region inference profile), the provider
+      # after a move. The invoke route keeps a /v1/messages call in the
+      # Messages format end to end; the converse route would translate it.
+      - model_name: claude-opus-bedrock
+        litellm_params:
+          model: bedrock/invoke/us.anthropic.claude-opus-5-5
+          aws_region_name: us-east-1
+
+    router_settings:
+      # The name of each trust domain of the agent platform, and the one
+      # entry behind it. Moving a name between the plan and Bedrock is a
+      # change of its one line here, by a person, in a pull request; a
+      # revert moves it back. There is no fallback anywhere in this file, on
+      # purpose: nothing moves a name but that line. The pilot has no bridge
+      # key of its own and uses the main one.
+      model_group_alias:
+        agents-main: claude-opus-bridge-main
+        agents-finance: claude-opus-bridge-finance
+        agents-workflows: claude-opus-bridge-workflows
+        agents-pilot: claude-opus-bridge-main
 
     general_settings:
       master_key: os.environ/LITELLM_MASTER_KEY

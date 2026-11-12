@@ -1,7 +1,8 @@
 ---
 # The Roles Anywhere client certificate in secret-roles-anywhere.sops.yaml
-# expires 2027-03-28; without it LiteLLM gets no Bedrock credentials and
-# claude-sonnet (the transcriber's summaries) fails. This fires 30 days before.
+# expires 2027-03-28; without it LiteLLM gets no Bedrock credentials, and
+# claude-sonnet (the transcriber's summaries) and claude-opus-bedrock (the
+# agent platform after a move) fail. This fires 30 days before.
 # After renewing the certificate, move the date (epoch seconds) with it.
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
