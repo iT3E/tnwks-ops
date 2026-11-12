@@ -49,6 +49,8 @@ spec:
       name: gha-runner-scale-set-controller-gha-rs-controller
     template:
       spec:
+        # The runner talks to GitHub only, never to the Kubernetes API.
+        automountServiceAccountToken: false
         securityContext:
           # The image's USER is the name `runner`; runAsNonRoot needs the uid.
           runAsNonRoot: true
