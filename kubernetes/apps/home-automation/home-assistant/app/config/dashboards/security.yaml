@@ -59,6 +59,15 @@ views:
             go2rtc: { stream: frigate_reolink_south_hq }
             capabilities: *hd_only
 
+          - camera_entity: camera.frigate_empiretech_east
+            go2rtc: { stream: frigate_empiretech_east_lq }
+            dependencies: { cameras: [frigate_empiretech_east_hd] }
+          - camera_entity: camera.frigate_empiretech_east
+            id: frigate_empiretech_east_hd
+            title: EmpireTech East HD
+            go2rtc: { stream: frigate_empiretech_east_hq }
+            capabilities: *hd_only
+
           - camera_entity: camera.frigate_sv3c_west
             go2rtc: { stream: frigate_sv3c_west_lq }
             dependencies: { cameras: [frigate_sv3c_west_hd] }
