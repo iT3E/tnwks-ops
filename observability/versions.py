@@ -14,5 +14,5 @@ THANOS = "quay.io/thanos/thanos:v0.42.5@sha256:0a546b98a8dd47735456ab389983675ee
 PROMETHEUS = "prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2"
 CADDY = "docker.io/library/caddy:2.11.9-alpine@sha256:0bbb055bda6793c999bde78b1b5ce3e89f829fb031af2cf50056ea1246559fee"
 GRAFANA = "grafana/grafana:13.3.1@sha256:0615ec4fbd4072004b7d86b46ded63013a74b7d6eb1119273dd89e8fa25c13cf"
-RENDERER = "grafana/grafana-image-renderer:v5.12.10@sha256:a7970b826f6e477461e02bf5463d92634e9ad27d525e4e50296978a2e592d2d7"
+RENDERER = "grafana/grafana-image-renderer:v5.12.11@sha256:cfa6c8f63e6d626f90208f2880f15bd5facc279daec1b9bb642af07aa850d95e"
 ALLOY = "docker.io/grafana/alloy:v1.21.3@sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4"
