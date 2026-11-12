@@ -1,7 +1,7 @@
 ---
-# Repo-scoped runner for the private docs repo (iT3E/tnwks-coe), whose CI
-# callers take `runs-on` from the repository variable CI_RUNNER: set it to
-# `tnwks-coe` to run its checks here, delete it to go back to GitHub-hosted
+# Repo-scoped runner for the private docs repo (iT3E/tnwks-coe). Its CI
+# callers run here by default (`runs-on: tnwks-coe`); the repository
+# variable CI_RUNNER=ubuntu-latest sends them back to GitHub-hosted
 # runners. Its jobs (privacy, secret scan, actionlint, changelog, labeler,
 # the skills' Python checks, release) need bash, git, curl, perl and
 # python3 only, all in the runner image.
