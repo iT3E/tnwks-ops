@@ -245,7 +245,7 @@ automation:
       watched_cameras:
         - frigate_loryta_fdoor
         - frigate_reolink_south
-        - frigate_sv3c_east
+        - frigate_empiretech_east
         - frigate_sv3c_west
         - frigate_amcrest_balc
         - frigate_amcrest_kitchen
