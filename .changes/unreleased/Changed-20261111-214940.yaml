@@ -1,3 +1,0 @@
-kind: Changed
-body: 'LiteLLM: the names of the agent platform (agents-main, agents-finance, agents-workflows, agents-pilot), each pointing at one entry by one line of model_group_alias; Claude Opus through the model bridge with the bridge key of each trust domain, and Claude Opus on Bedrock through the Invoke API; no fallback. The claude-opus-plan entry and its credential are gone'
-time: 2026-11-11T21:49:40.609339861-08:00

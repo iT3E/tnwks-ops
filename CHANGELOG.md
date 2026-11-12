@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.89.0 - 2026-11-12
+
+### Changed
+
+* LiteLLM: the names of the agent platform (agents-main, agents-finance, agents-workflows, agents-pilot), each pointing at one entry by one line of model_group_alias; Claude Opus through the model bridge with the bridge key of each trust domain, and Claude Opus on Bedrock through the Invoke API; no fallback. The claude-opus-plan entry and its credential are gone
+
 ## v2.88.2 - 2026-11-12
 
 ### Fixed
