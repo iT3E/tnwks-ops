@@ -1,0 +1,101 @@
+---
+# The model bridge (docs/apps/agent-platform.md, "The model bridge"): it
+# takes a Messages API call from the model gateway and runs it through the
+# Claude Agent SDK, with the sign-in of the plan. One engine process for
+# each live conversation, in memory; nothing on a disk.
+#
+# Source + image build: github.com/iT3E/tnwks-model-bridge. Pinned to a
+# release (<version>@sha256); every release becomes a Renovate PR here.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-bridge
+  namespace: ai
+  labels:
+    app.kubernetes.io/name: model-bridge
+  annotations:
+    # Roll the pod when model-bridge-secret changes.
+    reloader.stakater.com/auto: "true"
+spec:
+  # One replica: the conversations live in the memory of one pod.
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: model-bridge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: model-bridge
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: model-bridge
+          # A release, by digest: what runs only changes through git.
+          image: ghcr.io/it3e/tnwks-model-bridge:@@VERSION@@@sha256:@@DIGEST@@
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            # Listen on the address of the pod only (the default is loopback).
+            - name: BRIDGE_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: BRIDGE_PORT
+              value: "8080"
+            # The limits of the bridge (D14 of the Execution Plan): about
+            # 110 MiB and 200 MiB more for each live conversation, so 8 fit
+            # in the memory limit below. The pilot measures them.
+            - name: BRIDGE_MAX_CONVERSATIONS
+              value: "8"
+            - name: BRIDGE_IDLE_SECONDS
+              value: "900"
+          # CLAUDE_CODE_OAUTH_TOKEN, BRIDGE_KEY_MAIN, BRIDGE_KEY_FINANCE and
+          # BRIDGE_KEY_WORKFLOWS.
+          envFrom:
+            - secretRef:
+                name: model-bridge-secret
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            # The only writable path: a home for each engine process.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi

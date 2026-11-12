@@ -38,6 +38,7 @@ any time of day (the last rule in `.github/renovate/autoMerge.json5`,
 | `iT3E/tnwks-finance-sync` | Python | `ghcr.io/it3e/tnwks-finance-sync` | `:<version>@sha256` (`kubernetes/apps/production/finance-sync`) |
 | `iT3E/tnwks-transcriber` | Python | `ghcr.io/it3e/tnwks-transcriber` | `:<version>@sha256` (`kubernetes/apps/production/transcriber`) |
 | `iT3E/tnwks-transcriber-web` | Node (Angular) | `ghcr.io/it3e/tnwks-transcriber-web` | `:<version>@sha256` (`kubernetes/apps/production/transcriber`) |
+| `iT3E/tnwks-model-bridge` | Node | `ghcr.io/it3e/tnwks-model-bridge` | `:<version>@sha256` (`kubernetes/apps/ai/model-bridge`) |
 
 The image tags these pins rely on are part of the standard's contract
 (github-workflows' `image.yaml`): `:main` and `:sha-<short>` from `main`

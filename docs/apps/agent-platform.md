@@ -14,6 +14,7 @@ these parts.
 | Trust domain of the finance agent | `agents-finance` | `finance/` |
 | Trust domain of the workflow agents | `agents-workflows` | `workflows/` |
 | Pilot of a personal agent, on test accounts | `agents-pilot` | `pilot/` |
+| Model bridge, next to the model gateway | `ai` | `../model-bridge/` |
 
 ## Trust domains
 
@@ -101,6 +102,38 @@ charts make have no cluster label; they stay local because Cilium 1.19 sets
 `clustermesh.policyDefaultLocalCluster: true` by default, and the Cilium
 HelmRelease (`kubernetes/apps/kube-system/cilium/app/helmrelease.yaml`) does
 not change it.
+
+## The model bridge
+
+The model bridge (`kubernetes/apps/ai/model-bridge/`, image from
+[iT3E/tnwks-model-bridge](https://github.com/iT3E/tnwks-model-bridge)) takes
+a Messages API call from the model gateway and runs it through the Claude
+Agent SDK, with the sign-in of the plan. It belongs to no trust domain: it
+runs in the namespace of the model gateway, which is its one caller, and
+homelab-wsl lists it next to `agents/`.
+
+- **Service:** `http://model-bridge.ai.svc.cluster.local:8080`, with
+  `POST /v1/messages` and `GET /health`. The bridge listens on the address
+  of its pod.
+- **Callers:** each trust domain has its own bridge key, in the `x-api-key`
+  header. The entry of the model gateway for a trust domain points at the
+  bridge with that key, and the bridge keeps the conversations of each key
+  apart.
+- **Network policy:** in from the model gateway pods only (and the probes of
+  the kubelet), out to `api.anthropic.com` only, with DNS through Cilium's
+  DNS proxy.
+- **Pod:** one replica, the `restricted` settings, a read-only root file
+  system with an `emptyDir` on `/tmp`, and a memory limit of 2 GiB for at
+  most 8 live conversations (`BRIDGE_MAX_CONVERSATIONS`).
+- **Secret** `model-bridge-secret` (`secret.sops.yaml`):
+  `CLAUDE_CODE_OAUTH_TOKEN` (the token of `claude setup-token`; it lives one
+  year), and `BRIDGE_KEY_MAIN`, `BRIDGE_KEY_FINANCE` and
+  `BRIDGE_KEY_WORKFLOWS` (32 characters or more each, one for each trust
+  domain, not starting with `sk-ant-`). The model gateway gets the same
+  three keys for its entries.
+- A restart ends each live conversation; the next call of a conversation
+  goes in with its history as one text. The repository README has the
+  contract and the log format.
 
 ## Checks
 
