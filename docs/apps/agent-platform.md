@@ -216,7 +216,12 @@ the sandbox plugin copies the workspace only.
   `autoProviders` of the sandbox plugin is off, so no credential of the pod
   goes to a sandbox as a provider. Each channel takes messages from its one
   allowed sender, and no group. The config can't be changed from a chat
-  (`commands.config: false`, `configWrites: false`).
+  (`commands.config: false`, `configWrites: false`). The hosted model
+  catalog is not fetched (`models.catalogRefresh.enabled: false`), and
+  neither are helper binaries (`OPENCLAW_OFFLINE=1`). The gateway still
+  asks for the hosted plugin catalog once at start, which has no setting at
+  this release; the network policy blocks it, and the product uses its
+  bundled catalog.
 - **The scheduled turn** is the heartbeat of the product
   (`agents.defaults.heartbeat`): once a day, a turn in its own session with
   one shell command in a sandbox, and no message to a channel. Its traces go
@@ -247,7 +252,7 @@ the sandbox plugin copies the workspace only.
 | When | What | Kept |
 | --- | --- | --- |
 | Each start of the agent pod | `archive` init container (`agent/config/scripts/archive-state.sh`): a `tar.gz` of `state` in `archives/start/`, named with the release of the product and the time, read back against its checksum. Then `doctor` migrates the state, on a copy of the config | 14 days |
-| Each day | `backup` container (`agent/config/scripts/daily-backup.sh`): `openclaw backup create --verify` to `archives/daily/` | The last 7 |
+| Each day | `backup` container (`agent/config/scripts/daily-backup.sh`): once the gateway is ready, `openclaw backup create --verify` to `archives/daily/`. The command checks that the gateway owns the state, and it can only see the gateway process in the same PID namespace, so the pod shares one (`shareProcessNamespace: true`) | The last 7 |
 | Each day, after that backup | The same container: the SHA-256 of `AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md` and each file under `skills/`, compared with the list of the day before (`archives/instruction-files/`). One log line for each file that is new, changed or gone, then `instruction-check result=...` | 30 days of lists |
 | Each start of the Signal daemon | `archive` init container: a `tar.gz` of `data` in `archives/start/`, with the signal-cli release | 14 days |
 | Nightly | kopiur copies each volume, with its archives (`*/app/backup.yaml`, `docs/operations/backups.md`) | As the other volumes |

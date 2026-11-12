@@ -34,6 +34,14 @@ spec:
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
+      # One PID namespace for the containers of the pod. The backup command
+      # of the product checks that the gateway owns the state before it
+      # reads it, and it can only see the gateway process in the same PID
+      # namespace ("run this command inside the Gateway container or with a
+      # shared PID namespace"). Both containers run the same image, as the
+      # same user, with the same secret env, so neither sees more than it
+      # holds already. The restricted Pod Security level allows it.
+      shareProcessNamespace: true
       # The second worker. The state volume (local-path) stays on the node of
       # the first start.
       nodeSelector:
@@ -107,11 +115,13 @@ spec:
               value: "1"
             - name: XDG_CACHE_HOME
               value: /home/node/data/state/.cache
-            # No update check and no telemetry call (the network policy has
-            # no route for either).
+            # No update check, no telemetry call and no download of helper
+            # binaries (the network policy has no route for any of them).
             - name: OPENCLAW_NO_AUTO_UPDATE
               value: "1"
             - name: DO_NOT_TRACK
+              value: "1"
+            - name: OPENCLAW_OFFLINE
               value: "1"
           securityContext: *containerSecurity
           resources:
@@ -153,6 +163,8 @@ spec:
             - name: OPENCLAW_NO_AUTO_UPDATE
               value: "1"
             - name: DO_NOT_TRACK
+              value: "1"
+            - name: OPENCLAW_OFFLINE
               value: "1"
           envFrom: &secrets
             # OPENCLAW_GATEWAY_TOKEN, LITELLM_API_KEY, TELEGRAM_BOT_TOKEN,

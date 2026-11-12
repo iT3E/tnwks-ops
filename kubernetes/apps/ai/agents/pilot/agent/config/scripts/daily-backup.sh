@@ -11,7 +11,9 @@
 #    reads these lines, and one more fires when no `instruction-check
 #    result=` line came in 26 hours.
 #
-# A failed backup ends the container, so the restart shows on the pod.
+# The backup command must see the gateway process, so the pod shares one
+# PID namespace (app/deployment.yaml). A failed backup ends the container,
+# so the restart shows on the pod.
 set -eu
 
 ARCHIVES=/home/node/data/archives
@@ -73,10 +75,20 @@ instruction_check() {
   find "$LISTS" -maxdepth 1 -type f -name '*.sha256' -mtime +30 -delete
 }
 
+gateway_ready() {
+  node -e "require('http').get('http://127.0.0.1:18789/readyz', r => process.exit(r.statusCode < 400 ? 0 : 1)).on('error', () => process.exit(1))"
+}
+
 while true; do
   today=$(date -u +%Y-%m-%d)
   out="$DAILY/openclaw-backup-$today.tar.gz"
   if [ ! -f "$out" ]; then
+    # The backup command reads the state while the gateway owns it, so it runs
+    # once the gateway in the agent container is ready (same pod, same
+    # loopback, same PID namespace).
+    until gateway_ready; do
+      sleep 10
+    done
     if ! node /app/openclaw.mjs backup create --verify --output "$out"; then
       echo "daily-backup result=failed day=$today"
       rm -f "$out"
