@@ -1,0 +1,16 @@
+---
+# The volume of the Signal daemon, with two directories: `data` (the account
+# state of signal-cli: its keys and its database) and `archives` (an archive
+# of `data` at each start).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: signal-state
+  labels:
+    app.kubernetes.io/name: signal-daemon
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ${STORAGE_CLASS_DEFAULT}
+  resources:
+    requests:
+      storage: 1Gi

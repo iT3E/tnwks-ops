@@ -89,6 +89,19 @@ To add one: copy a policy file, change the name, namespace, PVC and user, add th
 namespace to `allowedNamespaces` in `repository/clusterrepository.yaml` if it is
 new, and list the file in `policies/kustomization.yaml`.
 
+The agent platform keeps its policies with each app instead, in its own trust
+domain's directory, since only homelab-wsl runs it
+(`docs/apps/agent-platform.md`, "The pilot agent"):
+
+| App | PVC | Why |
+| --- | --- | --- |
+| Pilot agent | `agents-pilot/agent-state` | The state of the product (sessions, workspace) and its archives. Mover user 1000 |
+| Pilot Signal daemon | `agents-pilot/signal-state` | The keys of the test Signal account and the archive of each start. Mover user 65532 |
+
+Those namespaces are `restricted` and deny by default, so the policy sets the
+mover's `podSecurityContext` too, and the namespace has a `backup-mover`
+policy that lets the movers reach S3 and the API server.
+
 ### Deliberately not backed up
 
 | What | Why |

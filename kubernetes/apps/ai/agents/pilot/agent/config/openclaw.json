@@ -1,0 +1,98 @@
+{
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "port": 18789,
+    "auth": {"mode": "token"},
+    "controlUi": {"enabled": false}
+  },
+  "update": {"checkOnStart": false},
+  "telemetry": {"enabled": false},
+  "acp": {"enabled": false},
+  "commands": {
+    "config": false,
+    "ownerAllowFrom": ["telegram:${TELEGRAM_ALLOW_FROM}"]
+  },
+  "session": {"dmScope": "per-channel-peer"},
+  "tools": {
+    "elevated": {"enabled": false},
+    "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch"]
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "~/.openclaw/workspace",
+      "model": {"primary": "litellm/agents-pilot"},
+      "modelPolicy": {"allow": ["litellm/agents-pilot"]},
+      "sandbox": {"mode": "all", "backend": "openshell", "scope": "session", "workspaceAccess": "rw"},
+      "heartbeat": {
+        "every": "24h",
+        "target": "none",
+        "isolatedSession": true,
+        "lightContext": true,
+        "prompt": "This is the daily scheduled check of the platform. Run the shell command `date -u` one time, then reply with its output and nothing else."
+      }
+    }
+  },
+  "models": {
+    "mode": "replace",
+    "providers": {
+      "litellm": {
+        "baseUrl": "http://litellm-app.ai.svc.cluster.local:4000",
+        "apiKey": "${LITELLM_API_KEY}",
+        "api": "anthropic-messages",
+        "models": [
+          {
+            "id": "agents-pilot",
+            "name": "Claude Opus 5.5 (agents-pilot at the model gateway)",
+            "reasoning": true,
+            "input": ["text", "image"],
+            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            "contextWindow": 200000,
+            "maxTokens": 32000
+          }
+        ]
+      }
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "allowlist",
+      "allowFrom": ["${TELEGRAM_ALLOW_FROM}"],
+      "groupPolicy": "disabled",
+      "configWrites": false
+    }
+  },
+  "plugins": {
+    "load": {
+      "paths": [
+        "/opt/openclaw/plugins/node_modules/@openclaw/openshell-sandbox"
+      ]
+    },
+    "entries": {
+      "openshell": {
+        "enabled": true,
+        "config": {
+          "mode": "mirror",
+          "from": "docker.io/library/python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
+          "gatewayEndpoint": "https://openshell.agents-pilot.svc.cluster.local:8080",
+          "autoProviders": false,
+          "timeoutSeconds": 300
+        }
+      },
+      "diagnostics-otel": {"enabled": true}
+    }
+  },
+  "diagnostics": {
+    "otel": {
+      "enabled": true,
+      "endpoint": "http://alloy.monitoring.svc.cluster.local:4318",
+      "protocol": "http/protobuf",
+      "serviceName": "openclaw-agents-pilot",
+      "traces": true,
+      "metrics": false,
+      "logs": false,
+      "sampleRate": 1.0
+    }
+  }
+}

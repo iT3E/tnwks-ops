@@ -1,0 +1,58 @@
+---
+# The state volume of the pilot agent, with its archives, to the Kopia
+# repository in S3 (docs/operations/backups.md). The copy is encrypted on the
+# client. The archives hold credentials, so the snapshots do too.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: agent-state
+spec:
+  repository:
+    kind: ClusterRepository
+    name: s3
+  # local-path has no CSI snapshots: the mover reads the live PVC read-only,
+  # on the node of the agent. The archives on the volume are the consistent
+  # copy of the database.
+  copyMethod: Direct
+  compression:
+    compressor: zstd
+  credentialProjection:
+    enabled: true
+  mover:
+    # The user of the agent image (the state is private, mode 0700), and
+    # the restricted level of the namespace.
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+      seccompProfile:
+        type: RuntimeDefault
+  retention:
+    keepLatest: 3
+    keepDaily: 7
+    keepWeekly: 4
+    keepMonthly: 6
+  sources:
+    - pvc:
+        name: agent-state
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: agent-state
+spec:
+  policyRef:
+    name: agent-state
+  schedule:
+    # Nightly, spread across 02:00-03:00 (H), as the other volumes.
+    cron: "H 2 * * *"
+    runOnCreate: true

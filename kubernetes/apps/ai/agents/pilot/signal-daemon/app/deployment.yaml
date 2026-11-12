@@ -1,0 +1,143 @@
+---
+# The Signal daemon of the pilot: signal-cli (the native build), as an HTTP
+# daemon with JSON-RPC and events, which the Signal channel of the product
+# uses (transport external-native). It runs in multi-account mode, so it
+# starts before the test number is linked; the owner links it once
+# (docs/apps/agent-platform.md, "The pilot agent").
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: signal-daemon
+  labels:
+    app.kubernetes.io/name: signal-daemon
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  # One process holds the account state, and the archive step reads it with
+  # no writer.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: signal-daemon
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: signal-daemon
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # Next to the agent pod.
+      nodeSelector:
+        kubernetes.io/hostname: homelab-wsl-worker-2
+      # The user of the image has a name and no fixed number, so the pod
+      # gives one.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # The directories of the volume, as the pod user (the kubelet makes a
+        # missing subPath as root). Then the archive step: an archive of the
+        # account state while the daemon is stopped, named with the release
+        # that starts and the time, read back against its checksum, kept for
+        # 14 days. A patch of the image can change the state, and this
+        # archive is the way back. A failed step stops the start.
+        - name: archive
+          image: &image ghcr.io/asamk/signal-cli:0.14.10-native@sha256:5a9a2a10db8ef3351bb713804e82f6ca7eb0a82340148839c2681720bc825d61
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              mkdir -p /volume/data /volume/archives/start
+              chmod 0700 /volume/data /volume/archives /volume/archives/start
+              release=$(/usr/bin/signal-cli --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
+              [ -n "$release" ] || release=unknown
+              name=signal-cli-$release-$(date -u +%Y%m%dT%H%M%SZ).tar.gz
+              cd /volume/archives/start
+              tar -czf "$name.partial" -C /volume/data .
+              mv "$name.partial" "$name"
+              sha256sum "$name" > "$name.sha256"
+              sha256sum -c "$name.sha256" > /dev/null
+              tar -tzf "$name" > /dev/null
+              echo "archive-signal result=ok release=$release name=$name bytes=$(wc -c < "$name")"
+              find . -maxdepth 1 -type f -name 'signal-cli-*' -mtime +14 -printf 'archive-signal removed=%f\n' -delete
+              find . -maxdepth 1 -type f -name '*.partial' -delete
+          env:
+            - name: HOME
+              value: /tmp
+          securityContext: &containerSecurity
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: state
+              mountPath: /volume
+            - name: tmp
+              mountPath: /tmp
+      containers:
+        - name: signal-cli
+          image: *image
+          imagePullPolicy: IfNotPresent
+          # The entrypoint is signal-cli with --config=/var/lib/signal-cli.
+          # Received messages go to the clients of the events path, not to
+          # the log.
+          args:
+            - daemon
+            - --http
+            - 0.0.0.0:8080
+            - --no-receive-stdout
+          env:
+            - name: HOME
+              value: /tmp
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /api/v1/check
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /api/v1/check
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # The pilot measures the use.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 1Gi
+          securityContext: *containerSecurity
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/signal-cli
+              subPath: data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: signal-state
+        - name: tmp
+          emptyDir:
+            sizeLimit: 512Mi

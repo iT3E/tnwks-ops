@@ -39,6 +39,9 @@ spec:
       - media
       - production
       - selfhosted
+      # The pilot of the agent platform (docs/apps/agent-platform.md): the
+      # volumes of the agent and the Signal daemon. Only homelab-wsl runs it.
+      - agents-pilot
   credentialProjection:
     allowed: true
   identityDefaults:

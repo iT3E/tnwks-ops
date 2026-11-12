@@ -1,0 +1,23 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The Signal daemon of the pilot (signal-cli): it holds the keys of the test
+# Signal account, and the agent pod is its one client.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-pilot-signal-daemon
+  namespace: flux-system
+spec:
+  targetNamespace: agents-pilot
+  path: ./kubernetes/apps/ai/agents/pilot/signal-daemon/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    # The SnapshotPolicy CRD and the repository it names.
+    - name: kopiur-repository
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

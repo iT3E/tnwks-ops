@@ -3,5 +3,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ./namespace.yaml
+  - ./backup-mover.yaml
   - ./sandbox-gateway/ks.yaml
   - ./checks/ks.yaml
+  # Off until the test Signal number exists: the pilot starts on Telegram
+  # only (docs/apps/agent-platform.md, "The pilot agent").
+  # - ./signal-daemon/ks.yaml
+  - ./agent/ks.yaml

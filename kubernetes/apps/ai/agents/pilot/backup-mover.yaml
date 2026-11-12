@@ -1,0 +1,27 @@
+---
+# The movers of kopiur (the backup operator) in this namespace: the Jobs that
+# copy the volumes of the agent and the Signal daemon to the Kopia repository
+# (agent/app/backup.yaml, signal-daemon/app/backup.yaml). default-deny
+# (namespace.yaml) covers them too. Out: the S3 endpoint of the repository
+# (kopiur-system/kopiur/repository/clusterrepository.yaml), and the API
+# server, where a mover writes the status of its run (ClusterRole
+# kopiur-mover). DNS comes through allow-dns.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: backup-mover
+  namespace: agents-pilot
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/managed-by: kopiur
+  egress:
+    - toFQDNs:
+        - matchName: s3.us-west-2.amazonaws.com
+        - matchPattern: "*.s3.us-west-2.amazonaws.com"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    - toEntities:
+        - kube-apiserver
