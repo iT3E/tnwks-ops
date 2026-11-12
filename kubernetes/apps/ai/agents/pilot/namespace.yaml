@@ -12,9 +12,10 @@ metadata:
     pod-security.kubernetes.io/enforce-version: latest
     agents.home.arpa/trust-domain: pilot
 ---
-# Deny by default. The sandbox pods (openshell.ai/managed-by) are left out:
-# their sandbox gateway gives each one its own policies when it makes it
-# (the workload gets no egress, the supervisor carries the approved egress).
+# Deny by default. A sandbox has two pods, and its sandbox gateway gives each
+# one its own policies when it makes it: the workload pod gets no egress at
+# all, DNS included, and the supervisor pod (openshell.ai/managed-by, left out
+# here) carries the egress the sandbox policy approves.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -27,8 +28,11 @@ spec:
         operator: DoesNotExist
   policyTypes: ["Ingress", "Egress"]
 ---
-# DNS for the other pods, through Cilium's DNS proxy, so an egress policy
-# here can name host names (toFQDNs).
+# DNS for the pods of the trust domain (gateway, agent, checks), through
+# Cilium's DNS proxy, so an egress policy here can name host names (toFQDNs).
+# Not for the pods of a sandbox: the workload pod (openshell.ai/boundary-role)
+# gets no DNS egress, since its names resolve through its supervisor, and the
+# supervisor pod (openshell.ai/managed-by) has its own egress policy.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -38,6 +42,8 @@ spec:
   endpointSelector:
     matchExpressions:
       - key: openshell.ai/managed-by
+        operator: DoesNotExist
+      - key: openshell.ai/boundary-role
         operator: DoesNotExist
   egress:
     - toEndpoints:

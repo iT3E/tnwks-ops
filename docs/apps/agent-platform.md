@@ -25,12 +25,18 @@ directory name.
 
 - **Pod Security:** each namespace enforces the `restricted` level.
 - **Default deny:** a `NetworkPolicy` denies ingress and egress for every pod
-  but the sandbox pods (label `openshell.ai/managed-by`). The sandbox gateway
-  gives each sandbox its own policies when it makes it: the workload pod gets
-  no egress, and its supervisor carries the egress that the sandbox policy
+  but the supervisor pods of sandboxes (label `openshell.ai/managed-by`). The
+  sandbox gateway gives each sandbox its own policies when it makes it: the
+  workload pod (label `openshell.ai/boundary-role: workload`) gets no egress,
+  DNS included, and its supervisor carries the egress that the sandbox policy
   approves.
-- **DNS:** a `CiliumNetworkPolicy` lets the other pods resolve names through
-  Cilium's DNS proxy, so a policy here can allow a host name (`toFQDNs`).
+- **DNS:** a `CiliumNetworkPolicy` lets the pods of the trust domain (the
+  gateway, the agent, the checks) resolve names through Cilium's DNS proxy,
+  so a policy here can allow a host name (`toFQDNs`). It selects no pod of a
+  sandbox (`openshell.ai/managed-by` or `openshell.ai/boundary-role`): a
+  sandbox resolves names through its own resolver, which its supervisor
+  answers by the sandbox policy, and the supervisor resolves through its own
+  egress policy.
 - Each app adds its own allow rules next to its manifests.
 - The label `agents.home.arpa/trust-domain` names the trust domain of a
   namespace.
@@ -145,7 +151,7 @@ pod's log goes to Loki.
 | CronJob | Schedule | What must hold |
 | --- | --- | --- |
 | `platform-check-isolation` | 04:17 | The check pod connects to its own sandbox gateway and to no other trust domain's gateway, and its client certificate works there (`sandbox list`) |
-| `platform-check-probe` | 04:47 | A new sandbox of the domain reaches nothing that no sandbox policy names: the API server, the internet, its own gateway, the model gateway and the metadata address, direct or through the sandbox proxy. It holds no service account token. While the sandbox runs, its two pods (workload and supervisor) must be found running; the probe logs each pod with its node, then deletes the sandbox |
+| `platform-check-probe` | 04:47 | A new sandbox of the domain reaches nothing that no sandbox policy names: the API server, the internet, its own gateway, the model gateway and the metadata address, direct or through the sandbox proxy, and the cluster DNS Service directly over UDP and TCP (any answer fails). It holds no service account token. While the sandbox runs, its two pods (workload and supervisor) must be found running; the probe logs each pod with its node, then deletes the sandbox |
 
 - The check pods may try every trust domain's gateway on port 8080, so the
   isolation check tests each gateway's own policy, not the check pod's.
