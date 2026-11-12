@@ -78,7 +78,7 @@ data:
         agents-main: claude-opus-bridge-main
         agents-finance: claude-opus-bridge-finance
         agents-workflows: claude-opus-bridge-workflows
-        agents-pilot: claude-opus-bedrock
+        agents-pilot: claude-opus-bridge-main
 
     general_settings:
       master_key: os.environ/LITELLM_MASTER_KEY
