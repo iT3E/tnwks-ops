@@ -95,6 +95,8 @@ resources:
   - ../../../apps/tools/actions-runner-controller/ansible-runner/ks.yaml
   # Hands impact/high Renovate PRs to Ori (docs/operations/renovate.md).
   - ../../../apps/tools/actions-runner-controller/openclaw-runner/ks.yaml
+  # Checks of the private docs repo when its CI_RUNNER variable names it.
+  - ../../../apps/tools/actions-runner-controller/coe-runner/ks.yaml
 
   # Trimmed namespaces — per-namespace overlays sit alongside this file
   - ./home-automation
