@@ -147,7 +147,7 @@ spec:
               value: /tmp/doctor/openclaw.json
           envFrom: &secrets
             # OPENCLAW_GATEWAY_TOKEN, LITELLM_API_KEY, TELEGRAM_BOT_TOKEN,
-            # TELEGRAM_ALLOW_FROM, SIGNAL_ACCOUNT, SIGNAL_ALLOW_FROM
+            # TELEGRAM_ALLOW_FROM
             # (docs/apps/agent-platform.md, "The pilot agent").
             - secretRef:
                 name: agent-secret

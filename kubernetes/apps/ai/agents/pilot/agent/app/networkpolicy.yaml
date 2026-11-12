@@ -2,7 +2,7 @@
 # The agent pod. No pod comes in: the gateway of the product listens on
 # loopback, the probes run in the pod, and default-deny (../../namespace.yaml)
 # denies ingress. Out, it reaches the model gateway, the sandbox gateway of
-# this trust domain, the Signal daemon, the trace collector and one host
+# this trust domain, the trace collector and one host
 # name, the Telegram Bot API (and DNS, through allow-dns). Nothing else: no
 # model vendor, no update or telemetry service, no other trust domain.
 apiVersion: cilium.io/v2
@@ -32,16 +32,6 @@ spec:
         - matchLabels:
             io.kubernetes.pod.namespace: agents-pilot
             app.kubernetes.io/instance: openshell
-            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
-      toPorts:
-        - ports:
-            - port: "8080"
-              protocol: TCP
-    # The Signal daemon of this trust domain (JSON-RPC and events).
-    - toEndpoints:
-        - matchLabels:
-            io.kubernetes.pod.namespace: agents-pilot
-            app.kubernetes.io/name: signal-daemon
             io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
       toPorts:
         - ports:

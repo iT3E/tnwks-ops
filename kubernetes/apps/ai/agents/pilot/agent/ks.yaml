@@ -43,8 +43,6 @@ spec:
     - name: agents-pilot-agent-config
     # The client certificate, and the gateway of the sandboxes.
     - name: agents-pilot-sandbox-gateway
-    # The account the Signal channel uses.
-    - name: agents-pilot-signal-daemon
     # The SnapshotPolicy CRD and the repository it names.
     - name: kopiur-repository
   wait: false

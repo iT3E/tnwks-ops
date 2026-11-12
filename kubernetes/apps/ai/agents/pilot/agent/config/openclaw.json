@@ -61,25 +61,12 @@
       "allowFrom": ["${TELEGRAM_ALLOW_FROM}"],
       "groupPolicy": "disabled",
       "configWrites": false
-    },
-    "signal": {
-      "enabled": true,
-      "account": "${SIGNAL_ACCOUNT}",
-      "transport": {
-        "kind": "external-native",
-        "url": "http://signal-daemon.agents-pilot.svc.cluster.local:8080"
-      },
-      "dmPolicy": "allowlist",
-      "allowFrom": ["${SIGNAL_ALLOW_FROM}"],
-      "groupPolicy": "disabled",
-      "configWrites": false
     }
   },
   "plugins": {
     "load": {
       "paths": [
-        "/opt/openclaw/plugins/node_modules/@openclaw/openshell-sandbox",
-        "/opt/openclaw/plugins/node_modules/@openclaw/signal"
+        "/opt/openclaw/plugins/node_modules/@openclaw/openshell-sandbox"
       ]
     },
     "entries": {

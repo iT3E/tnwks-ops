@@ -185,6 +185,14 @@ OpenClaw, in the agent image
 ([iT3E/tnwks-agent-image](https://github.com/iT3E/tnwks-agent-image)), whose
 README has the contract of the pod.
 
+**Signal is off for now.** The pilot starts on Telegram only. The Signal
+daemon stays in the repository but out of `pilot/kustomization.yaml`, and
+the config of the agent has no Signal channel. When the test Signal number
+exists, one change turns it on: the daemon in the kustomization, the
+`dependsOn` of the agent, the channel and its plugin in `openclaw.json`,
+the rule to the daemon in the agent's network policy, and the two Signal
+keys in the secret. Then link the number (below).
+
 | Part | What it is |
 | --- | --- |
 | `agent` (Deployment) | The gateway of the product, on loopback port 18789, `Recreate`, on the second worker, memory limit 4 GiB |
@@ -214,8 +222,8 @@ README has the contract of the pod.
   | `LITELLM_API_KEY` | The key `agents-pilot` of the model gateway (the same value as in `keys.json`) |
   | `TELEGRAM_BOT_TOKEN` | The token of the test bot |
   | `TELEGRAM_ALLOW_FROM` | The numeric Telegram user id of the one sender the bot takes |
-  | `SIGNAL_ACCOUNT` | The test Signal number, in E.164 form |
-  | `SIGNAL_ALLOW_FROM` | The one Signal number the agent takes messages from, in E.164 form |
+  | `SIGNAL_ACCOUNT` | Not set while Signal is off. The test Signal number, in E.164 form |
+  | `SIGNAL_ALLOW_FROM` | Not set while Signal is off. The one Signal number the agent takes messages from, in E.164 form |
 
   The config names each one as `${NAME}`; the product fails to start when
   one is missing.
@@ -223,7 +231,7 @@ README has the contract of the pod.
   `openshell-client-tls`, copied by the `prepare` init container into the
   directory the CLI reads.
 - **Network policy.** No pod comes in. Out: the model gateway, the sandbox
-  gateway of this namespace, the Signal daemon, alloy, and
+  gateway of this namespace, alloy, and
   `api.telegram.org`. The Signal daemon takes the agent pod only (and the
   kubelet's probes), and reaches `*.signal.org` only.
 
@@ -244,7 +252,7 @@ that one after a failed update.
 
 ### Link the test Signal number
 
-Once, after the first start of the daemon. The daemon is in multi-account
+Once, after the first start of the daemon (Signal is off for now, see above). The daemon is in multi-account
 mode, so it runs with no account. With the test phone at hand:
 
 ```sh
