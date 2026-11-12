@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'model-bridge: a stop of the pod lets the calls in work end. A preStop sleep of 5 s, BRIDGE_DRAIN_SECONDS 75 and a grace period of 90 s, and a rollout that starts the new pod first'
+time: 2026-11-12T22:59:17.000000000Z

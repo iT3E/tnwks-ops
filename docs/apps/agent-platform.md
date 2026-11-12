@@ -173,8 +173,15 @@ homelab-wsl lists it next to `agents/`.
   `BRIDGE_KEY_WORKFLOWS` (32 characters or more each, one for each trust
   domain, not starting with `sk-ant-`). The model gateway gets the same
   three keys for its entries, in `litellm-secret`.
+- **Stop:** a `preStop` sleep of 5 s, then SIGTERM. The bridge drains:
+  `/health` answers 503, a new call gets a 503 that a
+  caller retries, and the calls in work run to their end for up to
+  `BRIDGE_DRAIN_SECONDS` (75 s). The grace period is 90 s. A rollout starts
+  the new pod before it stops the old one (`maxSurge: 1`,
+  `maxUnavailable: 0`).
 - A restart ends each live conversation; the next call of a conversation
-  goes in with its history as one text. The repository README has the
+  goes in with its history as one text. A `rebuild` line in the log tells
+  why a call matched no live conversation. The repository README has the
   contract and the log format.
 
 ## The pilot agent
