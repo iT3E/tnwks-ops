@@ -378,8 +378,9 @@ are on both sites already.
   for every app on the VIPs, so with site 1 down only the kiosk (JWT) and local
   admin logins work. Use the admin account in `grafana-admin-secret`.
 - **Renderer:** runs on both sites, idle on the standby. The chart can't scale it to 0.
-- **Logs:** site 2 has no Loki, so the Loki datasource errors while Grafana runs
-  there. Metrics are complete through each site's Thanos Query.
+- **Logs:** the Loki datasource reads the Loki of the site Grafana runs on. Site
+  2's Loki holds only its own Job pods' logs, so site 1's logs are out of reach
+  while Grafana runs there. Metrics are complete through each site's Thanos Query.
 - **Replaced** the separate `grafana-02` instance (SQLite, local login), which
   didn't match the other apps' multi-site setup.
 
@@ -518,7 +519,7 @@ containers' restarts. A probe can require several strings; each must appear.
 
 Failover, Flux, upgrade and network events are kept as Prometheus series, so
 each site's own Prometheus holds its events for 15 days and the archive for 35.
-Either site reads them locally, without Loki (site 2 has none). Each board's
+Either site reads them locally, without Loki. Each board's
 History tab lists the events in the selected time range.
 
 | Board | Events | From |
