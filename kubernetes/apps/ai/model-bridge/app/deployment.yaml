@@ -20,6 +20,13 @@ spec:
   # One replica: the conversations live in the memory of one pod.
   replicas: 1
   revisionHistoryLimit: 2
+  # A rollout starts the new pod first and stops the old one when the new
+  # one is ready (the defaults round to these with one replica).
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: model-bridge
@@ -30,6 +37,9 @@ spec:
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
+      # The preStop sleep (5 s), the drain of the bridge (BRIDGE_DRAIN_SECONDS,
+      # 75 s) and its exit fit in this.
+      terminationGracePeriodSeconds: 90
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -61,11 +71,22 @@ spec:
               value: "8"
             - name: BRIDGE_IDLE_SECONDS
               value: "900"
+            # On SIGTERM the calls in work run to their end for up to this
+            # long; then the bridge cuts what is left with an error that the
+            # caller retries.
+            - name: BRIDGE_DRAIN_SECONDS
+              value: "75"
           # CLAUDE_CODE_OAUTH_TOKEN, BRIDGE_KEY_MAIN, BRIDGE_KEY_FINANCE and
           # BRIDGE_KEY_WORKFLOWS.
           envFrom:
             - secretRef:
                 name: model-bridge-secret
+          lifecycle:
+            # Time for the endpoint removal to reach the model gateway before
+            # SIGTERM, so no new call comes to a pod that drains.
+            preStop:
+              sleep:
+                seconds: 5
           readinessProbe:
             httpGet:
               path: /health
