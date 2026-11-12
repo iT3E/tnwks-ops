@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.88.2 - 2026-11-12
+
+### Fixed
+
+* Agent platform: the sandbox workload gets no DNS egress (allow-dns selects no sandbox pod), and the sandbox probe checks that the cluster DNS Service gives it no answer over UDP or TCP
+
 ## v2.88.1 - 2026-11-12
 
 ### Fixed
