@@ -1,0 +1,17 @@
+---
+# The address the config of the agent names:
+# http://signal-daemon.agents-pilot.svc.cluster.local:8080.
+apiVersion: v1
+kind: Service
+metadata:
+  name: signal-daemon
+  labels:
+    app.kubernetes.io/name: signal-daemon
+spec:
+  selector:
+    app.kubernetes.io/name: signal-daemon
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

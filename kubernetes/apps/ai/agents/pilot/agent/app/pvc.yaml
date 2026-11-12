@@ -1,0 +1,18 @@
+---
+# The state volume of the pilot agent, with two directories: `state` (the
+# state of the product, with the workspace in it) and `archives` (the
+# archives of the state, outside the workspace, so no sandbox gets them).
+# Size: the state x (1 + 7 daily archives + the starts in 14 days); with two
+# starts in 14 days, 10 GiB holds a state of 1 GiB. The pilot measures it.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agent-state
+  labels:
+    app.kubernetes.io/name: agent
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ${STORAGE_CLASS_DEFAULT}
+  resources:
+    requests:
+      storage: 10Gi

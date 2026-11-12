@@ -1,0 +1,53 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The config of the pilot agent (openclaw.json) and the scripts of its pod.
+# No ${VAR} substitution here: each ${NAME} in the config is for the product,
+# which reads it from an env var of the pod.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-pilot-agent-config
+  namespace: flux-system
+  labels:
+    substitution.flux.home.arpa/disabled: "true"
+spec:
+  targetNamespace: agents-pilot
+  path: ./kubernetes/apps/ai/agents/pilot/agent/config
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The pilot of a personal agent (docs/apps/agent-platform.md, "The pilot
+# agent"): the agent pod, its state volume, its network policy and the
+# backup policy of the volume.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-pilot-agent
+  namespace: flux-system
+spec:
+  targetNamespace: agents-pilot
+  path: ./kubernetes/apps/ai/agents/pilot/agent/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    # The config and the scripts the pod mounts.
+    - name: agents-pilot-agent-config
+    # The client certificate, and the gateway of the sandboxes.
+    - name: agents-pilot-sandbox-gateway
+    # The account the Signal channel uses.
+    - name: agents-pilot-signal-daemon
+    # The SnapshotPolicy CRD and the repository it names.
+    - name: kopiur-repository
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

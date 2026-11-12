@@ -1,0 +1,281 @@
+---
+# The pilot of a personal agent (docs/apps/agent-platform.md, "The pilot
+# agent"): the product (OpenClaw) in the agent image, on test accounts. Each
+# command it runs goes to a sandbox of this trust domain, through the sandbox
+# gateway; each model call goes to the model gateway, with the key of this
+# trust domain.
+#
+# The image contract is in the README of iT3E/tnwks-agent-image: the user,
+# the paths, the read-only root and the steps before the start.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent
+  labels:
+    app.kubernetes.io/name: agent
+  annotations:
+    # Start the pod again when agent-config, agent-scripts or agent-secret
+    # changes.
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  # The old pod stops before the new one starts: one process holds the state,
+  # and the archive step reads it with no writer.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # The second worker. The state volume (local-path) stays on the node of
+      # the first start.
+      nodeSelector:
+        kubernetes.io/hostname: homelab-wsl-worker-2
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # The directories of the state volume and /tmp, as uid 1000 (the
+        # kubelet makes a missing subPath as root), and the client
+        # certificate of the sandbox gateway in the directory of the CLI:
+        # the gateway address with each ":" and "/" as "_".
+        - name: prepare
+          image: &image ghcr.io/it3e/tnwks-agent-image:0.2.0@sha256:d0fef0cc4ab0270f74e9cc8a19ab27bc569d359949b24ce6d7ade50cf0428a40
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              mkdir -p /volume/state /volume/archives /scratch/tmp
+              chmod 0700 /volume/state /volume/archives /scratch/tmp
+              mkdir -p /home/node/.config/openshell/gateways/https___openshell.agents-pilot.svc.cluster.local_8080/mtls
+              cp /openshell-tls/ca.crt /openshell-tls/tls.crt /openshell-tls/tls.key \
+                /home/node/.config/openshell/gateways/https___openshell.agents-pilot.svc.cluster.local_8080/mtls/
+              chmod 0600 /home/node/.config/openshell/gateways/https___openshell.agents-pilot.svc.cluster.local_8080/mtls/*
+          securityContext: &containerSecurity
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources: &small
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: state
+              mountPath: /volume
+            - name: tmp
+              mountPath: /scratch
+            - name: user-config
+              mountPath: /home/node/.config
+            - name: openshell-tls
+              mountPath: /openshell-tls
+              readOnly: true
+        # The archive step (scripts/archive-state.sh in ../config): an archive
+        # of the state, named with the release that starts, read back against
+        # its checksum. A failed step stops the start.
+        - name: archive
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "/scripts/archive-state.sh"]
+          env: &env
+            - name: XDG_CACHE_HOME
+              value: /home/node/.openclaw/.cache
+            # No update check and no telemetry call (the network policy has
+            # no route for either).
+            - name: OPENCLAW_NO_AUTO_UPDATE
+              value: "1"
+            - name: DO_NOT_TRACK
+              value: "1"
+          securityContext: *containerSecurity
+          resources:
+            requests:
+              cpu: 10m
+              memory: 128Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: state
+              mountPath: /home/node/.openclaw
+              subPath: state
+            - name: state
+              mountPath: /home/node/.openclaw-archives
+              subPath: archives
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
+        # Doctor of the product, on a copy of the config: the config is read
+        # only, and doctor writes to it. It migrates the state for a new
+        # release.
+        - name: doctor
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - >-
+              mkdir -p /tmp/doctor
+              && cp /home/node/.openclaw/openclaw.json /tmp/doctor/openclaw.json
+              && exec node /app/openclaw.mjs doctor --fix --non-interactive
+          env:
+            - name: XDG_CACHE_HOME
+              value: /home/node/.openclaw/.cache
+            - name: OPENCLAW_NO_AUTO_UPDATE
+              value: "1"
+            - name: DO_NOT_TRACK
+              value: "1"
+            - name: OPENCLAW_CONFIG_PATH
+              value: /tmp/doctor/openclaw.json
+          envFrom: &secrets
+            # OPENCLAW_GATEWAY_TOKEN, LITELLM_API_KEY, TELEGRAM_BOT_TOKEN,
+            # TELEGRAM_ALLOW_FROM, SIGNAL_ACCOUNT, SIGNAL_ALLOW_FROM
+            # (docs/apps/agent-platform.md, "The pilot agent").
+            - secretRef:
+                name: agent-secret
+          securityContext: *containerSecurity
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+          volumeMounts: &stateMounts
+            - name: state
+              mountPath: /home/node/.openclaw
+              subPath: state
+            - name: state
+              mountPath: /home/node/.openclaw-archives
+              subPath: archives
+            - name: config
+              mountPath: /home/node/.openclaw/openclaw.json
+              subPath: openclaw.json
+              readOnly: true
+            # /tmp with mode 0700: the sandbox plugin refuses a temp dir that
+            # others can write with no sticky bit, as an emptyDir is.
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
+      containers:
+        # The gateway of the product, on loopback only: no pod comes in. It
+        # reaches the channels, the model gateway and the sandbox gateway.
+        - name: agent
+          image: *image
+          imagePullPolicy: IfNotPresent
+          env: *env
+          envFrom: *secrets
+          ports:
+            - name: gateway
+              containerPort: 18789
+              protocol: TCP
+          startupProbe:
+            exec:
+              command: &healthz
+                - node
+                - -e
+                - "require('http').get('http://127.0.0.1:18789/healthz', r => process.exit(r.statusCode < 400 ? 0 : 1)).on('error', () => process.exit(1))"
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command:
+                - node
+                - -e
+                - "require('http').get('http://127.0.0.1:18789/readyz', r => process.exit(r.statusCode < 400 ? 0 : 1)).on('error', () => process.exit(1))"
+            periodSeconds: 30
+            timeoutSeconds: 10
+          livenessProbe:
+            exec:
+              command: *healthz
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+          # The limit of the Design Doc (section 10.1). The pilot measures
+          # the use.
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              memory: 4Gi
+          securityContext: *containerSecurity
+          volumeMounts: *stateMounts
+        # The backup container (scripts/daily-backup.sh in ../config): once a
+        # day, the backup command of the product with its check, then the
+        # check of the instruction files.
+        - name: backup
+          image: *image
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "/scripts/daily-backup.sh"]
+          env: *env
+          envFrom: *secrets
+          resources:
+            requests:
+              cpu: 10m
+              memory: 128Mi
+            limits:
+              memory: 1Gi
+          securityContext: *containerSecurity
+          volumeMounts:
+            - name: state
+              mountPath: /home/node/.openclaw
+              subPath: state
+            - name: state
+              mountPath: /home/node/.openclaw-archives
+              subPath: archives
+            - name: config
+              mountPath: /home/node/.openclaw/openclaw.json
+              subPath: openclaw.json
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+              subPath: tmp
+            - name: user-config
+              mountPath: /home/node/.config
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: agent-state
+        - name: config
+          configMap:
+            name: agent-config
+        - name: scripts
+          configMap:
+            name: agent-scripts
+        - name: tmp
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: user-config
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+        # The client certificate of this trust domain's sandbox gateway
+        # (cert-manager, sandbox-gateway/app).
+        - name: openshell-tls
+          secret:
+            secretName: openshell-client-tls
+            defaultMode: 0440

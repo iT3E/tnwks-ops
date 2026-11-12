@@ -1,0 +1,37 @@
+---
+# The Signal daemon. In: the agent pod only (and the kubelet's probes, from
+# the host). Out: the Signal service only (and DNS, through allow-dns).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: signal-daemon
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: signal-daemon
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-pilot
+            app.kubernetes.io/name: agent
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  egress:
+    # The Signal service: chat, storage, the CDNs, contact discovery and the
+    # key backup are each a host under signal.org.
+    - toFQDNs:
+        - matchPattern: "*.signal.org"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

@@ -1,0 +1,18 @@
+---
+# The config of the pilot agent and the scripts of its pod. Flux applies this
+# directory with no ${VAR} substitution (../ks.yaml): each ${NAME} in
+# openclaw.json is for the product, which reads it from an env var of the pod
+# when it loads the config. The names stay fixed (no hash), and Reloader
+# starts the pod again when one changes (app/deployment.yaml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+generatorOptions:
+  disableNameSuffixHash: true
+configMapGenerator:
+  - name: agent-config
+    files:
+      - openclaw.json=./openclaw.json
+  - name: agent-scripts
+    files:
+      - archive-state.sh=./scripts/archive-state.sh
+      - daily-backup.sh=./scripts/daily-backup.sh

@@ -177,6 +177,91 @@ homelab-wsl lists it next to `agents/`.
   goes in with its history as one text. The repository README has the
   contract and the log format.
 
+## The pilot agent
+
+One personal agent in `agents-pilot`, on a test Telegram bot and a test
+Signal number (`pilot/agent/`, `pilot/signal-daemon/`). The product is
+OpenClaw, in the agent image
+([iT3E/tnwks-agent-image](https://github.com/iT3E/tnwks-agent-image)), whose
+README has the contract of the pod.
+
+| Part | What it is |
+| --- | --- |
+| `agent` (Deployment) | The gateway of the product, on loopback port 18789, `Recreate`, on the second worker, memory limit 4 GiB |
+| `agent-config` (ConfigMap) | `openclaw.json`, a read-only file in the pod. Applied with no `${VAR}` substitution (`agents-pilot-agent-config`) |
+| `agent-state` (PVC, 10 GiB) | `state` (the state of the product, with the workspace) and `archives` |
+| `signal-daemon` (Deployment and Service) | signal-cli, native build, as an HTTP daemon on port 8080, in multi-account mode |
+| `signal-state` (PVC, 1 GiB) | `data` (the account state) and `archives` |
+
+- **Config.** The product's sandbox backend is OpenShell, for every session
+  (`sandbox.mode: all`), at the gateway of this trust domain. One model,
+  `litellm/agents-pilot`, with no fallback list, and the provider list
+  replaced by the model gateway alone. The tools `code_execution`,
+  `file_fetch`, `file_write`, `dir_list` and `dir_fetch` are denied.
+  `autoProviders` of the sandbox plugin is off, so no credential of the pod
+  goes to a sandbox as a provider. Each channel takes messages from its one
+  allowed sender, and no group. The config can't be changed from a chat
+  (`commands.config: false`, `configWrites: false`).
+- **The scheduled turn** is the heartbeat of the product
+  (`agents.defaults.heartbeat`): once a day, a turn in its own session with
+  one shell command in a sandbox, and no message to a channel. Its traces go
+  to the collector (alloy, OTLP).
+- **Secret** `agent-secret` (env vars of the pod):
+
+  | Key | Value |
+  | --- | --- |
+  | `OPENCLAW_GATEWAY_TOKEN` | A random token for the gateway of the product |
+  | `LITELLM_API_KEY` | The key `agents-pilot` of the model gateway (the same value as in `keys.json`) |
+  | `TELEGRAM_BOT_TOKEN` | The token of the test bot |
+  | `TELEGRAM_ALLOW_FROM` | The numeric Telegram user id of the one sender the bot takes |
+  | `SIGNAL_ACCOUNT` | The test Signal number, in E.164 form |
+  | `SIGNAL_ALLOW_FROM` | The one Signal number the agent takes messages from, in E.164 form |
+
+  The config names each one as `${NAME}`; the product fails to start when
+  one is missing.
+- **Client certificate** of the sandbox gateway: Secret
+  `openshell-client-tls`, copied by the `prepare` init container into the
+  directory the CLI reads.
+- **Network policy.** No pod comes in. Out: the model gateway, the sandbox
+  gateway of this namespace, the Signal daemon, alloy, and
+  `api.telegram.org`. The Signal daemon takes the agent pod only (and the
+  kubelet's probes), and reaches `*.signal.org` only.
+
+### State, archives and backups
+
+| When | What | Kept |
+| --- | --- | --- |
+| Each start of the agent pod | `archive` init container (`agent/config/scripts/archive-state.sh`): a `tar.gz` of `state` in `archives/start/`, named with the release of the product and the time, read back against its checksum. Then `doctor` migrates the state, on a copy of the config | 14 days |
+| Each day | `backup` container (`agent/config/scripts/daily-backup.sh`): `openclaw backup create --verify` to `archives/daily/` | The last 7 |
+| Each day, after that backup | The same container: the SHA-256 of `AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md` and each file under `skills/`, compared with the list of the day before (`archives/instruction-files/`). One log line for each file that is new, changed or gone, then `instruction-check result=...` | 30 days of lists |
+| Each start of the Signal daemon | `archive` init container: a `tar.gz` of `data` in `archives/start/`, with the signal-cli release | 14 days |
+| Nightly | kopiur copies each volume, with its archives (`*/app/backup.yaml`, `docs/operations/backups.md`) | As the other volumes |
+
+A failed archive step stops the start of its pod. A failed daily backup ends
+the `backup` container, so the restart shows on the pod. The first archive
+with the name of a release holds the state from before that release; restore
+that one after a failed update.
+
+### Link the test Signal number
+
+Once, after the first start of the daemon. The daemon is in multi-account
+mode, so it runs with no account. With the test phone at hand:
+
+```sh
+kubectl -n agents-pilot port-forward svc/signal-daemon 8080:8080 &
+curl -s localhost:8080/api/v1/rpc -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"startLink","params":{}}'
+# Show the deviceLinkUri of the answer as a QR code (for example
+# `qrencode -t ansiutf8 '<uri>'`), and scan it in Signal on the test phone:
+# Settings, Linked devices.
+curl -s localhost:8080/api/v1/rpc -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"finishLink","params":{"deviceLinkUri":"<uri>","deviceName":"agents-pilot"}}'
+```
+
+Then start the agent pod again
+(`kubectl -n agents-pilot rollout restart deploy/agent`), so the Signal
+channel finds the account.
+
 ## Checks
 
 Two CronJobs in each trust domain test the boundaries every day

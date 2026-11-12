@@ -1,0 +1,58 @@
+---
+# The volume of the Signal daemon, with its archives, to the Kopia
+# repository in S3 (docs/operations/backups.md). It holds the keys of the
+# test account; the copy is encrypted on the client.
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotPolicy
+metadata:
+  name: signal-state
+spec:
+  repository:
+    kind: ClusterRepository
+    name: s3
+  # local-path has no CSI snapshots: the mover reads the live PVC read-only,
+  # on the node of the daemon. The archive of each start is the copy taken
+  # with no writer.
+  copyMethod: Direct
+  compression:
+    compressor: zstd
+  credentialProjection:
+    enabled: true
+  mover:
+    # The user of the daemon pod (the state is private, mode 0700), and the
+    # restricted level of the namespace.
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+      seccompProfile:
+        type: RuntimeDefault
+  retention:
+    keepLatest: 3
+    keepDaily: 7
+    keepWeekly: 4
+    keepMonthly: 6
+  sources:
+    - pvc:
+        name: signal-state
+---
+apiVersion: kopiur.home-operations.com/v1alpha1
+kind: SnapshotSchedule
+metadata:
+  name: signal-state
+spec:
+  policyRef:
+    name: signal-state
+  schedule:
+    # Nightly, spread across 02:00-03:00 (H), as the other volumes.
+    cron: "H 2 * * *"
+    runOnCreate: true
