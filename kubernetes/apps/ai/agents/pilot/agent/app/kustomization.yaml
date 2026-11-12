@@ -6,3 +6,6 @@ resources:
   - ./deployment.yaml
   - ./networkpolicy.yaml
   - ./backup.yaml
+  # Secret agent-secret: the gateway token, the key of the model gateway and
+  # the four values of the test chat accounts (docs/apps/agent-platform.md).
+  - ./secret.sops.yaml
