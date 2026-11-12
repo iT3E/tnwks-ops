@@ -47,6 +47,13 @@ talosctl cluster destroy --name homelab-wsl
   - `local-path` (default) — Talos node container's overlay (C:)
   - `local-path-bulk` — pinned to worker-2 → Windows E: at
     `/mnt/e/k8s-storage` for bulk video / archive PVCs
+- A pod can't mount a `local-path` volume with `subPath`: the kubelet runs
+  in its own container and doesn't see the local-path root (no kubelet extra
+  mount), so it makes the subPath directory in its own file system, as root,
+  and the pod user can't write there. A mount with no `subPath` works,
+  because containerd binds the host path directly. Mount the volume at its
+  root, and make the directories in an init container
+  (`kubernetes/apps/ai/agents/pilot/agent/app/deployment.yaml`)
 - Port-forward or a LoadBalancer VIP (Cilium LB IPAM + L2) for service access; the LB range
   (`10.5.0.200-220`) is reachable from the WSL host directly and from
   the LAN via the socat bridge (`wsl-lan-bridge.yml`)

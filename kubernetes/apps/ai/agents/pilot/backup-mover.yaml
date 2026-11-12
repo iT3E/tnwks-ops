@@ -19,6 +19,10 @@ spec:
     - toFQDNs:
         - matchName: s3.us-west-2.amazonaws.com
         - matchPattern: "*.s3.us-west-2.amazonaws.com"
+        # Kopia reaches the bucket on the dual-stack name; "*" in a pattern
+        # matches one label only.
+        - matchName: s3.dualstack.us-west-2.amazonaws.com
+        - matchPattern: "*.s3.dualstack.us-west-2.amazonaws.com"
       toPorts:
         - ports:
             - port: "443"

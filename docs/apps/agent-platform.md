@@ -196,10 +196,17 @@ keys in the secret. Then link the number (below).
 | Part | What it is |
 | --- | --- |
 | `agent` (Deployment) | The gateway of the product, on loopback port 18789, `Recreate`, on the second worker, memory limit 4 GiB |
-| `agent-config` (ConfigMap) | `openclaw.json`, a read-only file in the pod. Applied with no `${VAR}` substitution (`agents-pilot-agent-config`) |
-| `agent-state` (PVC, 10 GiB) | `state` (the state of the product, with the workspace) and `archives` |
+| `agent-config` (ConfigMap) | `openclaw.json`, a read-only file in the pod at `/home/node/config/` (`OPENCLAW_CONFIG_PATH`, with `OPENCLAW_CONFIG_READONLY=1`). Applied with no `${VAR}` substitution (`agents-pilot-agent-config`) |
+| `agent-state` (PVC, 10 GiB) | Mounted at `/home/node/data`: `state/` (the state of the product, `OPENCLAW_STATE_DIR`, with the workspace in `state/workspace/`) and `archives/` |
 | `signal-daemon` (Deployment and Service) | signal-cli, native build, as an HTTP daemon on port 8080, in multi-account mode |
-| `signal-state` (PVC, 1 GiB) | `data` (the account state) and `archives` |
+| `signal-state` (PVC, 1 GiB) | Mounted at `/var/lib/signal-cli`: `data/` (the account state, `--config`) and `archives/` |
+
+Each container mounts a volume at its root, with no `subPath`: on this
+cluster a `subPath` of a `local-path` volume comes out owned by root
+(`talos/wsl/README.md`). The `prepare` init container makes the two
+directories as the pod user, with mode 0700. The archives are outside the
+state directory, so they are in no backup of the product and in no sandbox:
+the sandbox plugin copies the workspace only.
 
 - **Config.** The product's sandbox backend is OpenShell, for every session
   (`sandbox.mode: all`), at the gateway of this trust domain. One model,
@@ -252,8 +259,8 @@ that one after a failed update.
 
 ### Link the test Signal number
 
-Once, after the first start of the daemon (Signal is off for now, see above). The daemon is in multi-account
-mode, so it runs with no account. With the test phone at hand:
+Once, after the first start of the daemon (Signal is off for now, see
+above). The daemon is in multi-account mode, so it runs with no account. With the test phone at hand:
 
 ```sh
 kubectl -n agents-pilot port-forward svc/signal-daemon 8080:8080 &

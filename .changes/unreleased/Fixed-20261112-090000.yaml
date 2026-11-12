@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'agents: the pilot agent and its Signal daemon mount each state volume at its root, with no subPath; the product finds its state and config through OPENCLAW_STATE_DIR and OPENCLAW_CONFIG_PATH, and treats the config as read-only'
+time: 2026-11-12T09:00:00.000000000Z
