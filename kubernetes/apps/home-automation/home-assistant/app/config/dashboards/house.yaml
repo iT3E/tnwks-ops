@@ -146,7 +146,7 @@ views:
           # Snapshots refresh every few seconds; a tap opens the Security dashboard.
           - &cam { type: picture-entity, entity: camera.frigate_loryta_fdoor, name: Front door, show_state: false, camera_view: auto, tap_action: { action: navigate, navigation_path: /home-security }, grid_options: { columns: 3, rows: 2 } }
           - { <<: *cam, entity: camera.frigate_reolink_south, name: South }
-          - { <<: *cam, entity: camera.frigate_sv3c_east, name: East }
+          - { <<: *cam, entity: camera.frigate_empiretech_east, name: East }
           - { <<: *cam, entity: camera.frigate_sv3c_west, name: West }
           - { <<: *cam, entity: camera.frigate_loryta_pool, name: Pool }
           - { <<: *cam, entity: camera.frigate_amcrest_balc, name: Balcony }
