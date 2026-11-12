@@ -3,6 +3,13 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.90.1 - 2026-11-12
+
+### Fixed
+
+* agents: the backup movers of agents-pilot reach the dual-stack S3 endpoint that Kopia uses
+* agents: the pilot agent and its Signal daemon mount each state volume at its root, with no subPath; the product finds its state and config through OPENCLAW_STATE_DIR and OPENCLAW_CONFIG_PATH, and treats the config as read-only
+
 ## v2.90.0 - 2026-11-12
 
 ### Added

@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'agents: the backup movers of agents-pilot reach the dual-stack S3 endpoint that Kopia uses'
-time: 2026-11-12T07:30:00.000000000Z
