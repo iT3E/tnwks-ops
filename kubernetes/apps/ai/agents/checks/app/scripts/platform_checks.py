@@ -33,6 +33,9 @@ SANDBOX = os.environ.get("PROBE_SANDBOX", "platform-probe")
 PORT = 8080
 # The model gateway (docs/apps/litellm.md). No sandbox policy names it.
 MODEL_GATEWAY = os.environ.get("MODEL_GATEWAY", "litellm-app.ai.svc.cluster.local")
+# The cluster DNS Service. The sandbox workload gets no DNS egress: its names
+# resolve through its supervisor, by the sandbox policy.
+KUBE_DNS = os.environ.get("KUBE_DNS", "kube-dns.kube-system.svc.cluster.local")
 failures = 0
 
 
@@ -93,7 +96,7 @@ def isolation() -> None:
 # Runs inside the sandbox. Every connection must fail: a sandbox reaches only
 # the addresses that its policy names, and this one has none.
 PROBE = r'''
-import json, os, socket, urllib.request
+import json, os, socket, struct, urllib.request
 def tcp(host, port):
     try:
         socket.create_connection((host, port), timeout=4).close(); return "connected"
@@ -104,12 +107,40 @@ def http(url):
         r = urllib.request.urlopen(url, timeout=6); return "HTTP %s" % r.status
     except Exception as e:
         return "blocked: " + type(e).__name__
+# A DNS query for the API server's name, sent straight to the cluster DNS
+# Service, not to the sandbox's own resolver. Any answer is a failure.
+QUERY = (b"\x4f\x53\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00"
+         + b"".join(bytes([len(p)]) + p.encode() for p in "kubernetes.default.svc.cluster.local".split("."))
+         + b"\x00\x00\x01\x00\x01")
+def answer(data):
+    return "answered: rcode %d, %d records" % (data[3] & 15, struct.unpack(">H", data[6:8])[0])
+def dns_udp(ip):
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.settimeout(4)
+        s.sendto(QUERY, (ip, 53)); data = s.recv(512); s.close()
+        return answer(data) if len(data) >= 12 else "answered: short"
+    except Exception as e:
+        return "blocked: " + type(e).__name__
+def dns_tcp(ip):
+    try:
+        s = socket.create_connection((ip, 53), timeout=4)
+    except Exception as e:
+        return "blocked: " + type(e).__name__
+    try:
+        s.settimeout(4); s.sendall(struct.pack(">H", len(QUERY)) + QUERY); data = s.recv(514)
+        return answer(data[2:]) if len(data) >= 14 else "connected: no answer"
+    except Exception as e:
+        return "connected: " + type(e).__name__
+    finally:
+        s.close()
 out = {
     "Kubernetes API, direct": tcp(os.environ.get("KUBERNETES_SERVICE_HOST", "kubernetes.default.svc"), 443),
     "internet, direct": tcp("1.1.1.1", 443),
     "own sandbox gateway, direct": tcp("GATEWAY_IP", 8080),
     "model gateway, direct": tcp("MODEL_GATEWAY_IP", 4000),
     "metadata address, direct": tcp("169.254.169.254", 80),
+    "cluster DNS, direct over UDP": dns_udp("KUBE_DNS_IP"),
+    "cluster DNS, direct over TCP": dns_tcp("KUBE_DNS_IP"),
     "internet, through the sandbox proxy": http("https://example.com/"),
     "model gateway, through the sandbox proxy": http("http://MODEL_GATEWAY:4000/health/liveliness"),
     "service account token": "present" if os.path.exists("/var/run/secrets/kubernetes.io/serviceaccount/token") else "blocked: absent",
@@ -190,7 +221,8 @@ def probe() -> None:
         deadline = time.monotonic() + 300
         # The direct probes use addresses: the sandbox resolves no names, so a
         # name would test DNS only. The check pod resolves them.
-        code = (PROBE.replace("MODEL_GATEWAY_IP", socket.gethostbyname(MODEL_GATEWAY))
+        code = (PROBE.replace("KUBE_DNS_IP", socket.gethostbyname(KUBE_DNS))
+                .replace("MODEL_GATEWAY_IP", socket.gethostbyname(MODEL_GATEWAY))
                 .replace("MODEL_GATEWAY", MODEL_GATEWAY)
                 .replace("GATEWAY_IP", socket.gethostbyname(gateway(OWN))))
         while time.monotonic() < deadline:
