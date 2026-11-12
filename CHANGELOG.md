@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.91.3 - 2026-11-12
+
+### Fixed
+
+* model-bridge: a stop of the pod lets the calls in work end. A preStop sleep of 5 s, BRIDGE_DRAIN_SECONDS 75 and a grace period of 90 s, and a rollout that starts the new pod first
+
 ## v2.91.2 - 2026-11-12
 
 ### Fixed
