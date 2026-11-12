@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.87.0 - 2026-11-12
+
+### Changed
+
+* Frigate: the east camera is now the EmpireTech frigate_empiretech_east (was frigate_sv3c_east, dead since 2026-09), enabled with audio; MikroTik: its temporary factory-default access is removed
+
 ## v2.86.0 - 2026-11-12
 
 ### Changed
