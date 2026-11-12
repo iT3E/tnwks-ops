@@ -6,6 +6,6 @@ resources:
   - ./deployment.yaml
   - ./service.yaml
   - ./networkpolicy.yaml
-  # The owner adds ./secret.sops.yaml (Secret model-bridge-secret) before
-  # the merge: the sign-in of the plan and one bridge key for each trust
-  # domain (docs/apps/agent-platform.md, "The model bridge").
+  # Secret model-bridge-secret: the sign-in of the plan and one bridge key
+  # for each trust domain (docs/apps/agent-platform.md, "The model bridge").
+  - ./secret.sops.yaml
