@@ -8,8 +8,8 @@
 # failed step stops the start of the pod.
 set -eu
 
-STATE=/home/node/.openclaw
-DEST=/home/node/.openclaw-archives/start
+STATE=/home/node/data/state
+DEST=/home/node/data/archives/start
 KEEP_DAYS=14
 
 mkdir -p "$DEST"

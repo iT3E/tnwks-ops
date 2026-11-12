@@ -46,10 +46,12 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
-        # The directories of the state volume and /tmp, as uid 1000 (the
-        # kubelet makes a missing subPath as root), and the client
-        # certificate of the sandbox gateway in the directory of the CLI:
-        # the gateway address with each ":" and "/" as "_".
+        # The two directories of the state volume and /tmp, as uid 1000 with
+        # mode 0700, and the client certificate of the sandbox gateway in the
+        # directory of the CLI: the gateway address with each ":" and "/" as
+        # "_". Each container mounts the volume at its root, with no subPath:
+        # on this cluster the kubelet can't reach the local-path directory,
+        # so it would make a subPath directory as root (talos/wsl/README.md).
         - name: prepare
           image: &image ghcr.io/it3e/tnwks-agent-image:0.2.0@sha256:d0fef0cc4ab0270f74e9cc8a19ab27bc569d359949b24ce6d7ade50cf0428a40
           imagePullPolicy: IfNotPresent
@@ -58,8 +60,8 @@ spec:
             - -c
             - |
               set -eu
-              mkdir -p /volume/state /volume/archives /scratch/tmp
-              chmod 0700 /volume/state /volume/archives /scratch/tmp
+              mkdir -p /home/node/data/state /home/node/data/archives /scratch/tmp
+              chmod 0700 /home/node/data/state /home/node/data/archives /scratch/tmp
               mkdir -p /home/node/.config/openshell/gateways/https___openshell.agents-pilot.svc.cluster.local_8080/mtls
               cp /openshell-tls/ca.crt /openshell-tls/tls.crt /openshell-tls/tls.key \
                 /home/node/.config/openshell/gateways/https___openshell.agents-pilot.svc.cluster.local_8080/mtls/
@@ -77,7 +79,7 @@ spec:
               memory: 256Mi
           volumeMounts:
             - name: state
-              mountPath: /volume
+              mountPath: /home/node/data
             - name: tmp
               mountPath: /scratch
             - name: user-config
@@ -93,8 +95,18 @@ spec:
           imagePullPolicy: IfNotPresent
           command: ["sh", "/scripts/archive-state.sh"]
           env: &env
+            # The state directory of the product (with the workspace in it),
+            # on the volume. The archives are next to it, outside it.
+            - name: OPENCLAW_STATE_DIR
+              value: /home/node/data/state
+            # The config from git, a read-only file. The product treats it as
+            # managed outside: no command or repair writes to it.
+            - name: OPENCLAW_CONFIG_PATH
+              value: /home/node/config/openclaw.json
+            - name: OPENCLAW_CONFIG_READONLY
+              value: "1"
             - name: XDG_CACHE_HOME
-              value: /home/node/.openclaw/.cache
+              value: /home/node/data/state/.cache
             # No update check and no telemetry call (the network policy has
             # no route for either).
             - name: OPENCLAW_NO_AUTO_UPDATE
@@ -110,11 +122,7 @@ spec:
               memory: 1Gi
           volumeMounts:
             - name: state
-              mountPath: /home/node/.openclaw
-              subPath: state
-            - name: state
-              mountPath: /home/node/.openclaw-archives
-              subPath: archives
+              mountPath: /home/node/data
             - name: scripts
               mountPath: /scripts
               readOnly: true
@@ -123,9 +131,8 @@ spec:
               subPath: tmp
             - name: user-config
               mountPath: /home/node/.config
-        # Doctor of the product, on a copy of the config: the config is read
-        # only, and doctor writes to it. It migrates the state for a new
-        # release.
+        # Doctor of the product, on a copy of the config (the image README):
+        # it migrates the state for a new release.
         - name: doctor
           image: *image
           imagePullPolicy: IfNotPresent
@@ -134,17 +141,19 @@ spec:
             - -c
             - >-
               mkdir -p /tmp/doctor
-              && cp /home/node/.openclaw/openclaw.json /tmp/doctor/openclaw.json
+              && cp /home/node/config/openclaw.json /tmp/doctor/openclaw.json
               && exec node /app/openclaw.mjs doctor --fix --non-interactive
           env:
+            - name: OPENCLAW_STATE_DIR
+              value: /home/node/data/state
+            - name: OPENCLAW_CONFIG_PATH
+              value: /tmp/doctor/openclaw.json
             - name: XDG_CACHE_HOME
-              value: /home/node/.openclaw/.cache
+              value: /home/node/data/state/.cache
             - name: OPENCLAW_NO_AUTO_UPDATE
               value: "1"
             - name: DO_NOT_TRACK
               value: "1"
-            - name: OPENCLAW_CONFIG_PATH
-              value: /tmp/doctor/openclaw.json
           envFrom: &secrets
             # OPENCLAW_GATEWAY_TOKEN, LITELLM_API_KEY, TELEGRAM_BOT_TOKEN,
             # TELEGRAM_ALLOW_FROM
@@ -160,14 +169,9 @@ spec:
               memory: 2Gi
           volumeMounts: &stateMounts
             - name: state
-              mountPath: /home/node/.openclaw
-              subPath: state
-            - name: state
-              mountPath: /home/node/.openclaw-archives
-              subPath: archives
+              mountPath: /home/node/data
             - name: config
-              mountPath: /home/node/.openclaw/openclaw.json
-              subPath: openclaw.json
+              mountPath: /home/node/config
               readOnly: true
             # /tmp with mode 0700: the sandbox plugin refuses a temp dir that
             # others can write with no sticky bit, as an emptyDir is.
@@ -239,14 +243,9 @@ spec:
           securityContext: *containerSecurity
           volumeMounts:
             - name: state
-              mountPath: /home/node/.openclaw
-              subPath: state
-            - name: state
-              mountPath: /home/node/.openclaw-archives
-              subPath: archives
+              mountPath: /home/node/data
             - name: config
-              mountPath: /home/node/.openclaw/openclaw.json
-              subPath: openclaw.json
+              mountPath: /home/node/config
               readOnly: true
             - name: scripts
               mountPath: /scripts

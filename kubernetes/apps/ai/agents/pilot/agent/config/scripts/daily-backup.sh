@@ -14,10 +14,10 @@
 # A failed backup ends the container, so the restart shows on the pod.
 set -eu
 
-ARCHIVES=/home/node/.openclaw-archives
+ARCHIVES=/home/node/data/archives
 DAILY="$ARCHIVES/daily"
 LISTS="$ARCHIVES/instruction-files"
-WORKSPACE=/home/node/.openclaw/workspace
+WORKSPACE=/home/node/data/state/workspace
 KEEP=7
 
 mkdir -p "$DAILY" "$LISTS"

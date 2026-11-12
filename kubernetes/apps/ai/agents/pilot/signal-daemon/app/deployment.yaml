@@ -40,12 +40,15 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
-        # The directories of the volume, as the pod user (the kubelet makes a
-        # missing subPath as root). Then the archive step: an archive of the
-        # account state while the daemon is stopped, named with the release
-        # that starts and the time, read back against its checksum, kept for
-        # 14 days. A patch of the image can change the state, and this
-        # archive is the way back. A failed step stops the start.
+        # The directories of the volume, as the pod user. Each container
+        # mounts the volume at its root, with no subPath: on this cluster the
+        # kubelet can't reach the local-path directory, so it would make a
+        # subPath directory as root (talos/wsl/README.md). Then the archive
+        # step: an archive of the account state while the daemon is stopped,
+        # named with the release that starts and the time, read back against
+        # its checksum, kept for 14 days. A patch of the image can change the
+        # state, and this archive is the way back. A failed step stops the
+        # start.
         - name: archive
           image: &image ghcr.io/asamk/signal-cli:0.14.10-native@sha256:5a9a2a10db8ef3351bb713804e82f6ca7eb0a82340148839c2681720bc825d61
           imagePullPolicy: IfNotPresent
@@ -54,13 +57,13 @@ spec:
             - -c
             - |
               set -eu
-              mkdir -p /volume/data /volume/archives/start
-              chmod 0700 /volume/data /volume/archives /volume/archives/start
+              mkdir -p /var/lib/signal-cli/data /var/lib/signal-cli/archives/start
+              chmod 0700 /var/lib/signal-cli/data /var/lib/signal-cli/archives /var/lib/signal-cli/archives/start
               release=$(/usr/bin/signal-cli --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
               [ -n "$release" ] || release=unknown
               name=signal-cli-$release-$(date -u +%Y%m%dT%H%M%SZ).tar.gz
-              cd /volume/archives/start
-              tar -czf "$name.partial" -C /volume/data .
+              cd /var/lib/signal-cli/archives/start
+              tar -czf "$name.partial" -C /var/lib/signal-cli/data .
               mv "$name.partial" "$name"
               sha256sum "$name" > "$name.sha256"
               sha256sum -c "$name.sha256" > /dev/null
@@ -84,16 +87,19 @@ spec:
               memory: 256Mi
           volumeMounts:
             - name: state
-              mountPath: /volume
+              mountPath: /var/lib/signal-cli
             - name: tmp
               mountPath: /tmp
       containers:
         - name: signal-cli
           image: *image
           imagePullPolicy: IfNotPresent
-          # The entrypoint is signal-cli with --config=/var/lib/signal-cli.
-          # Received messages go to the clients of the events path, not to
-          # the log.
+          # The account state is in data/ on the volume, next to the
+          # archives. Received messages go to the clients of the events path,
+          # not to the log.
+          command:
+            - /usr/bin/signal-cli
+            - --config=/var/lib/signal-cli/data
           args:
             - daemon
             - --http
@@ -131,7 +137,6 @@ spec:
           volumeMounts:
             - name: state
               mountPath: /var/lib/signal-cli
-              subPath: data
             - name: tmp
               mountPath: /tmp
       volumes:

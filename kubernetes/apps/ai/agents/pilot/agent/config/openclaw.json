@@ -20,7 +20,7 @@
   },
   "agents": {
     "defaults": {
-      "workspace": "~/.openclaw/workspace",
+      "workspace": "/home/node/data/state/workspace",
       "model": {"primary": "litellm/agents-pilot"},
       "modelPolicy": {"allow": ["litellm/agents-pilot"]},
       "sandbox": {"mode": "all", "backend": "openshell", "scope": "session", "workspaceAccess": "rw"},
