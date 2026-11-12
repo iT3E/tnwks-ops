@@ -1,0 +1,53 @@
+---
+# The model bridge takes calls from the model gateway pods only, and calls
+# out to the API of the vendor only (and DNS, through Cilium's DNS proxy, so
+# that the egress rule can name the host). The kubelet's probes come from
+# the host.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: model-bridge
+  namespace: ai
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: model-bridge
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: ai
+            # The gateway pods of the litellm HelmRelease (labels read from
+            # the running pods).
+            app.kubernetes.io/name: litellm
+            app.kubernetes.io/instance: litellm
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        - matchName: api.anthropic.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
