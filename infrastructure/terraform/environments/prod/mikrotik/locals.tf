@@ -122,10 +122,10 @@ locals {
             address     = "10.10.60.34"
             mac_address = "C0:99:60:D6:3E:BC"
           }
-          sv3c02 = {
-            comment     = "sv3c02"
+          empiretech01 = {
+            comment     = "empiretech01"
             address     = "10.10.60.35"
-            mac_address = "C0:99:2F:62:9A:AB"
+            mac_address = "8C:E9:B4:B9:AB:85"
           }
         }
       }
