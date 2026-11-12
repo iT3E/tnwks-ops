@@ -103,6 +103,42 @@ charts make have no cluster label; they stay local because Cilium 1.19 sets
 HelmRelease (`kubernetes/apps/kube-system/cilium/app/helmrelease.yaml`) does
 not change it.
 
+## The model path
+
+Every model call of an agent goes to the model gateway (LiteLLM,
+`http://litellm-app.ai.svc.cluster.local:4000`), with the key of its trust
+domain, to the name of its trust domain. Nothing else in a trust domain
+reaches a model.
+
+```text
+agent (key agents-<name>) -> model gateway, name agents-<name>
+  -> claude-opus-bridge-<domain> -> model bridge (bridge key of the domain) -> Claude plan
+  or, after a move by a person:
+  -> claude-opus-bedrock -> Bedrock
+```
+
+| Trust domain | Name and key alias | Entry today | Bridge domain |
+| --- | --- | --- | --- |
+| `agents-main` | `agents-main` | `claude-opus-bridge-main` | `main` |
+| `agents-finance` | `agents-finance` | `claude-opus-bridge-finance` | `finance` |
+| `agents-workflows` | `agents-workflows` | `claude-opus-bridge-workflows` | `workflows` |
+| `agents-pilot` | `agents-pilot` | `claude-opus-bridge-main` | `main` (the pilot has no bridge key of its own) |
+
+- **One name, one line.** Each name points at one entry, on one line of the
+  gateway config. A move between the plan and Bedrock is a change of that
+  line, by a person, in a pull request, and a revert is the way back. The
+  finance agent follows the main agent in the same pull request.
+  `docs/apps/litellm.md` ("The agent platform") has the steps.
+- **No fallback.** The gateway config has none. Each key lists its one name,
+  so a call to any other name, or a fallback in a request, gets 403. The
+  config of each agent names its one model, with no fallback list.
+- **Model:** Claude Opus 5.5 on both: `claude-opus-5-5` through the bridge,
+  and `us.anthropic.claude-opus-5-5` on Bedrock (Invoke API).
+- **Keys:** the agent's copy of its key is `LITELLM_API_KEY` in the Secret
+  `agent-secret` of its namespace; the gateway's copy is in `keys.json`
+  (`docs/apps/litellm.md`, "Keys of the agent platform"). No spend limit
+  until the pilot has measured the use.
+
 ## The model bridge
 
 The model bridge (`kubernetes/apps/ai/model-bridge/`, image from
@@ -130,7 +166,7 @@ homelab-wsl lists it next to `agents/`.
   year), and `BRIDGE_KEY_MAIN`, `BRIDGE_KEY_FINANCE` and
   `BRIDGE_KEY_WORKFLOWS` (32 characters or more each, one for each trust
   domain, not starting with `sk-ant-`). The model gateway gets the same
-  three keys for its entries.
+  three keys for its entries, in `litellm-secret`.
 - A restart ends each live conversation; the next call of a conversation
   goes in with its history as one text. The repository README has the
   contract and the log format.
