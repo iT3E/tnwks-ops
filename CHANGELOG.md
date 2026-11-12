@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.90.0 - 2026-11-12
+
+### Added
+
+* agents: the pilot agent in agents-pilot (OpenClaw in the agent image, with the OpenShell sandbox backend and one model at the model gateway) on Telegram, its Signal daemon (off until the test number exists), the archive step and daily backup of each volume, the check of the instruction files, and a kopiur policy for each volume
+
 ## v2.89.0 - 2026-11-12
 
 ### Changed
