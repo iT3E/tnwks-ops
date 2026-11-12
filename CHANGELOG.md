@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.86.0 - 2026-11-12
+
+### Changed
+
+* MikroTik: the 10.10.60.35 reservation moves from the dead SV3C (sv3c02) to the replacement EmpireTech camera (empiretech01)
+
 ## v2.85.0 - 2026-11-12
 
 ### Added
