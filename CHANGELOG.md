@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.85.0 - 2026-11-12
+
+### Added
+
+* MikroTik: VLANs take extra_addresses; temporary 192.168.1.1/24 on seccam-610 and HTTP from the desktop to 192.168.1.108, to set up the replacement east camera at its factory default
+
 ## v2.84.0 - 2026-11-11
 
 ### Added
