@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Agent platform probe: find the two pods of the probe sandbox through its Sandbox record while it runs, require both running, and log each pod with its node'
+time: 2026-11-11T21:36:44.164943674-08:00
