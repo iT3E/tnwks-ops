@@ -1,0 +1,74 @@
+---
+# Repo-scoped runner for the private docs repo (iT3E/tnwks-coe). Its CI
+# callers run here by default (`runs-on: tnwks-coe`); the repository
+# variable CI_RUNNER=ubuntu-latest sends them back to GitHub-hosted
+# runners. Its jobs (privacy, secret scan, actionlint, changelog, labeler,
+# the skills' Python checks, release) need bash, git, curl, perl and
+# python3 only, all in the runner image.
+#
+# No Docker: github-workflows runs those jobs without containers, so there
+# is no privileged dind sidecar. Code from a PR runs here, and only the
+# owner and the owner's agents can push to that private repo.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: tnwks-coe
+  namespace: tools
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: gha-runner-scale-set
+      version: 0.15.1
+      sourceRef:
+        kind: HelmRepository
+        name: actions-runner-controller
+        namespace: flux-system
+  maxHistory: 2
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  dependsOn:
+    - name: gha-runner-scale-set-controller
+  values:
+    githubConfigUrl: "https://github.com/iT3E/tnwks-coe"
+    runnerScaleSetName: tnwks-coe
+    # Same GitHub App as sites-builder, with tnwks-coe added to its installation.
+    githubConfigSecret: sites-runner-github-app
+    minRunners: 0
+    # A PR starts about five jobs; two at a time keeps the queue short.
+    maxRunners: 2
+    controllerServiceAccount:
+      namespace: tools
+      name: gha-runner-scale-set-controller-gha-rs-controller
+    template:
+      spec:
+        # The runner talks to GitHub only, never to the Kubernetes API.
+        automountServiceAccountToken: false
+        securityContext:
+          # The image's USER is the name `runner`; runAsNonRoot needs the uid.
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          seccompProfile:
+            type: RuntimeDefault
+        containers:
+          - name: runner
+            image: ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232
+            command: ["/home/runner/run.sh"]
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                memory: 1Gi
