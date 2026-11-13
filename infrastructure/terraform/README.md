@@ -8,12 +8,14 @@ environments/          thin roots — one per Terraform Cloud workspace
 │   ├── aws-init/      tnwks-ops-aws-init       (CLI run, static root keys)
 │   └── aws-identity/  tnwks-ops-aws-identity   (org, Identity Center, SOPS KMS)
 ├── aws-prod/          tnwks-ops-aws-prod       (CI-driven, day-to-day infra)
-└── cloudflare/        tnwks-cloudflare-prod    (CI-driven, self-hosted runner)
+├── cloudflare/        tnwks-cloudflare-prod    (CI-driven, self-hosted runner)
+└── github/            tnwks-github-prod        (CI-driven, self-hosted runner, off until enabled)
 
 modules/               child modules, namespaced by provider
 ├── aws/               prod account infra (+ oidc/ and identity/ nested)
 ├── tfc/               Terraform Cloud project, workspaces, variable set
-└── cloudflare/        one zone, its settings, WAF and DNS
+├── cloudflare/        one zone, its settings, WAF and DNS
+└── github/            the GitHub account's repositories and their settings
 ```
 
 Each environment root holds only `backend.tf`, `providers.tf`, `versions.tf`,
@@ -47,6 +49,7 @@ module conventions.
    | `tnwks-ops-aws-identity` | `environments/bootstrap/aws-identity` | remote | API/CLI, by hand |
    | `tnwks-ops-aws-prod` | `environments/prod/aws` | remote | `.github/workflows/terraform.yaml` |
    | `tnwks-cloudflare-prod` | `environments/prod/cloudflare` | local | `.github/workflows/terraform.yaml` (self-hosted runner) |
+   | `tnwks-github-prod` | `environments/prod/github` | local | `.github/workflows/terraform.yaml` (self-hosted runner), once `GITHUB_TERRAFORM_ENABLED` is `true` ([`docs/operations/github.md`](../../docs/operations/github.md)) |
 
    None of these workspaces currently has a VCS connection; runs are created by
    the GitHub Actions workflows (prod) or from the CLI.
