@@ -265,8 +265,9 @@ def test_each_token_has_a_lease_that_the_token_alert_reads():
 def test_a_listed_run_with_a_token_lists_its_lease_and_its_secret():
     """Without its Lease, SecurityTokenExpiring has no series for a token, and the
     run fails on the day the token ends with no warning before."""
-    resources = yaml.safe_load((APP / "kustomization.yaml").read_text())["resources"]
+    # By the file name, so "cronjob-github.yaml" and "./cronjob-github.yaml" are the same entry.
+    resources = {Path(item).name for item in yaml.safe_load((APP / "kustomization.yaml").read_text())["resources"]}
     for provider in ("cloudflare", "github"):
-        parts = {f"./cronjob-{provider}.yaml", f"./lease-{provider}-token.yaml", f"./secret-{provider}.sops.yaml"}
-        listed = parts & set(resources)
+        parts = {f"cronjob-{provider}.yaml", f"lease-{provider}-token.yaml", f"secret-{provider}.sops.yaml"}
+        listed = parts & resources
         assert listed in (set(), parts), f"{provider}: list the Secret, the Lease and the CronJob together, not {sorted(listed)}"
