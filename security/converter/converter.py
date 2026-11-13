@@ -27,10 +27,12 @@ import argparse
 import calendar
 import datetime
 import http.client
+import io
 import json
 import logging
 import os
 import re
+import stat
 import threading
 import time
 import urllib.error
@@ -50,6 +52,7 @@ FILES_SKIPPED = "homelab_security_converter_files_skipped"
 FINDINGS_PENDING = "homelab_security_converter_findings_pending"
 FINDINGS_SENT = "homelab_security_converter_findings_lines_sent_total"
 FINDINGS_REFUSED = "homelab_security_converter_findings_lines_refused_total"
+ACCEPTED_READ = "homelab_security_converter_accepted_list_read"
 
 INTERVAL_SECONDS = 300
 # The converter looks back three times the `late_after` of a stream, and one hour at
@@ -64,7 +67,9 @@ NANOSECONDS = 1_000_000_000
 
 
 def quote(value: object) -> str:
-    return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+    # A character that is not UTF-8 (a lone surrogate) becomes its escape, as text.
+    text = str(value).encode("utf-8", "backslashreplace").decode("utf-8")
+    return text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
 class Metrics:
@@ -81,7 +86,9 @@ class Metrics:
             f"{metric_name}{{{suffix}}} {number}" if suffix else f"{metric_name} {number}")
 
     def render(self) -> bytes:
-        return ("\n".join(line for lines in self.lines.values() for line in lines) + "\n").encode()
+        # A text that can not be UTF-8 (a lone surrogate) never stops a scrape.
+        text = "\n".join(line for lines in self.lines.values() for line in lines) + "\n"
+        return text.encode("utf-8", "backslashreplace")
 
 
 class Loop:
@@ -218,9 +225,11 @@ class Loki:
     def push(self, labels: dict[str, str], entries: list[tuple[int, str]]):
         """Send lines of one stream to the push API. Refused when Loki will never take
         them, NoAnswer for each other error and for no answer: then the converter sends
-        them again in its next cycle."""
+        them again in its next cycle. A 413 (the body is larger than the limit of the
+        gateway) is NoAnswer too: the lines wait, and the converter does not lose them.
+        The body is ASCII, so a text that is not UTF-8 (a lone surrogate) is an escape."""
         body = json.dumps({"streams": [{"stream": labels, "values": [[str(moment), line] for moment, line in entries]}]},
-                          separators=(",", ":"), ensure_ascii=False).encode()
+                          separators=(",", ":"), ensure_ascii=True).encode("ascii")
         request = urllib.request.Request(f"{self.url}/loki/api/v1/push", data=body,
                                          headers={"Content-Type": "application/json"}, method="POST")
         try:
@@ -229,7 +238,7 @@ class Loki:
         except urllib.error.HTTPError as error:
             # Only the status: the text of an answer can hold a line, and never reaches a log.
             error.close()
-            if 400 <= error.code < 500 and error.code != 429:
+            if 400 <= error.code < 500 and error.code not in (413, 429):
                 raise Refused(f"HTTPError {error.code}") from None
             raise NoAnswer(f"HTTPError {error.code}") from None
         except (OSError, http.client.HTTPException) as error:
@@ -301,94 +310,189 @@ class StreamSource(Loop):
 # The entry fields that the converter reads. `reason` stays in the file.
 ACCEPTED_FIELDS = ("source", "check", "system", "until")
 MAX_LIST_BYTES = 1024 * 1024
-MAX_CHECK_LENGTH = 200
+# The form of a check ID of each tool: Prowler, Trivy (`k8s-cis-1.23/1.2.3`), Wazuh, the
+# API checks. A value of another form is no check, so it never reaches a label.
+CHECK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_./:-]{0,199}$")
+# PyYAML reads a plain value that starts with one of these characters, or that is one of
+# these words, as a number, a date, a bool or null. The reader takes such a value only
+# when PyYAML gives the same text: a decimal number or a date as YYYY-MM-DD.
+TYPED_START = "+-.0123456789"
+TYPED_WORDS = {"yes", "Yes", "YES", "no", "No", "NO", "true", "True", "TRUE", "false", "False",
+               "FALSE", "on", "On", "ON", "off", "Off", "OFF", "null", "Null", "NULL", "~", "<<", "="}
+SAME_TEXT = re.compile(r"^(?:0|[1-9][0-9]*|[0-9]{4}-[0-9]{2}-[0-9]{2})$")
+# A character that YAML does not let a file hold. PyYAML stops on it.
+NOT_PRINTABLE = re.compile("[^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]")
 KEY_LINE = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(?:[ ]+(.*))?$")
-SINGLE_QUOTED = re.compile(r"^'((?:[^']|'')*)'[ ]*(?:#.*)?$")
+BLOCK_STARTS = ("|", ">", "|-", ">-", "|+", ">+")
 
 
-class NotTaken(ValueError):
-    """A value or a line that the reader of the list does not take."""
+class Unreadable(ValueError):
+    """A line of the list that the reader does not understand. After such a line the
+    reader can not know where the next entry starts, so the file gives no entry."""
 
 
-def scalar(text: str) -> str | None:
-    """The value of a `key: value` line of the list: a plain, single-quoted or
-    double-quoted scalar on one line. None for an empty value or the start of a block
-    scalar, whose lines follow. NotTaken for each other form."""
-    if text in ("", "|", ">", "|-", ">-", "|+", ">+") or text.startswith("#"):
+# The escapes of a double-quoted YAML value, and the number of hex digits after x, u, U.
+YAML_ESCAPES = {**dict.fromkeys('0abt\tnvfre "/\\N_LP', 0), "x": 2, "u": 4, "U": 8}
+HEX = re.compile(r"[0-9A-Fa-f]+")
+
+
+def quote_end(text: str, mark: str, start: int) -> int | None:
+    """The index after the quote that closes a value opened with `mark`, or None when the
+    value goes on to the next line. In single quotes `''` is a quote of the text; in
+    double quotes a backslash escapes the next character, also the end of the line.
+    Unreadable for an escape that YAML does not have: PyYAML stops on it."""
+    at = start
+    while at < len(text):
+        char = text[at]
+        if mark == "'" and char == "'":
+            if text[at + 1:at + 2] == "'":
+                at += 2
+                continue
+            return at + 1
+        if mark == '"' and char == "\\":
+            escape = text[at + 1:at + 2]
+            if escape == "":
+                return None  # the value goes on, with no space
+            digits = YAML_ESCAPES.get(escape)
+            if digits is None or (digits and not HEX.fullmatch(text[at + 2:at + 2 + digits] or "-")
+                                  or len(text[at + 2:at + 2 + digits]) < digits):
+                raise Unreadable("an escape that YAML does not have")
+            at += 2 + digits
+            continue
+        if mark == '"' and char == '"':
+            return at + 1
+        at += 1
+    return None
+
+
+def plain(value: str) -> str | None:
+    """The text of a plain value, or None when PyYAML reads it as another type, or as a
+    text that is not the same. Unreadable for a date as YYYY-MM-DD that is no day: PyYAML
+    stops on it."""
+    if value in TYPED_WORDS or (value[0] in TYPED_START and not SAME_TEXT.match(value)):
         return None
-    if text.startswith('"'):
+    if value[0] in TYPED_START and "-" in value:
         try:
-            value, end = json.JSONDecoder().raw_decode(text)
+            datetime.date.fromisoformat(value)
         except ValueError:
-            raise NotTaken("a double-quoted value that does not end on its line") from None
-        rest = text[end:].strip()
-        if rest and not rest.startswith("#"):
-            raise NotTaken("text after a quoted value")
-        return value
-    if text.startswith("'"):
-        match = SINGLE_QUOTED.match(text)
-        if not match:
-            raise NotTaken("a single-quoted value that does not end on its line")
-        return match[1].replace("''", "'")
-    if text[0] in "[]{}&*!%@`|>":
-        raise NotTaken("a flow collection, an anchor, an alias or a tag")
-    value = text.split(" #", 1)[0].rstrip()
-    if ": " in value or value.endswith(":"):
-        raise NotTaken("a plain value with a colon")
+            raise Unreadable("a date that is no day") from None
     return value
 
 
-def yaml_list(text: str) -> tuple[list[dict[str, str | None]], int]:
-    """The entries of the list of accepted findings, in the block form of
-    security/README.md: a YAML list of mappings, one `key: value` on each line. The
-    Python image of the converter has no YAML library, so this reader takes that form
-    only. An entry with a line of any other form is not taken, and is counted.
+def scalar(text: str) -> tuple[str | None, str | None]:
+    """The value of a `key: value` line, and what may follow it: "block" (the lines of a
+    block value), "plain" (more lines of a plain value), "empty", None, or the quote mark
+    of a quoted value that goes on to the next lines. The value is None when it is empty,
+    a block, a quoted value that goes on, a double-quoted value that the JSON decoder does
+    not read, or a plain value that PyYAML reads as another type. Unreadable for a flow
+    collection, an anchor, an alias, a tag, or a plain value with a colon."""
+    if text == "" or text.startswith("#"):
+        return None, "empty"
+    if text.split(" #", 1)[0].rstrip() in BLOCK_STARTS:
+        return None, "block"
+    if text[0] in "'\"":
+        end = quote_end(text, text[0], 1)
+        if end is None:
+            return None, text[0]
+        rest = text[end:].strip()
+        if rest and not rest.startswith("#"):
+            raise Unreadable("text after a quoted value")
+        if text[0] == "'":
+            return text[1:end - 1].replace("''", "'"), None
+        try:
+            return json.loads(text[:end]), None
+        except ValueError:
+            return None, None
+    if text[0] in "[]{},&*!%@`|>" or text.startswith(("- ", "? ", ": ")) or text in ("-", "?", ":"):
+        raise Unreadable("a flow collection, an anchor, an alias, a tag or an indicator")
+    value = text.split(" #", 1)[0].rstrip()
+    if ": " in value or value.endswith(":"):
+        raise Unreadable("a plain value with a colon")
+    return plain(value), "plain"
 
-    Returns the entries that it took, and the number of entries (or lines outside an
-    entry) that it did not take."""
-    entries: list[tuple[dict[str, str | None], bool]] = []
-    outside = 0
-    dash = key_column = None
-    last_key = None
-    for raw in text.splitlines():
+
+def yaml_list(text: str) -> list[dict[str, str | None]]:
+    """The entries of the list of accepted findings, in the block form of
+    security/README.md and of `yaml.safe_dump`: a YAML list of mappings, one `key: value`
+    on each line. The Python image of the converter has no YAML library, so this reader
+    takes that form only, and raises Unreadable at the first line of another form.
+
+    A quoted value can go on over more lines, as YAML lets it: the reader goes to its
+    closing quote, and reads no key in those lines. A block value (`|`, `>`) and a plain
+    value can go on over lines that are more indented than the key. A value on more lines
+    is None, so only `reason` can have one: an entry with such a `check`, `system`,
+    `source` or `until` does not fit."""
+    if NOT_PRINTABLE.search(text):
+        raise Unreadable("a character that YAML does not let a file hold")
+    entries: list[dict[str, str | None]] = []
+    dash = key_column = last_key = block_column = None
+    follows = None
+    for number, raw in enumerate(text.splitlines(), 1):
+        if follows in ("'", '"'):
+            if raw.startswith(("---", "...")) and raw[3:4] in ("", " ", "\t"):
+                raise Unreadable(f"line {number}: the end of a document inside a quoted value")
+            end = quote_end(raw, follows, 0)
+            if end is not None:
+                rest = raw[end:].strip()
+                if rest and not rest.startswith("#"):
+                    raise Unreadable(f"line {number}: text after a quoted value")
+                follows = None
+            continue
         line = raw.rstrip()
         content = line.lstrip(" ")
-        if not content or content.startswith("#") or (line in ("---", "...") and dash is None):
-            continue
         indent = len(line) - len(content)
-        if "\t" in raw[:len(raw) - len(raw.lstrip())]:
-            content = "\t"  # a tab in the indentation: no form of this reader
-        if (content == "-" or content.startswith("- ")) and (dash is None or indent == dash):
+        if follows == "block":
+            # The lines of a block value: blank, or more indented than the key. The
+            # first line sets the column of the value.
+            if not content:
+                continue
+            if indent > key_column:
+                if block_column is None:
+                    block_column = indent
+                if indent < block_column:
+                    raise Unreadable(f"line {number}: a line of a block value at another column")
+                continue
+            follows = None
+        if not content or content.startswith("#") or (line == "---" and dash is None):
+            if content.startswith("#") and follows == "plain":
+                follows = None  # a comment ends a plain value
+            continue
+        if content[0] == "\t":
+            raise Unreadable(f"line {number}: a tab in the indentation")
+        if (content == "-" or content.startswith("- ")) and indent == (indent if dash is None else dash):
             dash = indent
-            entries.append(({}, True))
+            entries.append({})
+            key_column = last_key = follows = None
             rest = content[1:].lstrip(" ")
-            key_column, last_key = None, None
             if not rest or rest.startswith("#"):
                 continue
-            key_column, content, indent = indent + len(content) - len(rest), rest, indent + len(content) - len(rest)
+            if rest[0] == "\t":
+                raise Unreadable(f"line {number}: a tab in the indentation")
+            indent = indent + len(content) - len(rest)
+            key_column, content = indent, rest
         if not entries:
-            outside += 1
-            continue
-        entry = entries[-1][0]
+            raise Unreadable(f"line {number}: a line outside the list")
         if key_column is None and indent > dash:
             key_column = indent
-        if indent == key_column and (match := KEY_LINE.match(content)):
-            key = match[1]
-            try:
-                value = scalar(match[2] or "")
-            except NotTaken:
-                entries[-1] = entry, False
-                continue
-            if key in entry:
-                entries[-1] = entry, False
-            entry[key], last_key = value, key
-        elif key_column is not None and indent > key_column and last_key is not None:
-            # A line of a block scalar or of a value on two lines. Only `reason` may have one.
+        entry = entries[-1]
+        if indent == key_column:
+            match = KEY_LINE.match(content)
+            if not match:
+                raise Unreadable(f"line {number}: not a `key: value` line")
+            if match[1] in entry:
+                raise Unreadable(f"line {number}: a key two times in one entry")
+            value, follows = scalar(match[2] or "")
+            entry[match[1]], last_key, block_column = value, match[1], None
+        elif key_column is not None and indent > key_column and follows == "plain":
+            # A line of a plain value on more lines.
+            if ": " in content or content.endswith(":") or " #" in content or "\t#" in content:
+                raise Unreadable(f"line {number}: a colon or a comment in a plain value")
             entry[last_key] = None
         else:
-            entries[-1] = entry, False
-    taken = [entry for entry, ok in entries if ok]
-    return taken, outside + len(entries) - len(taken)
+            raise Unreadable(f"line {number}: a line at a column of no key")
+    if follows in ("'", '"'):
+        raise Unreadable("the file ends inside a quoted value")
+    return entries
 
 
 def end_of(until: object) -> int:
@@ -401,24 +505,25 @@ def end_of(until: object) -> int:
 def accepted_entries(text: str, sources: set[str], systems: set[str]
                      ) -> tuple[dict[tuple[str, str, str], int], int]:
     """{(source, check, system): end} for each entry that fits, and the number of entries
-    that do not fit: a field is missing or empty, the source or the system is not in
-    the registry, or the end date is not a date. Two entries of one finding keep the
-    later end."""
-    entries, skipped = yaml_list(text)
+    that do not fit: a field is missing, empty or on more lines, the source or the system
+    is not in the registry, the check is not a check ID, or the end date is not a date as
+    YYYY-MM-DD. Two entries of one finding keep the later end. Unreadable when a line of
+    the file has a form that the reader does not read: then the file gives no entry."""
     result: dict[tuple[str, str, str], int] = {}
-    for index, entry in enumerate(entries, 1):
+    skipped = 0
+    for index, entry in enumerate(yaml_list(text), 1):
         source, check, system, until = (entry.get(field) for field in ACCEPTED_FIELDS)
         if not (source and check and system and until):
-            why = "a field is missing or empty"
+            why = "a field is missing, empty or on more lines"
         elif source not in sources or system not in systems:
             why = "the source or the system is not in the registry"
-        elif len(check) > MAX_CHECK_LENGTH:
-            why = "the check is longer than the limit"
+        elif not CHECK_ID.match(check):
+            why = "the check is not a check ID"
         else:
             try:
                 end = end_of(until)
             except ValueError:
-                why = "the end date is not a date"
+                why = "the end date is not a date as YYYY-MM-DD"
             else:
                 key = (source, check, system)
                 result[key] = max(end, result.get(key, end))
@@ -432,7 +537,11 @@ def accepted_entries(text: str, sources: set[str], systems: set[str]
 class AcceptedList(Loop):
     """The end of each accepted finding, from the list that Flux decrypts to the Secret
     security-accepted-findings. With no Secret, the list is empty. The converter reads
-    the file each cycle, so a new list counts from the next cycle."""
+    the file each cycle, so a new list counts from the next cycle.
+
+    The reader mutes too little rather than too much: an entry that does not fit is
+    skipped, and a file with a line that the reader does not understand gives no entry
+    at all, with homelab_security_converter_accepted_list_read at 0."""
 
     name = "accepted"
 
@@ -442,31 +551,36 @@ class AcceptedList(Loop):
         self.path = Path(path)
         self.series = registry["series"]["accepted"]
         self.sources, self.systems = set(registry["sources"]), set(registry["systems"])
-        self.result: tuple[dict[tuple[str, str, str], int], int, float] | None = None
+        self.result: tuple[dict[tuple[str, str, str], int], int, bool, float] | None = None
 
-    def read(self) -> tuple[dict[tuple[str, str, str], int], int]:
+    def read(self) -> tuple[dict[tuple[str, str, str], int], int, bool]:
+        """The entries, the number of skipped entries, and whether the file was read."""
         try:
             with self.path.open("rb") as file:
                 raw = file.read(MAX_LIST_BYTES + 1)
         except FileNotFoundError:
-            return {}, 0
+            return {}, 0, True
         except OSError as error:
             logger.warning("the list of accepted findings can not be read: %s", type(error).__name__)
-            return {}, 1
+            return {}, 0, False
         if len(raw) > MAX_LIST_BYTES:
             logger.warning("the list of accepted findings is larger than the limit")
-            return {}, 1
+            return {}, 0, False
         try:
-            text = raw.decode("utf-8")
+            entries, skipped = accepted_entries(raw.decode("utf-8"), self.sources, self.systems)
         except UnicodeDecodeError:
             logger.warning("the list of accepted findings is not UTF-8")
-            return {}, 1
-        return accepted_entries(text, self.sources, self.systems)
+            return {}, 0, False
+        except Unreadable as error:
+            # The number of the line and the kind of its form, and no text of the file.
+            logger.warning("the list of accepted findings gives no entry: %s", error)
+            return {}, 0, False
+        return entries, skipped, True
 
     def step(self):
-        entries, skipped = self.read()
+        entries, skipped, read = self.read()
         with self.lock:
-            self.result = entries, skipped, self.monotonic()
+            self.result = entries, skipped, read, self.monotonic()
 
     def clear(self):
         with self.lock:
@@ -475,9 +589,10 @@ class AcceptedList(Loop):
     def collect(self, metrics: Metrics, now: float):
         with self.lock:
             result = self.result
-        if result is None or not self.fresh(result[2], now):
+        if result is None or not self.fresh(result[3], now):
             return
-        entries, skipped, _ = result
+        entries, skipped, read, _ = result
+        metrics.add(ACCEPTED_READ, int(read))
         metrics.add(ACCEPTED_SKIPPED, skipped)
         for (source, check, system), end in sorted(entries.items()):
             metrics.add(self.series, end, source=source, check=check, system=system)
@@ -496,6 +611,11 @@ MAX_OCSF_BYTES = 256 * 1024 * 1024
 MAX_ITEM_CHARS = 4 * 1024 * 1024
 CHUNK_CHARS = 64 * 1024
 MAX_API_BYTES = 16 * 1024 * 1024
+# A file of Prowler holds one record of some kB for each resource of each check: some
+# thousand records in an account. These limits keep the memory of the counts, and the
+# number of series, small for a file that is not a file of Prowler.
+MAX_RECORDS = 200_000
+MAX_CHECKS = 5_000
 # The values of the label `severity`, from low to high: the OCSF names in lower case,
 # as the rule of Trivy Operator writes them.
 SEVERITIES = ("unknown", "informational", "low", "medium", "high", "critical")
@@ -577,31 +697,49 @@ def ocsf_checks(records) -> dict[str, tuple[int, str]]:
     Prowler (Detection Finding). The check is `metadata.event_code`. A record with
     `status_code` FAIL fails, unless its `status` is "Suppressed": the list of accepted
     findings muted it. A check with no PASS and no FAIL record (MANUAL only) has no
-    result. The severity of a check is the highest of its records."""
-    checks: dict[str, tuple[set[str], bool, str]] = {}
+    result. The severity of a check is the highest of its records. A resource is the
+    `uid` of its first resource, or the `uid` of the finding when it has none. BadFile
+    for a check that is not a check ID, or a file over the limits of records or checks."""
+    checks: dict[str, tuple[set[int], bool, str]] = {}
     for index, record in enumerate(records):
+        if index >= MAX_RECORDS:
+            raise BadFile("the file has more records than the limit")
         metadata = record.get("metadata")
         check = metadata.get("event_code") if isinstance(metadata, dict) else None
         status = record.get("status_code")
-        if not isinstance(check, str) or not check or len(check) > MAX_CHECK_LENGTH:
-            raise BadFile(f"record {index} has no check")
+        if not isinstance(check, str) or not CHECK_ID.match(check):
+            raise BadFile(f"record {index} has no check ID")
         if not isinstance(status, str):
             raise BadFile(f"record {index} has no status")
+        if check not in checks and len(checks) >= MAX_CHECKS:
+            raise BadFile("the file has more checks than the limit")
         failed, ran, level = checks.get(check, (set(), False, "unknown"))
         level = higher(level, severity(record.get("severity")))
         if status in ("PASS", "FAIL"):
             ran = True
         if status == "FAIL" and record.get("status") != "Suppressed":
-            info = record.get("finding_info")
-            uid = info.get("uid") if isinstance(info, dict) else None
-            failed.add(uid if isinstance(uid, str) and uid else f"record {index}")
+            # The hash of the ID, not the ID: the memory stays some bytes for each.
+            failed.add(hash(resource_id(record) or f"record {index}"))
         checks[check] = failed, ran, level
     return {check: (len(failed), level) for check, (failed, ran, level) in checks.items() if ran}
 
 
-def read_ocsf(path: Path) -> dict[str, tuple[int, str]]:
-    with path.open(encoding="utf-8") as stream:
-        return ocsf_checks(json_array(stream))
+def resource_id(record: dict) -> str | None:
+    """The ID of the resource of a record: the `uid` of its first resource, which is the
+    ARN on AWS, or else the `uid` of the finding, which Prowler makes from the name of
+    the resource."""
+    resources = record.get("resources")
+    first = resources[0] if isinstance(resources, list) and resources else None
+    info = record.get("finding_info")
+    for value in (first.get("uid") if isinstance(first, dict) else None,
+                  info.get("uid") if isinstance(info, dict) else None):
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def read_ocsf(file) -> dict[str, tuple[int, str]]:
+    return ocsf_checks(json_array(io.TextIOWrapper(file, encoding="utf-8")))
 
 
 def number(value: object) -> bool:
@@ -618,13 +756,15 @@ def api_results(payload: object, now: float) -> tuple[float, list[dict]]:
         raise BadFile("the time of the file is not a time of the past")
     if not isinstance(results, list):
         raise BadFile("the file has no list of results")
+    if len(results) > MAX_CHECKS:
+        raise BadFile("the file has more results than the limit")
     seen = set()
     for index, entry in enumerate(results):
         if not isinstance(entry, dict):
             raise BadFile(f"result {index} is not an object")
         check, system, failed = entry.get("check"), entry.get("system"), entry.get("failed")
-        if not isinstance(check, str) or not check or len(check) > MAX_CHECK_LENGTH:
-            raise BadFile(f"result {index} has no check")
+        if not isinstance(check, str) or not CHECK_ID.match(check):
+            raise BadFile(f"result {index} has no check ID")
         if not isinstance(system, str) or not system:
             raise BadFile(f"result {index} has no system")
         if not isinstance(failed, int) or isinstance(failed, bool) or failed < 0:
@@ -642,9 +782,22 @@ def api_results(payload: object, now: float) -> tuple[float, list[dict]]:
     return float(moment), results
 
 
-def read_api(path: Path, now: float) -> tuple[float, list[dict]]:
-    with path.open("rb") as file:
-        raw = file.read(MAX_API_BYTES + 1)
+def open_regular(path: Path):
+    """The open file and its status, for a regular file only: the converter follows no
+    link, and a FIFO would stop the loop. BadFile for each other kind of file."""
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError as error:
+        raise BadFile(f"the file can not be opened: {type(error).__name__}") from None
+    info = os.fstat(descriptor)
+    if not stat.S_ISREG(info.st_mode):
+        os.close(descriptor)
+        raise BadFile("the file is not a regular file")
+    return os.fdopen(descriptor, "rb"), info
+
+
+def read_api(file, now: float) -> tuple[float, list[dict]]:
+    raw = file.read(MAX_API_BYTES + 1)
     if len(raw) > MAX_API_BYTES:
         raise BadFile("the file is larger than the limit")
     try:
@@ -662,7 +815,16 @@ FINDINGS_STREAM = "findings"
 TEXT_LIMIT = 1024
 DETAIL_LIMIT = 8192
 MAX_RESOURCES = 20
+# The bytes of a batch on the wire: the JSON of its lines in the body of the push. The
+# gateway of Loki takes a body of 4 MiB at most (`client_max_body_size` of the chart).
 MAX_BATCH_BYTES = 1024 * 1024
+# The time, the brackets, the quotes and the comma of one line in the body.
+LINE_OVERHEAD_BYTES = 32
+# Loki refuses a line of more than 256 KB (`max_line_size`). A line with long texts of
+# 4 bytes in UTF-8 could reach that, so a line above this size has shorter texts.
+MAX_LINE_BYTES = 64 * 1024
+# The limits of the texts of a line: the first that gives a line under MAX_LINE_BYTES.
+LINE_LIMITS = ((TEXT_LIMIT, DETAIL_LIMIT, MAX_RESOURCES), (256, 2048, 5), (64, 512, 1))
 
 
 def text(value: object, limit: int = TEXT_LIMIT) -> str | None:
@@ -679,10 +841,23 @@ def child(value: object, key: str) -> dict:
 
 
 def ocsf_line(record: dict) -> str:
-    """The line of the stream `findings` for one OCSF record: its class, time, severity,
-    status and detail, its check (`metadata.event_code`), the ID and title of the finding,
-    the ID, name, type, Region and service of each resource, and the account. Each other
-    field of the record stays in the file."""
+    """The line of the stream `findings` for one OCSF record, with the first limits of
+    LINE_LIMITS that give a line of at most MAX_LINE_BYTES in UTF-8."""
+    for limits in LINE_LIMITS:
+        line = ocsf_line_within(record, *limits)
+        if len(line.encode("utf-8", "backslashreplace")) <= MAX_LINE_BYTES:
+            break
+    return line
+
+
+def ocsf_line_within(record: dict, text_limit: int, detail_limit: int, max_resources: int) -> str:
+    """The line for one OCSF record: its class, time, severity, status and detail, its
+    check (`metadata.event_code`), the ID and title of the finding, the ID, name, type,
+    Region and service of each resource, and the account. Each other field of the
+    record stays in the file."""
+    def text(value: object, limit: int = text_limit) -> str | None:
+        return value[:limit] if isinstance(value, str) and value else None
+
     cloud, account = child(record, "cloud"), child(child(record, "cloud"), "account")
     resources = record.get("resources") if isinstance(record.get("resources"), list) else []
     moment = record.get("time")
@@ -692,13 +867,13 @@ def ocsf_line(record: dict) -> str:
         "severity": text(record.get("severity")),
         "status": text(record.get("status")),
         "status_code": text(record.get("status_code")),
-        "status_detail": text(record.get("status_detail"), DETAIL_LIMIT),
+        "status_detail": text(record.get("status_detail"), detail_limit),
         "metadata": compact({"event_code": text(child(record, "metadata").get("event_code"))}),
         "finding_info": compact({key: text(child(record, "finding_info").get(key)) for key in ("uid", "title")}),
         "resources": [item for item in (
             compact({**{key: text(resource.get(key)) for key in ("uid", "name", "type", "region")},
                      "group": compact({"name": text(child(resource, "group").get("name"))})})
-            for resource in resources[:MAX_RESOURCES] if isinstance(resource, dict)) if item],
+            for resource in resources[:max_resources] if isinstance(resource, dict)) if item],
         "cloud": compact({"provider": text(cloud.get("provider")), "region": text(cloud.get("region")),
                           "account": compact({key: text(account.get(key)) for key in ("uid", "name")})}),
     })
@@ -707,8 +882,11 @@ def ocsf_line(record: dict) -> str:
 
 def ocsf_lines(path: Path):
     """The line of each finding that fails in an OCSF file, one record at a time."""
-    with path.open(encoding="utf-8") as stream:
-        for record in json_array(stream):
+    file, _ = open_regular(path)
+    with file:
+        for index, record in enumerate(json_array(io.TextIOWrapper(file, encoding="utf-8"))):
+            if index >= MAX_RECORDS:
+                raise BadFile("the file has more records than the limit")
             if record.get("status_code") == "FAIL" and record.get("status") != "Suppressed":
                 yield ocsf_line(record)
 
@@ -728,15 +906,23 @@ def api_lines(entries: list[dict], system: str, moment: float):
             }), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
+def wire_bytes(line: str) -> int:
+    """The bytes of one line in the body of a push: its JSON in ASCII, and the time."""
+    return len(json.dumps(line)) + LINE_OVERHEAD_BYTES
+
+
 def batches(lines, moment: int, limit: int = MAX_BATCH_BYTES):
-    """Lists of (time, line) of at most about `limit` bytes."""
+    """Lists of (time, line) whose lines take at most `limit` bytes in the body of a
+    push. A batch has one line at least: a line is MAX_LINE_BYTES at most, so its body
+    stays far under the limit of the gateway."""
     batch, size = [], 0
     for line in lines:
-        if batch and size + len(line) > limit:
+        cost = wire_bytes(line)
+        if batch and size + cost > limit:
             yield batch
             batch, size = [], 0
         batch.append((moment, line))
-        size += len(line)
+        size += cost
     if batch:
         yield batch
 
@@ -776,7 +962,9 @@ class Findings:
                         refused += len(batch)
                         logger.warning("Loki refused %d lines of findings of %s for %s: %s", len(batch), source,
                                        system, error)
-            except (NoAnswer, BadFile, OSError, UnicodeDecodeError) as error:
+            except Exception as error:  # noqa: BLE001 - one stream must not stop the others
+                # The kind of the error, and the text of NoAnswer and BadFile, which hold
+                # no value of a file and no answer of Loki.
                 logger.warning("the lines of findings of %s for %s wait for the next cycle: %s", source, system,
                                error if isinstance(error, (NoAnswer, BadFile)) else type(error).__name__)
                 pending[(source, system)] = True
@@ -836,11 +1024,8 @@ class ResultFiles(Loop):
         """{system: (path, time)} of the newest OCSF file of each system of the provider."""
         directory = self.root / "prowler" / provider
         found: dict[str, tuple[Path, int]] = {}
-        try:
-            with os.scandir(directory) as listing:
-                entries = list(listing)
-        except FileNotFoundError:
-            return found
+        with os.scandir(directory) as listing:
+            entries = list(listing)
         for entry in entries:
             if entry.name == "tmp" or not entry.is_file(follow_symlinks=False):
                 continue
@@ -864,25 +1049,29 @@ class ResultFiles(Loop):
         return found
 
     def read(self, path: Path, reader, limit: int):
-        """What `reader` gives for the file, from the cache while the file stays the
-        same. BadFile when the file does not fit, or can not be read."""
+        """What `reader` gives for the open file, from the cache while the file stays
+        the same. BadFile when the file does not fit, or can not be read. The converter
+        opens a regular file only: no link, and no FIFO that would stop the loop."""
         try:
-            info = os.stat(path, follow_symlinks=False)
-        except OSError as error:
-            return BadFile(f"the file can not be read: {type(error).__name__}")
-        signature = info.st_size, info.st_mtime_ns, info.st_ino
-        cached = self.cache.get(path)
-        if cached and cached[0] == signature:
-            return cached[1]
-        if info.st_size > limit:
-            result = BadFile("the file is larger than the limit")
-        else:
-            try:
-                result = reader(path)
-            except BadFile as error:
-                result = error
-            except (OSError, UnicodeDecodeError, RecursionError) as error:
-                result = BadFile(f"the file can not be read: {type(error).__name__}")
+            file, info = open_regular(path)
+        except BadFile as error:
+            logger.warning("%s is skipped: %s", path.relative_to(self.root), error)
+            self.cache.pop(path, None)
+            return error
+        with file:
+            signature = info.st_size, info.st_mtime_ns, info.st_ino
+            cached = self.cache.get(path)
+            if cached and cached[0] == signature:
+                return cached[1]
+            if info.st_size > limit:
+                result = BadFile("the file is larger than the limit")
+            else:
+                try:
+                    result = reader(file)
+                except BadFile as error:
+                    result = error
+                except (OSError, UnicodeDecodeError, RecursionError) as error:
+                    result = BadFile(f"the file can not be read: {type(error).__name__}")
         if isinstance(result, BadFile):
             logger.warning("%s is skipped: %s", path.relative_to(self.root), result)
         self.cache[path] = signature, result
@@ -900,7 +1089,17 @@ class ResultFiles(Loop):
         offers: dict[tuple[str, str], tuple[object, float, object]] = {}
         read: set[Path] = set()
         for provider in sorted(self.providers):
-            for system, (path, stamp) in sorted(self.newest(provider, now).items()):
+            try:
+                newest = self.newest(provider, now)
+            except FileNotFoundError:
+                newest = {}
+            except OSError as error:
+                # A directory that can not be read counts as one file skipped, and the
+                # other providers and the API checks go on.
+                logger.warning("prowler/%s can not be read: %s", provider, type(error).__name__)
+                skipped["prowler"] += 1
+                continue
+            for system, (path, stamp) in sorted(newest.items()):
                 read.add(path)
                 checks = self.read(path, read_ocsf, MAX_OCSF_BYTES)
                 if isinstance(checks, BadFile):
@@ -913,7 +1112,7 @@ class ResultFiles(Loop):
         api = self.root / API_FILE
         if os.path.lexists(api):
             read.add(api)
-            content = self.read(api, lambda path: read_api(path, now), MAX_API_BYTES)
+            content = self.read(api, lambda file: read_api(file, now), MAX_API_BYTES)
             if isinstance(content, BadFile):
                 skipped["api-check"] += 1
             else:

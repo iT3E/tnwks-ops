@@ -68,6 +68,33 @@ tests:
     exp_samples:
     - labels: homelab:security_safeguard_state{safeguard="1.1",line="01.01",title="Asset inventory",ig="1",function="identify",k8s_cluster="site"}
       value: 3
+- name: 'a result whose pod changes in the day is one result: a pass, then a fail'
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{source="prowler",check="config_recorder_all_regions_enabled",system="aws-management",pod="converter-a"}
+    values: 0+0x9
+  - series: homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-management",pod="converter-a"}
+    values: 0+0x9
+  - series: homelab_security_check_result{source="prowler",check="config_recorder_all_regions_enabled",system="aws-management",pod="converter-b"}
+    values: _x11 2+0x20
+  - series: homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-management",pod="converter-b"}
+    values: _x11 0+0x20
+  promql_expr_test:
+  - expr: homelab:security_control_state{safeguard="1.1",system="aws-management"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:security_control_state{safeguard="1.1",system="aws-management",system_type="aws-account",k8s_cluster="site"}
+      value: 1
+  - expr: homelab:security_control_state{safeguard="1.1",system="aws-management"}
+    eval_time: 15m
+    exp_samples:
+    - labels: homelab:security_control_state{safeguard="1.1",system="aws-management",system_type="aws-account",k8s_cluster="site"}
+      value: 3
+  - expr: homelab:security_control_state{safeguard="1.1",system="aws-management"}
+    eval_time: 30m
+    exp_samples:
+    - labels: homelab:security_control_state{safeguard="1.1",system="aws-management",system_type="aws-account",k8s_cluster="site"}
+      value: 3
 - name: a time of the last result in the future is no evidence
   interval: 1m
   input_series:
