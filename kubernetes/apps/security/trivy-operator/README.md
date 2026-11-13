@@ -107,7 +107,7 @@ contract of the registry (`security/README.md`, "The series"), with
 | Series | From | Value |
 | --- | --- | --- |
 | `homelab_security_check_result`, `check="k8s-cis-1.23/<control ID>"` | `trivy_compliance_info` of the report `k8s-cis-1.23` | The failed resources of a control that fails, and 0 for a control that passes |
-| `homelab_security_check_result`, `check="image-vulnerabilities"` | `trivy_image_vulnerabilities` | The critical vulnerabilities with a fix, over the distinct images of the cluster. 0 when the scan reports have none. A report counts for an hour after its last sample, so a report that is gone during its new scan changes nothing. No series when there is no scan report. While an image that runs on the cluster (`kube_pod_container_info` and `kube_pod_init_container_info`, by the digest of `image_id`) has had no report for an hour, a fail stays and a pass is "no evidence": a failed scan never reads as a pass, and never hides a known fail. The pods of the scan jobs, a container that has not started (no `image_id` yet) and an image with no registry digest are not counted |
+| `homelab_security_check_result`, `check="image-vulnerabilities"` | `trivy_image_vulnerabilities` | The critical vulnerabilities with a fix, over the distinct images that run on the cluster now (`kube_pod_container_info` and `kube_pod_init_container_info`, by the digest of `image_id`). The report of an image that no longer runs (an old ReplicaSet, whose report can stay for a day) does not count. 0 when the scan reports have none. No series when no running image is known (kube-state-metrics down). A report counts for an hour after its last sample, so a report that is gone during its new scan changes nothing. No series when there is no scan report. While an image that runs on the cluster has had no report for an hour, a fail stays and a pass is "no evidence": a failed scan never reads as a pass, and never hides a known fail. The pods of the scan jobs, a container that has not started (no `image_id` yet) and an image with no registry digest are not counted |
 | `homelab_security_last_result_timestamp_seconds` | `homelab_trivy_compliance_report_update_timestamp_seconds`, which kube-state-metrics reads from the status of the report | The time at which the operator wrote the report: at its start, then every 6 hours |
 
 A result also has the label `severity`, in lower case. Trivy counts a control
@@ -123,7 +123,13 @@ an alert fires").
 A private image, or an image of a registry that the policy does not name,
 has no report. The check `image-vulnerabilities` of its cluster then shows a
 fail, or "no evidence" in place of a pass, and `SecurityImagesNotScanned`
-fires after 36 hours, until the image has a report.
+fires after 36 hours, until the image has a report. For an image that no
+scan can read, the owner mutes the alert with an entry of the accepted list
+(`security/README.md`, "When an alert fires").
+
+A rollout: the new image counts from its first report, and the old one
+stops counting when its pods stop. Until the new image has a report, a pass
+is "no evidence" for those minutes.
 
 Known limits of the alert `SecurityFindingNew`:
 
@@ -131,7 +137,11 @@ Known limits of the alert `SecurityFindingNew`:
   the term "was 0 one hour before" reads the value of exactly one hour
   before.
 - A new critical vulnerability in an image that replaces another with the
-  same count does not raise the sum, so it does not alert.
+  same count does not raise the sum, so it does not alert. A rollout to an
+  image with more criticals alerts.
+- During a rolling update, the old and the new image both run, and both
+  count. An update that takes longer than the 10 minutes of the alert, with
+  both images reported, alerts once.
 
 ## Exceptions
 
