@@ -83,14 +83,22 @@ with one rule, a line for each request.
 node: no workflow runs `talosctl`, and the Ansible host playbooks do not read
 the patch lists. A running cluster gets the policy only from
 `talosctl patch mc --mode=no-reboot`, the command at the top of its file,
-run by the owner or with the owner's word. A new cluster gets it when
-`01-talos-bootstrap.yml` creates it: the control plane gets each file in
-`controlplane_patches` of the cluster's entry in `talos_clusters`
-(`infrastructure/ansible/inventory/group_vars/all/talos.yml`), and each
-list has `patches/audit-policy.yaml`.
+run by the owner or with the owner's word.
+
+A rebuilt cluster gets the patches in `controlplane_patches` of its entry in
+`talos_clusters` (`infrastructure/ansible/inventory/group_vars/all/talos.yml`).
+`01-talos-bootstrap.yml` creates a cluster only when the cluster has no
+control plane container. Each list has `patches/audit-policy.yaml`.
+
+| Cluster | A rebuild |
+| --- | --- |
+| homelab-wsl-02 | Gets the policy from the list |
+| homelab-wsl | Its patches are in the v1alpha1 form, which the pinned Talos refuses at create (`talos/wsl-02/README.md`, "Patches need talosctl >= 1.14"). A rebuild needs them in the multi-document form first |
 
 **What CI checks.** A change under `talos/` runs the `ansible` domain:
-each file under `talos/` parses, and each patch file of a cluster is in its
-lists (`infrastructure/ansible/tests/test_talos_patches.py`). A change to an
+each file under `talos/` parses, each directory is a cluster of
+`talos_clusters`, and each YAML file of a cluster is in its lists or is no
+patch (`infrastructure/ansible/tests/test_talos_patches.py`). A change to an
 audit policy also runs the rule tests above. CI builds no machine config, so
-Talos itself checks a patch only at the dry run of its apply.
+it does not see a patch that Talos refuses. Talos checks a patch at the dry
+run of its apply.
