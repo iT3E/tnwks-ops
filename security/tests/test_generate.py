@@ -47,6 +47,8 @@ def test_the_types_of_the_schema_are_the_types_of_the_generator():
     ("systems", lambda data: data[0].update(name="a name"), "does not fit"),
     ("sources", lambda data: data[0].update(late_after="soon"), "does not fit"),
     ("sources", lambda data: data[0].update(kind="guess"), "is not one of"),
+    ("sources", lambda data: data[4]["checks"]["k8s-audit"].update(system_label="A Label"), "does not fit"),
+    ("sources", lambda data: data[4]["checks"]["k8s-audit"].update(selector="{}"), "`selector` is not a field"),
     ("controls", lambda data: data[0].update(id="4"), "does not fit"),
     ("controls", lambda data: data[0].update(ig=True), "is not one of"),
     ("controls", lambda data: data[0].update(function="prevent"), "is not one of"),
@@ -249,6 +251,38 @@ def test_the_board_input_has_each_line_each_system_and_each_cycle(registry):
     assert board["series"]["has_result"] == generate.HAS_RESULT
 
 
+def test_the_stream_map_has_each_stream_of_each_system_with_its_selector(registry):
+    """The map of the converter (security/converter/README.md): what the late rule can
+    watch for a stream, and the Loki labels that select the lines of each system."""
+    streams = generate.stream_map(registry)
+    assert streams["series"] == LAST_RESULT
+    entries = streams["streams"]
+    watched = [(source, system, check, limit)
+               for source, system, check, limit in generate.expected(generate.every_source(registry)) if check]
+    assert [(e["source"], e["system"], e["check"], e["late_after_seconds"]) for e in entries] == watched
+    by_key = {(entry["check"], entry["system"]): entry["selector"] for entry in entries}
+    assert len(by_key) == len(entries) > 0
+    # The audit log is one stream for each cluster, with the name of the cluster in a label.
+    assert by_key["k8s-audit", "homelab-wsl"] == {"security_stream": "k8s-audit", "k8s_cluster": "homelab-wsl"}
+    assert by_key["k8s-audit", "homelab-wsl-02"] == {"security_stream": "k8s-audit", "k8s_cluster": "homelab-wsl-02"}
+    # A stream with no `system_label` is one stream for each system that has it as a check.
+    assert by_key["cloudtrail", "aws-management"] == by_key["cloudtrail", "aws-prod"] == {
+        "security_stream": "cloudtrail"}
+    assert all(set(selector) == {"security_stream"} or entry["system"] in selector.values()
+               for entry in entries for selector in [entry["selector"]])
+    # The label is one field of sources.yaml.
+    data = copy.deepcopy(registry)
+    stream = next(source for source in data["sources"] if source["kind"] == "stream")
+    stream["checks"]["k8s-audit"]["system_label"] = "cluster_name"
+    changed = {(e["check"], e["system"]): e["selector"] for e in generate.stream_map(data)["streams"]}
+    assert changed["k8s-audit", "homelab-wsl"] == {"security_stream": "k8s-audit", "cluster_name": "homelab-wsl"}
+    # The map does not wait for `sources`: the converter asks for a stream before a
+    # system lists it, so the time is there when the late rule starts to watch it.
+    for system in data["systems"]:
+        system.pop("sources", None)
+    assert len(generate.stream_map(data)["streams"]) == len(entries)
+
+
 def test_the_outputs_in_git_are_the_outputs_of_the_registry(registry):
     """What `generate.py --check` enforces in CI."""
     files = generate.artifacts(registry)
@@ -278,6 +312,8 @@ def test_the_rule_tests_cover_no_evidence_and_the_late_rule(registry):
                                 "each system with a check passes", "one system fails")) for name in names) == 4
     late = generate.late_fixtures(registry)["tests"]
     assert any(test["name"] == "a source that serves no time reads as late" for test in late)
+    assert any(test["name"] == "a stream with a line for one system only reads as late for the other system"
+               for test in late)
 
 
 ALLOWED_LABELS = {"SecurityResultLate": {"source", "system"}, "SecurityAcceptedFindingExpired": {"system"}}
