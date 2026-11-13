@@ -55,3 +55,16 @@ import {
   to = module.tfc.tfe_workspace_settings.tnwks-cloudflare-prod_workspace_settings
   id = "ws-hTRw2QxXsHtXDdzL"
 }
+
+# tnwks-github-prod: created through the TFC API on 2026-11-13 by
+# `bin/github-terraform bootstrap`, matching modules/tfc/workspaces.tf.
+# Safe to delete after the next apply.
+import {
+  to = module.tfc.tfe_workspace.tnwks-github-prod
+  id = "ws-HABrTaGpvgpGZeF8"
+}
+
+import {
+  to = module.tfc.tfe_workspace_settings.tnwks-github-prod_workspace_settings
+  id = "ws-HABrTaGpvgpGZeF8"
+}

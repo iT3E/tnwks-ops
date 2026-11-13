@@ -22,6 +22,7 @@ includes:
   bootstrap: .taskfiles/BootstrapTasks.yml
   cluster: .taskfiles/ClusterTasks.yml
   edgeos: .taskfiles/EdgeosTasks.yml
+  github: .taskfiles/GithubTasks.yml
   healthchecks: .taskfiles/HealthchecksTasks.yml
   mikrotik: .taskfiles/MikrotikTasks.yml
   precommit: .taskfiles/PrecommitTasks.yml

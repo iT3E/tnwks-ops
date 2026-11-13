@@ -55,12 +55,20 @@ spec:
       # compliance report, the input of the result series
       # (observability/rules.py).
       metricsClusterComplianceInfo: true
+      # Off: no check of the registry reads the exposed secret reports, and
+      # each report keeps the place and a masked match of a secret that Trivy
+      # finds in an image, in the namespace of the workload. Off also makes
+      # each scan shorter.
+      exposedSecretScannerEnabled: false
 
     # The node collector needs a host path and the host PID namespace, which
     # the `baseline` level of the namespace refuses. Each node matches this
     # label, so the operator starts no node collector (README.md).
     nodeCollector:
       excludeNodes: kubernetes.io/os=linux
+      # Never runs with excludeNodes above. Pinned so that a change of
+      # excludeNodes can not start an image that is not pinned.
+      tag: 0.3.1@sha256:f4702ce4667388f0219d6248d623a7e816231c2d4561d6af01c3ae053e524025
 
     # The operator downloads this bundle of checks only when
     # trivy.useEmbeddedRegoPolicies is off, or for a node collector. Neither
@@ -82,7 +90,15 @@ spec:
         kubernetes.io/hostname: ${SECURITY_NODE}
       # The network policy selects the scan jobs by this label.
       scanJobPodTemplateLabels: app.kubernetes.io/name=trivy-scan-job
+      # A scan job runs as nobody: an image scan reads the registry and the
+      # cache, and needs no root (the chart's containers drop each
+      # capability and have a read-only root). The local-path directory of
+      # trivy-cache is writable by each user.
       scanJobPodTemplatePodSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
         seccompProfile:
           type: RuntimeDefault
       # The database cache of pvc.yaml, at trivy.imageScanCacheDir. The
@@ -100,7 +116,7 @@ spec:
       image:
         registry: mirror.gcr.io
         repository: aquasec/trivy
-        tag: 0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+        tag: 0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
       mode: Standalone
       imageScanCacheDir: /var/trivyoperator/cache
       # Only the vulnerabilities that have a fixed version: the check
@@ -145,3 +161,34 @@ spec:
         memory: 128Mi
       limits:
         memory: 256Mi
+
+  # The chart's ClusterRole gives create and delete on Jobs and a read of pod
+  # logs in every namespace, and has no value to narrow it. With
+  # vulnerabilityReports.scanJobsInSameNamespace off (the chart's default),
+  # the operator creates, deletes and reads the logs of scan jobs in its own
+  # namespace only, so ./rbac.yaml gives those in security and this patch
+  # removes them from the ClusterRole. The operator keeps get, list and watch
+  # on Jobs in every namespace, because its cache watches Jobs in each one.
+  # Each test op checks the chart's rule order: if a chart release moves a
+  # rule, the patch fails and the upgrade stops, and nothing is widened.
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: ClusterRole
+              name: trivy-operator
+            patch: |-
+              - op: test
+                path: /rules/9/apiGroups
+                value: [batch]
+              - op: test
+                path: /rules/9/resources
+                value: [jobs]
+              - op: replace
+                path: /rules/9/verbs
+                value: [get, list, watch]
+              - op: test
+                path: /rules/2/resources
+                value: [pods/log]
+              - op: remove
+                path: /rules/2

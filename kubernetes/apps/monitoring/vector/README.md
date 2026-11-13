@@ -1,12 +1,13 @@
 # Vector: the log pipeline
 
-Two parts move logs to Loki. This file says what each one takes in, where it
+Three parts move logs to Loki. This file says what each one takes in, where it
 listens and what it reports about itself.
 
 | Part | Directory | Runs on | What it does |
 | --- | --- | --- | --- |
 | The aggregator | `aggregator/` (`ks.yaml`) | Each cluster, one pod | Takes in pod logs and the router's syslog, and writes them to the Loki of its cluster. Takes in the audit log of the API server, and writes the security streams |
 | The agent | `agent/` (`ks-agent.yaml`) | Each cluster that lists it, one pod on each node | Reads pod logs on its node and sends them to the aggregator. On the WSL clusters, Job pods only (`VECTOR_AGENT_POD_SELECTOR`) |
+| The audit reader | `audit-reader/` (`ks-audit-reader.yaml`) | Each cluster that lists it, one pod on the control plane node | Reads the audit log of the API server on its node and sends it to the audit source of the aggregator |
 
 The config of the aggregator is one file, `aggregator/config/vector.yaml`,
 for every cluster. A value that differs between clusters is a variable of
@@ -68,9 +69,47 @@ Three rules keep the other logs safe:
   store is away. `audit_source` feeds `loki_security_audit` only.
 - **A second sink on a source that exists drops when it is full.** It sets
   `buffer.when_full: drop_newest`, as `loki_security_routeros` does.
-- **Loki refuses a line that is older than 7 days**, and Vector does not send
-  a refused request again. A refusal shows as
+- **Loki refuses a line that is older than 7 days, and a line that is more
+  than one hour older than the newest line of its stream.** Vector does not
+  send a refused request again. A refusal shows as
   `vector_component_errors_total{component_id="loki_security_audit",error_type="request_failed"}`.
+  The audit reader sends the oldest file first, so a backlog arrives in the
+  order of its events.
+
+## The audit reader
+
+The API server of a Talos control plane node writes its audit log to
+`/var/log/audit/kube/` on the node: the live file `kube-apiserver.log`, and
+up to 10 rotated files of 100 MB. The audit reader is a Vector pod on that
+node, with the image of the aggregator. It reads the files and sends each
+line to `vector-aggregator-audit:6010`.
+
+| Property | Value |
+| --- | --- |
+| Where it runs | The control plane node (node selector and toleration), namespace `monitoring` |
+| User | 65534, the user that writes the audit files. No capability, a read-only root file system, no token of a ServiceAccount |
+| Audit files | The host path `/var/log/audit/kube`, read-only |
+| Positions | The host path `/var/lib/vector-audit`. An init container gives the directory to user 65534: it runs as root with the capability `CHOWN` only |
+| Sending | 200 events in a batch, one request at a time, a buffer of 200 events, 2 threads |
+| Memory | A request of 64 MiB and a limit of 128 MiB |
+
+The audit files on the node are the buffer of the path. The reader moves its
+position in a file only when Loki took the line, so when the aggregator or
+Loki is away the reader stops, and it goes on from its position after. It
+loses a line only when the API server removes a file that the reader did not
+finish: after 10 rotated files, or after 30 days.
+
+At its first start on a node, the reader sends each file that is there,
+the oldest first.
+
+A cluster starts its audit stream in three steps:
+
+1. Apply the audit policy of the cluster (`talos/README.md`), so the API
+   server writes the events that the stream is for.
+2. List `ks-audit-reader.yaml` in the apps of the cluster.
+3. In the same pull request, add `stream` to the `sources` of the cluster in
+   `security/registry/systems.yaml`, and run the generator
+   (`security/README.md`).
 
 ## Metrics
 

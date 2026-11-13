@@ -8,7 +8,8 @@ name: "Terraform"
 # root is one entry (docs/operations/ci.md).
 #
 # Logs are public: local roots print only counts and addresses
-# (github-workflows' actions/terraform); AWS plans and applies run in Terraform Cloud.
+# (github-workflows' actions/terraform), and a root's mask_sops values are
+# masked first; AWS plans and applies run in Terraform Cloud.
 on:
   workflow_call:
     inputs:
@@ -28,6 +29,12 @@ permissions: {}
 
 env:
   TF_CLOUD_ORGANIZATION: "tnwks-ops"
+  # For mask_sops (the step "Mask SOPS values"). Renovate moves the version;
+  # the checksum is from the release's checksums.txt and must move with it,
+  # or the download fails the check (closed, before Terraform runs).
+  # renovate: datasource=github-releases depName=getsops/sops
+  SOPS_VERSION: "v3.13.3"
+  SOPS_SHA256: "e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b"
 
 jobs:
   # Trusted: a same-repo PR opened by the owner or Renovate (whose Terraform
@@ -60,6 +67,23 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+
+      # Before Terraform, so an error that quotes a value from one of the
+      # root's SOPS files (mask_sops in domains.toml) shows *** in this
+      # public log. Fails the job, and Terraform is skipped, if sops is
+      # missing, a file does not decrypt or no value comes out.
+      # SOPS_AGE_KEY is in the runner pod's env.
+      - name: Mask SOPS values
+        if: matrix.backend == 'local' && matrix.mask_sops && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
+        working-directory: infrastructure/terraform/environments/${{ matrix.root }}
+        env:
+          MASK_SOPS: ${{ toJSON(matrix.mask_sops) }}
+        run: |
+          install -d "$RUNNER_TEMP/sops-mask"
+          curl -fsSL -o "$RUNNER_TEMP/sops-mask/sops" "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64"
+          echo "${SOPS_SHA256}  $RUNNER_TEMP/sops-mask/sops" | sha256sum -c --quiet -
+          chmod +x "$RUNNER_TEMP/sops-mask/sops"
+          python3 -I "$GITHUB_WORKSPACE/.github/scripts/sops-mask.py" --sops "$RUNNER_TEMP/sops-mask/sops" --json "$MASK_SOPS"
 
       - name: Plan
         id: tf
@@ -169,6 +193,23 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # Before Terraform, so an error that quotes a value from one of the
+      # root's SOPS files (mask_sops in domains.toml) shows *** in this
+      # public log. Fails the job, and Terraform is skipped, if sops is
+      # missing, a file does not decrypt or no value comes out.
+      # SOPS_AGE_KEY is in the runner pod's env.
+      - name: Mask SOPS values
+        if: matrix.backend == 'local' && matrix.mask_sops && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
+        working-directory: infrastructure/terraform/environments/${{ matrix.root }}
+        env:
+          MASK_SOPS: ${{ toJSON(matrix.mask_sops) }}
+        run: |
+          install -d "$RUNNER_TEMP/sops-mask"
+          curl -fsSL -o "$RUNNER_TEMP/sops-mask/sops" "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64"
+          echo "${SOPS_SHA256}  $RUNNER_TEMP/sops-mask/sops" | sha256sum -c --quiet -
+          chmod +x "$RUNNER_TEMP/sops-mask/sops"
+          python3 -I "$GITHUB_WORKSPACE/.github/scripts/sops-mask.py" --sops "$RUNNER_TEMP/sops-mask/sops" --json "$MASK_SOPS"
 
       - name: Plan and apply
         if: matrix.backend == 'local' && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
