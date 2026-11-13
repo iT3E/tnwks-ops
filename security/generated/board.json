@@ -435,7 +435,9 @@
       "type": "router",
       "site": "none",
       "domain": "infrastructure",
-      "sources": []
+      "sources": [
+        "stream"
+      ]
     },
     {
       "name": "sce-ep01",
@@ -540,5 +542,12 @@
       }
     }
   ],
-  "expected": []
+  "expected": [
+    {
+      "source": "stream",
+      "system": "sce-rtr01",
+      "late_after_seconds": 900,
+      "check": "routeros"
+    }
+  ]
 }
