@@ -1,0 +1,138 @@
+---
+# Trivy Operator (../README.md). The operator reads the workloads of this
+# cluster, checks their settings and the roles in its own process, and starts
+# one scan job at a time for the images. Each cluster that lists ../ks.yaml
+# gets these values, so each cluster has the same checks.
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: trivy-operator
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: trivy-operator
+      version: 0.38.1
+      sourceRef:
+        kind: HelmRepository
+        name: aquasecurity
+        namespace: flux-system
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  values:
+    image:
+      registry: mirror.gcr.io
+      repository: aquasec/trivy-operator
+      tag: 0.36.1@sha256:05191a514247ae644dd5cc71306a94f44faff0a6a3fa817235911b911ecebcb9
+
+    operator:
+      # One scan job at a time (../../README.md, "Memory"). The chart's
+      # default is 10.
+      scanJobsConcurrentLimit: 1
+      # Off: the operator gets no read of the Secrets and service accounts of
+      # each namespace (R2). It then reads no pull secret of a workload, so an
+      # image of a private registry has no scan.
+      accessGlobalSecretsAndServiceAccount: false
+      # The SBOM of each image is not a check of the registry, and its
+      # reports are the largest objects that the operator keeps in memory.
+      sbomGenerationEnabled: false
+      # A vulnerability report lives 24 hours, then the image is scanned
+      # again: the cycle of the source `trivy` (security/registry/sources.yaml).
+      scannerReportTTL: "24h"
+      # The infra assessment checks the arguments of the API server, the
+      # controller manager and the scheduler from their pods. The node
+      # collector is off by nodeCollector.excludeNodes below (README.md).
+      infraAssessmentScannerEnabled: true
+      # trivy_compliance_info: one series for each control of each
+      # compliance report, the input of the result series
+      # (observability/rules.py).
+      metricsClusterComplianceInfo: true
+
+    # The node collector needs a host path and the host PID namespace, which
+    # the `baseline` level of the namespace refuses. Each node matches this
+    # label, so the operator starts no node collector (README.md).
+    nodeCollector:
+      excludeNodes: kubernetes.io/os=linux
+
+    compliance:
+      # The one report that the registry reads (security/README.md, "What a
+      # check ID is").
+      specs:
+        - k8s-cis-1.23
+
+    trivyOperator:
+      scanJobNodeSelector:
+        kubernetes.io/hostname: ${SECURITY_NODE}
+      # The network policy selects the scan jobs by this label.
+      scanJobPodTemplateLabels: app.kubernetes.io/name=trivy-scan-job
+      scanJobPodTemplatePodSecurityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      # The database cache of pvc.yaml, at trivy.imageScanCacheDir. The
+      # operator mounts it in the init container that downloads the
+      # database, and in each scan container.
+      scanJobCustomVolumes:
+        - name: trivy-cache
+          persistentVolumeClaim:
+            claimName: trivy-cache
+      scanJobCustomVolumesMount:
+        - name: trivy-cache
+          mountPath: /var/trivyoperator/cache
+
+    trivy:
+      image:
+        registry: mirror.gcr.io
+        repository: aquasec/trivy
+        tag: 0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+      mode: Standalone
+      imageScanCacheDir: /var/trivyoperator/cache
+      # Only the vulnerabilities that have a fixed version: the check
+      # image-vulnerabilities is safeguard 7.4, the patching of applications.
+      ignoreUnfixed: true
+      # No call to a package index (such as the one of Maven) for a file that
+      # the database does not know. The scan reads the registries and the
+      # database, and the network policy names only those hosts.
+      offlineScan: true
+      # Trivy sends a version check and usage data to its vendor unless both
+      # are off. The network policy names no host of the vendor either.
+      configFile:
+        scan:
+          skip-version-check: true
+          disable-telemetry: true
+      # Each container of a scan job. One scan job measured 56 MiB at peak
+      # (../../README.md, "Memory"). The CPU limit is the chart's
+      # default: a scan is slower, but it does not take a core from the node.
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+
+    serviceMonitor:
+      enabled: true
+      interval: 1m
+
+    nodeSelector:
+      kubernetes.io/hostname: ${SECURITY_NODE}
+    podSecurityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+    # The limit of ../../README.md, "Memory". The operator and one scan job
+    # measured 218 MiB together on a test cluster.
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
