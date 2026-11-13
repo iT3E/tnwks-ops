@@ -59,6 +59,9 @@ resources:
   - ../../../apps/monitoring
   # Job pods' logs to Loki (VECTOR_AGENT_POD_SELECTOR in cluster-settings).
   - ../../../apps/monitoring/vector/ks-agent.yaml
+  # The audit log of this cluster's API server, as the security stream
+  # "k8s-audit" (apps/monitoring/vector/README.md).
+  - ../../../apps/monitoring/vector/ks-audit-reader.yaml
   - ../../../apps/monitoring/observability-pki/ks.yaml
   - ../../../apps/monitoring/observability-evidence/ks.yaml
   - ../../../apps/monitoring/observability-evidence/rules-ks.yaml
