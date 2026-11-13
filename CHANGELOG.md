@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.112.0 - 2026-11-13
+
+### Added
+
+* talos: the audit policy of the API server of homelab-wsl (`talos/wsl/patches/audit-policy.yaml`), with the rules of homelab-wsl-02 in the v1alpha1 form of that cluster (`cluster.apiServer.auditPolicy`). The file has the command that applies it to the running cluster and the way back; a merge applies nothing
+
 ## v2.111.0 - 2026-11-13
 
 ### Added
