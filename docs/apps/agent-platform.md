@@ -245,6 +245,13 @@ the sandbox plugin copies the workspace only.
   is not held. The exec approvals of the product cover host commands only,
   and the pilot runs each command in a sandbox, so no command is held. Each
   decision logs `message-hold decision=<decision>` in the `agent` container.
+  The product refuses a plugin whose directory others can write, and the
+  directory of a ConfigMap volume has mode 0777. So the `prepare` init
+  container copies the file to `/home/node/plugins/tnwks/` (directory 0755,
+  file 0444, owned by the pod user) on the `plugins` volume. Every other
+  container mounts that volume read-only, and `plugins.load.paths` names the
+  copy. To check: `kubectl -n agents-pilot logs deploy/agent -c agent | grep
+  tnwks-message-hold` shows no `blocked plugin candidate` line.
 - **The scheduled turn** is the heartbeat of the product
   (`agents.defaults.heartbeat`): once a day, a turn in its own session with
   one shell command in a sandbox, and no message to a channel. Its traces go
