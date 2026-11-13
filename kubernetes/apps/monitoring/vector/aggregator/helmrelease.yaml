@@ -41,6 +41,12 @@ spec:
             args:
               - "--config"
               - "/etc/vector/vector.yaml"
+            # Vector's own metrics (config/vector.yaml), for the PodMonitor.
+            # A port of the pod only: the Service below is a LoadBalancer,
+            # and the metrics do not go on it.
+            ports:
+              - name: metrics
+                containerPort: 9598
     service:
       app:
         controller: vector-aggregator
