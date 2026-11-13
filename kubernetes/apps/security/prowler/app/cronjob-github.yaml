@@ -1,0 +1,110 @@
+---
+# Prowler for the GitHub account, each day (../README.md). The token is the
+# owner's: app/secret-github.sops.yaml, key GITHUB_PERSONAL_ACCESS_TOKEN
+# (../README.md, "To start a provider").
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: prowler-github
+spec:
+  schedule: "47 7 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 86400
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: prowler
+            security.tnwks.us/prowler-provider: github
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          nodeSelector:
+            kubernetes.io/hostname: ${SECURITY_NODE}
+          securityContext:
+            # The user of the Prowler image.
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: prowler
+              image: docker.io/prowlercloud/prowler:5.49.0@sha256:0113d8ee9d42674d1b1baf3b64505835fd2f14b0bb0ab2bbe5d4a52f49ff3d22
+              command: ["/home/prowler/.venv/bin/python", "/app/run.py"]
+              args:
+                - --provider=github
+                - --system=iT3E
+                - --checks=/config/checks-github.json
+                - --
+                - --organization=iT3E
+                # The scan list has no check of the workflows: no clone and
+                # no scan of GitHub Actions.
+                - --no-github-actions
+              env:
+                - name: HOME
+                  value: /tmp
+                - name: PYTHONUNBUFFERED
+                  value: "1"
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+              envFrom:
+                - secretRef:
+                    name: prowler-github
+              # The limit of ../../README.md, "Memory". The first run measures
+              # it: the script prints the peak of the container.
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 512Mi
+                limits:
+                  memory: 768Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /app
+                  readOnly: true
+                - name: config
+                  mountPath: /config
+                  readOnly: true
+                - name: accepted
+                  mountPath: /accepted
+                  readOnly: true
+                # The whole volume, not a subPath (security/converter/README.md).
+                - name: results
+                  mountPath: /results
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: scripts
+              configMap:
+                name: prowler-scripts
+            - name: config
+              configMap:
+                name: prowler-config
+            # The list of accepted findings: the exception list of the run.
+            # Optional: with no list, nothing is muted.
+            - name: accepted
+              secret:
+                secretName: security-accepted-findings
+                optional: true
+            - name: results
+              persistentVolumeClaim:
+                claimName: security-results
+            # Prowler's own output (the OCSF file and the compliance tables)
+            # before the script copies the OCSF file to the volume.
+            - name: tmp
+              emptyDir:
+                sizeLimit: 1Gi

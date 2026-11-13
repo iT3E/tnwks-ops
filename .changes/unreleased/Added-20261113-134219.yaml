@@ -1,0 +1,3 @@
+kind: Added
+body: 'security: the Prowler runs for Cloudflare and GitHub (`kubernetes/apps/security/prowler`), each day with the scan list of the registry, and network policies for `api.cloudflare.com` and `api.github.com`. Neither runs until the owner adds its read-only token as a SOPS Secret and names it in the app; the README has the steps and the least scope of each token'
+time: 2026-11-13T13:42:19.131621174-08:00

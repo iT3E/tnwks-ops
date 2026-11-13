@@ -39,3 +39,64 @@ spec:
         - ports:
             - port: "443"
               protocol: TCP
+---
+# A run for Cloudflare: DNS, and the API of Cloudflare. Nothing else.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: prowler-cloudflare
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: prowler
+      security.tnwks.us/prowler-provider: cloudflare
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        - matchName: api.cloudflare.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+# A run for GitHub: DNS, and the REST API of GitHub. The run has
+# --no-github-actions, so it clones nothing from github.com.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: prowler-github
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: prowler
+      security.tnwks.us/prowler-provider: github
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        - matchName: api.github.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

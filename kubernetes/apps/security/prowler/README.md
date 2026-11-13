@@ -19,6 +19,8 @@ request.
 | --- | --- | --- | --- | --- |
 | `prowler-aws-prod` | `aws-prod` | `aws` | 03:17 | The Secret `aws-security-audit-sts` (`../aws-credentials/README.md`) |
 | `prowler-aws-management` | `aws-management` | `aws` | 05:17 | The same Secret, and the role `tnwks-security-audit` of the management account (`--role`) |
+| `prowler-cloudflare` | `cloudflare` | `cloudflare` | 07:17 | The Secret `prowler-cloudflare`, key `CLOUDFLARE_API_TOKEN` |
+| `prowler-github` | `iT3E` | `github` | 07:47 | The Secret `prowler-github`, key `GITHUB_PERSONAL_ACCESS_TOKEN` |
 
 The times keep one run at a time on the node.
 
@@ -28,6 +30,8 @@ The times keep one run at a time on the node.
 | --- | --- |
 | `ks.yaml` | The Flux Kustomization `security-prowler`. It waits for `security-converter`, which has the claim of the volume |
 | `app/cronjob-aws.yaml` | The two runs of AWS |
+| `app/cronjob-cloudflare.yaml`, `app/cronjob-github.yaml` | The run of each SaaS account |
+| `app/secret-cloudflare.sops.yaml`, `app/secret-github.sops.yaml` | The owner's tokens, encrypted. Not in git until the owner makes them |
 | `app/scripts/run.py` | One run: the mutelist, Prowler, the file for the converter, the files older than 14 days, the peak of memory. Tests: `security/tests/test_prowler.py` |
 | `app/config/checks-<provider>.json` | The scan list of each provider, in the form of `--checks-file`. `security/generate.py` writes them from the registry; never edit them |
 | `app/networkpolicy.yaml` | What a run of each provider can reach |
@@ -51,7 +55,8 @@ The claim `security-results` is in `../converter/app/pvc.yaml`.
    volume, then moves it to `prowler/<provider>/<system>.<time>.ocsf.json`,
    with the time at which the scan ended. Each directory has the mode 0755
    and each file 0644, for the converter. A run that fails moves no file, and
-   the Job fails.
+   the Job fails. So does a run in which Prowler makes no finding at all,
+   for which it writes no file: a run that checked nothing is no result.
 4. **The files of the system older than 14 days** are deleted.
 5. **The peak of memory** of the container is the last line of the log.
 
@@ -67,6 +72,8 @@ a run calls no API server (`automountServiceAccountToken: false`).
 | Provider | Hosts, port 443 | Why |
 | --- | --- | --- |
 | `aws` | `**.amazonaws.com`, `**.api.aws` | The API of each service in each Region, the global ones (IAM, STS, Organizations), and the public list of IP ranges. Resource Explorer is under `api.aws` |
+| `cloudflare` | `api.cloudflare.com` | The API of Cloudflare |
+| `github` | `api.github.com` | The REST API of GitHub. `--no-github-actions` turns off the scan of the workflows, so the run clones nothing |
 
 DNS goes through Cilium's DNS proxy, as in each app of the namespace.
 
@@ -99,6 +106,68 @@ has written `aws-security-audit-sts` (the annotation
 1. Add `- ./cronjob-aws.yaml` under `resources` in `app/kustomization.yaml`.
 2. Merge. The first runs are at the next 03:17 and 05:17 UTC. To run one now:
    `kubectl -n security create job --from=cronjob/prowler-aws-prod prowler-aws-prod-first`.
+
+**Cloudflare and GitHub.** Each token is the owner's, read-only, with the
+least scope that its checks need. Prowler reads it from the environment, and
+the run never prints it. For each provider, in one pull request:
+
+1. Make the token (the tables below). Give it an end date of one year at
+   most, and note the date: a run with an expired token fails, and
+   `KubeJobFailed` fires.
+2. Write the Secret in this form, with the token in place of the text in
+   angle brackets:
+
+   ```yaml
+   ---
+   apiVersion: v1
+   kind: Secret
+   metadata:
+     name: prowler-cloudflare  # or prowler-github
+   type: Opaque
+   stringData:
+     CLOUDFLARE_API_TOKEN: <the token>  # or GITHUB_PERSONAL_ACCESS_TOKEN
+   ```
+
+   as `app/secret-cloudflare.sops.yaml` (or `app/secret-github.sops.yaml`).
+3. Encrypt it: `sops --encrypt --in-place` on the file. The rule for
+   `kubernetes/` in `.sops.yaml` encrypts the whole of `stringData`.
+4. Name the Secret and the CronJob under `resources` in
+   `app/kustomization.yaml`, the Secret first.
+5. Merge. The run is at the next 07:17 (Cloudflare) or 07:47 (GitHub) UTC.
+
+The Cloudflare token: **My Profile, API Tokens, Create Custom Token.**
+
+| Field | Value | Why |
+| --- | --- | --- |
+| Permissions | Account, Account Settings, Read | Prowler finds the account of the token (`accounts.list`) |
+| | Zone, Zone, Read | The list of zones |
+| | Zone, Zone Settings, Read | The settings that the four checks read: SSL mode, minimum TLS version, Always Use HTTPS, Automatic HTTPS Rewrites |
+| Account Resources | Include, the account | One account |
+| Zone Resources | Include, All zones from the account | Each zone of the account |
+
+Prowler also asks for the DNSSEC, Universal SSL, rulesets and bot settings
+of each zone. This token may not read them, so the log of a run has errors
+for those calls. The registry runs no check that needs them.
+
+The GitHub token: **Settings, Developer settings, Fine-grained tokens,
+Generate new token.**
+
+| Field | Value | Why |
+| --- | --- | --- |
+| Resource owner | `iT3E` | The system of the registry |
+| Repository access | Public repositories | Read-only, and no permission to add |
+| Account or organization permissions | None | See below |
+
+The two checks of the registry for GitHub
+(`organization_members_mfa_required`,
+`organization_default_repository_permission_strict`) read the settings of
+an organization. `iT3E` is a personal account, so Prowler has no such
+settings to read: it makes no finding for these checks. With no finding,
+Prowler writes no file, so the run fails and `KubeJobFailed` fires each day.
+Do not start the run for GitHub before the owner decides how the registry
+checks this account. If the account becomes an organization, the token needs
+the organization permission Administration, Read, and the run gives a
+result.
 
 ## When a run fails
 

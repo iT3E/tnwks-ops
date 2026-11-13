@@ -3,9 +3,13 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: security
 # Nothing of a provider runs before its credentials exist (../README.md, "To
-# start a provider"). The owner names the CronJob of a provider here, after
+# start a provider"). The owner names the files of a provider here, after
 # that step:
 #   - ./cronjob-aws.yaml          after the first run of ../../aws-credentials
+#   - ./secret-cloudflare.sops.yaml
+#   - ./cronjob-cloudflare.yaml
+#   - ./secret-github.sops.yaml
+#   - ./cronjob-github.yaml
 resources:
   - ./networkpolicy.yaml
 configMapGenerator:
