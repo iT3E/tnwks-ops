@@ -97,6 +97,16 @@ class Domains(unittest.TestCase):
             self.assertIn(spec["backend"], ("local", "tfc-remote"), name)
             self.assertLessEqual(set(spec), TERRAFORM_FIELDS, f"{name}: unknown field")
 
+    def test_enabled_var_is_a_settable_name(self):
+        """GitHub rejects a variable whose name starts with GITHUB_ (HTTP 422),
+        so a root gated on one could never be turned on."""
+        for name, spec in CONFIG["groups"]["terraform"].items():
+            var = spec.get("enabled_var")
+            if var is None:
+                continue
+            self.assertRegex(var, r"^[A-Z_][A-Z0-9_]*$", name)
+            self.assertFalse(var.startswith("GITHUB_"), f"{name}: {var} is a reserved name")
+
     def test_mask_sops(self):
         """terraform.yaml masks these before Terraform (.github/scripts/sops-mask.py)."""
         for name, spec in CONFIG["groups"]["terraform"].items():

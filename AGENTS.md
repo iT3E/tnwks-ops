@@ -143,7 +143,7 @@ system actually owns the change:
   runner, lock and endpoint overrides are its entry in
   `.github/ci/domains.toml`. See `docs/network/ci.md`. The local
   `task <svc>:apply` / `task terraform:apply` targets are break-glass only.
-  GitHub runs only once the repository variable `GITHUB_TERRAFORM_ENABLED`
+  GitHub runs only once the repository variable `TERRAFORM_GITHUB_ENABLED`
   is `true` (`docs/operations/github.md`).
 
 - **Ansible (`infrastructure/ansible/**`)** — the host playbooks

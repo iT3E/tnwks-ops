@@ -33,7 +33,7 @@ PR / merge to main
 | UniFi controller | `terraform.yaml` (root `unifi`), `environments/prod/unifi` | Same runner, same flow. No tunnel: the runner and the controller share the WSL cluster, so CI sets `TF_VAR_unifi_url` to the in-cluster Service. State in TFC workspace `tnwks-unifi-prod`. Gated on the repository variable `UNIFI_TERRAFORM_ENABLED=true`, set once the controller is bootstrapped ([`unifi.md`](unifi.md)) |
 | healthchecks.io | `terraform.yaml` (root `healthchecks`), `environments/prod/healthchecks` | Same runner, same flow. No tunnel or override: healthchecks.io is a public API. State in TFC workspace `tnwks-healthchecks-prod` |
 | Cloudflare | `terraform.yaml` (root `cloudflare`), `environments/prod/cloudflare` | Same as healthchecks.io: public API, shared action (`root` input). State in TFC workspace `tnwks-cloudflare-prod` |
-| GitHub | `terraform.yaml` (root `github`), `environments/prod/github` | Same as Cloudflare. State in TFC workspace `tnwks-github-prod`. Gated on the repository variable `GITHUB_TERRAFORM_ENABLED=true` ([`../operations/github.md`](../operations/github.md)) |
+| GitHub | `terraform.yaml` (root `github`), `environments/prod/github` | Same as Cloudflare. State in TFC workspace `tnwks-github-prod`. Gated on the repository variable `TERRAFORM_GITHUB_ENABLED=true` ([`../operations/github.md`](../operations/github.md)) |
 | EdgeOS devices | `edgeos-{plan,apply}.yaml`, `.github/actions/edgeos-sync`, `infrastructure/edgeos` | Same runner. wireproxy also forwards `127.0.0.1:8022` to the EP-R6's SSH, the one forward `vpn-ci` has (`CI_ZONE_RULES`); CI logs in with its own SSH key against a pinned host key |
 
 ## Security model

@@ -5,7 +5,7 @@ version: "3"
 ## GitHub account repositories and settings (environments/prod/github).
 ##
 ## CI plans on the PR and applies on merge (.github/workflows/terraform.yaml on
-## the self-hosted runner) once GITHUB_TERRAFORM_ENABLED is true. These tasks
+## the self-hosted runner) once TERRAFORM_GITHUB_ENABLED is true. These tasks
 ## are break-glass, against the same TFC state (tnwks-github-prod, execution
 ## mode local): the root manages the ruleset and prod environment that gate
 ## its own CI apply, so a change that locks CI out is fixed from here.
@@ -24,7 +24,7 @@ tasks:
       - bin/github-terraform bootstrap {{.CLI_ARGS}}
 
   enable:
-    desc: "Set GITHUB_TERRAFORM_ENABLED once origin/main has the token and the log masking (-- --dry-run)"
+    desc: "Set TERRAFORM_GITHUB_ENABLED once origin/main has the token and the log masking (-- --dry-run)"
     dir: "{{.ROOT_DIR}}"
     cmds:
       - bin/github-terraform enable {{.CLI_ARGS}}
