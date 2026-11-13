@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'agents: the pilot reads its model gateway key by an explicit env SecretRef, so the doctor no longer reports it as plaintext, and the pilot''s tool to read and change its own config is denied'
+time: 2026-11-13T01:35:00.000000000Z

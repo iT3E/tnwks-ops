@@ -141,7 +141,8 @@ agent (key agents-<name>) -> model gateway, name agents-<name>
 - **Model:** Claude Opus 5.5 on both: `claude-opus-5-5` through the bridge,
   and `us.anthropic.claude-opus-5-5` on Bedrock (Invoke API).
 - **Keys:** the agent's copy of its key is `LITELLM_API_KEY` in the Secret
-  `agent-secret` of its namespace; the gateway's copy is in `keys.json`
+  `agent-secret` of its namespace, which the agent config reads by an env
+  SecretRef (`{"source": "env", "provider": "default", "id": "LITELLM_API_KEY"}`); the gateway's copy is in `keys.json`
   (`docs/apps/litellm.md`, "Keys of the agent platform"). No spend limit
   until the pilot has measured the use.
 
@@ -219,7 +220,8 @@ the sandbox plugin copies the workspace only.
   (`sandbox.mode: all`), at the gateway of this trust domain. One model,
   `litellm/agents-pilot`, with no fallback list, and the provider list
   replaced by the model gateway alone. The tools `code_execution`,
-  `file_fetch`, `file_write`, `dir_list` and `dir_fetch` are denied.
+  `file_fetch`, `file_write`, `dir_list`, `dir_fetch` and `gateway` (the
+  agent's own reads and changes of its config) are denied.
   `autoProviders` of the sandbox plugin is off, so no credential of the pod
   goes to a sandbox as a provider. Each channel takes messages from its one
   allowed sender, and no group. The config can't be changed from a chat
