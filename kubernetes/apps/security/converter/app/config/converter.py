@@ -10,8 +10,13 @@ Each 5 minutes one loop runs each part, and a fault of one part does not stop th
   time for that stream, so the rule for a late result reads the stream as late.
 - The list of accepted findings: it reads the list that Flux decrypts to a Secret, and
   serves the end of each accepted finding. No reason leaves the file.
+- The files of results: it reads the newest OCSF file of each system that Prowler wrote,
+  and the result file of the API checks, and serves the number of resources that fail
+  each check, and the time of the result. A file that it can not read gives no result
+  and no time for its system, so the rule for a late result fires.
 
-The converter sends GET requests only, and it keeps no state on a disk.
+The converter sends GET requests only, it never writes to the volume of results, and it
+keeps no state on a disk.
 """
 
 from __future__ import annotations
@@ -38,6 +43,7 @@ STREAMS = "homelab_security_converter_streams"
 LAST_CYCLE = "homelab_security_converter_last_cycle_timestamp_seconds"
 QUERY_SUCCESS = "homelab_security_converter_stream_query_success"
 ACCEPTED_SKIPPED = "homelab_security_converter_accepted_skipped_entries"
+FILES_SKIPPED = "homelab_security_converter_files_skipped"
 
 INTERVAL_SECONDS = 300
 # The converter looks back three times the `late_after` of a stream, and one hour at
@@ -447,6 +453,316 @@ class AcceptedList(Loop):
             metrics.add(self.series, end, source=source, check=check, system=system)
 
 
+# --- The files of results --------------------------------------------------------------
+
+# prowler/<provider>/<system>.<YYYYMMDDTHHMMSSZ>.ocsf.json (README, "The OCSF files").
+OCSF_NAME = re.compile(r"^(?P<system>[^/]+)\.(?P<stamp>\d{8}T\d{6}Z)\.ocsf\.json$")
+API_FILE = Path("api-check/results.json")
+# A time of a result that is this far in the future is no result.
+CLOCK_SKEW_SECONDS = 300
+# The converter reads an OCSF file one item at a time, so its memory does not grow
+# with the file. These limits stop a file that is not a file of Prowler.
+MAX_OCSF_BYTES = 256 * 1024 * 1024
+MAX_ITEM_CHARS = 4 * 1024 * 1024
+CHUNK_CHARS = 64 * 1024
+MAX_API_BYTES = 16 * 1024 * 1024
+# The values of the label `severity`, from low to high: the OCSF names in lower case,
+# as the rule of Trivy Operator writes them.
+SEVERITIES = ("unknown", "informational", "low", "medium", "high", "critical")
+
+
+class BadFile(ValueError):
+    """A file of results that does not fit its contract. The text says why, and never
+    holds a value of the file."""
+
+
+def severity(value: object) -> str:
+    text = str(value).lower() if isinstance(value, str) else ""
+    return text if text in SEVERITIES else "unknown"
+
+
+def higher(one: str, two: str) -> str:
+    return max(one, two, key=SEVERITIES.index)
+
+
+def json_array(stream, chunk: int = CHUNK_CHARS, limit: int = MAX_ITEM_CHARS):
+    """Each object of the JSON array in a text stream, with one object in memory at a
+    time. BadFile when the stream is not one array of objects, or one object is larger
+    than the limit."""
+    decoder = json.JSONDecoder()
+    buffer, at, ended = "", 0, False
+
+    def fill():
+        nonlocal buffer, at, ended
+        data = stream.read(chunk)
+        ended = not data
+        buffer, at = buffer[at:] + data, 0
+
+    def skip_space():
+        nonlocal at
+        while True:
+            while at < len(buffer) and buffer[at] in " \t\r\n":
+                at += 1
+            if at < len(buffer) or ended:
+                return
+            fill()
+
+    skip_space()
+    if at >= len(buffer) or buffer[at] != "[":
+        raise BadFile("the file is not a JSON array")
+    at += 1
+    skip_space()
+    if at < len(buffer) and buffer[at] == "]":
+        at += 1
+    else:
+        while True:
+            while True:
+                try:
+                    item, end = decoder.raw_decode(buffer, at)
+                    break
+                except json.JSONDecodeError:
+                    if ended or len(buffer) - at > limit:
+                        raise BadFile("an item is not JSON, is larger than the limit, or does not end") from None
+                    fill()
+            if not isinstance(item, dict):
+                raise BadFile("an item of the array is not an object")
+            at = end
+            yield item
+            skip_space()
+            if at < len(buffer) and buffer[at] == ",":
+                at += 1
+                skip_space()
+            elif at < len(buffer) and buffer[at] == "]":
+                at += 1
+                break
+            else:
+                raise BadFile("the array does not end")
+    skip_space()
+    if at < len(buffer):
+        raise BadFile("text after the array")
+
+
+def ocsf_checks(records) -> dict[str, tuple[int, str]]:
+    """{check: (resources that fail, severity)} from the records of one OCSF file of
+    Prowler (Detection Finding). The check is `metadata.event_code`. A record with
+    `status_code` FAIL fails, unless its `status` is "Suppressed": the list of accepted
+    findings muted it. A check with no PASS and no FAIL record (MANUAL only) has no
+    result. The severity of a check is the highest of its records."""
+    checks: dict[str, tuple[set[str], bool, str]] = {}
+    for index, record in enumerate(records):
+        metadata = record.get("metadata")
+        check = metadata.get("event_code") if isinstance(metadata, dict) else None
+        status = record.get("status_code")
+        if not isinstance(check, str) or not check or len(check) > MAX_CHECK_LENGTH:
+            raise BadFile(f"record {index} has no check")
+        if not isinstance(status, str):
+            raise BadFile(f"record {index} has no status")
+        failed, ran, level = checks.get(check, (set(), False, "unknown"))
+        level = higher(level, severity(record.get("severity")))
+        if status in ("PASS", "FAIL"):
+            ran = True
+        if status == "FAIL" and record.get("status") != "Suppressed":
+            info = record.get("finding_info")
+            uid = info.get("uid") if isinstance(info, dict) else None
+            failed.add(uid if isinstance(uid, str) and uid else f"record {index}")
+        checks[check] = failed, ran, level
+    return {check: (len(failed), level) for check, (failed, ran, level) in checks.items() if ran}
+
+
+def read_ocsf(path: Path) -> dict[str, tuple[int, str]]:
+    with path.open(encoding="utf-8") as stream:
+        return ocsf_checks(json_array(stream))
+
+
+def number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def api_results(payload: object, now: float) -> tuple[float, list[dict]]:
+    """The time and the results of the result file of the API checks, in the form of
+    README, "The result file of the API checks". BadFile for each other form."""
+    if not isinstance(payload, dict) or payload.get("version") != 1 or payload.get("source") != "api-check":
+        raise BadFile("the file is not version 1 of the API checks")
+    moment, results = payload.get("time"), payload.get("results")
+    if not number(moment) or not 0 < moment <= now + CLOCK_SKEW_SECONDS:
+        raise BadFile("the time of the file is not a time of the past")
+    if not isinstance(results, list):
+        raise BadFile("the file has no list of results")
+    seen = set()
+    for index, entry in enumerate(results):
+        if not isinstance(entry, dict):
+            raise BadFile(f"result {index} is not an object")
+        check, system, failed = entry.get("check"), entry.get("system"), entry.get("failed")
+        if not isinstance(check, str) or not check or len(check) > MAX_CHECK_LENGTH:
+            raise BadFile(f"result {index} has no check")
+        if not isinstance(system, str) or not system:
+            raise BadFile(f"result {index} has no system")
+        if not isinstance(failed, int) or isinstance(failed, bool) or failed < 0:
+            raise BadFile(f"result {index} has no number of resources that fail")
+        if "severity" in entry and severity(entry["severity"]) != entry["severity"]:
+            raise BadFile(f"result {index} has a severity that is not one of the list")
+        findings = entry.get("findings", [])
+        if not isinstance(findings, list) or any(
+                not isinstance(item, dict) or not isinstance(item.get("resource"), str)
+                or not isinstance(item.get("message"), str) for item in findings):
+            raise BadFile(f"result {index} has findings that are not in the form")
+        if (check, system) in seen:
+            raise BadFile(f"result {index} is a second result of one check and system")
+        seen.add((check, system))
+    return float(moment), results
+
+
+def read_api(path: Path, now: float) -> tuple[float, list[dict]]:
+    with path.open("rb") as file:
+        raw = file.read(MAX_API_BYTES + 1)
+    if len(raw) > MAX_API_BYTES:
+        raise BadFile("the file is larger than the limit")
+    try:
+        payload = json.loads(raw)
+    except ValueError:
+        raise BadFile("the file is not JSON") from None
+    return api_results(payload, now)
+
+
+class ResultFiles(Loop):
+    """The results of the files on the volume of results (README, "The files of
+    results"): the newest OCSF file of each system of each provider of Prowler, and the
+    result file of the API checks. The converter reads a file again only when it
+    changes. A file that does not fit gives no result and no time for its system, and
+    it counts in homelab_security_converter_files_skipped."""
+
+    name = "files"
+
+    def __init__(self, root: Path, registry: dict, interval: float = INTERVAL_SECONDS,
+                 clock=time.time, monotonic=time.monotonic):
+        super().__init__(interval, clock, monotonic)
+        self.root = Path(root)
+        self.result_series = registry["series"]["result"]
+        self.time_series = registry["series"]["last_result"]
+        self.providers = {provider: set(systems) for provider, systems in registry["prowler"].items()}
+        self.systems = set(registry["systems"])
+        # path -> (size, modified, inode), and what the converter read: a result or BadFile.
+        self.cache: dict[Path, tuple[tuple[int, int, int], object]] = {}
+        self.noted: set[str] = set()
+        self.result: tuple[list, list, dict[str, int], float] | None = None
+
+    def note(self, text: str):
+        """A log line one time, for a name that the converter does not read."""
+        if text not in self.noted:
+            self.noted.add(text)
+            logger.info(text)
+
+    def newest(self, provider: str, now: float) -> dict[str, tuple[Path, int]]:
+        """{system: (path, time)} of the newest OCSF file of each system of the provider."""
+        directory = self.root / "prowler" / provider
+        found: dict[str, tuple[Path, int]] = {}
+        try:
+            with os.scandir(directory) as listing:
+                entries = list(listing)
+        except FileNotFoundError:
+            return found
+        for entry in entries:
+            if entry.name == "tmp" or not entry.is_file(follow_symlinks=False):
+                continue
+            match = OCSF_NAME.match(entry.name)
+            if not match:
+                self.note(f"prowler/{provider}/{entry.name} is not the name of an OCSF file: not read")
+                continue
+            if match["system"] not in self.providers[provider]:
+                self.note(f"prowler/{provider}/{entry.name} is not a system of {provider} in the registry: not read")
+                continue
+            try:
+                stamp = calendar.timegm(time.strptime(match["stamp"], "%Y%m%dT%H%M%SZ"))
+            except ValueError:
+                self.note(f"prowler/{provider}/{entry.name} has a time that is not a time: not read")
+                continue
+            if stamp > now + CLOCK_SKEW_SECONDS:
+                self.note(f"prowler/{provider}/{entry.name} has a time in the future: not read")
+                continue
+            if match["system"] not in found or stamp > found[match["system"]][1]:
+                found[match["system"]] = Path(entry.path), stamp
+        return found
+
+    def read(self, path: Path, reader, limit: int):
+        """What `reader` gives for the file, from the cache while the file stays the
+        same. BadFile when the file does not fit, or can not be read."""
+        try:
+            info = os.stat(path, follow_symlinks=False)
+        except OSError as error:
+            return BadFile(f"the file can not be read: {type(error).__name__}")
+        signature = info.st_size, info.st_mtime_ns, info.st_ino
+        cached = self.cache.get(path)
+        if cached and cached[0] == signature:
+            return cached[1]
+        if info.st_size > limit:
+            result = BadFile("the file is larger than the limit")
+        else:
+            try:
+                result = reader(path)
+            except BadFile as error:
+                result = error
+            except (OSError, UnicodeDecodeError, RecursionError) as error:
+                result = BadFile(f"the file can not be read: {type(error).__name__}")
+        if isinstance(result, BadFile):
+            logger.warning("%s is skipped: %s", path.relative_to(self.root), result)
+        self.cache[path] = signature, result
+        return result
+
+    def clear(self):
+        with self.lock:
+            self.result = None
+
+    def step(self):
+        now = self.clock()
+        results: list[tuple[str, str, str, int, str]] = []
+        times: list[tuple[str, str, float]] = []
+        skipped = {"prowler": 0, "api-check": 0}
+        read: set[Path] = set()
+        for provider in sorted(self.providers):
+            for system, (path, stamp) in sorted(self.newest(provider, now).items()):
+                read.add(path)
+                checks = self.read(path, read_ocsf, MAX_OCSF_BYTES)
+                if isinstance(checks, BadFile):
+                    skipped["prowler"] += 1
+                    continue
+                times.append(("prowler", system, float(stamp)))
+                results += [("prowler", check, system, failed, level)
+                            for check, (failed, level) in sorted(checks.items())]
+        api = self.root / API_FILE
+        if os.path.lexists(api):
+            read.add(api)
+            content = self.read(api, lambda path: read_api(path, now), MAX_API_BYTES)
+            if isinstance(content, BadFile):
+                skipped["api-check"] += 1
+            else:
+                moment, entries = content
+                systems = set()
+                for entry in entries:
+                    if entry["system"] not in self.systems:
+                        self.note(f"{API_FILE} names a system that is not in the registry: its result is not read")
+                        continue
+                    systems.add(entry["system"])
+                    results.append(("api-check", entry["check"], entry["system"], entry["failed"],
+                                    entry.get("severity", "unknown")))
+                times += [("api-check", system, moment) for system in sorted(systems)]
+        self.cache = {path: value for path, value in self.cache.items() if path in read}
+        with self.lock:
+            self.result = results, times, skipped, self.monotonic()
+
+    def collect(self, metrics: Metrics, now: float):
+        with self.lock:
+            result = self.result
+        if result is None or not self.fresh(result[3], now):
+            return
+        results, times, skipped, _ = result
+        for source, count in sorted(skipped.items()):
+            metrics.add(FILES_SKIPPED, count, source=source)
+        for source, system, moment in times:
+            metrics.add(self.time_series, moment, source=source, system=system)
+        for source, check, system, failed, level in results:
+            metrics.add(self.result_series, failed, source=source, check=check, system=system, severity=level)
+
+
 # --- The service ------------------------------------------------------------------------
 
 
@@ -502,6 +818,8 @@ def main():
                         help="the names of the registry, from security/generate.py")
     parser.add_argument("--accepted", default="/accepted/accepted.yaml",
                         help="the list of accepted findings, from its Secret")
+    parser.add_argument("--results", default="/results",
+                        help="the root of the volume of results, read-only")
     parser.add_argument("--loki", default=os.environ.get("LOKI_URL"), help="the address of Loki")
     parser.add_argument("--port", type=int, default=9877)
     parser.add_argument("--interval", type=float, default=INTERVAL_SECONDS,
@@ -513,9 +831,10 @@ def main():
     registry = json.loads(Path(args.registry).read_text())
     streams = StreamSource(json.loads(Path(args.streams).read_text()), Loki(args.loki), interval=args.interval)
     accepted = AcceptedList(Path(args.accepted), registry, interval=args.interval)
-    converter = Converter([streams, accepted], interval=args.interval)
-    logger.info("the converter asks %s each %d seconds for %d streams, and reads the list of accepted findings",
-                args.loki, args.interval, len(streams.entries))
+    files = ResultFiles(Path(args.results), registry, interval=args.interval)
+    converter = Converter([streams, accepted, files], interval=args.interval)
+    logger.info("the converter asks %s each %d seconds for %d streams, and reads the list of accepted findings"
+                " and the files of results in %s", args.loki, args.interval, len(streams.entries), args.results)
     threading.Thread(target=converter.run, args=(threading.Event(),), daemon=True, name="converter").start()
     ThreadingHTTPServer(("0.0.0.0", args.port), handler(converter)).serve_forever()
 

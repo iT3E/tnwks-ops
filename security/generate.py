@@ -448,10 +448,13 @@ def stream_map(registry):
 
 def converter_registry(registry):
     """The names of the registry that the converter takes a value of a file against: a
-    line of the list of accepted findings names a source and a system of the registry."""
-    return {"series": {"accepted": ACCEPTED},
+    line of the list of accepted findings names a source and a system of the registry,
+    and an OCSF file of a provider of Prowler names a system of the type of the provider."""
+    return {"series": {"result": RESULT, "last_result": LAST_RESULT, "accepted": ACCEPTED},
             "sources": [source["name"] for source in registry["sources"]],
-            "systems": [system["name"] for system in registry["systems"]]}
+            "systems": [system["name"] for system in registry["systems"]],
+            "prowler": {provider: [system["name"] for system in registry["systems"] if system["type"] == system_type]
+                        for system_type, provider in PROWLER_PROVIDERS.items()}}
 
 
 # --- The tests of the rules -------------------------------------------------------------
