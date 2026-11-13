@@ -36,7 +36,7 @@ spec:
     image:
       repository: registry.k8s.io/agent-sandbox/agent-sandbox-controller
       # The same release as the GitRepository tag (the chart and the CRDs).
-      tag: v1.0.10@sha256:594f4853913bca2b336d0267fe0978445f1aaa5837ed23797e48e745c8d6b610
+      tag: v1.0.11@sha256:73cb162407cddf73f4cd063b02bdee2dac86aa342bbc40bd99a9f023e69b31ed
     # The `restricted` level of the namespace. The image runs as a non-root
     # user (distroless nonroot).
     podSecurityContext:
