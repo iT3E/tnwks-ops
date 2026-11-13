@@ -191,7 +191,7 @@ names the Service `litellm-app`).
 | --- | --- | --- | --- |
 | `agents-main` | `["agents-main"]` | `agents-main` | Secret `agent-secret`, key `LITELLM_API_KEY` |
 | `agents-finance` | `["agents-finance"]` | `agents-finance` | Secret `agent-secret`, key `LITELLM_API_KEY` |
-| `agents-workflows` | `["agents-workflows"]` | `agents-workflows` | Comes with the run path of the workflow agents |
+| `agents-workflows` | `["agents-workflows"]` | `agents-workflows` | Secret `workflow-providers-secret`, key `MODEL_GATEWAY_KEY`: the provider `model-gateway` of the sandbox gateway holds it, and a sandbox gets a placeholder ([agent-platform.md](agent-platform.md#the-run-receiver)) |
 | `agents-pilot` | `["agents-pilot"]` | `agents-pilot` | Secret `agent-secret`, key `LITELLM_API_KEY` |
 
 - The owner adds each entry to `keys.json`, with its value

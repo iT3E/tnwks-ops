@@ -6,9 +6,13 @@ resources:
   - ./deployment.yaml
   - ./service.yaml
   - ./sweep.yaml
+  - ./providers.yaml
   - ./networkpolicy.yaml
   # Secret run-receiver-secret: RUN_RECEIVER_TOKEN, the token of the callers.
   - ./secret.sops.yaml
+  # Secret workflow-providers-secret: MODEL_GATEWAY_KEY and GITHUB_TOKEN, the
+  # credentials of the providers (providers.yaml).
+  - ./secret-providers.sops.yaml
 # The names stay fixed (no hash): the Job template names the policy, and
 # Reloader starts the receiver again when its list changes.
 generatorOptions:
@@ -20,3 +24,10 @@ configMapGenerator:
   - name: renovate-reviewer-policy
     files:
       - policy.yaml=./policies/renovate-reviewer.yaml
+  - name: workflow-provider-profiles
+    files:
+      - workflow-model-gateway.yaml=./providers/workflow-model-gateway.yaml
+      - workflow-github-reviewer.yaml=./providers/workflow-github-reviewer.yaml
+  - name: workflow-providers-script
+    files:
+      - providers.sh=./scripts/providers.sh

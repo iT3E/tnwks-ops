@@ -48,7 +48,7 @@ spec:
     - toEntities:
         - kube-apiserver
 ---
-# The run jobs and the sweep. Nothing comes in. Out: the sandbox gateway of
+# The run jobs, the sweep and the setup of the providers. Nothing comes in. Out: the sandbox gateway of
 # this trust domain only, which also relays the SSH path to a sandbox (and
 # DNS, through allow-dns). The agent itself runs in the sandbox, whose egress
 # is the sandbox policy and the providers of the agent.
@@ -64,6 +64,7 @@ spec:
         values:
           - workflow-run
           - workflow-sweep
+          - workflow-providers
   egress:
     - toEndpoints:
         - matchLabels:

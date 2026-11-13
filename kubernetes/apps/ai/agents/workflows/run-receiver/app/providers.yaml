@@ -1,0 +1,100 @@
+---
+# The providers of the workflow agents (scripts/providers.sh): every hour it
+# imports or updates each provider profile (providers/) in the sandbox
+# gateway, and creates or updates each provider with its credential from the
+# Secret workflow-providers-secret. So a new value of a credential, or a new
+# store of the gateway, is in force within the hour. To run it now:
+# `kubectl -n agents-workflows create job --from=cronjob/workflow-providers providers-now`.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: workflow-providers
+  labels: &labels
+    app.kubernetes.io/name: workflow-providers
+spec:
+  schedule: "7 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels: *labels
+        spec:
+          restartPolicy: Never
+          serviceAccountName: workflow-run
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            # The client certificate (mode 0440) is readable by the group.
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: providers
+              # The image of the workflow agents holds the OpenShell CLI.
+              image: ghcr.io/it3e/tnwks-workflow-agents:0.1.0@sha256:d2eeca6cd89566d59c4b29b8526e5140b12c9187ddb372eb01efebe3b198cd11
+              imagePullPolicy: IfNotPresent
+              command: ["sh", "/scripts/providers.sh"]
+              env:
+                - name: OPENSHELL_GATEWAY_URL
+                  value: https://openshell.agents-workflows.svc.cluster.local:8080
+                - name: NO_COLOR
+                  value: "1"
+                # The key of this trust domain at the model gateway (the
+                # entry agents-workflows of keys.json in the model gateway).
+                - name: MODEL_GATEWAY_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: workflow-providers-secret
+                      key: MODEL_GATEWAY_KEY
+                # The GitHub token of the reviewer, for iT3E/tnwks-ops only.
+                - name: GITHUB_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: workflow-providers-secret
+                      key: GITHUB_TOKEN
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                - name: mtls
+                  mountPath: /mtls
+                  readOnly: true
+                - name: profiles
+                  mountPath: /profiles
+                  readOnly: true
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+          volumes:
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi
+            # The client certificate of the sandbox gateway.
+            - name: mtls
+              secret:
+                secretName: openshell-client-tls
+                defaultMode: 0440
+            - name: profiles
+              configMap:
+                name: workflow-provider-profiles
+            - name: scripts
+              configMap:
+                name: workflow-providers-script

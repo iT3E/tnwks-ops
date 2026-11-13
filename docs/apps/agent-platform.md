@@ -342,12 +342,30 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
   Job. The Job name comes from the key, so a second call with the same key
   gets the same run. A Job stays 7 days. The receiver refuses to start when
   a template breaks a rule of the image.
-- **The Renovate reviewer** is the one agent. It calls the model gateway
-  with the name `agents-workflows`, through the provider `model-gateway`,
-  and GitHub through the provider `github-reviewer`. Those two providers, in
-  the store of the sandbox gateway, and the repositories it may review come
-  with the test repository. Until then a run of it fails at the start of its
-  sandbox.
+- **The Renovate reviewer** is the one agent. It reviews pull requests of
+  `iT3E/tnwks-ops` only (`REVIEWER_REPOSITORIES`), and posts one comment for
+  each head: it never merges, approves, pushes or changes a label. It calls
+  the Messages API of the model gateway (`POST /v1/messages`) with the name
+  `agents-workflows` and the effort `high` (`AGENT_ENV_REVIEW_EFFORT` in
+  `agents.yaml`), through the provider `model-gateway`, and GitHub through
+  the provider `github-reviewer`.
+- **The providers** are in the store of the sandbox gateway. The CronJob
+  `workflow-providers` (`app/providers.yaml`, every hour at :07) imports or
+  updates each provider profile of `app/providers/`, and creates or updates
+  each provider with its credential from the Secret
+  `workflow-providers-secret` (`app/secret-providers.sops.yaml`). A new
+  value is in force within the hour; to run it now,
+  `kubectl -n agents-workflows create job --from=cronjob/workflow-providers providers-now`.
+
+  | Provider (profile) | Credential (key of the Secret) | What the proxy of a sandbox allows with it |
+  | --- | --- | --- |
+  | `model-gateway` (`workflow-model-gateway`) | `MODEL_GATEWAY_KEY`: the key `agents-workflows` of the model gateway ([litellm.md](litellm.md#keys-of-the-agent-platform)) | `POST /v1/messages` at `litellm-app.ai.svc.cluster.local:4000` |
+  | `github-reviewer` (`workflow-github-reviewer`) | `GITHUB_TOKEN`: a fine-grained token of the owner for `iT3E/tnwks-ops` only, with Issues read and write (the comment); the repository is public, so the reads need no more | `api.github.com`: `GET` on `pulls/*`, `pulls/*/files`, `contents/**`, `issues/*/comments` and `commits/*/check-runs`, and `POST issues/*/comments`, under `/repos/iT3E/tnwks-ops` |
+
+  The sandbox holds a placeholder for each credential, and the proxy puts
+  the value in the `Authorization` header of those calls only. The paths
+  have the case of the repository name, `iT3E/tnwks-ops`, so a caller sends
+  `repo` in that case.
 - **Roles.** The service account `run-receiver` can create and get Jobs,
   list pods and read pod logs in this namespace, and nothing more. The run
   jobs and the sweep run as `workflow-run`, with no role and no token: they
@@ -372,8 +390,8 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
 - **Network policy.** In: the runner pods of the `openclaw-hooks` scale set
   in `tools`, a pod `app.kubernetes.io/name: workflow-schedule` of this
   namespace (a schedule, later), and the kubelet's probes. Out: the API
-  server only. The run jobs and the sweep reach the sandbox gateway of this
-  namespace only, which also relays the SSH path to a sandbox. The agent
+  server only. The run jobs, the sweep and the providers job reach the
+  sandbox gateway of this namespace only, which also relays the SSH path to a sandbox. The agent
   runs in the sandbox, whose egress is its sandbox policy and its providers.
 - **A test call by hand** needs no rule: a `kubectl port-forward` reaches
   the pod through the kubelet, not from another pod, and the receiver
