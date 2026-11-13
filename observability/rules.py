@@ -463,6 +463,9 @@ TRIVY_REPORT_GAP = "1h"
 # on. The others are on the board only. The alert holds for one hour.
 SECURITY_FINDING_SEVERITY = "high|critical"
 SECURITY_FINDING_HOLD = "1h"
+SECURITY_FINDING_LABELS = "k8s_cluster, source, check, system, severity"
+# The step of the day before: 288 points of each check for each evaluation.
+SECURITY_FINDING_STEP = "5m"
 
 
 def security_records():
@@ -548,8 +551,14 @@ def security_alerts():
     and had none one window before. Both terms keep the labels of the pod, so
     the counter of a new pod is a new series; the sum then takes them away."""
     errors = f'vector_component_errors_total{{component_id="{AUDIT_SINK}"}}'
-    result = f'homelab_security_check_result{{source_site="",severity=~"{SECURITY_FINDING_SEVERITY}"}}'
-    day_before = f"max_over_time({result}[1d] offset {SECURITY_FINDING_HOLD})"
+    series = f'homelab_security_check_result{{source_site="",severity=~"{SECURITY_FINDING_SEVERITY}"}}'
+    # One series for each check: a scraped series also has pod, instance,
+    # container and endpoint, which change when the pod that serves it starts
+    # again, so the comparison is between the sums by these labels.
+    by = SECURITY_FINDING_LABELS
+    result = f"max by ({by}) ({series})"
+    day_before = f"max_over_time({result}[1d:{SECURITY_FINDING_STEP}] offset {SECURITY_FINDING_HOLD})"
+    hold_before = f"max by ({by}) ({series} offset {SECURITY_FINDING_HOLD})"
     # A result above 0 that is above each value of the day before, or was 0 one
     # hold before, or has no value in the day before (a new check, or one back
     # after more than a day). Each term holds until the hold has passed.
@@ -557,7 +566,7 @@ def security_alerts():
         {"alert": "SecurityFindingNew",
          "expr": (f"max by (k8s_cluster, source, system) ({result} > 0 and ("
                   f"{result} > {day_before}"
-                  f" or {result} offset {SECURITY_FINDING_HOLD} == 0"
+                  f" or {hold_before} == 0"
                   f" or {result} unless {day_before}))"),
          "for": "10m", "labels": {"severity": "warning"},
          "annotations": {"summary": "A new finding of high severity on {{ $labels.system }}, from {{ $labels.source }}",
@@ -1228,6 +1237,16 @@ def trivy_fixtures():
                                       .replace("{{ $labels.k8s_cluster }}", "homelab-wsl-02")
                                       for key, text in rule["annotations"].items()}}]},
              {"alertname": rule["alert"], "eval_time": f"{before + 75}m", "exp_alerts": []}]},
+        {"name": "a result whose pod label changes during the day does not alert", "interval": "1m",
+         "input_series": [
+             {"series": ('homelab_security_check_result{k8s_cluster="homelab-wsl-02",source="prowler",system="aws-prod",'
+                         'check="iam_root_mfa_enabled",severity="critical",pod="converter-a",instance="10.0.0.1:9090"}'),
+              "values": f"2+0x{before} _x{after}"},
+             {"series": ('homelab_security_check_result{k8s_cluster="homelab-wsl-02",source="prowler",system="aws-prod",'
+                         'check="iam_root_mfa_enabled",severity="critical",pod="converter-b",instance="10.0.0.2:9090"}'),
+              "values": f"_x{before} 2+0x{after}"},
+         ],
+         "alert_rule_test": [at(before + 15, []), at(before + 60, [])]},
         {"name": "a control of high severity that changes from pass to fail alerts", "interval": "1m",
          "input_series": [control("5.1.2", "Pass", f"1+0x{before}"),
                           control("5.1.2", "Fail", f"_x{before} 1+0x{after}")],

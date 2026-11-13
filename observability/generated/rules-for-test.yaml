@@ -417,10 +417,13 @@ groups:
     labels:
       source: trivy
   - alert: SecurityFindingNew
-    expr: max by (k8s_cluster, source, system) (homelab_security_check_result{source_site="",severity=~"high|critical"}
-      > 0 and (homelab_security_check_result{source_site="",severity=~"high|critical"} > max_over_time(homelab_security_check_result{source_site="",severity=~"high|critical"}[1d]
-      offset 1h) or homelab_security_check_result{source_site="",severity=~"high|critical"} offset 1h == 0 or homelab_security_check_result{source_site="",severity=~"high|critical"}
-      unless max_over_time(homelab_security_check_result{source_site="",severity=~"high|critical"}[1d] offset 1h)))
+    expr: max by (k8s_cluster, source, system) (max by (k8s_cluster, source, check, system, severity) (homelab_security_check_result{source_site="",severity=~"high|critical"})
+      > 0 and (max by (k8s_cluster, source, check, system, severity) (homelab_security_check_result{source_site="",severity=~"high|critical"})
+      > max_over_time(max by (k8s_cluster, source, check, system, severity) (homelab_security_check_result{source_site="",severity=~"high|critical"})[1d:5m]
+      offset 1h) or max by (k8s_cluster, source, check, system, severity) (homelab_security_check_result{source_site="",severity=~"high|critical"}
+      offset 1h) == 0 or max by (k8s_cluster, source, check, system, severity) (homelab_security_check_result{source_site="",severity=~"high|critical"})
+      unless max_over_time(max by (k8s_cluster, source, check, system, severity) (homelab_security_check_result{source_site="",severity=~"high|critical"})[1d:5m]
+      offset 1h)))
     for: 10m
     labels:
       severity: warning
