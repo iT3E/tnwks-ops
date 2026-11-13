@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.98.0 - 2026-11-13
+
+### Changed
+
+* wsl-02: worker 1 of homelab-wsl-02 has a memory limit of 18 GiB (talos_clusters memory_nodes; task talos:memory:wsl-02 sets it on the running node container, with no restart), and the WSL VM of WSL-02 has 45 GB (wsl_memory in the role windows_host_settings, read at the next WSL restart)
+
 ## v2.97.0 - 2026-11-13
 
 ### Added
