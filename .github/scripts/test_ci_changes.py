@@ -64,6 +64,14 @@ class Domains(unittest.TestCase):
         domains, _ = on(["kubernetes/apps/home-automation/home-assistant/app/config/automations.yaml"])
         self.assertEqual(domains, {"kubernetes", "observability", "home_assistant"})
 
+    def test_talos_patch_runs_ansible(self):
+        domains, _ = on(["talos/wsl/patches/talos-api-access.yaml"])
+        self.assertEqual(domains, {"ansible"})
+
+    def test_audit_policy_runs_its_rule_tests(self):
+        domains, _ = on(["talos/wsl-02/patches/audit-policy.yaml"])
+        self.assertEqual(domains, {"ansible", "observability"})
+
     def test_docs_only_runs_nothing(self):
         domains, groups = on(["docs/operations/ci.md", "README.md", ".changes/unreleased/x.yaml"])
         self.assertEqual(domains, set())

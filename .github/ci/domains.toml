@@ -30,6 +30,8 @@ paths = [
   "observability/**",
   # The control registry and its generated rules, scan lists and board input.
   "security/**",
+  # security/tests/test_audit_policy.py reads each cluster's audit policy.
+  "talos/*/patches/audit-policy.yaml",
   # validate_health.py scans every manifest.
   "kubernetes/**",
   "bin/site-failover-apps.json",
@@ -58,6 +60,8 @@ paths = [
 [domains.ansible]
 paths = [
   "infrastructure/ansible/**",
+  # The Talos patches 01-talos-bootstrap.yml reads (tests/test_talos_patches.py).
+  "talos/**",
   ".github/workflows/ansible.yaml",
 ]
 
