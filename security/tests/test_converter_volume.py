@@ -95,18 +95,34 @@ def test_the_file_of_a_run_is_the_newest_result_of_its_system(run, tmp_path):
 README_EXAMPLE = re.search(r"  accepted\.yaml: \|\n((?:    .*\n)+)", (ROOT / "security/README.md").read_text())
 
 
+# Reasons as an owner writes them: long, with ": " (yaml.safe_dump puts such a reason
+# in single quotes and wraps it over lines), with quotes, and with the text of an entry.
+LONG = ("Accepted: an invented reason that is long enough to wrap, as an owner writes one, with a colon, "
+        "and with more words: the line goes on past the width of yaml.safe_dump.")
+REASONS = [LONG, LONG + " It's 'quoted', \"too\".", "Invented.\n- source: prowler\n  check: check_injected",
+           "Invented: café, " * 12]
+
+
 def lists():
     example = "\n".join(line[4:] for line in README_EXAMPLE[1].splitlines()) + "\n"
-    dumped = yaml.safe_dump([
-        {"source": "prowler", "check": "check_open", "system": "aws-prod", "reason": "An invented reason.",
-         "until": "2026-11-13"},
-        {"source": "prowler", "check": "check_ended", "system": "aws-prod", "reason": "Invented.", "until": "2026-11-12"},
-        {"source": "prowler", "check": "check_other", "system": "aws-management", "reason": "Invented.",
-         "until": "2027-01-31"},
-        {"source": "trivy", "check": "k8s-cis-1.23/1.2.1", "system": "aws-prod", "reason": "Invented.",
-         "until": "2027-01-31"},
-    ])
-    return [example.replace("example-system", "aws-prod"), dumped]
+    entries = [
+        {"source": "prowler", "check": "check_open", "system": "aws-prod", "until": "2026-11-13"},
+        {"source": "prowler", "check": "check_ended", "system": "aws-prod", "until": "2026-11-12"},
+        {"source": "prowler", "check": "check_other", "system": "aws-management", "until": "2027-01-31"},
+        {"source": "prowler", "check": "check_late", "system": "aws-prod", "until": "2027-02-01"},
+        {"source": "trivy", "check": "k8s-cis-1.23/1.2.1", "system": "aws-prod", "until": "2027-01-31"},
+    ]
+    dumped = [yaml.safe_dump([entry | {"reason": REASONS[(index + shift) % len(REASONS)]}
+                              for index, entry in enumerate(entries)], width=width, allow_unicode=unicode)
+              for shift, (width, unicode) in enumerate([(80, False), (80, True), (40, False), (120, True)])]
+    return [example.replace("example-system", "aws-prod"), *dumped]
+
+
+def test_the_lists_hold_wrapped_quoted_reasons():
+    """The comparison below proves something only when a reason goes on over more lines."""
+    dumped = lists()[1:]
+    assert all(re.search(r"reason: '[^\n]*\n {4}\S", text) for text in dumped)
+    assert all("check_injected" in text for text in dumped)
 
 
 @pytest.mark.parametrize("text", lists())
@@ -116,10 +132,13 @@ def test_a_run_mutes_what_the_converter_serves_as_accepted_on_that_day(run, tmp_
     registry = generate.converter_registry(generate.load())
     served, skipped = converter.accepted_entries(text, set(registry["sources"]), set(registry["systems"]))
     assert skipped == 0
+    assert all(check != "check_injected" for _, check, _ in served)
     for day in (datetime.date(2026, 11, 13), datetime.date(2027, 1, 31), datetime.date(2027, 2, 1)):
         start = calendar.timegm(day.timetuple())
         for system in ("aws-prod", "aws-management"):
-            muted = set(run.accepted_checks(path, system, day))
+            accepted, not_fit = run.accepted_checks(path, system, day)
+            muted = set(accepted)
+            assert not_fit == 0
             open_ = {check for (source, check, name), end in served.items()
                      if source == "prowler" and name == system and end > start}
             assert muted == open_, (day, system)
