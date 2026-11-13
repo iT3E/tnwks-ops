@@ -1,0 +1,3 @@
+kind: Added
+body: 'agents: the run receiver of the workflow agents in agents-workflows, with its role for Jobs only, an admission policy that admits only a Job from the template of an agent, its network policy and the sweep of old run sandboxes'
+time: 2026-11-12T21:00:00.000000000Z

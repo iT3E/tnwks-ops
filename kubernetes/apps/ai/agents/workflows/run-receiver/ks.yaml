@@ -1,0 +1,47 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The admission policy of the run jobs (docs/apps/agent-platform.md, "The run
+# receiver"). Its two objects are cluster-scoped, so this Kustomization sets
+# no targetNamespace; the binding names the namespace agents-workflows.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-workflows-run-admission
+  namespace: flux-system
+spec:
+  path: ./kubernetes/apps/ai/agents/workflows/run-receiver/admission
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: true
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+# The run receiver of the workflow agents: the one entry for a run. It makes
+# a run job from the template of an agent, and the run job runs the agent in
+# a sandbox of this trust domain. Also the sweep of old run sandboxes, the
+# roles and the network policy.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agents-workflows-run-receiver
+  namespace: flux-system
+spec:
+  targetNamespace: agents-workflows
+  path: ./kubernetes/apps/ai/agents/workflows/run-receiver/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    # The client certificate, and the gateway of the sandboxes.
+    - name: agents-workflows-sandbox-gateway
+    # The admission policy is in force before the receiver can make a Job.
+    - name: agents-workflows-run-admission
+  wait: false
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

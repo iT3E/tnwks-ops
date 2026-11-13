@@ -1,0 +1,28 @@
+---
+# The sandbox policy of the Renovate reviewer (ConfigMap
+# renovate-reviewer-policy): the default file rules of OpenShell, /app (the
+# code of the agent) read-only, and one network rule, for the trace collector
+# (OTLP over HTTP). The model gateway and GitHub come from the providers of
+# the agent: their profiles name their own addresses and paths. Nothing else
+# leaves the sandbox.
+version: 1
+filesystem_policy:
+  include_workdir: true
+  read_only: [/bin, /usr, /lib, /proc, /dev/urandom, /etc, /var/log, /app]
+  read_write: [/tmp, /dev/null]
+landlock:
+  compatibility: best_effort
+network_policies:
+  otel:
+    name: otel
+    endpoints:
+      - host: alloy.monitoring.svc.cluster.local
+        port: 4318
+        protocol: rest
+        tls: ""
+        enforcement: enforce
+        rules:
+          - allow: {method: POST, path: "/v1/**"}
+    binaries:
+      - {path: /usr/local/bin/python3.13}
+      - {path: /usr/local/bin/python3}

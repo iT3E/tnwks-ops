@@ -1,0 +1,77 @@
+---
+# The sweep: it deletes each run sandbox that is older than one hour, through
+# the sandbox gateway. A run job deletes its own sandbox at its end; the
+# sweep deletes the sandbox of a run job that was stopped before that (a node
+# that went away, for example). It deletes only sandboxes with the name and
+# the label of a run, so it never deletes the sandbox of a check. A run job
+# has a time limit of 40 minutes at most (agents.yaml), and the admission
+# policy admits one hour at most.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: workflow-sweep
+  labels: &labels
+    app.kubernetes.io/name: workflow-sweep
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels: *labels
+        spec:
+          restartPolicy: Never
+          serviceAccountName: workflow-run
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            # The client certificate (mode 0440) is readable by the group.
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: sweep
+              image: ghcr.io/it3e/tnwks-workflow-agents:0.1.0@sha256:d2eeca6cd89566d59c4b29b8526e5140b12c9187ddb372eb01efebe3b198cd11
+              imagePullPolicy: IfNotPresent
+              args: ["sweep"]
+              env:
+                - name: OPENSHELL_GATEWAY_URL
+                  value: https://openshell.agents-workflows.svc.cluster.local:8080
+                - name: OPENSHELL_MTLS_DIR
+                  value: /etc/openshell/mtls
+                - name: SWEEP_MAX_AGE_SECONDS
+                  value: "3600"
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                - name: mtls
+                  mountPath: /etc/openshell/mtls
+                  readOnly: true
+          volumes:
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi
+            # The client certificate of the sandbox gateway.
+            - name: mtls
+              secret:
+                secretName: openshell-client-tls
+                defaultMode: 0440

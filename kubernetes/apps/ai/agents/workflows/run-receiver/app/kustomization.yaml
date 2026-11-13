@@ -1,0 +1,22 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./rbac.yaml
+  - ./deployment.yaml
+  - ./service.yaml
+  - ./sweep.yaml
+  - ./networkpolicy.yaml
+  # Secret run-receiver-secret: RUN_RECEIVER_TOKEN, the token of the callers.
+  - ./secret.sops.yaml
+# The names stay fixed (no hash): the Job template names the policy, and
+# Reloader starts the receiver again when its list changes.
+generatorOptions:
+  disableNameSuffixHash: true
+configMapGenerator:
+  - name: run-receiver-agents
+    files:
+      - agents.yaml=./agents.yaml
+  - name: renovate-reviewer-policy
+    files:
+      - policy.yaml=./policies/renovate-reviewer.yaml

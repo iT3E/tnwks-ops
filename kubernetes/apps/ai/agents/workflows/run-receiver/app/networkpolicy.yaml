@@ -1,0 +1,76 @@
+---
+# The run receiver. In: the runner of the review workflow of this repository
+# (the openclaw-hooks scale set in tools), the schedules of this namespace,
+# and the kubelet's probes (from the host). Out: the Kubernetes API only (and
+# DNS, through allow-dns). A kubectl port-forward for a test call needs no
+# rule: it reaches the pod through the kubelet, not through another pod.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: run-receiver
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: run-receiver
+  ingress:
+    # The runner pods of the scale set (labels of the runner controller), and
+    # not its listener.
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: tools
+            actions.github.com/scale-set-name: openclaw-hooks
+            app.kubernetes.io/component: runner
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    # A schedule of a workflow agent: a CronJob in git that makes the same
+    # call as the runner.
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-workflows
+            app.kubernetes.io/name: workflow-schedule
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  egress:
+    # Make and read the run jobs (rbac.yaml).
+    - toEntities:
+        - kube-apiserver
+---
+# The run jobs and the sweep. Nothing comes in. Out: the sandbox gateway of
+# this trust domain only, which also relays the SSH path to a sandbox (and
+# DNS, through allow-dns). The agent itself runs in the sandbox, whose egress
+# is the sandbox policy and the providers of the agent.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: workflow-run
+spec:
+  endpointSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - workflow-run
+          - workflow-sweep
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-workflows
+            app.kubernetes.io/instance: openshell
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP

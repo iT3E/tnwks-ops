@@ -1,0 +1,54 @@
+---
+# The run receiver makes a Job in this namespace and reads it back: the Job,
+# its pod and the log of the pod (the answer of the run is the last line of
+# the log). It can't change or delete a Job, or touch any other object. A
+# right to make a Job is a right to read each secret here, because the Job
+# sets its pod: the admission policy (../admission/) admits only a Job from
+# the template of an agent.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: run-receiver
+  labels:
+    app.kubernetes.io/name: run-receiver
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: run-receiver
+  labels:
+    app.kubernetes.io/name: run-receiver
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: run-receiver
+  labels:
+    app.kubernetes.io/name: run-receiver
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: run-receiver
+subjects:
+  - kind: ServiceAccount
+    name: run-receiver
+---
+# The run jobs and the sweep: no role and no token. They call the sandbox
+# gateway with its client certificate, and no Kubernetes API.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workflow-run
+  labels:
+    app.kubernetes.io/name: workflow-run
+automountServiceAccountToken: false
