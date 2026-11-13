@@ -83,6 +83,17 @@ Loki still refuses a line when CloudTrail delivers an event more than about 1
 hour after a newer event of its account and Region. Then the file gets the
 name `.bad` and the run fails (the table of cases below).
 
+The order is also why a fault of the request stops the run and sets nothing
+aside. If the job set files aside and went on, the newer files would move the
+newest line of the stream forward, and Loki would refuse the files of the fault
+for their time when they are sent again. So the job sets a file aside only for
+a 400 about the time of its lines, or for a 400 that comes after Loki took
+other batches of the same file. Loki 3.6 (the release that chart 7.6.0 of
+`kubernetes/apps/monitoring/loki` runs) says `timestamp too old` or
+`timestamp too new` for the first kind in its distributor, and `entry too far
+behind` or `entry out of order` in its ingester. Each other 400, such as a
+label that it can not parse or a limit, is a fault of the request.
+
 ## The volume
 
 The PersistentVolumeClaim `trail-copy`, mounted at `/data`:
@@ -98,8 +109,8 @@ where it is:
 | Name | Meaning |
 | --- | --- |
 | `<file>.json.gz` | Loki has each event of the file |
-| `<file>.json.gz.part` | The download or the send did not finish. The next run takes the file again |
-| `<file>.json.gz.bad` | Loki does not have each event of the file: the file can not be read as a trail file, or Loki refused a line of it. The run that found it failed, and its log names the key. The next runs pass it |
+| `<file>.json.gz.part` | The download or the send did not finish, or Loki refused the request. The next run takes the file again |
+| `<file>.json.gz.bad` | Loki does not have each event of the file: the file can not be read as a trail file, Loki refused a line of it for its time, or Loki refused a batch after it took others of the file. The run that found it failed, and its log names the key. The next runs pass it |
 
 So the volume is also the record of what the job has done. The job deletes a
 copy 7 days after its download. The object stays in the bucket for 90 days.
@@ -114,7 +125,7 @@ each prefix, and loses nothing.
 Every 15 minutes (`app/cronjob.yaml`, `app/scripts/trail_copy.py`):
 
 1. It reads the list of prefixes from `state.json`: one for each account and
-   Region. It lists them in the bucket again after 24 hours.
+   Region. It lists them in the bucket again each hour.
 2. It lists each prefix that is due, from the time of its newest local copy
    less 2 hours, for a file that AWS delivers late. The first run starts 6
    days back. A prefix is due:
@@ -133,19 +144,25 @@ next run sends the same file again, and a query of Loki gives a line one
 time (the same time and the same text).
 
 The last line of the log of a run counts the files, the events, the files set
-aside as `.bad`, the prefixes listed, and the list and get requests to S3.
+aside as `.bad`, the files left (with `(stopped)` when the run stopped at a
+file), the prefixes listed, and the list and get requests to S3.
 
 | Case | What the job does |
 | --- | --- |
 | Loki or S3 does not answer, Loki answers 429, a 5xx or a 4xx that is not 400, or AWS refuses the session | The run fails (`KubeJobFailed`). The next run takes the same files |
+| Loki answers 400 about the request, and not about the time of a line: a label that it can not parse, or a limit. It took no batch of the file | The run stops at that file and fails, with the key and the answer in its log. Nothing is set aside: each next run fails at the same file until the cause is fixed, and then the backlog goes to Loki in its order, while it is less than 7 days old |
 | Loki refuses a line for its time: more than 1 hour behind the newest line of its stream, or older than 7 days | The other lines of the file go to Loki. The file gets `.bad`, and the run fails at its end with the key in its log. No later run sends it again, so `KubeJobFailed` fires one time for each case |
-| Loki answers another 400: a line or a request that it will never take | The same. The stream goes on with the next file |
+| Loki answers another 400 for one batch, after it took other batches of the file | The same as a refusal for the time |
 | A file that can not be read as a trail file | The same |
 | An event over 200 KiB | The line goes without `requestParameters`, `responseElements`, `additionalEventData` and `serviceEventDetails`, with `"truncated": true`. If it is still over, it keeps only the small fields that name the event (`eventName`, `eventTime`, `eventID`, `userIdentity` and others). The local copy has the whole event |
-| S3 shows a file up to 2 hours after a newer file of its prefix was copied | The next list of the prefix finds it. If Loki refuses its lines, the row above |
-| S3 shows a file more than 2 hours after a newer file of its prefix was copied | No run lists it, and nothing alerts. The file stays in S3 for 90 days |
-| A new account or Region | Its prefix joins at the next list of the prefixes, within 24 hours |
+| S3 shows a file after a newer file of its prefix was copied | Up to 2 hours late, the next list of the prefix finds it. Loki takes its lines only if they are less than 1 hour behind the newest line of its stream. Else Loki refuses them for their time, the file gets `.bad`, and the run fails. So a file found late is not always a file in Loki. More than 2 hours late, no run lists it, and nothing alerts. The file stays in S3 for 90 days |
+| A new account or Region | Its prefix joins at the next list of the prefixes, within about 1 hour |
 | The Secret of the session still has its placeholder | The run says so and ends well |
+
+To send a `.bad` file again, delete its `.bad` copy. The next list of its
+prefix takes it only while it is less than 2 hours behind the newest copy of
+the prefix, and Loki takes its lines only while they are less than 1 hour
+behind the newest line of its stream.
 
 The script reads a file one event at a time, so a large file stays inside
 the 128 MiB of the job (`../README.md`, "Memory"). A file of 50,000 events
@@ -160,24 +177,25 @@ requests ([Amazon S3 pricing](https://aws.amazon.com/s3/pricing/), read on
 
 | Request | Count each month (30 days) |
 | --- | --- |
-| LIST, the prefixes | 30 × 4 a day: `AWSLogs/`, the organization, and each of 2 accounts |
+| LIST, the prefixes | 30 × 96 a day: 4 lists (`AWSLogs/`, the organization, and each of 2 accounts) each hour |
 | LIST, an active prefix | 30 × 96: each run |
 | LIST, a quiet prefix | 30 × about 10: each 4 hours, and about 4 more after a day with a new file |
 | LIST, when the whole trail had no new file for 90 minutes | Each quiet prefix, each run, until a file comes |
 | GET | One for each new file |
 
 ```text
-LIST each month = 30 × (4 + 96 × A + 10 × Q)
+LIST each month = 30 × (96 + 96 × A + 10 × Q)
 cost each month = LIST × 0.005 / 1000 + GET × 0.0004 / 1000
 ```
 
 `A` is the count of active prefixes (a file in most hours), and `Q` the
-count of quiet prefixes. 2 accounts and 17 Regions are 34 prefixes:
+count of quiet prefixes. 2 accounts and 17 Regions are 34 prefixes. The
+hourly list of the prefixes is 2,880 of them, about $0.01:
 
 | Active prefixes (assumed) | LIST each month | LIST cost |
 | --- | --- | --- |
-| 2 | 30 × (4 + 192 + 320) = 15,480 | $0.08 |
-| 4 | 30 × (4 + 384 + 300) = 20,640 | $0.10 |
+| 2 | 30 × (96 + 192 + 320) = 18,240 | $0.09 |
+| 4 | 30 × (96 + 384 + 300) = 23,400 | $0.12 |
 
 A list of each prefix in each run, as before, was (4 + 2 × 17) × 2,920 runs =
 about 111,000 LIST requests, $0.55 each month. The GET requests are in the

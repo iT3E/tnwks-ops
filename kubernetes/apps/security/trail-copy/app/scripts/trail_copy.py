@@ -4,14 +4,16 @@
 One run, each 15 minutes (../cronjob.yaml):
 
 1. Find the prefixes of the trail in its bucket: one for each account and Region.
-   The list of prefixes stays on the volume (state.json) for a day.
+   The list of prefixes stays on the volume (state.json) for an hour.
 2. List each prefix that is due (see `due`), from its newest local copy less an
    overlap for a file that AWS delivers late, and take the files with no local
    copy, oldest first.
 3. For each file: download it, send each of its events to Loki as one line of
    the stream of its account and Region, and only then give the copy its final
    name. So a file with its final name is a file that Loki has. A file with a
-   line that Loki refused gets the name .bad, and the run fails at its end.
+   line that Loki refused for its time gets the name .bad, and the run fails at
+   its end. A refusal of the request stops the run at that file, which stays
+   not done, so the backlog goes to Loki in order once the cause is fixed.
 4. Delete the local copies that are older than KEEP_DAYS.
 
 A run that stops half way loses nothing: the next run takes the same files
@@ -56,8 +58,15 @@ STUB_FIELDS = ("eventVersion", "eventTime", "eventSource", "eventName", "eventTy
                "eventID", "requestID", "awsRegion", "recipientAccountId", "sourceIPAddress", "userAgent",
                "errorCode", "errorMessage", "readOnly", "managementEvent", "userIdentity")
 MAX_STUB_FIELD = 2048
-# The words of a 400 of Loki for a line that it refuses for its time.
-REFUSED_FOR_AGE = ("too far behind", "too old", "out of order", "too new")
+# The words of a 400 of Loki for a line that it refuses for its time, at Loki 3.6
+# (chart 7.6.0, kubernetes/apps/monitoring/loki): the distributor's "has timestamp
+# too old" and "has timestamp too new" (pkg/validation/validate.go), and the
+# ingester's "entry too far behind" and "entry out of order" (pkg/chunkenc). Each
+# other 400 (labels, a limit, a request it refuses whole) is a fault of the request.
+REFUSED_FOR_AGE = ("timestamp too old", "timestamp too new", "entry too far behind", "entry out of order")
+# A Job starts some seconds after its minute: the list of prefixes is read again
+# in the run of the hour, not one run later.
+PREFIX_SLACK_SECONDS = 300
 # A prefix whose newest file is younger than this is active: each run lists it.
 ACTIVE = datetime.timedelta(hours=1)
 # When the newest file of the whole trail is this old, each run lists each prefix,
@@ -229,7 +238,7 @@ def trail_prefixes(s3: S3) -> list[str]:
 def cached_prefixes(s3: S3, state: dict, now: datetime.datetime, refresh_hours: int) -> list[str]:
     """The prefixes of the trail. The run lists them again when the list is empty or older than
     refresh_hours."""
-    if not state["prefixes"] or now.timestamp() - state["prefixes_at"] >= refresh_hours * 3600:
+    if not state["prefixes"] or now.timestamp() - state["prefixes_at"] >= refresh_hours * 3600 - PREFIX_SLACK_SECONDS:
         state["prefixes"], state["prefixes_at"] = trail_prefixes(s3), now.timestamp()
     return state["prefixes"]
 
@@ -415,7 +424,8 @@ class LokiError(RuntimeError):
 
 
 class Refused(Exception):
-    """Loki answered 400: it will never take some lines of the batch. It took the rest."""
+    """Loki answered 400: it will never take some lines of the batch, or the whole request.
+    `for_time` says that the answer is about the time of lines, and not about the request."""
 
     def __init__(self, text: str):
         super().__init__(text)
@@ -474,16 +484,24 @@ def copy_file(s3: S3, loki: Loki, data_dir: str, key: str) -> int:
     part = path + ".part"
     s3.download(key, part)
     fallback = file_time(key)
-    count, refusals = 0, []
+    count, taken, refusals = 0, 0, []
     try:
         with gzip.open(part, "rt", encoding="utf-8") as stream:
             for batch in batches(entry(record, fallback) for record in records(stream)):
                 try:
                     loki.push(labels, batch)
                 except Refused as refusal:
-                    # The next batches of the file still go: Loki took the rest of this one.
+                    if not refusal.for_time and not taken:
+                        # A fault of the request, not of a line: Loki took no batch of
+                        # this file. Set nothing aside. The run stops here, and the file
+                        # stays not done, so no newer line gets ahead of it in its stream.
+                        raise LokiError(f"Loki answered 400 for a request, not for the time of a line,"
+                                        f" so the run stops at {key}: {refusal}") from None
+                    # A line that Loki will never take. The next batches of the file still
+                    # go, and Loki took the rest of this one.
                     refusals.append(refusal)
                     continue
+                taken += 1
                 count += len(batch)
     except (OSError, EOFError, ValueError) as error:
         # A file that can't be read stays as .bad, so the next run goes on
@@ -492,7 +510,7 @@ def copy_file(s3: S3, loki: Loki, data_dir: str, key: str) -> int:
         raise BadFile(f"{key}: the file can't be read: {type(error).__name__}: {error}", events=count) from None
     if refusals:
         os.replace(part, path + ".bad")
-        why = "for their time" if all(refusal.for_time for refusal in refusals) else "with a 400"
+        why = "for their time" if all(refusal.for_time for refusal in refusals) else "with a 400, after it took others"
         raise BadFile(f"{key}: Loki refused lines of {len(refusals)} batches {why}: {refusals[0]}",
                       refused=True, events=count)
     os.replace(part, path)
@@ -521,7 +539,7 @@ def run(s3: S3, loki: Loki, data_dir: str, now: datetime.datetime, settings: dic
     # Saved before the copy, so a run that stops later keeps what it listed.
     save_state(data_dir, state)
     result = {"new": len(keys), "files": 0, "events": 0, "bad": [], "refused": 0, "left": 0,
-              "prefixes": len(state["prefixes"]), "listed": listed}
+              "prefixes": len(state["prefixes"]), "listed": listed, "stopped": ""}
     end = clock() + settings["run_seconds"]
     for number, key in enumerate(keys):
         if clock() > end:
@@ -534,6 +552,12 @@ def run(s3: S3, loki: Loki, data_dir: str, now: datetime.datetime, settings: dic
             result["events"] += error.events
             result["refused"] += int(error.refused)
             result["bad"].append(str(error))
+        except LokiError as error:
+            # Loki is away, or refuses the request: the file and the ones after it
+            # stay for the next run, in their order.
+            result["stopped"] = str(error)
+            result["left"] = len(keys) - number
+            break
     result["deleted"] = clean(data_dir, now, settings["keep_days"])
     return result
 
@@ -555,23 +579,26 @@ def main() -> None:
         "run_seconds": int(env("RUN_SECONDS", "600")),
         "keep_days": int(env("KEEP_DAYS", "7")),
         "quiet_minutes": int(env("QUIET_MINUTES", "240")),
-        "prefix_hours": int(env("PREFIX_HOURS", "24")),
+        "prefix_hours": int(env("PREFIX_HOURS", "1")),
     }
     s3 = S3(env("TRAIL_BUCKET"), env("AWS_REGION"), creds)
     loki = Loki(env("LOKI_URL").rstrip("/") + "/loki/api/v1/push")
     result = run(s3, loki, env("DATA_DIR", "/data"), datetime.datetime.now(UTC), settings)
     for line in result["bad"]:
         print(f"a file set aside as .bad: {line}", file=sys.stderr)
+    if result["stopped"]:
+        print(f"the run stopped: {result['stopped']}", file=sys.stderr)
     # The last line: the counts of the run, also the S3 requests that the cost rests on.
     print(
         f"{result['files']} of {result['new']} new files copied, {result['events']} events sent to Loki,"
         f" {len(result['bad'])} files set aside as .bad ({result['refused']} with lines that Loki refused),"
-        f" {result['left']} files left for the next run, {result['deleted']} old copies deleted,"
+        f" {result['left']} files left for the next run{' (stopped)' if result['stopped'] else ''},"
+        f" {result['deleted']} old copies deleted,"
         f" {result['listed']} of {result['prefixes']} prefixes listed,"
         f" S3 requests: {s3.requests['list']} list and {s3.requests['get']} get",
         flush=True,
     )
-    if result["bad"]:
+    if result["bad"] or result["stopped"]:
         sys.exit(1)
 
 
