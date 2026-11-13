@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.109.0 - 2026-11-13
+
+### Added
+
+* monitoring: the Vector aggregator of each cluster writes two security streams to the Loki of homelab-wsl-02: the audit log of the API server, from a source of its own on port 6010 (the ClusterIP Service `vector-aggregator-audit`), at the time of each event and with acknowledgements, and a second copy of the router log. The stream labels are `security_stream` and `k8s_cluster`. homelab-wsl writes through the TLS path (`SECURITY_LOKI_ENDPOINT`). `kubernetes/apps/monitoring/vector/README.md` has the contract. The registry of the security platform lists the stream as a source of `sce-rtr01`, so the rule for a late result watches the router log
+
 ## v2.108.0 - 2026-11-13
 
 ### Added
