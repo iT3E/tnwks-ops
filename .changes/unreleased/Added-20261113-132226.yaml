@@ -1,0 +1,3 @@
+kind: Added
+body: 'security: the result series of Trivy Operator (`observability/rules.py`): `homelab_security_check_result` for each control of `k8s-cis-1.23` that has an input on these clusters and for `image-vulnerabilities`, and the time of the last result from the compliance report through kube-state-metrics. An accepted finding of `trivy` gives 0 until its end. The new alert `SecurityFindingNew` fires when a result of high or critical severity is above each value of the day before. homelab-wsl-02 lists `trivy` in its sources, so the late alert watches it'
+time: 2026-11-13T13:22:26.639808218-08:00

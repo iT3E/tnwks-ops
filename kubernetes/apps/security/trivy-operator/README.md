@@ -49,8 +49,8 @@ operator could start a privileged pod on each node. So the collector is off:
   (the files of the control plane), 4.1.x (the files of the kubelet) and
   4.2.x (the settings of the kubelet). Talos keeps these files on a read-only
   root, and its machine config sets the kubelet. The registry names ten of
-  them. The rule of the result series (`observability/rules.py`) leaves them
-  out, so they read as "no evidence" and never as a pass.
+  them. The rule of the result series leaves them out, so they read as "no
+  evidence" and never as a pass (below).
 - **A stricter step, later:** a CI check of the kubelet settings in the
   machine config of each cluster (`talos/`), or the node collector in a
   namespace of its own when the chart can put it there.
@@ -58,15 +58,42 @@ operator could start a privileged pod on each node. So the collector is off:
 The infra assessment needs no node collector. It reads the pods of the
 control plane, and `operator.infraAssessmentScannerEnabled` stays on.
 
+## The result series
+
+The rules are in `observability/rules.py` (group `homelab.security`), and
+each site runs them for its own series. They give the two series of the
+contract of the registry (`security/README.md`, "The series"), with
+`source="trivy"` and the cluster as `system`:
+
+| Series | From | Value |
+| --- | --- | --- |
+| `homelab_security_check_result`, `check="k8s-cis-1.23/<control ID>"` | `trivy_compliance_info` of the report `k8s-cis-1.23` | The failed resources of a control that fails, and 0 for a control that passes |
+| `homelab_security_check_result`, `check="image-vulnerabilities"` | `trivy_image_vulnerabilities` | The critical vulnerabilities with a fix, over the distinct images of the cluster. 0 when the scan reports have none, and no series when there is no scan report |
+| `homelab_security_last_result_timestamp_seconds` | `homelab_trivy_compliance_report_update_timestamp_seconds`, which kube-state-metrics reads from the status of the report | The time at which the operator wrote the report: at its start, then every 6 hours |
+
+A result also has the label `severity`, in lower case. Trivy counts a control
+with no input as a pass, so the rule leaves out the controls that have no
+input on these clusters: 1.1.x, 4.1.x and 4.2.x (the node collector), and 2.x
+(Talos runs etcd as a service of the OS, not as a pod).
+
+The alert `SecurityFindingNew` fires when a result of high or critical
+severity is above each value of the day before (`security/README.md`, "When
+an alert fires").
+
 ## Exceptions
 
 An exception names a check, never a result. A check that does not apply to
 Talos, and each finding that the owner accepts, is a line of the encrypted
 list of accepted findings (`security/README.md`, "Accepted findings"). The
-rule of the result series reads that list: an accepted check of `trivy` has
-the value 0 until its end date. There is no second list here. The
-`ignoreFile` of the chart applies only to the image scans, so it is not the
+rule of the result series reads the series that the reader of that list
+serves, `homelab_security_accepted_until_timestamp_seconds`: a check of
+`trivy` that the list accepts for the system has the value 0 until its end
+date. There is no second list here. The `ignoreFile` of the chart applies
+only to the image scans, and not to the compliance report, so it is not the
 place for an exception.
+
+The reader runs on homelab-wsl-02, where the Secret of the list is. Until
+the reader runs, no check is accepted, and an exception shows as a fail.
 
 ## What it can reach
 
@@ -162,6 +189,8 @@ After a merge, on the cluster, with reads only:
    reports, and the log of a scan job has no error of a download.
 4. `kubectl get clustercompliancereport k8s-cis-1.23` has a status.
 5. Prometheus has `trivy_compliance_info` and `trivy_image_vulnerabilities`
-   for this cluster.
+   for this cluster, and `homelab_security_check_result{source="trivy"}` and
+   `homelab_security_last_result_timestamp_seconds{source="trivy"}` for its
+   system.
 6. The memory of the operator stays under its limit for a full cycle:
    `max_over_time(container_memory_working_set_bytes{namespace="security",container="trivy-operator"}[1d])`.

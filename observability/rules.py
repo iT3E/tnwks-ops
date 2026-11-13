@@ -439,6 +439,83 @@ AUDIT_SINK = "loki_security_audit"
 AUDIT_SINK_WINDOW = "15m"
 
 
+# The source `trivy` of the security registry (security/README.md, "The
+# series"): Trivy Operator on each cluster (kubernetes/apps/security/trivy-operator).
+# The rules below run on each site, for the series of that site only, and the
+# federation brings the two series of homelab-wsl to homelab-wsl-02.
+TRIVY_COMPLIANCE_SPEC = "k8s-cis-1.23"
+TRIVY_COMPLIANCE_TITLE = "CIS Kubernetes Benchmarks v1.23"
+# The controls that have no input on these clusters. The node collector is off
+# (1.1.x, 4.1.x, 4.2.x read the files and the settings of a node), and Talos
+# runs etcd as a service of the OS and not as a pod (2.x). Trivy counts a
+# control with no input as a pass, so these stay out: "no evidence", never a
+# pass. The README of trivy-operator says why the node collector is off.
+TRIVY_CONTROLS_WITH_NO_INPUT = r"1\.1\..+|2\..+|4\.[12]\..+"
+TRIVY_SEVERITIES = ("critical", "high", "medium", "low", "unknown")
+# A new finding of high severity (design table "The cycle of each check"): a
+# result of high or critical severity above each value of the day before. The
+# alert holds for one hour, then the day before has the new value too.
+SECURITY_FINDING_SEVERITY = "high|critical"
+SECURITY_FINDING_HOLD = "1h"
+
+
+def security_records():
+    """The two series of the contract for the source `trivy`, from the metrics of
+    Trivy Operator and of kube-state-metrics on this site.
+
+    A control of the compliance report: trivy_compliance_info has the number of
+    failed resources for a control that fails, and 1 for a control that passes.
+    The result is that number, or 0. The image scans: the sum, over the distinct
+    images of this site, of the critical vulnerabilities that have a fix (the
+    scan reports only those). A site with scan reports and none of them gives 0.
+
+    An accepted finding of `trivy` (the reader of the encrypted list) gives 0
+    until its end. That is the list of exceptions of the scanner: no second list.
+    The severity of the control, in lower case, is a label of the source."""
+    accepted = 'homelab_security_accepted_until_timestamp_seconds{source="trivy"} > time()'
+
+    def selector(metric, **labels):
+        """A selector of this site's own series: a federated copy has source_site."""
+        matchers = ['source_site=""'] + [f'{key}{value}' for key, value in labels.items()]
+        return f'{metric}{{{",".join(matchers)}}}'
+
+    def lower_severity(expr):
+        for value in TRIVY_SEVERITIES:
+            expr = f'label_replace({expr}, "severity", "{value}", "severity", "{value.upper()}")'
+        return expr
+
+    def as_system(expr):
+        return f'label_replace({expr}, "system", "$1", "k8s_cluster", "(.+)")'
+
+    def except_accepted(expr):
+        return f'({expr} unless on (check, system) ({accepted})) or 0 * {expr}'
+
+    # PromQL reads a backslash in a string as an escape, so the regex has two.
+    no_input = TRIVY_CONTROLS_WITH_NO_INPUT.replace("\\", "\\\\")
+
+    def info(status):
+        return selector("trivy_compliance_info", title=f'="{TRIVY_COMPLIANCE_TITLE}"',
+                        compliance_id=f'!~"{no_input}"', status=f'="{status}"')
+
+    by_control = f'max by (k8s_cluster, compliance_id, severity) ({info("Fail")} or 0 * {info("Pass")})'
+    controls = ("max by (k8s_cluster, system, check, severity) ("
+                + lower_severity(as_system(
+                    f'label_replace({by_control}, "check", "{TRIVY_COMPLIANCE_SPEC}/$1", "compliance_id", "(.+)")'))
+                + ")")
+    critical = selector("trivy_image_vulnerabilities", severity='="Critical"')
+    images = ("sum by (k8s_cluster) (max by (k8s_cluster, image_registry, image_repository, image_tag, image_digest)"
+              f" ({critical})) or on (k8s_cluster) 0 * count by (k8s_cluster) ({selector('trivy_image_vulnerabilities')})")
+    images = as_system(
+        f'label_replace(label_replace({images}, "check", "image-vulnerabilities", "", ""), "severity", "critical", "", "")')
+    report = selector("homelab_trivy_compliance_report_update_timestamp_seconds", name=f'="{TRIVY_COMPLIANCE_SPEC}"')
+    return [
+        {"record": "homelab_security_check_result", "expr": except_accepted(f"({controls} or {images})"),
+         "labels": {"source": "trivy"}},
+        {"record": "homelab_security_last_result_timestamp_seconds",
+         "expr": f"max by (k8s_cluster, system) ({as_system(report)})", "labels": {"source": "trivy"}},
+    ]
+
+
 def security_alerts():
     """The certificate alert reads a series of homelab-wsl-02 only, where the
     refresher runs. The audit alert reads a series of the Vector aggregator of
@@ -452,7 +529,18 @@ def security_alerts():
     and had none one window before. Both terms keep the labels of the pod, so
     the counter of a new pod is a new series; the sum then takes them away."""
     errors = f'vector_component_errors_total{{component_id="{AUDIT_SINK}"}}'
+    result = f'homelab_security_check_result{{source_site="",severity=~"{SECURITY_FINDING_SEVERITY}"}}'
     return [
+        {"alert": "SecurityFindingNew",
+         "expr": (f"max by (k8s_cluster, source, system) ({result}"
+                  f" > max_over_time({result}[1d] offset {SECURITY_FINDING_HOLD}))"),
+         "for": "10m", "labels": {"severity": "warning"},
+         "annotations": {"summary": "A new finding of high severity on {{ $labels.system }}, from {{ $labels.source }}",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": ("A check of high or critical severity has more failed resources than at each time of the day before."
+                                         " The board shows the failing safeguards of the system, and the reports of the source have the detail."
+                                         " Fix the cause, or accept the finding in the encrypted list with a reason and an end date"
+                                         f" (security/README.md, Accepted findings). The alert ends after {SECURITY_FINDING_HOLD[:-1]} hour.")}},
         {"alert": "SecurityCertificateExpiring",
          "expr": ('min by (k8s_cluster, namespace, lease) (kube_lease_renew_time'
                   f'{{namespace="security",lease=~"{SECURITY_CERTIFICATE_LEASES}"}}) - time()'
@@ -527,7 +615,8 @@ def rule_resource():
             "metadata": {"name": "homelab-observability", "namespace": "monitoring"},
             "spec": {"groups": [{"name": "homelab.evidence", "interval": "1m", "rules": rules},
                                 {"name": "homelab.capacity", "interval": "1m", "rules": capacity_alerts()},
-                                {"name": "homelab.security", "interval": "1m", "rules": security_alerts()}]}}
+                                {"name": "homelab.security", "interval": "1m",
+                                 "rules": security_records() + security_alerts()}]}}
 
 
 def fixtures():
@@ -860,6 +949,7 @@ def fixtures():
         *capacity_fixtures(),
         *security_fixtures(),
         *audit_sink_fixtures(),
+        *trivy_fixtures(),
     ]}
 
 
@@ -947,6 +1037,140 @@ def audit_sink_fixtures():
         {"name": "a refused request of another sink does not alert", "interval": "1m",
          "input_series": [errors("_x20 1+1x40", component="loki_kubernetes")],
          "alert_rule_test": [at(20, []), at(30, [])]},
+    ]
+
+
+def trivy_fixtures():
+    site = "homelab-wsl"
+    rule = next(rule for rule in security_alerts() if rule["alert"] == "SecurityFindingNew")
+
+    def control(control_id, status, value, severity="HIGH", title=TRIVY_COMPLIANCE_TITLE, extra=""):
+        return {"series": (f'trivy_compliance_info{{k8s_cluster="{site}",namespace="security",title="{title}",'
+                           f'description="CIS Kubernetes Benchmarks",compliance_id="{control_id}",compliance_name="A control",'
+                           f'status="{status}",severity="{severity}"{extra}}}'),
+                "values": value}
+
+    def image(namespace, repository, severity, value, digest="sha256:1"):
+        return {"series": (f'trivy_image_vulnerabilities{{k8s_cluster="{site}",namespace="{namespace}",name="replicaset-{repository}",'
+                           f'resource_kind="ReplicaSet",resource_name="{repository}",container_name="app",image_registry="ghcr.io",'
+                           f'image_repository="{repository}",image_tag="1.0",image_digest="{digest}",severity="{severity}"}}'),
+                "values": value}
+
+    def accepted(check, until):
+        return {"series": (f'homelab_security_accepted_until_timestamp_seconds{{k8s_cluster="homelab-wsl-02",'
+                           f'source_site="homelab-wsl-02",source="trivy",check="{check}",system="{site}"}}'),
+                "values": f"{until}+0x20"}
+
+    def result(check, severity, value):
+        return {"labels": (f'homelab_security_check_result{{k8s_cluster="{site}",system="{site}",source="trivy",'
+                           f'check="{check}",severity="{severity}"}}'),
+                "value": value}
+
+    labels = {"k8s_cluster": site, "source": "trivy", "system": site}
+    annotations = {}
+    for key, text in rule["annotations"].items():
+        for label, value in labels.items():
+            text = text.replace("{{ $labels." + label + " }}", value)
+        annotations[key] = text
+    fires = [{"exp_labels": {"severity": "warning", **labels}, "exp_annotations": annotations}]
+
+    def at(minute, exp_alerts):
+        return {"alertname": rule["alert"], "eval_time": f"{minute}m", "exp_alerts": exp_alerts}
+
+    # One day and one hour of a steady value, then a change at minute 1500.
+    before, after = 1500, 120
+    return [
+        {"name": "a control of the CIS report gives its failed resources, or 0; a control with no input gives nothing",
+         "interval": "1m",
+         "input_series": [
+             control("1.2.1", "Fail", "3+0x10", severity="MEDIUM"),
+             control("5.1.1", "Pass", "1+0x10"),
+             control("1.4.2", "Pass", "1+0x10", severity="CRITICAL"),
+             # Read nodes or etcd: no input on these clusters.
+             control("1.1.1", "Pass", "1+0x10"),
+             control("2.1", "Pass", "1+0x10"),
+             control("4.1.1", "Fail", "1+0x10"),
+             control("4.2.10", "Pass", "1+0x10"),
+             # Another report, and a copy of the other site.
+             control("1.2.2", "Fail", "4+0x10", title="NSA"),
+             control("1.2.3", "Fail", "5+0x10", extra=',source_site="homelab-wsl-02"'),
+         ], "promql_expr_test": [
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "5m", "exp_samples": [
+                 result("k8s-cis-1.23/1.2.1", "medium", 3),
+                 result("k8s-cis-1.23/1.4.2", "critical", 0),
+                 result("k8s-cis-1.23/5.1.1", "high", 0)]},
+         ]},
+        {"name": "the image scans give the critical vulnerabilities with a fix over the distinct images",
+         "interval": "1m",
+         "input_series": [
+             # One image in two workloads counts one time.
+             image("a", "one", "Critical", "2+0x10"),
+             image("b", "one", "Critical", "2+0x10"),
+             image("a", "one", "High", "7+0x10"),
+             image("a", "two", "Critical", "1+0x10"),
+             image("a", "three", "Critical", "0+0x10"),
+         ], "promql_expr_test": [
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "5m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 3)]},
+         ]},
+        {"name": "scan reports with no critical vulnerability give 0, and no scan report gives nothing",
+         "interval": "1m",
+         "input_series": [image("a", "one", "Critical", "0+0x5"), image("a", "one", "High", "4+0x5")],
+         "promql_expr_test": [
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "5m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 0)]},
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "15m", "exp_samples": []},
+         ]},
+        # time() is 300 at minute 5.
+        {"name": "an accepted check gives 0 until its end, then its result again",
+         "interval": "1m",
+         "input_series": [
+             control("1.2.1", "Fail", "3+0x10"),
+             control("1.2.8", "Fail", "1+0x10"),
+             image("a", "one", "Critical", "2+0x10"),
+             accepted("k8s-cis-1.23/1.2.1", 100000),
+             accepted("image-vulnerabilities", 100000),
+             accepted("k8s-cis-1.23/1.2.8", 200),
+         ], "promql_expr_test": [
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "5m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 0),
+                 result("k8s-cis-1.23/1.2.1", "high", 0),
+                 result("k8s-cis-1.23/1.2.8", "high", 1)]},
+         ]},
+        {"name": "the time of the last result is the time of the compliance report of this site",
+         "interval": "1m",
+         "input_series": [
+             {"series": (f'homelab_trivy_compliance_report_update_timestamp_seconds{{k8s_cluster="{site}",'
+                         'customresource_group="aquasecurity.github.io",customresource_kind="ClusterComplianceReport",'
+                         'customresource_version="v1alpha1",name="k8s-cis-1.23"}'), "values": "1700000000+0x10"},
+             {"series": ('homelab_trivy_compliance_report_update_timestamp_seconds{k8s_cluster="homelab-wsl-02",'
+                         'source_site="homelab-wsl-02",name="k8s-cis-1.23"}'), "values": "1800000000+0x10"},
+         ], "promql_expr_test": [
+             {"expr": 'homelab_security_last_result_timestamp_seconds{source="trivy"}', "eval_time": "5m", "exp_samples": [
+                 {"labels": (f'homelab_security_last_result_timestamp_seconds{{k8s_cluster="{site}",system="{site}",'
+                             'source="trivy"}'), "value": 1700000000}]},
+         ]},
+        {"name": "a result of high severity above each value of the day before alerts for one hour",
+         "interval": "1m",
+         "input_series": [control("5.1.2", "Fail", f"1+0x{before} 2+0x{after}")],
+         "alert_rule_test": [at(before - 10, []), at(before + 5, []), at(before + 15, fires),
+                             at(before + 55, fires), at(before + 70, [])]},
+        {"name": "a control of high severity that changes from pass to fail alerts", "interval": "1m",
+         "input_series": [control("5.1.2", "Pass", f"1+0x{before}"),
+                          control("5.1.2", "Fail", f"_x{before} 1+0x{after}")],
+         "alert_rule_test": [at(before - 10, []), at(before + 15, fires)]},
+        {"name": "a result of low severity, a steady result, a result that falls and a copy of the other site do not alert",
+         "interval": "1m",
+         "input_series": [
+             control("1.2.19", "Fail", f"1+0x{before} 2+0x{after}", severity="LOW"),
+             control("5.1.1", "Fail", f"2+0x{before + after}"),
+             control("5.1.3", "Fail", f"3+0x{before} 1+0x{after}"),
+             control("5.1.5", "Fail", f"1+0x{before} 2+0x{after}", extra=',source_site="homelab-wsl-02"'),
+         ],
+         "alert_rule_test": [at(before + 15, []), at(before + 60, [])]},
+        {"name": "a result that comes back after a gap of less than a day does not alert", "interval": "1m",
+         "input_series": [control("5.1.2", "Fail", f"2+0x600 _x600 2+0x{after}")],
+         "alert_rule_test": [at(1215, []), at(1260, [])]},
     ]
 
 

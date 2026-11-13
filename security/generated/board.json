@@ -400,7 +400,9 @@
       "type": "cluster",
       "site": "homelab-wsl-02",
       "domain": "infrastructure",
-      "sources": []
+      "sources": [
+        "trivy"
+      ]
     },
     {
       "name": "DESKTOP-HKE05KI",
@@ -543,6 +545,11 @@
     }
   ],
   "expected": [
+    {
+      "source": "trivy",
+      "system": "homelab-wsl-02",
+      "late_after_seconds": 129600
+    },
     {
       "source": "stream",
       "system": "sce-rtr01",

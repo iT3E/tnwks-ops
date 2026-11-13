@@ -359,6 +359,7 @@ security stream `findings` in Loki has the text of each finding.
 | --- | --- | --- |
 | `SecurityResultLate` | The newest result of a source for a system is older than `late_after` of the source, or the source serves no time. The safeguards that rest on it show "No evidence" | Open the tab Sources of the board. Then look at the last run of the source: its Job or its pod in the namespace `security`, or the agent on the host. The alert ends when the source reports again |
 | `SecurityAcceptedFindingExpired` | An accepted finding of the system has passed its end date | The owner reads the line in the list. The owner sets a new end date with a reason, or removes the line and the cause of the finding |
+| `SecurityFindingNew` | A check of high or critical severity on the system has more failed resources than at each time of the day before. It is in `observability/rules.py`, and each site fires it for its own results. It ends after one hour | Open the tab Systems of the board, then the reports of the source (for Trivy Operator, `kubectl get clustercompliancereport k8s-cis-1.23 -o yaml` and the vulnerability reports in the namespace of the workload). Fix the cause, or accept the finding in the encrypted list |
 
 ## Accepted findings
 
