@@ -1,0 +1,52 @@
+{
+  "series": "homelab_security_last_result_timestamp_seconds",
+  "streams": [
+    {
+      "source": "stream",
+      "check": "cloudtrail",
+      "system": "aws-management",
+      "late_after_seconds": 7200,
+      "selector": {
+        "security_stream": "cloudtrail"
+      }
+    },
+    {
+      "source": "stream",
+      "check": "cloudtrail",
+      "system": "aws-prod",
+      "late_after_seconds": 7200,
+      "selector": {
+        "security_stream": "cloudtrail"
+      }
+    },
+    {
+      "source": "stream",
+      "check": "k8s-audit",
+      "system": "homelab-wsl",
+      "late_after_seconds": 900,
+      "selector": {
+        "security_stream": "k8s-audit",
+        "k8s_cluster": "homelab-wsl"
+      }
+    },
+    {
+      "source": "stream",
+      "check": "k8s-audit",
+      "system": "homelab-wsl-02",
+      "late_after_seconds": 900,
+      "selector": {
+        "security_stream": "k8s-audit",
+        "k8s_cluster": "homelab-wsl-02"
+      }
+    },
+    {
+      "source": "stream",
+      "check": "routeros",
+      "system": "sce-rtr01",
+      "late_after_seconds": 900,
+      "selector": {
+        "security_stream": "routeros"
+      }
+    }
+  ]
+}
