@@ -16,9 +16,11 @@ on each cluster. It is the source `trivy` of the security registry
   the image has a new scan. The registry reads the sum as
   `image-vulnerabilities`.
 
-The release is Trivy Operator 0.36.1 (chart 0.38.1) with Trivy 0.76.1. Both
+The release is Trivy Operator 0.36.1 (chart 0.38.1) with Trivy 0.76.2. The
 images are pinned by digest in `app/helmrelease.yaml`. The digest of a tag
 comes from the registry: `crane digest mirror.gcr.io/aquasec/trivy-operator:0.36.1`.
+The image values keep the form `registry`, `repository` and `tag`, as other
+HelmReleases of this repository do, so Renovate finds them.
 
 ## The parts
 
@@ -28,6 +30,7 @@ comes from the registry: `crane digest mirror.gcr.io/aquasec/trivy-operator:0.36
 | `app/helmrelease.yaml` | The chart, from the HelmRepository `aquasecurity` (`kubernetes/flux/meta/helm/aquasecurity.yaml`) |
 | `app/pvc.yaml` | `trivy-cache`, 4 GiB: the vulnerability database for the scan jobs |
 | `app/networkpolicy.yaml` | What the operator and a scan job can reach |
+| `app/rbac.yaml` | The Role that lets the operator create and delete Jobs, and read pod logs, in `security` only ("Its roles") |
 
 The operator and its scan jobs run in the namespace `security`, on
 `SECURITY_NODE` (`../README.md`, "Placement").
@@ -58,6 +61,36 @@ operator could start a privileged pod on each node. So the collector is off:
 The infra assessment needs no node collector. It reads the pods of the
 control plane, and `operator.infraAssessmentScannerEnabled` stays on.
 
+## Its roles
+
+The chart's ClusterRole gives create and delete on Jobs, and a read of pod
+logs, in each namespace, and no value of the chart narrows it. The operator
+needs them only in `security`: with
+`vulnerabilityReports.scanJobsInSameNamespace` off (the chart's default),
+it creates each scan job in its own namespace
+(`pkg/vulnerabilityreport/builder.go`), deletes only the jobs that its
+controller selects in that namespace (`pkg/vulnerabilityreport/controller/scanjob.go`),
+and reads the log of the pod of such a job (`pkg/kube/logs.go`). So:
+
+- **A post-render patch** in `app/helmrelease.yaml` removes create and
+  delete from the Jobs rule of the ClusterRole, and removes its `pods/log`
+  rule. Its test ops check the order of the chart's rules: if a chart
+  release moves a rule, the upgrade fails, and no rule gets wider.
+- **`app/rbac.yaml`** gives create and delete on Jobs, and get on
+  `pods/log`, in `security` only.
+- **What stays in the ClusterRole:** get, list and watch on Jobs, because
+  the cache of the operator watches Jobs in each namespace, and the reads of
+  the workloads and roles that the checks need. The operator reads no
+  Secret outside `security`.
+
+A fault in the operator can not create a Job in another namespace, such as
+one at the `privileged` level, or read the log of a pod outside `security`.
+
+A scan job runs as the user `nobody` (65534), with each capability dropped
+and a read-only root. The exposed secret scan is off: no check of the
+registry reads its reports, and each report keeps the place and a masked
+match of a secret in the namespace of the workload.
+
 ## The result series
 
 The rules are in `observability/rules.py` (group `homelab.security`), and
@@ -70,7 +103,7 @@ contract of the registry (`security/README.md`, "The series"), with
 | Series | From | Value |
 | --- | --- | --- |
 | `homelab_security_check_result`, `check="k8s-cis-1.23/<control ID>"` | `trivy_compliance_info` of the report `k8s-cis-1.23` | The failed resources of a control that fails, and 0 for a control that passes |
-| `homelab_security_check_result`, `check="image-vulnerabilities"` | `trivy_image_vulnerabilities` | The critical vulnerabilities with a fix, over the distinct images of the cluster. 0 when the scan reports have none, and no series when there is no scan report |
+| `homelab_security_check_result`, `check="image-vulnerabilities"` | `trivy_image_vulnerabilities` | The critical vulnerabilities with a fix, over the distinct images of the cluster. 0 when the scan reports have none. No series when there is no scan report, or when an image that runs on the cluster (`kube_pod_container_info` and `kube_pod_init_container_info`, by the digest of `image_id`) has had no report for an hour: a failed scan is "no evidence", never a pass. The pods of the scan jobs are not counted |
 | `homelab_security_last_result_timestamp_seconds` | `homelab_trivy_compliance_report_update_timestamp_seconds`, which kube-state-metrics reads from the status of the report | The time at which the operator wrote the report: at its start, then every 6 hours |
 
 A result also has the label `severity`, in lower case. Trivy counts a control
@@ -79,8 +112,13 @@ input on these clusters: 1.1.x, 4.1.x and 4.2.x (the node collector), and 2.x
 (Talos runs etcd as a service of the OS, not as a pod).
 
 The alert `SecurityFindingNew` fires when a result of high or critical
-severity is above each value of the day before (`security/README.md`, "When
+severity is above 0 and is above each value of the day before, or was 0 one
+hour before, or has no value in the day before (`security/README.md`, "When
 an alert fires").
+
+A private image, or an image of a registry that the policy does not name,
+has no report, so the check `image-vulnerabilities` of its cluster stays "no
+evidence" until it has one.
 
 ## Exceptions
 
@@ -118,10 +156,20 @@ clusters, and the hosts where a registry sends the layers:
 | GitHub | `ghcr.io`, `pkg-containers.githubusercontent.com` |
 | Docker Hub | `docker.io`, `index.docker.io`, `registry-1.docker.io`, `auth.docker.io`, `production.cloudfront.docker.com` |
 | Quay | `quay.io`, `*.quay.io` |
-| Kubernetes | `registry.k8s.io`, `cdn.registry.k8s.io` |
+| Kubernetes | `registry.k8s.io`, `*-docker.pkg.dev` (the manifests, in a region that depends on the client), `cdn.registry.k8s.io` (the layers) |
 | Codeberg | `codeberg.org` |
 | AWS public | `public.ecr.aws`, `*.cloudfront.net` |
 | Microsoft | `mcr.microsoft.com`, `*.data.mcr.microsoft.com` |
+
+Each of these redirects was read before the merge: a `GET` of a manifest
+and of a layer, and the `Location` of each answer. `mirror.gcr.io` and
+Codeberg serve the layers from their own host.
+
+Two patterns are wide. `*.cloudfront.net` permits each CloudFront
+distribution of any owner, and `*-docker.pkg.dev` each Artifact Registry
+region. A scan job holds no token and no pull secret, and its only input is
+the image reference, so the risk is a scan job that sends data to such a
+host after a fault in Trivy. The registries give no narrower name.
 
 Trivy sends a version check and usage data to its vendor unless
 `scan.skip-version-check` and `scan.disable-telemetry` are both on. The
@@ -138,10 +186,24 @@ scan.
 | Part | Request | Limit | Source |
 | --- | --- | --- | --- |
 | The operator | 128 MiB | 256 MiB | `../README.md`, "Memory". The operator and one scan job measured 218 MiB together on a test cluster |
-| Each container of a scan job | 64 MiB | 512 MiB | `../README.md`. One scan job measured 56 MiB at peak. One job at a time (`operator.scanJobsConcurrentLimit: 1`) |
+| Each container of a scan job | 64 MiB | 512 MiB | `../README.md`. One scan container measured 56 MiB at peak. One job at a time (`operator.scanJobsConcurrentLimit: 1`) |
 
-A scan job has one container for each container of the workload, each with
-the limit. Its first container downloads the database (about 140 MB
+A scan job has one container for each container of the workload, its init
+containers too, each with the limit, and they run at the same time. On
+`homelab-wsl` the largest pods have 6 containers (Thanos query,
+`count by (namespace, pod)` of `kube_pod_container_info` plus
+`kube_pod_init_container_info`, on the day of this change). So the worst sum
+of Trivy on that cluster, while such a pod has its scan:
+
+| By | The operator | The scan job | Sum |
+| --- | --- | --- | --- |
+| Limits | 256 MiB | 6 x 512 MiB | 3328 MiB |
+| Measured use | 162 MiB | 6 x 56 MiB | 498 MiB |
+
+The measured line is from the test cluster: the operator and one scan job
+took 218 MiB, of which 56 MiB was the scan container. Each container of a
+scan job also has a CPU limit of 500m, so such a job can take 3 cores of
+`SECURITY_NODE` for the length of the scan. Its first container downloads the database (about 140 MB
 compressed) to `trivy-cache`, and a later job reads it from there. Without
 the cache, each job would download it again.
 
@@ -183,8 +245,14 @@ kustomize build kubernetes/apps/security/trivy-operator/app
 flate test all -p kubernetes/clusters/wsl-02
 flate test all -p kubernetes/clusters/wsl
 helm template trivy-operator aquasecurity/trivy-operator --version 0.38.1 \
-  --namespace security -f <(yq '.spec.values' kubernetes/apps/security/trivy-operator/app/helmrelease.yaml)
+  --namespace security -f <(yq '.spec.values' kubernetes/apps/security/trivy-operator/app/helmrelease.yaml) \
+  > all.yaml
 ```
+
+To see the roles after the post-render patch, put `all.yaml` in a
+`kustomization.yaml` with the `patches` of `spec.postRenderers` and run
+`kustomize build`. The ClusterRole `trivy-operator` then has no `pods/log`
+rule, and its Jobs rule has get, list and watch only.
 
 After a merge, on the cluster, with reads only:
 
@@ -192,12 +260,17 @@ After a merge, on the cluster, with reads only:
    `trivy-operator` runs on `SECURITY_NODE`.
 2. No node collector job exists:
    `kubectl -n security get jobs -l node-info.collector` is empty.
-3. A scan job ends: `kubectl -n security get vulnerabilityreports` lists
-   reports, and the log of a scan job has no error of a download.
-4. `kubectl get clustercompliancereport k8s-cis-1.23` has a status.
-5. Prometheus has `trivy_compliance_info` and `trivy_image_vulnerabilities`
+3. A scan job ends: `kubectl get vulnerabilityreports -A` lists reports,
+   and the log of a scan job has no error of a download or of a write to
+   the cache (the job runs as `nobody`).
+4. The roles are narrow:
+   `kubectl auth can-i create jobs -n default --as=system:serviceaccount:security:trivy-operator`
+   and `kubectl auth can-i get pods/log -n default --as=...` say `no`, and the
+   same two in `-n security` say `yes`.
+5. `kubectl get clustercompliancereport k8s-cis-1.23` has a status.
+6. Prometheus has `trivy_compliance_info` and `trivy_image_vulnerabilities`
    for this cluster, and `homelab_security_check_result{source="trivy"}` and
    `homelab_security_last_result_timestamp_seconds{source="trivy"}` for its
    system.
-6. The memory of the operator stays under its limit for a full cycle:
+7. The memory of the operator stays under its limit for a full cycle:
    `max_over_time(container_memory_working_set_bytes{namespace="security",container="trivy-operator"}[1d])`.

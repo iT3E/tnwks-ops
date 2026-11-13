@@ -341,6 +341,18 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
   Job. The Job name comes from the key, so a second call with the same key
   gets the same run. A Job stays 7 days. The receiver refuses to start when
   a template breaks a rule of the image.
+- **The retry rule of a caller.** The same key always gets the same answer,
+  a failure too, for the 7 days that its Job stays. So a retry is a new key:
+  the caller puts an attempt number at the end, for example
+  `renovate-review-<pr>-<sha7>-<n>` with `n` from 1.
+  - It tries again only after a `failed` (`502`) or `timed_out` (`504`)
+    answer, with `n + 1`, and at most 3 attempts in all. It never tries
+    again after a `2xx` answer.
+  - A call with no answer goes again with the same key, and gets the same
+    run.
+  - The receiver does not change for this. Each attempt is its own Job and
+    stays as a record. The agent must be safe to run twice for the same
+    work: the Renovate reviewer posts one comment for each head.
 - **The answer of a run stays with its Job.** The answer is the last line
   of the log of the run pod, and the pod GC of this cluster
   (`terminated-pod-gc-threshold: 1`, `talos/wsl/cluster-config.yaml`) deletes

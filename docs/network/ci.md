@@ -26,13 +26,14 @@ PR / merge to main
 | Runner scale set `tnwks-ops-runner-homelab-wsl` | `kubernetes/apps/tools/actions-runner-controller/ops-runner/` | Labels `tnwks-ops-runner` and `tnwks-ops-homelab-wsl`. `minRunners: 0`, `maxRunners: 1`. Same GitHub App as `sites-builder`, installed on both repos. ARC sends labels only when it registers a set, so a label change needs a new `runnerScaleSetName` |
 | Its twin on homelab-wsl-02 | `kubernetes/clusters/wsl-02/apps/ops-runner/` | The same HelmRelease, registered as `tnwks-ops-runner-wsl-02` with the label `tnwks-ops-runner` (`scaleSetLabels`), so `runs-on: tnwks-ops-runner` goes to whichever site's runner is up. Each also carries `tnwks-ops-<CLUSTER_NAME>` (`tnwks-ops-homelab-wsl`, `tnwks-ops-homelab-wsl-02`) for workflows that need one site: UniFi's, whose controller API is in-cluster on homelab-wsl. Its own Secret: the same CI age key and EdgeOS key, its own `wg03` peer |
 | wireproxy sidecar | same pod | Userspace WireGuard (no `NET_ADMIN`, TUN or kernel module). Exposes the router's REST API as `https://127.0.0.1:8443` inside the pod; the runner waits for its `/readyz`, which pings the router through the tunnel |
-| CI-only age key | `.sops.yaml` (first rules), `secret.sops.yaml` | Decrypts the MikroTik, EdgeOS, UniFi, healthchecks.io and Cloudflare secrets (`environments/prod/{mikrotik,unifi,healthchecks,cloudflare}`, `infrastructure/edgeos`) and nothing else in the repo. The runner gets it as `SOPS_AGE_KEY` |
+| CI-only age key | `.sops.yaml` (first rules), `secret.sops.yaml` | Decrypts the MikroTik, EdgeOS, UniFi, healthchecks.io, Cloudflare and GitHub secrets (`environments/prod/{mikrotik,unifi,healthchecks,cloudflare,github}`, `infrastructure/edgeos`) and nothing else in the repo. The runner gets it as `SOPS_AGE_KEY` |
 | Endpoint override | `variables.tf` (`routeros_url`) | CI sets `TF_VAR_routeros_url=https://127.0.0.1:8443`; unset locally, where the SOPS value (`wg01`) applies |
 | TFC token | repo secret `TF_API_TOKEN` | The one the AWS workflows already use. HCP Terraform's free plan has no custom teams, so no workspace-scoped token exists |
 | Workflows | `terraform.yaml` (called by `ci.yaml` to plan, `deploy.yaml` to apply), github-workflows' `actions/terraform` (plan and apply) and `actions/sticky-comment` (the plan comment), `.github/ci/domains.toml` | One matrix entry per changed root. Each root's runner, `lock` (the concurrency group its plans and applies share, so they never overlap) and endpoint overrides are its `[groups.terraform.<root>]` entry |
 | UniFi controller | `terraform.yaml` (root `unifi`), `environments/prod/unifi` | Same runner, same flow. No tunnel: the runner and the controller share the WSL cluster, so CI sets `TF_VAR_unifi_url` to the in-cluster Service. State in TFC workspace `tnwks-unifi-prod`. Gated on the repository variable `UNIFI_TERRAFORM_ENABLED=true`, set once the controller is bootstrapped ([`unifi.md`](unifi.md)) |
 | healthchecks.io | `terraform.yaml` (root `healthchecks`), `environments/prod/healthchecks` | Same runner, same flow. No tunnel or override: healthchecks.io is a public API. State in TFC workspace `tnwks-healthchecks-prod` |
 | Cloudflare | `terraform.yaml` (root `cloudflare`), `environments/prod/cloudflare` | Same as healthchecks.io: public API, shared action (`root` input). State in TFC workspace `tnwks-cloudflare-prod` |
+| GitHub | `terraform.yaml` (root `github`), `environments/prod/github` | Same as Cloudflare. State in TFC workspace `tnwks-github-prod`. Gated on the repository variable `TERRAFORM_GITHUB_ENABLED=true` ([`../operations/github.md`](../operations/github.md)) |
 | EdgeOS devices | `edgeos-{plan,apply}.yaml`, `.github/actions/edgeos-sync`, `infrastructure/edgeos` | Same runner. wireproxy also forwards `127.0.0.1:8022` to the EP-R6's SSH, the one forward `vpn-ci` has (`CI_ZONE_RULES`); CI logs in with its own SSH key against a pinned host key |
 
 ## Security model
@@ -51,17 +52,22 @@ tells it to inside the LAN. The controls:
    (no NetworkPolicy selects it), which is how it reaches the UniFi
    controller's Service.
 4. **Narrow secrets.** The CI age key decrypts only the secrets of the roots
-   the runner applies (MikroTik, EdgeOS, UniFi, healthchecks.io, Cloudflare).
+   the runner applies (MikroTik, EdgeOS, UniFi, healthchecks.io, Cloudflare,
+   GitHub).
    `permissions: {}` by default, `persist-credentials: false`.
 5. **Public logs show no plan body.** The composite action prints only the
    counts and addresses of changing resources, and Terraform's error blocks
-   on failure. The full plan never reaches the job log or the PR.
+   on failure. The full plan never reaches the job log or the PR. A root
+   with `mask_sops` (GitHub) masks its SOPS values before Terraform runs,
+   so those error blocks show `***` for them
+   ([`docs/operations/github.md`](../operations/github.md#the-mask)).
 
 ## Local runs
 
 Unchanged: `task mikrotik:plan` / `task mikrotik:apply` over `wg01`, and
 `task unifi:plan` / `task unifi:apply`, `task healthchecks:plan` /
-`task healthchecks:apply` and `task terraform:plan` / `task terraform:apply`
-(Cloudflare) from the desktop, for bootstrap,
+`task healthchecks:apply`, `task github:plan` / `task github:apply` and
+`task terraform:plan` / `task terraform:apply` (Cloudflare) from the
+desktop, for bootstrap,
 break-glass or when CI is down. Both use the same TFC state, and the
 workspace lock keeps them from overlapping with CI.
