@@ -1,0 +1,24 @@
+---
+# The copy of the AWS trail (README.md): a CronJob copies the new files of the
+# trail bucket to a volume and sends each event to this site's Loki, as the
+# security stream "cloudtrail". On homelab-wsl-02 only, where the security
+# streams rest.
+# yaml-language-server: $schema=https://kubernetes-schemas.devbu.io/kustomize.toolkit.fluxcd.io/kustomization_v1.json
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: security-trail-copy
+  namespace: flux-system
+spec:
+  dependsOn:
+    # The Secret with the session of the trail reader role.
+    - name: security-aws-credentials
+  path: ./kubernetes/apps/security/trail-copy/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false # no flux ks dependents
+  interval: 30m
+  retryInterval: 1m
+  timeout: 3m

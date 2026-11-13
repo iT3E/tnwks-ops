@@ -1,0 +1,3 @@
+kind: Added
+body: 'security: the copy of the AWS trail on homelab-wsl-02 (`kubernetes/apps/security/trail-copy`). A CronJob copies the new files of the trail bucket to a volume every 15 minutes, keeps them 7 days, and sends each event to the Loki of the site as the stream `security_stream="cloudtrail"`. The AWS systems of the registry have `stream` as a source, so the rule for a late result watches the trail'
+time: 2026-11-13T09:05:34.366516744-08:00

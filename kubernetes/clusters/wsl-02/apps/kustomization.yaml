@@ -124,6 +124,9 @@ resources:
   # The converter (security/converter/README.md): the time of the newest line
   # of each security stream in this site's Loki, as the time of the last result.
   - ../../../apps/security/converter/ks.yaml
+  # The copy of the AWS trail (apps/security/trail-copy/README.md): the new
+  # files of the trail bucket, to a volume and to this site's Loki.
+  - ../../../apps/security/trail-copy/ks.yaml
   # CI: the network-device Terraform runner (wg03 sidecar), so those
   # workflows run while homelab-wsl is down.
   - ../../../apps/tools/namespace.yaml

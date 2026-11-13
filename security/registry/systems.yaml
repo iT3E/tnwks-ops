@@ -16,10 +16,12 @@
   type: aws-account
   site: none
   domain: infrastructure
+  sources: [stream]
 - name: aws-prod
   type: aws-account
   site: none
   domain: infrastructure
+  sources: [stream]
 - name: cloudflare
   type: cloudflare-account
   site: none

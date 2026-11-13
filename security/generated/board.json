@@ -358,14 +358,18 @@
       "type": "aws-account",
       "site": "none",
       "domain": "infrastructure",
-      "sources": []
+      "sources": [
+        "stream"
+      ]
     },
     {
       "name": "aws-prod",
       "type": "aws-account",
       "site": "none",
       "domain": "infrastructure",
-      "sources": []
+      "sources": [
+        "stream"
+      ]
     },
     {
       "name": "cloudflare",
@@ -540,5 +544,18 @@
       }
     }
   ],
-  "expected": []
+  "expected": [
+    {
+      "source": "stream",
+      "system": "aws-management",
+      "late_after_seconds": 7200,
+      "check": "cloudtrail"
+    },
+    {
+      "source": "stream",
+      "system": "aws-prod",
+      "late_after_seconds": 7200,
+      "check": "cloudtrail"
+    }
+  ]
 }
