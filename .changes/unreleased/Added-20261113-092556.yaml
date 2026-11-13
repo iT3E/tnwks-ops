@@ -1,0 +1,3 @@
+kind: Added
+body: 'talos: the audit policy of the API server of homelab-wsl (`talos/wsl/patches/audit-policy.yaml`), with the rules of homelab-wsl-02 in the v1alpha1 form of that cluster (`cluster.apiServer.auditPolicy`). The file has the command that applies it to the running cluster and the way back; a merge applies nothing'
+time: 2026-11-13T09:25:56.446053935-08:00
