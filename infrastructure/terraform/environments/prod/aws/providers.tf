@@ -17,3 +17,22 @@ provider "aws" {
     role_arn = "arn:aws:iam::654654262098:role/tnwks-org-init-role"
   }
 }
+
+# The management account of the organization. The workspace's own credentials
+# belong to it, so this provider assumes no role. For the organization trail
+# and the audit role there (modules/aws/security).
+provider "aws" {
+  alias = "management"
+}
+
+# Cloud Control, for the one thing the aws provider has no data source for:
+# the list of trails in each account (modules/aws/security/cloudtrail.tf).
+provider "awscc" {
+  assume_role = {
+    role_arn = "arn:aws:iam::654654262098:role/tnwks-org-init-role"
+  }
+}
+
+provider "awscc" {
+  alias = "management"
+}
