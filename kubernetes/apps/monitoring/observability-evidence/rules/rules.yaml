@@ -396,21 +396,28 @@ spec:
         Kubernetes Benchmarks v1.23",compliance_id!~"1\\.1\\..+|2\\..+|4\\.[12]\\..+",status="Pass"}), "check",
         "k8s-cis-1.23/$1", "compliance_id", "(.+)"), "system", "$1", "k8s_cluster", "(.+)"), "severity", "critical",
         "severity", "CRITICAL"), "severity", "high", "severity", "HIGH"), "severity", "medium", "severity", "MEDIUM"),
-        "severity", "low", "severity", "LOW"), "severity", "unknown", "severity", "UNKNOWN")) or label_replace(label_replace(label_replace(sum
+        "severity", "low", "severity", "LOW"), "severity", "unknown", "severity", "UNKNOWN")) or label_replace(label_replace(label_replace((sum
         by (k8s_cluster) (max by (k8s_cluster, image_registry, image_repository, image_tag, image_digest) (trivy_image_vulnerabilities{source_site="",severity="Critical"}))
-        or on (k8s_cluster) 0 * count by (k8s_cluster) (trivy_image_vulnerabilities{source_site=""}), "check", "image-vulnerabilities",
-        "", ""), "severity", "critical", "", ""), "system", "$1", "k8s_cluster", "(.+)")) unless on (check, system)
-        (homelab_security_accepted_until_timestamp_seconds{source="trivy"} > time())) or 0 * (max by (k8s_cluster,
-        system, check, severity) (label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(max
+        or on (k8s_cluster) 0 * count by (k8s_cluster) (trivy_image_vulnerabilities{source_site=""})) unless on
+        (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)")) unless on (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
+        "digest", "$1", "image_digest", "(.+)"))), "check", "image-vulnerabilities", "", ""), "severity", "critical",
+        "", ""), "system", "$1", "k8s_cluster", "(.+)")) unless on (check, system) (homelab_security_accepted_until_timestamp_seconds{source="trivy"}
+        > time())) or 0 * (max by (k8s_cluster, system, check, severity) (label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(max
         by (k8s_cluster, compliance_id, severity) (trivy_compliance_info{source_site="",title="CIS Kubernetes Benchmarks
         v1.23",compliance_id!~"1\\.1\\..+|2\\..+|4\\.[12]\\..+",status="Fail"} or 0 * trivy_compliance_info{source_site="",title="CIS
         Kubernetes Benchmarks v1.23",compliance_id!~"1\\.1\\..+|2\\..+|4\\.[12]\\..+",status="Pass"}), "check",
         "k8s-cis-1.23/$1", "compliance_id", "(.+)"), "system", "$1", "k8s_cluster", "(.+)"), "severity", "critical",
         "severity", "CRITICAL"), "severity", "high", "severity", "HIGH"), "severity", "medium", "severity", "MEDIUM"),
-        "severity", "low", "severity", "LOW"), "severity", "unknown", "severity", "UNKNOWN")) or label_replace(label_replace(label_replace(sum
+        "severity", "low", "severity", "LOW"), "severity", "unknown", "severity", "UNKNOWN")) or label_replace(label_replace(label_replace((sum
         by (k8s_cluster) (max by (k8s_cluster, image_registry, image_repository, image_tag, image_digest) (trivy_image_vulnerabilities{source_site="",severity="Critical"}))
-        or on (k8s_cluster) 0 * count by (k8s_cluster) (trivy_image_vulnerabilities{source_site=""}), "check", "image-vulnerabilities",
-        "", ""), "severity", "critical", "", ""), "system", "$1", "k8s_cluster", "(.+)"))
+        or on (k8s_cluster) 0 * count by (k8s_cluster) (trivy_image_vulnerabilities{source_site=""})) unless on
+        (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)")) unless on (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
+        "digest", "$1", "image_digest", "(.+)"))), "check", "image-vulnerabilities", "", ""), "severity", "critical",
+        "", ""), "system", "$1", "k8s_cluster", "(.+)"))
       labels:
         source: trivy
     - record: homelab_security_last_result_timestamp_seconds
@@ -420,17 +427,21 @@ spec:
         source: trivy
     - alert: SecurityFindingNew
       expr: max by (k8s_cluster, source, system) (homelab_security_check_result{source_site="",severity=~"high|critical"}
-        > max_over_time(homelab_security_check_result{source_site="",severity=~"high|critical"}[1d] offset 1h))
+        > 0 and (homelab_security_check_result{source_site="",severity=~"high|critical"} > max_over_time(homelab_security_check_result{source_site="",severity=~"high|critical"}[1d]
+        offset 1h) or homelab_security_check_result{source_site="",severity=~"high|critical"} offset 1h == 0 or
+        homelab_security_check_result{source_site="",severity=~"high|critical"} unless max_over_time(homelab_security_check_result{source_site="",severity=~"high|critical"}[1d]
+        offset 1h)))
       for: 10m
       labels:
         severity: warning
       annotations:
         summary: A new finding of high severity on {{ $labels.system }}, from {{ $labels.source }}
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
-        description: A check of high or critical severity has more failed resources than at each time of the day
-          before. The board shows the failing safeguards of the system, and the reports of the source have the detail.
-          Fix the cause, or accept the finding in the encrypted list with a reason and an end date (security/README.md,
-          Accepted findings). The alert ends after 1 hour.
+        description: 'A check of high or critical severity fails: with more failed resources than at each time of
+          the day before, after an hour with none, or with no result in the day before. The board shows the failing
+          safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
+          finding in the encrypted list with a reason and an end date (security/README.md, Accepted findings). The
+          alert ends after 1 hour.'
     - alert: SecurityCertificateExpiring
       expr: min by (k8s_cluster, namespace, lease) (kube_lease_renew_time{namespace="security",lease=~"aws-security-.+-certificate"})
         - time() < 30 * 86400

@@ -101,7 +101,7 @@ contract of the registry (`security/README.md`, "The series"), with
 | Series | From | Value |
 | --- | --- | --- |
 | `homelab_security_check_result`, `check="k8s-cis-1.23/<control ID>"` | `trivy_compliance_info` of the report `k8s-cis-1.23` | The failed resources of a control that fails, and 0 for a control that passes |
-| `homelab_security_check_result`, `check="image-vulnerabilities"` | `trivy_image_vulnerabilities` | The critical vulnerabilities with a fix, over the distinct images of the cluster. 0 when the scan reports have none, and no series when there is no scan report |
+| `homelab_security_check_result`, `check="image-vulnerabilities"` | `trivy_image_vulnerabilities` | The critical vulnerabilities with a fix, over the distinct images of the cluster. 0 when the scan reports have none. No series when there is no scan report, or when an image that runs on the cluster (`kube_pod_container_info` and `kube_pod_init_container_info`, by the digest of `image_id`) has had no report for an hour: a failed scan is "no evidence", never a pass. The pods of the scan jobs are not counted |
 | `homelab_security_last_result_timestamp_seconds` | `homelab_trivy_compliance_report_update_timestamp_seconds`, which kube-state-metrics reads from the status of the report | The time at which the operator wrote the report: at its start, then every 6 hours |
 
 A result also has the label `severity`, in lower case. Trivy counts a control
@@ -110,8 +110,13 @@ input on these clusters: 1.1.x, 4.1.x and 4.2.x (the node collector), and 2.x
 (Talos runs etcd as a service of the OS, not as a pod).
 
 The alert `SecurityFindingNew` fires when a result of high or critical
-severity is above each value of the day before (`security/README.md`, "When
+severity is above 0 and is above each value of the day before, or was 0 one
+hour before, or has no value in the day before (`security/README.md`, "When
 an alert fires").
+
+A private image, or an image of a registry that the policy does not name,
+has no report, so the check `image-vulnerabilities` of its cluster stays "no
+evidence" until it has one.
 
 ## Exceptions
 
