@@ -45,6 +45,7 @@
           {
             "id": "agents-pilot",
             "name": "Claude Opus 5.5 (agents-pilot at the model gateway)",
+            "params": {"canonicalModelId": "claude-opus-5-5"},
             "reasoning": true,
             "input": ["text", "image"],
             "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
