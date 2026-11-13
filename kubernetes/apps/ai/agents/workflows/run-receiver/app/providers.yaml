@@ -65,7 +65,7 @@ spec:
                 # only. Its ID is not a secret; its private key is a file
                 # (/github-app), read by openssl only.
                 - name: GITHUB_APP_ID
-                  value: "REPLACE-WITH-THE-APP-ID"
+                  value: "5740538"
                 - name: GITHUB_APP_KEY_FILE
                   value: /github-app/private-key.pem
                 # What the reviewer may do at GitHub, in one place: the one
