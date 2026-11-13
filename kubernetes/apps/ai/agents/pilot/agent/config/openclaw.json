@@ -69,7 +69,7 @@
     "load": {
       "paths": [
         "/opt/openclaw/plugins/node_modules/@openclaw/openshell-sandbox",
-        "/home/node/config/tnwks-message-hold.ts"
+        "/home/node/plugins/tnwks/tnwks-message-hold.ts"
       ]
     },
     "entries": {
