@@ -212,6 +212,18 @@ new token, put it in its Secret with `sops <file>`, write its end date to the
 Lease, and merge them in one pull request. A Lease that nobody set has a date
 in the past, so the alert fires at once.
 
+- **A token with no end date.** Make each token with an end, one year at
+  most: the end is also the date of its rotation. If a token has no end,
+  write a review date one year out to the Lease, and at that date make a new
+  token with an end.
+- **The Lease belongs to Flux.** git is the one source of the date: Flux puts
+  back a `kubectl edit` of the Lease at its next reconcile. Change the date
+  in `app/lease-*-token.yaml` only.
+- **A test checks the pair.** `security/tests/test_prowler.py` fails if
+  `app/kustomization.yaml` lists the CronJob of a provider without its Secret
+  and its Lease, or the other way, and it checks the form of the date, not
+  its value.
+
 ## When a run fails
 
 `KubeJobFailed` fires for the Job. The log of its pod says why:

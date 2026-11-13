@@ -253,7 +253,20 @@ def test_each_token_has_a_lease_that_the_token_alert_reads():
         lease = yaml.safe_load((APP / f"lease-{provider}-token.yaml").read_text())
         assert lease["kind"] == "Lease"
         assert re.fullmatch(rules.SECURITY_TOKEN_LEASES, lease["metadata"]["name"])
-        # A Lease that nobody set has a date in the past, so the alert fires.
-        assert lease["spec"]["renewTime"].startswith("2000-")
+        # The form of a MicroTime, which the API server takes; not its value, as
+        # the owner writes the end date of each token there.
+        renew = lease["spec"]["renewTime"]
+        assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z", renew), renew
+        datetime.datetime.fromisoformat(renew)
         cronjob = (APP / f"cronjob-{provider}.yaml").read_text()
         assert variable in (APP.parent / "README.md").read_text() and f"prowler-{provider}" in cronjob
+
+
+def test_a_listed_run_with_a_token_lists_its_lease_and_its_secret():
+    """Without its Lease, SecurityTokenExpiring has no series for a token, and the
+    run fails on the day the token ends with no warning before."""
+    resources = yaml.safe_load((APP / "kustomization.yaml").read_text())["resources"]
+    for provider in ("cloudflare", "github"):
+        parts = {f"./cronjob-{provider}.yaml", f"./lease-{provider}-token.yaml", f"./secret-{provider}.sops.yaml"}
+        listed = parts & set(resources)
+        assert listed in (set(), parts), f"{provider}: list the Secret, the Lease and the CronJob together, not {sorted(listed)}"
