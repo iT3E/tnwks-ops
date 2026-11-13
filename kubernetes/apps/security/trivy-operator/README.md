@@ -96,7 +96,11 @@ match of a secret in the namespace of the workload.
 The rules are in `observability/rules.py` (group `homelab.security`), and
 each site runs them for its own series. The rules of the registry run on
 homelab-wsl-02 only, so the job `peer-federate` there brings the two series
-of homelab-wsl (`kubernetes/clusters/wsl-02/apps/kustomization.yaml`). They give the two series of the
+of homelab-wsl (`kubernetes/clusters/wsl-02/apps/kustomization.yaml`). When
+homelab-wsl or that scrape is down, its series go stale after 5 minutes, and
+`SecurityResultLate` fires for `trivy` on homelab-wsl 10 minutes later, next
+to the alert of the lost site. That is the federation, not a fault of the
+operator. The rules give the two series of the
 contract of the registry (`security/README.md`, "The series"), with
 `source="trivy"` and the cluster as `system`:
 
@@ -135,6 +139,10 @@ place for an exception.
 The reader runs on homelab-wsl-02, where the Secret of the list is. The
 job `peer-federate` of homelab-wsl brings its series of `trivy` there
 (`kubernetes/apps/monitoring/kube-prometheus-stack/app/helmrelease.yaml`).
+The rule of the result series reads the accepted findings with no
+`source_site` matcher, so on homelab-wsl the federated copy mutes them: the
+fixture "an accepted check gives 0 until its end" of `observability/rules.py`
+has the copy from homelab-wsl-02 and the result of homelab-wsl.
 Until the reader runs, no check is accepted, and an exception shows as a
 fail.
 
@@ -272,5 +280,8 @@ After a merge, on the cluster, with reads only:
    for this cluster, and `homelab_security_check_result{source="trivy"}` and
    `homelab_security_last_result_timestamp_seconds{source="trivy"}` for its
    system.
-7. The memory of the operator stays under its limit for a full cycle:
+7. The CPU of `SECURITY_NODE` while the largest scan job runs (6 containers
+   with a limit of 500m each):
+   `sum(rate(container_cpu_usage_seconds_total{namespace="security",pod=~"scan-vulnerabilityreport-.+"}[5m]))`.
+8. The memory of the operator stays under its limit for a full cycle:
    `max_over_time(container_memory_working_set_bytes{namespace="security",container="trivy-operator"}[1d])`.
