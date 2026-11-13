@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.94.0 - 2026-11-13
+
+### Added
+
+* agents: the pilot agent asks the owner before it sends a message to an address that it names
+
 ## v2.93.1 - 2026-11-13
 
 ### Fixed
