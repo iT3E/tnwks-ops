@@ -47,6 +47,10 @@ spec:
             ports:
               - name: metrics
                 containerPort: 9598
+              # The audit source, behind the Service vector-aggregator-audit
+              # (service-audit.yaml), which is a ClusterIP.
+              - name: audit
+                containerPort: 6010
     service:
       app:
         controller: vector-aggregator
@@ -74,3 +78,12 @@ spec:
         type: emptyDir
         globalMounts:
           - path: /vector-data-dir
+      # The client certificate for the TLS path to the Loki of the security
+      # streams (observability-pki). Vector reads it at its start, and
+      # Reloader restarts the pod when cert-manager renews it.
+      security-loki-client:
+        type: secret
+        name: security-loki-client
+        globalMounts:
+          - path: /etc/vector/security-loki-client
+            readOnly: true
