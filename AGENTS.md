@@ -135,14 +135,16 @@ system actually owns the change:
   same-repo PRs; anything else waits in the `external-contributions`
   environment (AWS only: other roots never plan on a third party's PR).
 
-- **Terraform MikroTik, UniFi, healthchecks.io, Cloudflare
-  (`infrastructure/terraform/environments/prod/{mikrotik,unifi,healthchecks,cloudflare}/**`
+- **Terraform MikroTik, UniFi, healthchecks.io, Cloudflare, GitHub
+  (`infrastructure/terraform/environments/prod/{mikrotik,unifi,healthchecks,cloudflare,github}/**`
   and their `modules/`)** — plan on the PR (gating Build Success) and apply
   on merge on the root's self-hosted runner, through the same
   `terraform.yaml` matrix (state in TFC with local execution). Each root's
   runner, lock and endpoint overrides are its entry in
   `.github/ci/domains.toml`. See `docs/network/ci.md`. The local
   `task <svc>:apply` / `task terraform:apply` targets are break-glass only.
+  GitHub runs only once the repository variable `GITHUB_TERRAFORM_ENABLED`
+  is `true` (`docs/operations/github.md`).
 
 - **Ansible (`infrastructure/ansible/**`)** — the host playbooks
   (`windows-host.yml`, `wsl-distro.yml`) are GitOps like Kubernetes:
@@ -287,10 +289,16 @@ and `task aws:ra-profile`; see
 - `infrastructure/terraform/environments/prod/cloudflare/` — DNS + zone/account-level
   config, planned and applied by `terraform.yaml` on the
   self-hosted runner (`task terraform:{plan,apply}` is break-glass).
+- `infrastructure/terraform/environments/prod/github/` — the iT3E account's
+  repositories, `tnwks-ops`' ruleset, environments and Actions settings,
+  imported as they were. Workspace `tnwks-github-prod`, same runner and flow
+  as Cloudflare (`task github:{plan,apply}` is break-glass). It manages the
+  ruleset and `prod` environment that gate its own apply; see
+  `docs/operations/github.md`.
 - `infrastructure/terraform/environments/bootstrap/{aws-init,aws-identity}/` — org
   bootstrap and Identity Center. CLI/VCS driven, not wired into CI.
 - `infrastructure/terraform/modules/` — shared child modules, namespaced by
-  provider (`aws/`, `aws/oidc/`, `aws/identity/`, `tfc/`, `cloudflare/`). One file per
+  provider (`aws/`, `aws/oidc/`, `aws/identity/`, `tfc/`, `cloudflare/`, `github/`). One file per
   piece of infrastructure. See its README for conventions.
 
 ### Talos

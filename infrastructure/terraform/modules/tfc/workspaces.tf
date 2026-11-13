@@ -93,3 +93,19 @@ resource "tfe_workspace_settings" "tnwks-cloudflare-prod_workspace_settings" {
   workspace_id   = tfe_workspace.tnwks-cloudflare-prod.id
   execution_mode = "local"
 }
+
+# The iT3E GitHub account's repositories and their settings. GitHub is a
+# public API, but the token is read from SOPS with the CI age key on the
+# self-hosted runner (terraform.yaml), so execution is local, like the
+# Cloudflare workspace.
+resource "tfe_workspace" "tnwks-github-prod" {
+  name              = "tnwks-github-prod"
+  organization      = var.tfc_organization
+  project_id        = tfe_project.tfe_project_aws.id
+  working_directory = "environments/prod/github"
+}
+
+resource "tfe_workspace_settings" "tnwks-github-prod_workspace_settings" {
+  workspace_id   = tfe_workspace.tnwks-github-prod.id
+  execution_mode = "local"
+}

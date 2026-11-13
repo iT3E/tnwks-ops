@@ -132,6 +132,22 @@ paths = [
   ".github/workflows/terraform.yaml",
 ]
 
+# The iT3E account's repositories (docs/operations/github.md). Off until the
+# owner adds the token and sets GITHUB_TERRAFORM_ENABLED, which Terraform
+# doesn't manage.
+[groups.terraform.github]
+title = "GitHub"
+root = "prod/github"
+runner = "tnwks-ops-runner"
+backend = "local"
+lock = "github-terraform"
+enabled_var = "GITHUB_TERRAFORM_ENABLED"
+paths = [
+  "infrastructure/terraform/environments/prod/github/**",
+  "infrastructure/terraform/modules/github/**",
+  ".github/workflows/terraform.yaml",
+]
+
 [groups.terraform.healthchecks]
 title = "Healthchecks"
 root = "prod/healthchecks"

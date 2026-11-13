@@ -1,0 +1,42 @@
+---
+version: "3"
+
+## ---------------------------------------------------------------------------------------------------------------------
+## GitHub account repositories and settings (environments/prod/github).
+##
+## CI plans on the PR and applies on merge (.github/workflows/terraform.yaml on
+## the self-hosted runner) once GITHUB_TERRAFORM_ENABLED is true. These tasks
+## are break-glass, against the same TFC state (tnwks-github-prod, execution
+## mode local): the root manages the ruleset and prod environment that gate
+## its own CI apply, so a change that locks CI out is fixed from here.
+## See docs/operations/github.md.
+## ---------------------------------------------------------------------------------------------------------------------
+
+vars:
+  GITHUB_TF_DIR: "{{.TERRAFORM_DIR}}/environments/prod/github"
+
+tasks:
+  init:
+    desc: Initialize the GitHub Terraform root module
+    dir: "{{.GITHUB_TF_DIR}}"
+    cmds:
+      - terraform init {{.CLI_ARGS}}
+
+  validate:
+    desc: Validate the GitHub Terraform root module without a backend
+    dir: "{{.GITHUB_TF_DIR}}"
+    cmds:
+      - terraform init -backend=false
+      - terraform validate
+
+  plan:
+    desc: Show the changes Terraform will make to the GitHub repositories
+    dir: "{{.GITHUB_TF_DIR}}"
+    cmds:
+      - terraform plan {{.CLI_ARGS}}
+
+  apply:
+    desc: Apply the GitHub repositories and settings
+    dir: "{{.GITHUB_TF_DIR}}"
+    cmds:
+      - terraform apply {{.CLI_ARGS}}
