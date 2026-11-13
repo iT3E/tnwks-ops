@@ -45,8 +45,14 @@ WSL-02, which has that cluster's kubeconfig
   bytes of its 90-day streams in a day, before compression.
   `WslDriveSpaceLow`: the drive under the WSL disk of WSL-02 has less than
   100 GB free (evaluated by site 1, which scrapes both Windows hosts).
+- **Certificates of the security platform:** `SecurityCertificateExpiring`
+  (group `homelab.security`, `observability/rules.py`) fires 30 days before
+  a certificate for IAM Roles Anywhere of the namespace `security` on
+  homelab-wsl-02 ends. Its series is `kube_lease_renew_time`: the credential
+  refresher writes the end of each certificate to a Lease
+  (`kubernetes/apps/security/aws-credentials/README.md` has the renewal).
 - **Audit lines refused:** `SecurityAuditLinesRefused`, of the group
-  `homelab.streams` (`observability/rules.py`). The sink
+  `homelab.security` (`observability/rules.py`). The sink
   `loki_security_audit` of a Vector aggregator dropped a request that Loki
   refused, and Vector does not send it again. The alert fires at the first
   refused request and holds for 15 minutes after the last one. Loki refuses

@@ -1,0 +1,39 @@
+---
+# What the refresher may reach, on top of default-deny (../../namespace.yaml):
+# DNS, the download of aws_signing_helper, the Roles Anywhere endpoint of the
+# Region, and the API server for its two Secrets and two Leases. Nothing
+# calls it.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: aws-credentials
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: aws-credentials
+  egress:
+    # DNS through Cilium's DNS proxy, so that the rule below can name hosts.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        # The release of aws_signing_helper (HELPER_URL of the CronJob).
+        - matchName: rolesanywhere.amazonaws.com
+        # CreateSession.
+        - matchName: rolesanywhere.us-west-2.amazonaws.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    - toEntities:
+        - kube-apiserver
