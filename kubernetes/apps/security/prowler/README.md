@@ -43,8 +43,8 @@ The claim `security-results` is in `../converter/app/pvc.yaml`.
    exceptions: the run always passes its own mutelist, so the default
    mutelist of Prowler is off too. The reason of an entry stays in the
    Secret. A muted finding is in the OCSF file with the status `Suppressed`.
-   An entry that does not fit (not a mapping, a field missing or empty, an
-   end that is not a date) is skipped and counted, as the converter does: the
+   An entry that does not fit (not a mapping, a field missing or empty, the
+   reason too, an end that is not a date with no time) is skipped and counted, as the converter does: the
    log has its number and why, never a value of the list. So one bad entry
    does not stop each run until the list is fixed. A list that can not be
    read at all (not YAML, not a list) stops the run with code 2: the run can
