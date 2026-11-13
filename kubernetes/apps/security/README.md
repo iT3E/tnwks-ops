@@ -80,8 +80,10 @@ to this table first, because the sum is the budget of the node.
 The audit reader reads files of the control plane node, so it does not run
 on `SECURITY_NODE`, and its 128 MiB are not in the budget of worker 1.
 
-The worst sum of Trivy by limits (3328 MiB) is over the budget of
-homelab-wsl, and its measured use (498 MiB) is under it. The worst case
-lasts only while a pod of 6 containers has its scan, once a day. The owner
-decides between a larger budget for that time and a lower limit for each
-scan container, before Trivy runs on homelab-wsl.
+The budget counts the limit of each part that always runs and the measured
+peak of each job. By that count Trivy takes 256 MiB and the peak of its
+largest scan job, 6 x 56 MiB, on homelab-wsl. By the limits of that job
+alone, the sum is 3328 MiB, over the budget, but only while a pod of 6
+containers has its scan, once a day. The owner decides which count holds
+for homelab-wsl before Trivy runs there (`trivy-operator/README.md`,
+"Memory").
