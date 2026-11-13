@@ -59,6 +59,9 @@ resources:
   - ../../../apps/monitoring/loki/ks.yaml
   - ../../../apps/monitoring/vector/ks.yaml
   - ../../../apps/monitoring/vector/ks-agent.yaml
+  # The audit log of this cluster's API server, as the security stream
+  # "k8s-audit" (apps/monitoring/vector/README.md).
+  - ../../../apps/monitoring/vector/ks-audit-reader.yaml
   # Follows the UniFi controller (UNIFI_REPLICAS).
   - ../../../apps/monitoring/unpoller/ks.yaml
   # Certificates: cert-manager with the Let's Encrypt DNS-01 issuers, and the

@@ -1,0 +1,40 @@
+# The audit reader: it reads the audit log of the API server on the control
+# plane node and sends each line to the audit source of the aggregator of
+# its cluster (../README.md).
+data_dir: /vector-data-dir
+
+sources:
+  # The audit files of the API server, as Talos keeps them: the live file
+  # kube-apiserver.log and its rotated files. The oldest file goes first, so
+  # a backlog arrives in the order of its events.
+  audit:
+    type: file
+    include:
+      - /var/log/audit/kube/*.log
+    oldest_first: true
+    max_line_bytes: 1048576
+
+sinks:
+  # Acknowledgements go from Loki through the aggregator back to the file
+  # source: the position in a file moves only for a line that Loki took.
+  # When the aggregator or Loki is away, the sink waits, the buffer fills,
+  # the source stops reading, and the files wait on the node.
+  #
+  # Small batches, one request at a time and a small buffer keep the memory
+  # flat while the reader sends a backlog.
+  aggregator:
+    type: vector
+    inputs:
+      - audit
+    address: http://vector-aggregator-audit.monitoring.svc.cluster.local:6010
+    acknowledgements:
+      enabled: true
+    batch:
+      max_events: 200
+      timeout_secs: 1
+    request:
+      concurrency: 1
+    buffer:
+      type: memory
+      max_events: 200
+      when_full: block
