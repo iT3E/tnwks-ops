@@ -1,8 +1,10 @@
 ---
 # Every 15 minutes, the cycle of the stream in security/registry/sources.yaml:
 # the new files of the trail bucket -> the volume -> this site's Loki
-# (scripts/trail_copy.py). A failed run raises KubeJobFailed, and the next run
-# takes the same files again.
+# (scripts/trail_copy.py). A failed run raises KubeJobFailed. After a failure of
+# S3 or Loki the next run takes the same files again. A file with a line that
+# Loki refused, or that can't be read, gets the name .bad: the run that found
+# it fails one time, and the next runs pass it.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -65,6 +67,13 @@ spec:
                 # back: Loki refuses a line that is older than 7 days.
                 - name: START_HOURS
                   value: "144"
+                # The S3 requests (../README.md, "The cost"): a prefix with no
+                # file in the last hour is listed each 4 hours, and the list of
+                # prefixes is read again each 24 hours.
+                - name: QUIET_MINUTES
+                  value: "240"
+                - name: PREFIX_HOURS
+                  value: "24"
               # The session of the trail reader role (../../aws-credentials):
               # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN and
               # AWS_REGION. A new pod each run, so it has the newest session.

@@ -2,8 +2,10 @@
 
 kubernetes/apps/security/trail-copy: the script signs its S3 requests, reads a
 trail file one event at a time, sends each event to Loki as a line of the
-stream {security_stream="cloudtrail"}, and gives a local copy its final name
-only when Loki has its events. Its manifests agree with each other.
+stream of its account and Region, with security_stream="cloudtrail", and gives
+a local copy its final name only when Loki has its events. A file with a line
+that Loki refused gets the name .bad and fails the run. A quiet prefix is
+listed less often. Its manifests agree with each other.
 """
 
 import datetime
@@ -25,7 +27,10 @@ NOW = datetime.datetime(2026, 11, 13, 12, 0, tzinfo=UTC)
 ORG = "AWSLogs/o-example/"
 PREFIX_A = f"{ORG}111111111111/CloudTrail/us-west-2/"
 PREFIX_B = f"{ORG}222222222222/CloudTrail/us-east-1/"
-SETTINGS = {"start_hours": 144, "overlap_minutes": 60, "max_files": 500, "run_seconds": 600, "keep_days": 7}
+SETTINGS = {"start_hours": 144, "overlap_minutes": 120, "max_files": 500, "run_seconds": 600, "keep_days": 7,
+            "quiet_minutes": 240, "prefix_hours": 24}
+LABELS_A = {"security_stream": "cloudtrail", "aws_account": "111111111111", "aws_region": "us-west-2"}
+LABELS_B = {"security_stream": "cloudtrail", "aws_account": "222222222222", "aws_region": "us-east-1"}
 
 
 @pytest.fixture(scope="module")
@@ -56,9 +61,11 @@ class FakeS3:
     def __init__(self, objects: dict):
         self.objects = objects
         self.lists = []
+        self.requests = {"list": 0, "get": 0}
 
     def list(self, prefix, start_after="", delimiter="", limit=0):
         self.lists.append((prefix, start_after, delimiter))
+        self.requests["list"] += 1
         keys, prefixes = [], set()
         for name in sorted(self.objects):
             if not name.startswith(prefix) or name <= start_after:
@@ -71,23 +78,42 @@ class FakeS3:
         return keys, sorted(prefixes)
 
     def download(self, name, path):
+        self.requests["get"] += 1
         Path(path).write_bytes(self.objects[name])
 
 
 class FakeLoki:
-    def __init__(self, fail_after: int | None = None):
-        self.batches = []
-        self.refused = 0
-        self.fail_after = fail_after
+    """Loki as a list of (labels, batch). `refuse` gives the 400 text for a batch, or None."""
 
-    def push(self, batch):
+    def __init__(self, fail_after: int | None = None, refuse=None, trail_copy=None):
+        self.batches = []
+        self.fail_after = fail_after
+        self.refuse = refuse
+        self.trail_copy = trail_copy
+
+    def push(self, labels, batch):
         if self.fail_after is not None and len(self.batches) >= self.fail_after:
             raise RuntimeError("Loki answered 503")
-        self.batches.append(batch)
+        text = self.refuse(labels, batch) if self.refuse else None
+        if text:
+            raise self.trail_copy.Refused(text)
+        self.batches.append((labels, batch))
 
     @property
     def lines(self):
-        return [json.loads(line) for batch in self.batches for _, line in batch]
+        return [json.loads(line) for _, batch in self.batches for _, line in batch]
+
+
+def files_of(trail_copy, s3, data_dir):
+    """new_files with a fresh state, as a first run sees it."""
+    return trail_copy.new_files(s3, str(data_dir), NOW, SETTINGS, trail_copy.fresh_state())[0]
+
+
+def put(trail_copy, data_dir, name, suffix=""):
+    """A local copy of a file, as a run that took it leaves it."""
+    path = Path(trail_copy.local_path(str(data_dir), name) + suffix)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"")
 
 
 # --- the signature ---
@@ -176,24 +202,23 @@ def test_the_first_run_starts_six_days_back_and_takes_the_oldest_first(trail_cop
     second = key(PREFIX_A, NOW - datetime.timedelta(hours=2))
     third = key(PREFIX_B, NOW - datetime.timedelta(hours=1))
     s3 = FakeS3(dict.fromkeys([old, first, second, third], b""))
-    assert trail_copy.new_files(s3, str(tmp_path), NOW, 144, 60, 500) == [first, second, third]
-    assert trail_copy.new_files(s3, str(tmp_path), NOW, 144, 60, 2) == [first, second]
+    assert files_of(trail_copy, s3, tmp_path) == [first, second, third]
+    two = trail_copy.new_files(s3, str(tmp_path), NOW, {**SETTINGS, "max_files": 2}, trail_copy.fresh_state())
+    assert two == ([first, second], 2)
 
 
 def test_a_later_run_lists_from_the_newest_copy_less_the_overlap(trail_copy, tmp_path):
     copied = key(PREFIX_A, NOW - datetime.timedelta(hours=2))
     late = key(PREFIX_A, NOW - datetime.timedelta(hours=2, minutes=30), "Late")
-    older = key(PREFIX_A, NOW - datetime.timedelta(hours=4))
+    older = key(PREFIX_A, NOW - datetime.timedelta(hours=5))
     new = key(PREFIX_A, NOW - datetime.timedelta(minutes=20))
     s3 = FakeS3(dict.fromkeys([copied, late, older, new], b""))
-    path = Path(trail_copy.local_path(str(tmp_path), copied))
-    path.parent.mkdir(parents=True)
-    path.write_bytes(b"")
+    put(trail_copy, tmp_path, copied)
     # The file that AWS delivered late is inside the overlap. The older one is
     # before it, and the copied one has its copy.
-    assert trail_copy.new_files(s3, str(tmp_path), NOW, 144, 60, 500) == [late, new]
+    assert files_of(trail_copy, s3, tmp_path) == [late, new]
     listed = [call for call in s3.lists if call[0] == PREFIX_A and not call[2]]
-    start = NOW - datetime.timedelta(hours=3)
+    start = NOW - datetime.timedelta(hours=4)
     assert listed == [(PREFIX_A, f"{PREFIX_A}{start:%Y/%m/%d}/111111111111_CloudTrail_us-west-2_{start:%Y%m%dT%H%MZ}", "")]
 
 
@@ -267,31 +292,37 @@ def loki_with(trail_copy, answers: list):
     return trail_copy.Loki("http://loki/loki/api/v1/push", opener, sleeps.append), bodies, sleeps
 
 
-def test_a_push_is_one_stream_with_one_label(trail_copy):
+def test_a_push_is_one_stream_with_the_labels_of_its_file(trail_copy):
     loki, bodies, _ = loki_with(trail_copy, [None])
-    loki.push([(1, "a"), (2, "b")])
-    assert bodies == [{"streams": [{"stream": {"security_stream": "cloudtrail"}, "values": [["1", "a"], ["2", "b"]]}]}]
+    loki.push(trail_copy.stream_labels(key(PREFIX_A, NOW)), [(1, "a"), (2, "b")])
+    assert bodies == [{"streams": [{"stream": LABELS_A, "values": [["1", "a"], ["2", "b"]]}]}]
 
 
 def test_a_push_waits_and_tries_again_then_fails(trail_copy):
     loki, bodies, sleeps = loki_with(trail_copy, [(429, "slow down"), "down", (503, "busy"), None])
-    loki.push([(1, "a")])
+    loki.push(LABELS_A, [(1, "a")])
     assert len(bodies) == 4 and sleeps == [2, 4, 8]
     loki, bodies, sleeps = loki_with(trail_copy, [(503, "busy")] * 5)
     with pytest.raises(trail_copy.LokiError, match="503"):
-        loki.push([(1, "a")])
+        loki.push(LABELS_A, [(1, "a")])
     assert len(bodies) == 5 and sleeps == [2, 4, 8, 16]
-
-
-def test_a_line_that_loki_refuses_for_its_time_is_counted_and_another_400_fails(trail_copy):
-    too_old = "entry for stream '{security_stream=\"cloudtrail\"}' has timestamp too old: 2026-11-01T00:00:00Z"
-    loki, bodies, _ = loki_with(trail_copy, [(400, too_old)])
-    loki.push([(1, "a")])
-    assert loki.refused == 1 and len(bodies) == 1
-    loki, _, sleeps = loki_with(trail_copy, [(400, "error parsing labels")])
-    with pytest.raises(trail_copy.LokiError, match="400"):
-        loki.push([(1, "a")])
+    # Another answer of 4xx is not the fault of one file: the run stops.
+    loki, _, sleeps = loki_with(trail_copy, [(404, "not found")])
+    with pytest.raises(trail_copy.LokiError, match="404"):
+        loki.push(LABELS_A, [(1, "a")])
     assert sleeps == []
+
+
+def test_a_400_is_a_refusal_with_no_second_try_and_says_if_it_is_for_the_time(trail_copy):
+    too_far = "entry with timestamp 2026-11-13 10:00:00 ignored, reason: 'entry too far behind'"
+    loki, bodies, sleeps = loki_with(trail_copy, [(400, too_far)])
+    with pytest.raises(trail_copy.Refused) as refusal:
+        loki.push(LABELS_A, [(1, "a")])
+    assert refusal.value.for_time and len(bodies) == 1 and sleeps == []
+    loki, _, sleeps = loki_with(trail_copy, [(400, "Max entry size '262144' bytes exceeded")])
+    with pytest.raises(trail_copy.Refused) as refusal:
+        loki.push(LABELS_A, [(1, "a")])
+    assert not refusal.value.for_time and sleeps == []
 
 
 # --- one run ---
@@ -305,6 +336,7 @@ def test_a_run_copies_sends_and_names_the_copy(trail_copy, tmp_path):
     result = trail_copy.run(s3, loki, str(tmp_path), NOW, SETTINGS)
     assert (result["new"], result["files"], result["events"], result["bad"]) == (2, 2, 3, [])
     assert [line["eventName"] for line in loki.lines] == ["A", "B", "C"]
+    assert [labels for labels, _ in loki.batches] == [LABELS_A, LABELS_B]
     for name in (one, two):
         assert Path(trail_copy.local_path(str(tmp_path), name)).read_bytes() == s3.objects[name]
     # The next run has nothing to do.
@@ -365,6 +397,236 @@ def test_the_placeholder_session_is_a_run_with_nothing_to_do(trail_copy, monkeyp
     assert "not there yet" in capsys.readouterr().out
 
 
+# --- a stream for each account and Region, and the order of its lines ---
+
+HOUR = 3600 * 1_000_000_000
+
+
+def loki_with_a_window(trail_copy):
+    """A Loki that refuses a line more than 1 hour older than the newest line of its stream."""
+    newest = {}
+
+    def refuse(labels, batch):
+        stream = tuple(sorted(labels.items()))
+        if any(moment < newest.get(stream, 0) - HOUR for moment, _ in batch):
+            return "entry with timestamp ignored, reason: 'entry too far behind'"
+        newest[stream] = max([newest.get(stream, 0)] + [moment for moment, _ in batch])
+        return None
+
+    return FakeLoki(refuse=refuse, trail_copy=trail_copy)
+
+
+def test_each_account_and_region_is_a_stream_of_its_own(trail_copy):
+    assert trail_copy.stream_labels(key(PREFIX_A, NOW)) == LABELS_A
+    assert trail_copy.stream_labels(key(PREFIX_B, NOW)) == LABELS_B
+    alone = "AWSLogs/333333333333/CloudTrail/eu-west-1/"
+    assert trail_copy.stream_labels(key(alone, NOW))["aws_account"] == "333333333333"
+    with pytest.raises(ValueError, match="not a key of the trail"):
+        trail_copy.stream_labels("AWSLogs/o-example/an-account/CloudTrail/us-west-2/2026/11/13/a.json.gz")
+
+
+def test_each_stream_gets_its_files_in_the_order_of_their_time(trail_copy, tmp_path):
+    objects = {}
+    for prefix, minutes in ((PREFIX_A, (50, 10, 30, 40, 20)), (PREFIX_B, (15, 45, 25, 35))):
+        for number in minutes:
+            moment = NOW - datetime.timedelta(minutes=number)
+            events = [event(moment - datetime.timedelta(minutes=3)), event(moment - datetime.timedelta(minutes=1))]
+            objects[key(prefix, moment)] = trail_file(events)
+    loki = loki_with_a_window(trail_copy)
+    result = trail_copy.run(FakeS3(objects), loki, str(tmp_path), NOW, SETTINGS)
+    assert (result["files"], result["bad"]) == (9, [])
+    for labels, count in ((LABELS_A, 5), (LABELS_B, 4)):
+        times = [max(moment for moment, _ in batch) for stream, batch in loki.batches if stream == labels]
+        assert len(times) == count and times == sorted(times)
+
+
+def test_a_quiet_prefix_sent_hours_later_is_not_refused_in_its_own_stream(trail_copy, tmp_path, monkeypatch):
+    # The active prefix has its new files. The quiet prefix has one file of 3 hours ago,
+    # which a run takes after them, as a run that lists a quiet prefix later does.
+    late = NOW - datetime.timedelta(hours=3)
+    order = [key(PREFIX_A, NOW - datetime.timedelta(minutes=30)), key(PREFIX_A, NOW - datetime.timedelta(minutes=15)),
+             key(PREFIX_B, late)]
+    s3 = FakeS3({name: trail_file([event(trail_copy.file_time(name))]) for name in order})
+    loki = loki_with_a_window(trail_copy)
+    assert [trail_copy.copy_file(s3, loki, str(tmp_path / "streams"), name) for name in order] == [1, 1, 1]
+    # In one stream for the whole trail, Loki would refuse it.
+    monkeypatch.setattr(trail_copy, "stream_labels", lambda name: {"security_stream": "cloudtrail"})
+    loki = loki_with_a_window(trail_copy)
+    for name in order[:2]:
+        trail_copy.copy_file(s3, loki, str(tmp_path / "one"), name)
+    with pytest.raises(trail_copy.BadFile, match="too far behind"):
+        trail_copy.copy_file(s3, loki, str(tmp_path / "one"), order[2])
+
+
+def test_the_converter_reads_the_streams_of_each_account_and_region(trail_copy):
+    spec = importlib.util.spec_from_file_location("converter_of_the_trail", ROOT / "security/converter/converter.py")
+    converter = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(converter)
+    streams = json.loads((ROOT / "kubernetes/apps/security/converter/app/config/streams.json").read_text())
+    selectors = [item["selector"] for item in streams["streams"] if item["check"] == trail_copy.STREAM_NAME]
+    assert len(selectors) == 2 and all(selector.items() <= LABELS_A.items() for selector in selectors)
+    answer = {"status": "success", "data": {"resultType": "streams", "result": [
+        {"stream": LABELS_A, "values": [["1500", "-"]]}, {"stream": LABELS_B, "values": [["1400", "-"]]}]}}
+    assert converter.newest_time(answer, selectors[0], 1000, 2000) == 1500
+
+
+# --- a line that Loki refuses, and a line that is too large ---
+
+
+def test_a_file_with_a_refused_line_is_set_aside_and_its_other_lines_go(trail_copy, tmp_path, monkeypatch):
+    moment = NOW - datetime.timedelta(hours=1)
+    name = key(PREFIX_A, moment)
+    s3 = FakeS3({name: trail_file([event(moment, f"E{number}") for number in range(3)])})
+    monkeypatch.setattr(trail_copy, "batches", lambda entries: ([item] for item in entries))
+    pushed = []
+
+    def refuse(labels, batch):
+        pushed.append(batch)
+        return "entry with timestamp ignored, reason: 'entry too far behind'" if len(pushed) == 2 else None
+
+    loki = FakeLoki(refuse=refuse, trail_copy=trail_copy)
+    result = trail_copy.run(s3, loki, str(tmp_path), NOW, SETTINGS)
+    assert (result["files"], result["events"], result["refused"]) == (0, 2, 1)
+    (line,) = result["bad"]
+    assert name in line and "1 batches for their time" in line
+    assert [item["eventName"] for item in loki.lines] == ["E0", "E2"]
+    assert Path(trail_copy.local_path(str(tmp_path), name) + ".bad").exists()
+    # No later run sends it again, so no loop of failed runs.
+    assert trail_copy.run(s3, FakeLoki(), str(tmp_path), NOW, SETTINGS)["new"] == 0
+
+
+def test_a_file_with_another_400_is_set_aside_and_the_stream_goes_on(trail_copy, tmp_path):
+    first, second = NOW - datetime.timedelta(hours=2), NOW - datetime.timedelta(hours=1)
+    stuck, good = key(PREFIX_A, first), key(PREFIX_A, second)
+    s3 = FakeS3({stuck: trail_file([event(first, "Stuck")]), good: trail_file([event(second, "Good")])})
+
+    def refuse(labels, batch):
+        return "Max entry size '262144' bytes exceeded" if "Stuck" in batch[0][1] else None
+
+    loki = FakeLoki(refuse=refuse, trail_copy=trail_copy)
+    result = trail_copy.run(s3, loki, str(tmp_path), NOW, SETTINGS)
+    assert result["files"] == 1 and result["refused"] == 1 and "with a 400" in result["bad"][0]
+    assert [item["eventName"] for item in loki.lines] == ["Good"]
+    assert Path(trail_copy.local_path(str(tmp_path), stuck) + ".bad").exists()
+
+
+def test_a_record_that_is_not_an_object_sets_the_file_aside(trail_copy, tmp_path):
+    name = key(PREFIX_A, NOW - datetime.timedelta(hours=1))
+    s3 = FakeS3({name: gzip.compress(b'{"Records":["a text"]}')})
+    result = trail_copy.run(s3, FakeLoki(), str(tmp_path), NOW, SETTINGS)
+    assert len(result["bad"]) == 1 and "not an object" in result["bad"][0] and result["refused"] == 0
+
+
+def test_a_line_still_over_the_limit_keeps_only_the_small_fields_that_name_the_event(trail_copy):
+    who = {"type": "AssumedRole", "principalId": "an-example-principal"}
+    record = event(NOW, "CreateThing", eventID="an-event-id", userIdentity=who,
+                   resources=[{"ARN": "x" * 1000}] * 300)
+    _, line = trail_copy.entry(record, NOW)
+    assert len(line.encode()) <= trail_copy.MAX_LINE
+    assert json.loads(line) == {"eventVersion": "1.11", "eventTime": "2026-11-13T12:00:00Z", "eventName": "CreateThing",
+                                "recipientAccountId": "111111111111", "eventID": "an-event-id",
+                                "userIdentity": who, "truncated": True}
+    # A field of the stub that is too large itself goes too.
+    _, line = trail_copy.entry(event(NOW, "y" * 300_000), NOW)
+    assert len(line.encode()) <= trail_copy.MAX_LINE and "eventName" not in json.loads(line)
+
+
+def test_a_run_with_a_file_set_aside_fails_counts_it_last_and_shows_no_credential(trail_copy, tmp_path,
+                                                                                 monkeypatch, capsys):
+    now = datetime.datetime.now(UTC).replace(second=0, microsecond=0)
+    moment = now - datetime.timedelta(hours=1)
+    refused, unreadable = key(PREFIX_A, moment), key(PREFIX_B, moment)
+    s3 = FakeS3({refused: trail_file([event(moment)]), unreadable: b"not a gzip file"})
+    loki = FakeLoki(refuse=lambda labels, batch: "entry too far behind" if labels == LABELS_A else None,
+                    trail_copy=trail_copy)
+    monkeypatch.setattr(trail_copy, "S3", lambda *args: s3)
+    monkeypatch.setattr(trail_copy, "Loki", lambda *args: loki)
+    creds = {"AWS_ACCESS_KEY_ID": "an-access-key-id", "AWS_SECRET_ACCESS_KEY": "a-secret-access-key",
+             "AWS_SESSION_TOKEN": "a-session-token"}
+    for name, value in {**creds, "TRAIL_BUCKET": "the-bucket", "AWS_REGION": "us-west-2",
+                        "LOKI_URL": "http://loki", "DATA_DIR": str(tmp_path)}.items():
+        monkeypatch.setenv(name, value)
+    with pytest.raises(SystemExit) as end:
+        trail_copy.main()
+    assert end.value.code == 1
+    out, err = capsys.readouterr()
+    last = out.strip().splitlines()[-1]
+    assert "0 of 2 new files copied" in last and "2 files set aside as .bad (1 with lines that Loki refused)" in last
+    assert "S3 requests: 6 list and 2 get" in last
+    assert refused in err and unreadable in err
+    assert not any(value in out + err for value in creds.values())
+
+
+# --- the requests to S3 ---
+
+
+def lists_of_a_run(trail_copy, s3, data_dir, at, settings=SETTINGS):
+    s3.lists.clear()
+    trail_copy.run(s3, FakeLoki(), str(data_dir), at, settings)
+    return [prefix for prefix, *_ in s3.lists]
+
+
+def test_a_quiet_prefix_is_listed_less_often_and_the_prefixes_once_a_day(trail_copy, tmp_path):
+    def active_file(at):
+        moment = at - datetime.timedelta(minutes=5)
+        s3.objects[key(PREFIX_A, moment)] = trail_file([event(moment)])
+
+    old = NOW - datetime.timedelta(days=2)
+    s3 = FakeS3({key(PREFIX_B, old): trail_file([event(old)])})
+    put(trail_copy, tmp_path, key(PREFIX_B, old))
+    active_file(NOW)
+    # The first run lists the prefixes (AWSLogs/, the organization, two accounts), then each prefix.
+    assert lists_of_a_run(trail_copy, s3, tmp_path, NOW) == ["AWSLogs/", ORG, f"{ORG}111111111111/CloudTrail/",
+                                                             f"{ORG}222222222222/CloudTrail/", PREFIX_A, PREFIX_B]
+    # Then the active prefix each run, and the quiet one after 4 hours.
+    for minutes in range(15, 240, 15):
+        at = NOW + datetime.timedelta(minutes=minutes)
+        active_file(at)
+        assert lists_of_a_run(trail_copy, s3, tmp_path, at) == [PREFIX_A]
+    at = NOW + datetime.timedelta(minutes=240)
+    active_file(at)
+    assert lists_of_a_run(trail_copy, s3, tmp_path, at) == [PREFIX_A, PREFIX_B]
+    # The list of prefixes again after a day.
+    at = NOW + datetime.timedelta(hours=24)
+    active_file(at)
+    assert lists_of_a_run(trail_copy, s3, tmp_path, at)[:4] == ["AWSLogs/", ORG, f"{ORG}111111111111/CloudTrail/",
+                                                                f"{ORG}222222222222/CloudTrail/"]
+    # No new file in the whole trail for 90 minutes: each prefix, each run, until one comes.
+    for minutes in (75, 90, 105):
+        at = NOW + datetime.timedelta(hours=24, minutes=minutes)
+        expected = [PREFIX_A] if minutes < 90 else [PREFIX_A, PREFIX_B]
+        assert lists_of_a_run(trail_copy, s3, tmp_path, at) == expected
+
+
+def test_a_prefix_with_files_left_for_the_next_run_is_listed_again(trail_copy, tmp_path):
+    old = NOW - datetime.timedelta(days=2)
+    first, second = NOW - datetime.timedelta(hours=3), NOW - datetime.timedelta(hours=2)
+    s3 = FakeS3({key(PREFIX_B, moment): trail_file([event(moment)]) for moment in (old, first, second)})
+    s3.objects[key(PREFIX_A, NOW - datetime.timedelta(minutes=5))] = trail_file([event(NOW)])
+    one_file = {**SETTINGS, "max_files": 1}
+    put(trail_copy, tmp_path, key(PREFIX_B, old))
+    assert lists_of_a_run(trail_copy, s3, tmp_path, NOW, one_file)[-2:] == [PREFIX_A, PREFIX_B]
+    later = NOW + datetime.timedelta(minutes=15)
+    assert lists_of_a_run(trail_copy, s3, tmp_path, later, one_file) == [PREFIX_A, PREFIX_B]
+    assert Path(trail_copy.local_path(str(tmp_path), key(PREFIX_B, second))).exists()
+    # The next list of the quiet prefix finds no new file, so it waits from then.
+    at = NOW + datetime.timedelta(minutes=30)
+    assert lists_of_a_run(trail_copy, s3, tmp_path, at, one_file) == [PREFIX_A, PREFIX_B]
+    at = NOW + datetime.timedelta(minutes=45)
+    assert lists_of_a_run(trail_copy, s3, tmp_path, at, one_file) == [PREFIX_A]
+
+
+def test_a_state_file_that_does_not_fit_is_a_fresh_state(trail_copy, tmp_path):
+    moment = NOW - datetime.timedelta(hours=1)
+    s3 = FakeS3({key(PREFIX_A, moment): trail_file([event(moment)])})
+    for text in ("{not json", '{"prefixes": "AWSLogs/", "prefixes_at": 0, "listed": {}}', "[]"):
+        (tmp_path / "state.json").write_text(text)
+        assert trail_copy.load_state(str(tmp_path)) == trail_copy.fresh_state()
+    assert trail_copy.run(s3, FakeLoki(), str(tmp_path), NOW, SETTINGS)["files"] == 1
+    state = json.loads((tmp_path / "state.json").read_text())
+    assert state["prefixes"] == [PREFIX_A] and state["listed"] == {}
+
+
 # --- the manifests ---
 
 
@@ -386,6 +648,8 @@ def test_the_job_runs_on_the_security_node_inside_its_memory_line():
     env = {item["name"]: item["value"] for item in container["env"]}
     assert env["TRAIL_BUCKET"] == "${SECURITY_TRAIL_BUCKET}"
     assert int(env["START_HOURS"]) < 168 and env["KEEP_DAYS"] == "7"
+    # The two settings of the cost in the README.
+    assert (env["QUIET_MINUTES"], env["PREFIX_HOURS"]) == ("240", "24")
     (claim,) = [volume["persistentVolumeClaim"]["claimName"] for volume in pod["spec"]["volumes"]
                 if "persistentVolumeClaim" in volume]
     assert claim == documents("pvc.yaml")[0]["metadata"]["name"]
@@ -407,7 +671,10 @@ def test_the_network_policy_names_the_bucket_loki_and_dns_only():
 def test_the_stream_is_a_stream_of_the_registry_and_the_settings_name_the_bucket(trail_copy):
     sources = yaml.safe_load((ROOT / "security/registry/sources.yaml").read_text())
     (stream,) = [source for source in sources if source["name"] == "stream"]
-    assert trail_copy.STREAM == {"security_stream": "cloudtrail"}
-    assert trail_copy.STREAM["security_stream"] in stream["checks"]
+    assert trail_copy.STREAM_NAME in stream["checks"]
+    # The rule for a late result reads the stream before it is late: each prefix is
+    # listed again in time (trail_copy.ALL_AFTER).
+    late_after = stream["checks"][trail_copy.STREAM_NAME]["late_after"]
+    assert late_after == "2h" and trail_copy.ALL_AFTER < datetime.timedelta(hours=2)
     settings = yaml.safe_load((ROOT / "kubernetes/clusters/wsl-02/cluster-settings.yaml").read_text())
     assert settings["data"]["SECURITY_TRAIL_BUCKET"].startswith("tnwks-cloudtrail-")
