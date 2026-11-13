@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.94.1 - 2026-11-13
+
+### Fixed
+
+* agents: the message hold of the pilot loads from a copy in a read-only plugins volume, as the product refuses a plugin in a directory that others can write
+
 ## v2.94.0 - 2026-11-13
 
 ### Added
