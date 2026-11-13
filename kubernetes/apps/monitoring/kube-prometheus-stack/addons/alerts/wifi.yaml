@@ -188,11 +188,19 @@ spec:
         # resets() looks back 10 minutes, so the alert clears ~10 minutes after
         # the reboot. An AP that stays offline longer than that and comes back
         # isn't seen (its subquery window holds only the new uptime).
+        # The controller runs on homelab-wsl-02. For a few minutes after it
+        # restarts, it reports every AP's uptime as 120 s, then the real value
+        # again (2026-11-11 04:36 after a WSL-02 reboot, APs up 8 days). A real
+        # reboot keeps the uptime low, so the uptime must stay under an hour
+        # for 5 minutes.
         - alert: WifiAPRebootedOutsideUpgradeWindow
           expr: |
             resets((max by (name) (unpoller_device_uptime_seconds))[10m:2m]) > 0
+            and on (name)
+            max by (name) (unpoller_device_uptime_seconds) < 3600
             unless on ()
             (hour() >= 9 and hour() < 13)
+          for: 5m
           labels:
             severity: warning
           annotations:

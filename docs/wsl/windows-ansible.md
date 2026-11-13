@@ -167,8 +167,9 @@ these differ, and lists each difference:
   advanced properties `*EEE`, `AdvancedEEE`, `EnableGreenEthernet` and
   `PowerSavingMode` at 0. Empty on a host on Wi-Fi (WSL-02): not checked.
 - **Wi-Fi adapter disabled** (`host_settings_disabled_adapters`), so Windows
-  never fails over to Wi-Fi (which resets the WSL vNIC). Empty on WSL-02,
-  which stays on Wi-Fi.
+  never fails over to Wi-Fi (which resets the WSL vNIC). `Disabled` or
+  `Not Present` both pass: a device disabled in Device Manager shows as
+  `Not Present`. Empty on WSL-02, which stays on Wi-Fi.
 - **Power plan** High performance (`8c5e7fda-...`).
 
 Why Ansible doesn't fix these: setting an adapter property restarts the

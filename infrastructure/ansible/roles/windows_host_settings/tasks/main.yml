@@ -34,9 +34,11 @@
               if ($have -ne $Advanced[$k]) { $drift += "$Ethernet $k is $have ($($p.DisplayValue)), want $($Advanced[$k])" }
           }
       }
+      # A device disabled in Device Manager (PnP problem code 22) shows as
+      # 'Not Present' here rather than 'Disabled'; either way it can't carry traffic.
       foreach ($name in $Disabled) {
           $a = Get-NetAdapter -Name $name -ErrorAction SilentlyContinue
-          if ($a -and "$($a.Status)" -ne 'Disabled') { $drift += "$name adapter is $($a.Status), want Disabled" }
+          if ($a -and "$($a.Status)" -notin 'Disabled', 'Not Present') { $drift += "$name adapter is $($a.Status), want Disabled" }
       }
       $active = if ((powercfg.exe /getactivescheme) -match '([0-9a-f]{8}-[0-9a-f-]{27})') { $Matches[1] } else { '?' }
       if ($active -ne $Scheme) { $drift += "active power scheme is $active, want $Scheme" }
