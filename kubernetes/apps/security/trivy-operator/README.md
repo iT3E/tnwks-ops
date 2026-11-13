@@ -61,7 +61,9 @@ control plane, and `operator.infraAssessmentScannerEnabled` stays on.
 ## The result series
 
 The rules are in `observability/rules.py` (group `homelab.security`), and
-each site runs them for its own series. They give the two series of the
+each site runs them for its own series. The rules of the registry run on
+homelab-wsl-02 only, so the job `peer-federate` there brings the two series
+of homelab-wsl (`kubernetes/clusters/wsl-02/apps/kustomization.yaml`). They give the two series of the
 contract of the registry (`security/README.md`, "The series"), with
 `source="trivy"` and the cluster as `system`:
 
@@ -92,8 +94,11 @@ date. There is no second list here. The `ignoreFile` of the chart applies
 only to the image scans, and not to the compliance report, so it is not the
 place for an exception.
 
-The reader runs on homelab-wsl-02, where the Secret of the list is. Until
-the reader runs, no check is accepted, and an exception shows as a fail.
+The reader runs on homelab-wsl-02, where the Secret of the list is. The
+job `peer-federate` of homelab-wsl brings its series of `trivy` there
+(`kubernetes/apps/monitoring/kube-prometheus-stack/app/helmrelease.yaml`).
+Until the reader runs, no check is accepted, and an exception shows as a
+fail.
 
 ## What it can reach
 

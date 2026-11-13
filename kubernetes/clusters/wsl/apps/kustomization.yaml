@@ -69,6 +69,11 @@ resources:
   # The security platform's namespace (kubernetes/apps/security/README.md):
   # baseline Pod Security, deny by default. Its apps join one by one.
   - ../../../apps/security/namespace.yaml
+  # Trivy Operator (kubernetes/apps/security/trivy-operator/README.md): the
+  # checks of this cluster and of its images, with the values of
+  # homelab-wsl-02. Its two series of the security registry go to
+  # homelab-wsl-02 through peer-federate there.
+  - ../../../apps/security/trivy-operator/ks.yaml
   - ../../../apps/selfhosted
   # Immich (photo library for the kitchen screensaver): WSL-only, its library
   # sits on local-path-bulk. See docs/apps/immich.md.

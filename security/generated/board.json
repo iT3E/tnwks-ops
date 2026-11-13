@@ -393,7 +393,9 @@
       "type": "cluster",
       "site": "homelab-wsl",
       "domain": "infrastructure",
-      "sources": []
+      "sources": [
+        "trivy"
+      ]
     },
     {
       "name": "homelab-wsl-02",
@@ -545,6 +547,11 @@
     }
   ],
   "expected": [
+    {
+      "source": "trivy",
+      "system": "homelab-wsl",
+      "late_after_seconds": 129600
+    },
     {
       "source": "trivy",
       "system": "homelab-wsl-02",
