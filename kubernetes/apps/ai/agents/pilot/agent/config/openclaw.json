@@ -68,8 +68,7 @@
   "plugins": {
     "load": {
       "paths": [
-        "/opt/openclaw/plugins/node_modules/@openclaw/openshell-sandbox",
-        "/home/node/plugins/tnwks/tnwks-message-hold.ts"
+        "/opt/openclaw/plugins/node_modules/@openclaw/openshell-sandbox"
       ]
     },
     "entries": {
@@ -83,8 +82,7 @@
           "timeoutSeconds": 300
         }
       },
-      "diagnostics-otel": {"enabled": true},
-      "tnwks-message-hold": {"enabled": true}
+      "diagnostics-otel": {"enabled": true}
     }
   },
   "diagnostics": {

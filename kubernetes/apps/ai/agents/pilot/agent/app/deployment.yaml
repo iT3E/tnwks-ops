@@ -62,12 +62,6 @@ spec:
         # "_". Each container mounts the volume at its root, with no subPath:
         # on this cluster the kubelet can't reach the local-path directory,
         # so it would make a subPath directory as root (talos/wsl/README.md).
-        # Last, the plugin files of the config (../config/plugins) in a
-        # directory of the plugins volume, owned by uid 1000 with mode 0755:
-        # the product refuses a plugin whose directory others can write, and
-        # the directory of a ConfigMap volume has mode 0777. Every other
-        # container mounts that volume read-only, so no process of the pod
-        # can change a plugin file until the next start.
         - name: prepare
           image: &image ghcr.io/it3e/tnwks-agent-image:0.2.0@sha256:d0fef0cc4ab0270f74e9cc8a19ab27bc569d359949b24ce6d7ade50cf0428a40
           imagePullPolicy: IfNotPresent
@@ -82,10 +76,6 @@ spec:
               cp /openshell-tls/ca.crt /openshell-tls/tls.crt /openshell-tls/tls.key \
                 /home/node/.config/openshell/gateways/https___openshell.agents-pilot.svc.cluster.local_8080/mtls/
               chmod 0600 /home/node/.config/openshell/gateways/https___openshell.agents-pilot.svc.cluster.local_8080/mtls/*
-              mkdir -p /home/node/plugins/tnwks
-              chmod 0755 /home/node/plugins/tnwks
-              cp -f /home/node/config/tnwks-message-hold.ts /home/node/plugins/tnwks/
-              chmod 0444 /home/node/plugins/tnwks/*
           securityContext: &containerSecurity
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -107,11 +97,6 @@ spec:
             - name: openshell-tls
               mountPath: /openshell-tls
               readOnly: true
-            - name: config
-              mountPath: /home/node/config
-              readOnly: true
-            - name: plugins
-              mountPath: /home/node/plugins
         # The archive step (scripts/archive-state.sh in ../config): an archive
         # of the state, named with the release that starts, read back against
         # its checksum. A failed step stops the start.
@@ -209,9 +194,6 @@ spec:
               subPath: tmp
             - name: user-config
               mountPath: /home/node/.config
-            - name: plugins
-              mountPath: /home/node/plugins
-              readOnly: true
       containers:
         # The gateway of the product, on loopback only: no pod comes in. It
         # reaches the channels, the model gateway and the sandbox gateway.
@@ -288,9 +270,6 @@ spec:
               subPath: tmp
             - name: user-config
               mountPath: /home/node/.config
-            - name: plugins
-              mountPath: /home/node/plugins
-              readOnly: true
         # The sandbox-start container (scripts/sandbox-start.sh in ../config):
         # it starts each sandbox of the product that the sandbox gateway left
         # stopped, when the pod starts and then each minute. The client
@@ -329,12 +308,6 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 16Mi
-        # The plugin files of the config, copied by the prepare init
-        # container. Read-only in every other container.
-        - name: plugins
-          emptyDir:
-            medium: Memory
-            sizeLimit: 1Mi
         # The client certificate of this trust domain's sandbox gateway
         # (cert-manager, sandbox-gateway/app).
         - name: openshell-tls

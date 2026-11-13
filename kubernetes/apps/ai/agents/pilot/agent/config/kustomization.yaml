@@ -12,7 +12,6 @@ configMapGenerator:
   - name: agent-config
     files:
       - openclaw.json=./openclaw.json
-      - tnwks-message-hold.ts=./plugins/tnwks-message-hold.ts
   - name: agent-scripts
     files:
       - archive-state.sh=./scripts/archive-state.sh
