@@ -166,8 +166,9 @@ homelab-wsl lists it next to `agents/`.
   the kubelet), out to `api.anthropic.com` only, with DNS through Cilium's
   DNS proxy.
 - **Pod:** one replica, the `restricted` settings, a read-only root file
-  system with an `emptyDir` on `/tmp`, and a memory limit of 2 GiB for at
-  most 8 live conversations (`BRIDGE_MAX_CONVERSATIONS`).
+  system with an `emptyDir` on `/tmp`, a memory request of 512 MiB, and a
+  memory limit of 2 GiB for at most 8 live conversations
+  (`BRIDGE_MAX_CONVERSATIONS`).
 - **Secret** `model-bridge-secret` (`secret.sops.yaml`):
   `CLAUDE_CODE_OAUTH_TOKEN` (the token of `claude setup-token`; it lives one
   year), and `BRIDGE_KEY_MAIN`, `BRIDGE_KEY_FINANCE` and
@@ -203,7 +204,7 @@ keys in the secret. Then link the number (below).
 
 | Part | What it is |
 | --- | --- |
-| `agent` (Deployment) | The gateway of the product, on loopback port 18789, `Recreate`, on the second worker, memory limit 4 GiB |
+| `agent` (Deployment) | The gateway of the product, on loopback port 18789, `Recreate`, on the second worker, memory request 2 GiB and limit 4 GiB |
 | `agent-config` (ConfigMap) | `openclaw.json`, a read-only file in the pod at `/home/node/config/` (`OPENCLAW_CONFIG_PATH`, with `OPENCLAW_CONFIG_READONLY=1`). Applied with no `${VAR}` substitution (`agents-pilot-agent-config`) |
 | `agent-state` (PVC, 10 GiB) | Mounted at `/home/node/data`: `state/` (the state of the product, `OPENCLAW_STATE_DIR`, with the workspace in `state/workspace/`) and `archives/` |
 | `signal-daemon` (Deployment and Service) | signal-cli, native build, as an HTTP daemon on port 8080, in multi-account mode |

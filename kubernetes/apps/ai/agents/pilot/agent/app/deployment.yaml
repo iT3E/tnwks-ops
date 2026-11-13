@@ -229,12 +229,13 @@ spec:
             periodSeconds: 60
             timeoutSeconds: 10
             failureThreshold: 3
-          # The limit of the Design Doc (section 10.1). The pilot measures
-          # the use.
+          # The limit of the Design Doc (section 10.1). The request covers
+          # the use that the pilot measured over 24 hours: 1.2 to 1.6 GiB
+          # steady, 1.9 GiB at the most.
           resources:
             requests:
               cpu: 250m
-              memory: 1Gi
+              memory: 2Gi
             limits:
               memory: 4Gi
           securityContext: *containerSecurity
