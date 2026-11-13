@@ -2,10 +2,16 @@
 # The providers of the workflow agents, in the store of the sandbox gateway
 # of this trust domain (docs/apps/agent-platform.md, "The run receiver").
 # The CronJob workflow-providers runs it: it imports or updates each profile
-# of /profiles, then creates or updates each provider with its credential.
-# Each credential comes from an env var of the pod (`--credential NAME`, an
-# env lookup), so no value is on a command line or in the log.
+# of /profiles, gets a new installation token of the GitHub App of the
+# reviewer (github_app_token.py), then creates or updates each provider with
+# its credential. Each credential is an env var (`--credential NAME`, an env
+# lookup), so no value is on a command line or in the log.
 set -eu
+
+# The token goes from standard output into the env, and nowhere else. A
+# failure stops the run before any provider changes.
+GITHUB_TOKEN="$(python3 /scripts/github_app_token.py)"
+export GITHUB_TOKEN
 
 dir="$HOME/.config/openshell/gateways/workflows/mtls"
 mkdir -p "$dir"

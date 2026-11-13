@@ -1,3 +1,3 @@
 kind: Added
-body: 'agents: the providers of the Renovate reviewer in agents-workflows (the model gateway on its Messages API, and GitHub on iT3E/tnwks-ops only), the hourly job that writes them into the sandbox gateway, and the reviewer on the Messages API with the effort high'
+body: 'agents: the providers of the Renovate reviewer in agents-workflows (the model gateway on its Messages API, and GitHub on iT3E/tnwks-ops only through an installation token of its own GitHub App, scoped to that repository), the job that writes them into the sandbox gateway every 15 minutes, and the reviewer 0.1.1 on the Messages API with the effort high'
 time: 2026-11-12T23:00:00.000000000Z

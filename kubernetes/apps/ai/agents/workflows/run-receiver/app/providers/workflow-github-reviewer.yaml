@@ -1,8 +1,10 @@
 ---
 # The provider profile of GitHub for the Renovate reviewer: the calls of the
-# reviewer and no other, on iT3E/tnwks-ops only. In a sandbox, GITHUB_TOKEN
-# holds a placeholder; the proxy of the sandbox puts the token in the
-# Authorization header of these calls. The reviewer reads the pull request,
+# reviewer and no other, on iT3E/tnwks-ops only. The credential is an
+# installation token of the GitHub App of the reviewer (contents read, pull
+# requests write for the comment, checks read), which the providers job gets
+# every 15 minutes. In a sandbox, GITHUB_TOKEN holds a placeholder; the proxy
+# of the sandbox puts the token in the Authorization header of these calls. The reviewer reads the pull request,
 # its files, a file at the head, the comments and the checks, and posts one
 # comment. Nothing here can merge, push, approve or change a label, whatever
 # the token allows.
@@ -12,7 +14,7 @@ description: Read one pull request and post one comment, on iT3E/tnwks-ops
 category: source_control
 credentials:
   - name: api_token
-    description: The GitHub token of the reviewer, for iT3E/tnwks-ops only
+    description: An installation token of the GitHub App of the reviewer, for iT3E/tnwks-ops only
     env_vars: [GITHUB_TOKEN]
     required: true
     auth_style: bearer

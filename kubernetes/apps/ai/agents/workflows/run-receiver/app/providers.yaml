@@ -1,9 +1,16 @@
 ---
-# The providers of the workflow agents (scripts/providers.sh): every hour it
-# imports or updates each provider profile (providers/) in the sandbox
-# gateway, and creates or updates each provider with its credential from the
-# Secret workflow-providers-secret. So a new value of a credential, or a new
-# store of the gateway, is in force within the hour. To run it now:
+# The providers of the workflow agents (scripts/providers.sh). Every 15
+# minutes it imports or updates each provider profile (providers/) in the
+# sandbox gateway, gets a new installation token of the GitHub App of the
+# reviewer, and creates or updates each provider: model-gateway with the key
+# from the Secret workflow-providers-secret, github-reviewer with the token.
+#
+# Why every 15 minutes: an installation token lives one hour, and a sandbox
+# keeps the token of its start for its whole life (the gateway keeps the old
+# revision of a credential for a process that has it). A run job lives 40
+# minutes at most (agents.yaml). So a token is at most 15 minutes old when a
+# run starts, and at most 55 minutes old when it ends: each run has a valid
+# token to its end. To run it now:
 # `kubectl -n agents-workflows create job --from=cronjob/workflow-providers providers-now`.
 apiVersion: batch/v1
 kind: CronJob
@@ -12,7 +19,7 @@ metadata:
   labels: &labels
     app.kubernetes.io/name: workflow-providers
 spec:
-  schedule: "7 * * * *"
+  schedule: "7,22,37,52 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 3
@@ -39,7 +46,7 @@ spec:
           containers:
             - name: providers
               # The image of the workflow agents holds the OpenShell CLI.
-              image: ghcr.io/it3e/tnwks-workflow-agents:0.1.0@sha256:d2eeca6cd89566d59c4b29b8526e5140b12c9187ddb372eb01efebe3b198cd11
+              image: ghcr.io/it3e/tnwks-workflow-agents:0.1.1@sha256:4ce4f5b0e57e3bde22d08f15d2d2ea42eca17b35a4992a12b56d822b8122b0c8
               imagePullPolicy: IfNotPresent
               command: ["sh", "/scripts/providers.sh"]
               env:
@@ -54,12 +61,15 @@ spec:
                     secretKeyRef:
                       name: workflow-providers-secret
                       key: MODEL_GATEWAY_KEY
-                # The GitHub token of the reviewer, for iT3E/tnwks-ops only.
-                - name: GITHUB_TOKEN
-                  valueFrom:
-                    secretKeyRef:
-                      name: workflow-providers-secret
-                      key: GITHUB_TOKEN
+                # The GitHub App of the reviewer, installed on iT3E/tnwks-ops
+                # only. Its ID is not a secret; its private key is a file
+                # (/github-app), read by openssl only.
+                - name: GITHUB_APP_ID
+                  value: "REPLACE-WITH-THE-APP-ID"
+                - name: GITHUB_APP_KEY_FILE
+                  value: /github-app/private-key.pem
+                - name: GITHUB_REPOSITORY
+                  value: iT3E/tnwks-ops
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
@@ -83,6 +93,9 @@ spec:
                 - name: scripts
                   mountPath: /scripts
                   readOnly: true
+                - name: github-app
+                  mountPath: /github-app
+                  readOnly: true
           volumes:
             - name: tmp
               emptyDir:
@@ -98,3 +111,11 @@ spec:
             - name: scripts
               configMap:
                 name: workflow-providers-script
+            # The private key of the GitHub App, readable by the group only.
+            - name: github-app
+              secret:
+                secretName: workflow-providers-secret
+                defaultMode: 0440
+                items:
+                  - key: GITHUB_APP_PRIVATE_KEY
+                    path: private-key.pem

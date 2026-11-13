@@ -10,8 +10,9 @@ resources:
   - ./networkpolicy.yaml
   # Secret run-receiver-secret: RUN_RECEIVER_TOKEN, the token of the callers.
   - ./secret.sops.yaml
-  # Secret workflow-providers-secret: MODEL_GATEWAY_KEY and GITHUB_TOKEN, the
-  # credentials of the providers (providers.yaml).
+  # Secret workflow-providers-secret: MODEL_GATEWAY_KEY, the key of the model
+  # gateway, and GITHUB_APP_PRIVATE_KEY, the private key of the GitHub App of
+  # the reviewer (providers.yaml).
   - ./secret-providers.sops.yaml
 # The names stay fixed (no hash): the Job template names the policy, and
 # Reloader starts the receiver again when its list changes.
@@ -31,3 +32,4 @@ configMapGenerator:
   - name: workflow-providers-script
     files:
       - providers.sh=./scripts/providers.sh
+      - github_app_token.py=./scripts/github_app_token.py

@@ -350,22 +350,42 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
   `agents.yaml`), through the provider `model-gateway`, and GitHub through
   the provider `github-reviewer`.
 - **The providers** are in the store of the sandbox gateway. The CronJob
-  `workflow-providers` (`app/providers.yaml`, every hour at :07) imports or
-  updates each provider profile of `app/providers/`, and creates or updates
-  each provider with its credential from the Secret
-  `workflow-providers-secret` (`app/secret-providers.sops.yaml`). A new
-  value is in force within the hour; to run it now,
+  `workflow-providers` (`app/providers.yaml`, every 15 minutes at :07, :22,
+  :37 and :52) imports or updates each provider profile of `app/providers/`,
+  gets a new installation token of the GitHub App of the reviewer
+  (`app/scripts/github_app_token.py`), and creates or updates each provider.
+  To run it now,
   `kubectl -n agents-workflows create job --from=cronjob/workflow-providers providers-now`.
 
-  | Provider (profile) | Credential (key of the Secret) | What the proxy of a sandbox allows with it |
+  | Provider (profile) | Credential | What the proxy of a sandbox allows with it |
   | --- | --- | --- |
-  | `model-gateway` (`workflow-model-gateway`) | `MODEL_GATEWAY_KEY`: the key `agents-workflows` of the model gateway ([litellm.md](litellm.md#keys-of-the-agent-platform)) | `POST /v1/messages` at `litellm-app.ai.svc.cluster.local:4000` |
-  | `github-reviewer` (`workflow-github-reviewer`) | `GITHUB_TOKEN`: a fine-grained token of the owner for `iT3E/tnwks-ops` only, with Issues read and write (the comment); the repository is public, so the reads need no more | `api.github.com`: `GET` on `pulls/*`, `pulls/*/files`, `contents/**`, `issues/*/comments` and `commits/*/check-runs`, and `POST issues/*/comments`, under `/repos/iT3E/tnwks-ops` |
+  | `model-gateway` (`workflow-model-gateway`) | `MODEL_GATEWAY_KEY` of the Secret `workflow-providers-secret`: the key `agents-workflows` of the model gateway ([litellm.md](litellm.md#keys-of-the-agent-platform)) | `POST /v1/messages` at `litellm-app.ai.svc.cluster.local:4000` |
+  | `github-reviewer` (`workflow-github-reviewer`) | `GITHUB_TOKEN`: an installation token of the GitHub App of the reviewer, for `iT3E/tnwks-ops` only, with contents read, pull requests write (the comment) and checks read | `api.github.com`: `GET` on `pulls/*`, `pulls/*/files`, `contents/**`, `issues/*/comments` and `commits/*/check-runs`, and `POST issues/*/comments`, under `/repos/iT3E/tnwks-ops` |
 
   The sandbox holds a placeholder for each credential, and the proxy puts
   the value in the `Authorization` header of those calls only. The paths
   have the case of the repository name, `iT3E/tnwks-ops`, so a caller sends
   `repo` in that case.
+- **The GitHub App** of the reviewer is its own identity at GitHub: the
+  owner makes it, with contents read, pull requests read and write and checks
+  read, and installed it on `iT3E/tnwks-ops` only. Its ID is `GITHUB_APP_ID`
+  in `app/providers.yaml`; its private key is `GITHUB_APP_PRIVATE_KEY` in
+  `workflow-providers-secret`, a file in the providers job that only
+  `openssl` reads. Each run of the job signs a JWT of the App (RS256, 9
+  minutes), finds the installation on the repository, and asks for a token
+  for that one repository with the three permissions above. It fails if the
+  answer grants more. No key or token is on a command line or in a log.
+- **The token life.** An installation token lives one hour. A sandbox keeps
+  the credential of its start for its whole life: after a provider update,
+  the gateway still resolves the placeholder of a running process to the
+  value of its start, while that revision is in its history of 8 (OpenShell
+  0.1.8, `crates/openshell-core/src/provider_credentials.rs:16` and `:776`;
+  docs, "Runtime Limitations" of the provider profiles). A run job lives 40
+  minutes at most, so with a new token every 15 minutes a token is at most
+  15 minutes old when a run starts and 55 minutes old when it ends: a run
+  always has a valid token to its end. A revision that leaves the history
+  resolves to the current value, which is newer. A new run gets the newest
+  token.
 - **Roles.** The service account `run-receiver` can create and get Jobs,
   list pods and read pod logs in this namespace, and nothing more. The run
   jobs and the sweep run as `workflow-run`, with no role and no token: they
@@ -390,8 +410,9 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
 - **Network policy.** In: the runner pods of the `openclaw-hooks` scale set
   in `tools`, a pod `app.kubernetes.io/name: workflow-schedule` of this
   namespace (a schedule, later), and the kubelet's probes. Out: the API
-  server only. The run jobs, the sweep and the providers job reach the
-  sandbox gateway of this namespace only, which also relays the SSH path to a sandbox. The agent
+  server only. The run jobs and the sweep reach the sandbox gateway of this
+  namespace only (the providers job also reaches `api.github.com`, for the
+  token of the App), which also relays the SSH path to a sandbox. The agent
   runs in the sandbox, whose egress is its sandbox policy and its providers.
 - **A test call by hand** needs no rule: a `kubectl port-forward` reaches
   the pod through the kubelet, not from another pod, and the receiver
