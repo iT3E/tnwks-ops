@@ -271,10 +271,15 @@ operator and its narrow roles stay, and the HelmRelease is not ready
 chart before the upgrade (`crds: CreateReplace`), so the new CRDs are in the
 cluster; they add fields, and the old operator works with them. The fix:
 read the rules of the new chart's ClusterRole, and change the two indexes of
-the patch. `bin/trivy-operator-roles` checks the rendered ClusterRole of
-each cluster that lists the app: a rule with a write outside the reports, or
-a log read, fails it. Run it with each chart release (Tests, below); it is
-not yet a step of `.github/workflows/kubernetes.yaml`.
+the patch. `bin/trivy-operator-roles` checks the rendered cluster-wide
+roles of each cluster that lists the app: each ClusterRole of the chart, and
+each ClusterRole that a ClusterRoleBinding gives to the service account
+`trivy-operator`. Outside the reports, a rule with a write, or a rule that
+names `secrets` or `*`, fails it (the cluster-wide read of Secrets that
+`accessGlobalSecretsAndServiceAccount: false` keeps away). A log read fails
+it, and so does a binding to a ClusterRole that is not in the render. Run it
+in each pull request of a chart release (Tests, below); it is not yet a step
+of `.github/workflows/kubernetes.yaml`.
 
 ## The way back
 
