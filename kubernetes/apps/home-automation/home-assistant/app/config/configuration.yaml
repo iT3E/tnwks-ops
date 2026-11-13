@@ -111,7 +111,7 @@ lovelace:
     - url: /local/advanced-camera-card/advanced-camera-card.js?v=8.2.0
       type: module
     # renovate: datasource=github-releases depName=NemesisRE/kiosk-mode cache-bust
-    - url: /local/kiosk-mode/kiosk-mode.js?v=15.0.0
+    - url: /local/kiosk-mode/kiosk-mode.js?v=16.0.0
       type: module
     # The robot vacuum's map card (rooms, zones, go-to).
     # renovate: datasource=github-releases depName=PiotrMachowski/lovelace-xiaomi-vacuum-map-card cache-bust

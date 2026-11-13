@@ -113,7 +113,7 @@ spec:
               # renovate: datasource=github-releases depName=dermotduffy/advanced-camera-card
               ADVANCED_CAMERA_CARD_VERSION: v8.2.0
               # renovate: datasource=github-releases depName=NemesisRE/kiosk-mode
-              KIOSK_MODE_VERSION: v15.0.0
+              KIOSK_MODE_VERSION: v16.0.0
               # The Map Extractor's maintained line is v3 (config flow; v2 is
               # YAML-only and last released 2025-07), still tagged alpha.
               # renovate: datasource=github-releases depName=PiotrMachowski/Home-Assistant-custom-components-Xiaomi-Cloud-Map-Extractor
