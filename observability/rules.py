@@ -424,6 +424,32 @@ def capacity_alerts():
     ]
 
 
+# The certificates of IAM Roles Anywhere behind the AWS sessions of the security
+# platform (kubernetes/apps/security/aws-credentials). The refresher there writes
+# the end of each certificate to the renew time of a Lease, and kube-state-metrics
+# serves that time: a CronJob has no endpoint of its own to scrape.
+SECURITY_CERTIFICATE_LEASES = "aws-security-.+-certificate"
+SECURITY_CERTIFICATE_DAYS = 30
+
+
+def security_alerts():
+    """Reads a series of homelab-wsl-02 only, where the refresher runs."""
+    return [
+        {"alert": "SecurityCertificateExpiring",
+         "expr": ('min by (k8s_cluster, namespace, lease) (kube_lease_renew_time'
+                  f'{{namespace="security",lease=~"{SECURITY_CERTIFICATE_LEASES}"}}) - time()'
+                  f' < {SECURITY_CERTIFICATE_DAYS} * 86400'),
+         "for": "1h", "labels": {"severity": "warning"},
+         "annotations": {"summary": (f"A certificate for IAM Roles Anywhere on {{{{ $labels.k8s_cluster }}}} ends within"
+                                     f" {SECURITY_CERTIFICATE_DAYS} days: {{{{ $labels.lease }}}}"),
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": ("The AWS sessions of one tool of the security platform come from this certificate, and stop when it ends."
+                                         " Make a new certificate and put it in its SOPS Secret:"
+                                         " kubernetes/apps/security/aws-credentials/README.md has the steps."
+                                         " The alert ends at the next run of the refresher.")}},
+    ]
+
+
 def rule_resource():
     rules = [{"record": name, "expr": expr} for name, expr in records().items()]
     rules += [
@@ -471,7 +497,8 @@ def rule_resource():
     return {"apiVersion": "monitoring.coreos.com/v1", "kind": "PrometheusRule",
             "metadata": {"name": "homelab-observability", "namespace": "monitoring"},
             "spec": {"groups": [{"name": "homelab.evidence", "interval": "1m", "rules": rules},
-                                {"name": "homelab.capacity", "interval": "1m", "rules": capacity_alerts()}]}}
+                                {"name": "homelab.capacity", "interval": "1m", "rules": capacity_alerts()},
+                                {"name": "homelab.security", "interval": "1m", "rules": security_alerts()}]}}
 
 
 def fixtures():
@@ -802,7 +829,51 @@ def fixtures():
         *house_fixtures(),
         *host_fixtures(),
         *capacity_fixtures(),
+        *security_fixtures(),
     ]}
+
+
+def security_fixtures():
+    site = "homelab-wsl-02"
+    day = 86400
+    (rule,) = security_alerts()
+
+    def lease(name, ends, namespace="security"):
+        """A Lease whose renew time is `ends` seconds after the start of the test."""
+        return {"series": f'kube_lease_renew_time{{k8s_cluster="{site}",namespace="{namespace}",lease="{name}"}}',
+                "values": f"{ends}+0x320"}
+
+    def expected(name):
+        labels = {"k8s_cluster": site, "namespace": "security", "lease": name}
+        annotations = {}
+        for key, text in rule["annotations"].items():
+            for label, value in labels.items():
+                text = text.replace("{{ $labels." + label + " }}", value)
+            annotations[key] = text
+        return {"exp_labels": {"severity": "warning", **labels}, "exp_annotations": annotations}
+
+    return [
+        {"name": "a certificate with 29 days left alerts; one with 40 days, another lease and another namespace do not",
+         "interval": "5m",
+         "input_series": [
+             lease("aws-security-audit-certificate", 29 * day),
+             lease("aws-security-trail-certificate", 40 * day),
+             lease("some-controller", 0),
+             lease("aws-security-audit-certificate", day, namespace="other"),
+         ], "alert_rule_test": [
+             {"alertname": "SecurityCertificateExpiring", "eval_time": "30m", "exp_alerts": []},
+             {"alertname": "SecurityCertificateExpiring", "eval_time": "70m", "exp_alerts": [
+                 expected("aws-security-audit-certificate")]},
+         ]},
+        # 31 days left at the start: the last 30 days begin after one day.
+        {"name": "the alert starts when a certificate has 30 days left, and not before", "interval": "5m",
+         "input_series": [lease("aws-security-trail-certificate", 31 * day)],
+         "alert_rule_test": [
+             {"alertname": "SecurityCertificateExpiring", "eval_time": "23h", "exp_alerts": []},
+             {"alertname": "SecurityCertificateExpiring", "eval_time": "26h", "exp_alerts": [
+                 expected("aws-security-trail-certificate")]},
+         ]},
+    ]
 
 
 def capacity_fixtures():
