@@ -60,6 +60,7 @@
   type: router
   site: none
   domain: infrastructure
+  sources: [stream]
 - name: sce-ep01
   type: other
   site: none
