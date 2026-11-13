@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.102.0 - 2026-11-13
+
+### Added
+
+* security: `security/generate.py` makes the rules, the Prowler scan lists, the Wazuh map, the board input and the list of gaps from the control registry, and checks the registry against its schema. The `contracts` job of the observability workflow runs it with `--check`, with the tests of the generator and of the rules. A system with no fresh result gets "no evidence", a safeguard is a pass only when each system with a check for it passes, and one alert rule watches the time of the last result of each source
+
 ## v2.101.0 - 2026-11-13
 
 ### Added
