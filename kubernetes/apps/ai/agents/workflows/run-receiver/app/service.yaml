@@ -1,0 +1,17 @@
+---
+# http://run-receiver.agents-workflows.svc.cluster.local:8080, for the
+# workflow runner and the schedules only (networkpolicy.yaml).
+apiVersion: v1
+kind: Service
+metadata:
+  name: run-receiver
+  labels:
+    app.kubernetes.io/name: run-receiver
+spec:
+  selector:
+    app.kubernetes.io/name: run-receiver
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

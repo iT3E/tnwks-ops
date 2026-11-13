@@ -12,7 +12,7 @@ these parts.
 | Sandbox controller (Agent Sandbox) | `agent-sandbox-system` | `sandbox-controller/` |
 | Trust domain of the main personal agent | `agents-main` | `main/` |
 | Trust domain of the finance agent | `agents-finance` | `finance/` |
-| Trust domain of the workflow agents | `agents-workflows` | `workflows/` |
+| Trust domain of the workflow agents, and their run receiver | `agents-workflows` | `workflows/` |
 | Pilot of a personal agent, on test accounts | `agents-pilot` | `pilot/` |
 | Model bridge, next to the model gateway | `ai` | `../model-bridge/` |
 
@@ -307,6 +307,75 @@ curl -s localhost:8080/api/v1/rpc -H 'Content-Type: application/json' \
 Then start the agent pod again
 (`kubectl -n agents-pilot rollout restart deploy/agent`), so the Signal
 channel finds the account.
+
+## The run receiver
+
+The one entry for a run of a workflow agent, in `agents-workflows`
+(`workflows/run-receiver/`). A caller sends a token, the name of an agent,
+the input and a key. The receiver makes a run job from the template of that
+agent, and gives back the answer of the run. The run job starts the agent in
+a sandbox of this trust domain that runs one time, sends it the input, and
+deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
+(public); the API and the image contract are in the README of
+[iT3E/tnwks-workflow-agents](https://github.com/iT3E/tnwks-workflow-agents).
+
+| What a caller uses | Value |
+| --- | --- |
+| Address | `http://run-receiver.agents-workflows.svc.cluster.local:8080` |
+| A run | `POST /runs` with `Authorization: Bearer <token>` and `{"agent": "<name>", "input": {...}, "key": "<key>", "wait": true}` |
+| The state of a run | `GET /runs/<key>`, with the token |
+| Token | `RUN_RECEIVER_TOKEN` in the Secret `run-receiver-secret` (`app/secret.sops.yaml`). The workflow that calls the receiver holds the same value |
+
+- **The list of agents** (`app/agents.yaml`, the ConfigMap
+  `run-receiver-agents`) has the Job template of each agent: the image, the
+  sandbox policy, the providers and the variables of the agent. The caller
+  sets the name of an agent, the input and the key, and nothing else of the
+  Job. The Job name comes from the key, so a second call with the same key
+  gets the same run. A Job stays 7 days. The receiver refuses to start when
+  a template breaks a rule of the image.
+- **The Renovate reviewer** is the one agent. It calls the model gateway
+  with the name `agents-workflows`, through the provider `model-gateway`,
+  and GitHub through the provider `github-reviewer`. Those two providers, in
+  the store of the sandbox gateway, and the repositories it may review come
+  with the test repository. Until then a run of it fails at the start of its
+  sandbox.
+- **Roles.** The service account `run-receiver` can create and get Jobs,
+  list pods and read pod logs in this namespace, and nothing more. The run
+  jobs and the sweep run as `workflow-run`, with no role and no token: they
+  call the sandbox gateway with its client certificate.
+- **The admission policy** (`run-receiver/admission/`, the
+  ValidatingAdmissionPolicy `workflow-run-jobs` and its binding to this
+  namespace). A right to make a Job is a right to read each secret of the
+  namespace, because the Job sets its pod. So each Job that the receiver
+  sends must match the rules of a template: an agent of the list with its
+  own providers, one container from the image of the workflow agents pinned
+  by digest (and a sandbox of the same image), the service account
+  `workflow-run` with no token, no secret but the client certificate, one
+  try, and a time limit of one hour at most. The two objects are
+  cluster-scoped, so they have a Flux Kustomization of their own with no
+  `targetNamespace` (`agents-workflows-run-admission`), and the receiver
+  depends on it. A new agent adds its providers to the policy in the same
+  pull request as its entry in `agents.yaml`.
+- **The sweep** (CronJob `workflow-sweep`, every 15 minutes) deletes each
+  run sandbox that is older than one hour, by its name and label, through
+  the sandbox gateway. A run job deletes its own sandbox; the sweep is for
+  a run job that stopped before it could.
+- **Network policy.** In: the runner pods of the `openclaw-hooks` scale set
+  in `tools`, a pod `app.kubernetes.io/name: workflow-schedule` of this
+  namespace (a schedule, later), and the kubelet's probes. Out: the API
+  server only. The run jobs and the sweep reach the sandbox gateway of this
+  namespace only, which also relays the SSH path to a sandbox. The agent
+  runs in the sandbox, whose egress is its sandbox policy and its providers.
+- **A test call by hand** needs no rule: a `kubectl port-forward` reaches
+  the pod through the kubelet, not from another pod, and the receiver
+  listens on each address of the pod.
+
+```sh
+kubectl -n agents-workflows port-forward svc/run-receiver 8080:8080 &
+curl -s localhost:8080/healthz
+# With no token, a run fails (401):
+curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8080/runs -d '{}'
+```
 
 ## Checks
 

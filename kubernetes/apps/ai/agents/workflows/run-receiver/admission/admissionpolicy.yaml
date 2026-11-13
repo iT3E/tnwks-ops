@@ -1,0 +1,128 @@
+---
+# The second control on the run jobs (docs/apps/agent-platform.md, "The run
+# receiver"). A right to make a Job is a right to read each secret of the
+# namespace, because the Job sets its pod. The run receiver has that right,
+# and its code is the first control: it makes each Job from the template of
+# an agent in ../app/agents.yaml. This policy refuses a Job of the receiver
+# that is not such a Job, if a fault in the receiver makes one.
+#
+# It checks each Job that the service account of the receiver sends, and no
+# other Job (the sweep and the checks come from CronJobs in git). A Job of
+# the receiver must have:
+#   - an agent of the list below, with the providers of that agent and no
+#     other ones;
+#   - one container, run-job, from the image of the workflow agents, pinned
+#     by digest, and a sandbox of that same image;
+#   - the service account workflow-run, with no token;
+#   - no secret but the client certificate of the sandbox gateway, and no
+#     variable from a secret;
+#   - one try, and a time limit of one hour at most (the sweep deletes a run
+#     sandbox after one hour).
+# A new workflow agent adds its line to `providers` below, in the same pull
+# request as its entry in ../app/agents.yaml.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: workflow-run-jobs
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["jobs"]
+  matchConditions:
+    - name: sent-by-the-run-receiver
+      expression: >-
+        request.userInfo.username ==
+        'system:serviceaccount:agents-workflows:run-receiver'
+  variables:
+    # Each agent of ../app/agents.yaml, with its providers (SANDBOX_PROVIDERS).
+    - name: providers
+      expression: >-
+        {'renovate-reviewer': 'model-gateway,github-reviewer'}
+    - name: agent
+      expression: >-
+        has(object.metadata.labels) &&
+        'workflow-agents/agent' in object.metadata.labels ?
+        object.metadata.labels['workflow-agents/agent'] : ''
+    - name: pod
+      expression: object.spec.template.spec
+    # A Job has one container or more (the API server checks that first);
+    # the rule on containers below admits one only.
+    - name: container
+      expression: variables.pod.containers[0]
+    - name: env
+      expression: >-
+        has(variables.container.env) ? variables.container.env : []
+  validations:
+    - expression: variables.agent in variables.providers
+      message: The agent of the Job is not in the list of this policy.
+    - expression: >-
+        object.metadata.name.startsWith('run-') &&
+        has(object.spec.backoffLimit) && object.spec.backoffLimit == 0 &&
+        has(object.spec.activeDeadlineSeconds) &&
+        object.spec.activeDeadlineSeconds <= 3600 &&
+        variables.pod.restartPolicy == 'Never'
+      message: >-
+        A run job is named run-*, has one try, and a time limit of one hour
+        at most.
+    - expression: >-
+        variables.pod.containers.size() == 1 &&
+        variables.container.name == 'run-job' &&
+        (!has(variables.pod.initContainers) ||
+        variables.pod.initContainers.size() == 0) &&
+        (!has(variables.pod.ephemeralContainers) ||
+        variables.pod.ephemeralContainers.size() == 0)
+      message: A run job has one container, run-job, and no other one.
+    - expression: >-
+        variables.container.image.matches('^ghcr[.]io/it3e/tnwks-workflow-agents:[^@]+@sha256:[0-9a-f]{64}$') &&
+        variables.env.filter(e, e.name == 'SANDBOX_IMAGE').size() == 1 &&
+        variables.env.exists(e, e.name == 'SANDBOX_IMAGE' && has(e.value) &&
+        e.value == variables.container.image)
+      message: >-
+        A run job and its sandbox use the image of the workflow agents,
+        pinned by digest.
+    - expression: >-
+        has(variables.pod.serviceAccountName) &&
+        variables.pod.serviceAccountName == 'workflow-run' &&
+        has(variables.pod.automountServiceAccountToken) &&
+        variables.pod.automountServiceAccountToken == false
+      message: A run job runs as workflow-run, with no token.
+    - expression: >-
+        variables.env.filter(e, e.name == 'AGENT_NAME').size() == 1 &&
+        variables.env.exists(e, e.name == 'AGENT_NAME' && has(e.value) &&
+        e.value == variables.agent)
+      message: AGENT_NAME is the agent of the Job label.
+    - expression: >-
+        variables.agent in variables.providers &&
+        variables.env.filter(e, e.name == 'SANDBOX_PROVIDERS').size() == 1 &&
+        variables.env.exists(e, e.name == 'SANDBOX_PROVIDERS' && has(e.value) &&
+        e.value == variables.providers[variables.agent])
+      message: The providers of a run job are those of its agent.
+    - expression: >-
+        (!has(variables.container.envFrom) ||
+        variables.container.envFrom.size() == 0) &&
+        variables.env.all(e, !has(e.valueFrom))
+      message: A run job takes no variable from a secret or another object.
+    - expression: >-
+        !has(variables.pod.volumes) || variables.pod.volumes.all(v,
+        has(v.emptyDir) ||
+        (has(v.secret) && v.secret.secretName == 'openshell-client-tls') ||
+        (has(v.configMap) && v.configMap.name == variables.agent + '-policy'))
+      message: >-
+        A run job mounts an emptyDir, the client certificate, and the sandbox
+        policy of its agent, and nothing else.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: workflow-run-jobs
+spec:
+  policyName: workflow-run-jobs
+  validationActions: ["Deny"]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: agents-workflows

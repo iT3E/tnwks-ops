@@ -1,0 +1,120 @@
+---
+# The list of agents of the run receiver, with the Job template of each one
+# (the contract is in the README of iT3E/tnwks-workflow-agents). The receiver
+# reads it at the start, from the ConfigMap run-receiver-agents, and refuses
+# to start when a template breaks a rule of the image. It sets the Job name
+# (from the key of the run), the namespace, the label workflow-agents/agent,
+# two annotations, and the variables RUN_KEY and RUN_INPUT. Nothing else of
+# a Job comes from a caller.
+#
+# The admission policy (../admission/admissionpolicy.yaml) checks each Job of
+# the receiver against these rules too: a new agent adds its providers there
+# in the same pull request.
+#
+# The sandbox image is the image of the Job (one anchor, so the two never
+# differ), and Renovate moves it with the Deployment of the receiver.
+agents:
+  renovate-reviewer:
+    job:
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        labels:
+          app.kubernetes.io/name: workflow-run
+      spec:
+        # One run for one key: no second pod.
+        backoffLimit: 0
+        # The time limit of a run, with the start and the delete of the
+        # sandbox. The sweep deletes a run sandbox after one hour.
+        activeDeadlineSeconds: 2400
+        # The Job, and so its key, stays 7 days.
+        ttlSecondsAfterFinished: 604800
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/name: workflow-run
+          spec:
+            restartPolicy: Never
+            serviceAccountName: workflow-run
+            # The run job calls no Kubernetes API.
+            automountServiceAccountToken: false
+            enableServiceLinks: false
+            # Time to delete the sandbox after SIGTERM.
+            terminationGracePeriodSeconds: 90
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 10001
+              runAsGroup: 10001
+              # The client certificate (mode 0440) is readable by the group.
+              fsGroup: 10001
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+              - name: run-job
+                image: &image ghcr.io/it3e/tnwks-workflow-agents:0.1.0@sha256:d2eeca6cd89566d59c4b29b8526e5140b12c9187ddb372eb01efebe3b198cd11
+                imagePullPolicy: IfNotPresent
+                args: ["run-job"]
+                env:
+                  - name: AGENT_NAME
+                    value: renovate-reviewer
+                  - name: SANDBOX_IMAGE
+                    value: *image
+                  - name: SANDBOX_POLICY
+                    value: /etc/workflow-run/policy.yaml
+                  # The providers of the agent, in the store of the sandbox
+                  # gateway. The provider of the reviewer and its Job come
+                  # with the test repository; until then a run fails at the
+                  # start of its sandbox.
+                  - name: SANDBOX_PROVIDERS
+                    value: model-gateway,github-reviewer
+                  - name: SANDBOX_MEMORY
+                    value: 512Mi
+                  # The sandbox gateway of this trust domain.
+                  - name: OPENSHELL_GATEWAY_URL
+                    value: https://openshell.agents-workflows.svc.cluster.local:8080
+                  - name: RUN_TIMEOUT_SECONDS
+                    value: "1800"
+                  # AGENT_ENV_<NAME> goes into the sandbox as <NAME>. The
+                  # model name of this trust domain at the model gateway
+                  # (docs/apps/litellm.md). The repositories the reviewer may
+                  # review (REVIEWER_REPOSITORIES) come with the test
+                  # repository.
+                  - name: AGENT_ENV_MODEL_GATEWAY_URL
+                    value: http://litellm-app.ai.svc.cluster.local:4000/v1
+                  - name: AGENT_ENV_MODEL_ID
+                    value: agents-workflows
+                  - name: AGENT_ENV_OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: http://alloy.monitoring.svc.cluster.local:4318
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  capabilities:
+                    drop: ["ALL"]
+                resources:
+                  requests:
+                    cpu: 50m
+                    memory: 64Mi
+                  limits:
+                    memory: 256Mi
+                volumeMounts:
+                  - name: tmp
+                    mountPath: /tmp
+                  - name: mtls
+                    mountPath: /etc/openshell/mtls
+                    readOnly: true
+                  - name: policy
+                    mountPath: /etc/workflow-run
+                    readOnly: true
+            volumes:
+              - name: tmp
+                emptyDir:
+                  sizeLimit: 64Mi
+              # The client certificate of the sandbox gateway: ca.crt,
+              # tls.crt, tls.key.
+              - name: mtls
+                secret:
+                  secretName: openshell-client-tls
+                  defaultMode: 0440
+              - name: policy
+                configMap:
+                  name: renovate-reviewer-policy

@@ -4,4 +4,5 @@ kind: Kustomization
 resources:
   - ./namespace.yaml
   - ./sandbox-gateway/ks.yaml
+  - ./run-receiver/ks.yaml
   - ./checks/ks.yaml
