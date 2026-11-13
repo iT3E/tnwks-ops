@@ -104,6 +104,9 @@ paths = [
 #                Without one, plans key on the PR and applies on the root.
 #   tf_vars      endpoint overrides that only hold on the runner
 #   enabled_var  repository variable that must be "true" to run
+#   mask_sops    SOPS files, relative to root, whose every value is masked in
+#                the job log before Terraform runs (.github/scripts/sops-mask.py),
+#                for values a Terraform error could quote. local backend only.
 # Adding a root is one entry here.
 
 [groups.terraform.aws]
@@ -132,9 +135,9 @@ paths = [
   ".github/workflows/terraform.yaml",
 ]
 
-# The iT3E account's repositories (docs/operations/github.md). Off until the
-# owner adds the token and sets GITHUB_TERRAFORM_ENABLED, which Terraform
-# doesn't manage.
+# The iT3E account's repositories (docs/operations/github.md). Off until
+# `task github:enable` sets GITHUB_TERRAFORM_ENABLED (not managed by
+# Terraform), which it does only once main has the token and the mask.
 [groups.terraform.github]
 title = "GitHub"
 root = "prod/github"
@@ -142,9 +145,12 @@ runner = "tnwks-ops-runner"
 backend = "local"
 lock = "github-terraform"
 enabled_var = "GITHUB_TERRAFORM_ENABLED"
+# Private repositories' names and descriptions, and the token.
+mask_sops = ["repositories.sops.yaml", "secrets.sops.yaml"]
 paths = [
   "infrastructure/terraform/environments/prod/github/**",
   "infrastructure/terraform/modules/github/**",
+  ".github/scripts/sops-mask.py",
   ".github/workflows/terraform.yaml",
 ]
 
