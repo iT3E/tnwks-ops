@@ -237,6 +237,14 @@ the sandbox plugin copies the workspace only.
   asks for the hosted plugin catalog once at start, which has no setting at
   this release; the network policy blocks it, and the product uses its
   bundled catalog.
+- **The hold of a message.** A plugin file in the config
+  (`agent/config/plugins/tnwks-message-hold.ts`, loaded from
+  `plugins.load.paths`) asks the owner in the chat before the message tool
+  sends to an address that the agent names, or broadcasts: allow once, or
+  deny, with a deny after 10 minutes. A normal reply names no address and
+  is not held. The exec approvals of the product cover host commands only,
+  and the pilot runs each command in a sandbox, so no command is held. Each
+  decision logs `message-hold decision=<decision>` in the `agent` container.
 - **The scheduled turn** is the heartbeat of the product
   (`agents.defaults.heartbeat`): once a day, a turn in its own session with
   one shell command in a sandbox, and no message to a channel. Its traces go
