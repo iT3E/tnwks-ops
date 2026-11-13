@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.91.4 - 2026-11-13
+
+### Fixed
+
+* alerts: a UniFi controller restart no longer reads as every AP rebooting, and the desktop's nightly drift check accepts its Wi-Fi card disabled in Device Manager and the syslog relay rule's stored address
+
 ## v2.91.3 - 2026-11-12
 
 ### Fixed

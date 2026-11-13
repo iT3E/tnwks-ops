@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'alerts: a UniFi controller restart no longer reads as every AP rebooting, and the desktop''s nightly drift check accepts its Wi-Fi card disabled in Device Manager and the syslog relay rule''s stored address'
-time: 2026-11-12T17:08:01.432707895-08:00
