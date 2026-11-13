@@ -1,0 +1,94 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: security-loki-proxy
+  namespace: monitoring
+spec:
+  interval: 30m
+  timeout: 5m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  values:
+    controllers:
+      security-loki-proxy:
+        type: deployment
+        replicas: 1
+        annotations:
+          # Caddy reads the certificate at its start: a renewed one needs a new pod.
+          reloader.stakater.com/auto: "true"
+        pod:
+          automountServiceAccountToken: false
+          # The node of the security platform (kubernetes/apps/security/README.md).
+          nodeSelector:
+            kubernetes.io/hostname: ${SECURITY_NODE}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+        containers:
+          app:
+            image:
+              repository: docker.io/library/caddy
+              tag: 2.11.9-alpine@sha256:0bbb055bda6793c999bde78b1b5ce3e89f829fb031af2cf50056ea1246559fee
+            command: [caddy]
+            args: [run, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
+            env:
+              XDG_DATA_HOME: /tmp/caddy/data
+              XDG_CONFIG_HOME: /tmp/caddy/config
+            ports:
+              - name: https
+                containerPort: 8443
+            securityContext:
+              readOnlyRootFilesystem: true
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: [ALL]
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 64Mi
+            probes:
+              liveness: &probe
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: 8443
+                  periodSeconds: 30
+              readiness: *probe
+    persistence:
+      config:
+        type: configMap
+        name: security-loki-proxy-config
+        globalMounts:
+          - path: /etc/caddy/Caddyfile
+            subPath: Caddyfile
+            readOnly: true
+      tls:
+        type: secret
+        name: security-loki-server
+        globalMounts:
+          - path: /tls
+            readOnly: true
+      tmp:
+        type: emptyDir
+        sizeLimit: 32Mi
+        globalMounts:
+          - path: /tmp

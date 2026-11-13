@@ -44,6 +44,9 @@ resources:
   - ../../../apps/monitoring/thanos-metrics/ks.yaml
   - ../../../apps/monitoring/thanos-metrics/archive-ks.yaml
   - ./observability-garage-ks.yaml
+  # The TLS proxy in front of this site's Loki, the store of the security
+  # streams: the path on which homelab-wsl writes them.
+  - ../../../apps/monitoring/security-loki-proxy/ks.yaml
   - ./alertmanager-ks.yaml
   - ../../../apps/monitoring/kube-prometheus-stack/ks.yaml
   - ../../../apps/monitoring/node-exporter/ks.yaml

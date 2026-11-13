@@ -1,0 +1,55 @@
+---
+# The proxy takes connections from the Vector aggregator of the other site
+# only, and it calls the Loki gateway of this cluster only (and DNS, for the
+# name of the gateway). The kubelet's probes come from the host.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: security-loki-proxy
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: security-loki-proxy
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: vector-aggregator
+            app.kubernetes.io/instance: vector-aggregator
+            # Both WSL clusters are one Cilium Cluster Mesh: name the other one.
+            io.cilium.k8s.policy.cluster: ${PEER_CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: loki
+            app.kubernetes.io/instance: loki
+            app.kubernetes.io/component: gateway
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            # The port of the gateway pod. Its Service has port 80.
+            - port: "8080"
+              protocol: TCP
