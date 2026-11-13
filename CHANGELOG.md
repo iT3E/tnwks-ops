@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.107.0 - 2026-11-13
+
+### Added
+
+* monitoring: the Vector aggregator of each cluster serves its own metrics (an `internal_metrics` source and a `prometheus_exporter` sink on port 9598 of the pod), and a PodMonitor scrapes them. The port is not on the LoadBalancer Service. `kubernetes/apps/monitoring/vector/README.md` lists the ports and the series
+
 ## v2.106.0 - 2026-11-13
 
 ### Added
