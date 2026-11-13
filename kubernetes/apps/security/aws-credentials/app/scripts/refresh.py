@@ -159,7 +159,8 @@ def refresh(entry: dict, namespace: str, region: str, now: datetime.datetime) ->
     creds = session(entry)
     patch(f"/api/v1/namespaces/{namespace}/secrets/{entry['secret']}", secret_patch(creds, region, not_after))
     days = (not_after - now).days
-    return (f"refreshed {namespace}/{entry['secret']}, expires {creds['Expiration']};"
+    # The line names the session and two dates, and nothing of the session itself.
+    return (f"{entry['name']}: session refreshed, expires {creds['Expiration']};"
             f" its certificate ends {not_after:%Y-%m-%d}, in {days} days")
 
 
