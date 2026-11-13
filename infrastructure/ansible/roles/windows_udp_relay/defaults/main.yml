@@ -19,9 +19,11 @@ udp_relays:
     port: 2055
     remote: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
   # Router syslog -> monitoring/vector-aggregator. Only the router (its 910
-  # address) sends syslog. Written as a range because that's how Windows
-  # stored the rule's single address; `10.10.91.1` alone reads as a /32 to
-  # win_firewall_rule and shows up as a change against the existing rule.
+  # address) sends syslog. A plain address, which Windows stores as
+  # 10.10.91.1/255.255.255.255. The range form 10.10.91.1-10.10.91.1 matched
+  # only a rule first created that way; the rule was recreated with the plain
+  # address between the 2026-11-10 and 11-11 nightly checks, and the range
+  # form has failed the check since.
   - task: tnwks-udp-relay-syslog
     port: 6001
-    remote: [10.10.91.1-10.10.91.1]
+    remote: [10.10.91.1]
