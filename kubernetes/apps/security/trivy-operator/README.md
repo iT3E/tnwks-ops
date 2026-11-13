@@ -151,7 +151,11 @@ job `peer-federate` of homelab-wsl brings its series of `trivy` there
 The rule of the result series reads the accepted findings with no
 `source_site` matcher, so on homelab-wsl the federated copy mutes them: the
 fixture "an accepted check gives 0 until its end" of `observability/rules.py`
-has the copy from homelab-wsl-02 and the result of homelab-wsl.
+has the copy from homelab-wsl-02 and the result of homelab-wsl. The rule
+keeps the last value of the list for a day, so when homelab-wsl-02 or the
+federation is down, an accepted finding stays muted and does not alert as
+new (the fixture "an accepted check of homelab-wsl stays muted while the
+federated list is gone for hours").
 Until the reader runs, no check is accepted, and an exception shows as a
 fail.
 
