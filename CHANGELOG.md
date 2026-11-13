@@ -3,6 +3,30 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.115.0 - 2026-11-13
+
+### Added
+
+* monitoring: the audit reader, a small Vector DaemonSet on the control plane node that reads the audit log of the API server and sends it to the audit source of the aggregator, with acknowledgements. It runs as user 65534 with no capability and no ServiceAccount token, and it keeps its positions on the node. homelab-wsl-02 lists it, and the registry of the security platform lists the stream as a source of that cluster. `kubernetes/apps/monitoring/vector/README.md` has its properties
+
+## v2.114.1 - 2026-11-13
+
+### Fixed
+
+* terraform: the GitHub root's CI switch is TERRAFORM_GITHUB_ENABLED (GitHub refuses to set a variable named GITHUB_*, so the root could not be turned on), and task github:enable reads it through the API instead of gh variable get, which older gh releases lack
+
+## v2.114.0 - 2026-11-13
+
+### Added
+
+* terraform: the GitHub root's token (secrets.sops.yaml, encrypted for the CI age key) and the import blocks that adopt its tnwks-github-prod workspace in aws-init, both from task github:bootstrap
+
+## v2.113.0 - 2026-11-13
+
+### Added
+
+* terraform: the GitHub account as a root, environments/prod/github with modules/github, importing every repository of the account (private ones whose names are not public under neutral keys, with the names in SOPS) and the main ruleset, environments, Actions settings and variables of tnwks-ops as they are; its Terraform Cloud workspace, a CI entry off until GITHUB_TERRAFORM_ENABLED is true that masks the values of the root's SOPS files in its public log (mask_sops in .github/ci/domains.toml), task github:bootstrap and task github:enable to bring it up, break-glass tasks and docs/operations/github.md
+
 ## v2.112.0 - 2026-11-13
 
 ### Added
