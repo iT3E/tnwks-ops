@@ -115,6 +115,9 @@ resources:
   - ../../../apps/kopiur-system/standby-restore/ks.yaml
   # Fence a warm app's Postgres when its site lease names this site.
   - ../../../apps/databases/site-lease-fence/ks.yaml
+  # The security platform's namespace (kubernetes/apps/security/README.md):
+  # baseline Pod Security, deny by default. Its apps join one by one.
+  - ../../../apps/security/namespace.yaml
   # CI: the network-device Terraform runner (wg03 sidecar), so those
   # workflows run while homelab-wsl is down.
   - ../../../apps/tools/namespace.yaml
