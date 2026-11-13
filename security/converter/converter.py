@@ -38,6 +38,7 @@ STREAMS = "homelab_security_converter_streams"
 LAST_CYCLE = "homelab_security_converter_last_cycle_timestamp_seconds"
 QUERY_SUCCESS = "homelab_security_converter_stream_query_success"
 ACCEPTED_SKIPPED = "homelab_security_converter_accepted_skipped_entries"
+ACCEPTED_READ = "homelab_security_converter_accepted_list_read"
 
 INTERVAL_SECONDS = 300
 # The converter looks back three times the `late_after` of a stream, and one hour at
@@ -52,7 +53,9 @@ NANOSECONDS = 1_000_000_000
 
 
 def quote(value: object) -> str:
-    return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+    # A character that is not UTF-8 (a lone surrogate) becomes its escape, as text.
+    text = str(value).encode("utf-8", "backslashreplace").decode("utf-8")
+    return text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
 class Metrics:
@@ -69,7 +72,9 @@ class Metrics:
             f"{metric_name}{{{suffix}}} {number}" if suffix else f"{metric_name} {number}")
 
     def render(self) -> bytes:
-        return ("\n".join(line for lines in self.lines.values() for line in lines) + "\n").encode()
+        # A text that can not be UTF-8 (a lone surrogate) never stops a scrape.
+        text = "\n".join(line for lines in self.lines.values() for line in lines) + "\n"
+        return text.encode("utf-8", "backslashreplace")
 
 
 class Loop:
@@ -265,94 +270,189 @@ class StreamSource(Loop):
 # The entry fields that the converter reads. `reason` stays in the file.
 ACCEPTED_FIELDS = ("source", "check", "system", "until")
 MAX_LIST_BYTES = 1024 * 1024
-MAX_CHECK_LENGTH = 200
+# The form of a check ID of each tool: Prowler, Trivy (`k8s-cis-1.23/1.2.3`), Wazuh, the
+# API checks. A value of another form is no check, so it never reaches a label.
+CHECK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_./:-]{0,199}$")
+# PyYAML reads a plain value that starts with one of these characters, or that is one of
+# these words, as a number, a date, a bool or null. The reader takes such a value only
+# when PyYAML gives the same text: a decimal number or a date as YYYY-MM-DD.
+TYPED_START = "+-.0123456789"
+TYPED_WORDS = {"yes", "Yes", "YES", "no", "No", "NO", "true", "True", "TRUE", "false", "False",
+               "FALSE", "on", "On", "ON", "off", "Off", "OFF", "null", "Null", "NULL", "~", "<<", "="}
+SAME_TEXT = re.compile(r"^(?:0|[1-9][0-9]*|[0-9]{4}-[0-9]{2}-[0-9]{2})$")
+# A character that YAML does not let a file hold. PyYAML stops on it.
+NOT_PRINTABLE = re.compile("[^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]")
 KEY_LINE = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(?:[ ]+(.*))?$")
-SINGLE_QUOTED = re.compile(r"^'((?:[^']|'')*)'[ ]*(?:#.*)?$")
+BLOCK_STARTS = ("|", ">", "|-", ">-", "|+", ">+")
 
 
-class NotTaken(ValueError):
-    """A value or a line that the reader of the list does not take."""
+class Unreadable(ValueError):
+    """A line of the list that the reader does not understand. After such a line the
+    reader can not know where the next entry starts, so the file gives no entry."""
 
 
-def scalar(text: str) -> str | None:
-    """The value of a `key: value` line of the list: a plain, single-quoted or
-    double-quoted scalar on one line. None for an empty value or the start of a block
-    scalar, whose lines follow. NotTaken for each other form."""
-    if text in ("", "|", ">", "|-", ">-", "|+", ">+") or text.startswith("#"):
+# The escapes of a double-quoted YAML value, and the number of hex digits after x, u, U.
+YAML_ESCAPES = {**dict.fromkeys('0abt\tnvfre "/\\N_LP', 0), "x": 2, "u": 4, "U": 8}
+HEX = re.compile(r"[0-9A-Fa-f]+")
+
+
+def quote_end(text: str, mark: str, start: int) -> int | None:
+    """The index after the quote that closes a value opened with `mark`, or None when the
+    value goes on to the next line. In single quotes `''` is a quote of the text; in
+    double quotes a backslash escapes the next character, also the end of the line.
+    Unreadable for an escape that YAML does not have: PyYAML stops on it."""
+    at = start
+    while at < len(text):
+        char = text[at]
+        if mark == "'" and char == "'":
+            if text[at + 1:at + 2] == "'":
+                at += 2
+                continue
+            return at + 1
+        if mark == '"' and char == "\\":
+            escape = text[at + 1:at + 2]
+            if escape == "":
+                return None  # the value goes on, with no space
+            digits = YAML_ESCAPES.get(escape)
+            if digits is None or (digits and not HEX.fullmatch(text[at + 2:at + 2 + digits] or "-")
+                                  or len(text[at + 2:at + 2 + digits]) < digits):
+                raise Unreadable("an escape that YAML does not have")
+            at += 2 + digits
+            continue
+        if mark == '"' and char == '"':
+            return at + 1
+        at += 1
+    return None
+
+
+def plain(value: str) -> str | None:
+    """The text of a plain value, or None when PyYAML reads it as another type, or as a
+    text that is not the same. Unreadable for a date as YYYY-MM-DD that is no day: PyYAML
+    stops on it."""
+    if value in TYPED_WORDS or (value[0] in TYPED_START and not SAME_TEXT.match(value)):
         return None
-    if text.startswith('"'):
+    if value[0] in TYPED_START and "-" in value:
         try:
-            value, end = json.JSONDecoder().raw_decode(text)
+            datetime.date.fromisoformat(value)
         except ValueError:
-            raise NotTaken("a double-quoted value that does not end on its line") from None
-        rest = text[end:].strip()
-        if rest and not rest.startswith("#"):
-            raise NotTaken("text after a quoted value")
-        return value
-    if text.startswith("'"):
-        match = SINGLE_QUOTED.match(text)
-        if not match:
-            raise NotTaken("a single-quoted value that does not end on its line")
-        return match[1].replace("''", "'")
-    if text[0] in "[]{}&*!%@`|>":
-        raise NotTaken("a flow collection, an anchor, an alias or a tag")
-    value = text.split(" #", 1)[0].rstrip()
-    if ": " in value or value.endswith(":"):
-        raise NotTaken("a plain value with a colon")
+            raise Unreadable("a date that is no day") from None
     return value
 
 
-def yaml_list(text: str) -> tuple[list[dict[str, str | None]], int]:
-    """The entries of the list of accepted findings, in the block form of
-    security/README.md: a YAML list of mappings, one `key: value` on each line. The
-    Python image of the converter has no YAML library, so this reader takes that form
-    only. An entry with a line of any other form is not taken, and is counted.
+def scalar(text: str) -> tuple[str | None, str | None]:
+    """The value of a `key: value` line, and what may follow it: "block" (the lines of a
+    block value), "plain" (more lines of a plain value), "empty", None, or the quote mark
+    of a quoted value that goes on to the next lines. The value is None when it is empty,
+    a block, a quoted value that goes on, a double-quoted value that the JSON decoder does
+    not read, or a plain value that PyYAML reads as another type. Unreadable for a flow
+    collection, an anchor, an alias, a tag, or a plain value with a colon."""
+    if text == "" or text.startswith("#"):
+        return None, "empty"
+    if text.split(" #", 1)[0].rstrip() in BLOCK_STARTS:
+        return None, "block"
+    if text[0] in "'\"":
+        end = quote_end(text, text[0], 1)
+        if end is None:
+            return None, text[0]
+        rest = text[end:].strip()
+        if rest and not rest.startswith("#"):
+            raise Unreadable("text after a quoted value")
+        if text[0] == "'":
+            return text[1:end - 1].replace("''", "'"), None
+        try:
+            return json.loads(text[:end]), None
+        except ValueError:
+            return None, None
+    if text[0] in "[]{},&*!%@`|>" or text.startswith(("- ", "? ", ": ")) or text in ("-", "?", ":"):
+        raise Unreadable("a flow collection, an anchor, an alias, a tag or an indicator")
+    value = text.split(" #", 1)[0].rstrip()
+    if ": " in value or value.endswith(":"):
+        raise Unreadable("a plain value with a colon")
+    return plain(value), "plain"
 
-    Returns the entries that it took, and the number of entries (or lines outside an
-    entry) that it did not take."""
-    entries: list[tuple[dict[str, str | None], bool]] = []
-    outside = 0
-    dash = key_column = None
-    last_key = None
-    for raw in text.splitlines():
+
+def yaml_list(text: str) -> list[dict[str, str | None]]:
+    """The entries of the list of accepted findings, in the block form of
+    security/README.md and of `yaml.safe_dump`: a YAML list of mappings, one `key: value`
+    on each line. The Python image of the converter has no YAML library, so this reader
+    takes that form only, and raises Unreadable at the first line of another form.
+
+    A quoted value can go on over more lines, as YAML lets it: the reader goes to its
+    closing quote, and reads no key in those lines. A block value (`|`, `>`) and a plain
+    value can go on over lines that are more indented than the key. A value on more lines
+    is None, so only `reason` can have one: an entry with such a `check`, `system`,
+    `source` or `until` does not fit."""
+    if NOT_PRINTABLE.search(text):
+        raise Unreadable("a character that YAML does not let a file hold")
+    entries: list[dict[str, str | None]] = []
+    dash = key_column = last_key = block_column = None
+    follows = None
+    for number, raw in enumerate(text.splitlines(), 1):
+        if follows in ("'", '"'):
+            if raw.startswith(("---", "...")) and raw[3:4] in ("", " ", "\t"):
+                raise Unreadable(f"line {number}: the end of a document inside a quoted value")
+            end = quote_end(raw, follows, 0)
+            if end is not None:
+                rest = raw[end:].strip()
+                if rest and not rest.startswith("#"):
+                    raise Unreadable(f"line {number}: text after a quoted value")
+                follows = None
+            continue
         line = raw.rstrip()
         content = line.lstrip(" ")
-        if not content or content.startswith("#") or (line in ("---", "...") and dash is None):
-            continue
         indent = len(line) - len(content)
-        if "\t" in raw[:len(raw) - len(raw.lstrip())]:
-            content = "\t"  # a tab in the indentation: no form of this reader
-        if (content == "-" or content.startswith("- ")) and (dash is None or indent == dash):
+        if follows == "block":
+            # The lines of a block value: blank, or more indented than the key. The
+            # first line sets the column of the value.
+            if not content:
+                continue
+            if indent > key_column:
+                if block_column is None:
+                    block_column = indent
+                if indent < block_column:
+                    raise Unreadable(f"line {number}: a line of a block value at another column")
+                continue
+            follows = None
+        if not content or content.startswith("#") or (line == "---" and dash is None):
+            if content.startswith("#") and follows == "plain":
+                follows = None  # a comment ends a plain value
+            continue
+        if content[0] == "\t":
+            raise Unreadable(f"line {number}: a tab in the indentation")
+        if (content == "-" or content.startswith("- ")) and indent == (indent if dash is None else dash):
             dash = indent
-            entries.append(({}, True))
+            entries.append({})
+            key_column = last_key = follows = None
             rest = content[1:].lstrip(" ")
-            key_column, last_key = None, None
             if not rest or rest.startswith("#"):
                 continue
-            key_column, content, indent = indent + len(content) - len(rest), rest, indent + len(content) - len(rest)
+            if rest[0] == "\t":
+                raise Unreadable(f"line {number}: a tab in the indentation")
+            indent = indent + len(content) - len(rest)
+            key_column, content = indent, rest
         if not entries:
-            outside += 1
-            continue
-        entry = entries[-1][0]
+            raise Unreadable(f"line {number}: a line outside the list")
         if key_column is None and indent > dash:
             key_column = indent
-        if indent == key_column and (match := KEY_LINE.match(content)):
-            key = match[1]
-            try:
-                value = scalar(match[2] or "")
-            except NotTaken:
-                entries[-1] = entry, False
-                continue
-            if key in entry:
-                entries[-1] = entry, False
-            entry[key], last_key = value, key
-        elif key_column is not None and indent > key_column and last_key is not None:
-            # A line of a block scalar or of a value on two lines. Only `reason` may have one.
+        entry = entries[-1]
+        if indent == key_column:
+            match = KEY_LINE.match(content)
+            if not match:
+                raise Unreadable(f"line {number}: not a `key: value` line")
+            if match[1] in entry:
+                raise Unreadable(f"line {number}: a key two times in one entry")
+            value, follows = scalar(match[2] or "")
+            entry[match[1]], last_key, block_column = value, match[1], None
+        elif key_column is not None and indent > key_column and follows == "plain":
+            # A line of a plain value on more lines.
+            if ": " in content or content.endswith(":") or " #" in content or "\t#" in content:
+                raise Unreadable(f"line {number}: a colon or a comment in a plain value")
             entry[last_key] = None
         else:
-            entries[-1] = entry, False
-    taken = [entry for entry, ok in entries if ok]
-    return taken, outside + len(entries) - len(taken)
+            raise Unreadable(f"line {number}: a line at a column of no key")
+    if follows in ("'", '"'):
+        raise Unreadable("the file ends inside a quoted value")
+    return entries
 
 
 def end_of(until: object) -> int:
@@ -365,24 +465,25 @@ def end_of(until: object) -> int:
 def accepted_entries(text: str, sources: set[str], systems: set[str]
                      ) -> tuple[dict[tuple[str, str, str], int], int]:
     """{(source, check, system): end} for each entry that fits, and the number of entries
-    that do not fit: a field is missing or empty, the source or the system is not in
-    the registry, or the end date is not a date. Two entries of one finding keep the
-    later end."""
-    entries, skipped = yaml_list(text)
+    that do not fit: a field is missing, empty or on more lines, the source or the system
+    is not in the registry, the check is not a check ID, or the end date is not a date as
+    YYYY-MM-DD. Two entries of one finding keep the later end. Unreadable when a line of
+    the file has a form that the reader does not read: then the file gives no entry."""
     result: dict[tuple[str, str, str], int] = {}
-    for index, entry in enumerate(entries, 1):
+    skipped = 0
+    for index, entry in enumerate(yaml_list(text), 1):
         source, check, system, until = (entry.get(field) for field in ACCEPTED_FIELDS)
         if not (source and check and system and until):
-            why = "a field is missing or empty"
+            why = "a field is missing, empty or on more lines"
         elif source not in sources or system not in systems:
             why = "the source or the system is not in the registry"
-        elif len(check) > MAX_CHECK_LENGTH:
-            why = "the check is longer than the limit"
+        elif not CHECK_ID.match(check):
+            why = "the check is not a check ID"
         else:
             try:
                 end = end_of(until)
             except ValueError:
-                why = "the end date is not a date"
+                why = "the end date is not a date as YYYY-MM-DD"
             else:
                 key = (source, check, system)
                 result[key] = max(end, result.get(key, end))
@@ -396,7 +497,11 @@ def accepted_entries(text: str, sources: set[str], systems: set[str]
 class AcceptedList(Loop):
     """The end of each accepted finding, from the list that Flux decrypts to the Secret
     security-accepted-findings. With no Secret, the list is empty. The converter reads
-    the file each cycle, so a new list counts from the next cycle."""
+    the file each cycle, so a new list counts from the next cycle.
+
+    The reader mutes too little rather than too much: an entry that does not fit is
+    skipped, and a file with a line that the reader does not understand gives no entry
+    at all, with homelab_security_converter_accepted_list_read at 0."""
 
     name = "accepted"
 
@@ -406,31 +511,36 @@ class AcceptedList(Loop):
         self.path = Path(path)
         self.series = registry["series"]["accepted"]
         self.sources, self.systems = set(registry["sources"]), set(registry["systems"])
-        self.result: tuple[dict[tuple[str, str, str], int], int, float] | None = None
+        self.result: tuple[dict[tuple[str, str, str], int], int, bool, float] | None = None
 
-    def read(self) -> tuple[dict[tuple[str, str, str], int], int]:
+    def read(self) -> tuple[dict[tuple[str, str, str], int], int, bool]:
+        """The entries, the number of skipped entries, and whether the file was read."""
         try:
             with self.path.open("rb") as file:
                 raw = file.read(MAX_LIST_BYTES + 1)
         except FileNotFoundError:
-            return {}, 0
+            return {}, 0, True
         except OSError as error:
             logger.warning("the list of accepted findings can not be read: %s", type(error).__name__)
-            return {}, 1
+            return {}, 0, False
         if len(raw) > MAX_LIST_BYTES:
             logger.warning("the list of accepted findings is larger than the limit")
-            return {}, 1
+            return {}, 0, False
         try:
-            text = raw.decode("utf-8")
+            entries, skipped = accepted_entries(raw.decode("utf-8"), self.sources, self.systems)
         except UnicodeDecodeError:
             logger.warning("the list of accepted findings is not UTF-8")
-            return {}, 1
-        return accepted_entries(text, self.sources, self.systems)
+            return {}, 0, False
+        except Unreadable as error:
+            # The number of the line and the kind of its form, and no text of the file.
+            logger.warning("the list of accepted findings gives no entry: %s", error)
+            return {}, 0, False
+        return entries, skipped, True
 
     def step(self):
-        entries, skipped = self.read()
+        entries, skipped, read = self.read()
         with self.lock:
-            self.result = entries, skipped, self.monotonic()
+            self.result = entries, skipped, read, self.monotonic()
 
     def clear(self):
         with self.lock:
@@ -439,9 +549,10 @@ class AcceptedList(Loop):
     def collect(self, metrics: Metrics, now: float):
         with self.lock:
             result = self.result
-        if result is None or not self.fresh(result[2], now):
+        if result is None or not self.fresh(result[3], now):
             return
-        entries, skipped, _ = result
+        entries, skipped, read, _ = result
+        metrics.add(ACCEPTED_READ, int(read))
         metrics.add(ACCEPTED_SKIPPED, skipped)
         for (source, check, system), end in sorted(entries.items()):
             metrics.add(self.series, end, source=source, check=check, system=system)

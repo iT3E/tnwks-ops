@@ -146,6 +146,7 @@ the contract of the registry.
 | `homelab_security_converter_streams` | None | The number of entries in the map |
 | `homelab_security_converter_last_cycle_timestamp_seconds` | None | The Unix time at which the last cycle ended |
 | `homelab_security_converter_stream_query_success` | `source`, `check`, `system` | 1 when Loki gave an answer in the last cycle, with a line or with none. 0 for an error or no answer |
+| `homelab_security_converter_accepted_list_read` | None | 1 when the converter read the list of accepted findings in its last cycle, or found no list. 0 when it gave no entry of a list that is there ([A file that gives no entry](#a-file-that-gives-no-entry)) |
 | `homelab_security_converter_accepted_skipped_entries` | None | The number of entries of the list of accepted findings that the converter skipped in its last cycle ([An entry that the converter skips](#an-entry-that-the-converter-skips)) |
 
 ## The list of accepted findings
@@ -184,32 +185,70 @@ restart the pod.
 ### The form that the converter reads
 
 The Python image of the converter has no YAML library, so the converter
-reads the block form of the example in `../README.md`, and no other form:
+reads the block form of the example in `../README.md`, and the form that
+`yaml.safe_dump` writes, and no other form:
 
 - A YAML list, one entry for each item `- `, with one `key: value` on each
-  line. A comment, a blank line and `---` are no problem.
-- A value is plain, in single quotes or in double quotes, on one line. Only
-  `reason` can have a block (`|` or `>`) or a value on two lines.
-- No flow form (`{ }`, `[ ]`), no anchor, no alias, no tag, no tab.
+  line. A comment, a blank line and `---` before the list are no problem.
+- A value is plain, in single quotes or in double quotes. A quoted value can
+  go on over more lines, to its closing quote, as `yaml.safe_dump` writes a
+  long `reason`. A block (`|` or `>`) and a plain value can go on over the
+  lines that are more indented than the key. The converter reads no key in
+  the lines of a value.
+- No flow form (`{ }`, `[ ]`), no anchor, no alias, no tag, no tab in the
+  indentation, no key two times in one entry.
 
-The tests read the example of `../README.md`, and lists in the block form,
-with PyYAML too: the converter must read each of them as PyYAML does.
+The reader mutes too little rather than too much. After a line that it does
+not understand, it can not know where the next entry starts, so one such
+line makes the whole file give no entry. An entry that it reads but that
+does not fit is skipped, and the other entries are served.
+
+The tests hold the reader to PyYAML 6. Each field that the converter takes
+is the text that PyYAML gives for it, in the entry of the same place, and
+the converter takes no entry of a file that PyYAML does not read. The tests
+check this on the example of `../README.md`, on lists of `yaml.safe_dump`
+with long and wrapped reasons, and on some thousand invented lists with
+lines and characters put in.
 
 ### An entry that the converter skips
 
-The converter skips an entry, and counts it, when:
+The converter skips an entry, and counts it in
+`homelab_security_converter_accepted_skipped_entries`, when:
 
-- A line of the entry has a form of the list above that the converter does
-  not read, or a key is there two times.
-- `source`, `check`, `system` or `until` is missing or empty, or is a block.
+- `source`, `check`, `system` or `until` is missing or empty, or goes on
+  over more lines.
 - The source or the system is not in the registry.
-- `until` is not a date as `YYYY-MM-DD`.
+- The check is not a check ID: a letter or a digit, then letters, digits and
+  `_./:-`, 200 characters at most. So no text of another form reaches a
+  label.
+- PyYAML reads the plain value as a number, a bool or null, and its text is
+  not the same: `0x1A`, `1.5`, `yes`, `~`. Put such a value in quotes.
+- `until` is not a date that Python's `datetime.date.fromisoformat` reads.
+  The Prowler job (`run.py` of the Prowler app) reads it with the same
+  function, so the two agree. It reads `2027-12-31`, and since Python 3.11
+  also `20271231` and `'2027-W52-5'`. Write `YYYY-MM-DD`, as in
+  `../README.md`.
 
-The other entries are served. A file that can not be read, is not UTF-8 or is
-larger than 1 MiB counts as one entry skipped, and the converter serves no
-entry. `homelab_security_converter_accepted_skipped_entries` is the count.
-A skipped entry has no series, so the board does not show it, and the rule
-of Trivy Operator does not mute it: the finding shows as a fail.
+The other entries are served. A skipped entry has no series, so the board
+does not show it, and the rule of Trivy Operator does not mute it: the
+finding shows as a fail.
+
+### A file that gives no entry
+
+The converter serves no entry, sets
+`homelab_security_converter_accepted_list_read` to 0, and logs the number
+of the line and the kind of its form (no text of the file), when the list:
+
+- Has a line of a form that the converter does not read, or a key two times
+  in one entry.
+- Ends inside a quoted value.
+- Has a character that YAML does not let a file hold, an escape that YAML
+  does not have, or a plain date that is no day (`2027-02-30`). PyYAML
+  stops on each of them, and so does `run.py`.
+- Can not be read, is not UTF-8, or is larger than 1 MiB.
+
+With no list (the Secret does not exist) the converter serves no entry and
+the value is 1.
 
 ## The loop of the parts
 
