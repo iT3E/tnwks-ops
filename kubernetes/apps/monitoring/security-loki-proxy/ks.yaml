@@ -1,0 +1,21 @@
+---
+# homelab-wsl-02 only: the TLS proxy stands in front of the Loki that keeps
+# the security streams (README.md). The other site reaches it through the
+# global Service security-loki of observability-pki.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: security-loki-proxy
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: observability-pki
+    - name: loki
+  path: ./kubernetes/apps/monitoring/security-loki-proxy/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
