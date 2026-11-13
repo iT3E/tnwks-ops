@@ -7,6 +7,12 @@
 # is its result, and each of its checks is one stream, with its own times in
 # `checks`. `by_type` sets a different `late_after` for one type of system.
 #
+# `system_label` of a stream is the Loki label whose value is the name of the
+# system: Loki holds the audit log one time for each cluster. A stream with no
+# `system_label` is one stream for each system that has it as a check: the
+# trail of the organization is the stream of each AWS account. The converter
+# reads this map (security/converter/README.md).
+#
 # These numbers are in this file only. The generated rules and the board read
 # them from here (security/README.md).
 - name: prowler
@@ -35,7 +41,7 @@
   cycle: continuous
   late_after: 15m
   checks:
-    k8s-audit: { cycle: continuous, late_after: 15m }
+    k8s-audit: { cycle: continuous, late_after: 15m, system_label: k8s_cluster }
     routeros: { cycle: continuous, late_after: 15m }
     cloudtrail: { cycle: 15m, late_after: 2h }
 - name: wazuh

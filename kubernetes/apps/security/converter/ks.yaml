@@ -1,0 +1,23 @@
+---
+# The converter of the security platform (security/converter/README.md): it
+# serves the time of the newest line of each security stream in this site's
+# Loki as the time of the last result. On homelab-wsl-02 only, where the
+# security streams rest and the rules of the registry run.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: security-converter
+  namespace: flux-system
+spec:
+  dependsOn:
+    # The ServiceMonitor needs its CRD.
+    - name: kube-prometheus-stack
+  path: ./kubernetes/apps/security/converter/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false # no flux ks dependents
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
