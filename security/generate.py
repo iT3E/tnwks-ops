@@ -27,6 +27,7 @@ SYSTEM_INFO = "homelab:security_system_info"
 CONTROL = "homelab:security_control_state"
 SAFEGUARD = "homelab:security_safeguard_state"
 ACCEPTED = "homelab_security_accepted_until_timestamp_seconds"
+HAS_RESULT = "homelab:security_safeguard_has_result"
 NO_EVIDENCE, PASS, FAIL = 0, 1, 3
 
 # Each rule reads the newest sample in this window, so one missed scrape or a
@@ -219,6 +220,36 @@ def control_expr(registry, system_type, entries):
             f" or on (system) ({none}))")
 
 
+def present_types(registry):
+    """The types that have a system, in the order of TYPES."""
+    return [system_type for system_type in TYPES
+            if any(system["type"] == system_type for system in registry["systems"])]
+
+
+def counted_types(registry, line):
+    """The types whose systems count for a line: a system is there, and the line has a
+    check for the type. A system of a type with an empty list has nothing to run."""
+    return [system_type for system_type in present_types(registry) if line["checks"].get(system_type)]
+
+
+def safeguard_expr(registry, line):
+    """The state of a line over the systems that count: a fail when one fails, else
+    "no evidence" when one has no fresh result, else a pass. So a line is a pass only
+    when each system that has a check for it passes. A line with no check for any
+    system stays "no evidence"."""
+    every = f'{CONTROL}{{safeguard="{line["id"]}"}}'
+    counted = counted_types(registry, line)
+    if not counted:
+        return f"{NO_EVIDENCE} * max({every})"
+    states = f'{CONTROL}{{safeguard="{line["id"]}",{matcher("system_type", counted)}}}'
+    return f"(max({states}) == {FAIL}) or clamp_max(min({states}), {PASS})"
+
+
+def has_result_expr(line):
+    """1 when one system or more has a fresh result for the line, a pass or a fail."""
+    return f'max({CONTROL}{{safeguard="{line["id"]}"}}) > bool {NO_EVIDENCE}'
+
+
 def expected(registry):
     """(source, system, stream or None, late after) for each source that reports on a
     system today: what the rule for a late result watches."""
@@ -293,8 +324,7 @@ def alerts(registry):
 
 
 def rule_resource(registry):
-    present = [system_type for system_type in TYPES
-               if any(system["type"] == system_type for system in registry["systems"])]
+    present = present_types(registry)
     records = [{"record": SYSTEM_INFO, "expr": "vector(1)",
                 "labels": {"system": system["name"], "system_type": system["type"],
                            "site": system["site"], "domain": system["domain"], **site_labels()}}
@@ -304,10 +334,12 @@ def rule_resource(registry):
             records.append({"record": CONTROL,
                             "expr": control_expr(registry, system_type, line["checks"].get(system_type, [])),
                             "labels": {"safeguard": line["id"], "system_type": system_type, **site_labels()}})
-        records.append({"record": SAFEGUARD, "expr": f'max({CONTROL}{{safeguard="{line["id"]}"}})',
+        records.append({"record": SAFEGUARD, "expr": safeguard_expr(registry, line),
                         "labels": {"safeguard": line["id"], "line": line_number(line["id"]),
                                    "title": line["title"], "ig": str(line["ig"]),
                                    "function": line["function"], **site_labels()}})
+        records.append({"record": HAS_RESULT, "expr": has_result_expr(line),
+                        "labels": {"safeguard": line["id"], "ig": str(line["ig"]), **site_labels()}})
     groups = [{"name": "homelab.security.controls", "interval": "1m", "rules": records},
               {"name": "homelab.security.alerts", "interval": "1m", "rules": alerts(registry)}]
     return {"apiVersion": "monitoring.coreos.com/v1", "kind": "PrometheusRule",
@@ -370,7 +402,8 @@ def board_input(registry):
     return {
         "board": BOARD,
         "series": {"result": RESULT, "last_result": LAST_RESULT, "system": SYSTEM_INFO,
-                   "control": CONTROL, "safeguard": SAFEGUARD, "accepted": ACCEPTED},
+                   "control": CONTROL, "safeguard": SAFEGUARD, "has_result": HAS_RESULT,
+                   "accepted": ACCEPTED},
         "states": {"no evidence": NO_EVIDENCE, "pass": PASS, "fail": FAIL},
         "safeguards": [{"id": line["id"], "line": line_number(line["id"]), "title": line["title"],
                         "ig": line["ig"], "function": line["function"]}
@@ -443,6 +476,8 @@ def fixtures(registry):
               "exp_samples": [{"labels": "{}", "value": lines * systems}]},
              {"expr": f"{CONTROL} != {NO_EVIDENCE}", "eval_time": "5m", "exp_samples": []},
              {"expr": f"{SAFEGUARD} != {NO_EVIDENCE}", "eval_time": "5m", "exp_samples": []},
+             {"expr": f"count({HAS_RESULT} == 0)", "eval_time": "5m",
+              "exp_samples": [{"labels": "{}", "value": lines}]},
          ]},
         {"name": "a result with no time of the last result is no evidence, and never a pass",
          "interval": "1m",
@@ -504,7 +539,76 @@ def fixtures(registry):
              {"eval_time": "1h", "alertname": "SecurityAcceptedFindingExpired", "exp_alerts": []},
              {"eval_time": "25h", "alertname": "SecurityAcceptedFindingExpired",
               "exp_alerts": [alert_sample(accepted_rule(), system=system)]}]})
+    tests += line_fixtures(registry)
     return {"rule_files": ["rules-for-test.yaml"], "evaluation_interval": "1m", "tests": tests}
+
+
+def passing(registry, line, system):
+    """The input series that give one system a fresh pass for a line, from the first
+    check of its type. With `value` above 0 on the result series it is a fail."""
+    kinds = {source["name"]: source["kind"] for source in registry["sources"]}
+    entry = line["checks"][system["type"]][0]
+    if kinds[entry["source"]] == "stream":
+        return [series(LAST_RESULT, "0+0x10", source=entry["source"], check=entry["check"], system=system["name"])]
+    return [series(RESULT, "0+0x10", source=entry["source"], check=entry["check"], system=system["name"]),
+            series(LAST_RESULT, "0+0x10", source=entry["source"], system=system["name"])]
+
+
+def line_fixtures(registry):
+    """Tests of the state of a line over its systems: on the line with the fewest
+    systems that count, two or more, whose first one has a result series."""
+    kinds = {source["name"]: source["kind"] for source in registry["sources"]}
+
+    def counted(line):
+        types = counted_types(registry, line)
+        return [system for system in registry["systems"] if system["type"] in types]
+
+    def fits(line):
+        systems = counted(line)
+        return len(systems) > 1 and kinds[line["checks"][systems[0]["type"]][0]["source"]] == "results"
+
+    candidates = [line for line in registry["controls"] if fits(line)]
+    if not candidates:
+        raise RegistryError("the registry has no line for a test of the state of a line")
+    line = min(candidates, key=lambda item: len(counted(item)))
+    systems = counted(line)
+    first, rest = systems[0], systems[1:]
+    failing = passing(registry, line, first)
+    failing[0] = failing[0] | {"values": "1+0x10"}
+
+    def state(value):
+        return {"expr": f'{SAFEGUARD}{{safeguard="{line["id"]}"}}', "eval_time": "5m",
+                "exp_samples": [{"labels": safeguard_labels(registry, line["id"]), "value": value}]}
+
+    def has_result(value):
+        labels = f'{HAS_RESULT}{{safeguard="{line["id"]}",ig="{line["ig"]}",k8s_cluster="site"}}'
+        return {"expr": f'{HAS_RESULT}{{safeguard="{line["id"]}"}}', "eval_time": "5m",
+                "exp_samples": [{"labels": labels, "value": value}]}
+
+    def control(system, value):
+        return {"expr": f'{CONTROL}{{safeguard="{line["id"]}",system="{system["name"]}"}}', "eval_time": "5m",
+                "exp_samples": [{"labels": f'{CONTROL}{{safeguard="{line["id"]}",system="{system["name"]}",'
+                                 f'system_type="{system["type"]}",k8s_cluster="site"}}', "value": value}]}
+
+    return [
+        {"name": "one system passes and a second with a check has no evidence: the line is no evidence, "
+                 "and it has a result", "interval": "1m",
+         "input_series": passing(registry, line, first),
+         "promql_expr_test": [control(first, PASS), control(rest[0], NO_EVIDENCE),
+                              state(NO_EVIDENCE), has_result(1)]},
+        {"name": "each system with a check passes: the line is a pass, and a system of a type "
+                 "with no check does not count", "interval": "1m",
+         "input_series": [item for system in systems for item in passing(registry, line, system)],
+         "promql_expr_test": [*(control(system, PASS) for system in systems), state(PASS), has_result(1)]},
+        {"name": "one system fails: the line is a fail, with or without a result of the others",
+         "interval": "1m",
+         "input_series": failing,
+         "promql_expr_test": [control(first, FAIL), control(rest[0], NO_EVIDENCE),
+                              state(FAIL), has_result(1)]},
+        {"name": "one system fails and each other system passes: the line is a fail", "interval": "1m",
+         "input_series": failing + [item for system in rest for item in passing(registry, line, system)],
+         "promql_expr_test": [state(FAIL), has_result(1)]},
+    ]
 
 
 def safeguard_labels(registry, safeguard):

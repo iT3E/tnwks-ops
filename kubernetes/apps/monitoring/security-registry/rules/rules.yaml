@@ -202,13 +202,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="1.1"})
+      expr: (max(homelab:security_control_state{safeguard="1.1",system_type=~"aws-account|windows-host|wsl-distro"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="1.1",system_type=~"aws-account|windows-host|wsl-distro"}),
+        1)
       labels:
         safeguard: '1.1'
         line: '01.01'
         title: Asset inventory
         ig: '1'
         function: identify
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="1.1"}) > bool 0
+      labels:
+        safeguard: '1.1'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -265,13 +273,19 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="1.2"})
+      expr: 0 * max(homelab:security_control_state{safeguard="1.2"})
       labels:
         safeguard: '1.2'
         line: '01.02'
         title: Unauthorized assets handled
         ig: '1'
         function: respond
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="1.2"}) > bool 0
+      labels:
+        safeguard: '1.2'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -334,13 +348,20 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="2.1"})
+      expr: (max(homelab:security_control_state{safeguard="2.1",system_type=~"windows-host|wsl-distro"}) == 3) or
+        clamp_max(min(homelab:security_control_state{safeguard="2.1",system_type=~"windows-host|wsl-distro"}), 1)
       labels:
         safeguard: '2.1'
         line: '02.01'
         title: Software inventory
         ig: '1'
         function: identify
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="2.1"}) > bool 0
+      labels:
+        safeguard: '2.1'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"awslambda_function_using_supported_runtimes|ec2_instance_with_outdated_ami|eks_cluster_uses_a_supported_version|elasticbeanstalk_environment_php_platform_updated|kafka_cluster_uses_latest_version|rds_instance_deprecated_engine_version"}[10m]))
@@ -400,13 +421,20 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="2.2"})
+      expr: (max(homelab:security_control_state{safeguard="2.2",system_type="aws-account"}) == 3) or clamp_max(min(homelab:security_control_state{safeguard="2.2",system_type="aws-account"}),
+        1)
       labels:
         safeguard: '2.2'
         line: '02.02'
         title: Supported software only
         ig: '1'
         function: identify
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="2.2"}) > bool 0
+      labels:
+        safeguard: '2.2'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -466,13 +494,20 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="2.3"})
+      expr: (max(homelab:security_control_state{safeguard="2.3",system_type="windows-host"}) == 3) or clamp_max(min(homelab:security_control_state{safeguard="2.3",system_type="windows-host"}),
+        1)
       labels:
         safeguard: '2.3'
         line: '02.03'
         title: Unauthorized software handled
         ig: '1'
         function: respond
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="2.3"}) > bool 0
+      labels:
+        safeguard: '2.3'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -529,13 +564,19 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="3.1"})
+      expr: 0 * max(homelab:security_control_state{safeguard="3.1"})
       labels:
         safeguard: '3.1'
         line: '03.01'
         title: Data management process
         ig: '1'
         function: govern
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="3.1"}) > bool 0
+      labels:
+        safeguard: '3.1'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"macie_automated_sensitive_data_discovery_enabled|macie_is_enabled"}[10m]))
@@ -595,13 +636,20 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="3.2"})
+      expr: (max(homelab:security_control_state{safeguard="3.2",system_type="aws-account"}) == 3) or clamp_max(min(homelab:security_control_state{safeguard="3.2",system_type="aws-account"}),
+        1)
       labels:
         safeguard: '3.2'
         line: '03.02'
         title: Data inventory
         ig: '1'
         function: identify
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="3.2"}) > bool 0
+      labels:
+        safeguard: '3.2'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"awslambda_function_not_publicly_accessible|cloudtrail_logs_s3_bucket_is_not_publicly_accessible|cloudwatch_log_group_not_publicly_accessible|codebuild_project_not_publicly_accessible|dynamodb_table_cross_account_access|ec2_ami_public|ecr_repositories_not_publicly_accessible|efs_access_point_enforce_root_directory|efs_access_point_enforce_user_identity|efs_mount_target_not_publicly_accessible|efs_not_publicly_accessible|eventbridge_bus_cross_account_access|eventbridge_bus_exposed|glacier_vaults_policy_public_access|glue_data_catalogs_not_publicly_accessible|kms_key_not_publicly_accessible|s3_access_point_public_access_block|s3_account_level_public_access_blocks|s3_bucket_acl_prohibited|s3_bucket_cross_account_access|s3_bucket_level_public_access_block|s3_bucket_policy_public_write_access|s3_bucket_public_access|s3_bucket_public_list_acl|s3_bucket_public_write_acl|s3_multi_region_access_point_public_access_block|secretsmanager_has_restrictive_resource_policy|secretsmanager_not_publicly_accessible|ses_identity_not_publicly_accessible|sns_topics_not_publicly_accessible|sqs_queues_not_publicly_accessible|ssm_documents_set_as_public"}[10m]))
@@ -670,13 +718,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="3.3"})
+      expr: (max(homelab:security_control_state{safeguard="3.3",system_type=~"aws-account|github-organization|cluster|wsl-distro"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="3.3",system_type=~"aws-account|github-organization|cluster|wsl-distro"}),
+        1)
       labels:
         safeguard: '3.3'
         line: '03.03'
         title: Data access control lists
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="3.3"}) > bool 0
+      labels:
+        safeguard: '3.3'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"cloudwatch_log_group_retention_policy_specific_days_enabled|ecr_repositories_lifecycle_policy_enabled|kinesis_stream_data_retention_period|s3_bucket_lifecycle_enabled"}[10m]))
@@ -739,13 +795,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="3.4"})
+      expr: (max(homelab:security_control_state{safeguard="3.4",system_type=~"aws-account|windows-host"}) == 3)
+        or clamp_max(min(homelab:security_control_state{safeguard="3.4",system_type=~"aws-account|windows-host"}),
+        1)
       labels:
         safeguard: '3.4'
         line: '03.04'
         title: Data retention
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="3.4"}) > bool 0
+      labels:
+        safeguard: '3.4'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -802,13 +866,19 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="3.5"})
+      expr: 0 * max(homelab:security_control_state{safeguard="3.5"})
       labels:
         safeguard: '3.5'
         line: '03.05'
         title: Secure data disposal
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="3.5"}) > bool 0
+      labels:
+        safeguard: '3.5'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -868,13 +938,20 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="3.6"})
+      expr: (max(homelab:security_control_state{safeguard="3.6",system_type="windows-host"}) == 3) or clamp_max(min(homelab:security_control_state{safeguard="3.6",system_type="windows-host"}),
+        1)
       labels:
         safeguard: '3.6'
         line: '03.06'
         title: Encrypted end-user devices
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="3.6"}) > bool 0
+      labels:
+        safeguard: '3.6'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -940,13 +1017,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="4.1"})
+      expr: (max(homelab:security_control_state{safeguard="4.1",system_type=~"cluster|windows-host|wsl-distro"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="4.1",system_type=~"cluster|windows-host|wsl-distro"}),
+        1)
       labels:
         safeguard: '4.1'
         line: '04.01'
         title: Secure configuration process
         ig: '1'
         function: govern
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="4.1"}) > bool 0
+      labels:
+        safeguard: '4.1'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -1006,13 +1091,20 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="4.2"})
+      expr: (max(homelab:security_control_state{safeguard="4.2",system_type="windows-host"}) == 3) or clamp_max(min(homelab:security_control_state{safeguard="4.2",system_type="windows-host"}),
+        1)
       labels:
         safeguard: '4.2'
         line: '04.02'
         title: Secure configuration of network gear
         ig: '1'
         function: govern
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="4.2"}) > bool 0
+      labels:
+        safeguard: '4.2'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"appstream_fleet_maximum_session_duration|appstream_fleet_session_disconnect_timeout|appstream_fleet_session_idle_disconnect_timeout"}[10m]))
@@ -1078,13 +1170,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="4.3"})
+      expr: (max(homelab:security_control_state{safeguard="4.3",system_type=~"aws-account|windows-host|wsl-distro"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="4.3",system_type=~"aws-account|windows-host|wsl-distro"}),
+        1)
       labels:
         safeguard: '4.3'
         line: '04.03'
         title: Automatic session lock
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="4.3"}) > bool 0
+      labels:
+        safeguard: '4.3'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"ec2_instance_port_cassandra_exposed_to_internet|ec2_instance_port_cifs_exposed_to_internet|ec2_instance_port_elasticsearch_kibana_exposed_to_internet|ec2_instance_port_ftp_exposed_to_internet|ec2_instance_port_kafka_exposed_to_internet|ec2_instance_port_kerberos_exposed_to_internet|ec2_instance_port_ldap_exposed_to_internet|ec2_instance_port_memcached_exposed_to_internet|ec2_instance_port_mongodb_exposed_to_internet|ec2_instance_port_mysql_exposed_to_internet|ec2_instance_port_oracle_exposed_to_internet|ec2_instance_port_postgresql_exposed_to_internet|ec2_instance_port_rdp_exposed_to_internet|ec2_instance_port_redis_exposed_to_internet|ec2_instance_port_sqlserver_exposed_to_internet|ec2_instance_port_ssh_exposed_to_internet|ec2_instance_port_telnet_exposed_to_internet|ec2_securitygroup_allow_ingress_from_internet_to_all_ports|ec2_securitygroup_allow_ingress_from_internet_to_any_port|ec2_securitygroup_allow_ingress_from_internet_to_any_port_from_ip|ec2_securitygroup_allow_ingress_from_internet_to_high_risk_tcp_ports|ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_22|ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_3389|ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_cassandra_7199_9160_8888|ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_elasticsearch_kibana_9200_9300_5601|ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_ftp_20_21|ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_kafka_9092|ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_memcached_11211|ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_mongodb_27017_27018|ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_mysql_3306|ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_oracle_1521_2483|ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_postgres_5432|ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_redis_6379|ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_sql_server_1433_1434|ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_telnet_23|ec2_securitygroup_allow_wide_open_public_ipv4|ec2_securitygroup_default_restrict_traffic|ec2_securitygroup_with_many_ingress_egress_rules"}[10m]))
@@ -1153,13 +1253,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="4.4"})
+      expr: (max(homelab:security_control_state{safeguard="4.4",system_type=~"aws-account|cluster|windows-host|wsl-distro"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="4.4",system_type=~"aws-account|cluster|windows-host|wsl-distro"}),
+        1)
       labels:
         safeguard: '4.4'
         line: '04.04'
         title: Firewall on servers
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="4.4"}) > bool 0
+      labels:
+        safeguard: '4.4'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -1224,13 +1332,20 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="4.5"})
+      expr: (max(homelab:security_control_state{safeguard="4.5",system_type=~"windows-host|wsl-distro"}) == 3) or
+        clamp_max(min(homelab:security_control_state{safeguard="4.5",system_type=~"windows-host|wsl-distro"}), 1)
       labels:
         safeguard: '4.5'
         line: '04.05'
         title: Firewall on end-user devices
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="4.5"}) > bool 0
+      labels:
+        safeguard: '4.5'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"autoscaling_group_launch_configuration_requires_imdsv2|ec2_instance_account_imdsv2_enabled|ec2_instance_imdsv2_enabled|ec2_instance_managed_by_ssm|ec2_launch_template_imdsv2_required"}[10m]))
@@ -1296,13 +1411,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="4.6"})
+      expr: (max(homelab:security_control_state{safeguard="4.6",system_type=~"aws-account|cloudflare-account|cluster"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="4.6",system_type=~"aws-account|cloudflare-account|cluster"}),
+        1)
       labels:
         safeguard: '4.6'
         line: '04.06'
         title: Secure management of assets and software
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="4.6"}) > bool 0
+      labels:
+        safeguard: '4.6'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"iam_avoid_root_usage|iam_no_root_access_key|iam_root_credentials_management_enabled|rds_cluster_default_admin|rds_instance_default_admin|redshift_cluster_non_default_username"}[10m]))
@@ -1368,13 +1491,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="4.7"})
+      expr: (max(homelab:security_control_state{safeguard="4.7",system_type=~"aws-account|cluster|windows-host"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="4.7",system_type=~"aws-account|cluster|windows-host"}),
+        1)
       labels:
         safeguard: '4.7'
         line: '04.07'
         title: Default accounts managed
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="4.7"}) > bool 0
+      labels:
+        safeguard: '4.7'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -1431,13 +1562,19 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="5.1"})
+      expr: 0 * max(homelab:security_control_state{safeguard="5.1"})
       labels:
         safeguard: '5.1'
         line: '05.01'
         title: Account inventory
         ig: '1'
         function: identify
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="5.1"}) > bool 0
+      labels:
+        safeguard: '5.1'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"cognito_user_pool_password_policy_lowercase|cognito_user_pool_password_policy_minimum_length_14|cognito_user_pool_password_policy_number|cognito_user_pool_password_policy_symbol|cognito_user_pool_password_policy_uppercase|iam_password_policy_lowercase|iam_password_policy_minimum_length_14|iam_password_policy_number|iam_password_policy_reuse_24|iam_password_policy_symbol|iam_password_policy_uppercase"}[10m]))
@@ -1503,13 +1640,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="5.2"})
+      expr: (max(homelab:security_control_state{safeguard="5.2",system_type=~"aws-account|windows-host|wsl-distro"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="5.2",system_type=~"aws-account|windows-host|wsl-distro"}),
+        1)
       labels:
         safeguard: '5.2'
         line: '05.02'
         title: Unique passwords
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="5.2"}) > bool 0
+      labels:
+        safeguard: '5.2'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"iam_user_accesskey_unused|iam_user_console_access_unused"}[10m]))
@@ -1569,13 +1714,20 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="5.3"})
+      expr: (max(homelab:security_control_state{safeguard="5.3",system_type="aws-account"}) == 3) or clamp_max(min(homelab:security_control_state{safeguard="5.3",system_type="aws-account"}),
+        1)
       labels:
         safeguard: '5.3'
         line: '05.03'
         title: Dormant accounts disabled
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="5.3"}) > bool 0
+      labels:
+        safeguard: '5.3'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"iam_aws_attached_policy_no_administrative_privileges|iam_customer_attached_policy_no_administrative_privileges|iam_group_administrator_access_policy|iam_inline_policy_no_administrative_privileges|iam_role_administratoraccess_policy|iam_user_administrator_access_policy"}[10m]))
@@ -1641,13 +1793,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="5.4"})
+      expr: (max(homelab:security_control_state{safeguard="5.4",system_type=~"aws-account|cluster|wsl-distro"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="5.4",system_type=~"aws-account|cluster|wsl-distro"}),
+        1)
       labels:
         safeguard: '5.4'
         line: '05.04'
         title: Admin rights on dedicated accounts
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="5.4"}) > bool 0
+      labels:
+        safeguard: '5.4'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -1704,13 +1864,19 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="6.1"})
+      expr: 0 * max(homelab:security_control_state{safeguard="6.1"})
       labels:
         safeguard: '6.1'
         line: '06.01'
         title: Access granting process
         ig: '1'
         function: govern
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="6.1"}) > bool 0
+      labels:
+        safeguard: '6.1'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -1770,13 +1936,20 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="6.2"})
+      expr: (max(homelab:security_control_state{safeguard="6.2",system_type="wsl-distro"}) == 3) or clamp_max(min(homelab:security_control_state{safeguard="6.2",system_type="wsl-distro"}),
+        1)
       labels:
         safeguard: '6.2'
         line: '06.02'
         title: Access revoking process
         ig: '1'
         function: govern
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="6.2"}) > bool 0
+      labels:
+        safeguard: '6.2'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"cognito_user_pool_mfa_enabled|iam_user_hardware_mfa_enabled|iam_user_mfa_enabled_console_access"}[10m]))
@@ -1839,13 +2012,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="6.3"})
+      expr: (max(homelab:security_control_state{safeguard="6.3",system_type=~"aws-account|github-organization"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="6.3",system_type=~"aws-account|github-organization"}),
+        1)
       labels:
         safeguard: '6.3'
         line: '06.03'
         title: MFA for exposed applications
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="6.3"}) > bool 0
+      labels:
+        safeguard: '6.3'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"directoryservice_radius_server_security_protocol|directoryservice_supported_mfa_radius_enabled"}[10m]))
@@ -1908,13 +2089,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="6.4"})
+      expr: (max(homelab:security_control_state{safeguard="6.4",system_type=~"aws-account|github-organization"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="6.4",system_type=~"aws-account|github-organization"}),
+        1)
       labels:
         safeguard: '6.4'
         line: '06.04'
         title: MFA for remote network access
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="6.4"}) > bool 0
+      labels:
+        safeguard: '6.4'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"iam_administrator_access_with_mfa|iam_root_hardware_mfa_enabled|iam_root_mfa_enabled"}[10m]))
@@ -1977,7 +2166,9 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="6.5"})
+      expr: (max(homelab:security_control_state{safeguard="6.5",system_type=~"aws-account|github-organization"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="6.5",system_type=~"aws-account|github-organization"}),
+        1)
       labels:
         safeguard: '6.5'
         line: '06.05'
@@ -1985,6 +2176,12 @@ spec:
         ig: '1'
         function: protect
         k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="6.5"}) > bool 0
+      labels:
+        safeguard: '6.5'
+        ig: '1'
+        k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
       labels:
@@ -2040,7 +2237,7 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="7.1"})
+      expr: 0 * max(homelab:security_control_state{safeguard="7.1"})
       labels:
         safeguard: '7.1'
         line: '07.01'
@@ -2048,6 +2245,12 @@ spec:
         ig: '1'
         function: govern
         k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="7.1"}) > bool 0
+      labels:
+        safeguard: '7.1'
+        ig: '1'
+        k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
       labels:
@@ -2103,13 +2306,19 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="7.2"})
+      expr: 0 * max(homelab:security_control_state{safeguard="7.2"})
       labels:
         safeguard: '7.2'
         line: '07.02'
         title: Remediation process
         ig: '1'
         function: govern
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="7.2"}) > bool 0
+      labels:
+        safeguard: '7.2'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check="ssm_managed_compliant_patching"}[10m]))
@@ -2177,13 +2386,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="7.3"})
+      expr: (max(homelab:security_control_state{safeguard="7.3",system_type=~"aws-account|windows-host|wsl-distro"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="7.3",system_type=~"aws-account|windows-host|wsl-distro"}),
+        1)
       labels:
         safeguard: '7.3'
         line: '07.03'
         title: Automated OS patching
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="7.3"}) > bool 0
+      labels:
+        safeguard: '7.3'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"dms_instance_minor_version_upgrade_enabled|elasticache_redis_cluster_auto_minor_version_upgrades|elasticbeanstalk_environment_managed_updates_enabled|memorydb_cluster_auto_minor_version_upgrades|mq_broker_auto_minor_version_upgrades|rds_cluster_minor_version_upgrade_enabled|rds_instance_minor_version_upgrade_enabled|redshift_cluster_automatic_upgrades"}[10m]))
@@ -2252,13 +2469,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="7.4"})
+      expr: (max(homelab:security_control_state{safeguard="7.4",system_type=~"aws-account|cluster|windows-host|wsl-distro"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="7.4",system_type=~"aws-account|cluster|windows-host|wsl-distro"}),
+        1)
       labels:
         safeguard: '7.4'
         line: '07.04'
         title: Automated application patching
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="7.4"}) > bool 0
+      labels:
+        safeguard: '7.4'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -2315,13 +2540,19 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="8.1"})
+      expr: 0 * max(homelab:security_control_state{safeguard="8.1"})
       labels:
         safeguard: '8.1'
         line: '08.01'
         title: Audit log process
         ig: '1'
         function: govern
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="8.1"}) > bool 0
+      labels:
+        safeguard: '8.1'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (((max by (system) (label_replace((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"apigateway_restapi_logging_enabled|apigatewayv2_api_access_logging_enabled|appsync_field_level_logging_enabled|athena_workgroup_logging_enabled|awslambda_function_invoke_api_operations_cloudtrail_logging_enabled|bedrock_model_invocation_logging_enabled|cloudfront_distributions_logging_enabled|cloudtrail_bedrock_logging_enabled|cloudtrail_cloudwatch_logging_enabled|cloudtrail_logs_s3_bucket_access_logging_enabled|cloudtrail_multi_region_enabled|cloudtrail_multi_region_enabled_logging_management_events|codebuild_project_logging_enabled|config_recorder_all_regions_enabled|datasync_task_logging_enabled|directoryservice_directory_log_forwarding_enabled|dms_replication_task_source_logging_enabled|dms_replication_task_target_logging_enabled|documentdb_cluster_cloudwatch_log_export|ec2_client_vpn_endpoint_connection_logging_enabled|ecs_task_definitions_logging_enabled|eks_control_plane_logging_all_types_enabled|elasticbeanstalk_environment_cloudwatch_logging_enabled|elb_logging_enabled|elbv2_logging_enabled|mq_broker_logging_enabled|neptune_cluster_integration_cloudwatch_logs|networkfirewall_logging_enabled|opensearch_service_domains_cloudwatch_logging_enabled|rds_cluster_integration_cloudwatch_logs|rds_instance_integration_cloudwatch_logs|redshift_cluster_audit_logging|s3_bucket_server_access_logging_enabled|stepfunctions_statemachine_logging_enabled|vpc_flow_logs_enabled|waf_global_webacl_logging_enabled|wafv2_webacl_logging_enabled"}[10m]))
@@ -2394,13 +2625,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="8.2"})
+      expr: (max(homelab:security_control_state{safeguard="8.2",system_type=~"aws-account|cluster|windows-host|wsl-distro|router"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="8.2",system_type=~"aws-account|cluster|windows-host|wsl-distro|router"}),
+        1)
       labels:
         safeguard: '8.2'
         line: '08.02'
         title: Audit logs collected
         ig: '1'
         function: detect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="8.2"}) > bool 0
+      labels:
+        safeguard: '8.2'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -2466,7 +2705,9 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="8.3"})
+      expr: (max(homelab:security_control_state{safeguard="8.3",system_type=~"cluster|windows-host|wsl-distro"})
+        == 3) or clamp_max(min(homelab:security_control_state{safeguard="8.3",system_type=~"cluster|windows-host|wsl-distro"}),
+        1)
       labels:
         safeguard: '8.3'
         line: '08.03'
@@ -2474,6 +2715,12 @@ spec:
         ig: '1'
         function: protect
         k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="8.3"}) > bool 0
+      labels:
+        safeguard: '8.3'
+        ig: '1'
+        k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
       labels:
@@ -2529,7 +2776,7 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="9.1"})
+      expr: 0 * max(homelab:security_control_state{safeguard="9.1"})
       labels:
         safeguard: '9.1'
         line: '09.01'
@@ -2537,6 +2784,12 @@ spec:
         ig: '1'
         function: protect
         k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="9.1"}) > bool 0
+      labels:
+        safeguard: '9.1'
+        ig: '1'
+        k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
       labels:
@@ -2592,13 +2845,19 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="9.2"})
+      expr: 0 * max(homelab:security_control_state{safeguard="9.2"})
       labels:
         safeguard: '9.2'
         line: '09.02'
         title: DNS filtering
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="9.2"}) > bool 0
+      labels:
+        safeguard: '9.2'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check="guardduty_ec2_malware_protection_enabled"}[10m]))
@@ -2663,13 +2922,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="10.1"})
+      expr: (max(homelab:security_control_state{safeguard="10.1",system_type=~"aws-account|windows-host"}) == 3)
+        or clamp_max(min(homelab:security_control_state{safeguard="10.1",system_type=~"aws-account|windows-host"}),
+        1)
       labels:
         safeguard: '10.1'
         line: '10.01'
         title: Anti-malware deployed
         ig: '1'
         function: detect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="10.1"}) > bool 0
+      labels:
+        safeguard: '10.1'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -2729,13 +2996,20 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="10.2"})
+      expr: (max(homelab:security_control_state{safeguard="10.2",system_type="windows-host"}) == 3) or clamp_max(min(homelab:security_control_state{safeguard="10.2",system_type="windows-host"}),
+        1)
       labels:
         safeguard: '10.2'
         line: '10.02'
         title: Anti-malware signatures updated
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="10.2"}) > bool 0
+      labels:
+        safeguard: '10.2'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -2798,13 +3072,21 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="10.3"})
+      expr: (max(homelab:security_control_state{safeguard="10.3",system_type=~"windows-host|wsl-distro"}) == 3)
+        or clamp_max(min(homelab:security_control_state{safeguard="10.3",system_type=~"windows-host|wsl-distro"}),
+        1)
       labels:
         safeguard: '10.3'
         line: '10.03'
         title: Autorun off for removable media
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="10.3"}) > bool 0
+      labels:
+        safeguard: '10.3'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -2861,13 +3143,19 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="11.1"})
+      expr: 0 * max(homelab:security_control_state{safeguard="11.1"})
       labels:
         safeguard: '11.1'
         line: '11.01'
         title: Data recovery process
         ig: '1'
         function: govern
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="11.1"}) > bool 0
+      labels:
+        safeguard: '11.1'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"backup_plans_exist|backup_vaults_exist|dlm_ebs_snapshot_lifecycle_policy_exists|documentdb_cluster_backup_enabled|drs_job_exist|dynamodb_table_protected_by_backup_plan|dynamodb_tables_pitr_enabled|ec2_ebs_volume_protected_by_backup_plan|ec2_ebs_volume_snapshots_exists|efs_have_backup_enabled|elasticache_redis_cluster_backup_enabled|lightsail_instance_automated_snapshots|neptune_cluster_backup_enabled|rds_cluster_backtrack_enabled|rds_cluster_protected_by_backup_plan|rds_instance_backup_enabled|rds_instance_protected_by_backup_plan|redshift_cluster_automated_snapshot|s3_bucket_object_versioning"}[10m]))
@@ -2927,13 +3215,20 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="11.2"})
+      expr: (max(homelab:security_control_state{safeguard="11.2",system_type="aws-account"}) == 3) or clamp_max(min(homelab:security_control_state{safeguard="11.2",system_type="aws-account"}),
+        1)
       labels:
         safeguard: '11.2'
         line: '11.02'
         title: Automated backups
         ig: '1'
         function: recover
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="11.2"}) > bool 0
+      labels:
+        safeguard: '11.2'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"backup_recovery_point_encrypted|backup_vaults_encrypted|documentdb_cluster_public_snapshot|ec2_ebs_public_snapshot|ec2_ebs_snapshot_account_block_public_access|ec2_ebs_snapshots_encrypted|neptune_cluster_public_snapshot|neptune_cluster_snapshot_encrypted|rds_snapshots_encrypted|rds_snapshots_public_access|s3_bucket_no_mfa_delete|s3_bucket_object_lock"}[10m]))
@@ -2993,13 +3288,20 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="11.3"})
+      expr: (max(homelab:security_control_state{safeguard="11.3",system_type="aws-account"}) == 3) or clamp_max(min(homelab:security_control_state{safeguard="11.3",system_type="aws-account"}),
+        1)
       labels:
         safeguard: '11.3'
         line: '11.03'
         title: Recovery data protected
         ig: '1'
         function: protect
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="11.3"}) > bool 0
+      labels:
+        safeguard: '11.3'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check="s3_bucket_cross_region_replication"}[10m]))
@@ -3059,13 +3361,20 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="11.4"})
+      expr: (max(homelab:security_control_state{safeguard="11.4",system_type="aws-account"}) == 3) or clamp_max(min(homelab:security_control_state{safeguard="11.4",system_type="aws-account"}),
+        1)
       labels:
         safeguard: '11.4'
         line: '11.04'
         title: Isolated copy of recovery data
         ig: '1'
         function: recover
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="11.4"}) > bool 0
+      labels:
+        safeguard: '11.4'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -3125,7 +3434,8 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="12.1"})
+      expr: (max(homelab:security_control_state{safeguard="12.1",system_type="router"}) == 3) or clamp_max(min(homelab:security_control_state{safeguard="12.1",system_type="router"}),
+        1)
       labels:
         safeguard: '12.1'
         line: '12.01'
@@ -3133,6 +3443,12 @@ spec:
         ig: '1'
         function: protect
         k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="12.1"}) > bool 0
+      labels:
+        safeguard: '12.1'
+        ig: '1'
+        k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
       labels:
@@ -3188,7 +3504,7 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="15.1"})
+      expr: 0 * max(homelab:security_control_state{safeguard="15.1"})
       labels:
         safeguard: '15.1'
         line: '15.01'
@@ -3196,6 +3512,12 @@ spec:
         ig: '1'
         function: identify
         k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="15.1"}) > bool 0
+      labels:
+        safeguard: '15.1'
+        ig: '1'
+        k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
       labels:
@@ -3251,13 +3573,19 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="17.1"})
+      expr: 0 * max(homelab:security_control_state{safeguard="17.1"})
       labels:
         safeguard: '17.1'
         line: '17.01'
         title: Incident handling roles
         ig: '1'
         function: respond
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="17.1"}) > bool 0
+      labels:
+        safeguard: '17.1'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) ((((1 + 2 * (max by (system) (last_over_time(homelab_security_check_result{source="prowler",check=~"account_maintain_current_contact_details|account_maintain_different_contact_details_to_security_billing_and_operations|account_security_contact_information_is_registered"}[10m]))
@@ -3317,13 +3645,20 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="17.2"})
+      expr: (max(homelab:security_control_state{safeguard="17.2",system_type="aws-account"}) == 3) or clamp_max(min(homelab:security_control_state{safeguard="17.2",system_type="aws-account"}),
+        1)
       labels:
         safeguard: '17.2'
         line: '17.02'
         title: Incident contact list
         ig: '1'
         function: govern
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="17.2"}) > bool 0
+      labels:
+        safeguard: '17.2'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_control_state
       expr: max by (system) (0 * homelab:security_system_info{system_type="aws-account"})
@@ -3380,13 +3715,19 @@ spec:
         system_type: other
         k8s_cluster: ${CLUSTER_NAME}
     - record: homelab:security_safeguard_state
-      expr: max(homelab:security_control_state{safeguard="17.3"})
+      expr: 0 * max(homelab:security_control_state{safeguard="17.3"})
       labels:
         safeguard: '17.3'
         line: '17.03'
         title: Incident reporting process
         ig: '1'
         function: govern
+        k8s_cluster: ${CLUSTER_NAME}
+    - record: homelab:security_safeguard_has_result
+      expr: max(homelab:security_control_state{safeguard="17.3"}) > bool 0
+      labels:
+        safeguard: '17.3'
+        ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
   - name: homelab.security.alerts
     interval: 1m

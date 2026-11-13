@@ -113,6 +113,9 @@ spec:
       namespace: production
       name: "*"
     - kind: HelmRelease
+      namespace: security
+      name: "*"
+    - kind: HelmRelease
       namespace: selfhosted
       name: "*"
     - kind: HelmRelease

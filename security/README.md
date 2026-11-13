@@ -128,7 +128,8 @@ The names and the labels stay. A new source maps to them.
 | `homelab_security_last_result_timestamp_seconds` | Each source | `source`, `system`. For a source of the kind `stream`, also `check` | The Unix time of the newest result of the source for the system |
 | `homelab:security_system_info` | The generated rules | `system`, `system_type`, `site`, `domain`, `k8s_cluster` | 1 for each system of the registry |
 | `homelab:security_control_state` | The generated rules | `safeguard`, `system`, `system_type`, `k8s_cluster` | The state of one safeguard on one system |
-| `homelab:security_safeguard_state` | The generated rules | `safeguard`, `line`, `title`, `ig`, `function`, `k8s_cluster` | The state of one safeguard: the worst state of its systems that have a result |
+| `homelab:security_safeguard_state` | The generated rules | `safeguard`, `line`, `title`, `ig`, `function`, `k8s_cluster` | The state of one safeguard over the systems that have a check for it |
+| `homelab:security_safeguard_has_result` | The generated rules | `safeguard`, `ig`, `k8s_cluster` | 1 when one system or more has a fresh result for the safeguard, and 0 when none has |
 | `homelab_security_accepted_until_timestamp_seconds` | The reader of the list of accepted findings | `source`, `check`, `system` | The Unix time at which one accepted finding ends |
 
 The first two are the result series and the series with the time of the last
@@ -151,6 +152,28 @@ counts only while the time of the last result of its source is fresh: not
 older than `late_after`, and not more than 5 minutes in the future. A result
 with no time is "no evidence". When two sources test one line, one fresh
 source is enough, and a fail wins.
+
+### The state of a safeguard over its systems
+
+`homelab:security_safeguard_state` is the state of one line of the registry.
+A system counts for a line when the line has a check for the type of the
+system. A system of a type with an empty list has no check to run, and does
+not count.
+
+| State of the line | When |
+| --- | --- |
+| Fail | One system or more that counts has a fail |
+| No evidence | No system fails, and one system or more that counts has no fresh result. Also a line with no check for any system |
+| Pass | Each system that counts has a pass |
+
+So a line is a pass only when each check that can run did run. One system
+with a pass does not make the line a pass while a second system with a check
+has no result.
+
+`homelab:security_safeguard_has_result` says a different thing: that one
+system or more has a fresh result for the line, a pass or a fail. The count
+of lines with a result is the sum of this series. A line can have a result
+and the state "No evidence" at the same time.
 
 ### What a source must do
 
@@ -204,7 +227,7 @@ uv run --project observability pytest security/tests -q
 
 | Output | File | What it is |
 | --- | --- | --- |
-| Rules | `kubernetes/apps/monitoring/security-registry/rules/rules.yaml` | One recording rule for each safeguard and type, the state of each safeguard, and the rule for a late result |
+| Rules | `kubernetes/apps/monitoring/security-registry/rules/rules.yaml` | One recording rule for each safeguard and type, the state of each safeguard over its systems, whether it has a result, and the rule for a late result |
 | Scan lists | `generated/scan-lists.json` | The checks that Prowler runs for each provider, in the form of its `--checks-file` |
 | The Wazuh map | `generated/wazuh-map.json` | The safeguards of each host check: the CIS tags of the release in `catalog/wazuh.json`, carried to the same check IDs, with the lines of the registry. And the checks with no tag |
 | Board input | `generated/board.json` | The safeguards, the systems and the cycles that the board shows |
@@ -233,6 +256,10 @@ reads the result series of the checks of the line and writes
 `homelab:security_control_state`. The last term of each rule is the list of
 systems of the registry, with the value 0. So each system has a line for
 each safeguard, and a system with no fresh result has "no evidence".
+
+Two more rules for each safeguard read the control series: one writes the
+state of the line over the systems that count, and one writes whether the
+line has a result.
 
 One alert rule, `SecurityResultLate`, watches the time of the last result of
 each source in `sources` of each system. For each pair it has two terms:
@@ -270,7 +297,8 @@ tests of the rules compare the whole text of a sample of each alert.
 The tests of the rules are generated too (`generated/rule-tests.yaml`,
 `generated/rule-tests-every-source.yaml`), and `promtool test rules` runs
 them in CI. They prove that an absent result gives "no evidence" and never a
-pass, and that a source with no time fires the alert. The second file tests
+pass, that a line is a pass only when each system with a check passes, and
+that a source with no time fires the alert. The second file tests
 the rules of the registry with each source in `sources`, so the alert has a
 test before the first source runs.
 

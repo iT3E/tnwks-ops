@@ -24,6 +24,11 @@ tests:
   - expr: homelab:security_safeguard_state != 0
     eval_time: 5m
     exp_samples: []
+  - expr: count(homelab:security_safeguard_has_result == 0)
+    eval_time: 5m
+    exp_samples:
+    - labels: '{}'
+      value: 48
 - name: a result with no time of the last result is no evidence, and never a pass
   interval: 1m
   input_series:
@@ -156,3 +161,113 @@ tests:
         description: aws-management has an accepted finding whose end date has passed. Renew it or remove it in
           the encrypted list of accepted findings.
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site
+- name: 'one system passes and a second with a check has no evidence: the line is no evidence, and it has a result'
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{source="prowler",check="awslambda_function_using_supported_runtimes",system="aws-management"}
+    values: 0+0x10
+  - series: homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-management"}
+    values: 0+0x10
+  promql_expr_test:
+  - expr: homelab:security_control_state{safeguard="2.2",system="aws-management"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:security_control_state{safeguard="2.2",system="aws-management",system_type="aws-account",k8s_cluster="site"}
+      value: 1
+  - expr: homelab:security_control_state{safeguard="2.2",system="aws-prod"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:security_control_state{safeguard="2.2",system="aws-prod",system_type="aws-account",k8s_cluster="site"}
+      value: 0
+  - expr: homelab:security_safeguard_state{safeguard="2.2"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:security_safeguard_state{safeguard="2.2",line="02.02",title="Supported software only",ig="1",function="identify",k8s_cluster="site"}
+      value: 0
+  - expr: homelab:security_safeguard_has_result{safeguard="2.2"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:security_safeguard_has_result{safeguard="2.2",ig="1",k8s_cluster="site"}
+      value: 1
+- name: 'each system with a check passes: the line is a pass, and a system of a type with no check does not count'
+  interval: 1m
+  input_series:
+  - series: homelab_security_check_result{source="prowler",check="awslambda_function_using_supported_runtimes",system="aws-management"}
+    values: 0+0x10
+  - series: homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-management"}
+    values: 0+0x10
+  - series: homelab_security_check_result{source="prowler",check="awslambda_function_using_supported_runtimes",system="aws-prod"}
+    values: 0+0x10
+  - series: homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-prod"}
+    values: 0+0x10
+  promql_expr_test:
+  - expr: homelab:security_control_state{safeguard="2.2",system="aws-management"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:security_control_state{safeguard="2.2",system="aws-management",system_type="aws-account",k8s_cluster="site"}
+      value: 1
+  - expr: homelab:security_control_state{safeguard="2.2",system="aws-prod"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:security_control_state{safeguard="2.2",system="aws-prod",system_type="aws-account",k8s_cluster="site"}
+      value: 1
+  - expr: homelab:security_safeguard_state{safeguard="2.2"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:security_safeguard_state{safeguard="2.2",line="02.02",title="Supported software only",ig="1",function="identify",k8s_cluster="site"}
+      value: 1
+  - expr: homelab:security_safeguard_has_result{safeguard="2.2"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:security_safeguard_has_result{safeguard="2.2",ig="1",k8s_cluster="site"}
+      value: 1
+- name: 'one system fails: the line is a fail, with or without a result of the others'
+  interval: 1m
+  input_series:
+  - &id001
+    series: homelab_security_check_result{source="prowler",check="awslambda_function_using_supported_runtimes",system="aws-management"}
+    values: 1+0x10
+  - &id002
+    series: homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-management"}
+    values: 0+0x10
+  promql_expr_test:
+  - expr: homelab:security_control_state{safeguard="2.2",system="aws-management"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:security_control_state{safeguard="2.2",system="aws-management",system_type="aws-account",k8s_cluster="site"}
+      value: 3
+  - expr: homelab:security_control_state{safeguard="2.2",system="aws-prod"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:security_control_state{safeguard="2.2",system="aws-prod",system_type="aws-account",k8s_cluster="site"}
+      value: 0
+  - expr: homelab:security_safeguard_state{safeguard="2.2"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:security_safeguard_state{safeguard="2.2",line="02.02",title="Supported software only",ig="1",function="identify",k8s_cluster="site"}
+      value: 3
+  - expr: homelab:security_safeguard_has_result{safeguard="2.2"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:security_safeguard_has_result{safeguard="2.2",ig="1",k8s_cluster="site"}
+      value: 1
+- name: 'one system fails and each other system passes: the line is a fail'
+  interval: 1m
+  input_series:
+  - *id001
+  - *id002
+  - series: homelab_security_check_result{source="prowler",check="awslambda_function_using_supported_runtimes",system="aws-prod"}
+    values: 0+0x10
+  - series: homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-prod"}
+    values: 0+0x10
+  promql_expr_test:
+  - expr: homelab:security_safeguard_state{safeguard="2.2"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:security_safeguard_state{safeguard="2.2",line="02.02",title="Supported software only",ig="1",function="identify",k8s_cluster="site"}
+      value: 3
+  - expr: homelab:security_safeguard_has_result{safeguard="2.2"}
+    eval_time: 5m
+    exp_samples:
+    - labels: homelab:security_safeguard_has_result{safeguard="2.2",ig="1",k8s_cluster="site"}
+      value: 1

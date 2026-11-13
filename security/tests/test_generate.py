@@ -128,6 +128,33 @@ def test_one_rule_for_each_safeguard_and_type_and_each_ends_in_no_evidence(regis
     assert [rule["labels"]["line"] for rule in lines] == sorted(rule["labels"]["line"] for rule in lines)
 
 
+def test_a_line_is_a_pass_only_when_each_system_with_a_check_passes(registry):
+    present = {system["type"] for system in registry["systems"]}
+    lines = {rule["labels"]["safeguard"]: rule["expr"] for rule in rules(registry) if rule.get("record") == SAFEGUARD}
+    with_check = 0
+    for line in registry["controls"]:
+        counted = [kind for kind in TYPES if kind in present and line["checks"].get(kind)]
+        every = f'{CONTROL}{{safeguard="{line["id"]}"}}'
+        if not counted:
+            # No system has a check for the line: it stays "no evidence".
+            assert lines[line["id"]] == f"{NO_EVIDENCE} * max({every})"
+            continue
+        with_check += 1
+        states = f'{CONTROL}{{safeguard="{line["id"]}",{generate.matcher("system_type", counted)}}}'
+        # A fail of one system wins. Else the least state of the systems that count
+        # decides, so one system with no evidence keeps the line from a pass.
+        assert lines[line["id"]] == f"(max({states}) == {generate.FAIL}) or clamp_max(min({states}), {generate.PASS})"
+        # A type with an empty list is not in the selector: its systems do not count.
+        for kind in present - set(counted):
+            assert kind not in re.findall(r'system_type=~?"([^"]+)"', lines[line["id"]])[0].split("|")
+    assert 0 < with_check < len(registry["controls"])
+    results = [rule for rule in rules(registry) if rule.get("record") == generate.HAS_RESULT]
+    assert [rule["labels"]["safeguard"] for rule in results] == [line["id"] for line in registry["controls"]]
+    for rule in results:
+        assert rule["expr"] == f'max({CONTROL}{{safeguard="{rule["labels"]["safeguard"]}"}}) > bool {NO_EVIDENCE}'
+        assert set(rule["labels"]) == {"safeguard", "ig", "k8s_cluster"}
+
+
 def test_a_rule_counts_a_result_only_with_a_fresh_time_of_its_source(registry):
     for rule in rules(registry):
         if rule.get("record") != CONTROL:
@@ -219,6 +246,7 @@ def test_the_board_input_has_each_line_each_system_and_each_cycle(registry):
     assert {item["name"]: (item["cycle"], item["late_after"]) for item in board["sources"]} == {
         source["name"]: (source["cycle"], source["late_after"]) for source in registry["sources"]}
     assert board["states"] == {"no evidence": 0, "pass": 1, "fail": 3}
+    assert board["series"]["has_result"] == generate.HAS_RESULT
 
 
 def test_the_outputs_in_git_are_the_outputs_of_the_registry(registry):
@@ -245,6 +273,9 @@ def test_the_rule_tests_cover_no_evidence_and_the_late_rule(registry):
     names = [test["name"] for test in generate.fixtures(registry)["tests"]]
     assert "with no source, each line of the registry is no evidence" in names
     assert "a result with no time of the last result is no evidence, and never a pass" in names
+    # The state of a line over its systems.
+    assert sum(name.startswith(("one system passes and a second with a check has no evidence",
+                                "each system with a check passes", "one system fails")) for name in names) == 4
     late = generate.late_fixtures(registry)["tests"]
     assert any(test["name"] == "a source that serves no time reads as late" for test in late)
 

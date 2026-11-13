@@ -6,6 +6,7 @@
     "system": "homelab:security_system_info",
     "control": "homelab:security_control_state",
     "safeguard": "homelab:security_safeguard_state",
+    "has_result": "homelab:security_safeguard_has_result",
     "accepted": "homelab_security_accepted_until_timestamp_seconds"
   },
   "states": {
