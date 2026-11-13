@@ -341,6 +341,21 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
   Job. The Job name comes from the key, so a second call with the same key
   gets the same run. A Job stays 7 days. The receiver refuses to start when
   a template breaks a rule of the image.
+- **The answer of a run stays with its Job.** The answer is the last line
+  of the log of the run pod, and the pod GC of this cluster
+  (`terminated-pod-gc-threshold: 1`, `talos/wsl/cluster-config.yaml`) deletes
+  that pod soon after the Job ends: 35 s on the first run. So the receiver
+  keeps the answer in the annotation `workflow-agents/result` of the Job when
+  it first reads it, on a call or in a loop every 10 s over the ended Jobs
+  with no kept answer (`RUN_RECEIVER_RECORD_SECONDS`). A later call with
+  the same key reads the annotation.
+  - An answer of more than 64 KiB is kept without its `output`.
+  - If the pod went before the receiver read it (the receiver was down for
+    that time), the answer is the state of the Job (`succeeded`, `failed` or
+    `timed_out`), with `"output_kept": false`.
+  - For this, the Role of the receiver has `jobs`: `list` and `patch`. The
+    patch changes only the annotations, and the admission policy checks it
+    as it checks a new Job (it matches `UPDATE` too).
 - **The Renovate reviewer** is the one agent. It reviews pull requests of
   `iT3E/tnwks-ops` only (`REVIEWER_REPOSITORIES`), and posts one comment for
   each head: it never merges, approves, pushes or changes a label. It calls
