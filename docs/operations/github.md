@@ -106,11 +106,8 @@ In this order:
    (README in `infrastructure/terraform/`). It adds `tnwks-github-prod`
    (execution mode local, `modules/tfc/workspaces.tf`).
 3. **Check locally**: `task github:init` and `task github:plan`. The plan
-   imports every resource in `imports.tf` (31) and adds and destroys
-   nothing. It also shows each repository as changed in place, with only
-   `archive_on_destroy` set to true: Terraform keeps that value in its state
-   and GitHub has no such setting, so an import can't fill it in. Applying
-   it sends each repository's current settings back unchanged.
+   imports every resource in `imports.tf` (31) and adds, changes and
+   destroys nothing.
 4. **Turn CI on**: set the repository variable
    `GITHUB_TERRAFORM_ENABLED=true` (Settings > Secrets and variables >
    Actions > Variables).
@@ -121,9 +118,9 @@ In this order:
 ## Safety
 
 - **No deletes.** Every repository has `lifecycle { prevent_destroy = true }`,
-  so a plan that would destroy one fails. `archive_on_destroy = true` means
-  that, should the guard be lifted, a destroy archives the repository
-  instead of deleting it.
+  so a plan that would destroy one fails. `archive_on_destroy = true`
+  (archive instead of delete, should the guard be lifted) is not set in
+  this phase; see "Later phases".
 - **No replacements.** No repository sets `template`, `fork` or `source_*`:
   on an existing repository they force a replacement, which is a delete.
 - **A token that can't delete repositories** (a classic PAT without
@@ -154,6 +151,12 @@ small PRs.
 
 ## Later phases
 
+- `archive_on_destroy = true` on every repository, in its own PR after the
+  first apply. GitHub never reports the setting, so an import can't fill it
+  in: the plan shows it as one in-place update per repository, and the apply
+  sends each repository's current settings back unchanged
+  (`PATCH /repos/{owner}/{repo}`) while Terraform records the value in its
+  state.
 - Actions, environment and Dependabot secrets, and the webhook, from SOPS.
 - The other private repositories, once the owner decides whether their
   names can be in this public repo.

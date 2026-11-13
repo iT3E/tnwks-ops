@@ -7,7 +7,7 @@ What it manages, what stays by hand, the token and the bootstrap:
 
 | File              | Manages                                                                                                                  |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `repositories.tf` | `github_repository`: one per entry, with secret scanning where set. Never deleted (`prevent_destroy`, `archive_on_destroy`) |
+| `repositories.tf` | `github_repository`: one per entry, with secret scanning where set. Never deleted (`prevent_destroy`)                     |
 | `rulesets.tf`     | `github_repository_ruleset`: an entry's `rulesets`                                                                        |
 | `environments.tf` | `github_repository_environment` and `github_repository_environment_deployment_policy`: an entry's `environments`         |
 | `actions.tf`      | `github_actions_repository_permissions`, `github_workflow_repository_permissions`, `github_actions_variable`              |
@@ -22,8 +22,11 @@ The root pins the version and configures the owner and token.
   repository, so an entry lists only what differs. The optional parts
   (`vulnerability_alerts`, `actions`, `workflow_permissions`, `variables`,
   `environments`, `rulesets`) are managed only where an entry sets them.
-- **Never a delete.** No `template`, `fork` or `source_*` arguments: on an
-  existing repository they force a replacement. The deprecated `private`,
+- **Never a delete.** `prevent_destroy` on every repository. No `template`,
+  `fork` or `source_*` arguments: on an existing repository they force a
+  replacement. `archive_on_destroy` isn't set yet: GitHub never reports it,
+  so on an import it shows as an in-place update of every repository; it
+  comes in its own change after the first apply. The deprecated `private`,
   `default_branch`, `vulnerability_alerts`, `pages` and `has_downloads`
   arguments stay unset.
 - **Private repositories** get no `security_and_analysis` or `rulesets` on
