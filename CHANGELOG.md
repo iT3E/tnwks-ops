@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.92.1 - 2026-11-13
+
+### Fixed
+
+* agents: the pilot reads its model gateway key by an explicit env SecretRef, so the doctor no longer reports it as plaintext, and the pilot's tool to read and change its own config is denied
+
 ## v2.92.0 - 2026-11-13
 
 ### Added
