@@ -13,22 +13,7 @@ locals {
   # Built here and not read from the trail: the bucket policy names the trail,
   # and the trail needs the bucket policy before it can be made.
   trail_arn = "arn:aws:cloudtrail:${data.aws_region.management.region}:${data.aws_caller_identity.management.account_id}:trail/${local.trail_name}"
-
-  # Every trail that either account lists, other than this one (the member
-  # account lists the organization trail too, by name or by ARN).
-  other_trails = sort([
-    for id in setunion(data.awscc_cloudtrail_trails.management.ids, data.awscc_cloudtrail_trails.member.ids) :
-    id if id != local.trail_name && !endswith(id, ":trail/${local.trail_name}")
-  ])
 }
-
-# The trails of each account, through Cloud Control (the aws provider has no
-# data source that lists trails). Read on every plan, for the guard below.
-data "awscc_cloudtrail_trails" "management" {
-  provider = awscc.management
-}
-
-data "awscc_cloudtrail_trails" "member" {}
 
 # An organization trail made through the API needs trusted access for
 # CloudTrail in the organization first. CloudTrail makes its own
@@ -50,18 +35,49 @@ resource "aws_cloudtrail" "organization" {
   include_global_service_events = true
   enable_log_file_validation    = true
 
-  lifecycle {
-    # Only the first copy of management events is free, and each further copy
-    # is billed for each event. So a plan fails here, before anything is
-    # made, while an account has a trail that this module does not manage.
-    precondition {
-      condition     = length(local.other_trails) == 0
-      error_message = "An account of the organization lists a trail that this module does not manage: ${join(", ", local.other_trails)}. A second copy of management events is billed for each event. Remove that trail, or bring it into this module, and plan again."
-    }
-  }
-
   depends_on = [
     aws_s3_bucket_policy.trail,
     aws_organizations_aws_service_access.cloudtrail,
   ]
+}
+
+## ---------------------------------------------------------------------------------------------------------------------
+## ONE TRAIL ONLY
+## Only the first copy of management events is free, and each further copy is
+## billed for each event. So each plan and each apply lists the trails of both
+## accounts through Cloud Control (the aws provider has no data source that
+## lists trails), and warns, with its name, while an account lists a trail
+## other than the one above. The member account can list the organization
+## trail too, by its name or by its ARN.
+##
+## These are checks and not preconditions for one reason: the data source
+## fails on an empty list. Inside a check that failure is a warning ("Empty
+## result") and the run goes on. A trail of the same name that Terraform does
+## not know fails the apply at CreateTrail.
+## ---------------------------------------------------------------------------------------------------------------------
+
+check "one_trail_management" {
+  data "awscc_cloudtrail_trails" "management" {
+    provider = awscc.management
+  }
+
+  assert {
+    condition = alltrue([
+      for id in data.awscc_cloudtrail_trails.management.ids :
+      id == local.trail_name || endswith(id, ":trail/${local.trail_name}")
+    ])
+    error_message = "The management account lists a trail that this module does not manage (all of its trails: ${join(", ", data.awscc_cloudtrail_trails.management.ids)}). A second copy of management events is billed for each event. Remove that trail, or bring it into this module."
+  }
+}
+
+check "one_trail_member" {
+  data "awscc_cloudtrail_trails" "member" {}
+
+  assert {
+    condition = alltrue([
+      for id in data.awscc_cloudtrail_trails.member.ids :
+      id == local.trail_name || endswith(id, ":trail/${local.trail_name}")
+    ])
+    error_message = "The prod account lists a trail that this module does not manage (all of its trails: ${join(", ", data.awscc_cloudtrail_trails.member.ids)}). A second copy of management events is billed for each event. Remove that trail, or bring it into this module."
+  }
 }

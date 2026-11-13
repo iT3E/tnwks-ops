@@ -27,12 +27,20 @@ services.
 
 ## One trail only
 
-Each further copy of management events is billed for each event. So the trail
-has a guard: on every plan, Cloud Control lists the trails of both accounts
-(`awscc_cloudtrail_trails`), and the plan fails, before it makes anything,
-while an account lists a trail other than `tnwks-organization-trail`. The
-message names that trail. A trail of the same name that Terraform does not
-know fails the apply at `CreateTrail`, and so does a bucket of the same name.
+Each further copy of management events is billed for each event. So the
+module has two checks, one for each account (`cloudtrail.tf`): on every plan
+and apply, Cloud Control lists the trails of the account
+(`awscc_cloudtrail_trails`), and the run warns while the account lists a
+trail other than `tnwks-organization-trail`. The message gives the names. A
+check warns and does not stop the run, so read the warnings of the plan
+before the merge of a change to this root.
+
+| What exists | What the run shows |
+| --- | --- |
+| A trail of another name, in either account | The warning `Check block assertion failed`, with the names of the trails |
+| An empty list | The warning `Empty result`: the data source fails on an empty list, and that is why this is a check and not a precondition |
+| A trail named `tnwks-organization-trail` that Terraform does not know | The apply fails at `CreateTrail` |
+| A bucket of the trail bucket's name | The apply fails at `CreateBucket` |
 
 The list is the one that Cloud Control gives in the home Region of the
 workspace. Before the first apply, read the trails of each account once by
