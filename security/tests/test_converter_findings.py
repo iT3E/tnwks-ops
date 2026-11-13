@@ -70,7 +70,7 @@ class FakeLoki(ThreadingHTTPServer):
     """The push API of a Loki on the loopback address. `status` is the answer to each push."""
 
     def __init__(self):
-        self.pushes, self.status = [], 204
+        self.pushes, self.status, self.bodies = [], 204, []
         super().__init__(("127.0.0.1", 0), self.Handler)
         threading.Thread(target=self.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True).start()
 
@@ -89,7 +89,9 @@ class FakeLoki(ThreadingHTTPServer):
 
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
-            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            raw = self.rfile.read(int(self.headers["Content-Length"]))
+            self.server.bodies.append(raw)
+            body = json.loads(raw)
             status = self.server.status
             self.server.pushes.append((self.path, dict(self.headers), body, status))
             text = b"an-answer-of-loki" if status != 204 else b""
@@ -207,7 +209,7 @@ def test_after_a_start_the_newest_file_is_sent_again_with_the_same_times_and_tex
     assert first[2] == second[2], "Loki keeps one line for the same time and the same text"
 
 
-@pytest.mark.parametrize("status", [500, 503, 429])
+@pytest.mark.parametrize("status", [500, 503, 429, 413])
 def test_lines_that_loki_did_not_take_wait_for_the_next_cycle(tmp_path, loki, status, caplog):
     write(tmp_path, f"prowler/aws/account-one.{stamp(3600)}.ocsf.json", prowler_text(RECORDS))
     part = files_for(tmp_path, loki)
@@ -251,14 +253,69 @@ def test_a_bad_file_sends_no_line(tmp_path, loki):
     assert series(part, converter.FINDINGS_PENDING) == {}
 
 
-def test_the_lines_go_in_batches_of_a_limited_size(tmp_path, loki):
+def test_the_lines_go_in_batches_of_a_limited_size_in_bytes_on_the_wire(tmp_path, loki):
+    """Quotes and text that is not ASCII take more bytes in the body than characters."""
+    detail = '"quoted" café ' * 40
     write(tmp_path, f"prowler/aws/account-one.{stamp(3600)}.ocsf.json",
-          prowler_text([record("check_a", resource=f"r{index}") for index in range(50)]))
+          prowler_text([record("check_a", resource=f"r{index}", status_detail=detail) for index in range(50)]))
     part = files_for(tmp_path, loki)
     part.findings.batch_bytes = 4000
     part.cycle()
-    assert len(loki.pushes) > 5
+    assert len(loki.pushes) > 10
     assert len(loki.lines()) == 50
+    envelope = len(json.dumps({"streams": [{"stream": loki.pushes[0][2]["streams"][0]["stream"], "values": []}]}))
+    assert all(len(body) - envelope <= 4000 for body in loki.bodies)
+    assert all(body.isascii() for body in loki.bodies)
+    assert json.loads(loki.lines()[0][2])["status_detail"] == detail
+
+
+def test_the_body_of_a_push_stays_under_the_limit_of_the_gateway():
+    line = json.dumps({"status_detail": '"\u00e9' * 8000})
+    body_of = lambda batch: len(json.dumps({"streams": [{"stream": {"a": "b"}, "values": [
+        [str(moment), text] for moment, text in batch]}]}).encode())
+    sizes = [body_of(batch) for batch in converter.batches([line] * 400, 1)]
+    assert len(sizes) > 1 and max(sizes) <= converter.MAX_BATCH_BYTES + 1024 < 4 * 1024 * 1024
+
+
+def test_a_line_with_long_texts_is_made_shorter_to_fit_the_limit_of_loki():
+    wide = "\U0001F600" * 1024  # four bytes each in UTF-8
+    item = record("check_a") | {"status_detail": wide * 8, "resources": [
+        {"uid": wide, "name": wide, "type": wide, "region": wide, "group": {"name": wide}} for _ in range(20)]}
+    line = converter.ocsf_line(item)
+    assert len(line.encode()) <= converter.MAX_LINE_BYTES
+    assert json.loads(line)["resources"], "the line keeps a resource"
+    assert converter.ocsf_line(record("check_a")) == converter.ocsf_line_within(record("check_a"), *converter.LINE_LIMITS[0])
+
+
+def test_a_lone_surrogate_in_a_line_stops_no_stream(tmp_path, loki):
+    write(tmp_path, f"prowler/aws/account-one.{stamp(3600)}.ocsf.json",
+          prowler_text([record("check_a", status_detail="an invented detail \ud800", resource="r\udfff")]))
+    write(tmp_path, f"prowler/aws/account-two.{stamp(3600)}.ocsf.json", prowler_text([record("check_b")]))
+    part = files_for(tmp_path, loki)
+    part.cycle()
+    assert [labels["system"] for labels, _, _ in loki.lines()] == ["account-one", "account-two"]
+    assert series(part, converter.FINDINGS_PENDING) == {'{source="prowler",system="account-one"}': 0,
+                                                        '{source="prowler",system="account-two"}': 0}
+    assert all(body.isascii() for body in loki.bodies)
+    part.render()
+
+
+def test_a_fault_in_the_lines_of_one_stream_stops_no_other_stream(tmp_path, loki, monkeypatch):
+    write(tmp_path, f"prowler/aws/account-one.{stamp(3600)}.ocsf.json", prowler_text([record("boom")]))
+    write(tmp_path, f"prowler/aws/account-two.{stamp(3600)}.ocsf.json", prowler_text([record("check_b")]))
+    real = converter.ocsf_line
+
+    def faulty(item):
+        if item["metadata"]["event_code"] == "boom":
+            raise RuntimeError("a fault")
+        return real(item)
+
+    monkeypatch.setattr(converter, "ocsf_line", faulty)
+    part = files_for(tmp_path, loki)
+    part.cycle()
+    assert [labels["system"] for labels, _, _ in loki.lines()] == ["account-two"]
+    assert series(part, converter.FINDINGS_PENDING) == {'{source="prowler",system="account-one"}': 1,
+                                                        '{source="prowler",system="account-two"}': 0}
 
 
 def test_the_findings_of_the_api_checks_are_lines_of_their_system(tmp_path, loki):

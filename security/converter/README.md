@@ -151,6 +151,7 @@ the contract of the registry.
 | `homelab_security_converter_last_cycle_timestamp_seconds` | None | The Unix time at which the last cycle ended |
 | `homelab_security_converter_stream_query_success` | `source`, `check`, `system` | 1 when Loki gave an answer in the last cycle, with a line or with none. 0 for an error or no answer |
 | `homelab_security_converter_files_skipped` | `source` (`prowler`, `api-check`) | The number of files that the converter skipped in its last cycle: the newest OCSF file of a system, or the result file, that does not fit ([A file that does not fit](#a-file-that-does-not-fit)) |
+| `homelab_security_converter_accepted_list_read` | None | 1 when the converter read the list of accepted findings in its last cycle, or found no list. 0 when it gave no entry of a list that is there ([A file that gives no entry](#a-file-that-gives-no-entry)) |
 | `homelab_security_converter_accepted_skipped_entries` | None | The number of entries of the list of accepted findings that the converter skipped in its last cycle ([An entry that the converter skips](#an-entry-that-the-converter-skips)) |
 
 ## The list of accepted findings
@@ -189,32 +190,70 @@ restart the pod.
 ### The form that the converter reads
 
 The Python image of the converter has no YAML library, so the converter
-reads the block form of the example in `../README.md`, and no other form:
+reads the block form of the example in `../README.md`, and the form that
+`yaml.safe_dump` writes, and no other form:
 
 - A YAML list, one entry for each item `- `, with one `key: value` on each
-  line. A comment, a blank line and `---` are no problem.
-- A value is plain, in single quotes or in double quotes, on one line. Only
-  `reason` can have a block (`|` or `>`) or a value on two lines.
-- No flow form (`{ }`, `[ ]`), no anchor, no alias, no tag, no tab.
+  line. A comment, a blank line and `---` before the list are no problem.
+- A value is plain, in single quotes or in double quotes. A quoted value can
+  go on over more lines, to its closing quote, as `yaml.safe_dump` writes a
+  long `reason`. A block (`|` or `>`) and a plain value can go on over the
+  lines that are more indented than the key. The converter reads no key in
+  the lines of a value.
+- No flow form (`{ }`, `[ ]`), no anchor, no alias, no tag, no tab in the
+  indentation, no key two times in one entry.
 
-The tests read the example of `../README.md`, and lists in the block form,
-with PyYAML too: the converter must read each of them as PyYAML does.
+The reader mutes too little rather than too much. After a line that it does
+not understand, it can not know where the next entry starts, so one such
+line makes the whole file give no entry. An entry that it reads but that
+does not fit is skipped, and the other entries are served.
+
+The tests hold the reader to PyYAML 6. Each field that the converter takes
+is the text that PyYAML gives for it, in the entry of the same place, and
+the converter takes no entry of a file that PyYAML does not read. The tests
+check this on the example of `../README.md`, on lists of `yaml.safe_dump`
+with long and wrapped reasons, and on some thousand invented lists with
+lines and characters put in.
 
 ### An entry that the converter skips
 
-The converter skips an entry, and counts it, when:
+The converter skips an entry, and counts it in
+`homelab_security_converter_accepted_skipped_entries`, when:
 
-- A line of the entry has a form of the list above that the converter does
-  not read, or a key is there two times.
-- `source`, `check`, `system` or `until` is missing or empty, or is a block.
+- `source`, `check`, `system` or `until` is missing or empty, or goes on
+  over more lines.
 - The source or the system is not in the registry.
-- `until` is not a date as `YYYY-MM-DD`.
+- The check is not a check ID: a letter or a digit, then letters, digits and
+  `_./:-`, 200 characters at most. So no text of another form reaches a
+  label.
+- PyYAML reads the plain value as a number, a bool or null, and its text is
+  not the same: `0x1A`, `1.5`, `yes`, `~`. Put such a value in quotes.
+- `until` is not a date that Python's `datetime.date.fromisoformat` reads.
+  The Prowler job (`run.py` of the Prowler app) reads it with the same
+  function, so the two agree. It reads `2027-12-31`, and since Python 3.11
+  also `20271231` and `'2027-W52-5'`. Write `YYYY-MM-DD`, as in
+  `../README.md`.
 
-The other entries are served. A file that can not be read, is not UTF-8 or is
-larger than 1 MiB counts as one entry skipped, and the converter serves no
-entry. `homelab_security_converter_accepted_skipped_entries` is the count.
-A skipped entry has no series, so the board does not show it, and the rule
-of Trivy Operator does not mute it: the finding shows as a fail.
+The other entries are served. A skipped entry has no series, so the board
+does not show it, and the rule of Trivy Operator does not mute it: the
+finding shows as a fail.
+
+### A file that gives no entry
+
+The converter serves no entry, sets
+`homelab_security_converter_accepted_list_read` to 0, and logs the number
+of the line and the kind of its form (no text of the file), when the list:
+
+- Has a line of a form that the converter does not read, or a key two times
+  in one entry.
+- Ends inside a quoted value.
+- Has a character that YAML does not let a file hold, an escape that YAML
+  does not have, or a plain date that is no day (`2027-02-30`). PyYAML
+  stops on each of them, and so does `run.py`.
+- Can not be read, is not UTF-8, or is larger than 1 MiB.
+
+With no list (the Secret does not exist) the converter serves no entry and
+the value is 1.
 
 ## The loop of the parts
 
@@ -274,7 +313,7 @@ homelab_security_last_result_timestamp_seconds{source="prowler",system="example-
 | Label | Value |
 | --- | --- |
 | `source` | `prowler` or `api-check`, the name of the source in `registry/sources.yaml` |
-| `check` | The check ID |
+| `check` | The check ID: a letter or a digit, then letters, digits and `_./:-`, 200 characters at most |
 | `system` | The name of the system in `registry/systems.yaml` |
 | `severity` | Of the result series only. The severity of the check, in lower case: `critical`, `high`, `medium`, `low`, `informational` or `unknown`. The rule of Trivy Operator gives the same values, so one alert for a new finding reads both |
 
@@ -283,12 +322,27 @@ check on the system, and 0 when it passes. The time is the time of the newest
 whole file of the system. The rules of the registry read `source`, `check`
 and `system` only (`max by (system)`), so the label `severity` does not
 change the state of a control, and the board counts one series for each
-check and system. The converter gives each check one severity.
+check and system. The converter gives each check one severity. A change of
+the severity of a check (a new release of Prowler, or an API job that adds
+`severity`) makes a new series, with no history of the day before.
+
+The ServiceMonitor drops the labels of the pod (`pod`, `instance`,
+`container`, `endpoint`), so each series of the converter has the labels of
+the contract, and `job`, `namespace` and `service`. A restart of the pod
+makes no new series, and an alert that compares a series with the day before
+finds it. No rule and no board reads the four labels, and one pod runs
+(`Recreate`), so two series can not meet.
 
 The converter reads a file again only when its size, its time or its inode
-changes. It reads an OCSF file one record at a time, so its memory does not
-grow with the file: a test file of 167 MiB took 26 MiB of the process at
-its peak, in 0.3 seconds.
+changes. It reads an OCSF file one record at a time, and keeps a hash of 8
+bytes for each resource that fails, not its ID. So its memory does not grow
+with the size of a record: a test file of 167 MiB took 26 MiB of the process
+at its peak, in 0.3 seconds, and a test file at the limit of 200 000 records,
+each of them a fail, took 46 MiB. The limit of the pod is 128 MiB.
+
+The converter opens a file of results only when it is a regular file. It
+follows no link, and a FIFO or a directory in the place of a file is a file
+that does not fit, so no read waits.
 
 A file of results holds results, so it never goes to git.
 
@@ -342,7 +396,7 @@ How the converter counts the records of one file:
 
 | Record | What it counts |
 | --- | --- |
-| `status_code` `FAIL`, and `status` not `Suppressed` | One resource that fails. Two records with one `finding_info.uid` are one resource |
+| `status_code` `FAIL`, and `status` not `Suppressed` | One resource that fails. The resource is the `uid` of the first item of `resources`, the ARN on AWS, or the `finding_info.uid` when it has none. Two records of one resource are one resource. Two resources with one name are two resources |
 | `status_code` `FAIL`, and `status` `Suppressed` | Nothing: the list of accepted findings muted it (`kubernetes/apps/security/prowler`). The check has a result |
 | `status_code` `PASS` | Nothing. The check has a result |
 | `status_code` `MANUAL`, or another one | Nothing. A check with no `PASS` and no `FAIL` record has no result series |
@@ -416,8 +470,10 @@ of the converter names the file and the reason, with no value of the file.
 
 | File | It does not fit when |
 | --- | --- |
-| The newest OCSF file of a system | It is not UTF-8, or not one JSON array of objects: a file that a run left half written, an empty file, a comma at the end, text after the array. A record has no `metadata.event_code` or no `status_code` as text. A record is larger than 4 MiB, or the file is larger than 256 MiB |
-| `api-check/results.json` | It is not JSON, `version` is not 1, `source` is not `api-check`, `time` is not a time up to 5 minutes in the future, or an entry does not have the form of the table above. The file is larger than 16 MiB |
+| The newest OCSF file of a system | It is not UTF-8, or not one JSON array of objects: a file that a run left half written, an empty file, a comma at the end, text after the array. A record has no `metadata.event_code` that is a check ID, or no `status_code` as text. A record is larger than 4 MiB, the file is larger than 256 MiB, or it has more than 200 000 records or 5 000 checks |
+| `api-check/results.json` | It is not JSON, `version` is not 1, `source` is not `api-check`, `time` is not a time up to 5 minutes in the future, or an entry does not have the form of the table above: a `check` that is not a check ID too. The file is larger than 16 MiB, or it has more than 5 000 results |
+| Each of them | It is not a regular file: a link, a FIFO, a directory |
+| The directory of a provider | It can not be read: it counts as one file of `prowler` that does not fit, and the other providers and the API checks go on |
 
 When the file of a system goes away, its results go away in the next cycle.
 
@@ -457,8 +513,11 @@ why, and no setting of a resource:
 | `resources[]` | For each resource (20 at most): `uid`, `name`, `type`, `region`, and `group.name` (the service) |
 | `cloud` | `provider`, `region`, and `account.uid` and `account.name` |
 
-Each other text field has its first 1024 characters. Each other field of the
-record stays in the file. These never go to a line: the data of a resource
+Each other text field has its first 1024 characters. A line is 64 KiB at
+most in UTF-8, under the line limit of Loki (256 KB): a line that would be
+longer has 5 resources and shorter texts (256 and 2048 characters), and then
+1 resource (64 and 512 characters). Each other field of the record stays in
+the file. These never go to a line: the data of a resource
 (`resources[].data`, the settings that Prowler read), the tags of a resource
 or an account (`labels`), the remedy and the risk texts of the check, the
 compliance map and the other `unmapped` fields, and the organization. The
@@ -477,20 +536,31 @@ with the status `Suppressed`, which the list of accepted findings muted.
 
 - **One time for each file.** The converter sends the lines of a newest
   file, and then sends them no more. A new file of the system is a new set
-  of lines.
+  of lines. The converter sends the newest file only: when a newer file
+  comes while the lines of an older one wait for Loki, the older lines are
+  not sent. The file stays on the volume for 14 days.
 - **After a start** the converter sends the newest file of each system again,
   with the same times and the same text. A query of Loki gives each line one
   time.
-- **When Loki does not take them** (no answer, an error 5xx, or 429), the
-  lines wait for the next cycle, and
+- **When Loki does not take them** (no answer, an error 5xx, 429, or 413),
+  the lines wait for the next cycle, and
   `homelab_security_converter_findings_pending` is 1 for the stream. The
-  result series do not wait for Loki.
-- **When Loki refuses them** (a status 4xx other than 429, such as a line
-  more than 7 days old), the converter counts them and does not send them
-  again.
-- Batches of about 1 MiB, to the push API of the gateway
-  (`/loki/api/v1/push`). No line and no answer of Loki is in a log of the
-  converter: the log says the number of lines, and the status.
+  result series do not wait for Loki. A 413 says that the body is larger
+  than the gateway takes. A batch is far under that limit, so a 413 means
+  that the limit changed: the lines wait for that fix, and the series shows
+  it, and no line is lost.
+- **When Loki refuses them** (a status 4xx other than 429 and 413, such as
+  a line more than 7 days old), the converter counts them and does not send
+  them again.
+- **Each stream on its own.** A fault in the lines of one system (a file
+  that changed, a text that is not UTF-8) makes that stream wait, and the
+  converter goes on with the next one.
+- **Batches of 1 MiB at most on the wire**, to the push API of the gateway
+  (`/loki/api/v1/push`). The converter counts the bytes of each line in
+  the body, as JSON in ASCII, and not its characters. The gateway of the
+  Loki chart takes 4 MiB (`client_max_body_size`). No line and no answer of
+  Loki is in a log of the converter: the log says the number of lines, and
+  the status.
 
 A day with a few hundred findings that fail is a few hundred kB in Loki.
 

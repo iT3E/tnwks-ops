@@ -13,6 +13,7 @@ import tracemalloc
 from pathlib import Path
 
 import pytest
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "converter"))
@@ -178,6 +179,8 @@ BAD = {
     "a comma at the end": "[" + json.dumps(record("a")) + ",]",
     "text after the array": prowler_text([record("a")]) + "x",
     "not UTF-8": b"[\xff]",
+    "a check that is not a check ID": prowler_text([record("a b")]),
+    "a lone surrogate in a check": '[{"metadata": {"event_code": "a\\ud800"}, "status_code": "FAIL"}]',
 }
 
 
@@ -194,6 +197,72 @@ def test_a_bad_newest_file_gives_no_result_and_no_time_for_its_system_and_is_cou
     assert skipped(part) == {"prowler": 1, "api-check": 0}
     assert f"prowler/aws/account-one.{stamp(3600)}.ocsf.json is skipped" in caplog.text
     assert "invented" not in caplog.text, "no value of a file in a log"
+
+
+@pytest.mark.parametrize("limit", ["MAX_RECORDS", "MAX_CHECKS"])
+def test_a_file_with_more_records_or_checks_than_the_limit_is_a_bad_file(tmp_path, monkeypatch, limit):
+    write(tmp_path, f"prowler/aws/account-one.{stamp(3600)}.ocsf.json",
+          prowler_text([record(f"check_{index}") for index in range(3)]))
+    monkeypatch.setattr(converter, limit, 2)
+    part = files_for(tmp_path)
+    part.cycle()
+    assert times(part) == {} and skipped(part)["prowler"] == 1
+    monkeypatch.setattr(converter, limit, 3)
+    write(tmp_path, f"prowler/aws/account-one.{stamp(3600)}.ocsf.json",
+          prowler_text([record(f"check_{index}") for index in range(3)]) + " ")
+    part.cycle()
+    assert len(results(part)) == 3 and skipped(part)["prowler"] == 0
+
+
+def test_the_memory_of_the_counts_stays_small_with_many_failing_records(tmp_path):
+    """Each failing resource costs the hash of its ID, not the ID."""
+    items = ",".join(json.dumps({"metadata": {"event_code": "check_a"}, "status_code": "FAIL",
+                                 "resources": [{"uid": f"arn:example:resource/{'x' * 200}-{index}"}]})
+                     for index in range(50_000))
+    write(tmp_path, f"prowler/aws/account-one.{stamp(3600)}.ocsf.json", f"[{items}]")
+    part = files_for(tmp_path)
+    tracemalloc.start()
+    part.cycle()
+    peak = tracemalloc.get_traced_memory()[1]
+    tracemalloc.stop()
+    assert results(part) == {("prowler", "check_a", "account-one"): (50_000, "unknown")}
+    assert peak < 8 * 1024 * 1024, f"{peak / 2**20:.1f} MiB"
+
+
+def test_a_resource_is_the_uid_of_its_first_resource_and_else_the_uid_of_the_finding(tmp_path):
+    one = record("check_a", resource="r1")
+    # Two resources with one name: one ID of the finding, two IDs of the resource.
+    two = record("check_a", resource="r2") | {"finding_info": one["finding_info"]}
+    bare = [{key: value for key, value in record("check_b", resource=name).items() if key != "resources"}
+            for name in ("r3", "r4", "r4")]
+    write(tmp_path, f"prowler/aws/account-one.{stamp(3600)}.ocsf.json", prowler_text([one, two, *bare]))
+    part = files_for(tmp_path)
+    part.cycle()
+    assert results(part) == {("prowler", "check_a", "account-one"): (2, "high"),
+                             ("prowler", "check_b", "account-one"): (2, "high")}
+
+
+def test_a_directory_that_can_not_be_read_counts_and_the_others_go_on(tmp_path):
+    write(tmp_path, "prowler/github", "a file in the place of a directory")
+    write(tmp_path, f"prowler/aws/account-one.{stamp(3600)}.ocsf.json", prowler_text([record("a")]))
+    write(tmp_path, "api-check/results.json", api({"check": "b", "system": "example-system", "failed": 0}))
+    part = files_for(tmp_path)
+    part.cycle()
+    assert set(results(part)) == {("prowler", "a", "account-one"), ("api-check", "b", "example-system")}
+    assert skipped(part) == {"prowler": 1, "api-check": 0}
+
+
+@pytest.mark.parametrize("kind", ["a FIFO", "a link", "a directory"])
+def test_the_result_file_is_read_only_when_it_is_a_regular_file(tmp_path, kind):
+    """A FIFO would stop the loop, and a link can point out of the volume."""
+    target = write(tmp_path, "elsewhere.json", api({"check": "b", "system": "example-system", "failed": 0}))
+    path = tmp_path / "api-check/results.json"
+    path.parent.mkdir(parents=True)
+    {"a FIFO": lambda: os.mkfifo(path), "a link": lambda: path.symlink_to(target),
+     "a directory": lambda: path.mkdir()}[kind]()
+    part = files_for(tmp_path)
+    part.cycle()  # returns: no read waits for a writer
+    assert results(part) == {} and skipped(part) == {"prowler": 0, "api-check": 1}
 
 
 def test_a_file_larger_than_a_limit_is_skipped(tmp_path, monkeypatch):
@@ -318,6 +387,10 @@ API_BAD = {
     "a count that is not a number": api({"check": "a", "system": "example-system", "failed": True}),
     "a count below 0": api({"check": "a", "system": "example-system", "failed": -1}),
     "no check": api({"system": "example-system", "failed": 0}),
+    "a check that is not a check ID": api({"check": "a\nb", "system": "example-system", "failed": 0}),
+    "a lone surrogate in a check": api({"check": "a\ud800", "system": "example-system", "failed": 0}),
+    "more results than the limit": api(*({"check": f"c{index}", "system": "example-system", "failed": 0}
+                                         for index in range(converter.MAX_CHECKS + 1))),
     "two results of one check": api({"check": "a", "system": "example-system", "failed": 0},
                                     {"check": "a", "system": "example-system", "failed": 1}),
     "a severity of no list": api({"check": "a", "system": "example-system", "failed": 0, "severity": "High"}),
@@ -343,6 +416,18 @@ def test_a_result_with_a_severity_has_that_label(tmp_path):
     part = files_for(tmp_path)
     part.cycle()
     assert results(part) == {("api-check", "a", "example-router"): (1, "high")}
+
+
+def test_the_service_monitor_drops_the_labels_of_the_pod():
+    """The series carry the labels of the contract only, so a restart of the pod makes no
+    new series (README, "The labels of the series")."""
+    release = yaml.safe_load((ROOT / "kubernetes/apps/security/converter/app/helmrelease.yaml").read_text())
+    endpoint, = release["spec"]["values"]["serviceMonitor"]["app"]["endpoints"]
+    drops = [re.compile(f"^(?:{rule['regex']})$") for rule in endpoint["metricRelabelings"]
+             if rule["action"] == "labeldrop"]
+    assert all(any(drop.match(label) for drop in drops) for label in ("pod", "instance", "container", "endpoint"))
+    assert not any(drop.match(label) for drop in drops
+                   for label in ("source", "check", "system", "severity", "job", "namespace", "k8s_cluster"))
 
 
 # --- The map of the registry ------------------------------------------------------------
