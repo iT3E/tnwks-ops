@@ -510,6 +510,7 @@
         "k8s-audit": {
           "cycle": "continuous",
           "late_after": "15m",
+          "system_label": "k8s_cluster",
           "late_after_seconds": 900
         },
         "routeros": {

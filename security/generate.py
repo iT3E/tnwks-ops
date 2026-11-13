@@ -1,5 +1,5 @@
-"""Make the rules, the scan lists, the Wazuh map, the board input and the list of gaps
-from the control registry, or reject stale copies (--check).
+"""Make the rules, the scan lists, the Wazuh map, the board input, the list of gaps and
+the stream map of the converter from the control registry, or reject stale copies (--check).
 
 The contract of the series and of the registry is in security/README.md. The
 script uses the Python standard library and PyYAML, from the pinned project of
@@ -19,6 +19,10 @@ REGISTRY = ROOT / "security/registry"
 CATALOG = ROOT / "security/catalog"
 GENERATED = ROOT / "security/generated"
 RULES = ROOT / "kubernetes/apps/monitoring/security-registry/rules/rules.yaml"
+# The converter (security/converter/README.md). Its pod reads its code and the stream map
+# from a ConfigMap, and kustomize takes a file only from the directory of the app.
+CONVERTER = ROOT / "security/converter/converter.py"
+CONVERTER_CONFIG = ROOT / "kubernetes/apps/security/converter/app/config"
 
 # The series of the contract (security/README.md).
 RESULT = "homelab_security_check_result"
@@ -29,6 +33,8 @@ SAFEGUARD = "homelab:security_safeguard_state"
 ACCEPTED = "homelab_security_accepted_until_timestamp_seconds"
 HAS_RESULT = "homelab:security_safeguard_has_result"
 NO_EVIDENCE, PASS, FAIL = 0, 1, 3
+# The Loki label of a security stream. Its value is the check ID of the stream.
+STREAM_LABEL = "security_stream"
 
 # Each rule reads the newest sample in this window, so one missed scrape or a
 # restart of a source is no gap. A series with no sample in the window is absent.
@@ -418,6 +424,28 @@ def board_input(registry):
     }
 
 
+def stream_map(registry):
+    """The map of the stream source of the converter: one entry for each security stream
+    and each system that has it as a check, with the Loki selector of its lines. A stream
+    with a `system_label` has one stream in Loki for each system, and the value of that
+    label is the name of the system. A stream with none is one stream, and its newest
+    line is the result of each system that has it as a check."""
+    entries = []
+    for source in registry["sources"]:
+        if source["kind"] != "stream":
+            continue
+        for system in registry["systems"]:
+            streams = dict.fromkeys(check for _, checked, name, check in named(registry)
+                                    if checked == system["type"] and name == source["name"])
+            for check in streams:
+                label = source["checks"][check].get("system_label")
+                entries.append({
+                    "source": source["name"], "check": check, "system": system["name"],
+                    "late_after_seconds": late_after(registry, source["name"], system["type"], check),
+                    "selector": {STREAM_LABEL: check} | ({label: system["name"]} if label else {})})
+    return {"series": LAST_RESULT, "streams": entries}
+
+
 # --- The tests of the rules -------------------------------------------------------------
 
 
@@ -642,6 +670,13 @@ def late_fixtures(registry):
     quiet = lambda *skip: [item for item in others if not any(
         f'source="{name}",system="{target}"' in item["series"] for name, target in skip)]
     minutes = limit // 60
+    # A stream that Loki holds one time for each system: it has a line for the first
+    # system, and no line for the second.
+    by_system = {check for entry in full["sources"] for check, times in entry.get("checks", {}).items()
+                 if "system_label" in times}
+    silent = [item for item in watched if item[2] in by_system][1]
+    one_only = [item for item in others
+                if f'source="{silent[0]}",system="{silent[1]}",check="{silent[2]}"' not in item["series"]]
     return {"rule_files": ["rules-every-source-for-test.yaml"], "evaluation_interval": "1m", "tests": [
         {"name": "each source serves a fresh time: no alert", "interval": "1m", "external_labels": {"cluster": "site"},
          "input_series": others,
@@ -662,6 +697,13 @@ def late_fixtures(registry):
               "exp_alerts": [late_alert(stream[0], stream[1])] if minutes - 5 > 60 else []},
              {"eval_time": f"{minutes + 30}m", "alertname": "SecurityResultLate",
               "exp_alerts": [late_alert(source, system), late_alert(stream[0], stream[1])]}]},
+        {"name": "a stream with a line for one system only reads as late for the other system",
+         "interval": "1m", "external_labels": {"cluster": "site"},
+         "input_series": one_only,
+         "alert_rule_test": [
+             {"eval_time": "5m", "alertname": "SecurityResultLate", "exp_alerts": []},
+             {"eval_time": "30m", "alertname": "SecurityResultLate",
+              "exp_alerts": [late_alert(silent[0], silent[1])]}]},
     ]}
 
 
@@ -697,6 +739,8 @@ def artifacts(registry=None):
         GENERATED / "wazuh-map.json": dump_json(wazuh_map(registry)),
         GENERATED / "board.json": dump_json(board_input(registry)),
         GENERATED / "gaps.json": dump_json(gaps(registry)),
+        CONVERTER_CONFIG / "streams.json": dump_json(stream_map(registry)),
+        CONVERTER_CONFIG / "converter.py": CONVERTER.read_text(),
     }
 
 
