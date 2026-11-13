@@ -1,0 +1,3 @@
+kind: Added
+body: 'monitoring: the alert `SecurityAuditLinesRefused` (group `homelab.streams`), with promtool fixtures: the sink of a Vector aggregator that writes the audit log to the Loki of the security streams dropped a request that Loki refused. It reads `vector_component_errors_total` of that sink only, and it fires at the first refused request, though the counter starts at 1'
+time: 2026-11-13T09:18:43.615382941-08:00
