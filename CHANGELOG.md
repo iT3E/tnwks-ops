@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.96.0 - 2026-11-13
+
+### Added
+
+* agents: the providers of the Renovate reviewer in agents-workflows (the model gateway on its Messages API, and GitHub on iT3E/tnwks-ops only through an installation token of its own GitHub App, scoped to that repository and to the permissions listed in git, with a drift check of the App), the job that writes them into the sandbox gateway every 15 minutes, and the reviewer 0.1.1 on the Messages API with the effort high
+
 ## v2.95.0 - 2026-11-13
 
 ### Removed
