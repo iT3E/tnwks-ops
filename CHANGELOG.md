@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.96.1 - 2026-11-13
+
+### Fixed
+
+* agents: the run receiver keeps the answer of a run in an annotation of its Job, so a second call with the same key gets it after the pod GC deleted the run pod (workflow agents 0.1.2, and jobs list and patch in its Role)
+
 ## v2.96.0 - 2026-11-13
 
 ### Added
