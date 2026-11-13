@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.115.1 - 2026-11-13
+
+### Fixed
+
+* talos: the control plane patch list of each WSL cluster (controlplane_patches in talos_clusters) names its audit policy. A rebuild of homelab-wsl-02 gets the policy from the list. The patches of homelab-wsl are in the v1alpha1 form, which the pinned Talos refuses at create, so its rebuild needs them in the multi-document form first. A change under talos/ now runs CI: each file parses, and each YAML file of a cluster is in its lists or is no patch. A merge applies nothing to a running node; talos/README.md says how the policy reaches one
+
 ## v2.115.0 - 2026-11-13
 
 ### Added
