@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.92.0 - 2026-11-13
+
+### Added
+
+* WSL-02 can't sleep any more: a new windows_power role disallows standby on its power scheme and turns hibernation off, after three sleeps in two weeks took homelab-wsl-02 down (95 minutes on 2026-11-12)
+
 ## v2.91.4 - 2026-11-13
 
 ### Fixed
