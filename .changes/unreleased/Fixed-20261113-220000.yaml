@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'terraform: the GitHub root''s CI switch is TERRAFORM_GITHUB_ENABLED (GitHub refuses to set a variable named GITHUB_*, so the root could not be turned on), and task github:enable reads it through the API instead of gh variable get, which older gh releases lack'
-time: 2026-11-13T22:00:00.000000000Z

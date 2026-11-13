@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.114.1 - 2026-11-13
+
+### Fixed
+
+* terraform: the GitHub root's CI switch is TERRAFORM_GITHUB_ENABLED (GitHub refuses to set a variable named GITHUB_*, so the root could not be turned on), and task github:enable reads it through the API instead of gh variable get, which older gh releases lack
+
 ## v2.114.0 - 2026-11-13
 
 ### Added
