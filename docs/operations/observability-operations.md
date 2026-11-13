@@ -37,6 +37,14 @@ WSL-02, which has that cluster's kubeconfig
   halted (`thanos_compact_halted`) and how many compactions it has left. Then
   check the sidecars' upload errors. `observability/verify_live_archive.py`
   proves Store-only history per site (read-only).
+- **Room on site 2:** three alerts of the group `homelab.capacity`
+  (`observability/rules.py`). `NodeContainerMemoryNearLimit`: worker 1 of
+  homelab-wsl-02 is past 90% of the memory limit of its node container (the
+  kubelet's `node_memory_working_set_bytes`, scraped on that site).
+  `LokiSecurityIngestAbovePlan`: its Loki took in more than twice the planned
+  bytes of its 90-day streams in a day, before compression.
+  `WslDriveSpaceLow`: the drive under the WSL disk of WSL-02 has less than
+  100 GB free (evaluated by site 1, which scrapes both Windows hosts).
 - **Evidence collector:** stateless. A restart loses nothing, and its panels
   read Unknown until it reports again. Peer-dependent prerequisites, such as
   the fence, need the other site's collector too.
