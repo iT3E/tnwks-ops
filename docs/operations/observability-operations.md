@@ -45,6 +45,22 @@ WSL-02, which has that cluster's kubeconfig
   bytes of its 90-day streams in a day, before compression.
   `WslDriveSpaceLow`: the drive under the WSL disk of WSL-02 has less than
   100 GB free (evaluated by site 1, which scrapes both Windows hosts).
+- **Certificates of the security platform:** `SecurityCertificateExpiring`
+  (group `homelab.security`, `observability/rules.py`) fires 30 days before
+  a certificate for IAM Roles Anywhere of the namespace `security` on
+  homelab-wsl-02 ends. Its series is `kube_lease_renew_time`: the credential
+  refresher writes the end of each certificate to a Lease
+  (`kubernetes/apps/security/aws-credentials/README.md` has the renewal).
+- **Audit lines refused:** `SecurityAuditLinesRefused`, of the group
+  `homelab.security` (`observability/rules.py`). The sink
+  `loki_security_audit` of a Vector aggregator dropped a request that Loki
+  refused, and Vector does not send it again. The alert fires at the first
+  refused request and holds for 15 minutes after the last one. Loki refuses
+  a line that is older than 7 days, or more than one hour older than the
+  newest line of its stream: the log of the aggregator pod has the answer,
+  and `vector_component_discarded_events_total` of the sink has the number
+  of lines. A request that got no answer is not in this alert: Vector sends
+  it again (`kubernetes/apps/monitoring/vector/README.md`).
 - **Evidence collector:** stateless. A restart loses nothing, and its panels
   read Unknown until it reports again. Peer-dependent prerequisites, such as
   the fence, need the other site's collector too.
