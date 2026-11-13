@@ -43,6 +43,12 @@ The claim `security-results` is in `../converter/app/pvc.yaml`.
    exceptions: the run always passes its own mutelist, so the default
    mutelist of Prowler is off too. The reason of an entry stays in the
    Secret. A muted finding is in the OCSF file with the status `Suppressed`.
+   An entry that does not fit (not a mapping, a field missing or empty, an
+   end that is not a date) is skipped and counted, as the converter does: the
+   log has its number and why, never a value of the list. So one bad entry
+   does not stop each run until the list is fixed. A list that can not be
+   read at all (not YAML, not a list) stops the run with code 2: the run can
+   not know what to mute.
 2. **Prowler,** with `--checks-file`, the output format `json-ocsf`,
    `--no-banner` and `--ignore-exit-code-3` (a failed check is a result, not
    an error of the run).
@@ -51,7 +57,8 @@ The claim `security-results` is in `../converter/app/pvc.yaml`.
    volume, then moves it to `prowler/<provider>/<system>.<time>.ocsf.json`,
    with the time at which the scan ended. Each directory has the mode 0755
    and each file 0644, for the converter. A run that fails moves no file, and
-   the Job fails.
+   the Job fails. A run that leaves no OCSF file, or an empty one, is a
+   failed run too: the converter reads an empty file as a bad file.
 4. **The files of the system older than 14 days** are deleted.
 5. **The peak of memory** of the container is the last line of the log.
 
@@ -66,7 +73,21 @@ a run calls no API server (`automountServiceAccountToken: false`).
 
 | Provider | Hosts, port 443 | Why |
 | --- | --- | --- |
-| `aws` | `**.amazonaws.com`, `**.api.aws` | The API of each service in each Region, the global ones (IAM, STS, Organizations), and the public list of IP ranges. Resource Explorer is under `api.aws` |
+| `aws` | `*.amazonaws.com`, `*.*.amazonaws.com`, `api.ecr.*.amazonaws.com`, `*.s3.*.amazonaws.com`, `*.s3-control.*.amazonaws.com` | The API of each service in each Region, the global ones (IAM, CloudFront, WAF, S3), the buckets, S3 Control with the account in the name, and the public list of IP ranges |
+
+One `*` is one label of a name. The list is the names that the AWS SDK of
+Prowler 5.49.0 resolves for each client of the checks in
+`app/config/checks-aws.json`, in each Region, with no dual-stack and no FIPS
+endpoint. A new release of Prowler or a new check can call a new name: read
+the names again with the SDK of the image, or look for a refused DNS name of
+the pod in Hubble after the run.
+
+What stays open: `*.*.amazonaws.com` and the bucket patterns permit the
+bucket of any owner, and a few public names of other customers (for example
+an EC2 name under `compute-1.amazonaws.com`). Prowler reads the buckets of
+the account by these names, so no list of names can close this. A changed
+image with the audit session could send what it reads there; the image is
+pinned by digest, and the session can only read.
 
 DNS goes through Cilium's DNS proxy, as in each app of the namespace.
 

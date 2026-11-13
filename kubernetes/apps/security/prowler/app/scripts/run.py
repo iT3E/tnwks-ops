@@ -6,13 +6,15 @@ provider and one system. The script:
 1. Writes the mutelist of the run from the list of accepted findings (the Secret
    security-accepted-findings, optional): each entry of `prowler` for this
    system whose end date has not passed. It is the only exception list of the
-   run, so the default mutelist of Prowler is off too.
+   run, so the default mutelist of Prowler is off too. An entry that does not
+   fit is skipped and counted; a list that can not be read stops the run.
 2. Runs Prowler with the checks of the registry for the provider, the output
    format json-ocsf and no report to the vendor.
 3. Moves the finished file to `prowler/<provider>/<system>.<time>.ocsf.json` on
    the volume of results, through `prowler/<provider>/tmp/`, so the converter
    never reads half a file (security/converter/README.md, "The files of
-   results"). A run that fails moves no file.
+   results"). A run that fails, or leaves no file or an empty one, moves no
+   file.
 4. Deletes the files of the system that are older than 14 days.
 5. Prints the peak of memory of the container, the measure of the run.
 
@@ -37,29 +39,58 @@ KEEP_DAYS = 14
 MEMORY_PEAK = Path("/sys/fs/cgroup/memory.peak")
 
 
-def accepted_checks(path: Path, system: str, today: datetime.date) -> dict[str, str]:
-    """The checks of `prowler` that the list accepts for the system today, with their end date.
+class UnreadableList(Exception):
+    """The list of accepted findings can not be read at all."""
+
+
+def accepted_checks(path: Path, system: str, today: datetime.date) -> tuple[dict[str, str], int]:
+    """The checks of `prowler` that the list accepts for the system today, with their end
+    date, and the number of entries that are skipped because they do not fit.
 
     The list is a YAML list of entries with source, check, system, reason and
     until (security/README.md, "Accepted findings"). An entry is accepted until
-    the end of its day, UTC. The reason stays in the Secret."""
+    the end of its day, UTC. The reason stays in the Secret.
+
+    The converter reads the same list the same way: an entry that does not fit
+    (not a mapping, a field missing or empty, an end that is not a date) is
+    skipped and counted, and the log has its number and why, never a value of
+    the list. One bad entry then does not stop each run until the list is
+    fixed. A list that can not be read at all (not YAML, not a list) raises
+    UnreadableList: the run then fails, as it can not know what to mute."""
     if not path.is_file():
-        return {}
+        return {}, 0
     import yaml  # the Prowler image has PyYAML; the tests use the one of observability/
 
-    entries = yaml.safe_load(path.read_text()) or []
+    try:
+        entries = yaml.safe_load(path.read_text(encoding="utf-8")) or []
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
+        # The type only: a YAML error quotes the line, and a line can hold a reason.
+        raise UnreadableList(type(error).__name__) from None
     if not isinstance(entries, list):
-        raise TypeError("the list of accepted findings is not a YAML list")
-    checks = {}
-    for entry in entries:
+        raise UnreadableList("not a YAML list")
+    checks: dict[str, str] = {}
+    skipped = 0
+    for index, entry in enumerate(entries, 1):
+        why = None
         if not isinstance(entry, dict):
-            raise TypeError("an entry of the list of accepted findings is not a mapping")
-        if entry.get("source") != "prowler" or entry.get("system") != system:
+            why = "not a mapping"
+        elif not all(entry.get(field) for field in ("source", "check", "system", "until")):
+            why = "a field is missing or empty"
+        else:
+            try:
+                until = datetime.date.fromisoformat(str(entry["until"]))
+            except ValueError:
+                why = "the end date is not a date"
+        if why:
+            print(f"entry {index} of the list of accepted findings is skipped: {why}", flush=True)
+            skipped += 1
             continue
-        until = datetime.date.fromisoformat(str(entry["until"]))
+        if entry["source"] != "prowler" or entry["system"] != system:
+            continue
         if until >= today:
-            checks[str(entry["check"])] = until.isoformat()
-    return checks
+            check = str(entry["check"])
+            checks[check] = max(until.isoformat(), checks.get(check, ""))
+    return checks, skipped
 
 
 def mutelist(checks: dict[str, str]) -> dict:
@@ -136,7 +167,11 @@ def memory_peak() -> str:
 
 def run(args: argparse.Namespace, now=lambda: datetime.datetime.now(UTC), call=subprocess.call) -> int:
     started = now()
-    checks = accepted_checks(args.accepted, args.system, started.date())
+    try:
+        checks, skipped = accepted_checks(args.accepted, args.system, started.date())
+    except UnreadableList as error:
+        print(f"the list of accepted findings can not be read ({error}): no run", flush=True)
+        return 2
     with tempfile.TemporaryDirectory(dir=args.work) as work:
         work = Path(work)
         mutelist_file = work / "mutelist.yaml"
@@ -145,13 +180,19 @@ def run(args: argparse.Namespace, now=lambda: datetime.datetime.now(UTC), call=s
         output = work / "output"
         name = f"{args.system}.run"
         command = prowler_command(args.provider, args.checks, mutelist_file, output, name, args.extra)
-        print(f"prowler {args.provider} for {args.system}: {len(checks)} accepted checks muted", flush=True)
+        print(f"prowler {args.provider} for {args.system}: {len(checks)} accepted checks muted,"
+              f" {skipped} entries of the list skipped", flush=True)
         code = call(command)
         produced = output / f"{name}.ocsf.json"
         if code != 0:
             print(f"prowler ended with code {code}: no file for the converter", flush=True)
         elif not produced.is_file():
             print("prowler wrote no OCSF file: no file for the converter", flush=True)
+            code = 1
+        elif produced.stat().st_size == 0:
+            # The converter reads an empty file as a bad file and serves no
+            # result: the same as no file, so the run fails and moves nothing.
+            print("prowler wrote an empty OCSF file: no file for the converter", flush=True)
             code = 1
         else:
             final = publish(produced, args.results, args.provider, args.system, now())
