@@ -382,8 +382,8 @@ Each entry has five fields:
 | `source` | The `name` of the source in `sources.yaml` |
 | `check` | The check ID, as in `controls.yaml`. A check that no line names is also possible |
 | `system` | The `name` of the system in `systems.yaml` |
-| `reason` | Why the owner accepts the finding |
-| `until` | The end date, as `YYYY-MM-DD`. The finding is past its end date from the start of the next day, UTC |
+| `reason` | Why the owner accepts the finding. An entry with no reason is skipped: it accepts nothing |
+| `until` | The end date, as `YYYY-MM-DD`, with no time: a reader skips an entry whose end has a time. The finding is past its end date from the start of the next day, UTC |
 
 This is the form of the file before encryption. The values are invented:
 
