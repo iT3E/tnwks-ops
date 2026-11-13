@@ -219,7 +219,12 @@ the sandbox plugin copies the workspace only.
 - **Config.** The product's sandbox backend is OpenShell, for every session
   (`sandbox.mode: all`), at the gateway of this trust domain. One model,
   `litellm/agents-pilot`, with no fallback list, and the provider list
-  replaced by the model gateway alone. The tools `code_execution`,
+  replaced by the model gateway alone. The model entry names its Claude
+  model (`params.canonicalModelId: claude-opus-5-5`), so the product uses
+  the rules of that model: it keeps each turn's context in the history,
+  which lets the model bridge match the conversation at the next turn and
+  keeps the prompt cache, and it sends the effort as set. Change it in the
+  same PR as a move of the name to a different model. The tools `code_execution`,
   `file_fetch`, `file_write`, `dir_list`, `dir_fetch` and `gateway` (the
   agent's own reads and changes of its config) are denied.
   `autoProviders` of the sandbox plugin is off, so no credential of the pod
