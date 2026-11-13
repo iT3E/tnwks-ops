@@ -5,7 +5,8 @@
     "last_result": "homelab_security_last_result_timestamp_seconds",
     "system": "homelab:security_system_info",
     "control": "homelab:security_control_state",
-    "safeguard": "homelab:security_safeguard_state"
+    "safeguard": "homelab:security_safeguard_state",
+    "has_result": "homelab:security_safeguard_has_result"
   },
   "states": {
     "no evidence": 0,
