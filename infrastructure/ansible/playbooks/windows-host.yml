@@ -91,6 +91,9 @@
       tags: [observability-storage]
     - role: windows_time
       tags: [time]
+    - role: windows_power
+      when: power_no_sleep | default(false) | bool
+      tags: [power]
     # Check-only by default (an sshd_config rewrite restarts sshd under the
     # session). Like host-settings, near the end: a failed assertion stops
     # nothing else.
