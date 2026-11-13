@@ -553,6 +553,10 @@ with the status `Suppressed`, which the list of accepted findings muted.
 - **When Loki does not take them** (no answer, an error 5xx, 429, or 413),
   the lines wait for the next cycle, and
   `homelab_security_converter_findings_pending` is 1 for the stream. The
+  next cycle starts after the batches that Loki took of the same file, so
+  Loki does not get them again, and no line counts two times in
+  `homelab_security_converter_findings_lines_sent_total`. After a restart
+  the converter starts the file from its first batch. The
   result series do not wait for Loki. A 413 says that the body is larger
   than the gateway takes. A batch is far under that limit, so a 413 means
   that the limit changed: the lines wait for that fix, and the series shows

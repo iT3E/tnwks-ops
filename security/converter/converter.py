@@ -985,12 +985,16 @@ class Findings:
     (source, system) is one stream, with the labels `security_stream`, `source` and
     `system`, and each line has the time of its file. The converter sends the lines of a
     file one time. After a start it sends the newest file of each system again, with the
-    same times and the same text, and a query of Loki gives each line one time."""
+    same times and the same text, and a query of Loki gives each line one time. When a
+    batch waits, the next cycle starts after the batches that Loki took of the same file,
+    so Loki does not get them again."""
 
     def __init__(self, loki, batch_bytes: int = MAX_BATCH_BYTES):
         self.loki, self.batch_bytes = loki, batch_bytes
         # (source, system) -> the key of the file whose lines Loki has.
         self.sent: dict[tuple[str, str], object] = {}
+        # (source, system) -> (the key of a file whose lines wait, the batches done of it).
+        self.done: dict[tuple[str, str], tuple[object, int]] = {}
         self.pending: dict[tuple[str, str], bool] = {}
         self.counts = {"sent": {"prowler": 0, "api-check": 0}, "refused": {"prowler": 0, "api-check": 0}}
         self.lock = threading.Lock()
@@ -1006,8 +1010,14 @@ class Findings:
                 continue
             labels = {"security_stream": FINDINGS_STREAM, "source": source, "system": system}
             sent = refused = 0
+            # The batches of one file are the same in each cycle: the same lines, in the
+            # same order, cut at the same size.
+            done_key, start = self.done.get((source, system), (None, 0))
+            start = start if done_key == key else 0
             try:
-                for batch in batches(lines(), int(moment * NANOSECONDS), self.batch_bytes):
+                for index, batch in enumerate(batches(lines(), int(moment * NANOSECONDS), self.batch_bytes)):
+                    if index < start:
+                        continue
                     try:
                         self.loki.push(labels, batch)
                         sent += len(batch)
@@ -1015,6 +1025,7 @@ class Findings:
                         refused += len(batch)
                         logger.warning("Loki refused %d lines of findings of %s for %s: %s", len(batch), source,
                                        system, error)
+                    self.done[(source, system)] = key, index + 1
             except Exception as error:  # noqa: BLE001 - one stream must not stop the others
                 # The kind of the error, and the text of NoAnswer and BadFile, which hold
                 # no value of a file and no answer of Loki.
@@ -1027,10 +1038,12 @@ class Findings:
                     self.counts["sent"][source] = self.counts["sent"].get(source, 0) + sent
                     self.counts["refused"][source] = self.counts["refused"].get(source, 0) + refused
             self.sent[(source, system)] = key
+            self.done.pop((source, system), None)
             pending[(source, system)] = False
             logger.info("%d lines of findings of %s for %s are in Loki", sent, source, system)
         # A stream with no newest file now has nothing to send, and nothing to keep.
         self.sent = {stream: key for stream, key in self.sent.items() if stream in offers}
+        self.done = {stream: value for stream, value in self.done.items() if stream in offers}
         with self.lock:
             self.pending = pending
 
