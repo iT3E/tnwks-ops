@@ -249,6 +249,44 @@ patches:
               - op: replace
                 path: /spec/values/prometheus/prometheusSpec/retentionSize
                 value: 30GB
+  # Loki here is the long store of the security streams: a stream with the
+  # label security_stream stays 90 days, and every other stream keeps the
+  # 14 days of retention_period. The compactor applies both
+  # (retention_enabled in the shared values); a rule's period can't be under
+  # 24h. The chart's ServiceMonitor is on, once a minute, so this site's
+  # Prometheus has Loki's own series (what it takes in, per retention period,
+  # and the series of loki.rules). clusterLabelOverride: the ServiceMonitor
+  # writes a `cluster` label on every series, the release name by default,
+  # and an alert that keeps it would name that instead of the cluster.
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata:
+        name: loki
+        namespace: flux-system
+      spec:
+        patches:
+          - target:
+              kind: HelmRelease
+              name: loki
+            patch: |-
+              apiVersion: helm.toolkit.fluxcd.io/v2
+              kind: HelmRelease
+              metadata:
+                name: loki
+              spec:
+                values:
+                  clusterLabelOverride: ${CLUSTER_NAME}
+                  loki:
+                    limits_config:
+                      retention_stream:
+                        - selector: '{security_stream=~".+"}'
+                          priority: 1
+                          period: 90d
+                  monitoring:
+                    serviceMonitor:
+                      enabled: true
+                      interval: 1m
   - patch: |-
       apiVersion: kustomize.toolkit.fluxcd.io/v1
       kind: Kustomization
