@@ -60,7 +60,9 @@ The control plane has a limit of 4 GiB and each worker 13 GiB
 (`memory_nodes`): 35 GiB of limits inside WSL-02's 45 GB VM (`wsl_memory`,
 role `windows_host_settings`). `task talos:memory:wsl-02`
 (`06-talos-node-memory.yml -e talos_target=wsl-02`) sets a node's own limit
-on its running container, with no restart. A roll keeps it.
+on its running container, with no restart. A roll keeps it. The play sets
+only the nodes that `memory_nodes` names: to go back, give the node its old
+size there and run the play, then remove the entry.
 
 ## Patches need talosctl >= 1.14
 

@@ -15,7 +15,9 @@
 #   task talos:memory:wsl-02
 #   ansible-playbook playbooks/06-talos-node-memory.yml -e talos_target=wsl-02
 #
-# To go back: set the size back in talos_clusters and run it again.
+# To go back: give the node its old size in memory_nodes and run it again.
+# Keep the entry until then: the play only sets the nodes that memory_nodes
+# names, so a node whose entry is gone keeps the limit it has.
 # 01-talos-bootstrap.yml runs the same tasks, so a cluster it creates gets
 # these sizes too.
 
