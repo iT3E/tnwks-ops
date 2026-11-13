@@ -362,6 +362,8 @@ security stream `findings` in Loki has the text of each finding.
 | --- | --- | --- |
 | `SecurityResultLate` | The newest result of a source for a system is older than `late_after` of the source, or the source serves no time. The safeguards that rest on it show "No evidence" | Open the tab Sources of the board. Then look at the last run of the source: its Job or its pod in the namespace `security`, or the agent on the host. The alert ends when the source reports again |
 | `SecurityAcceptedFindingExpired` | An accepted finding of the system has passed its end date | The owner reads the line in the list. The owner sets a new end date with a reason, or removes the line and the cause of the finding |
+| `SecurityAcceptedListUnread` | The security converter gets no entry from the list of accepted findings, for 30 minutes. The board shows no accepted finding, and the rule of Trivy Operator mutes none | The log of the converter names the line and the kind of its form. Fix that line of the list (`converter/README.md`, "The form that the converter reads") |
+| `SecurityAcceptedEntriesSkipped` | Entries of the list do not fit, for one hour, so their findings show as fails | The log of the converter names each entry by its number, and why. Fix those entries (`converter/README.md`, "An entry that the converter skips") |
 
 ## Accepted findings
 
