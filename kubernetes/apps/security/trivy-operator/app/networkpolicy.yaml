@@ -77,8 +77,11 @@ spec:
         # Quay and its layer hosts (cdn01.quay.io and the others).
         - matchName: quay.io
         - matchPattern: "*.quay.io"
-        # The Kubernetes registry and its layer host.
+        # The Kubernetes registry. It redirects a manifest to Artifact
+        # Registry (<region>-docker.pkg.dev, the region depends on the
+        # client) and a layer to its CDN host. One `*` matches one label.
         - matchName: registry.k8s.io
+        - matchPattern: "*-docker.pkg.dev"
         - matchName: cdn.registry.k8s.io
         # Codeberg serves its layers from the same host.
         - matchName: codeberg.org

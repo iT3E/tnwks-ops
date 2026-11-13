@@ -60,7 +60,7 @@ to this table first, because the sum is the budget of the node.
 
 | Part | Runs on | Memory limit |
 | --- | --- | --- |
-| Trivy Operator | each cluster | 256 MiB for the operator, 512 MiB for a scan job, one scan job at a time |
+| Trivy Operator | each cluster | 256 MiB for the operator, 512 MiB for each container of a scan job, one scan job at a time. On homelab-wsl the worst sum is 3328 MiB by limits and 498 MiB by measured use, for a pod of 6 containers (`trivy-operator/README.md`, "Memory") |
 | Prowler job | homelab-wsl-02, one run a day | 768 MiB |
 | The converter | homelab-wsl-02 | 128 MiB |
 | Trail copy job | homelab-wsl-02 | 128 MiB |
@@ -79,3 +79,9 @@ to this table first, because the sum is the budget of the node.
 
 The audit reader reads files of the control plane node, so it does not run
 on `SECURITY_NODE`, and its 128 MiB are not in the budget of worker 1.
+
+The worst sum of Trivy by limits (3328 MiB) is over the budget of
+homelab-wsl, and its measured use (498 MiB) is under it. The worst case
+lasts only while a pod of 6 containers has its scan, once a day. The owner
+decides between a larger budget for that time and a lower limit for each
+scan container, before Trivy runs on homelab-wsl.
