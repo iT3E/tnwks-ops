@@ -45,10 +45,8 @@ module "security" {
   source = "../../../modules/aws/security"
 
   providers = {
-    aws              = aws
-    aws.management   = aws.management
-    awscc            = awscc
-    awscc.management = awscc.management
+    aws            = aws
+    aws.management = aws.management
   }
 
   rolesanywhere_trust_anchor_arn   = module.aws.rolesanywhere_trust_anchor_arn

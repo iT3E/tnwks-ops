@@ -24,15 +24,3 @@ provider "aws" {
 provider "aws" {
   alias = "management"
 }
-
-# Cloud Control, for the one thing the aws provider has no data source for:
-# the list of trails in each account (modules/aws/security/cloudtrail.tf).
-provider "awscc" {
-  assume_role = {
-    role_arn = "arn:aws:iam::654654262098:role/tnwks-org-init-role"
-  }
-}
-
-provider "awscc" {
-  alias = "management"
-}
