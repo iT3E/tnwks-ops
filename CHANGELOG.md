@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.101.0 - 2026-11-13
+
+### Added
+
+* security: the control registry of the security platform in `security/registry` (the systems in scope, the sources with their cycles, and the 48 safeguards of CIS Controls v8.1 IG1 with their checks for each type of system), its schema, and the contract of the result series and the control series in `security/README.md`
+
 ## v2.100.1 - 2026-11-13
 
 ### Fixed
