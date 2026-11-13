@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.100.0 - 2026-11-13
+
+### Added
+
+* monitoring: three alerts for the room on homelab-wsl-02, each with a promtool fixture (NodeContainerMemoryNearLimit: worker 1 past 90% of the 18 GiB limit of its node container, from the kubelet resource endpoint scraped there; LokiSecurityIngestAbovePlan: the 90-day streams of its Loki above twice their plan of 1.2 GB of lines a day; WslDriveSpaceLow: under 100 GB free on the drive of its WSL disk)
+
 ## v2.99.0 - 2026-11-13
 
 ### Changed
