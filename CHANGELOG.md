@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.111.0 - 2026-11-13
+
+### Added
+
+* talos: the audit policy of the API server of homelab-wsl-02 (`talos/wsl-02/patches/audit-policy.yaml`, a `KubeAuditPolicyConfig`). It keeps each request on a Secret by each user, each command in a pod, each write, and each read of a person, and it does not keep the heartbeat writes and the reads of the components. The file has the command that applies it to the running cluster and the way back; a merge applies nothing. `security/tests/test_audit_policy.py` gives sample requests to the rules
+
 ## v2.110.0 - 2026-11-13
 
 ### Added
