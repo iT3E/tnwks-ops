@@ -224,6 +224,40 @@ def test_lines_that_loki_did_not_take_wait_for_the_next_cycle(tmp_path, loki, st
     assert "an-answer-of-loki" not in caplog.text
 
 
+def test_a_batch_that_waits_resumes_after_the_batches_that_loki_took(tmp_path, loki):
+    """Loki takes two batches of a file and then fails: the next cycle sends from the third
+    batch, and no batch twice."""
+    write(tmp_path, f"prowler/aws/account-one.{stamp(3600)}.ocsf.json",
+          prowler_text([record("check_a", resource=f"r{index}") for index in range(40)]))
+    part = files_for(tmp_path, loki)
+    part.findings.batch_bytes = 2000
+    statuses = iter([204, 204, 503, 503])
+    handler = loki.RequestHandlerClass.do_POST
+
+    def flaky(request):
+        loki.status = next(statuses, 204)
+        handler(request)
+
+    loki.RequestHandlerClass.do_POST = flaky
+    try:
+        part.cycle()
+        assert series(part, converter.FINDINGS_PENDING) == {'{source="prowler",system="account-one"}': 1}
+        part.cycle()
+        assert series(part, converter.FINDINGS_PENDING) == {'{source="prowler",system="account-one"}': 1}
+        part.cycle()
+    finally:
+        loki.RequestHandlerClass.do_POST = handler
+    assert series(part, converter.FINDINGS_PENDING) == {'{source="prowler",system="account-one"}': 0}
+    taken = [line for _, _, line in loki.lines()]
+    assert len(taken) == 40 and len(set(taken)) == 40, "each line once"
+    assert series(part, converter.FINDINGS_SENT)['{source="prowler"}'] == 40
+    first = [push[2] for push in loki.pushes[:2]]
+    assert loki.pushes[2][2] == loki.pushes[3][2], "the batch that waits is the third"
+    assert all(push[2] not in first for push in loki.pushes[2:])
+    part.findings.send({})  # the file goes away: nothing is kept
+    assert part.findings.done == {} and part.findings.sent == {}
+
+
 def test_a_loki_that_is_down_holds_back_no_result(tmp_path):
     down = FakeLoki()
     down.close()
