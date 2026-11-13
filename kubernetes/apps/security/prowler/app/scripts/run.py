@@ -52,7 +52,8 @@ def accepted_checks(path: Path, system: str, today: datetime.date) -> tuple[dict
     the end of its day, UTC. The reason stays in the Secret.
 
     The converter reads the same list the same way: an entry that does not fit
-    (not a mapping, a field missing or empty, an end that is not a date) is
+    (not a mapping, a field missing or empty, the reason too, as each accepted
+    finding has a reason (Design Doc 4.1.2), an end that is not a date) is
     skipped and counted, and the log has its number and why, never a value of
     the list. One bad entry then does not stop each run until the list is
     fixed. A list that can not be read at all (not YAML, not a list) raises
@@ -74,7 +75,7 @@ def accepted_checks(path: Path, system: str, today: datetime.date) -> tuple[dict
         why = None
         if not isinstance(entry, dict):
             why = "not a mapping"
-        elif not all(entry.get(field) for field in ("source", "check", "system", "until")):
+        elif not all(entry.get(field) for field in ("source", "check", "system", "reason", "until")):
             why = "a field is missing or empty"
         else:
             try:

@@ -60,10 +60,11 @@ def test_no_list_accepts_nothing(run, tmp_path):
 def test_a_bad_entry_is_skipped_and_counted_and_its_values_stay_out_of_the_log(run, tmp_path, capsys):
     bad_date = entry("check_bad_date", "next spring")
     no_check = entry("", "2027-01-31")
-    path = accepted_file(tmp_path, ["a line", bad_date, no_check, entry("check_open", "2027-01-31")])
-    assert run.accepted_checks(path, "aws-prod", NOW.date()) == ({"check_open": "2027-01-31"}, 3)
+    no_reason = {key: value for key, value in entry("check_no_reason", "2027-01-31").items() if key != "reason"}
+    path = accepted_file(tmp_path, ["a line", bad_date, no_check, no_reason, entry("check_open", "2027-01-31")])
+    assert run.accepted_checks(path, "aws-prod", NOW.date()) == ({"check_open": "2027-01-31"}, 4)
     out = capsys.readouterr().out
-    assert "entry 1 " in out and "entry 2 " in out and "entry 3 " in out
+    assert all(f"entry {index} " in out for index in (1, 2, 3, 4))
     assert "next spring" not in out and "invented reason" not in out and "a line" not in out
 
 
