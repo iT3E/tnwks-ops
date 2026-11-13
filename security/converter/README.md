@@ -222,12 +222,18 @@ The converter skips an entry, and counts it in
 
 - `source`, `check`, `system` or `until` is missing or empty, or goes on
   over more lines.
+- `reason` is missing or empty. An accepted finding has a reason (Design
+  Doc, section 4.1.2), and the Prowler job skips such an entry too. A reason
+  that PyYAML reads as null, false or 0 is empty. A reason on more lines
+  counts when it has a character that is not space. The reason stays in the
+  file: the converter checks only that it is there.
 - The source or the system is not in the registry.
 - The check is not a check ID: a letter or a digit, then letters, digits and
   `_./:-`, 200 characters at most. So no text of another form reaches a
   label.
-- PyYAML reads the plain value as a number, a bool or null, and its text is
-  not the same: `0x1A`, `1.5`, `yes`, `~`. Put such a value in quotes.
+- PyYAML reads the plain value of a field as a number, a bool or null, and
+  its text is not the same: `0`, `012`, `0x1A`, `1.5`, `yes`, `~`. Put such
+  a value in quotes. A decimal number other than 0 is the same text.
 - `until` is not a date that Python's `datetime.date.fromisoformat` reads.
   The Prowler job (`run.py` of the Prowler app) reads it with the same
   function, so the two agree. It reads `2027-12-31`, and since Python 3.11
@@ -248,8 +254,10 @@ of the line and the kind of its form (no text of the file), when the list:
   in one entry.
 - Ends inside a quoted value.
 - Has a character that YAML does not let a file hold, an escape that YAML
-  does not have, or a plain date that is no day (`2027-02-30`). PyYAML
-  stops on each of them, and so does `run.py`.
+  does not have, a plain date that is no day (`2027-02-30`), or a plain `=`
+  or `<<`. PyYAML stops on each of them, and so does `run.py`.
+- Has a plain value with a date and a time of day, which the reader does
+  not check. Put it in quotes.
 - Can not be read, is not UTF-8, or is larger than 1 MiB.
 
 With no list (the Secret does not exist) the converter serves no entry and
