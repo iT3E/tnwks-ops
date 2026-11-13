@@ -63,6 +63,17 @@ jobs:
           docker run --rm --network none --entrypoint /bin/promtool \
             --mount type=bind,src="$PWD/observability/generated",dst=/rules,readonly \
             "$image" test rules /rules/rule-tests.yaml
+      # The control registry (security/README.md): its schema, its generated
+      # outputs, and the rules that give "no evidence" for an absent result.
+      - name: Security registry, its outputs and its rules
+        run: |
+          uv run --project observability python security/generate.py --check
+          uv run --project observability ruff check --config observability/pyproject.toml security
+          uv run --project observability pytest security/tests -q
+          image=$(python3 -I -c "import runpy; print(runpy.run_path('observability/versions.py')['PROMETHEUS'])")
+          docker run --rm --network none --entrypoint /bin/promtool \
+            --mount type=bind,src="$PWD/security/generated",dst=/rules,readonly \
+            "$image" test rules /rules/rule-tests.yaml /rules/rule-tests-every-source.yaml
 
   rehearsals:
     if: inputs.rehearse

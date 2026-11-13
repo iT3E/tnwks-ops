@@ -14,6 +14,10 @@ result is a Prometheus series on the sites, and the board shows it.
 | `registry/systems.yaml` | One line for each system in scope |
 | `registry/sources.yaml` | One line for each source of results, with its cycle |
 | `registry/controls.yaml` | One line for each safeguard, with its checks for each type of system |
+| `catalog/` | The check list of each tool, at the release that the registry follows |
+| `generate.py` | The generator. It checks the registry and writes the outputs below |
+| `generated/` | The outputs of the generator that no cluster reads directly, and the tests of the rules |
+| `tests/` | The tests of the generator |
 
 ## Names
 
@@ -178,6 +182,86 @@ does. Its value is the site whose Prometheus runs the rules. The label
 | The AWS trail | `stream`, check `cloudtrail` | 15 minutes | 2 hours |
 | Wazuh | `wazuh` | 12 hours | 30 minutes, and 7 days for a laptop |
 
+## The generator
+
+`generate.py` reads the registry and writes five outputs. It uses the Python
+standard library and PyYAML, from the pinned project of `observability/`.
+
+```bash
+uv run --project observability python security/generate.py          # write the outputs
+uv run --project observability python security/generate.py --check  # fail when one is stale
+uv run --project observability pytest security/tests -q
+```
+
+| Output | File | What it is |
+| --- | --- | --- |
+| Rules | `kubernetes/apps/monitoring/security-registry/rules/rules.yaml` | One recording rule for each safeguard and type, the state of each safeguard, and the rule for a late result |
+| Scan lists | `generated/scan-lists.json` | The checks that Prowler runs for each provider, in the form of its `--checks-file` |
+| The Wazuh map | `generated/wazuh-map.json` | The safeguards of each host check: the CIS tags of the release in `catalog/wazuh.json`, carried to the same check IDs, with the lines of the registry. And the checks with no tag |
+| Board input | `generated/board.json` | The safeguards, the systems and the cycles that the board shows |
+| The list of gaps | `generated/gaps.json` | Each check of a tool that no line names. The quarterly review reads it |
+
+Never edit an output. Change the registry, run the generator, and commit the
+outputs with the change. CI runs `generate.py --check` in the `contracts`
+job of `.github/workflows/observability.yaml`, so a change to the registry
+without its outputs fails. The same job runs the tests of the generator and
+the tests of the rules.
+
+### What the generator checks
+
+- **The schema.** Each file must fit its entry in `registry/schema.json`. A
+  line that does not fit fails CI. The schema has no field for a result.
+- **The three files agree.** A line names a source of `sources.yaml`. A
+  stream is a stream of `sources.yaml`. A system lists only a source that
+  has a check for its type. The safeguards are in the order of their IDs.
+- **A check exists.** For a source with a file in `catalog/`, each named
+  check must be in the check list of its tool for that type.
+
+### The rules
+
+For each safeguard and each type that has a system, one recording rule
+reads the result series of the checks of the line and writes
+`homelab:security_control_state`. The last term of each rule is the list of
+systems of the registry, with the value 0. So each system has a line for
+each safeguard, and a system with no fresh result has "no evidence".
+
+One alert rule, `SecurityResultLate`, watches the time of the last result of
+each source in `sources` of each system. For each pair it has two terms:
+
+- `time() - last_over_time(<time>[10m]) > <late_after>`: the newest time is
+  older than the limit of its source.
+- `absent_over_time(<time>[10m])`: the source served no time. This is
+  `absent()` with a stated window, so a source that serves no time reads as
+  late.
+
+The query window of each rule is 10 minutes. A rule reads the newest sample
+in the window, so one missed scrape or a restart of a source is no gap. The
+alert waits 10 minutes more before it fires. Its text has a system, a
+source, a severity and a link to the board, and no result.
+
+The tests of the rules are generated too (`generated/rule-tests.yaml`,
+`generated/rule-tests-every-source.yaml`), and `promtool test rules` runs
+them in CI. They prove that an absent result gives "no evidence" and never a
+pass, and that a source with no time fires the alert. The second file tests
+the rules of the registry with each source in `sources`, so the alert has a
+test before the first source runs.
+
+### The catalogues
+
+`catalog/<source>.json` is the check list of a tool for each type of system,
+at one release. The generator needs it for the list of gaps, and to refuse a
+check that the tool does not have.
+
+| File | Release | Made from |
+| --- | --- | --- |
+| `catalog/prowler.json` | Prowler 5.49.0 | The check directories of the AWS, Cloudflare and GitHub providers |
+| `catalog/trivy.json` | Trivy Operator 0.36.1 | The controls of the compliance report `k8s-cis-1.23` that have an automated check |
+| `catalog/wazuh.json` | Wazuh v4.14.10 | The check IDs of the SCA policies for Windows 11 and Ubuntu 24.04, and the `cis_csc_v8` tag of each |
+
+When a tool moves to a new release, update its catalogue in the same pull
+request. A check that the new release adds then shows in the list of gaps
+until a line names it.
+
 ## How to change the registry
 
 Each change is a pull request, and the owner reviews each line.
@@ -195,6 +279,7 @@ the type, so nothing else changes.
 4. In the pull request that starts the source on a system, add the source
    to `sources` of that system in `systems.yaml`. From that merge, the rule
    for a late result watches it.
+5. Run the generator, and commit its outputs.
 
 A text in this repository says what a part does. It never names a finding
 or the result of a check. An accepted finding goes to the encrypted list,

@@ -1,0 +1,541 @@
+{
+  "board": "tnwks-security",
+  "series": {
+    "result": "homelab_security_check_result",
+    "last_result": "homelab_security_last_result_timestamp_seconds",
+    "system": "homelab:security_system_info",
+    "control": "homelab:security_control_state",
+    "safeguard": "homelab:security_safeguard_state"
+  },
+  "states": {
+    "no evidence": 0,
+    "pass": 1,
+    "fail": 3
+  },
+  "safeguards": [
+    {
+      "id": "1.1",
+      "line": "01.01",
+      "title": "Asset inventory",
+      "ig": 1,
+      "function": "identify"
+    },
+    {
+      "id": "1.2",
+      "line": "01.02",
+      "title": "Unauthorized assets handled",
+      "ig": 1,
+      "function": "respond"
+    },
+    {
+      "id": "2.1",
+      "line": "02.01",
+      "title": "Software inventory",
+      "ig": 1,
+      "function": "identify"
+    },
+    {
+      "id": "2.2",
+      "line": "02.02",
+      "title": "Supported software only",
+      "ig": 1,
+      "function": "identify"
+    },
+    {
+      "id": "2.3",
+      "line": "02.03",
+      "title": "Unauthorized software handled",
+      "ig": 1,
+      "function": "respond"
+    },
+    {
+      "id": "3.1",
+      "line": "03.01",
+      "title": "Data management process",
+      "ig": 1,
+      "function": "govern"
+    },
+    {
+      "id": "3.2",
+      "line": "03.02",
+      "title": "Data inventory",
+      "ig": 1,
+      "function": "identify"
+    },
+    {
+      "id": "3.3",
+      "line": "03.03",
+      "title": "Data access control lists",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "3.4",
+      "line": "03.04",
+      "title": "Data retention",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "3.5",
+      "line": "03.05",
+      "title": "Secure data disposal",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "3.6",
+      "line": "03.06",
+      "title": "Encrypted end-user devices",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "4.1",
+      "line": "04.01",
+      "title": "Secure configuration process",
+      "ig": 1,
+      "function": "govern"
+    },
+    {
+      "id": "4.2",
+      "line": "04.02",
+      "title": "Secure configuration of network gear",
+      "ig": 1,
+      "function": "govern"
+    },
+    {
+      "id": "4.3",
+      "line": "04.03",
+      "title": "Automatic session lock",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "4.4",
+      "line": "04.04",
+      "title": "Firewall on servers",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "4.5",
+      "line": "04.05",
+      "title": "Firewall on end-user devices",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "4.6",
+      "line": "04.06",
+      "title": "Secure management of assets and software",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "4.7",
+      "line": "04.07",
+      "title": "Default accounts managed",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "5.1",
+      "line": "05.01",
+      "title": "Account inventory",
+      "ig": 1,
+      "function": "identify"
+    },
+    {
+      "id": "5.2",
+      "line": "05.02",
+      "title": "Unique passwords",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "5.3",
+      "line": "05.03",
+      "title": "Dormant accounts disabled",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "5.4",
+      "line": "05.04",
+      "title": "Admin rights on dedicated accounts",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "6.1",
+      "line": "06.01",
+      "title": "Access granting process",
+      "ig": 1,
+      "function": "govern"
+    },
+    {
+      "id": "6.2",
+      "line": "06.02",
+      "title": "Access revoking process",
+      "ig": 1,
+      "function": "govern"
+    },
+    {
+      "id": "6.3",
+      "line": "06.03",
+      "title": "MFA for exposed applications",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "6.4",
+      "line": "06.04",
+      "title": "MFA for remote network access",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "6.5",
+      "line": "06.05",
+      "title": "MFA for admin access",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "7.1",
+      "line": "07.01",
+      "title": "Vulnerability management process",
+      "ig": 1,
+      "function": "govern"
+    },
+    {
+      "id": "7.2",
+      "line": "07.02",
+      "title": "Remediation process",
+      "ig": 1,
+      "function": "govern"
+    },
+    {
+      "id": "7.3",
+      "line": "07.03",
+      "title": "Automated OS patching",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "7.4",
+      "line": "07.04",
+      "title": "Automated application patching",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "8.1",
+      "line": "08.01",
+      "title": "Audit log process",
+      "ig": 1,
+      "function": "govern"
+    },
+    {
+      "id": "8.2",
+      "line": "08.02",
+      "title": "Audit logs collected",
+      "ig": 1,
+      "function": "detect"
+    },
+    {
+      "id": "8.3",
+      "line": "08.03",
+      "title": "Audit log storage",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "9.1",
+      "line": "09.01",
+      "title": "Supported browsers and mail clients",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "9.2",
+      "line": "09.02",
+      "title": "DNS filtering",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "10.1",
+      "line": "10.01",
+      "title": "Anti-malware deployed",
+      "ig": 1,
+      "function": "detect"
+    },
+    {
+      "id": "10.2",
+      "line": "10.02",
+      "title": "Anti-malware signatures updated",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "10.3",
+      "line": "10.03",
+      "title": "Autorun off for removable media",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "11.1",
+      "line": "11.01",
+      "title": "Data recovery process",
+      "ig": 1,
+      "function": "govern"
+    },
+    {
+      "id": "11.2",
+      "line": "11.02",
+      "title": "Automated backups",
+      "ig": 1,
+      "function": "recover"
+    },
+    {
+      "id": "11.3",
+      "line": "11.03",
+      "title": "Recovery data protected",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "11.4",
+      "line": "11.04",
+      "title": "Isolated copy of recovery data",
+      "ig": 1,
+      "function": "recover"
+    },
+    {
+      "id": "12.1",
+      "line": "12.01",
+      "title": "Network gear up to date",
+      "ig": 1,
+      "function": "protect"
+    },
+    {
+      "id": "15.1",
+      "line": "15.01",
+      "title": "Service provider inventory",
+      "ig": 1,
+      "function": "identify"
+    },
+    {
+      "id": "17.1",
+      "line": "17.01",
+      "title": "Incident handling roles",
+      "ig": 1,
+      "function": "respond"
+    },
+    {
+      "id": "17.2",
+      "line": "17.02",
+      "title": "Incident contact list",
+      "ig": 1,
+      "function": "govern"
+    },
+    {
+      "id": "17.3",
+      "line": "17.03",
+      "title": "Incident reporting process",
+      "ig": 1,
+      "function": "govern"
+    }
+  ],
+  "systems": [
+    {
+      "name": "aws-management",
+      "type": "aws-account",
+      "site": "none",
+      "domain": "infrastructure",
+      "sources": []
+    },
+    {
+      "name": "aws-prod",
+      "type": "aws-account",
+      "site": "none",
+      "domain": "infrastructure",
+      "sources": []
+    },
+    {
+      "name": "cloudflare",
+      "type": "cloudflare-account",
+      "site": "none",
+      "domain": "infrastructure",
+      "sources": []
+    },
+    {
+      "name": "iT3E",
+      "type": "github-organization",
+      "site": "none",
+      "domain": "infrastructure",
+      "sources": []
+    },
+    {
+      "name": "tnwks-ops",
+      "type": "terraform-cloud-organization",
+      "site": "none",
+      "domain": "infrastructure",
+      "sources": []
+    },
+    {
+      "name": "homelab-wsl",
+      "type": "cluster",
+      "site": "homelab-wsl",
+      "domain": "infrastructure",
+      "sources": []
+    },
+    {
+      "name": "homelab-wsl-02",
+      "type": "cluster",
+      "site": "homelab-wsl-02",
+      "domain": "infrastructure",
+      "sources": []
+    },
+    {
+      "name": "DESKTOP-HKE05KI",
+      "type": "windows-host",
+      "site": "homelab-wsl",
+      "domain": "infrastructure",
+      "sources": []
+    },
+    {
+      "name": "WSL-02",
+      "type": "windows-host",
+      "site": "homelab-wsl-02",
+      "domain": "infrastructure",
+      "sources": []
+    },
+    {
+      "name": "DESKTOP-HKE05KI-ubuntu",
+      "type": "wsl-distro",
+      "site": "homelab-wsl",
+      "domain": "infrastructure",
+      "sources": []
+    },
+    {
+      "name": "WSL-02-ubuntu",
+      "type": "wsl-distro",
+      "site": "homelab-wsl-02",
+      "domain": "infrastructure",
+      "sources": []
+    },
+    {
+      "name": "sce-rtr01",
+      "type": "router",
+      "site": "none",
+      "domain": "infrastructure",
+      "sources": []
+    },
+    {
+      "name": "sce-ep01",
+      "type": "other",
+      "site": "none",
+      "domain": "infrastructure",
+      "sources": []
+    },
+    {
+      "name": "SW03",
+      "type": "other",
+      "site": "none",
+      "domain": "infrastructure",
+      "sources": []
+    },
+    {
+      "name": "unifi",
+      "type": "other",
+      "site": "none",
+      "domain": "infrastructure",
+      "sources": []
+    },
+    {
+      "name": "healthchecks",
+      "type": "other",
+      "site": "none",
+      "domain": "infrastructure",
+      "sources": []
+    }
+  ],
+  "sources": [
+    {
+      "name": "prowler",
+      "title": "Prowler",
+      "kind": "results",
+      "cycle": "24h",
+      "late_after": "36h",
+      "late_after_seconds": 129600
+    },
+    {
+      "name": "trivy",
+      "title": "Trivy Operator",
+      "kind": "results",
+      "cycle": "24h",
+      "late_after": "36h",
+      "late_after_seconds": 129600
+    },
+    {
+      "name": "host-check",
+      "title": "The host check",
+      "kind": "results",
+      "cycle": "6h",
+      "late_after": "12h",
+      "late_after_seconds": 43200
+    },
+    {
+      "name": "api-check",
+      "title": "The API checks",
+      "kind": "results",
+      "cycle": "24h",
+      "late_after": "36h",
+      "late_after_seconds": 129600
+    },
+    {
+      "name": "stream",
+      "title": "The security streams",
+      "kind": "stream",
+      "cycle": "continuous",
+      "late_after": "15m",
+      "late_after_seconds": 900,
+      "checks": {
+        "k8s-audit": {
+          "cycle": "continuous",
+          "late_after": "15m",
+          "late_after_seconds": 900
+        },
+        "routeros": {
+          "cycle": "continuous",
+          "late_after": "15m",
+          "late_after_seconds": 900
+        },
+        "cloudtrail": {
+          "cycle": "15m",
+          "late_after": "2h",
+          "late_after_seconds": 7200
+        }
+      }
+    },
+    {
+      "name": "wazuh",
+      "title": "Wazuh",
+      "kind": "results",
+      "cycle": "12h",
+      "late_after": "30m",
+      "late_after_seconds": 1800,
+      "by_type": {
+        "laptop": {
+          "late_after": "7d",
+          "late_after_seconds": 604800
+        }
+      }
+    }
+  ],
+  "expected": []
+}
