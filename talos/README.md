@@ -79,5 +79,18 @@ lease can start again.
 **The way back** is the second command at the top of the file: the policy
 with one rule, a line for each request.
 
-A new cluster gets the patches that its entry in `talos_clusters` lists
-(`controlplane_patches`, in the Ansible inventory).
+**How the policy reaches a node.** A merge applies nothing to a running
+node: no workflow runs `talosctl`, and the Ansible host playbooks do not read
+the patch lists. A running cluster gets the policy only from
+`talosctl patch mc --mode=no-reboot`, the command at the top of its file,
+run by the owner or with the owner's word. A new cluster gets it when
+`01-talos-bootstrap.yml` creates it: the control plane gets each file in
+`controlplane_patches` of the cluster's entry in `talos_clusters`
+(`infrastructure/ansible/inventory/group_vars/all/talos.yml`), and each
+list has `patches/audit-policy.yaml`.
+
+**What CI checks.** A change under `talos/` runs the `ansible` domain:
+each file under `talos/` parses, and each patch file of a cluster is in its
+lists (`infrastructure/ansible/tests/test_talos_patches.py`). A change to an
+audit policy also runs the rule tests above. CI builds no machine config, so
+Talos itself checks a patch only at the dry run of its apply.

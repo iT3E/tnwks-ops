@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'talos: the bootstrap list of each WSL cluster (controlplane_patches in talos_clusters) names its audit policy, so a cluster that 01-talos-bootstrap.yml creates gets it. A change under talos/ now runs CI: each file parses, and each patch file of a cluster is in its lists. A merge applies nothing to a running node; talos/README.md says how the policy reaches one'
+time: 2026-11-13T15:27:54-08:00

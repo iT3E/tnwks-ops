@@ -28,6 +28,11 @@ talos_clusters:
   #                             gives every worker memory_workers, so
   #                             06-talos-node-memory.yml sets these on the
   #                             node containers, while they run.
+  # The two patch lists are read only when 01-talos-bootstrap.yml creates a
+  # cluster: a change to them applies nothing to a running node
+  # (talos/README.md, "The audit policy"). CI checks that each file in
+  # talos/<target>/patches/ is in one of them
+  # (infrastructure/ansible/tests/test_talos_patches.py).
   # homelab-wsl on DESKTOP-HKE05KI.
   wsl:
     provisioner: docker
@@ -45,7 +50,7 @@ talos_clusters:
     memory_controlplanes: 4GiB
     memory_workers: 13GiB
     config_patches: [cluster-config.yaml, patches/kubelet-image-gc.yaml]
-    controlplane_patches: [patches/talos-api-access.yaml]
+    controlplane_patches: [patches/talos-api-access.yaml, patches/audit-policy.yaml]
     worker2_augment: true
   # homelab-wsl-02 on WSL-02 (talos/wsl-02/README.md): Cilium, the
   # multi-document patches (talosctl >= 1.14), no USB. Worker 1 has 18 GiB
@@ -69,7 +74,7 @@ talos_clusters:
     memory_nodes:
       worker-1: 18GiB
     config_patches: [patches/cluster.yaml]
-    controlplane_patches: [patches/controlplane.yaml]
+    controlplane_patches: [patches/controlplane.yaml, patches/audit-policy.yaml]
     # Flux from the committed flux-system/ manifests (public repo, HTTPS,
     # no deploy key) instead of `flux bootstrap github` (04-flux-install.yml).
     flux_install: manifests
