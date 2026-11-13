@@ -13,10 +13,12 @@ Each 5 minutes one loop runs each part, and a fault of one part does not stop th
 - The files of results: it reads the newest OCSF file of each system that Prowler wrote,
   and the result file of the API checks, and serves the number of resources that fail
   each check, and the time of the result. A file that it can not read gives no result
-  and no time for its system, so the rule for a late result fires.
+  and no time for its system, so the rule for a late result fires. Each finding that
+  fails in the newest file of a system is one line of the security stream `findings`
+  in the same Loki: a part of its OCSF record, with no data of the resource.
 
-The converter sends GET requests only, it never writes to the volume of results, and it
-keeps no state on a disk.
+The converter sends GET requests to Loki, and POST requests to its push API for the stream
+`findings` only. It never writes to the volume of results, and it keeps no state on a disk.
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ import os
 import re
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -44,6 +47,9 @@ LAST_CYCLE = "homelab_security_converter_last_cycle_timestamp_seconds"
 QUERY_SUCCESS = "homelab_security_converter_stream_query_success"
 ACCEPTED_SKIPPED = "homelab_security_converter_accepted_skipped_entries"
 FILES_SKIPPED = "homelab_security_converter_files_skipped"
+FINDINGS_PENDING = "homelab_security_converter_findings_pending"
+FINDINGS_SENT = "homelab_security_converter_findings_lines_sent_total"
+FINDINGS_REFUSED = "homelab_security_converter_findings_lines_refused_total"
 
 INTERVAL_SECONDS = 300
 # The converter looks back three times the `late_after` of a stream, and one hour at
@@ -137,6 +143,10 @@ class NoAnswer(Exception):
     """Loki gave an error, an answer that does not fit the query, or no answer."""
 
 
+class Refused(Exception):
+    """Loki answered that it will never take the lines: a status 4xx that is not 429."""
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *_):
         return None
@@ -204,6 +214,26 @@ class Loki:
             raise NoAnswer("the answer is not JSON") from None
         newest = newest_time(payload, labels, *window)
         return None if newest is None else newest / NANOSECONDS
+
+    def push(self, labels: dict[str, str], entries: list[tuple[int, str]]):
+        """Send lines of one stream to the push API. Refused when Loki will never take
+        them, NoAnswer for each other error and for no answer: then the converter sends
+        them again in its next cycle."""
+        body = json.dumps({"streams": [{"stream": labels, "values": [[str(moment), line] for moment, line in entries]}]},
+                          separators=(",", ":"), ensure_ascii=False).encode()
+        request = urllib.request.Request(f"{self.url}/loki/api/v1/push", data=body,
+                                         headers={"Content-Type": "application/json"}, method="POST")
+        try:
+            with self.opener.open(request, timeout=self.timeout) as response:
+                response.read(MAX_ANSWER_BYTES)
+        except urllib.error.HTTPError as error:
+            # Only the status: the text of an answer can hold a line, and never reaches a log.
+            error.close()
+            if 400 <= error.code < 500 and error.code != 429:
+                raise Refused(f"HTTPError {error.code}") from None
+            raise NoAnswer(f"HTTPError {error.code}") from None
+        except (OSError, http.client.HTTPException) as error:
+            raise NoAnswer(type(error).__name__) from None
 
 
 class StreamSource(Loop):
@@ -624,6 +654,156 @@ def read_api(path: Path, now: float) -> tuple[float, list[dict]]:
     return api_results(payload, now)
 
 
+# --- The stream `findings` --------------------------------------------------------------
+
+FINDINGS_STREAM = "findings"
+# A line is a part of the OCSF record: what failed, where, and why, in the names of OCSF.
+# No data, no tag and no label of a resource, so no setting of a resource is in a line.
+TEXT_LIMIT = 1024
+DETAIL_LIMIT = 8192
+MAX_RESOURCES = 20
+MAX_BATCH_BYTES = 1024 * 1024
+
+
+def text(value: object, limit: int = TEXT_LIMIT) -> str | None:
+    return value[:limit] if isinstance(value, str) and value else None
+
+
+def compact(mapping: dict) -> dict:
+    return {key: value for key, value in mapping.items() if value is not None and value != {} and value != []}
+
+
+def child(value: object, key: str) -> dict:
+    found = value.get(key) if isinstance(value, dict) else None
+    return found if isinstance(found, dict) else {}
+
+
+def ocsf_line(record: dict) -> str:
+    """The line of the stream `findings` for one OCSF record: its class, time, severity,
+    status and detail, its check (`metadata.event_code`), the ID and title of the finding,
+    the ID, name, type, Region and service of each resource, and the account. Each other
+    field of the record stays in the file."""
+    cloud, account = child(record, "cloud"), child(child(record, "cloud"), "account")
+    resources = record.get("resources") if isinstance(record.get("resources"), list) else []
+    moment = record.get("time")
+    line = compact({
+        "class_uid": record.get("class_uid") if number(record.get("class_uid")) else None,
+        "time": int(moment) if number(moment) else None,
+        "severity": text(record.get("severity")),
+        "status": text(record.get("status")),
+        "status_code": text(record.get("status_code")),
+        "status_detail": text(record.get("status_detail"), DETAIL_LIMIT),
+        "metadata": compact({"event_code": text(child(record, "metadata").get("event_code"))}),
+        "finding_info": compact({key: text(child(record, "finding_info").get(key)) for key in ("uid", "title")}),
+        "resources": [item for item in (
+            compact({**{key: text(resource.get(key)) for key in ("uid", "name", "type", "region")},
+                     "group": compact({"name": text(child(resource, "group").get("name"))})})
+            for resource in resources[:MAX_RESOURCES] if isinstance(resource, dict)) if item],
+        "cloud": compact({"provider": text(cloud.get("provider")), "region": text(cloud.get("region")),
+                          "account": compact({key: text(account.get(key)) for key in ("uid", "name")})}),
+    })
+    return json.dumps(line, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def ocsf_lines(path: Path):
+    """The line of each finding that fails in an OCSF file, one record at a time."""
+    with path.open(encoding="utf-8") as stream:
+        for record in json_array(stream):
+            if record.get("status_code") == "FAIL" and record.get("status") != "Suppressed":
+                yield ocsf_line(record)
+
+
+def api_lines(entries: list[dict], system: str, moment: float):
+    """The line of each finding of the API checks for one system, in the same OCSF names."""
+    for entry in entries:
+        if entry["system"] != system:
+            continue
+        level = entry.get("severity", "unknown")
+        for finding in entry.get("findings", []):
+            yield json.dumps(compact({
+                "time": int(moment), "severity": level.capitalize(), "status": "New", "status_code": "FAIL",
+                "status_detail": text(finding["message"], DETAIL_LIMIT),
+                "metadata": {"event_code": entry["check"]},
+                "resources": [compact({"uid": text(finding["resource"])})],
+            }), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def batches(lines, moment: int, limit: int = MAX_BATCH_BYTES):
+    """Lists of (time, line) of at most about `limit` bytes."""
+    batch, size = [], 0
+    for line in lines:
+        if batch and size + len(line) > limit:
+            yield batch
+            batch, size = [], 0
+        batch.append((moment, line))
+        size += len(line)
+    if batch:
+        yield batch
+
+
+class Findings:
+    """The lines of the security stream `findings` in the Loki of the site. Each
+    (source, system) is one stream, with the labels `security_stream`, `source` and
+    `system`, and each line has the time of its file. The converter sends the lines of a
+    file one time. After a start it sends the newest file of each system again, with the
+    same times and the same text, and a query of Loki gives each line one time."""
+
+    def __init__(self, loki, batch_bytes: int = MAX_BATCH_BYTES):
+        self.loki, self.batch_bytes = loki, batch_bytes
+        # (source, system) -> the key of the file whose lines Loki has.
+        self.sent: dict[tuple[str, str], object] = {}
+        self.pending: dict[tuple[str, str], bool] = {}
+        self.counts = {"sent": {"prowler": 0, "api-check": 0}, "refused": {"prowler": 0, "api-check": 0}}
+        self.lock = threading.Lock()
+
+    def send(self, offers: dict[tuple[str, str], tuple[object, float, object]]):
+        """Send the lines of each newest file whose lines Loki does not have yet.
+        `offers` maps (source, system) to (key of the file, time of the file, a function
+        that gives its lines)."""
+        pending = {}
+        for (source, system), (key, moment, lines) in sorted(offers.items(), key=lambda item: item[0]):
+            if self.sent.get((source, system)) == key:
+                pending[(source, system)] = False
+                continue
+            labels = {"security_stream": FINDINGS_STREAM, "source": source, "system": system}
+            sent = refused = 0
+            try:
+                for batch in batches(lines(), int(moment * NANOSECONDS), self.batch_bytes):
+                    try:
+                        self.loki.push(labels, batch)
+                        sent += len(batch)
+                    except Refused as error:
+                        refused += len(batch)
+                        logger.warning("Loki refused %d lines of findings of %s for %s: %s", len(batch), source,
+                                       system, error)
+            except (NoAnswer, BadFile, OSError, UnicodeDecodeError) as error:
+                logger.warning("the lines of findings of %s for %s wait for the next cycle: %s", source, system,
+                               error if isinstance(error, (NoAnswer, BadFile)) else type(error).__name__)
+                pending[(source, system)] = True
+                continue
+            finally:
+                with self.lock:
+                    self.counts["sent"][source] = self.counts["sent"].get(source, 0) + sent
+                    self.counts["refused"][source] = self.counts["refused"].get(source, 0) + refused
+            self.sent[(source, system)] = key
+            pending[(source, system)] = False
+            logger.info("%d lines of findings of %s for %s are in Loki", sent, source, system)
+        # A stream with no newest file now has nothing to send, and nothing to keep.
+        self.sent = {stream: key for stream, key in self.sent.items() if stream in offers}
+        with self.lock:
+            self.pending = pending
+
+    def collect(self, metrics: Metrics):
+        with self.lock:
+            pending, counts = dict(self.pending), {kind: dict(values) for kind, values in self.counts.items()}
+        for (source, system), waits in sorted(pending.items()):
+            metrics.add(FINDINGS_PENDING, int(waits), source=source, system=system)
+        for source, count in sorted(counts["sent"].items()):
+            metrics.add(FINDINGS_SENT, count, source=source)
+        for source, count in sorted(counts["refused"].items()):
+            metrics.add(FINDINGS_REFUSED, count, source=source)
+
+
 class ResultFiles(Loop):
     """The results of the files on the volume of results (README, "The files of
     results"): the newest OCSF file of each system of each provider of Prowler, and the
@@ -633,10 +813,10 @@ class ResultFiles(Loop):
 
     name = "files"
 
-    def __init__(self, root: Path, registry: dict, interval: float = INTERVAL_SECONDS,
-                 clock=time.time, monotonic=time.monotonic):
+    def __init__(self, root: Path, registry: dict, findings: Findings | None = None,
+                 interval: float = INTERVAL_SECONDS, clock=time.time, monotonic=time.monotonic):
         super().__init__(interval, clock, monotonic)
-        self.root = Path(root)
+        self.root, self.findings = Path(root), findings
         self.result_series = registry["series"]["result"]
         self.time_series = registry["series"]["last_result"]
         self.providers = {provider: set(systems) for provider, systems in registry["prowler"].items()}
@@ -717,6 +897,7 @@ class ResultFiles(Loop):
         results: list[tuple[str, str, str, int, str]] = []
         times: list[tuple[str, str, float]] = []
         skipped = {"prowler": 0, "api-check": 0}
+        offers: dict[tuple[str, str], tuple[object, float, object]] = {}
         read: set[Path] = set()
         for provider in sorted(self.providers):
             for system, (path, stamp) in sorted(self.newest(provider, now).items()):
@@ -728,6 +909,7 @@ class ResultFiles(Loop):
                 times.append(("prowler", system, float(stamp)))
                 results += [("prowler", check, system, failed, level)
                             for check, (failed, level) in sorted(checks.items())]
+                offers[("prowler", system)] = (path.name, float(stamp), lambda path=path: ocsf_lines(path))
         api = self.root / API_FILE
         if os.path.lexists(api):
             read.add(api)
@@ -745,9 +927,18 @@ class ResultFiles(Loop):
                     results.append(("api-check", entry["check"], entry["system"], entry["failed"],
                                     entry.get("severity", "unknown")))
                 times += [("api-check", system, moment) for system in sorted(systems)]
+                for system in systems:
+                    offers[("api-check", system)] = (
+                        moment, moment, lambda entries=entries, system=system, moment=moment:
+                        api_lines(entries, system, moment))
         self.cache = {path: value for path, value in self.cache.items() if path in read}
         with self.lock:
             self.result = results, times, skipped, self.monotonic()
+        if self.findings is not None:
+            try:
+                self.findings.send(offers)
+            except Exception as error:  # noqa: BLE001 - the results are served all the same
+                logger.error("the lines of findings were not sent: %s", type(error).__name__)
 
     def collect(self, metrics: Metrics, now: float):
         with self.lock:
@@ -761,6 +952,8 @@ class ResultFiles(Loop):
             metrics.add(self.time_series, moment, source=source, system=system)
         for source, check, system, failed, level in results:
             metrics.add(self.result_series, failed, source=source, check=check, system=system, severity=level)
+        if self.findings is not None:
+            self.findings.collect(metrics)
 
 
 # --- The service ------------------------------------------------------------------------
@@ -829,9 +1022,10 @@ def main():
         parser.error("the address of Loki is not set (--loki or LOKI_URL)")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     registry = json.loads(Path(args.registry).read_text())
-    streams = StreamSource(json.loads(Path(args.streams).read_text()), Loki(args.loki), interval=args.interval)
+    loki = Loki(args.loki)
+    streams = StreamSource(json.loads(Path(args.streams).read_text()), loki, interval=args.interval)
     accepted = AcceptedList(Path(args.accepted), registry, interval=args.interval)
-    files = ResultFiles(Path(args.results), registry, interval=args.interval)
+    files = ResultFiles(Path(args.results), registry, Findings(loki), interval=args.interval)
     converter = Converter([streams, accepted, files], interval=args.interval)
     logger.info("the converter asks %s each %d seconds for %d streams, and reads the list of accepted findings"
                 " and the files of results in %s", args.loki, args.interval, len(streams.entries), args.results)

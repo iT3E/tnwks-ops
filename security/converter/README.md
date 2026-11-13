@@ -8,7 +8,8 @@ those series, so they do not know the tools.
 
 It has the form of the evidence collector (`observability/collector.py`):
 one Python file on the standard library, with its tests in CI, on the pinned
-Python image. It reads, and it never writes to a source.
+Python image. It reads, and it never writes to a source. The one thing that it
+writes is the security stream `findings`, in the Loki of its site.
 
 | Path | What it is |
 | --- | --- |
@@ -16,6 +17,7 @@ Python image. It reads, and it never writes to a source.
 | `../tests/test_converter.py` | The tests of the stream source, with a fake Loki on the loopback address |
 | `../tests/test_converter_accepted.py` | The tests of the list of accepted findings, and of the loop of the parts |
 | `../tests/test_converter_files.py` | The tests of the files of results, with invented OCSF files and result files |
+| `../tests/test_converter_findings.py` | The tests of the stream `findings`, with a fake push API of Loki |
 | `kubernetes/apps/security/converter/` | The Flux Kustomization, the HelmRelease and the network policy |
 | `kubernetes/apps/security/converter/app/config/` | What the pod runs: the copy of `converter.py`, `streams.json`, and `registry.json` (the names of the sources, the systems and the series). `security/generate.py` writes them, so never edit them there |
 
@@ -24,6 +26,7 @@ Python image. It reads, and it never writes to a source.
 | The security streams | Here. [The stream source](#the-stream-source) |
 | The list of accepted findings | Here. [The list of accepted findings](#the-list-of-accepted-findings) |
 | The OCSF files of Prowler, and the result file of the API checks | Here. [The files of results](#the-files-of-results). The converter reads them from the volume `security-results` |
+| The lines of the failed findings | Here. [The stream `findings`](#the-stream-findings) |
 | The state of the Wazuh indexer | Step 2 of the platform |
 
 ## The stream source
@@ -239,7 +242,8 @@ cycle only, and serves nothing that no cycle replaced in 10 minutes.
 The CiliumNetworkPolicy `security-converter` names each path. In: the
 metrics port, from the Prometheus pods of this cluster and from the host (the
 probes of the kubelet). Out: the gateway pods of this cluster's Loki on port
-8080, and DNS. `default-deny` of the namespace denies each other path.
+8080, for the queries of the stream source and the push of the stream
+`findings`, and DNS. `default-deny` of the namespace denies each other path.
 
 ## Run the tests
 
@@ -387,7 +391,7 @@ One file, `api-check/results.json`. Each run writes
 | `system` | The name of the system in `registry/systems.yaml` |
 | `failed` | The number of resources that fail the test, a whole number. 0 is a pass. It is the value of the result series |
 | `severity` | Optional. The severity of the test: `critical`, `high`, `medium`, `low`, `informational` or `unknown`, in lower case. With no `severity` it is `unknown`. The alert for a new finding fires for `high` and `critical` only |
-| `findings` | Optional. One object for each resource that fails, with `resource` (what fails) and `message` (why). The job can add fields. The converter sends each object as one line of the stream `findings`, and adds `source`, `check` and `system` |
+| `findings` | Optional. One object for each resource that fails, with `resource` (what fails) and `message` (why), as text. The job can add fields, and they stay in the file. The converter sends each object as one line of the stream `findings` ([The stream `findings`](#the-stream-findings)) |
 
 - **A test that did not run has no entry.** The job never writes 0 for a
   test that it could not do. A system with no entry gets no time, so the rule
@@ -416,3 +420,82 @@ of the converter names the file and the reason, with no value of the file.
 | `api-check/results.json` | It is not JSON, `version` is not 1, `source` is not `api-check`, `time` is not a time up to 5 minutes in the future, or an entry does not have the form of the table above. The file is larger than 16 MiB |
 
 When the file of a system goes away, its results go away in the next cycle.
+
+## The stream `findings`
+
+Each finding that fails is one line in the Loki of homelab-wsl-02: the
+security stream `findings`. The board counts the results, and this stream
+says what failed and where. The converter sends the lines of the newest file
+of each system, when that file is new to it.
+
+| Label | Value |
+| --- | --- |
+| `security_stream` | `findings`. So Loki keeps the stream for 90 days, as each security stream (the rule `{security_stream=~".+"}` of the Loki of homelab-wsl-02) |
+| `source` | `prowler` or `api-check` |
+| `system` | The name of the system in `registry/systems.yaml` |
+
+Each (source, system) is one stream in Loki, and each line has the time of
+its file: the time of the name of the OCSF file, or `time` of the result file.
+
+```logql
+{security_stream="findings", system="example-system"} | json
+```
+
+### What a line holds
+
+A line is a part of the OCSF record of one finding (Detection Finding), as
+compact JSON, with the field names of OCSF. It holds what failed, where and
+why, and no setting of a resource:
+
+| Field | Value |
+| --- | --- |
+| `class_uid`, `time` | The class of the record (2004), and the time of the finding, as Prowler wrote them |
+| `severity`, `status`, `status_code` | The severity (`High`), `New`, and `FAIL` |
+| `status_detail` | Why the check failed, in the words of the tool. The first 8192 characters |
+| `metadata.event_code` | The check ID |
+| `finding_info.uid`, `finding_info.title` | The ID of the finding, and the title of the check |
+| `resources[]` | For each resource (20 at most): `uid`, `name`, `type`, `region`, and `group.name` (the service) |
+| `cloud` | `provider`, `region`, and `account.uid` and `account.name` |
+
+Each other text field has its first 1024 characters. Each other field of the
+record stays in the file. These never go to a line: the data of a resource
+(`resources[].data`, the settings that Prowler read), the tags of a resource
+or an account (`labels`), the remedy and the risk texts of the check, the
+compliance map and the other `unmapped` fields, and the organization. The
+data of a resource can hold a value of a setting, and a log line holds no
+credential (red line R2).
+
+A line of the API checks has the same names: `time` and `severity` of its
+result, `status` `New`, `status_code` `FAIL`, `metadata.event_code` (the
+check), `status_detail` (the `message`), and `resources[0].uid` (the
+`resource`). The other fields of the job stay in the file.
+
+A record that does not fail has no line: `PASS`, `MANUAL`, and a `FAIL`
+with the status `Suppressed`, which the list of accepted findings muted.
+
+### How the lines are sent
+
+- **One time for each file.** The converter sends the lines of a newest
+  file, and then sends them no more. A new file of the system is a new set
+  of lines.
+- **After a start** the converter sends the newest file of each system again,
+  with the same times and the same text. A query of Loki gives each line one
+  time.
+- **When Loki does not take them** (no answer, an error 5xx, or 429), the
+  lines wait for the next cycle, and
+  `homelab_security_converter_findings_pending` is 1 for the stream. The
+  result series do not wait for Loki.
+- **When Loki refuses them** (a status 4xx other than 429, such as a line
+  more than 7 days old), the converter counts them and does not send them
+  again.
+- Batches of about 1 MiB, to the push API of the gateway
+  (`/loki/api/v1/push`). No line and no answer of Loki is in a log of the
+  converter: the log says the number of lines, and the status.
+
+A day with a few hundred findings that fail is a few hundred kB in Loki.
+
+| Series | Labels | Value |
+| --- | --- | --- |
+| `homelab_security_converter_findings_pending` | `source`, `system` | 1 when the lines of the newest file of the system wait for Loki, 0 when Loki has them |
+| `homelab_security_converter_findings_lines_sent_total` | `source` | The lines that Loki took, since the start |
+| `homelab_security_converter_findings_lines_refused_total` | `source` | The lines that Loki refused, since the start |
