@@ -1,0 +1,47 @@
+---
+# The sources of results, and the cycle of each. One line for each source: its
+# name, the time between two runs (`cycle`), and the age at which its newest
+# result is late (`late_after`). The form is in schema.json.
+#
+# A source of the kind `stream` is a security stream in Loki: its newest line
+# is its result, and each of its checks is one stream, with its own times in
+# `checks`. `by_type` sets a different `late_after` for one type of system.
+#
+# These numbers are in this file only. The generated rules and the board read
+# them from here (security/README.md).
+- name: prowler
+  title: Prowler
+  kind: results
+  cycle: 24h
+  late_after: 36h
+- name: trivy
+  title: Trivy Operator
+  kind: results
+  cycle: 24h
+  late_after: 36h
+- name: host-check
+  title: The host check
+  kind: results
+  cycle: 6h
+  late_after: 12h
+- name: api-check
+  title: The API checks
+  kind: results
+  cycle: 24h
+  late_after: 36h
+- name: stream
+  title: The security streams
+  kind: stream
+  cycle: continuous
+  late_after: 15m
+  checks:
+    k8s-audit: { cycle: continuous, late_after: 15m }
+    routeros: { cycle: continuous, late_after: 15m }
+    cloudtrail: { cycle: 15m, late_after: 2h }
+- name: wazuh
+  title: Wazuh
+  kind: results
+  cycle: 12h
+  late_after: 30m
+  by_type:
+    laptop: { late_after: 7d }

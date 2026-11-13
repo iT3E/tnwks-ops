@@ -1,0 +1,78 @@
+---
+# The systems that the security platform checks. One line for each system:
+# its name, its type, its site and its domain. The form is in schema.json.
+#
+# A name is the name that this repository uses already: the cluster name, the
+# host in the Ansible inventory, the Terraform root. `site` is the cluster name
+# of the site, or `none` for a system that is on no site. A system of the type
+# `other` is a layer with no check.
+#
+# `sources` lists the sources that report on the system today. The rule for a
+# late result watches each of them. A source joins this list in the pull
+# request that starts it (security/README.md).
+#
+# The registry names controls, systems and checks. It holds no result.
+- name: aws-management
+  type: aws-account
+  site: none
+  domain: infrastructure
+- name: aws-prod
+  type: aws-account
+  site: none
+  domain: infrastructure
+- name: cloudflare
+  type: cloudflare-account
+  site: none
+  domain: infrastructure
+- name: iT3E
+  type: github-organization
+  site: none
+  domain: infrastructure
+- name: tnwks-ops
+  type: terraform-cloud-organization
+  site: none
+  domain: infrastructure
+- name: homelab-wsl
+  type: cluster
+  site: homelab-wsl
+  domain: infrastructure
+- name: homelab-wsl-02
+  type: cluster
+  site: homelab-wsl-02
+  domain: infrastructure
+- name: DESKTOP-HKE05KI
+  type: windows-host
+  site: homelab-wsl
+  domain: infrastructure
+- name: WSL-02
+  type: windows-host
+  site: homelab-wsl-02
+  domain: infrastructure
+- name: DESKTOP-HKE05KI-ubuntu
+  type: wsl-distro
+  site: homelab-wsl
+  domain: infrastructure
+- name: WSL-02-ubuntu
+  type: wsl-distro
+  site: homelab-wsl-02
+  domain: infrastructure
+- name: sce-rtr01
+  type: router
+  site: none
+  domain: infrastructure
+- name: sce-ep01
+  type: other
+  site: none
+  domain: infrastructure
+- name: SW03
+  type: other
+  site: none
+  domain: infrastructure
+- name: unifi
+  type: other
+  site: none
+  domain: infrastructure
+- name: healthchecks
+  type: other
+  site: none
+  domain: infrastructure
