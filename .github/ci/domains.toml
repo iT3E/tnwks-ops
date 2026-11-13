@@ -28,6 +28,8 @@ paths = [
 [domains.observability]
 paths = [
   "observability/**",
+  # The control registry and its generated rules, scan lists and board input.
+  "security/**",
   # validate_health.py scans every manifest.
   "kubernetes/**",
   "bin/site-failover-apps.json",
