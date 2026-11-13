@@ -366,15 +366,37 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
   the value in the `Authorization` header of those calls only. The paths
   have the case of the repository name, `iT3E/tnwks-ops`, so a caller sends
   `repo` in that case.
-- **The GitHub App** of the reviewer is its own identity at GitHub: the
-  owner makes it, with contents read, pull requests read and write and checks
-  read, and installed it on `iT3E/tnwks-ops` only. Its ID is `GITHUB_APP_ID`
-  in `app/providers.yaml`; its private key is `GITHUB_APP_PRIVATE_KEY` in
-  `workflow-providers-secret`, a file in the providers job that only
-  `openssl` reads. Each run of the job signs a JWT of the App (RS256, 9
-  minutes), finds the installation on the repository, and asks for a token
-  for that one repository with the three permissions above. It fails if the
-  answer grants more. No key or token is on a command line or in a log.
+- **The GitHub App** of the reviewer is its own identity at GitHub. GitHub
+  has no API that registers an App or changes its permissions, so the owner
+  does that in the browser, and git declares the rest.
+  - **Registration.** The owner opens this link, which fills in the form
+    (GitHub docs, "Registering a GitHub App using URL parameters"): a private
+    App with no webhook, contents read, pull requests read and write, and
+    checks read:
+    <https://github.com/settings/apps/new?name=tnwks-renovate-reviewer&url=https://github.com/iT3E/tnwks-ops&public=false&webhook_active=false&contents=read&pull_requests=write&checks=read>.
+    Then the owner makes a private key, and installs the App on
+    `iT3E/tnwks-ops` only ("Only select repositories").
+  - **The list in git.** What the reviewer may do at GitHub is in one place:
+    `GITHUB_REPOSITORY` and `GITHUB_APP_PERMISSIONS` in `app/providers.yaml`
+    (`contents:read,pull_requests:write,checks:read`). Each token is for
+    that one repository with exactly those permissions, whatever the App was
+    granted; the job fails if GitHub's answer grants more.
+  - **The drift check.** Each run of the job reads the permissions of the
+    App (`GET /app`) and the permissions and the repository selection of its
+    installation, compares them with the list, and logs one line:
+    `app-drift result=ok|drift detail=<names>` (for example
+    `extra:app:administration` or `extra:installation:repository_selection`).
+    More than the list is drift: the line is for an alert, and the token is
+    still scoped. Less than the list (`missing:...`) fails the job before any
+    token, with a line that says what to grant.
+  - **A change of permissions** is two steps: change the list in git, in a
+    pull request, and the owner's click in the App settings (and the
+    acceptance on the installation). Until both are done, the drift line
+    says which side is ahead.
+  - The App ID is `GITHUB_APP_ID` in `app/providers.yaml`. The private key
+    is `GITHUB_APP_PRIVATE_KEY` in `workflow-providers-secret`, a file in the
+    providers job that only `openssl` reads. Each run signs a JWT of the App
+    (RS256, 9 minutes). No key or token is on a command line or in a log.
 - **The token life.** An installation token lives one hour. A sandbox keeps
   the credential of its start for its whole life: after a provider update,
   the gateway still resolves the placeholder of a running process to the

@@ -4,17 +4,29 @@ scripts/providers.sh runs it and reads the token from standard output; the
 token goes on to the provider github-reviewer through an env var. Nothing
 else goes to standard output, and no key or token goes to the log.
 
+The repository and the permissions come from git, in one place: the env
+GITHUB_REPOSITORY and GITHUB_APP_PERMISSIONS of the CronJob
+workflow-providers. A token never has more than that list, whatever the App
+was granted.
+
 1. A JWT of the App: RS256, signed by openssl with the private key file,
    issued 60 s in the past (clock drift) and valid 9 minutes.
-2. The installation of the App on the repository.
+2. The drift check: the permissions of the App (GET /app), and the
+   permissions and the repository selection of its installation on the
+   repository, against the list in git. One log line:
+       app-drift result=ok|drift detail=<names only>
+   More than the list (or an installation on all repositories) is drift: a
+   log line for an alert, and the token is still scoped to the list. Less
+   than the list fails the run, before any token.
 3. An installation token for that one repository, with the permissions of
-   the provider profile and no more. The answer must grant exactly those
-   (and metadata read, which every token has), or the run fails.
+   the list. The answer must grant exactly those (and metadata read, which
+   every token has), or the run fails.
 
 Environment:
     GITHUB_APP_ID           the App ID (or its client ID)
     GITHUB_APP_KEY_FILE     the private key (PEM). Default /github-app/private-key.pem
-    GITHUB_REPOSITORY       owner/name. Default iT3E/tnwks-ops
+    GITHUB_REPOSITORY       owner/name
+    GITHUB_APP_PERMISSIONS  name:level, comma separated (level read or write)
     GITHUB_API_URL          default https://api.github.com
 """
 
@@ -28,16 +40,30 @@ import time
 import urllib.error
 import urllib.request
 
-# The permissions of the profile workflow-github-reviewer: contents and the
-# check runs to read, and pull requests to read and to comment on (POST
-# issues/*/comments on a pull request needs pull_requests write).
-PERMISSIONS = {"contents": "read", "pull_requests": "write", "checks": "read"}
 JWT_LIFETIME = 540
 CLOCK_DRIFT = 60
+LEVELS = {"read": 1, "write": 2, "admin": 3}
+IMPLIED = {"metadata": "read"}  # every App and every token has it
 
 
 class TokenError(RuntimeError):
     pass
+
+
+def parse_permissions(text: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for item in text.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        name, sep, level = item.partition(":")
+        name, level = name.strip(), level.strip()
+        if not sep or not re.fullmatch(r"[a-z_]+", name) or level not in ("read", "write"):
+            raise TokenError(f"GITHUB_APP_PERMISSIONS: {item!r} is not name:read or name:write")
+        out[name] = level
+    if not out:
+        raise TokenError("GITHUB_APP_PERMISSIONS is empty")
+    return out
 
 
 def b64url(data: bytes) -> str:
@@ -83,27 +109,61 @@ def call(api: str, method: str, path: str, jwt: str, body: dict | None = None) -
         raise TokenError(f"{method} {path}: {e.code} {message}".rstrip()) from None
 
 
-def installation_token(api: str, app_id: str, key_file: str, repository: str, now: int) -> dict:
+def compare(where: str, granted: dict, wanted: dict[str, str]) -> tuple[list[str], list[str]]:
+    """The names over the list (extra) and under it (missing), as 'where:name'."""
+    extra, missing = [], []
+    for name, level in sorted((granted or {}).items()):
+        if IMPLIED.get(name) == level:
+            continue
+        if name not in wanted or LEVELS.get(level, 9) > LEVELS[wanted[name]]:
+            extra.append(f"{where}:{name}")
+    for name, level in sorted(wanted.items()):
+        if LEVELS.get((granted or {}).get(name), 0) < LEVELS[level]:
+            missing.append(f"{where}:{name}")
+    return extra, missing
+
+
+def drift_check(app: dict, installation: dict, wanted: dict[str, str]) -> list[str]:
+    """Log the one drift line; return the names under the list (empty when the mint may go on)."""
+    extra, missing = [], []
+    for where, granted in (("app", app.get("permissions")), ("installation", installation.get("permissions"))):
+        e, m = compare(where, granted, wanted)
+        extra += e
+        missing += m
+    if installation.get("repository_selection") != "selected":
+        extra.append("installation:repository_selection")
+    detail = ",".join([f"extra:{n}" for n in extra] + [f"missing:{n}" for n in missing]) or "none"
+    print(f"app-drift result={'drift' if extra or missing else 'ok'} detail={detail}", file=sys.stderr)
+    return missing
+
+
+def installation_token(api: str, app_id: str, key_file: str, repository: str, wanted: dict, now: int) -> dict:
     owner, name = repository.split("/", 1)
     jwt = app_jwt(app_id, key_file, now)
+    app = call(api, "GET", "/app", jwt)
     installation = call(api, "GET", f"/repos/{owner}/{name}/installation", jwt)
     installation_id = installation.get("id")
     if not isinstance(installation_id, int):
         raise TokenError(f"no installation of the App on {repository}")
+    missing = drift_check(app, installation, wanted)
+    if missing:
+        raise TokenError(
+            f"the App has less than git asks ({', '.join(missing)}): no token. "
+            "Grant it in the App settings (and accept it on the installation), or change the list in git"
+        )
     answer = call(
         api,
         "POST",
         f"/app/installations/{installation_id}/access_tokens",
         jwt,
-        {"repositories": [name], "permissions": PERMISSIONS},
+        {"repositories": [name], "permissions": wanted},
     )
     token = answer.get("token")
     if not isinstance(token, str) or not token:
         raise TokenError("the answer has no token")
-    granted = answer.get("permissions") or {}
-    extra = {k: v for k, v in granted.items() if k not in PERMISSIONS and (k, v) != ("metadata", "read")}
-    if any(granted.get(k) != v for k, v in PERMISSIONS.items()) or extra:
-        raise TokenError(f"the token has the permissions {granted}, not {PERMISSIONS}")
+    extra, short = compare("token", answer.get("permissions"), wanted)
+    if extra or short:
+        raise TokenError(f"the token does not have exactly the permissions of git ({', '.join(extra + short)})")
     repos = [r.get("full_name", "").lower() for r in answer.get("repositories") or []]
     if repos != [repository.lower()]:
         raise TokenError(f"the token is for {repos}, not [{repository}]")
@@ -113,19 +173,27 @@ def installation_token(api: str, app_id: str, key_file: str, repository: str, no
 def main() -> int:
     app_id = os.environ.get("GITHUB_APP_ID", "").strip()
     if not re.fullmatch(r"[0-9]+|Iv[0-9A-Za-z.]+", app_id):
-        print("GITHUB_APP_ID is not an App ID or a client ID", file=sys.stderr)
+        print("github app token: GITHUB_APP_ID is not an App ID or a client ID", file=sys.stderr)
+        return 2
+    repository = os.environ.get("GITHUB_REPOSITORY", "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+", repository):
+        print("github app token: GITHUB_REPOSITORY is not owner/name", file=sys.stderr)
+        return 2
+    try:
+        wanted = parse_permissions(os.environ.get("GITHUB_APP_PERMISSIONS", ""))
+    except TokenError as e:
+        print(f"github app token: {e}", file=sys.stderr)
         return 2
     key_file = os.environ.get("GITHUB_APP_KEY_FILE", "/github-app/private-key.pem")
-    repository = os.environ.get("GITHUB_REPOSITORY", "iT3E/tnwks-ops")
     api = os.environ.get("GITHUB_API_URL", "https://api.github.com")
     try:
-        out = installation_token(api, app_id, key_file, repository, int(time.time()))
+        out = installation_token(api, app_id, key_file, repository, wanted, int(time.time()))
     except (TokenError, OSError, subprocess.SubprocessError) as e:
         print(f"github app token: {e}", file=sys.stderr)
         return 1
     print(
         f"github app token: installation {out['installation_id']}, {repository} only, "
-        f"{','.join(f'{k}:{v}' for k, v in PERMISSIONS.items())}, expires {out['expires_at']}",
+        f"{','.join(f'{k}:{v}' for k, v in wanted.items())}, expires {out['expires_at']}",
         file=sys.stderr,
     )
     sys.stdout.write(out["token"])

@@ -68,8 +68,16 @@ spec:
                   value: "REPLACE-WITH-THE-APP-ID"
                 - name: GITHUB_APP_KEY_FILE
                   value: /github-app/private-key.pem
+                # What the reviewer may do at GitHub, in one place: the one
+                # repository and the permissions of each token. A token never
+                # has more, whatever the App was granted; the job logs an
+                # "app-drift" line when the App or its installation has more,
+                # and fails when it has less. A change here goes with the
+                # owner's change in the App settings (docs/apps/agent-platform.md).
                 - name: GITHUB_REPOSITORY
                   value: iT3E/tnwks-ops
+                - name: GITHUB_APP_PERMISSIONS
+                  value: contents:read,pull_requests:write,checks:read
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
