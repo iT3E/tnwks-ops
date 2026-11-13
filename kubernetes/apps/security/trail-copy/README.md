@@ -94,8 +94,9 @@ from the Amazon S3 API reference.
 ## To start it, and the way back
 
 It needs the trail and its roles (the AWS Terraform root), and the
-credential refresher with its certificate: its Flux Kustomization depends on
-`security-aws-credentials`. The pull request that lists `ks.yaml` on a
+credential refresher with its certificate (`../aws-credentials`): a cluster
+lists that app first, because the pod of this one does not start without the
+Secret of the session. The pull request that lists `ks.yaml` on a
 cluster also adds `stream` to the `sources` of the AWS systems in
 `security/registry/systems.yaml`, so the rule for a late result watches the
 stream from that merge.
