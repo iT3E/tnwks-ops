@@ -107,7 +107,7 @@ contract of the registry (`security/README.md`, "The series"), with
 | Series | From | Value |
 | --- | --- | --- |
 | `homelab_security_check_result`, `check="k8s-cis-1.23/<control ID>"` | `trivy_compliance_info` of the report `k8s-cis-1.23` | The failed resources of a control that fails, and 0 for a control that passes |
-| `homelab_security_check_result`, `check="image-vulnerabilities"` | `trivy_image_vulnerabilities` | The critical vulnerabilities with a fix, over the distinct images of the cluster. 0 when the scan reports have none. No series when there is no scan report, or when an image that runs on the cluster (`kube_pod_container_info` and `kube_pod_init_container_info`, by the digest of `image_id`) has had no report for an hour: a failed scan is "no evidence", never a pass. The pods of the scan jobs are not counted |
+| `homelab_security_check_result`, `check="image-vulnerabilities"` | `trivy_image_vulnerabilities` | The critical vulnerabilities with a fix, over the distinct images of the cluster. 0 when the scan reports have none. A report counts for an hour after its last sample, so a report that is gone during its new scan changes nothing. No series when there is no scan report. While an image that runs on the cluster (`kube_pod_container_info` and `kube_pod_init_container_info`, by the digest of `image_id`) has had no report for an hour, a fail stays and a pass is "no evidence": a failed scan never reads as a pass, and never hides a known fail. The pods of the scan jobs, a container that has not started (no `image_id` yet) and an image with no registry digest are not counted |
 | `homelab_security_last_result_timestamp_seconds` | `homelab_trivy_compliance_report_update_timestamp_seconds`, which kube-state-metrics reads from the status of the report | The time at which the operator wrote the report: at its start, then every 6 hours |
 
 A result also has the label `severity`, in lower case. Trivy counts a control
@@ -121,8 +121,17 @@ hour before, or has no value in the day before (`security/README.md`, "When
 an alert fires").
 
 A private image, or an image of a registry that the policy does not name,
-has no report, so the check `image-vulnerabilities` of its cluster stays "no
-evidence" until it has one.
+has no report. The check `image-vulnerabilities` of its cluster then shows a
+fail, or "no evidence" in place of a pass, and `SecurityImagesNotScanned`
+fires after 36 hours, until the image has a report.
+
+Known limits of the alert `SecurityFindingNew`:
+
+- A 0 that lasts less than an hour between two fails alerts at most once:
+  the term "was 0 one hour before" reads the value of exactly one hour
+  before.
+- A new critical vulnerability in an image that replaces another with the
+  same count does not raise the sum, so it does not alert.
 
 ## Exceptions
 
@@ -206,10 +215,14 @@ of Trivy on that cluster, while such a pod has its scan:
 | By | The operator | The scan job | Sum |
 | --- | --- | --- | --- |
 | Limits | 256 MiB | 6 x 512 MiB | 3328 MiB |
-| Measured use | 162 MiB | 6 x 56 MiB | 498 MiB |
+| Estimate | 162 MiB | 6 x 56 MiB | 498 MiB |
 
-The measured line is from the test cluster: the operator and one scan job
-took 218 MiB, of which 56 MiB was the scan container. Each container of a
+The estimate is not a measure of a job of 6 containers: on the test cluster
+the operator and a scan job of one container took 218 MiB, of which 56 MiB
+was the scan container, and the estimate takes that container 6 times. A
+scan of a pod of 6 containers on homelab-wsl-02 (the Cilium agent pods have
+6 there too) measures it before homelab-wsl lists the app (step 8 of
+"Tests"). The owner decides the limit with that number. Each container of a
 scan job also has a CPU limit of 500m, so such a job can take 3 cores of
 `SECURITY_NODE` for the length of the scan. Its first container downloads the database (about 140 MB
 compressed) to `trivy-cache`, and a later job reads it from there. Without
@@ -235,6 +248,18 @@ A merge that changes `app/` makes Flux upgrade the HelmRelease on each
 cluster that lists `ks.yaml`. The operator restarts. It then checks the
 workloads again, and a scan job starts for each image that has no report.
 
+**A chart release that moves a rule.** A `test` op of the post-render patch
+fails, and the upgrade stops before Helm applies a resource: the running
+operator and its narrow roles stay, and the HelmRelease is not ready
+(`homelab_flux_resource_ready`). helm-controller applies the CRDs of the new
+chart before the upgrade (`crds: CreateReplace`), so the new CRDs are in the
+cluster; they add fields, and the old operator works with them. The fix:
+read the rules of the new chart's ClusterRole, and change the two indexes of
+the patch. `bin/trivy-operator-roles` checks the rendered ClusterRole of
+each cluster that lists the app: a rule with a write outside the reports, or
+a log read, fails it. Run it with each chart release (Tests, below); it is
+not yet a step of `.github/workflows/kubernetes.yaml`.
+
 ## The way back
 
 1. Remove `ks.yaml` from the `apps/kustomization.yaml` of the cluster. Flux
@@ -250,6 +275,7 @@ Offline, before a merge:
 
 ```bash
 kustomize build kubernetes/apps/security/trivy-operator/app
+bin/trivy-operator-roles kubernetes/clusters/wsl kubernetes/clusters/wsl-02
 flate test all -p kubernetes/clusters/wsl-02
 flate test all -p kubernetes/clusters/wsl
 helm template trivy-operator aquasecurity/trivy-operator --version 0.38.1 \
@@ -285,3 +311,9 @@ After a merge, on the cluster, with reads only:
    `sum(rate(container_cpu_usage_seconds_total{namespace="security",pod=~"scan-vulnerabilityreport-.+"}[5m]))`.
 8. The memory of the operator stays under its limit for a full cycle:
    `max_over_time(container_memory_working_set_bytes{namespace="security",container="trivy-operator"}[1d])`.
+8. On homelab-wsl-02, before homelab-wsl lists the app: the peak memory of
+   the scan job of the pod with the most containers (a Cilium agent pod has
+   6), summed over its containers:
+   `max_over_time(sum by (pod) (container_memory_working_set_bytes{namespace="security",pod=~"scan-vulnerabilityreport-.+",container!=""})[1d:1m])`,
+   with `kubectl -n security get jobs -l app.kubernetes.io/managed-by=trivy-operator`
+   for the job of that pod. Write it in "Memory" in place of the estimate.
