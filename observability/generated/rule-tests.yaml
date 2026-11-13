@@ -1184,3 +1184,55 @@ tests:
   - alertname: WslDriveSpaceLow
     eval_time: 20m
     exp_alerts: []
+- name: a certificate with 29 days left alerts; one with 40 days, another lease and another namespace do not
+  interval: 5m
+  input_series:
+  - series: kube_lease_renew_time{k8s_cluster="homelab-wsl-02",namespace="security",lease="aws-security-audit-certificate"}
+    values: 2505600+0x320
+  - series: kube_lease_renew_time{k8s_cluster="homelab-wsl-02",namespace="security",lease="aws-security-trail-certificate"}
+    values: 3456000+0x320
+  - series: kube_lease_renew_time{k8s_cluster="homelab-wsl-02",namespace="security",lease="some-controller"}
+    values: 0+0x320
+  - series: kube_lease_renew_time{k8s_cluster="homelab-wsl-02",namespace="other",lease="aws-security-audit-certificate"}
+    values: 86400+0x320
+  alert_rule_test:
+  - alertname: SecurityCertificateExpiring
+    eval_time: 30m
+    exp_alerts: []
+  - alertname: SecurityCertificateExpiring
+    eval_time: 70m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl-02
+        namespace: security
+        lease: aws-security-audit-certificate
+      exp_annotations:
+        summary: 'A certificate for IAM Roles Anywhere on homelab-wsl-02 ends within 30 days: aws-security-audit-certificate'
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        description: 'The AWS sessions of one tool of the security platform come from this certificate, and stop
+          when it ends. Make a new certificate and put it in its SOPS Secret: kubernetes/apps/security/aws-credentials/README.md
+          has the steps. The alert ends at the next run of the refresher.'
+- name: the alert starts when a certificate has 30 days left, and not before
+  interval: 5m
+  input_series:
+  - series: kube_lease_renew_time{k8s_cluster="homelab-wsl-02",namespace="security",lease="aws-security-trail-certificate"}
+    values: 2678400+0x320
+  alert_rule_test:
+  - alertname: SecurityCertificateExpiring
+    eval_time: 23h
+    exp_alerts: []
+  - alertname: SecurityCertificateExpiring
+    eval_time: 26h
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl-02
+        namespace: security
+        lease: aws-security-trail-certificate
+      exp_annotations:
+        summary: 'A certificate for IAM Roles Anywhere on homelab-wsl-02 ends within 30 days: aws-security-trail-certificate'
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        description: 'The AWS sessions of one tool of the security platform come from this certificate, and stop
+          when it ends. Make a new certificate and put it in its SOPS Secret: kubernetes/apps/security/aws-credentials/README.md
+          has the steps. The alert ends at the next run of the refresher.'

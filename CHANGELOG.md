@@ -3,6 +3,24 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.108.0 - 2026-11-13
+
+### Added
+
+* monitoring: a path on which homelab-wsl writes to the Loki of homelab-wsl-02, which keeps the security streams: the global Service `security-loki`, a TLS proxy on homelab-wsl-02 that asks for a client certificate of the shared CA and passes only the push of log lines, the two certificates, and a network policy for the proxy. `kubernetes/apps/monitoring/security-loki-proxy/README.md` has the address for a sender on each site
+
+## v2.107.0 - 2026-11-13
+
+### Added
+
+* monitoring: the Vector aggregator of each cluster serves its own metrics (an `internal_metrics` source and a `prometheus_exporter` sink on port 9598 of the pod), and a PodMonitor scrapes them. The port is not on the LoadBalancer Service. `kubernetes/apps/monitoring/vector/README.md` lists the ports and the series
+
+## v2.106.0 - 2026-11-13
+
+### Added
+
+* security: the AWS sessions of the security platform in `kubernetes/apps/security/aws-credentials`. A CronJob in the form of the backups turns each of two IAM Roles Anywhere certificates into a 4-hour session, in `aws-security-audit-sts` for Prowler and `aws-security-trail-sts` for the trail copy job, with a network policy for what it reaches. `SecurityCertificateExpiring` fires 30 days before a certificate ends, from the end time that the refresher writes to a Lease, with promtool fixtures. homelab-wsl-02 lists the app once the owner has made the two certificates
+
 ## v2.105.0 - 2026-11-13
 
 ### Added
