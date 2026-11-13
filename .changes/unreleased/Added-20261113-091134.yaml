@@ -1,0 +1,3 @@
+kind: Added
+body: 'monitoring: the audit reader, a small Vector DaemonSet on the control plane node that reads the audit log of the API server and sends it to the audit source of the aggregator, with acknowledgements. It runs as user 65534 with no capability and no ServiceAccount token, and it keeps its positions on the node. homelab-wsl-02 lists it, and the registry of the security platform lists the stream as a source of that cluster. `kubernetes/apps/monitoring/vector/README.md` has its properties'
+time: 2026-11-13T09:11:34.682995387-08:00
