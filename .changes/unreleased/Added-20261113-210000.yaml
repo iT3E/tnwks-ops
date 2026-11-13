@@ -1,0 +1,3 @@
+kind: Added
+body: 'terraform: the GitHub root''s token (secrets.sops.yaml, encrypted for the CI age key) and the import blocks that adopt its tnwks-github-prod workspace in aws-init, both from task github:bootstrap'
+time: 2026-11-13T21:00:00.000000000Z
