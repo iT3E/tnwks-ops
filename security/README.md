@@ -236,7 +236,7 @@ uv run --project observability pytest security/tests -q
 | The Wazuh map | `generated/wazuh-map.json` | The safeguards of each host check: the CIS tags of the release in `catalog/wazuh.json`, carried to the same check IDs, with the lines of the registry. And the checks with no tag |
 | Board input | `generated/board.json` | The safeguards, the systems and the cycles that the board shows |
 | The list of gaps | `generated/gaps.json` | Each check of a tool that no line names. The quarterly review reads it |
-| The stream map | `kubernetes/apps/security/converter/app/config/streams.json` | Each security stream of each system that has it as a check, with its `late_after` and the Loki selector of its lines. The converter reads it |
+| The maps of the converter | `kubernetes/apps/security/converter/app/config/streams.json` and `registry.json` | Each security stream of each system that has it as a check, with its `late_after` and the Loki selector of its lines. And the names of the sources, the systems and the series, that the converter takes a value of a file against. The converter reads both |
 
 The generator also writes the copy of `converter/converter.py` that the pod
 of the converter runs, next to the stream map. Kustomize takes a file only
@@ -409,14 +409,18 @@ is readable there.
 No cluster lists the Flux Kustomization before the list has its first file.
 To start the list, the owner does these steps in one pull request:
 
-1. Write the file in the form above, with the first accepted findings.
+1. Write the file in the form above, with the first accepted findings. The
+   converter reads the block form of the example only
+   ([`converter/README.md`](converter/README.md), "The form that the
+   converter reads").
 2. Encrypt it: `sops --encrypt --in-place` on the file.
 3. Name the file under `resources` in `app/kustomization.yaml`.
 4. Add `ks.yaml` to `kubernetes/clusters/wsl-02/apps/kustomization.yaml`,
    after the line of the namespace `security`.
 
-Each scanner reads the Secret as its list of exceptions. The part that reads
-the Secret for Prometheus serves one series for each entry:
+Each scanner reads the Secret as its list of exceptions. The converter reads
+the Secret for Prometheus ([`converter/README.md`](converter/README.md), "The
+list of accepted findings"), and serves one series for each entry:
 `homelab_security_accepted_until_timestamp_seconds`, with the labels
 `source`, `check` and `system`, and the Unix time of the end as its value.
 The alert and the board read this series, and nothing else of the list

@@ -1,20 +1,29 @@
 """The converter of the security platform: it serves the results of the sources that
 export no metrics of their own, in the series of the control registry (security/README.md).
 
-This file holds the stream source. Each 5 minutes it asks the Loki of its site for the
-time of the newest line of each security stream, and it serves that time as the time of
-the last result. It reads a time and no line, it sends GET requests only, and it keeps
-no state on a disk. When Loki has no line, gives an error or gives no answer, it serves
-no time for that stream, so the rule for a late result reads the stream as late.
+Each 5 minutes one loop runs each part, and a fault of one part does not stop the others
+(security/converter/README.md):
+
+- The stream source asks the Loki of its site for the time of the newest line of each
+  security stream, and serves that time as the time of the last result. It reads a time
+  and no line. When Loki has no line, gives an error or gives no answer, it serves no
+  time for that stream, so the rule for a late result reads the stream as late.
+- The list of accepted findings: it reads the list that Flux decrypts to a Secret, and
+  serves the end of each accepted finding. No reason leaves the file.
+
+The converter sends GET requests only, and it keeps no state on a disk.
 """
 
 from __future__ import annotations
 
 import argparse
+import calendar
+import datetime
 import http.client
 import json
 import logging
 import os
+import re
 import threading
 import time
 import urllib.parse
@@ -28,6 +37,7 @@ logger = logging.getLogger("converter")
 STREAMS = "homelab_security_converter_streams"
 LAST_CYCLE = "homelab_security_converter_last_cycle_timestamp_seconds"
 QUERY_SUCCESS = "homelab_security_converter_stream_query_success"
+ACCEPTED_SKIPPED = "homelab_security_converter_accepted_skipped_entries"
 
 INTERVAL_SECONDS = 300
 # The converter looks back three times the `late_after` of a stream, and one hour at
@@ -46,16 +56,75 @@ def quote(value: object) -> str:
 
 
 class Metrics:
+    """The text form of Prometheus. The lines of one series name stay together, also when
+    two parts serve the same name."""
+
     def __init__(self):
-        self.lines: list[str] = []
+        self.lines: dict[str, list[str]] = {}
 
     def add(self, metric_name: str, value: float, **labels):
         suffix = ",".join(f'{key}="{quote(val)}"' for key, val in sorted(labels.items()))
         number = f"{value:.3f}" if isinstance(value, float) else str(int(value))
-        self.lines.append(f"{metric_name}{{{suffix}}} {number}" if suffix else f"{metric_name} {number}")
+        self.lines.setdefault(metric_name, []).append(
+            f"{metric_name}{{{suffix}}} {number}" if suffix else f"{metric_name} {number}")
 
     def render(self) -> bytes:
-        return ("\n".join(self.lines) + "\n").encode()
+        return ("\n".join(line for lines in self.lines.values() for line in lines) + "\n").encode()
+
+
+class Loop:
+    """A part with a cycle: one at the start, and one each interval after it. A part keeps
+    the result of its last cycle only, and serves no result that no cycle replaced in two
+    intervals. So a loop that stopped never serves an old result as a new one."""
+
+    def __init__(self, interval: float = INTERVAL_SECONDS, clock=time.time, monotonic=time.monotonic):
+        self.interval, self.clock, self.monotonic = interval, clock, monotonic
+        self.max_age = 2 * interval
+        self.lock = threading.Lock()
+        self.last_cycle: tuple[float, float] | None = None
+        self.started = monotonic()
+
+    def step(self):
+        raise NotImplementedError
+
+    def collect(self, metrics: Metrics, now: float):
+        raise NotImplementedError
+
+    def clear(self):
+        """Forget the result of the last cycle, after a cycle that failed."""
+
+    def cycle(self):
+        self.step()
+        with self.lock:
+            self.last_cycle = self.clock(), self.monotonic()
+
+    def run(self, stop: threading.Event):
+        while not stop.is_set():
+            started = self.monotonic()
+            try:
+                self.cycle()
+            except Exception as error:  # noqa: BLE001 - the loop must go on
+                logger.error("the cycle failed: %s", type(error).__name__)
+            stop.wait(max(0.0, self.interval - (self.monotonic() - started)))
+
+    def healthy(self) -> bool:
+        """The loop runs: a cycle ended in the last three intervals, or the start was."""
+        with self.lock:
+            newest = self.last_cycle[1] if self.last_cycle else self.started
+        return self.monotonic() - newest <= 3 * self.interval
+
+    def fresh(self, read_at: float | None, now: float) -> bool:
+        return read_at is not None and now - read_at <= self.max_age
+
+    def render(self) -> bytes:
+        metrics = Metrics()
+        now = self.monotonic()
+        with self.lock:
+            last_cycle = self.last_cycle
+        if last_cycle and now - last_cycle[1] <= self.max_age:
+            metrics.add(LAST_CYCLE, float(last_cycle[0]))
+        self.collect(metrics, now)
+        return metrics.render()
 
 
 class NoAnswer(Exception):
@@ -131,32 +200,32 @@ class Loki:
         return None if newest is None else newest / NANOSECONDS
 
 
-class StreamSource:
+class StreamSource(Loop):
     """The time of the last result of each security stream, for each system.
 
     `streams` is the map that security/generate.py writes from the registry: one entry
     for each stream and each system that has it as a check, with the Loki selector of
-    its lines. The source keeps the result of its last cycle only. A result goes away
-    when the next query has no line or no answer, and when no cycle replaced it in two
-    intervals. So the source never serves the time of an older cycle as the newest one.
+    its lines. A result goes away when the next query has no line or no answer.
     """
+
+    name = "streams"
 
     def __init__(self, streams: dict, loki, interval: float = INTERVAL_SECONDS,
                  clock=time.time, monotonic=time.monotonic):
+        super().__init__(interval, clock, monotonic)
         self.series, self.entries, self.loki = streams["series"], streams["streams"], loki
-        self.interval, self.clock, self.monotonic = interval, clock, monotonic
-        self.max_age = 2 * interval
-        self.lock = threading.Lock()
         # (source, check, system) -> (time of the newest line or None, Loki answered, read at)
         self.results: dict[tuple[str, str, str], tuple[float | None, bool, float]] = {}
-        self.last_cycle: tuple[float, float] | None = None
-        self.started = monotonic()
 
     @staticmethod
     def key(entry: dict) -> tuple[str, str, str]:
         return entry["source"], entry["check"], entry["system"]
 
-    def cycle(self):
+    def clear(self):
+        with self.lock:
+            self.results = {}
+
+    def step(self):
         """Ask Loki one time for each stream and system, and replace each old result."""
         for entry in self.entries:
             now = self.clock()
@@ -172,37 +241,15 @@ class StreamSource:
                 result = None, False
             with self.lock:
                 self.results[self.key(entry)] = (*result, self.monotonic())
-        with self.lock:
-            self.last_cycle = self.clock(), self.monotonic()
 
-    def run(self, stop: threading.Event):
-        """One cycle at the start, and one each interval after it."""
-        while not stop.is_set():
-            started = self.monotonic()
-            try:
-                self.cycle()
-            except Exception as error:  # noqa: BLE001 - the loop must go on
-                logger.error("the cycle failed: %s", type(error).__name__)
-            stop.wait(max(0.0, self.interval - (self.monotonic() - started)))
-
-    def healthy(self) -> bool:
-        """The loop runs: a cycle ended in the last three intervals, or the start was."""
+    def collect(self, metrics: Metrics, now: float):
         with self.lock:
-            newest = self.last_cycle[1] if self.last_cycle else self.started
-        return self.monotonic() - newest <= 3 * self.interval
-
-    def render(self) -> bytes:
-        metrics = Metrics()
-        now = self.monotonic()
-        with self.lock:
-            results, last_cycle = dict(self.results), self.last_cycle
+            results = dict(self.results)
         metrics.add(STREAMS, len(self.entries))
-        if last_cycle and now - last_cycle[1] <= self.max_age:
-            metrics.add(LAST_CYCLE, float(last_cycle[0]))
         current = []
         for entry in self.entries:
             newest, answered, read_at = results.get(self.key(entry), (None, False, None))
-            if read_at is None or now - read_at > self.max_age:
+            if not self.fresh(read_at, now):
                 # Not asked yet after a start, or the loop stopped: no series at all.
                 continue
             labels = {"source": entry["source"], "check": entry["check"], "system": entry["system"]}
@@ -211,10 +258,221 @@ class StreamSource:
         for labels, newest in current:
             if newest is not None:
                 metrics.add(self.series, float(newest), **labels)
-        return metrics.render()
 
 
-def handler(source: StreamSource) -> type[BaseHTTPRequestHandler]:
+# --- The list of accepted findings ------------------------------------------------------
+
+# The entry fields that the converter reads. `reason` stays in the file.
+ACCEPTED_FIELDS = ("source", "check", "system", "until")
+MAX_LIST_BYTES = 1024 * 1024
+MAX_CHECK_LENGTH = 200
+KEY_LINE = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(?:[ ]+(.*))?$")
+SINGLE_QUOTED = re.compile(r"^'((?:[^']|'')*)'[ ]*(?:#.*)?$")
+
+
+class NotTaken(ValueError):
+    """A value or a line that the reader of the list does not take."""
+
+
+def scalar(text: str) -> str | None:
+    """The value of a `key: value` line of the list: a plain, single-quoted or
+    double-quoted scalar on one line. None for an empty value or the start of a block
+    scalar, whose lines follow. NotTaken for each other form."""
+    if text in ("", "|", ">", "|-", ">-", "|+", ">+") or text.startswith("#"):
+        return None
+    if text.startswith('"'):
+        try:
+            value, end = json.JSONDecoder().raw_decode(text)
+        except ValueError:
+            raise NotTaken("a double-quoted value that does not end on its line") from None
+        rest = text[end:].strip()
+        if rest and not rest.startswith("#"):
+            raise NotTaken("text after a quoted value")
+        return value
+    if text.startswith("'"):
+        match = SINGLE_QUOTED.match(text)
+        if not match:
+            raise NotTaken("a single-quoted value that does not end on its line")
+        return match[1].replace("''", "'")
+    if text[0] in "[]{}&*!%@`|>":
+        raise NotTaken("a flow collection, an anchor, an alias or a tag")
+    value = text.split(" #", 1)[0].rstrip()
+    if ": " in value or value.endswith(":"):
+        raise NotTaken("a plain value with a colon")
+    return value
+
+
+def yaml_list(text: str) -> tuple[list[dict[str, str | None]], int]:
+    """The entries of the list of accepted findings, in the block form of
+    security/README.md: a YAML list of mappings, one `key: value` on each line. The
+    Python image of the converter has no YAML library, so this reader takes that form
+    only. An entry with a line of any other form is not taken, and is counted.
+
+    Returns the entries that it took, and the number of entries (or lines outside an
+    entry) that it did not take."""
+    entries: list[tuple[dict[str, str | None], bool]] = []
+    outside = 0
+    dash = key_column = None
+    last_key = None
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        content = line.lstrip(" ")
+        if not content or content.startswith("#") or (line in ("---", "...") and dash is None):
+            continue
+        indent = len(line) - len(content)
+        if "\t" in raw[:len(raw) - len(raw.lstrip())]:
+            content = "\t"  # a tab in the indentation: no form of this reader
+        if (content == "-" or content.startswith("- ")) and (dash is None or indent == dash):
+            dash = indent
+            entries.append(({}, True))
+            rest = content[1:].lstrip(" ")
+            key_column, last_key = None, None
+            if not rest or rest.startswith("#"):
+                continue
+            key_column, content, indent = indent + len(content) - len(rest), rest, indent + len(content) - len(rest)
+        if not entries:
+            outside += 1
+            continue
+        entry = entries[-1][0]
+        if key_column is None and indent > dash:
+            key_column = indent
+        if indent == key_column and (match := KEY_LINE.match(content)):
+            key = match[1]
+            try:
+                value = scalar(match[2] or "")
+            except NotTaken:
+                entries[-1] = entry, False
+                continue
+            if key in entry:
+                entries[-1] = entry, False
+            entry[key], last_key = value, key
+        elif key_column is not None and indent > key_column and last_key is not None:
+            # A line of a block scalar or of a value on two lines. Only `reason` may have one.
+            entry[last_key] = None
+        else:
+            entries[-1] = entry, False
+    taken = [entry for entry, ok in entries if ok]
+    return taken, outside + len(entries) - len(taken)
+
+
+def end_of(until: object) -> int:
+    """The Unix time at which an accepted finding ends: the start of the day after its
+    end date, UTC (security/README.md, "Accepted findings")."""
+    day = datetime.date.fromisoformat(str(until))
+    return calendar.timegm((day + datetime.timedelta(days=1)).timetuple())
+
+
+def accepted_entries(text: str, sources: set[str], systems: set[str]
+                     ) -> tuple[dict[tuple[str, str, str], int], int]:
+    """{(source, check, system): end} for each entry that fits, and the number of entries
+    that do not fit: a field is missing or empty, the source or the system is not in
+    the registry, or the end date is not a date. Two entries of one finding keep the
+    later end."""
+    entries, skipped = yaml_list(text)
+    result: dict[tuple[str, str, str], int] = {}
+    for index, entry in enumerate(entries, 1):
+        source, check, system, until = (entry.get(field) for field in ACCEPTED_FIELDS)
+        if not (source and check and system and until):
+            why = "a field is missing or empty"
+        elif source not in sources or system not in systems:
+            why = "the source or the system is not in the registry"
+        elif len(check) > MAX_CHECK_LENGTH:
+            why = "the check is longer than the limit"
+        else:
+            try:
+                end = end_of(until)
+            except ValueError:
+                why = "the end date is not a date"
+            else:
+                key = (source, check, system)
+                result[key] = max(end, result.get(key, end))
+                continue
+        # The number of the entry only: a value of the list never reaches a log.
+        logger.warning("entry %d of the list of accepted findings is skipped: %s", index, why)
+        skipped += 1
+    return result, skipped
+
+
+class AcceptedList(Loop):
+    """The end of each accepted finding, from the list that Flux decrypts to the Secret
+    security-accepted-findings. With no Secret, the list is empty. The converter reads
+    the file each cycle, so a new list counts from the next cycle."""
+
+    name = "accepted"
+
+    def __init__(self, path: Path, registry: dict, interval: float = INTERVAL_SECONDS,
+                 clock=time.time, monotonic=time.monotonic):
+        super().__init__(interval, clock, monotonic)
+        self.path = Path(path)
+        self.series = registry["series"]["accepted"]
+        self.sources, self.systems = set(registry["sources"]), set(registry["systems"])
+        self.result: tuple[dict[tuple[str, str, str], int], int, float] | None = None
+
+    def read(self) -> tuple[dict[tuple[str, str, str], int], int]:
+        try:
+            with self.path.open("rb") as file:
+                raw = file.read(MAX_LIST_BYTES + 1)
+        except FileNotFoundError:
+            return {}, 0
+        except OSError as error:
+            logger.warning("the list of accepted findings can not be read: %s", type(error).__name__)
+            return {}, 1
+        if len(raw) > MAX_LIST_BYTES:
+            logger.warning("the list of accepted findings is larger than the limit")
+            return {}, 1
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            logger.warning("the list of accepted findings is not UTF-8")
+            return {}, 1
+        return accepted_entries(text, self.sources, self.systems)
+
+    def step(self):
+        entries, skipped = self.read()
+        with self.lock:
+            self.result = entries, skipped, self.monotonic()
+
+    def clear(self):
+        with self.lock:
+            self.result = None
+
+    def collect(self, metrics: Metrics, now: float):
+        with self.lock:
+            result = self.result
+        if result is None or not self.fresh(result[2], now):
+            return
+        entries, skipped, _ = result
+        metrics.add(ACCEPTED_SKIPPED, skipped)
+        for (source, check, system), end in sorted(entries.items()):
+            metrics.add(self.series, end, source=source, check=check, system=system)
+
+
+# --- The service ------------------------------------------------------------------------
+
+
+class Converter(Loop):
+    """Each part of the converter in one loop. A fault of one part does not stop the
+    others, and a part whose cycle failed serves nothing of an older cycle."""
+
+    def __init__(self, parts: list[Loop], interval: float = INTERVAL_SECONDS,
+                 clock=time.time, monotonic=time.monotonic):
+        super().__init__(interval, clock, monotonic)
+        self.parts = parts
+
+    def step(self):
+        for part in self.parts:
+            try:
+                part.step()
+            except Exception as error:  # noqa: BLE001 - one part must not stop the others
+                logger.error("the part %s failed: %s", part.name, type(error).__name__)
+                part.clear()
+
+    def collect(self, metrics: Metrics, now: float):
+        for part in self.parts:
+            part.collect(metrics, now)
+
+
+def handler(source: Loop) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path == "/healthz":
@@ -240,6 +498,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--streams", default="/config/streams.json",
                         help="the map of the streams, from security/generate.py")
+    parser.add_argument("--registry", default="/config/registry.json",
+                        help="the names of the registry, from security/generate.py")
+    parser.add_argument("--accepted", default="/accepted/accepted.yaml",
+                        help="the list of accepted findings, from its Secret")
     parser.add_argument("--loki", default=os.environ.get("LOKI_URL"), help="the address of Loki")
     parser.add_argument("--port", type=int, default=9877)
     parser.add_argument("--interval", type=float, default=INTERVAL_SECONDS,
@@ -248,12 +510,14 @@ def main():
     if not args.loki:
         parser.error("the address of Loki is not set (--loki or LOKI_URL)")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    streams = json.loads(Path(args.streams).read_text())
-    source = StreamSource(streams, Loki(args.loki), interval=args.interval)
-    logger.info("the stream source asks %s each %d seconds for %d streams",
-                args.loki, args.interval, len(source.entries))
-    threading.Thread(target=source.run, args=(threading.Event(),), daemon=True, name="streams").start()
-    ThreadingHTTPServer(("0.0.0.0", args.port), handler(source)).serve_forever()
+    registry = json.loads(Path(args.registry).read_text())
+    streams = StreamSource(json.loads(Path(args.streams).read_text()), Loki(args.loki), interval=args.interval)
+    accepted = AcceptedList(Path(args.accepted), registry, interval=args.interval)
+    converter = Converter([streams, accepted], interval=args.interval)
+    logger.info("the converter asks %s each %d seconds for %d streams, and reads the list of accepted findings",
+                args.loki, args.interval, len(streams.entries))
+    threading.Thread(target=converter.run, args=(threading.Event(),), daemon=True, name="converter").start()
+    ThreadingHTTPServer(("0.0.0.0", args.port), handler(converter)).serve_forever()
 
 
 if __name__ == "__main__":

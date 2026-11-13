@@ -13,13 +13,15 @@ Python image. It reads, and it never writes to a source.
 | Path | What it is |
 | --- | --- |
 | `converter.py` | The service |
-| `../tests/test_converter.py` | Its tests, with a fake Loki on the loopback address |
+| `../tests/test_converter.py` | The tests of the stream source, with a fake Loki on the loopback address |
+| `../tests/test_converter_accepted.py` | The tests of the list of accepted findings, and of the loop of the parts |
 | `kubernetes/apps/security/converter/` | The Flux Kustomization, the HelmRelease and the network policy |
-| `kubernetes/apps/security/converter/app/config/` | What the pod runs: the copy of `converter.py`, and `streams.json`. `security/generate.py` writes both, so never edit them there |
+| `kubernetes/apps/security/converter/app/config/` | What the pod runs: the copy of `converter.py`, `streams.json`, and `registry.json` (the names of the sources, the systems and the series). `security/generate.py` writes them, so never edit them there |
 
 | Source | State |
 | --- | --- |
 | The security streams | Here. [The stream source](#the-stream-source) |
+| The list of accepted findings | Here. [The list of accepted findings](#the-list-of-accepted-findings) |
 | The OCSF files of Prowler, and the result file of the API checks | The contract is fixed: [The files of results](#the-files-of-results). The converter reads them when the scanners start |
 | The state of the Wazuh indexer | Step 2 of the platform |
 
@@ -144,6 +146,78 @@ the contract of the registry.
 | `homelab_security_converter_streams` | None | The number of entries in the map |
 | `homelab_security_converter_last_cycle_timestamp_seconds` | None | The Unix time at which the last cycle ended |
 | `homelab_security_converter_stream_query_success` | `source`, `check`, `system` | 1 when Loki gave an answer in the last cycle, with a line or with none. 0 for an error or no answer |
+| `homelab_security_converter_accepted_skipped_entries` | None | The number of entries of the list of accepted findings that the converter skipped in its last cycle ([An entry that the converter skips](#an-entry-that-the-converter-skips)) |
+
+## The list of accepted findings
+
+The owner keeps the accepted findings in an encrypted list
+([`../README.md`](../README.md), "Accepted findings"). Flux decrypts it to
+the Secret `security-accepted-findings`, and the pod mounts the Secret at
+`/accepted`. Each 5 minutes the converter reads `accepted.yaml` and serves one
+series for each entry:
+
+```text
+homelab_security_accepted_until_timestamp_seconds{source="prowler",check="example_check_id",system="example-system"} 1801353600
+```
+
+| Label | Value |
+| --- | --- |
+| `source` | The `source` of the entry, a name of `registry/sources.yaml` |
+| `check` | The `check` of the entry |
+| `system` | The `system` of the entry, a name of `registry/systems.yaml` |
+
+The value is the Unix time at which the finding ends: the start of the day
+after `until`, UTC. So `SecurityAcceptedFindingExpired` fires from the first
+second of the next day, and a scanner mutes the finding to the end of its
+`until` day. Two entries of one finding give one series, with the later end.
+
+Nothing else of the list leaves the file. The `reason` is in no series and in
+no log, and a log line about an entry names its number in the list only.
+
+The mount is optional. Before the owner makes the first list the Secret does
+not exist, and the converter serves no entry. When Flux makes or changes the
+Secret, the kubelet changes the file in the pod within a minute or two, and
+the converter reads the file again in each cycle. So the new list is served
+in 10 minutes at the latest, with no restart. On a change, Reloader can also
+restart the pod.
+
+### The form that the converter reads
+
+The Python image of the converter has no YAML library, so the converter
+reads the block form of the example in `../README.md`, and no other form:
+
+- A YAML list, one entry for each item `- `, with one `key: value` on each
+  line. A comment, a blank line and `---` are no problem.
+- A value is plain, in single quotes or in double quotes, on one line. Only
+  `reason` can have a block (`|` or `>`) or a value on two lines.
+- No flow form (`{ }`, `[ ]`), no anchor, no alias, no tag, no tab.
+
+The tests read the example of `../README.md`, and lists in the block form,
+with PyYAML too: the converter must read each of them as PyYAML does.
+
+### An entry that the converter skips
+
+The converter skips an entry, and counts it, when:
+
+- A line of the entry has a form of the list above that the converter does
+  not read, or a key is there two times.
+- `source`, `check`, `system` or `until` is missing or empty, or is a block.
+- The source or the system is not in the registry.
+- `until` is not a date as `YYYY-MM-DD`.
+
+The other entries are served. A file that can not be read, is not UTF-8 or is
+larger than 1 MiB counts as one entry skipped, and the converter serves no
+entry. `homelab_security_converter_accepted_skipped_entries` is the count.
+A skipped entry has no series, so the board does not show it, and the rule
+of Trivy Operator does not mute it: the finding shows as a fail.
+
+## The loop of the parts
+
+One loop runs the parts of the converter one after the other, each 5
+minutes: the stream source, then the list of accepted findings. A fault of
+one part does not stop the others: the part serves nothing in that cycle,
+and the log says the kind of the fault. Each part keeps the result of its last
+cycle only, and serves nothing that no cycle replaced in 10 minutes.
 
 ## The service
 
@@ -152,11 +226,11 @@ the contract of the registry.
 | Where | homelab-wsl-02, the namespace `security`, on `SECURITY_NODE` (`kubernetes/apps/security/README.md`) |
 | Flux Kustomization | `security-converter` (`kubernetes/apps/security/converter/ks.yaml`) |
 | Workload | The HelmRelease `security-converter`: one pod, as user 65534, with a read-only root file system and no capability |
-| Code | The ConfigMap `security-converter-code`: `converter.py` and `streams.json`. The image is the pinned Python image of the evidence collector, by digest. The converter has no image of its own |
+| Code | The ConfigMap `security-converter-code`: `converter.py`, `streams.json` and `registry.json`. The image is the pinned Python image of the evidence collector, by digest. The converter has no image of its own |
 | Port | 9877: `/metrics` and `/healthz` |
 | Scrape | The ServiceMonitor `security-converter`, each minute, by the Prometheus of homelab-wsl-02. The rules of the registry run there |
 | Service account | The default one of the namespace, with no token in the pod. The converter does not ask the API server |
-| Credentials | None |
+| Credentials | None. The pod mounts the Secret `security-accepted-findings`, read-only and optional: the list holds no credential |
 | Memory | A request of 32 MiB and a limit of 128 MiB, the line of the converter in `kubernetes/apps/security/README.md` |
 
 The CiliumNetworkPolicy `security-converter` names each path. In: the
