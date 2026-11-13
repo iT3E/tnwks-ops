@@ -1213,6 +1213,31 @@ tests:
         description: 'The AWS sessions of one tool of the security platform come from this certificate, and stop
           when it ends. Make a new certificate and put it in its SOPS Secret: kubernetes/apps/security/aws-credentials/README.md
           has the steps. The alert ends at the next run of the refresher.'
+- name: a token with 29 days left alerts; one with 40 days does not
+  interval: 5m
+  input_series:
+  - series: kube_lease_renew_time{k8s_cluster="homelab-wsl-02",namespace="security",lease="prowler-cloudflare-token"}
+    values: 2505600+0x320
+  - series: kube_lease_renew_time{k8s_cluster="homelab-wsl-02",namespace="security",lease="prowler-github-token"}
+    values: 3456000+0x320
+  alert_rule_test:
+  - alertname: SecurityTokenExpiring
+    eval_time: 30m
+    exp_alerts: []
+  - alertname: SecurityTokenExpiring
+    eval_time: 70m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl-02
+        namespace: security
+        lease: prowler-cloudflare-token
+      exp_annotations:
+        summary: 'An API token of Prowler on homelab-wsl-02 ends within 30 days: prowler-cloudflare-token'
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        description: 'The daily Prowler run of one provider reads with this token, and fails when it ends. Make
+          a new token, put it in its SOPS Secret, and write its end date to its Lease: kubernetes/apps/security/prowler/README.md
+          has the steps. The alert ends when the Lease has the new date.'
 - name: the alert starts when a certificate has 30 days left, and not before
   interval: 5m
   input_series:

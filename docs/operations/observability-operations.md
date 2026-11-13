@@ -51,6 +51,11 @@ WSL-02, which has that cluster's kubeconfig
   homelab-wsl-02 ends. Its series is `kube_lease_renew_time`: the credential
   refresher writes the end of each certificate to a Lease
   (`kubernetes/apps/security/aws-credentials/README.md` has the renewal).
+- **API tokens of Prowler:** `SecurityTokenExpiring` (group
+  `homelab.security`) fires 30 days before the token of the Prowler run for
+  Cloudflare or GitHub ends. The owner writes the end date to the renew time
+  of the token's Lease (`kubernetes/apps/security/prowler/README.md`, "When a
+  token ends").
 - **Audit lines refused:** `SecurityAuditLinesRefused`, of the group
   `homelab.security` (`observability/rules.py`). The sink
   `loki_security_audit` of a Vector aggregator dropped a request that Loki

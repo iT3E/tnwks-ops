@@ -430,6 +430,11 @@ def capacity_alerts():
 # serves that time: a CronJob has no endpoint of its own to scrape.
 SECURITY_CERTIFICATE_LEASES = "aws-security-.+-certificate"
 SECURITY_CERTIFICATE_DAYS = 30
+# The API tokens of the Prowler runs for Cloudflare and GitHub
+# (kubernetes/apps/security/prowler). Nothing renews a token, so the owner
+# writes its end date to the renew time of its Lease when the token is made,
+# in the form of the certificates above.
+SECURITY_TOKEN_LEASES = "prowler-.+-token"
 
 
 # The sink of the Vector aggregator that writes the audit log of the API
@@ -465,6 +470,18 @@ def security_alerts():
                                          " Make a new certificate and put it in its SOPS Secret:"
                                          " kubernetes/apps/security/aws-credentials/README.md has the steps."
                                          " The alert ends at the next run of the refresher.")}},
+        {"alert": "SecurityTokenExpiring",
+         "expr": ('min by (k8s_cluster, namespace, lease) (kube_lease_renew_time'
+                  f'{{namespace="security",lease=~"{SECURITY_TOKEN_LEASES}"}}) - time()'
+                  f' < {SECURITY_CERTIFICATE_DAYS} * 86400'),
+         "for": "1h", "labels": {"severity": "warning"},
+         "annotations": {"summary": (f"An API token of Prowler on {{{{ $labels.k8s_cluster }}}} ends within"
+                                     f" {SECURITY_CERTIFICATE_DAYS} days: {{{{ $labels.lease }}}}"),
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": ("The daily Prowler run of one provider reads with this token, and fails when it ends."
+                                         " Make a new token, put it in its SOPS Secret, and write its end date to its Lease:"
+                                         " kubernetes/apps/security/prowler/README.md has the steps."
+                                         " The alert ends when the Lease has the new date.")}},
         {"alert": "SecurityAuditLinesRefused",
          "expr": ("sum by (k8s_cluster, component_id) ("
                   f"increase({errors}[{AUDIT_SINK_WINDOW}]) > 0"
@@ -867,16 +884,17 @@ def security_fixtures():
     site = "homelab-wsl-02"
     day = 86400
     rule = next(rule for rule in security_alerts() if rule["alert"] == "SecurityCertificateExpiring")
+    token_rule = next(rule for rule in security_alerts() if rule["alert"] == "SecurityTokenExpiring")
 
     def lease(name, ends, namespace="security"):
         """A Lease whose renew time is `ends` seconds after the start of the test."""
         return {"series": f'kube_lease_renew_time{{k8s_cluster="{site}",namespace="{namespace}",lease="{name}"}}',
                 "values": f"{ends}+0x320"}
 
-    def expected(name):
+    def expected(name, alert=rule):
         labels = {"k8s_cluster": site, "namespace": "security", "lease": name}
         annotations = {}
-        for key, text in rule["annotations"].items():
+        for key, text in alert["annotations"].items():
             for label, value in labels.items():
                 text = text.replace("{{ $labels." + label + " }}", value)
             annotations[key] = text
@@ -894,6 +912,13 @@ def security_fixtures():
              {"alertname": "SecurityCertificateExpiring", "eval_time": "30m", "exp_alerts": []},
              {"alertname": "SecurityCertificateExpiring", "eval_time": "70m", "exp_alerts": [
                  expected("aws-security-audit-certificate")]},
+         ]},
+        {"name": "a token with 29 days left alerts; one with 40 days does not", "interval": "5m",
+         "input_series": [lease("prowler-cloudflare-token", 29 * day), lease("prowler-github-token", 40 * day)],
+         "alert_rule_test": [
+             {"alertname": "SecurityTokenExpiring", "eval_time": "30m", "exp_alerts": []},
+             {"alertname": "SecurityTokenExpiring", "eval_time": "70m", "exp_alerts": [
+                 expected("prowler-cloudflare-token", token_rule)]},
          ]},
         # 31 days left at the start: the last 30 days begin after one day.
         {"name": "the alert starts when a certificate has 30 days left, and not before", "interval": "5m",

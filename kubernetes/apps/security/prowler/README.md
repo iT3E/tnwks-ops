@@ -131,11 +131,15 @@ has written `aws-security-audit-sts` (the annotation
 
 **Cloudflare and GitHub.** Each token is the owner's, read-only, with the
 least scope that its checks need. Prowler reads it from the environment, and
-the run never prints it. For each provider, in one pull request:
+the run never prints it. The run for GitHub stays out of the app until the
+owner decides how the registry checks that account (below). For each
+provider, in one pull request:
 
 1. Make the token (the tables below). Give it an end date of one year at
-   most, and note the date: a run with an expired token fails, and
-   `KubeJobFailed` fires.
+   most, and write that date as `spec.renewTime` of
+   `app/lease-cloudflare-token.yaml` (or `app/lease-github-token.yaml`), in
+   the form `2027-11-13T00:00:00.000000Z`. `SecurityTokenExpiring` fires 30
+   days before it ("When a token ends").
 2. Write the Secret in this form, with the token in place of the text in
    angle brackets:
 
@@ -153,7 +157,7 @@ the run never prints it. For each provider, in one pull request:
    as `app/secret-cloudflare.sops.yaml` (or `app/secret-github.sops.yaml`).
 3. Encrypt it: `sops --encrypt --in-place` on the file. The rule for
    `kubernetes/` in `.sops.yaml` encrypts the whole of `stringData`.
-4. Name the Secret and the CronJob under `resources` in
+4. Name the Secret, the Lease and the CronJob under `resources` in
    `app/kustomization.yaml`, the Secret first.
 5. Merge. The run is at the next 07:17 (Cloudflare) or 07:47 (GitHub) UTC.
 
@@ -169,7 +173,13 @@ The Cloudflare token: **My Profile, API Tokens, Create Custom Token.**
 
 Prowler also asks for the DNSSEC, Universal SSL, rulesets and bot settings
 of each zone. This token may not read them, so the log of a run has errors
-for those calls. The registry runs no check that needs them.
+for those calls. The registry runs no check that needs them. The expected
+lines, for each zone, are six `ERROR` lines of the class
+`PermissionDeniedError` (HTTP 403): four that start with the ID of the zone
+(DNSSEC, Universal SSL, the rate limit rules, the bot settings) and two with
+no ID (the firewall rules and the WAF rulesets, both from the rulesets of the
+zone). Another class, such as `AuthenticationError` (HTTP 401, a token that
+is wrong or has ended), or a 403 for the zone settings, is a fault.
 
 The GitHub token: **Settings, Developer settings, Fine-grained tokens,
 Generate new token.**
@@ -190,6 +200,17 @@ Do not start the run for GitHub before the owner decides how the registry
 checks this account. If the account becomes an organization, the token needs
 the organization permission Administration, Read, and the run gives a
 result.
+
+## When a token ends
+
+A token of Cloudflare or GitHub does not renew itself. The owner writes its
+end date to the renew time of its Lease (`app/lease-*-token.yaml`), and
+kube-state-metrics serves it as `kube_lease_renew_time`, in the form of the
+certificates of `../aws-credentials`. The alert `SecurityTokenExpiring`
+(`observability/rules.py`) fires 30 days before that date. To renew, make a
+new token, put it in its Secret with `sops <file>`, write its end date to the
+Lease, and merge them in one pull request. A Lease that nobody set has a date
+in the past, so the alert fires at once.
 
 ## When a run fails
 

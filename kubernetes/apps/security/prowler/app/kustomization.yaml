@@ -7,8 +7,12 @@ namespace: security
 # that step:
 #   - ./cronjob-aws.yaml          after the first run of ../../aws-credentials
 #   - ./secret-cloudflare.sops.yaml
+#   - ./lease-cloudflare-token.yaml
 #   - ./cronjob-cloudflare.yaml
+# GitHub stays out until the owner decides how its run gives a result (a
+# token of a personal account reads no check of the organization):
 #   - ./secret-github.sops.yaml
+#   - ./lease-github-token.yaml
 #   - ./cronjob-github.yaml
 resources:
   - ./networkpolicy.yaml

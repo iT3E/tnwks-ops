@@ -239,3 +239,20 @@ def test_the_claim_of_results_is_in_the_app_of_the_converter():
     assert claim["spec"]["accessModes"] == ["ReadWriteOnce"]
     assert claim["spec"]["resources"]["requests"]["storage"] == "1Gi"
     assert "./pvc.yaml" in yaml.safe_load((ROOT / "kubernetes/apps/security/converter/app/kustomization.yaml").read_text())["resources"]
+
+
+def test_each_token_has_a_lease_that_the_token_alert_reads():
+    import re
+    import sys
+    sys.path.insert(0, str(ROOT / "observability"))
+    import rules
+    alert = next(rule for rule in rules.security_alerts() if rule["alert"] == "SecurityTokenExpiring")
+    assert rules.SECURITY_TOKEN_LEASES in alert["expr"]
+    for provider, variable in (("cloudflare", "CLOUDFLARE_API_TOKEN"), ("github", "GITHUB_PERSONAL_ACCESS_TOKEN")):
+        lease = yaml.safe_load((APP / f"lease-{provider}-token.yaml").read_text())
+        assert lease["kind"] == "Lease"
+        assert re.fullmatch(rules.SECURITY_TOKEN_LEASES, lease["metadata"]["name"])
+        # A Lease that nobody set has a date in the past, so the alert fires.
+        assert lease["spec"]["renewTime"].startswith("2000-")
+        cronjob = (APP / f"cronjob-{provider}.yaml").read_text()
+        assert variable in (APP.parent / "README.md").read_text() and f"prowler-{provider}" in cronjob
