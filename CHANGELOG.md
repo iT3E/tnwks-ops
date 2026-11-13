@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.114.0 - 2026-11-13
+
+### Added
+
+* terraform: the GitHub root's token (secrets.sops.yaml, encrypted for the CI age key) and the import blocks that adopt its tnwks-github-prod workspace in aws-init, both from task github:bootstrap
+
 ## v2.113.0 - 2026-11-13
 
 ### Added
