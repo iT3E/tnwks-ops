@@ -1,0 +1,3 @@
+kind: Added
+body: 'security: the AWS sessions of the security platform in `kubernetes/apps/security/aws-credentials`. A CronJob in the form of the backups turns each of two IAM Roles Anywhere certificates into a 4-hour session, in `aws-security-audit-sts` for Prowler and `aws-security-trail-sts` for the trail copy job, with a network policy for what it reaches. `SecurityCertificateExpiring` fires 30 days before a certificate ends, from the end time that the refresher writes to a Lease, with promtool fixtures. homelab-wsl-02 lists the app once the owner has made the two certificates'
+time: 2026-11-13T05:19:53.18559217-08:00

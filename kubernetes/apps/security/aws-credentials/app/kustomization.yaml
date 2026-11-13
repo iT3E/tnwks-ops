@@ -1,0 +1,26 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: security
+# The owner makes the two certificates (../README.md has their form), and
+# names them here before a cluster lists ../ks.yaml:
+#   - ./secret-certificate-audit.sops.yaml
+#   - ./secret-certificate-trail.sops.yaml
+resources:
+  - ./secret-sts.yaml
+  - ./lease.yaml
+  - ./rbac.yaml
+  - ./networkpolicy.yaml
+  - ./cronjob.yaml
+configMapGenerator:
+  - name: aws-credentials-scripts
+    files:
+      - ./scripts/refresh.py
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled
+labels:
+  - pairs:
+      app.kubernetes.io/name: aws-credentials
+      app.kubernetes.io/instance: aws-credentials
