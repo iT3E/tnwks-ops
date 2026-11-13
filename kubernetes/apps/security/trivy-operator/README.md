@@ -101,7 +101,7 @@ contract of the registry (`security/README.md`, "The series"), with
 | Series | From | Value |
 | --- | --- | --- |
 | `homelab_security_check_result`, `check="k8s-cis-1.23/<control ID>"` | `trivy_compliance_info` of the report `k8s-cis-1.23` | The failed resources of a control that fails, and 0 for a control that passes |
-| `homelab_security_check_result`, `check="image-vulnerabilities"` | `trivy_image_vulnerabilities` | The critical vulnerabilities with a fix, over the distinct images of the cluster. 0 when the scan reports have none. No series when there is no scan report, or when an image that runs on the cluster (`kube_pod_container_info` and `kube_pod_init_container_info`, by the digest of `image_id`) has had no report for an hour: a failed scan is "no evidence", never a pass. The pods of the scan jobs are not counted |
+| `homelab_security_check_result`, `check="image-vulnerabilities"` | `trivy_image_vulnerabilities` | The critical vulnerabilities with a fix, over the distinct images of the cluster. 0 when the scan reports have none. A report counts for an hour after its last sample, so a report that is gone during its new scan changes nothing. No series when there is no scan report. While an image that runs on the cluster (`kube_pod_container_info` and `kube_pod_init_container_info`, by the digest of `image_id`) has had no report for an hour, a fail stays and a pass is "no evidence": a failed scan never reads as a pass, and never hides a known fail. The pods of the scan jobs, a container that has not started (no `image_id` yet) and an image with no registry digest are not counted |
 | `homelab_security_last_result_timestamp_seconds` | `homelab_trivy_compliance_report_update_timestamp_seconds`, which kube-state-metrics reads from the status of the report | The time at which the operator wrote the report: at its start, then every 6 hours |
 
 A result also has the label `severity`, in lower case. Trivy counts a control
@@ -115,8 +115,17 @@ hour before, or has no value in the day before (`security/README.md`, "When
 an alert fires").
 
 A private image, or an image of a registry that the policy does not name,
-has no report, so the check `image-vulnerabilities` of its cluster stays "no
-evidence" until it has one.
+has no report. The check `image-vulnerabilities` of its cluster then shows a
+fail, or "no evidence" in place of a pass, and `SecurityImagesNotScanned`
+fires after 36 hours, until the image has a report.
+
+Known limits of the alert `SecurityFindingNew`:
+
+- A 0 that lasts less than an hour between two fails alerts at most once:
+  the term "was 0 one hour before" reads the value of exactly one hour
+  before.
+- A new critical vulnerability in an image that replaces another with the
+  same count does not raise the sum, so it does not alert.
 
 ## Exceptions
 
