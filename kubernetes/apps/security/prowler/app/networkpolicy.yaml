@@ -1,0 +1,41 @@
+---
+# What a Prowler run for AWS may reach, on top of default-deny
+# (../../namespace.yaml): DNS, and the API endpoints of AWS on 443. Nothing
+# calls it, and it calls no API server. The checks call the services of each
+# Region (<service>.<region>.amazonaws.com), the global ones (iam, sts,
+# organizations), and the public list of AWS IP ranges
+# (ip-ranges.amazonaws.com); Resource Explorer is under api.aws. No host of
+# the vendor of Prowler: the runs have no --push-to-cloud and no version check.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: prowler-aws
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: prowler
+      security.tnwks.us/prowler-provider: aws
+  egress:
+    # DNS through Cilium's DNS proxy, so that the rule below can name hosts.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+            # Both WSL clusters are one Cilium Cluster Mesh: name this cluster.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        # Each level under the name: ec2.us-west-2.amazonaws.com, and also
+        # s3.dualstack.us-west-2.amazonaws.com.
+        - matchPattern: "**.amazonaws.com"
+        - matchPattern: "**.api.aws"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
