@@ -16,6 +16,19 @@ vars:
   GITHUB_TF_DIR: "{{.TERRAFORM_DIR}}/environments/prod/github"
 
 tasks:
+  bootstrap:
+    desc: "Token, TFC workspace and an imports-only local plan (bin/github-terraform; -- --dry-run)"
+    dir: "{{.ROOT_DIR}}"
+    interactive: true
+    cmds:
+      - bin/github-terraform bootstrap {{.CLI_ARGS}}
+
+  enable:
+    desc: "Set GITHUB_TERRAFORM_ENABLED once origin/main has the token and the log masking (-- --dry-run)"
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - bin/github-terraform enable {{.CLI_ARGS}}
+
   init:
     desc: Initialize the GitHub Terraform root module
     dir: "{{.GITHUB_TF_DIR}}"

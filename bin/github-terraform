@@ -1,0 +1,557 @@
+#!/usr/bin/env python3
+"""Bring the GitHub account's Terraform root up (docs/operations/github.md).
+
+    bin/github-terraform bootstrap [--dry-run]   (task github:bootstrap)
+    bin/github-terraform enable [--dry-run]      (task github:enable)
+
+bootstrap, on the owner's workstation, from a checkout with the root in it.
+Stops at the first thing that is wrong.
+
+  1. Token: skipped when the root's secrets.sops.yaml is already a sops file.
+     Otherwise prints the GitHub page for a new classic token (scope and
+     description filled in), reads the token without echo and checks it with
+     GET /user: login iT3E, and for a classic token `repo` in its scopes and
+     `delete_repo` not. A fine-grained token has no scopes to check and can
+     delete repositories, so it needs a typed confirmation. Then writes the
+     file (umask 077), encrypts it in place with bin/sops and checks it: every
+     value ENC[, the recipients of its .sops.yaml rule, and it decrypts back
+     to the token. Any failure removes the file.
+  2. Workspace: skipped when tnwks-github-prod exists in Terraform Cloud with
+     the settings in modules/tfc/workspaces.tf (checked with a GET).
+     Otherwise creates it through the TFC API with those settings, after a
+     typed "yes", and adds the import blocks that adopt it to
+     environments/bootstrap/aws-init/imports.tf: the way the mikrotik, unifi,
+     healthchecks and cloudflare workspaces were added, because aws-init
+     can't be applied (its state predates the moved blocks, which reach an
+     IAM resource its static credentials can't read).
+  3. Plan: terraform init and plan in the root. Passes only when the plan
+     imports and does nothing else ("N to import, 0 to add, 0 to change, 0 to
+     destroy"), or has no changes. Prints the summary line and the imports
+     by type, never the plan.
+  4. Prints what is left: the git add, the PR, then `task github:enable`.
+
+enable, after that PR is merged: fetches origin/main and refuses unless it
+holds the encrypted token, the root's mask_sops entry in
+.github/ci/domains.toml and the masking step before Terraform in both
+terraform.yaml jobs. Then sets the repository variable
+GITHUB_TERRAFORM_ENABLED=true (`env -u GITHUB_TOKEN gh variable set`), the
+only thing that turns the root on in CI.
+
+--dry-run prints each step instead of taking it. bootstrap's dry run reads
+local files only (no GitHub, Terraform Cloud or AWS); enable's dry run still
+fetches and checks origin/main and reads the variable, and doesn't set it.
+
+The token never reaches argv, the environment, a log or the terminal: it is
+read with getpass, sent from this process (urllib), and handed to sops only
+as the file sops encrypts in place.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime
+import getpass
+import hmac
+import json
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import tomllib
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+OWNER = "iT3E"
+GH_REPO = f"{OWNER}/tnwks-ops"
+ROOT = "infrastructure/terraform/environments/prod/github"
+SECRETS = f"{ROOT}/secrets.sops.yaml"
+AWS_INIT_IMPORTS = "infrastructure/terraform/environments/bootstrap/aws-init/imports.tf"
+ENABLED_VAR = "GITHUB_TERRAFORM_ENABLED"
+GITHUB_API = "https://api.github.com"
+TFC_API = "https://app.terraform.io/api/v2"
+TFC_ORG = "tnwks-ops"
+TFC_PROJECT = "AWS_Project"
+WORKSPACE = "tnwks-github-prod"
+WORKING_DIRECTORY = "environments/prod/github"
+TOKEN_URL = "https://github.com/settings/tokens/new?" + urllib.parse.urlencode(
+    {"scopes": "repo", "description": f"Terraform {WORKSPACE} (tnwks-ops)"}
+)
+# GitHub tokens are [A-Za-z0-9_]; anything else is a paste error, and would
+# need quoting in YAML.
+TOKEN_RE = re.compile(r"[A-Za-z0-9_]{20,255}")
+FINE_GRAINED_ACK = "I understand"
+TERRAFORM_ACTION = "iT3E/github-workflows/actions/terraform@"
+MASK_SCRIPT = ".github/scripts/sops-mask.py"
+PLAN_RE = re.compile(r"^Plan: (\d+) to import, 0 to add, 0 to change, 0 to destroy\.$", re.M)
+
+
+class Stop(Exception):
+    """A check failed: the message says what and what to do."""
+
+
+def say(msg: str = "") -> None:
+    print(msg, flush=True)
+
+
+def step(n: int, title: str) -> None:
+    say(f"\n== {n}. {title}")
+
+
+def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, cwd=kw.pop("cwd", REPO), capture_output=True, text=True, check=False, **kw)
+
+
+def yq_json(text: str | None = None, path: str | None = None) -> object:
+    r = run(["yq", "-o=json", ".", path or "-"], input=text)
+    if r.returncode != 0:
+        raise Stop(f"yq could not read {path or 'the file'} as YAML")
+    return json.loads(r.stdout)
+
+
+# --- sops checks ------------------------------------------------------------
+
+
+def sops_rule(sops_config: dict, rel: str) -> dict:
+    for rule in sops_config.get("creation_rules", []):
+        if re.search(rule.get("path_regex", ""), rel):
+            return rule
+    raise Stop(f".sops.yaml has no creation rule for {rel}")
+
+
+def split_keys(value: str | None) -> set[str]:
+    return {k.strip() for k in (value or "").split(",") if k.strip()}
+
+
+def check_encrypted(doc: object, sops_config: dict, rel: str) -> None:
+    """The token file as sops wrote it: only github_token, encrypted, for the rule's recipients."""
+    if not isinstance(sops_config, dict):
+        raise Stop(".sops.yaml is missing or empty")
+    if not isinstance(doc, dict) or not isinstance(doc.get("sops"), dict) or not doc["sops"].get("mac"):
+        raise Stop(f"{rel} has no sops metadata: it is not encrypted, and may hold a token in plain "
+                   "text. Check it and remove it")
+    values = {k: v for k, v in doc.items() if k != "sops"}
+    if set(values) != {"github_token"}:
+        raise Stop(f"{rel} should hold github_token only; it has {sorted(values)}")
+    if not str(values["github_token"]).startswith("ENC[AES256_GCM,data:"):
+        raise Stop(f"{rel}: github_token is not encrypted")
+    rule = sops_rule(sops_config, rel)
+    meta = doc["sops"]
+    got_age = {a.get("recipient") for a in meta.get("age") or []}
+    # .sops.yaml spells a KMS key with its role as <key arn>+<role arn>.
+    got_kms = {k.get("arn", "") + (f"+{k['role']}" if k.get("role") else "") for k in meta.get("kms") or []}
+    missing = sorted((split_keys(rule.get("age")) - got_age) | (split_keys(rule.get("kms")) - got_kms))
+    if missing:
+        raise Stop(f"{rel} is not encrypted for every recipient of its .sops.yaml rule "
+                   f"(missing {len(missing)}, CI's age key among them if CI can't decrypt it); "
+                   f"run `bin/sops updatekeys {rel}`")
+
+
+def check_local_secrets(rel: str = SECRETS) -> None:
+    check_encrypted(yq_json(path=rel), yq_json(path=".sops.yaml"), rel)
+
+
+# --- step 1: the token ------------------------------------------------------
+
+
+def github_user(token: str, api: str = GITHUB_API) -> tuple[str, str | None, str | None]:
+    """GET /user: (login, X-OAuth-Scopes or None, token expiry or None). Never raises with the token in it."""
+    req = urllib.request.Request(api.rstrip("/") + "/user", headers={
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "tnwks-ops-github-terraform",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = json.load(resp)
+            return (str(body.get("login", "")), resp.headers.get("X-OAuth-Scopes"),
+                    resp.headers.get("GitHub-Authentication-Token-Expiration"))
+    except urllib.error.HTTPError as e:
+        raise Stop(f"GitHub refused the token: GET /user returned {e.code}") from None
+    except (urllib.error.URLError, TimeoutError, ValueError) as e:
+        raise Stop(f"GET /user failed ({type(e).__name__}); nothing was written") from None
+
+
+def validate_token(token: str, api: str = GITHUB_API, confirm=input) -> None:
+    if not TOKEN_RE.fullmatch(token):
+        raise Stop("that doesn't look like a GitHub token (letters, digits and _ only); nothing was written")
+    login, scopes, expiry = github_user(token, api)
+    if login != OWNER:
+        raise Stop(f"the token belongs to {login or 'nobody'}, not {OWNER}")
+    say(f"  GET /user: {login}" + (f", expires {expiry}" if expiry else ", no expiry"))
+    if scopes is None:
+        say("  No X-OAuth-Scopes header: a fine-grained token (or an app's), whose permissions this")
+        say("  script can't read. With Administration: write, which this root needs, it can delete")
+        say("  repositories. A classic token with `repo` can't (deleting needs `delete_repo`).")
+        if confirm(f'  Type "{FINE_GRAINED_ACK}" to use it anyway: ').strip() != FINE_GRAINED_ACK:
+            raise Stop("fine-grained token not confirmed; nothing was written")
+        return
+    have = {s.strip() for s in scopes.split(",") if s.strip()}
+    say(f"  scopes: {', '.join(sorted(have)) or '(none)'}")
+    if "delete_repo" in have:
+        raise Stop("the token has delete_repo; make one without it (this root never deletes a repository)")
+    if "repo" not in have:
+        raise Stop("the token lacks the repo scope")
+    if have - {"repo"}:
+        say(f"  note: more than this root needs ({', '.join(sorted(have - {'repo'}))}); `repo` alone is enough")
+
+
+def write_encrypted(token: str, rel: str = SECRETS) -> None:
+    """Write, encrypt in place with bin/sops, verify; remove the file on any failure."""
+    path = REPO / rel
+    if path.exists():
+        raise Stop(f"{rel} already exists")
+    old_umask = os.umask(0o077)
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    finally:
+        os.umask(old_umask)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(f'---\ngithub_token: "{token}"\n')
+        r = run(["bin/sops", "--encrypt", "--in-place", rel])
+        if r.returncode != 0:
+            detail = [line for line in r.stderr.splitlines() if token not in line][-5:]
+            raise Stop("bin/sops could not encrypt the file (removed):\n    " + "\n    ".join(detail))
+        raw = path.read_text()
+        if token in raw or "ENC[" not in raw:
+            raise Stop("the file is not encrypted after bin/sops (removed)")
+        check_local_secrets(rel)
+        r = run(["bin/sops", "--decrypt", "--extract", '["github_token"]', rel])
+        if r.returncode != 0 or not hmac.compare_digest(r.stdout.strip().encode(), token.encode()):
+            raise Stop("the encrypted file does not decrypt back to the token (removed)")
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+
+
+def token_step(dry_run: bool) -> bool:
+    """True when this run created the file."""
+    step(1, "Token")
+    path = REPO / SECRETS
+    if path.exists():
+        check_local_secrets()
+        say(f"  {SECRETS} is already encrypted (sops metadata, ENC values, the rule's recipients); skipped")
+        return False
+    if dry_run:
+        say(f"  would print {TOKEN_URL}")
+        say("  would read the token without echo, check it with GET /user (login, scopes),")
+        say(f"  write {SECRETS} with umask 077, bin/sops --encrypt --in-place it, and check it")
+        return False
+    say("  Create a classic token, scope `repo` only, with an expiry you'll renew:")
+    say(f"    {TOKEN_URL}")
+    try:
+        token = getpass.getpass("  Paste it (not echoed): ").strip()
+    except EOFError:
+        raise Stop("no token read") from None
+    validate_token(token)
+    write_encrypted(token)
+    del token
+    say(f"  wrote {SECRETS}: encrypted, the rule's recipients, decrypts back to the token")
+    return True
+
+
+# --- step 2: the workspace --------------------------------------------------
+
+
+def tfc_token() -> str:
+    tok = os.environ.get("TF_TOKEN_app_terraform_io")
+    if tok:
+        return tok
+    creds = Path.home() / ".terraform.d/credentials.tfrc.json"
+    try:
+        return json.loads(creds.read_text())["credentials"]["app.terraform.io"]["token"]
+    except (OSError, KeyError, ValueError):
+        raise Stop("no Terraform Cloud token: run `terraform login`") from None
+
+
+def tfc(method: str, path: str, body: dict | None = None) -> tuple[int, dict | None]:
+    req = urllib.request.Request(TFC_API + path, method=method,
+                                 data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Authorization": f"Bearer {tfc_token()}",
+                                          "Content-Type": "application/vnd.api+json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.status, json.load(resp)
+    except urllib.error.HTTPError as e:
+        return e.code, None
+    except (urllib.error.URLError, TimeoutError) as e:
+        raise Stop(f"Terraform Cloud: {method} {path} failed ({type(e).__name__})") from None
+
+
+def project_id() -> str:
+    st, d = tfc("GET", f"/organizations/{TFC_ORG}/projects?" + urllib.parse.urlencode({"filter[names]": TFC_PROJECT}))
+    ids = [p["id"] for p in (d or {}).get("data", []) if p["attributes"]["name"] == TFC_PROJECT]
+    if st != 200 or len(ids) != 1:
+        raise Stop(f"Terraform Cloud: project {TFC_PROJECT} not found (status {st})")
+    return ids[0]
+
+
+def check_workspace(ws: dict, pid: str) -> str:
+    a = ws["attributes"]
+    wrong = []
+    if a.get("execution-mode") != "local":
+        wrong.append(f"execution mode {a.get('execution-mode')}, not local")
+    if a.get("working-directory") != WORKING_DIRECTORY:
+        wrong.append(f"working directory {a.get('working-directory')!r}, not {WORKING_DIRECTORY!r}")
+    if ws["relationships"]["project"]["data"]["id"] != pid:
+        wrong.append(f"not in project {TFC_PROJECT}")
+    if wrong:
+        raise Stop(f"workspace {WORKSPACE} exists but differs from modules/tfc/workspaces.tf: " + "; ".join(wrong))
+    return ws["id"]
+
+
+def import_blocks(ws_id: str) -> str:
+    today = datetime.date.today().isoformat()
+    return (
+        f"\n# {WORKSPACE}: created through the TFC API on {today} by\n"
+        f"# `bin/github-terraform bootstrap`, matching modules/tfc/workspaces.tf.\n"
+        f"# Safe to delete after the next apply.\n"
+        f"import {{\n  to = module.tfc.tfe_workspace.{WORKSPACE}\n  id = \"{ws_id}\"\n}}\n\n"
+        f"import {{\n  to = module.tfc.tfe_workspace_settings.{WORKSPACE}_workspace_settings\n  id = \"{ws_id}\"\n}}\n"
+    )
+
+
+def add_imports(ws_id: str, dry_run: bool) -> bool:
+    path = REPO / AWS_INIT_IMPORTS
+    text = path.read_text()
+    if f"module.tfc.tfe_workspace.{WORKSPACE}\n" in text:
+        say(f"  {AWS_INIT_IMPORTS} already adopts it")
+        return False
+    if dry_run:
+        say(f"  would add the import blocks for it to {AWS_INIT_IMPORTS}")
+        return False
+    path.write_text(text.rstrip("\n") + "\n" + import_blocks(ws_id))
+    say(f"  added its import blocks to {AWS_INIT_IMPORTS} (aws-init adopts it on its next apply)")
+    return True
+
+
+def workspace_step(dry_run: bool, confirm=input) -> bool:
+    """True when this run changed aws-init/imports.tf."""
+    step(2, f"Terraform Cloud workspace {WORKSPACE}")
+    if dry_run:
+        say(f"  would GET /organizations/{TFC_ORG}/workspaces/{WORKSPACE}; if it exists, check it")
+        say(f"  (execution mode local, working directory {WORKING_DIRECTORY}, project {TFC_PROJECT}) and skip")
+        say(f"  if not: ask, then POST it with those settings, and add its import blocks to {AWS_INIT_IMPORTS}")
+        return False
+    pid = project_id()
+    st, d = tfc("GET", f"/organizations/{TFC_ORG}/workspaces/{WORKSPACE}")
+    if st == 200:
+        ws_id = check_workspace(d["data"], pid)
+        say(f"  exists ({ws_id}), settings match; skipped")
+        return add_imports(ws_id, dry_run)
+    if st != 404:
+        raise Stop(f"Terraform Cloud: GET workspace returned {st}")
+    say(f"  not found. Create it in {TFC_ORG}/{TFC_PROJECT}: execution mode local, working directory")
+    say(f"  {WORKING_DIRECTORY} (modules/tfc/workspaces.tf; aws-init adopts it through imports.tf).")
+    if confirm("  Create it? Only 'yes' will be accepted: ").strip() != "yes":
+        raise Stop("workspace not created")
+    st, d = tfc("POST", f"/organizations/{TFC_ORG}/workspaces", {"data": {
+        "type": "workspaces",
+        "attributes": {
+            "name": WORKSPACE,
+            "working-directory": WORKING_DIRECTORY,
+            "execution-mode": "local",
+            "setting-overwrites": {"execution-mode": True, "agent-pool": True},
+        },
+        "relationships": {"project": {"data": {"type": "projects", "id": pid}}},
+    }})
+    if st != 201 or not d:
+        raise Stop(f"Terraform Cloud: creating the workspace returned {st}")
+    st, d = tfc("GET", f"/organizations/{TFC_ORG}/workspaces/{WORKSPACE}")
+    if st != 200:
+        raise Stop(f"Terraform Cloud: the new workspace reads back {st}")
+    ws_id = check_workspace(d["data"], pid)
+    say(f"  created {ws_id}")
+    return add_imports(ws_id, dry_run)
+
+
+# --- step 3: the local plan -------------------------------------------------
+
+
+def imports_by_type(plan_json: dict) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for rc in plan_json.get("resource_changes", []):
+        change = rc.get("change", {})
+        if change.get("actions") != ["no-op"] or not change.get("importing"):
+            raise Stop(f"the plan does more than import: {rc.get('address')} {change.get('actions')}")
+        counts[rc["type"]] = counts.get(rc["type"], 0) + 1
+    return counts
+
+
+def plan_step(dry_run: bool) -> None:
+    step(3, f"Local plan ({ROOT})")
+    if dry_run:
+        say("  would run terraform init and terraform plan -detailed-exitcode there (output to a private")
+        say("  temp dir, never printed), and pass only on imports and nothing else")
+        return
+    with tempfile.TemporaryDirectory(prefix="github-terraform-") as tmp:
+        os.chmod(tmp, 0o700)
+        r = run(["terraform", f"-chdir={ROOT}", "init", "-input=false", "-no-color"])
+        if r.returncode != 0:
+            raise Stop("terraform init failed; run `task github:init` to see why")
+        say("  init: ok")
+        plan_file = Path(tmp) / "tfplan"
+        r = run(["terraform", f"-chdir={ROOT}", "plan", "-input=false", "-no-color", "-lock-timeout=5m",
+                 "-detailed-exitcode", f"-out={plan_file}"])
+        if r.returncode == 0 and "No changes." in r.stdout:
+            say("  No changes: the state already holds everything; nothing to import")
+            return
+        if r.returncode != 2:
+            raise Stop(f"terraform plan failed (exit {r.returncode}); run `task github:plan` to see why "
+                       "(locally: its output names the private repositories)")
+        found = PLAN_RE.findall(r.stdout)
+        if len(found) != 1:
+            raise Stop("the plan is not imports only (no 'N to import, 0 to add, 0 to change, 0 to destroy' "
+                       "line); run `task github:plan` to see it")
+        # In memory only: the JSON holds the decrypted SOPS data.
+        s = run(["terraform", f"-chdir={ROOT}", "show", "-json", str(plan_file)])
+        if s.returncode != 0:
+            raise Stop("terraform show -json failed")
+        counts = imports_by_type(json.loads(s.stdout))
+        if sum(counts.values()) != int(found[0]):
+            raise Stop(f"the summary says {found[0]} imports, the plan has {sum(counts.values())}")
+        say(f"  Plan: {found[0]} to import, 0 to add, 0 to change, 0 to destroy.")
+        for t, n in sorted(counts.items()):
+            say(f"    {n:3d} {t}")
+
+
+def bootstrap(args) -> int:
+    for tool in ("terraform", "yq", "git"):
+        if shutil.which(tool) is None:
+            raise Stop(f"{tool} is not on PATH (task init)")
+    # Not `sops --version`: it asks GitHub for the latest release.
+    if not os.access(REPO / "bin/sops", os.X_OK) or not any(
+            os.access(Path(d) / "sops", os.X_OK) and Path(d).resolve() != (REPO / "bin").resolve()
+            for d in os.environ.get("PATH", "").split(os.pathsep) if d):
+        raise Stop("no sops binary on PATH for bin/sops (task init)")
+    if args.dry_run:
+        say("Dry run: nothing is written and nothing contacts GitHub, Terraform Cloud or AWS.")
+    token_step(args.dry_run)
+    imports_changed = workspace_step(args.dry_run)
+    plan_step(args.dry_run)
+
+    step(4, "What's left")
+    if args.dry_run:
+        say(f"  would re-check {SECRETS} and print the git add, the PR and `task github:enable`")
+        return 0
+    check_local_secrets()
+    add = []
+    if run(["git", "ls-files", "--error-unmatch", SECRETS]).returncode != 0:
+        add.append(SECRETS)
+    if imports_changed or run(["git", "diff", "--quiet", "--", AWS_INIT_IMPORTS]).returncode != 0:
+        add.append(AWS_INIT_IMPORTS)
+    say(f"  {SECRETS}: encrypted (re-checked)")
+    if add:
+        say("  On a branch:")
+        say(f"    git add {' '.join(add)}")
+        say("    changie new, commit, open a PR and merge it")
+    else:
+        say("  Nothing to commit here.")
+    say("  Then, once it is on main:")
+    say("    task github:enable")
+    return 0
+
+
+# --- enable -----------------------------------------------------------------
+
+
+def show_main(rel: str) -> str | None:
+    r = run(["git", "show", f"origin/main:{rel}"])
+    return r.stdout if r.returncode == 0 else None
+
+
+def check_main() -> None:
+    """Refuse unless origin/main has the encrypted token and the masking."""
+    secrets = show_main(SECRETS)
+    if secrets is None:
+        raise Stop(f"origin/main has no {SECRETS}: merge the bootstrap PR first")
+    check_encrypted(yq_json(secrets), yq_json(show_main(".sops.yaml") or ""), SECRETS)
+    say(f"  origin/main: {SECRETS} encrypted for its rule's recipients")
+
+    domains = tomllib.loads(show_main(".github/ci/domains.toml") or "")
+    entry = domains.get("groups", {}).get("terraform", {}).get("github")
+    if not entry or entry.get("enabled_var") != ENABLED_VAR or entry.get("root") != "prod/github":
+        raise Stop(f"origin/main: domains.toml has no github root gated on {ENABLED_VAR}")
+    masks = entry.get("mask_sops") or []
+    for need in ("repositories.sops.yaml", "secrets.sops.yaml"):
+        if need not in masks:
+            raise Stop(f"origin/main: the github root's mask_sops doesn't list {need}")
+    for f in masks:
+        if show_main(f"{ROOT}/{f}") is None:
+            raise Stop(f"origin/main: mask_sops lists {f}, which isn't in {ROOT}")
+    if show_main(MASK_SCRIPT) is None:
+        raise Stop(f"origin/main has no {MASK_SCRIPT}")
+    jobs = yq_json(show_main(".github/workflows/terraform.yaml") or "").get("jobs", {})
+    for name in ("plan", "apply"):
+        steps = (jobs.get(name) or {}).get("steps") or []
+        tf = [i for i, s in enumerate(steps) if str(s.get("uses", "")).startswith(TERRAFORM_ACTION)]
+        mask = [i for i, s in enumerate(steps) if MASK_SCRIPT in str(s.get("run", ""))]
+        if not tf or not mask or mask[0] > tf[0] or "matrix.mask_sops" not in str(steps[mask[0]].get("if", "")):
+            raise Stop(f"origin/main: terraform.yaml's {name} job doesn't mask SOPS values before Terraform")
+    say(f"  origin/main: mask_sops {masks}, and the masking step before Terraform in plan and apply")
+
+
+def enable(args) -> int:
+    gh = ["env", "-u", "GITHUB_TOKEN", "gh"]
+    if args.dry_run:
+        say("Dry run: fetches and checks origin/main, reads the variable, sets nothing.")
+    say("== Checks on origin/main")
+    r = run(["git", "fetch", "--quiet", "origin", "main"])
+    if r.returncode != 0:
+        raise Stop("git fetch origin main failed")
+    check_main()
+    r = run([*gh, "variable", "get", ENABLED_VAR, "--repo", GH_REPO])
+    current = r.stdout.strip() if r.returncode == 0 else None
+    if current == "true":
+        say(f"  {ENABLED_VAR} is already true; nothing to do")
+        return 0
+    say(f"  {ENABLED_VAR} is {'unset' if current is None else repr(current)}")
+    cmd = [*gh, "variable", "set", ENABLED_VAR, "--body", "true", "--repo", GH_REPO]
+    if args.dry_run:
+        say(f"  would run: {' '.join(cmd)}")
+        return 0
+    r = run(cmd)
+    if r.returncode != 0:
+        raise Stop(f"gh variable set failed: {r.stderr.strip()}")
+    r = run([*gh, "variable", "get", ENABLED_VAR, "--repo", GH_REPO])
+    if r.stdout.strip() != "true":
+        raise Stop(f"{ENABLED_VAR} doesn't read back as true")
+    say(f"  {ENABLED_VAR}=true. CI now plans the root on PRs and applies it on merge.")
+    say("  The first apply (the imports) runs on the next merge that touches the root, or now with:")
+    say(f"    {' '.join(gh)} workflow run deploy.yaml --repo {GH_REPO} -f roots=github")
+    return 0
+
+
+def interrupted(signum, frame):
+    raise KeyboardInterrupt
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    for name in ("bootstrap", "enable"):
+        p = sub.add_parser(name)
+        p.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args(argv)
+    os.chdir(REPO)
+    # Ctrl-C, a closed terminal or a kill still runs the cleanup in write_encrypted.
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, interrupted)
+    try:
+        return bootstrap(args) if args.cmd == "bootstrap" else enable(args)
+    except Stop as e:
+        print(f"\nStopped: {e}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        print("\nInterrupted.", file=sys.stderr)
+        return 130
+
+
+if __name__ == "__main__":
+    sys.exit(main())
