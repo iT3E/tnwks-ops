@@ -202,9 +202,8 @@ locals {
     #####################################
     ##            private              ##
     #####################################
-    # Only those already named elsewhere in this repo, outside the paths
-    # .github/privacy-allow exempts. The others wait on the owner
-    # (docs/operations/github.md, later phases).
+    # Those already named elsewhere in this repo, outside the paths
+    # .github/privacy-allow exempts. The rest are sops_repositories below.
 
     tnwks-agent-image = {
       visibility  = "private"
@@ -246,10 +245,51 @@ locals {
       has_wiki    = false
     }
   }
+
+  # Private repositories whose names stay out of this public repo. Each has a
+  # neutral key here and its name (and description, where it has one) under
+  # the same key in repositories.sops.yaml. Keys are state addresses and show
+  # in CI output: never rename or reuse one, and add new ones as the next
+  # number (docs/operations/github.md).
+  sops_repositories = {
+    private1 = {
+      visibility = "private"
+      has_wiki   = false
+    }
+    private2 = {
+      visibility = "private"
+      has_wiki   = false
+    }
+    private3 = {
+      visibility = "private"
+      has_wiki   = false
+    }
+    private4 = {
+      visibility = "private"
+      has_wiki   = false
+    }
+    private5 = {
+      visibility = "private"
+      has_wiki   = false
+    }
+  }
 }
 
 module "github" {
   source = "../../../modules/github"
 
-  repositories = local.repositories
+  # nonsensitive(): GitHub returns name and description unmarked, so marked
+  # values here plan as an in-place update of each repository (sensitivity
+  # only, same values) and the apply would rewrite it. The mark would hide
+  # nothing anyway: the provider's id, full_name and URL attributes carry
+  # the name unmarked. What keeps the names out of public CI logs is the
+  # action printing no plan body (docs/operations/github.md, Public logs).
+  # sops leaves an empty string unencrypted, so an empty description is left
+  # out of the file and defaults to "" here.
+  repositories = merge(local.repositories, {
+    for key, repo in local.sops_repositories : key => merge(repo, {
+      name        = nonsensitive(data.sops_file.repositories.data["${key}.name"])
+      description = nonsensitive(lookup(data.sops_file.repositories.data, "${key}.description", ""))
+    })
+  })
 }

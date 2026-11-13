@@ -291,7 +291,9 @@ and `task aws:ra-profile`; see
   self-hosted runner (`task terraform:{plan,apply}` is break-glass).
 - `infrastructure/terraform/environments/prod/github/` — the iT3E account's
   repositories, `tnwks-ops`' ruleset, environments and Actions settings,
-  imported as they were. Workspace `tnwks-github-prod`, same runner and flow
+  imported as they were. Private repositories whose names aren't public
+  sit under neutral keys (`private1`, ...) with the names in
+  `repositories.sops.yaml`. Workspace `tnwks-github-prod`, same runner and flow
   as Cloudflare (`task github:{plan,apply}` is break-glass). It manages the
   ruleset and `prod` environment that gate its own apply; see
   `docs/operations/github.md`.

@@ -13,6 +13,16 @@ import {
   id       = each.key
 }
 
+# The repositories named in repositories.sops.yaml. The import ID is the
+# repository name and can't be sensitive, so nonsensitive() here, and only
+# here. Terraform prints import IDs in its progress lines; what reaches CI's
+# public log is in docs/operations/github.md (Public logs).
+import {
+  for_each = local.sops_repositories
+  to       = module.github.github_repository.this[each.key]
+  id       = nonsensitive(data.sops_file.repositories.data["${each.key}.name"])
+}
+
 # tnwks-ops: the main ruleset, its environments, Actions settings and variables.
 
 import {

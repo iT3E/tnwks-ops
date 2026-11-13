@@ -9,9 +9,12 @@ variable "repositories" {
     The optional parts (vulnerability_alerts, actions, workflow_permissions,
     variables, environments, rulesets) are only managed where they are set:
     null or empty leaves them alone. security_and_analysis and rulesets need a
-    public repository on this account's plan.
+    public repository on this account's plan. name defaults to the key; set it
+    (from SOPS) where the real name must stay out of the code, under a
+    neutral key: keys are state addresses and show in CI output.
   EOT
   type = map(object({
+    name         = optional(string)
     visibility   = string
     description  = optional(string, "")
     homepage_url = optional(string, "")

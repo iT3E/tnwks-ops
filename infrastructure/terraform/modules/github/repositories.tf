@@ -17,7 +17,9 @@
 resource "github_repository" "this" {
   for_each = var.repositories
 
-  name         = each.key
+  # The key, unless the entry names the repository (a neutral key whose real
+  # name comes from SOPS in the root).
+  name         = coalesce(each.value.name, each.key)
   description  = each.value.description
   homepage_url = each.value.homepage_url
   visibility   = each.value.visibility

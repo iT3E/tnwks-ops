@@ -36,5 +36,10 @@ The root pins the version and configures the owner and token.
 - **Rulesets.** The provider can't set the pull request rule's
   `require_extra_approval_for_unattributed_changes`; an update of the
   ruleset may reset it (`rulesets.tf`).
+- **Names.** An entry's key is the repository name unless it sets `name`.
+  The root uses that for private repositories whose names stay out of the
+  code: a neutral key (`private1`), the name from SOPS. Keys are state
+  addresses and show in CI output, so they never carry a name, and they're
+  never renamed. No output carries a name.
 - **Keys** are `<repo>/<name>` for rulesets, environments and variables, and
   `<repo>/<environment>/<pattern>` for deployment policies.
