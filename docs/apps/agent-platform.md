@@ -227,7 +227,14 @@ the sandbox plugin copies the workspace only.
   keeps the prompt cache, and it sends the effort as set. Change it in the
   same PR as a move of the name to a different model. The tools `code_execution`,
   `file_fetch`, `file_write`, `dir_list`, `dir_fetch` and `gateway` (the
-  agent's own reads and changes of its config) are denied.
+  agent's own reads and changes of its config) are denied. The agent has
+  no `message` tool: the product leaves it out of a sandboxed session by
+  default (`tools.sandbox.tools`), and every session of the pilot is
+  sandboxed. So the agent answers in the chat that wrote to it, and can't
+  send to an address that it names. Adding `message` to that list is a
+  design change: the exec approvals of the product cover host commands
+  only, so a hold of an outward message needs a plugin hook
+  (`before_tool_call` with `requireApproval`).
   `autoProviders` of the sandbox plugin is off, so no credential of the pod
   goes to a sandbox as a provider. Each channel takes messages from its one
   allowed sender, and no group. The config can't be changed from a chat
@@ -237,21 +244,6 @@ the sandbox plugin copies the workspace only.
   asks for the hosted plugin catalog once at start, which has no setting at
   this release; the network policy blocks it, and the product uses its
   bundled catalog.
-- **The hold of a message.** A plugin file in the config
-  (`agent/config/plugins/tnwks-message-hold.ts`, loaded from
-  `plugins.load.paths`) asks the owner in the chat before the message tool
-  sends to an address that the agent names, or broadcasts: allow once, or
-  deny, with a deny after 10 minutes. A normal reply names no address and
-  is not held. The exec approvals of the product cover host commands only,
-  and the pilot runs each command in a sandbox, so no command is held. Each
-  decision logs `message-hold decision=<decision>` in the `agent` container.
-  The product refuses a plugin whose directory others can write, and the
-  directory of a ConfigMap volume has mode 0777. So the `prepare` init
-  container copies the file to `/home/node/plugins/tnwks/` (directory 0755,
-  file 0444, owned by the pod user) on the `plugins` volume. Every other
-  container mounts that volume read-only, and `plugins.load.paths` names the
-  copy. To check: `kubectl -n agents-pilot logs deploy/agent -c agent | grep
-  tnwks-message-hold` shows no `blocked plugin candidate` line.
 - **The scheduled turn** is the heartbeat of the product
   (`agents.defaults.heartbeat`): once a day, a turn in its own session with
   one shell command in a sandbox, and no message to a channel. Its traces go
