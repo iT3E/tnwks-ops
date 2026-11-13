@@ -81,6 +81,9 @@
     #     memory limits are ceilings, not reservations, so this coexists with
     #     the Docker daemon, WSL services, and qmd's CUDA address reservation
     #     inside the 40GiB VM. Raising these further needs a `.wslconfig` bump.
+    #   * --memory-workers is one size for every worker. A node with a size of
+    #     its own (talos_cluster.memory_nodes: homelab-wsl-02's worker 1, in
+    #     WSL-02's larger VM) gets it right after, below.
     - name: Create the Talos Docker cluster
       ansible.builtin.command: >-
         talosctl cluster create docker
@@ -102,6 +105,12 @@
       register: cluster_create
       # Only runs when no cluster containers exist.
       changed_when: true
+
+    # Idempotent, also on an existing cluster (06-talos-node-memory.yml runs
+    # the same tasks on their own).
+    - name: Node memory limits that differ from --memory-workers
+      ansible.builtin.include_tasks: tasks/talos-node-memory.yml
+      when: docker_cluster
 
     - name: Fetch the Docker cluster's kubeconfig
       ansible.builtin.command: >-

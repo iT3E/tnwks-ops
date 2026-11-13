@@ -9,6 +9,9 @@
 # host-settings -e wslconfig_write=true`, then plan a `wsl --shutdown`.
 wslconfig_path: 'C:\Users\{{ windows_desktop_user }}\.wslconfig'
 wslconfig_write: false
+# The VM's memory (.wslconfig memory). The memory limits of the Talos node
+# containers (talos_clusters in group_vars/all/talos.yml) must fit inside it.
+wsl_memory: 40GB
 # The VM's clocksource (.wslconfig kernelCommandLine). hyperv_clocksource_tsc_page
 # fixed the desktop's slow clock on 2026-09-24. WSL-02's VM clock runs ~10-13%
 # slow on both Hyper-V clocksources (TSC page and MSR, 2026-11-06) while its

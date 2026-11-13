@@ -1,0 +1,41 @@
+---
+# The memory limit of each node container that has one of its own
+# (talos_cluster.memory_nodes, inventory/group_vars/all/talos.yml). Expects
+# `cluster_name` and `talos_cluster`.
+#
+# `docker update` moves the cgroup limit of the running container: the node
+# and its pods keep running. The swap limit stays at twice the memory, what
+# Docker gives a container created with a memory limit alone (talosctl
+# cluster create, talos/wsl/roll-node.sh), so a node reads the same after
+# either. A later roll keeps the limit: roll-node.sh copies it from the
+# container it replaces.
+
+- name: Inspect the node containers with a memory limit of their own
+  community.docker.docker_container_info:
+    name: "{{ cluster_name }}-{{ item.key }}"
+  loop: "{{ talos_cluster.memory_nodes | default({}) | dict2items }}"
+  loop_control:
+    label: "{{ cluster_name }}-{{ item.key }}"
+  register: node_memory_info
+
+- name: Every node named in memory_nodes exists
+  ansible.builtin.assert:
+    that: item.exists
+    fail_msg: "no container {{ cluster_name }}-{{ item.item.key }}: memory_nodes names a node this cluster doesn't have"
+    quiet: true
+  loop: "{{ node_memory_info.results }}"
+  loop_control:
+    label: "{{ cluster_name }}-{{ item.item.key }}"
+
+# human_to_bytes reads GB as 2^30 and rejects the GiB that talosctl takes.
+- name: Set the memory limit of the running node container
+  ansible.builtin.command: >-
+    docker update --memory {{ node_memory_bytes }} --memory-swap {{ node_memory_bytes | int * 2 }}
+    {{ cluster_name }}-{{ item.item.key }}
+  vars:
+    node_memory_bytes: "{{ item.item.value | regex_replace('iB$', 'B') | human_to_bytes }}"
+  when: item.container.HostConfig.Memory | int != node_memory_bytes | int
+  changed_when: true
+  loop: "{{ node_memory_info.results }}"
+  loop_control:
+    label: "{{ cluster_name }}-{{ item.item.key }}: {{ item.item.value }}"
