@@ -393,3 +393,16 @@ groups:
       description: 'The AWS sessions of one tool of the security platform come from this certificate, and stop when
         it ends. Make a new certificate and put it in its SOPS Secret: kubernetes/apps/security/aws-credentials/README.md
         has the steps. The alert ends at the next run of the refresher.'
+  - alert: SecurityAuditLinesRefused
+    expr: sum by (k8s_cluster, component_id) (increase(vector_component_errors_total{component_id="loki_security_audit"}[15m])
+      > 0 or (vector_component_errors_total{component_id="loki_security_audit"} > 0 unless vector_component_errors_total{component_id="loki_security_audit"}
+      offset 15m))
+    labels:
+      severity: warning
+    annotations:
+      summary: Loki refused audit lines of {{ $labels.k8s_cluster }}
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+      description: The sink {{ $labels.component_id }} of the Vector aggregator on {{ $labels.k8s_cluster }} dropped
+        a request in the last 15 minutes, and Vector does not send it again. Loki refuses a line that is older than
+        7 days, or more than one hour older than the newest line of its stream. The log of the aggregator pod has
+        the answer of Loki, and vector_component_discarded_events_total has the number of lines.

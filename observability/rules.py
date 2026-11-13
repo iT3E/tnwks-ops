@@ -432,8 +432,26 @@ SECURITY_CERTIFICATE_LEASES = "aws-security-.+-certificate"
 SECURITY_CERTIFICATE_DAYS = 30
 
 
+# The sink of the Vector aggregator that writes the audit log of the API
+# server to the Loki of the security streams (component_id in
+# kubernetes/apps/monitoring/vector/aggregator/config/vector.yaml).
+AUDIT_SINK = "loki_security_audit"
+AUDIT_SINK_WINDOW = "15m"
+
+
 def security_alerts():
-    """Reads a series of homelab-wsl-02 only, where the refresher runs."""
+    """The certificate alert reads a series of homelab-wsl-02 only, where the
+    refresher runs. The audit alert reads a series of the Vector aggregator of
+    each site.
+
+    Vector counts an error of a sink only when it stops trying: a request that
+    Loki refused (HTTP 400) is not sent again, and a request that got no answer
+    is sent again and is not an error here. The series of the counter starts at
+    its first error, with the value 1, so increase() over the new series is 0.
+    The second term of the audit alert fires for a series that has a value now
+    and had none one window before. Both terms keep the labels of the pod, so
+    the counter of a new pod is a new series; the sum then takes them away."""
+    errors = f'vector_component_errors_total{{component_id="{AUDIT_SINK}"}}'
     return [
         {"alert": "SecurityCertificateExpiring",
          "expr": ('min by (k8s_cluster, namespace, lease) (kube_lease_renew_time'
@@ -447,6 +465,17 @@ def security_alerts():
                                          " Make a new certificate and put it in its SOPS Secret:"
                                          " kubernetes/apps/security/aws-credentials/README.md has the steps."
                                          " The alert ends at the next run of the refresher.")}},
+        {"alert": "SecurityAuditLinesRefused",
+         "expr": ("sum by (k8s_cluster, component_id) ("
+                  f"increase({errors}[{AUDIT_SINK_WINDOW}]) > 0"
+                  f" or ({errors} > 0 unless {errors} offset {AUDIT_SINK_WINDOW}))"),
+         "labels": {"severity": "warning"},
+         "annotations": {"summary": "Loki refused audit lines of {{ $labels.k8s_cluster }}",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": ("The sink {{ $labels.component_id }} of the Vector aggregator on {{ $labels.k8s_cluster }} dropped a request"
+                                         f" in the last {AUDIT_SINK_WINDOW[:-1]} minutes, and Vector does not send it again. Loki refuses a line that is older than"
+                                         " 7 days, or more than one hour older than the newest line of its stream. The log of the aggregator pod has the"
+                                         " answer of Loki, and vector_component_discarded_events_total has the number of lines.")}},
     ]
 
 
@@ -830,13 +859,14 @@ def fixtures():
         *host_fixtures(),
         *capacity_fixtures(),
         *security_fixtures(),
+        *audit_sink_fixtures(),
     ]}
 
 
 def security_fixtures():
     site = "homelab-wsl-02"
     day = 86400
-    (rule,) = security_alerts()
+    rule = next(rule for rule in security_alerts() if rule["alert"] == "SecurityCertificateExpiring")
 
     def lease(name, ends, namespace="security"):
         """A Lease whose renew time is `ends` seconds after the start of the test."""
@@ -873,6 +903,50 @@ def security_fixtures():
              {"alertname": "SecurityCertificateExpiring", "eval_time": "26h", "exp_alerts": [
                  expected("aws-security-trail-certificate")]},
          ]},
+    ]
+
+
+def audit_sink_fixtures():
+    site = "homelab-wsl"
+    rule = next(rule for rule in security_alerts() if rule["alert"] == "SecurityAuditLinesRefused")
+
+    def errors(values, component=AUDIT_SINK, pod="vector-aggregator-1"):
+        return {"series": (f'vector_component_errors_total{{k8s_cluster="{site}",namespace="monitoring",pod="{pod}",'
+                           f'component_id="{component}",component_kind="sink",component_type="loki",'
+                           'error_type="request_failed",stage="sending"}'),
+                "values": values}
+
+    labels = {"k8s_cluster": site, "component_id": AUDIT_SINK}
+    annotations = {}
+    for key, text in rule["annotations"].items():
+        for label, value in labels.items():
+            text = text.replace("{{ $labels." + label + " }}", value)
+        annotations[key] = text
+    fires = [{"exp_labels": {"severity": "warning", **labels}, "exp_annotations": annotations}]
+
+    def at(minute, exp_alerts):
+        return {"alertname": rule["alert"], "eval_time": f"{minute}m", "exp_alerts": exp_alerts}
+
+    return [
+        # Vector makes the series at the first refused request: no sample for
+        # 20 minutes, then the value 1. The alert holds for one window.
+        {"name": "the first refused request of the audit sink alerts, though its counter starts at 1", "interval": "1m",
+         "input_series": [errors("_x20 1+0x40")],
+         "alert_rule_test": [at(19, []), at(20, fires), at(34, fires), at(36, [])]},
+        {"name": "a later refused request of the audit sink alerts", "interval": "1m",
+         "input_series": [errors("1+0x40 2+0x40")],
+         "alert_rule_test": [at(30, []), at(41, fires), at(54, fires), at(56, [])]},
+        # The pod of the aggregator starts again, and the counter of the new pod
+        # is a new series that starts at 1, under the old value.
+        {"name": "the first refused request of a new aggregator pod alerts", "interval": "1m",
+         "input_series": [errors("3+0x30 stale"), errors("_x40 1+0x20", pod="vector-aggregator-2")],
+         "alert_rule_test": [at(30, []), at(39, []), at(40, fires)]},
+        {"name": "a counter of the audit sink that does not move does not alert", "interval": "1m",
+         "input_series": [errors("2+0x60")],
+         "alert_rule_test": [at(30, []), at(60, [])]},
+        {"name": "a refused request of another sink does not alert", "interval": "1m",
+         "input_series": [errors("_x20 1+1x40", component="loki_kubernetes")],
+         "alert_rule_test": [at(20, []), at(30, [])]},
     ]
 
 

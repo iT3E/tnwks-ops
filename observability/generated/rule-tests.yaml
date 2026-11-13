@@ -1236,3 +1236,91 @@ tests:
         description: 'The AWS sessions of one tool of the security platform come from this certificate, and stop
           when it ends. Make a new certificate and put it in its SOPS Secret: kubernetes/apps/security/aws-credentials/README.md
           has the steps. The alert ends at the next run of the refresher.'
+- name: the first refused request of the audit sink alerts, though its counter starts at 1
+  interval: 1m
+  input_series:
+  - series: vector_component_errors_total{k8s_cluster="homelab-wsl",namespace="monitoring",pod="vector-aggregator-1",component_id="loki_security_audit",component_kind="sink",component_type="loki",error_type="request_failed",stage="sending"}
+    values: _x20 1+0x40
+  alert_rule_test:
+  - alertname: SecurityAuditLinesRefused
+    eval_time: 19m
+    exp_alerts: []
+  - alertname: SecurityAuditLinesRefused
+    eval_time: 20m
+    exp_alerts: &id002
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl
+        component_id: loki_security_audit
+      exp_annotations:
+        summary: Loki refused audit lines of homelab-wsl
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl
+        description: The sink loki_security_audit of the Vector aggregator on homelab-wsl dropped a request in the
+          last 15 minutes, and Vector does not send it again. Loki refuses a line that is older than 7 days, or
+          more than one hour older than the newest line of its stream. The log of the aggregator pod has the answer
+          of Loki, and vector_component_discarded_events_total has the number of lines.
+  - alertname: SecurityAuditLinesRefused
+    eval_time: 34m
+    exp_alerts: *id002
+  - alertname: SecurityAuditLinesRefused
+    eval_time: 36m
+    exp_alerts: []
+- name: a later refused request of the audit sink alerts
+  interval: 1m
+  input_series:
+  - series: vector_component_errors_total{k8s_cluster="homelab-wsl",namespace="monitoring",pod="vector-aggregator-1",component_id="loki_security_audit",component_kind="sink",component_type="loki",error_type="request_failed",stage="sending"}
+    values: 1+0x40 2+0x40
+  alert_rule_test:
+  - alertname: SecurityAuditLinesRefused
+    eval_time: 30m
+    exp_alerts: []
+  - alertname: SecurityAuditLinesRefused
+    eval_time: 41m
+    exp_alerts: *id002
+  - alertname: SecurityAuditLinesRefused
+    eval_time: 54m
+    exp_alerts: *id002
+  - alertname: SecurityAuditLinesRefused
+    eval_time: 56m
+    exp_alerts: []
+- name: the first refused request of a new aggregator pod alerts
+  interval: 1m
+  input_series:
+  - series: vector_component_errors_total{k8s_cluster="homelab-wsl",namespace="monitoring",pod="vector-aggregator-1",component_id="loki_security_audit",component_kind="sink",component_type="loki",error_type="request_failed",stage="sending"}
+    values: 3+0x30 stale
+  - series: vector_component_errors_total{k8s_cluster="homelab-wsl",namespace="monitoring",pod="vector-aggregator-2",component_id="loki_security_audit",component_kind="sink",component_type="loki",error_type="request_failed",stage="sending"}
+    values: _x40 1+0x20
+  alert_rule_test:
+  - alertname: SecurityAuditLinesRefused
+    eval_time: 30m
+    exp_alerts: []
+  - alertname: SecurityAuditLinesRefused
+    eval_time: 39m
+    exp_alerts: []
+  - alertname: SecurityAuditLinesRefused
+    eval_time: 40m
+    exp_alerts: *id002
+- name: a counter of the audit sink that does not move does not alert
+  interval: 1m
+  input_series:
+  - series: vector_component_errors_total{k8s_cluster="homelab-wsl",namespace="monitoring",pod="vector-aggregator-1",component_id="loki_security_audit",component_kind="sink",component_type="loki",error_type="request_failed",stage="sending"}
+    values: 2+0x60
+  alert_rule_test:
+  - alertname: SecurityAuditLinesRefused
+    eval_time: 30m
+    exp_alerts: []
+  - alertname: SecurityAuditLinesRefused
+    eval_time: 60m
+    exp_alerts: []
+- name: a refused request of another sink does not alert
+  interval: 1m
+  input_series:
+  - series: vector_component_errors_total{k8s_cluster="homelab-wsl",namespace="monitoring",pod="vector-aggregator-1",component_id="loki_kubernetes",component_kind="sink",component_type="loki",error_type="request_failed",stage="sending"}
+    values: _x20 1+1x40
+  alert_rule_test:
+  - alertname: SecurityAuditLinesRefused
+    eval_time: 20m
+    exp_alerts: []
+  - alertname: SecurityAuditLinesRefused
+    eval_time: 30m
+    exp_alerts: []
