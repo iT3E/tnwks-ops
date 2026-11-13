@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'agents: the memory request of the pilot agent is 2 GiB and that of the model bridge is 512 MiB, as the pilot measured'
-time: 2026-11-13T06:15:00.000000000Z

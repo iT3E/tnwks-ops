@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.93.1 - 2026-11-13
+
+### Fixed
+
+* agents: the memory request of the pilot agent is 2 GiB and that of the model bridge is 512 MiB, as the pilot measured
+
 ## v2.93.0 - 2026-11-13
 
 ### Added
