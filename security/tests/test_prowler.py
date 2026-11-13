@@ -48,18 +48,34 @@ def test_only_the_open_entries_of_prowler_for_the_system_are_accepted(run, tmp_p
         entry("check_other_system", "2027-01-31", system="aws-management"),
         entry("k8s-cis-1.23/1.2.1", "2027-01-31", source="trivy", system="aws-prod"),
     ])
-    assert run.accepted_checks(path, "aws-prod", NOW.date()) == {
-        "check_open": "2026-11-13", "check_later": "2027-01-31"}
+    assert run.accepted_checks(path, "aws-prod", NOW.date()) == ({
+        "check_open": "2026-11-13", "check_later": "2027-01-31"}, 0)
 
 
 def test_no_list_accepts_nothing(run, tmp_path):
-    assert run.accepted_checks(tmp_path / "absent.yaml", "aws-prod", NOW.date()) == {}
-    assert run.accepted_checks(accepted_file(tmp_path, []), "aws-prod", NOW.date()) == {}
+    assert run.accepted_checks(tmp_path / "absent.yaml", "aws-prod", NOW.date()) == ({}, 0)
+    assert run.accepted_checks(accepted_file(tmp_path, []), "aws-prod", NOW.date()) == ({}, 0)
 
 
-def test_a_list_of_another_form_is_an_error(run, tmp_path):
-    with pytest.raises(TypeError):
-        run.accepted_checks(accepted_file(tmp_path, {"source": "prowler"}), "aws-prod", NOW.date())
+def test_a_bad_entry_is_skipped_and_counted_and_its_values_stay_out_of_the_log(run, tmp_path, capsys):
+    bad_date = entry("check_bad_date", "next spring")
+    no_check = entry("", "2027-01-31")
+    path = accepted_file(tmp_path, ["a line", bad_date, no_check, entry("check_open", "2027-01-31")])
+    assert run.accepted_checks(path, "aws-prod", NOW.date()) == ({"check_open": "2027-01-31"}, 3)
+    out = capsys.readouterr().out
+    assert "entry 1 " in out and "entry 2 " in out and "entry 3 " in out
+    assert "next spring" not in out and "invented reason" not in out and "a line" not in out
+
+
+@pytest.mark.parametrize("text", ["source: prowler\n", "- [unclosed\n  reason: An invented reason.\n"])
+def test_a_list_that_can_not_be_read_stops_the_run_and_its_text_stays_out_of_the_log(run, tmp_path, capsys, text):
+    (tmp_path / "accepted.yaml").write_text(text)
+    with pytest.raises(run.UnreadableList):
+        run.accepted_checks(tmp_path / "accepted.yaml", "aws-prod", NOW.date())
+    call, calls = fake_prowler()
+    assert run.run(args(run, tmp_path), now=lambda: NOW, call=call) == 2
+    assert calls == []
+    assert "invented reason" not in capsys.readouterr().out
 
 
 def test_the_mutelist_mutes_each_accepted_check_and_holds_no_reason(run):
@@ -83,7 +99,7 @@ def test_the_command_sends_nothing_to_the_vendor(run, tmp_path):
     assert command[-1] == "--role=arn:aws:iam::123456789012:role/example"
 
 
-def fake_prowler(code=0, write=True):
+def fake_prowler(code=0, write=True, content='[{"status_code": "FAIL"}]'):
     calls = []
 
     def call(command):
@@ -92,7 +108,7 @@ def fake_prowler(code=0, write=True):
             output = Path(command[command.index("--output-directory") + 1])
             output.mkdir(parents=True, exist_ok=True)
             name = command[command.index("--output-filename") + 1]
-            (output / f"{name}.ocsf.json").write_text('[{"status_code": "FAIL"}]')
+            (output / f"{name}.ocsf.json").write_text(content)
             (output / "compliance").mkdir()
             (output / "compliance" / f"{name}_cis.csv").write_text("a table")
         return code
@@ -139,9 +155,12 @@ def test_the_mutelist_of_the_run_has_the_accepted_checks(run, tmp_path):
     assert list(seen["Mutelist"]["Accounts"]["*"]["Checks"]) == ["check_open"]
 
 
-@pytest.mark.parametrize("code,write", [(1, True), (2, False), (0, False)])
-def test_a_run_that_fails_moves_no_file(run, tmp_path, code, write):
-    call, _ = fake_prowler(code=code, write=write)
+@pytest.mark.parametrize("code,write,content", [
+    (1, True, "[]"), (2, False, "[]"), (0, False, "[]"),
+    # An empty file is a bad file for the converter: the run fails.
+    (0, True, "")])
+def test_a_run_that_fails_moves_no_file(run, tmp_path, code, write, content):
+    call, _ = fake_prowler(code=code, write=write, content=content)
     assert run.run(args(run, tmp_path), now=lambda: NOW, call=call) != 0
     directory = tmp_path / "results/prowler/aws"
     assert not directory.exists() or not any(path.is_file() for path in directory.rglob("*"))
