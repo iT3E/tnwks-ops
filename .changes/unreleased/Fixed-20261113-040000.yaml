@@ -1,3 +1,3 @@
 kind: Fixed
-body: 'agents: the pilot's model entry names its Claude model, so the product keeps each turn's context in the history, the model bridge matches the conversation at the next turn, and the prompt cache works'
+body: 'agents: the model entry of the pilot names its Claude model, so the product keeps the context of each turn in the history, the model bridge matches the conversation at the next turn, and the prompt cache works'
 time: 2026-11-13T04:00:00.000000000Z
