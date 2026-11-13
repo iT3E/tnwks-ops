@@ -1,42 +1,73 @@
 #!/usr/bin/env bash
-# Checks the rendered ClusterRole of Trivy Operator on each cluster that lists
-# the app (kubernetes/apps/security/trivy-operator/README.md, "Its roles").
+# Checks the rendered cluster-wide roles of Trivy Operator on each cluster that
+# lists the app (kubernetes/apps/security/trivy-operator/README.md, "Its roles").
 #
 #   bin/trivy-operator-roles kubernetes/clusters/wsl-02 [more cluster paths]
 #
-# flate renders the HelmRelease with its post-render patch. Outside the report
-# CRDs of the operator (aquasecurity.github.io), each rule of the ClusterRole
-# `trivy-operator` may only get, list or watch, and no rule names pods/log.
-# The test ops of the patch guard the order of the chart's rules; this check
-# guards the result, so a chart release that adds a rule with a write, or a
-# log read, fails here. Needs flate (FLATE_SUPPLY set, as in kubernetes.yaml)
-# and yq.
+# flate renders the HelmRelease with its post-render patch. The check reads
+# each ClusterRole of the chart (label app.kubernetes.io/name=trivy-operator)
+# and each ClusterRole that a ClusterRoleBinding gives to the service account
+# trivy-operator. Outside the report CRDs of the operator
+# (aquasecurity.github.io), a rule may only get, list or watch, and may not
+# name Secrets or every resource ("*"): that read is what
+# accessGlobalSecretsAndServiceAccount=false keeps away. No rule names
+# pods/log. A binding of the service account to a ClusterRole that is not in
+# the render (a built-in role) fails too. The test ops of the patch guard the
+# order of the chart's rules; this check guards the result, so a chart release
+# that adds a rule, a role or a binding fails here. Needs flate (FLATE_SUPPLY
+# set, as in kubernetes.yaml) and yq.
 set -euo pipefail
 
 app="../../../apps/security/trivy-operator/ks.yaml"
+account="trivy-operator"
+errors="$(mktemp)"
+trap 'rm -f "${errors}"' EXIT
 status=0
 for cluster in "$@"; do
   if ! grep -qF -- "- ${app}" "${cluster}/apps/kustomization.yaml"; then
     echo "${cluster}: does not list trivy-operator, nothing to check"
     continue
   fi
-  rendered="$(flate build all --no-progress -p "${cluster}" --only-kinds ClusterRole 2>/dev/null)"
-  role="$(yq 'select(.kind == "ClusterRole" and .metadata.name == "trivy-operator")' <<<"${rendered}")"
-  if [[ -z "${role}" ]]; then
-    echo "::error::${cluster}: no ClusterRole trivy-operator in the render"
+  # flate warns on each SOPS Secret it can not read: show its stderr only when
+  # it fails.
+  if ! rendered="$(flate build all --no-progress -p "${cluster}" \
+      --only-kinds ClusterRole,ClusterRoleBinding 2>"${errors}")"; then
+    echo "::error::${cluster}: flate could not render the cluster:"
+    cat "${errors}"
     status=1
     continue
   fi
-  wide="$(yq -o=json -I=0 '.rules[]
-    | select((.resources[] | select(. == "pods/log"))
-        or ((.apiGroups | all_c(. == "aquasecurity.github.io")) | not)
-           and ([.verbs[] | select(. != "get" and . != "list" and . != "watch")] | length > 0))' <<<"${role}")"
-  if [[ -n "${wide}" ]]; then
-    echo "::error::${cluster}: the ClusterRole trivy-operator is wider than its README says:"
-    echo "${wide}"
+  bound="$(yq -N "select(.kind == \"ClusterRoleBinding\"
+      and (.subjects // [] | any_c(.kind == \"ServiceAccount\" and .name == \"${account}\")))
+    | .roleRef.name" <<<"${rendered}" | sort -u)"
+  if [[ -z "${bound}" ]]; then
+    echo "::error::${cluster}: no ClusterRoleBinding of the service account ${account} in the render"
     status=1
-  else
-    echo "${cluster}: the ClusterRole trivy-operator writes only the reports, and reads no pod log"
+    continue
   fi
+  roles="$(yq -N 'select(.kind == "ClusterRole"
+      and .metadata.labels."app.kubernetes.io/name" == "trivy-operator") | .metadata.name' <<<"${rendered}")"
+  for name in $(printf '%s\n%s\n' "${bound}" "${roles}" | sort -u); do
+    role="$(yq "select(.kind == \"ClusterRole\" and .metadata.name == \"${name}\")" <<<"${rendered}")"
+    if [[ -z "${role}" ]]; then
+      echo "::error::${cluster}: ${account} is bound to the ClusterRole ${name}, which is not in the render"
+      status=1
+      continue
+    fi
+    # yq reads a "*" after == as a wildcard, so "*" is matched by a regex.
+    wide="$(yq -o=json -I=0 '(.rules // []) | .[]
+      | ((.resources // []) | any_c(. == "pods/log")) as $log
+      | ((.apiGroups // []) | all_c(. == "aquasecurity.github.io")) as $reports
+      | ([.verbs[] | select(. != "get" and . != "list" and . != "watch")] | length > 0) as $writes
+      | ((.resources // []) | any_c(test("^(secrets|[*])$"))) as $secrets
+      | select($log or (($reports | not) and ($writes or $secrets)))' <<<"${role}")"
+    if [[ -n "${wide}" ]]; then
+      echo "::error::${cluster}: the ClusterRole ${name} is wider than the README says:"
+      echo "${wide}"
+      status=1
+    else
+      echo "${cluster}: the ClusterRole ${name} writes only the reports, reads no Secret and no pod log"
+    fi
+  done
 done
 exit "${status}"
