@@ -1,0 +1,54 @@
+---
+# Read with powercfg, change only what differs, then read again: a value that
+# didn't take fails the task. powercfg is a native command, so every call's
+# exit code is checked (it doesn't throw).
+- name: No sleep (standby not allowed, hibernation off)
+  ansible.windows.win_powershell:
+    error_action: stop
+    script: |
+      [CmdletBinding(SupportsShouldProcess)]
+      param()
+      $Ansible.Changed = $false
+      $sub = '238c9fa8-0aad-41ed-83f4-97be242c8f20'    # SUB_SLEEP
+      $allow = 'abfc2519-3608-4c2a-94ea-171b0ed546ab'  # ALLOWSTANDBY: allow standby states (S1-S3)
+
+      function Invoke-Powercfg {
+          $out = & powercfg.exe @args
+          if ($LASTEXITCODE -ne 0) { throw "powercfg $($args -join ' ') exited $LASTEXITCODE`: $out" }
+          $out
+      }
+      # Current AC and DC index of ALLOWSTANDBY on the active scheme (/qh: hidden settings too).
+      function Read-AllowStandby {
+          $q = (Invoke-Powercfg /qh SCHEME_CURRENT $sub $allow) -join "`n"
+          foreach ($side in 'AC', 'DC') {
+              if ($q -match "Current $side Power Setting Index:\s+0x([0-9a-f]+)") { [Convert]::ToInt32($Matches[1], 16) }
+              else { throw "no $side index for ALLOWSTANDBY in: $q" }
+          }
+      }
+      # The sleep states powercfg /a lists as available (an English host).
+      function Read-Available {
+          $in = $false
+          foreach ($l in (Invoke-Powercfg /a)) {
+              if ($l -match 'are available on this system') { $in = $true; continue }
+              if ($l -match 'are not available on this system') { $in = $false; continue }
+              if ($in -and $l -match '^\s{4}(\S.*)$') { $Matches[1].Trim() }
+          }
+      }
+      function Get-Todo {
+          $ac, $dc = Read-AllowStandby
+          if ($ac -ne 0) { "standby allowed plugged in ($ac) -> 0" }
+          if ($dc -ne 0) { "standby allowed on battery ($dc) -> 0" }
+          if (@(Read-Available) -contains 'Hibernate') { 'hibernation on -> off' }
+      }
+
+      $todo = @(Get-Todo)
+      if ($todo -and -not $Ansible.CheckMode) {
+          Invoke-Powercfg /setacvalueindex SCHEME_CURRENT $sub $allow 0 | Out-Null
+          Invoke-Powercfg /setdcvalueindex SCHEME_CURRENT $sub $allow 0 | Out-Null
+          Invoke-Powercfg /setactive SCHEME_CURRENT | Out-Null
+          if (@(Read-Available) -contains 'Hibernate') { Invoke-Powercfg /hibernate off | Out-Null }
+          $left = @(Get-Todo)
+          if ($left) { throw "still not applied: $($left -join '; ')" }
+      }
+      $Ansible.Changed = [bool]$todo
+      @{ todo = $todo; available = @(Read-Available) }

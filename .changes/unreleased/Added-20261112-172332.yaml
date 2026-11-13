@@ -1,0 +1,3 @@
+kind: Added
+body: 'WSL-02 can''t sleep any more: a new windows_power role disallows standby on its power scheme and turns hibernation off, after three sleeps in two weeks took homelab-wsl-02 down (95 minutes on 2026-11-12)'
+time: 2026-11-12T17:23:32.018729232-08:00

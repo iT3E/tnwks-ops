@@ -1,0 +1,17 @@
+---
+# windows_power: a host that must never sleep (docs/wsl/windows-ansible.md).
+#
+# Idle sleep is already "never" on the High performance scheme that
+# windows_host_settings checks. With power_no_sleep, a program or the Start
+# menu's Sleep can't sleep the host either: standby (S1-S3) is not allowed on
+# the active scheme, plugged in or on battery, and hibernation is off (so
+# Fast Startup is off too). WSL-02 went to sleep three times in two weeks
+# that way (2026-11-07, 11-08, 11-12: Kernel-Power 42 "Application API"),
+# the last for 95 minutes, taking homelab-wsl-02 with it.
+#
+# Not a toggle back: with power_no_sleep false the role is skipped and leaves
+# the settings as they are. To allow sleep again on a host, run
+# `powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP ALLOWSTANDBY 1`
+# (and /setdcvalueindex), `powercfg /setactive SCHEME_CURRENT` and
+# `powercfg /hibernate on`.
+power_no_sleep: false
