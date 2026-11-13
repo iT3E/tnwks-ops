@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.93.0 - 2026-11-13
+
+### Added
+
+* agents: the run receiver of the workflow agents in agents-workflows, with its role for Jobs only, an admission policy that admits only a Job from the template of an agent, its network policy and the sweep of old run sandboxes
+
 ## v2.92.2 - 2026-11-13
 
 ### Fixed
