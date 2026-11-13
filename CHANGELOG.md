@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.92.2 - 2026-11-13
+
+### Fixed
+
+* agents: the model entry of the pilot names its Claude model, so the product keeps the context of each turn in the history, the model bridge matches the conversation at the next turn, and the prompt cache works
+
 ## v2.92.1 - 2026-11-13
 
 ### Fixed
