@@ -532,12 +532,12 @@ def fixtures(registry):
     tests.append(
         {"name": "an accepted finding past its end date raises one alert for its system, with no check in its text",
          "interval": "1m", "external_labels": {"cluster": "site"},
-         "input_series": [series(ACCEPTED, "86400+0x1600", source=source, check="sample-check", system=system),
-                          series(ACCEPTED, "7200+0x1600", source=source, check="other-check", system=system),
-                          series(ACCEPTED, "864000+0x1600", source=source, check="later-check", system=system)],
+         "input_series": [series(ACCEPTED, "1800+0x60", source=source, check="sample-check", system=system),
+                          series(ACCEPTED, "1200+0x60", source=source, check="other-check", system=system),
+                          series(ACCEPTED, "864000+0x60", source=source, check="later-check", system=system)],
          "alert_rule_test": [
-             {"eval_time": "1h", "alertname": "SecurityAcceptedFindingExpired", "exp_alerts": []},
-             {"eval_time": "25h", "alertname": "SecurityAcceptedFindingExpired",
+             {"eval_time": "15m", "alertname": "SecurityAcceptedFindingExpired", "exp_alerts": []},
+             {"eval_time": "45m", "alertname": "SecurityAcceptedFindingExpired",
               "exp_alerts": [alert_sample(accepted_rule(), system=system)]}]})
     tests += line_fixtures(registry)
     return {"rule_files": ["rules-for-test.yaml"], "evaluation_interval": "1m", "tests": tests}

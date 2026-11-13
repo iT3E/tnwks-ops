@@ -231,7 +231,8 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-observability / Archive and delivery / Time since last upload | `thanos_objstore_bucket_last_successful_upload_time` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Archive and delivery / Notification failures | `alertmanager_notifications_failed_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/external-monitoring.md) |
 | tnwks-security / Safeguards / Safeguards in the registry | `homelab:security_safeguard_state` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
-| tnwks-security / Safeguards / With a result | `homelab:security_safeguard_state` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
+| tnwks-security / Safeguards / With a result | `homelab:security_safeguard_has_result` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
+| tnwks-security / Safeguards / Passing | `homelab:security_safeguard_state` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
 | tnwks-security / Safeguards / Failing | `homelab:security_safeguard_state` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
 | tnwks-security / Safeguards / State of each safeguard | `homelab:security_safeguard_state` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
 | tnwks-security / Systems / Failing safeguards by system | `homelab:security_control_state` | 180s | None | [Runbook](../../security/README.md) |

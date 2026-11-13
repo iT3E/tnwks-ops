@@ -143,7 +143,7 @@
                       "group": "prometheus",
                       "version": "v0",
                       "spec": {
-                        "expr": "sum(max by (safeguard) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"}) > bool 0)",
+                        "expr": "sum(max by (safeguard) (homelab:security_safeguard_has_result{k8s_cluster=~\"$cluster\"}))",
                         "instant": true,
                         "legendFormat": "{{safeguard}}",
                         "range": false
@@ -195,13 +195,92 @@
               }
             }
           },
-          "description": "Safeguards for which one system or more has a fresh result. The others are No evidence: no check exists, or its source is late.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "Safeguards for which one system or more has a fresh result, a pass or a fail. For the others no check exists, or its source is late.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
       "panel-3": {
         "kind": "Panel",
         "spec": {
           "id": 4,
+          "title": "Passing",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/security/README.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum(max by (safeguard) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"}) == bool 1)",
+                        "instant": true,
+                        "legendFormat": "{{safeguard}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Safeguards for which each system that has a check passes. A safeguard with a result on one system and none on a second system is not in this count.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "id": 5,
           "title": "Failing",
           "links": [
             {
@@ -290,10 +369,10 @@
           "description": "Safeguards for which one check or more fails on a system. The Systems tab says where.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-4": {
+      "panel-5": {
         "kind": "Panel",
         "spec": {
-          "id": 5,
+          "id": 6,
           "title": "State of each safeguard",
           "links": [
             {
@@ -542,13 +621,13 @@
               }
             }
           },
-          "description": "One line for each safeguard: Fail when a check fails on one system or more, Pass when each fresh result passes, and No evidence when no system has a fresh result. A result counts only while its source is inside its limit. A line never shows Pass for a check that did not run.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+          "description": "One line for each safeguard: Fail when a check fails on one system or more, Pass when each system that has a check for it passes, and No evidence when one of those systems has no fresh result. A result counts only while its source is inside its limit. A line never shows Pass for a check that did not run.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-5": {
+      "panel-6": {
         "kind": "Panel",
         "spec": {
-          "id": 6,
+          "id": 7,
           "title": "Failing safeguards by system",
           "links": [
             {
@@ -775,10 +854,10 @@
           "description": "Each safeguard that fails, on the system where it fails. The security stream `findings` in Loki lists each failed finding.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-6": {
+      "panel-7": {
         "kind": "Panel",
         "spec": {
-          "id": 7,
+          "id": 8,
           "title": "Safeguards with a result",
           "links": [
             {
@@ -964,10 +1043,10 @@
           "description": "For each system of the registry, the number of safeguards with a fresh result. A system at 0 has no source that reports.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-7": {
+      "panel-8": {
         "kind": "Panel",
         "spec": {
-          "id": 8,
+          "id": 9,
           "title": "Systems in the registry",
           "links": [
             {
@@ -1141,10 +1220,10 @@
           "description": "Each system that the platform checks, from security/registry/systems.yaml. A new system is one line in that file.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-8": {
+      "panel-9": {
         "kind": "Panel",
         "spec": {
-          "id": 9,
+          "id": 10,
           "title": "Age of the last result",
           "links": [
             {
@@ -1344,10 +1423,10 @@
           "description": "Time since the newest result of each source, for each system. A source is late after: Prowler 36h; Trivy Operator 36h; The host check 12h; The API checks 36h; The security streams 15m, k8s-audit 15m, routeros 15m, cloudtrail 2h; Wazuh 30m, laptop 7d. These limits are in security/registry/sources.yaml.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-9": {
+      "panel-10": {
         "kind": "Panel",
         "spec": {
-          "id": 10,
+          "id": 11,
           "title": "Late sources",
           "links": [
             {
@@ -1521,10 +1600,10 @@
           "description": "Each source whose newest result is older than its limit, or that serves no time. The safeguards that rest on it show No evidence until it reports again.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-10": {
+      "panel-11": {
         "kind": "Panel",
         "spec": {
-          "id": 11,
+          "id": 12,
           "title": "Failing checks",
           "links": [
             {
@@ -1710,10 +1789,10 @@
           "description": "The number of checks of each source that fail on each system.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-11": {
+      "panel-12": {
         "kind": "Panel",
         "spec": {
-          "id": 12,
+          "id": 13,
           "title": "Accepted findings",
           "links": [
             {
@@ -1789,10 +1868,10 @@
           "description": "The lines of the encrypted list of accepted findings. The owner writes each line, with a reason and an end date. No value means that the list has no line, or that nothing serves it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-12": {
+      "panel-13": {
         "kind": "Panel",
         "spec": {
-          "id": 13,
+          "id": 14,
           "title": "Past their end date",
           "links": [
             {
@@ -1881,10 +1960,10 @@
           "description": "Accepted findings whose end date has passed. The owner renews each one or removes it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
         }
       },
-      "panel-13": {
+      "panel-14": {
         "kind": "Panel",
         "spec": {
-          "id": 14,
+          "id": 15,
           "title": "Accepted findings by system",
           "links": [
             {
@@ -2117,6 +2196,15 @@
                                     "name": "panel-3"
                                   }
                                 }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4"
+                                  }
+                                }
                               }
                             ],
                             "maxColumnCount": 6,
@@ -2141,7 +2229,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-4"
+                                    "name": "panel-5"
                                   }
                                 }
                               }
@@ -2208,7 +2296,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-5"
+                                    "name": "panel-6"
                                   }
                                 }
                               }
@@ -2235,7 +2323,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-6"
+                                    "name": "panel-7"
                                   }
                                 }
                               },
@@ -2244,7 +2332,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-7"
+                                    "name": "panel-8"
                                   }
                                 }
                               }
@@ -2284,15 +2372,6 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-8"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
                                     "name": "panel-9"
                                   }
                                 }
@@ -2303,6 +2382,15 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-10"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-11"
                                   }
                                 }
                               }
@@ -2342,7 +2430,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-11"
+                                    "name": "panel-12"
                                   }
                                 }
                               },
@@ -2351,7 +2439,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-12"
+                                    "name": "panel-13"
                                   }
                                 }
                               }
@@ -2378,7 +2466,7 @@
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-13"
+                                    "name": "panel-14"
                                   }
                                 }
                               }

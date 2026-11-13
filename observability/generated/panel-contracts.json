@@ -7135,7 +7135,32 @@
     "dashboard": "tnwks-security",
     "tab": "Safeguards",
     "panel": "With a result",
-    "query": "sum(max by (safeguard) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"}) > bool 0)",
+    "query": "sum(max by (safeguard) (homelab:security_safeguard_has_result{k8s_cluster=~\"$cluster\"}))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:security_safeguard_has_result"
+    ],
+    "sources": [
+      {
+        "metric": "homelab:security_safeguard_has_result",
+        "producer": "security registry rules (security/generate.py)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Safeguards",
+    "panel": "Passing",
+    "query": "sum(max by (safeguard) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"}) == bool 1)",
     "unit": "short",
     "query_mode": "instant",
     "inputs": [

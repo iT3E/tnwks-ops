@@ -141,16 +141,16 @@ tests:
     cluster: site
   input_series:
   - series: homelab_security_accepted_until_timestamp_seconds{source="prowler",check="sample-check",system="aws-management"}
-    values: 86400+0x1600
+    values: 1800+0x60
   - series: homelab_security_accepted_until_timestamp_seconds{source="prowler",check="other-check",system="aws-management"}
-    values: 7200+0x1600
+    values: 1200+0x60
   - series: homelab_security_accepted_until_timestamp_seconds{source="prowler",check="later-check",system="aws-management"}
-    values: 864000+0x1600
+    values: 864000+0x60
   alert_rule_test:
-  - eval_time: 1h
+  - eval_time: 15m
     alertname: SecurityAcceptedFindingExpired
     exp_alerts: []
-  - eval_time: 25h
+  - eval_time: 45m
     alertname: SecurityAcceptedFindingExpired
     exp_alerts:
     - exp_labels:

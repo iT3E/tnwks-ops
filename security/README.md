@@ -330,13 +330,16 @@ change to the board.
 
 | Tab | What it shows |
 | --- | --- |
-| Safeguards | One line for each safeguard with its state, and the count of lines with a result and of lines that fail |
+| Safeguards | One line for each safeguard with its state, and three counts: the lines with a result, the lines that pass and the lines that fail |
 | Systems | Each failing safeguard with its system, the count of safeguards with a result for each system, and the systems of the registry |
 | Sources | The age of the last result of each source for each system, the sources that are late, and the count of failing checks |
 | Accepted findings | The count of accepted findings, in all and by system, and the count past their end date |
 
 Before a source reports, the first tab shows each safeguard of the registry
-with the state "No evidence". The board shows a state and a count. The
+with the state "No evidence". The count of lines with a result is the sum of
+`homelab:security_safeguard_has_result`. It is apart from the count of lines
+that pass, because a line with a result on one system is a pass only when
+each system with a check for it passes. The board shows a state and a count. The
 security stream `findings` in Loki has the text of each finding.
 
 ## When an alert fires

@@ -20,6 +20,7 @@ def board() -> Board:
     # The words of a control: "No evidence", "Pass", "Fail".
     states = tuple((str(value), word.capitalize()) for word, value in values.items())
     safeguard = f'max by (safeguard) ({selector(series["safeguard"])})'
+    has_result = f'max by (safeguard) ({selector(series["has_result"])})'
     control = selector(series["control"])
     accepted = f'max by (source, check, system) ({selector(series["accepted"])})'
     limits = "; ".join(
@@ -33,16 +34,20 @@ def board() -> Board:
                 p("Safeguards in the registry", f"count({safeguard})", "short",
                   f'The lines of the control registry: {len(data["safeguards"])} safeguards of CIS Controls v8.1. '
                   "A count below that means that the rules of the registry do not run.", "stat"),
-                p("With a result", f'sum({safeguard} > bool {values["no evidence"]})', "short",
-                  "Safeguards for which one system or more has a fresh result. The others are No evidence: "
-                  "no check exists, or its source is late.", "stat"),
+                p("With a result", f"sum({has_result})", "short",
+                  "Safeguards for which one system or more has a fresh result, a pass or a fail. "
+                  "For the others no check exists, or its source is late.", "stat"),
+                p("Passing", f'sum({safeguard} == bool {values["pass"]})', "short",
+                  "Safeguards for which each system that has a check passes. A safeguard with a result "
+                  "on one system and none on a second system is not in this count.", "stat"),
                 p("Failing", f'sum({safeguard} == bool {values["fail"]})', "failures",
                   "Safeguards for which one check or more fails on a system. The Systems tab says where.", "stat"),
                 p("State of each safeguard",
                   f'max by (line, safeguard, title, function) ({selector(series["safeguard"])})', "state",
                   "One line for each safeguard: Fail when a check fails on one system or more, Pass when each "
-                  "fresh result passes, and No evidence when no system has a fresh result. A result counts "
-                  "only while its source is inside its limit. A line never shows Pass for a check that did not run.",
+                  "system that has a check for it passes, and No evidence when one of those systems has no "
+                  "fresh result. A result counts only while its source is inside its limit. "
+                  "A line never shows Pass for a check that did not run.",
                   "table", states=states, order="line"),
             ],
             "Systems": [
