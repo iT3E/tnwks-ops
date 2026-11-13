@@ -171,24 +171,24 @@ def test_a_field_other_than_the_reason_in_quotes_on_more_lines_skips_its_entry(k
 
 NOT_READ = {
     "a flow mapping": "- {source: prowler, check: a, system: system-one, until: 2027-01-01}\n",
-    "an anchor": "- source: &s prowler\n  check: a\n  system: system-one\n  until: 2027-01-01\n",
-    "a tag": "- source: !!str prowler\n  check: a\n  system: system-one\n  until: 2027-01-01\n",
-    "a tab": "- source: prowler\n\tcheck: a\n  system: system-one\n  until: 2027-01-01\n",
+    "an anchor": "- source: &s prowler\n  check: a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
+    "a tag": "- source: !!str prowler\n  check: a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
+    "a tab": "- source: prowler\n\tcheck: a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
     "a key that is there two times": "- source: prowler\n  source: trivy\n  check: a\n  system: system-one\n"
-                                     "  until: 2027-01-01\n",
-    "a line at a column of no key": "- source: prowler\n check: a\n  system: system-one\n  until: 2027-01-01\n",
+                                     "  reason: invented\n  until: 2027-01-01\n",
+    "a line at a column of no key": "- source: prowler\n check: a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
     "a file that ends inside a quote": "- source: prowler\n  check: a\n  system: system-one\n"
                                        "  reason: 'a reason\n  until: 2027-01-01\n",
-    "text after a quote": "- source: prowler\n  check: 'a' b\n  system: system-one\n  until: 2027-01-01\n",
+    "text after a quote": "- source: prowler\n  check: 'a' b\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
     "a list in a mapping": "accepted:\n  - source: prowler\n",
     "a character that YAML does not hold": "- source: prowler\x0c\n  check: a\n",
-    "a date that is no day": "- source: prowler\n  check: a\n  system: system-one\n  until: 2027-02-30\n",
+    "a date that is no day": "- source: prowler\n  check: a\n  system: system-one\n  reason: invented\n  until: 2027-02-30\n",
 }
 
 
 @pytest.mark.parametrize("text", NOT_READ.values(), ids=NOT_READ.keys())
 def test_a_line_of_another_form_makes_the_whole_file_give_no_entry(tmp_path, caplog, text):
-    good = "- source: prowler\n  check: good\n  system: system-two\n  until: 2027-01-01\n"
+    good = "- source: prowler\n  check: good\n  system: system-two\n  reason: invented\n  until: 2027-01-01\n"
     with pytest.raises(converter.Unreadable):
         converter.yaml_list(good + text)
     source = accepted_for(tmp_path, good + text)
@@ -239,8 +239,11 @@ def assert_no_drift(text):
             continue
         assert isinstance(theirs, dict) and set(ours) == set(theirs)
         for key, value in ours.items():
-            if value is not None:
+            if isinstance(value, str):
                 assert str(theirs[key]) == value, (key, value, theirs[key])
+            if value and not (isinstance(value, converter.Undecoded) and not value.text):
+                # What the reader takes as a value, the Prowler job takes as one too.
+                assert theirs[key], (key, value, theirs[key])
     return True
 
 
@@ -255,9 +258,10 @@ def test_the_reader_takes_what_yaml_safe_dump_writes_as_pyyaml_reads_it():
                                   sort_keys=chance.random() < 0.5)
             assert assert_no_drift(text), text
             result, skipped = converter.accepted_entries(text, set(REGISTRY["sources"]), set(REGISTRY["systems"]))
-            assert skipped == 0 and result == {
+            kept = [entry for entry in entries if entry["reason"]]
+            assert skipped == len(entries) - len(kept) and result == {
                 (entry["source"], entry["check"], entry["system"]): end(entry["until"])
-                for entry in sorted(entries, key=lambda entry: entry["until"])} | result
+                for entry in sorted(kept, key=lambda entry: entry["until"])}
 
 
 def test_the_reader_and_pyyaml_do_not_drift_on_invented_lists():
@@ -283,9 +287,9 @@ def test_the_reader_and_pyyaml_do_not_drift_on_invented_lists():
 
 
 def test_a_check_that_is_not_a_check_id_is_skipped_and_a_lone_surrogate_stops_nothing(tmp_path):
-    text = ('- source: prowler\n  check: "a\\ud800"\n  system: system-one\n  until: 2027-01-01\n'
-            '- source: prowler\n  check: "a b"\n  system: system-one\n  until: 2027-01-01\n'
-            '- source: prowler\n  check: good\n  system: system-one\n  until: 2027-01-01\n')
+    text = ('- source: prowler\n  check: "a\\ud800"\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n'
+            '- source: prowler\n  check: "a b"\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n'
+            '- source: prowler\n  check: good\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n')
     source = accepted_for(tmp_path, text)
     source.cycle()
     rendered = source.render().decode()
@@ -305,27 +309,73 @@ def test_the_end_is_the_start_of_the_day_after_the_end_date():
 
 
 @pytest.mark.parametrize("entry", [
-    "- check: a\n  system: system-one\n  until: 2027-01-01\n",
-    "- source: prowler\n  check: ''\n  system: system-one\n  until: 2027-01-01\n",
-    "- source: prowler\n  check: a\n  system: system-one\n  until: soon\n",
-    "- source: prowler\n  check: a\n  system: system-one\n  until: '2027-02-30'\n",
-    "- source: prowler\n  check: a\n  system: not-in-the-registry\n  until: 2027-01-01\n",
-    "- source: not-a-source\n  check: a\n  system: system-one\n  until: 2027-01-01\n",
-    "- source: prowler\n  check: >\n    a\n  system: system-one\n  until: 2027-01-01\n",
-    "- source: prowler\n  check: a\n    b\n  system: system-one\n  until: 2027-01-01\n",
-    "- source: prowler\n  check: " + "a" * 201 + "\n  system: system-one\n  until: 2027-01-01\n",
+    "- check: a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
+    "- source: prowler\n  check: ''\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
+    "- source: prowler\n  check: a\n  system: system-one\n  reason: invented\n  until: soon\n",
+    "- source: prowler\n  check: a\n  system: system-one\n  reason: invented\n  until: '2027-02-30'\n",
+    "- source: prowler\n  check: a\n  system: not-in-the-registry\n  reason: invented\n  until: 2027-01-01\n",
+    "- source: not-a-source\n  check: a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
+    "- source: prowler\n  check: >\n    a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
+    "- source: prowler\n  check: a\n    b\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
+    "- source: prowler\n  check: " + "a" * 201 + "\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n",
 ], ids=["no source", "an empty check", "no date", "a day that is not", "a system not in the registry",
         "a source not in the registry", "a check in a block", "a check on two lines", "a long check"])
 def test_an_entry_that_does_not_fit_is_skipped_and_counted(entry):
-    good = "- source: trivy\n  check: good\n  system: system-two\n  until: 2027-01-01\n"
+    good = "- source: trivy\n  check: good\n  system: system-two\n  reason: invented\n  until: 2027-01-01\n"
     result, skipped = converter.accepted_entries(good + entry, set(REGISTRY["sources"]), set(REGISTRY["systems"]))
     assert result == {("trivy", "good", "system-two"): end("2027-01-01")}
     assert skipped == 1
 
 
+NO_REASON = {
+    "no reason key": "",
+    "an empty reason": "  reason:\n",
+    "an empty quoted reason": "  reason: ''\n",
+    "an empty double-quoted reason": '  reason: ""\n',
+    "a reason of null": "  reason: null\n",
+    "a reason of false": "  reason: false\n",
+    "a reason of 0": "  reason: 0\n",
+    "an empty block": "  reason: |\n",
+}
+
+
+@pytest.mark.parametrize("reason", NO_REASON.values(), ids=NO_REASON.keys())
+def test_an_entry_with_no_reason_is_skipped_and_counted(tmp_path, reason):
+    """Design Doc 4.1.2: an accepted finding has a reason. The file stays readable."""
+    good = "- source: trivy\n  check: good\n  system: system-two\n  reason: invented\n  until: 2027-01-01\n"
+    text = good + "- source: prowler\n  check: a\n  system: system-one\n" + reason + "  until: 2027-01-01\n"
+    result, skipped = converter.accepted_entries(text, set(REGISTRY["sources"]), set(REGISTRY["systems"]))
+    assert result == {("trivy", "good", "system-two"): end("2027-01-01")} and skipped == 1
+    assert not (yaml.safe_load(text)[1].get("reason")), "the Prowler job skips it too"
+    source = accepted_for(tmp_path, text)
+    source.cycle()
+    rendered = source.render().decode()
+    assert served(rendered, converter.ACCEPTED_SKIPPED) == {(): 1.0}
+    assert served(rendered, converter.ACCEPTED_READ) == {(): 1.0}
+
+
+def test_a_reason_of_space_only_on_two_lines_counts_as_none():
+    """PyYAML folds it to one space, which the Prowler job takes. The reader does not fold
+    a value, so it takes only a reason with a character that is not space: it mutes less."""
+    text = "- source: prowler\n  check: a\n  system: system-one\n  reason: '\n    '\n  until: 2027-01-01\n"
+    assert yaml.safe_load(text)[0]["reason"] == " "
+    assert converter.accepted_entries(text, set(REGISTRY["sources"]), set(REGISTRY["systems"])) == ({}, 1)
+
+
+@pytest.mark.parametrize("reason", [
+    "  reason: yes\n", "  reason: '0'\n", "  reason: |\n    An invented reason.\n",
+    "  reason: 'An invented reason,\n    on two lines.'\n", '  reason: "caf\\xE9, invented"\n',
+    "  reason: 26001\n"])
+def test_a_reason_in_another_form_counts(reason):
+    text = "- source: prowler\n  check: a\n  system: system-one\n" + reason + "  until: 2027-01-01\n"
+    result, skipped = converter.accepted_entries(text, set(REGISTRY["sources"]), set(REGISTRY["systems"]))
+    assert result == {("prowler", "a", "system-one"): end("2027-01-01")} and skipped == 0
+    assert yaml.safe_load(text)[0]["reason"]
+
+
 def test_two_entries_of_one_finding_keep_the_later_end():
-    text = ("- source: prowler\n  check: a\n  system: system-one\n  until: 2027-03-01\n"
-            "- source: prowler\n  check: a\n  system: system-one\n  until: 2027-01-01\n")
+    text = ("- source: prowler\n  check: a\n  system: system-one\n  reason: invented\n  until: 2027-03-01\n"
+            "- source: prowler\n  check: a\n  system: system-one\n  reason: invented\n  until: 2027-01-01\n")
     result, skipped = converter.accepted_entries(text, set(REGISTRY["sources"]), set(REGISTRY["systems"]))
     assert result == {("prowler", "a", "system-one"): end("2027-03-01")} and skipped == 0
 

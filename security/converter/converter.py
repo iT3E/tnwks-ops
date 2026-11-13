@@ -313,17 +313,40 @@ MAX_LIST_BYTES = 1024 * 1024
 # The form of a check ID of each tool: Prowler, Trivy (`k8s-cis-1.23/1.2.3`), Wazuh, the
 # API checks. A value of another form is no check, so it never reaches a label.
 CHECK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_./:-]{0,199}$")
-# PyYAML reads a plain value that starts with one of these characters, or that is one of
-# these words, as a number, a date, a bool or null. The reader takes such a value only
-# when PyYAML gives the same text: a decimal number or a date as YYYY-MM-DD.
-TYPED_START = "+-.0123456789"
-TYPED_WORDS = {"yes", "Yes", "YES", "no", "No", "NO", "true", "True", "TRUE", "false", "False",
-               "FALSE", "on", "On", "ON", "off", "Off", "OFF", "null", "Null", "NULL", "~", "<<", "="}
-SAME_TEXT = re.compile(r"^(?:0|[1-9][0-9]*|[0-9]{4}-[0-9]{2}-[0-9]{2})$")
+# The plain values that PyYAML reads as another type than text: the implicit types of
+# YAML 1.1 in its resolver. The reader takes such a value as text only when PyYAML gives
+# the same text (a decimal number other than 0), and as a day when it is a date.
+TRUE_WORDS = {"yes", "Yes", "YES", "true", "True", "TRUE", "on", "On", "ON"}
+FALSE_WORDS = {"no", "No", "NO", "false", "False", "FALSE", "off", "Off", "OFF", "null", "Null", "NULL", "~"}
+YAML_NUMBER = re.compile(r"""^(?:[-+]?0b[0-1_]+|[-+]?0[0-7_]+|[-+]?(?:0|[1-9][0-9_]*)|[-+]?0x[0-9a-fA-F_]+
+    |[-+]?[1-9][0-9_]*(?::[0-5]?[0-9])+
+    |[-+]?(?:[0-9][0-9_]*)\.[0-9_]*(?:[eE][-+][0-9]+)?|\.[0-9][0-9_]*(?:[eE][-+][0-9]+)?
+    |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\.[0-9_]*|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$""", re.VERBOSE)
+YAML_TIMESTAMP = re.compile(r"""^(?:[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]
+    |[0-9][0-9][0-9][0-9]-[0-9][0-9]?-[0-9][0-9]?(?:[Tt]|[ \t]+)[0-9][0-9]?:[0-9][0-9]:[0-9][0-9](?:\.[0-9]*)?
+    (?:[ \t]*(?:Z|[-+][0-9][0-9]?(?::[0-9][0-9])?))?)$""", re.VERBOSE)
+DECIMAL = re.compile(r"^[1-9][0-9]*$")
+DATE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 # A character that YAML does not let a file hold. PyYAML stops on it.
 NOT_PRINTABLE = re.compile("[^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]")
 KEY_LINE = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(?:[ ]+(.*))?$")
 BLOCK_STARTS = ("|", ">", "|-", ">-", "|+", ">+")
+
+
+class Undecoded:
+    """A value that the reader does not decode: a value on more lines, or a value in
+    double quotes with an escape of YAML that JSON does not have. Only `reason` can have
+    one, and `text` says whether it holds more than space."""
+
+    def __init__(self, text: bool = False):
+        self.text = text
+
+
+def has_text(segment: str, mark: str = "") -> bool:
+    """Whether a part of a value holds a character that is not space. A backslash and the
+    quote mark do not count, so an escape of a space counts as space: the reader takes
+    such a reason as empty, and mutes less."""
+    return any(char not in " \t\\" + mark for char in segment)
 
 
 class Unreadable(ValueError):
@@ -365,13 +388,24 @@ def quote_end(text: str, mark: str, start: int) -> int | None:
     return None
 
 
-def plain(value: str) -> str | None:
-    """The text of a plain value, or None when PyYAML reads it as another type, or as a
-    text that is not the same. Unreadable for a date as YYYY-MM-DD that is no day: PyYAML
-    stops on it."""
-    if value in TYPED_WORDS or (value[0] in TYPED_START and not SAME_TEXT.match(value)):
-        return None
-    if value[0] in TYPED_START and "-" in value:
+def plain(value: str) -> str | Undecoded:
+    """The text of a plain value as PyYAML reads it, or Undecoded when PyYAML reads it as
+    another type than text with another text. Its `text` is True for a word that PyYAML
+    reads as true, and False for each other: so a reason of `false`, `null` or `0` is no
+    reason, as for the Prowler job, and a number other than a decimal one counts as no
+    reason too (it mutes less). Unreadable where PyYAML stops: `=`, `<<`, a date that is
+    no day; and for a time of day, which the reader does not check."""
+    if value in ("=", "<<"):
+        raise Unreadable("a value of a type that PyYAML does not build")
+    if value in TRUE_WORDS:
+        return Undecoded(True)
+    if value in FALSE_WORDS:
+        return Undecoded(False)
+    if YAML_NUMBER.match(value):
+        return value if DECIMAL.match(value) else Undecoded(False)
+    if YAML_TIMESTAMP.match(value):
+        if not DATE.match(value):
+            raise Unreadable("a time of day in a plain value")
         try:
             datetime.date.fromisoformat(value)
         except ValueError:
@@ -379,12 +413,13 @@ def plain(value: str) -> str | None:
     return value
 
 
-def scalar(text: str) -> tuple[str | None, str | None]:
+def scalar(text: str) -> tuple[str | Undecoded | None, str | None]:
     """The value of a `key: value` line, and what may follow it: "block" (the lines of a
     block value), "plain" (more lines of a plain value), "empty", None, or the quote mark
     of a quoted value that goes on to the next lines. The value is None when it is empty,
-    a block, a quoted value that goes on, a double-quoted value that the JSON decoder does
-    not read, or a plain value that PyYAML reads as another type. Unreadable for a flow
+    or a plain value that PyYAML reads as another type. It is Undecoded for a block, a
+    quoted value that goes on, and a double-quoted value that the JSON decoder does not
+    read. Unreadable for a flow
     collection, an anchor, an alias, a tag, or a plain value with a colon."""
     if text == "" or text.startswith("#"):
         return None, "empty"
@@ -402,7 +437,7 @@ def scalar(text: str) -> tuple[str | None, str | None]:
         try:
             return json.loads(text[:end]), None
         except ValueError:
-            return None, None
+            return Undecoded(has_text(text[1:end - 1], '"')), None
     if text[0] in "[]{},&*!%@`|>" or text.startswith(("- ", "? ", ": ")) or text in ("-", "?", ":"):
         raise Unreadable("a flow collection, an anchor, an alias, a tag or an indicator")
     value = text.split(" #", 1)[0].rstrip()
@@ -411,7 +446,7 @@ def scalar(text: str) -> tuple[str | None, str | None]:
     return plain(value), "plain"
 
 
-def yaml_list(text: str) -> list[dict[str, str | None]]:
+def yaml_list(text: str) -> list[dict[str, str | Undecoded | None]]:
     """The entries of the list of accepted findings, in the block form of
     security/README.md and of `yaml.safe_dump`: a YAML list of mappings, one `key: value`
     on each line. The Python image of the converter has no YAML library, so this reader
@@ -420,11 +455,11 @@ def yaml_list(text: str) -> list[dict[str, str | None]]:
     A quoted value can go on over more lines, as YAML lets it: the reader goes to its
     closing quote, and reads no key in those lines. A block value (`|`, `>`) and a plain
     value can go on over lines that are more indented than the key. A value on more lines
-    is None, so only `reason` can have one: an entry with such a `check`, `system`,
+    is Undecoded, so only `reason` can have one: an entry with such a `check`, `system`,
     `source` or `until` does not fit."""
     if NOT_PRINTABLE.search(text):
         raise Unreadable("a character that YAML does not let a file hold")
-    entries: list[dict[str, str | None]] = []
+    entries: list[dict[str, str | Undecoded | None]] = []
     dash = key_column = last_key = block_column = None
     follows = None
     for number, raw in enumerate(text.splitlines(), 1):
@@ -432,6 +467,8 @@ def yaml_list(text: str) -> list[dict[str, str | None]]:
             if raw.startswith(("---", "...")) and raw[3:4] in ("", " ", "\t"):
                 raise Unreadable(f"line {number}: the end of a document inside a quoted value")
             end = quote_end(raw, follows, 0)
+            value = entries[-1][last_key]
+            value.text = value.text or has_text(raw if end is None else raw[:end - 1], follows)
             if end is not None:
                 rest = raw[end:].strip()
                 if rest and not rest.startswith("#"):
@@ -451,6 +488,7 @@ def yaml_list(text: str) -> list[dict[str, str | None]]:
                     block_column = indent
                 if indent < block_column:
                     raise Unreadable(f"line {number}: a line of a block value at another column")
+                entries[-1][last_key].text = True
                 continue
             follows = None
         if not content or content.startswith("#") or (line == "---" and dash is None):
@@ -482,17 +520,30 @@ def yaml_list(text: str) -> list[dict[str, str | None]]:
             if match[1] in entry:
                 raise Unreadable(f"line {number}: a key two times in one entry")
             value, follows = scalar(match[2] or "")
+            if follows in ("'", '"'):
+                value = Undecoded(has_text((match[2] or "")[1:], follows))
+            elif follows == "block":
+                value = Undecoded()
             entry[match[1]], last_key, block_column = value, match[1], None
         elif key_column is not None and indent > key_column and follows == "plain":
             # A line of a plain value on more lines.
             if ": " in content or content.endswith(":") or " #" in content or "\t#" in content:
                 raise Unreadable(f"line {number}: a colon or a comment in a plain value")
-            entry[last_key] = None
+            entry[last_key] = Undecoded(True)
         else:
             raise Unreadable(f"line {number}: a line at a column of no key")
     if follows in ("'", '"'):
         raise Unreadable("the file ends inside a quoted value")
     return entries
+
+
+def has_reason(reason: object) -> bool:
+    """Whether an entry has a reason (Design Doc 4.1.2: an accepted finding has one). The
+    reason stays in the file: only whether it is there leaves this function. A reason
+    that PyYAML reads as empty, null, false or 0 is no reason, as for the Prowler job."""
+    if isinstance(reason, Undecoded):
+        return reason.text
+    return isinstance(reason, str) and reason != ""
 
 
 def end_of(until: object) -> int:
@@ -505,16 +556,18 @@ def end_of(until: object) -> int:
 def accepted_entries(text: str, sources: set[str], systems: set[str]
                      ) -> tuple[dict[tuple[str, str, str], int], int]:
     """{(source, check, system): end} for each entry that fits, and the number of entries
-    that do not fit: a field is missing, empty or on more lines, the source or the system
-    is not in the registry, the check is not a check ID, or the end date is not a date as
-    YYYY-MM-DD. Two entries of one finding keep the later end. Unreadable when a line of
+    that do not fit: a field is missing, empty or on more lines, the reason is missing or
+    empty, the source or the system is not in the registry, the check is not a check ID,
+    or the end date is not a date. Two entries of one finding keep the later end. Unreadable when a line of
     the file has a form that the reader does not read: then the file gives no entry."""
     result: dict[tuple[str, str, str], int] = {}
     skipped = 0
     for index, entry in enumerate(yaml_list(text), 1):
         source, check, system, until = (entry.get(field) for field in ACCEPTED_FIELDS)
-        if not (source and check and system and until):
+        if not all(isinstance(value, str) and value for value in (source, check, system, until)):
             why = "a field is missing, empty or on more lines"
+        elif not has_reason(entry.get("reason")):
+            why = "the reason is missing or empty"
         elif source not in sources or system not in systems:
             why = "the source or the system is not in the registry"
         elif not CHECK_ID.match(check):
