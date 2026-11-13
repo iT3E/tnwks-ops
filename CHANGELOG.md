@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.103.0 - 2026-11-13
+
+### Added
+
+* security: the board Security in Grafana, from the board input of the control registry (the state of each safeguard, by system and by source, and the count of accepted findings). The generated rules of the registry run on homelab-wsl-02. `kubernetes/apps/security/accepted-findings` is the place of the encrypted list of accepted findings, with an alert for an end date that has passed, and `security/README.md` has its form
+
 ## v2.102.0 - 2026-11-13
 
 ### Added
