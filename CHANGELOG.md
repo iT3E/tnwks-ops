@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.97.0 - 2026-11-13
+
+### Added
+
+* security: the namespace security on homelab-wsl and homelab-wsl-02 (baseline Pod Security, a network policy that denies by default), SECURITY_NODE in each cluster-settings for the node selector of its pods, and the contract for its apps in kubernetes/apps/security/README.md
+
 ## v2.96.1 - 2026-11-13
 
 ### Fixed
