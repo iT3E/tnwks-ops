@@ -1,3 +1,0 @@
-kind: Added
-body: 'terraform: the GitHub account as a root, environments/prod/github with modules/github, importing every repository of the account (private ones whose names are not public under neutral keys, with the names in SOPS) and the main ruleset, environments, Actions settings and variables of tnwks-ops as they are; its Terraform Cloud workspace, a CI entry off until GITHUB_TERRAFORM_ENABLED is true that masks the values of the root''s SOPS files in its public log (mask_sops in .github/ci/domains.toml), task github:bootstrap and task github:enable to bring it up, break-glass tasks and docs/operations/github.md'
-time: 2026-11-12T12:00:00.000000000Z
