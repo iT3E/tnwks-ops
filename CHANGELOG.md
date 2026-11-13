@@ -3,6 +3,18 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.105.0 - 2026-11-13
+
+### Added
+
+* security: the converter runs on homelab-wsl-02, in the namespace `security` on the security node: the HelmRelease `security-converter` with a memory limit of 128 MiB and no service account token, a ServiceMonitor that the Prometheus of the site scrapes each minute, and a network policy that lets it reach the Loki gateway of the site and DNS, and lets Prometheus reach its metrics port
+
+## v2.104.0 - 2026-11-13
+
+### Added
+
+* security: the converter of the security platform (`security/converter`), with its stream source. Each 5 minutes it asks Loki for the time of the newest line of each security stream, for each system, and serves it as the time of the last result. With no line, an error or no answer it serves no time, so the rule for a late result reads the stream as late. The generator writes the stream map from the registry (`system_label` in `sources.yaml`), and `security/converter/README.md` has the contract of the files of results
+
 ## v2.103.0 - 2026-11-13
 
 ### Added
