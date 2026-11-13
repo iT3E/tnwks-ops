@@ -62,6 +62,15 @@ spec:
     nodeCollector:
       excludeNodes: kubernetes.io/os=linux
 
+    # The operator downloads this bundle of checks only when
+    # trivy.useEmbeddedRegoPolicies is off, or for a node collector. Neither
+    # is the case here, so the reference is empty: the checks are the ones in
+    # the image of the operator, and nothing is downloaded.
+    policiesBundle:
+      registry: ""
+      repository: ""
+      tag: ""
+
     compliance:
       # The one report that the registry reads (security/README.md, "What a
       # check ID is").
