@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.105.0 - 2026-11-13
+
+### Added
+
+* security: the converter runs on homelab-wsl-02, in the namespace `security` on the security node: the HelmRelease `security-converter` with a memory limit of 128 MiB and no service account token, a ServiceMonitor that the Prometheus of the site scrapes each minute, and a network policy that lets it reach the Loki gateway of the site and DNS, and lets Prometheus reach its metrics port
+
 ## v2.104.0 - 2026-11-13
 
 ### Added

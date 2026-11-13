@@ -1,3 +1,0 @@
-kind: Added
-body: 'security: the converter runs on homelab-wsl-02, in the namespace `security` on the security node: the HelmRelease `security-converter` with a memory limit of 128 MiB and no service account token, a ServiceMonitor that the Prometheus of the site scrapes each minute, and a network policy that lets it reach the Loki gateway of the site and DNS, and lets Prometheus reach its metrics port'
-time: 2026-11-13T05:16:00.392847311-08:00
