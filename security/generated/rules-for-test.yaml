@@ -3728,6 +3728,10 @@ groups:
       > 7200) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="aws-management",check="cloudtrail"}[10m]))
       or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="aws-prod",check="cloudtrail"}[10m])
       > 7200) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="aws-prod",check="cloudtrail"}[10m]))
+      or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="homelab-wsl-02",check="k8s-audit"}[10m])
+      > 900) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="homelab-wsl-02",check="k8s-audit"}[10m]))
+      or max by (source, system) (time() - last_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="sce-rtr01",check="routeros"}[10m])
+      > 900) or max by (source, system) (absent_over_time(homelab_security_last_result_timestamp_seconds{source="stream",system="sce-rtr01",check="routeros"}[10m]))
     for: 10m
     labels:
       severity: warning

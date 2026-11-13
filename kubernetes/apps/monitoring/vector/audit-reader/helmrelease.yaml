@@ -1,0 +1,122 @@
+---
+# The audit reader (../README.md): one small Vector pod on the control plane
+# node. It reads the audit log of the API server from the node and sends it
+# to the audit source of the aggregator.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: vector-audit-reader
+  namespace: monitoring
+spec:
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      interval: 30m
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  interval: 30m
+  values:
+    defaultPodOptions:
+      # The pod calls the aggregator only. It has no use for the API.
+      automountServiceAccountToken: false
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      # The API server of Talos writes its audit files as this user.
+      securityContext:
+        runAsUser: 65534
+        runAsGroup: 65534
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+    controllers:
+      vector-audit-reader:
+        type: daemonset
+        strategy: RollingUpdate
+        annotations:
+          reloader.stakater.com/auto: "true"
+        initContainers:
+          # The position directory is a directory of the node, and the node
+          # makes it for root. This container gives it to the user of the
+          # reader. It runs as root with one capability, CHOWN, and it mounts
+          # that directory only.
+          own-data-dir:
+            image:
+              repository: docker.io/library/busybox
+              tag: 1.38@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+            command: ["chown", "65534:65534", "/vector-data-dir"]
+            securityContext:
+              runAsUser: 0
+              runAsGroup: 0
+              runAsNonRoot: false
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+                add: ["CHOWN"]
+            resources:
+              requests:
+                cpu: 1m
+                memory: 4Mi
+              limits:
+                memory: 16Mi
+        containers:
+          app:
+            # The image of the aggregator (../aggregator/helmrelease.yaml):
+            # both ends of the Vector protocol are one release.
+            image:
+              repository: timberio/vector
+              tag: 0.61.0-distroless-libc@sha256:1a3451978644d5cd4b99a0b28c990791e2f7e1efbea4184122f1c59a56448143
+            args:
+              - "--config"
+              - "/etc/vector/vector.yaml"
+              - "--threads"
+              - "2"
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            resources:
+              requests:
+                cpu: 10m
+                memory: 64Mi
+              limits:
+                memory: 128Mi
+    persistence:
+      config:
+        type: configMap
+        name: vector-audit-reader-configmap
+        advancedMounts:
+          vector-audit-reader:
+            app:
+              - path: /etc/vector/vector.yaml
+                subPath: vector.yaml
+                readOnly: true
+      # The audit files of the API server on a Talos control plane node. No
+      # hostPath type: the kubelet then makes no check of the path.
+      audit:
+        type: hostPath
+        hostPath: /var/log/audit/kube
+        advancedMounts:
+          vector-audit-reader:
+            app:
+              - path: /var/log/audit/kube
+                readOnly: true
+      # The positions of the reader in the audit files. On the node, so a
+      # new pod goes on where the last one stopped.
+      data:
+        type: hostPath
+        hostPath: /var/lib/vector-audit
+        advancedMounts:
+          vector-audit-reader:
+            own-data-dir:
+              - path: /vector-data-dir
+            app:
+              - path: /vector-data-dir

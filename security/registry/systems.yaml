@@ -42,6 +42,7 @@
   type: cluster
   site: homelab-wsl-02
   domain: infrastructure
+  sources: [stream]
 - name: DESKTOP-HKE05KI
   type: windows-host
   site: homelab-wsl
@@ -62,6 +63,7 @@
   type: router
   site: none
   domain: infrastructure
+  sources: [stream]
 - name: sce-ep01
   type: other
   site: none
