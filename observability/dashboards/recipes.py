@@ -73,6 +73,9 @@ def visualization(panel: Panel):
         if panel.link == ROW_BOARD:
             # The row's board is for its link, not for reading.
             viz.override_by_name("board", [model.DynamicConfigValue(id_val="custom.hidden", value=True)])
+        if panel.order:
+            # The rows' order is for sorting, not for reading.
+            viz.override_by_name(panel.order, [model.DynamicConfigValue(id_val="custom.hidden", value=True)])
         if panel.per_site:
             # Every site column is a value: style them all by type, whatever the sites are.
             assert not panel.link, (panel.title, "a fleet table's row has no single entity to open")

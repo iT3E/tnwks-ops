@@ -15,7 +15,10 @@ EMPTY_IS_NORMAL = {"Override creation age", "Needs attention",
                    "PVCs without a backup schedule",
                    # Worst-first lists on the diagnose boards: nobody on them is the good case.
                    "Weak signal clients", "Low satisfaction clients", "Top downloaders now",
-                   "Top uploaders now", "Now: device, app and destination", "Top WAN devices now"}
+                   "Top uploaders now", "Now: device, app and destination", "Top WAN devices now",
+                   # Lists of what fails, is late or is accepted on the security board.
+                   "Failing safeguards by system", "Late sources", "Failing checks",
+                   "Accepted findings by system"}
 
 
 def test_sdk_generates_isolated_household_and_operator_resources():

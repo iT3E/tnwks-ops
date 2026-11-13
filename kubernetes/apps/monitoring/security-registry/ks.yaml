@@ -1,0 +1,21 @@
+---
+# The rules of the control registry (security/README.md): the control series
+# of each safeguard and the alerts of the registry. security/generate.py
+# writes rules/rules.yaml from security/registry.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: security-registry-rules
+  namespace: flux-system
+spec:
+  dependsOn:
+    # The PrometheusRule needs its CRD.
+    - name: kube-prometheus-stack
+  path: ./kubernetes/apps/monitoring/security-registry/rules
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m

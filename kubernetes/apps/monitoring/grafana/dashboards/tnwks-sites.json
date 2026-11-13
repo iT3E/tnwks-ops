@@ -313,6 +313,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "State"
                       }
                     }
@@ -540,6 +548,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Evidence age"
                       }
                     }
@@ -841,6 +857,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Cross-site observation"
                       }
                     }
@@ -1267,7 +1291,15 @@
                         "channel": "Channel",
                         "client": "Device",
                         "as_name": "Destination",
-                        "category": "Category"
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source"
                       }
                     }
                   }
@@ -1436,6 +1468,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Desired replicas"
                       }
                     }
@@ -1617,6 +1657,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Ready replicas"
                       }
                     }
@@ -1798,6 +1846,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Overrides"
                       }
                     }
@@ -1997,6 +2053,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Override creation age"
                       }
                     }
@@ -3211,6 +3275,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Serving-state changes"
                       }
                     }
@@ -3392,6 +3464,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Shared VIP route changes"
                       }
                     }
@@ -3573,6 +3653,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "When"
                       }
                     }

@@ -129,6 +129,15 @@ configMapGenerator:
       kustomize.toolkit.fluxcd.io/substitute: disabled
     labels:
       grafana_dashboard: 'true'
+- name: grafana-tnwks-security
+  files:
+  - tnwks-security.json
+  options:
+    annotations:
+      grafana_folder: Security
+      kustomize.toolkit.fluxcd.io/substitute: disabled
+    labels:
+      grafana_dashboard: 'true'
 - name: grafana-tnwks-alerts
   files:
   - tnwks-alerts.json

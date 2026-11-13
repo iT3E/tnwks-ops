@@ -7107,6 +7107,356 @@
     "owner": "homelab operator"
   },
   {
+    "dashboard": "tnwks-security",
+    "tab": "Safeguards",
+    "panel": "Safeguards in the registry",
+    "query": "count(max by (safeguard) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"}))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:security_safeguard_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab:security_safeguard_state",
+        "producer": "security registry rules (security/generate.py)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Safeguards",
+    "panel": "With a result",
+    "query": "sum(max by (safeguard) (homelab:security_safeguard_has_result{k8s_cluster=~\"$cluster\"}))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:security_safeguard_has_result"
+    ],
+    "sources": [
+      {
+        "metric": "homelab:security_safeguard_has_result",
+        "producer": "security registry rules (security/generate.py)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Safeguards",
+    "panel": "Passing",
+    "query": "sum(max by (safeguard) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"}) == bool 1)",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:security_safeguard_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab:security_safeguard_state",
+        "producer": "security registry rules (security/generate.py)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Safeguards",
+    "panel": "Failing",
+    "query": "sum(max by (safeguard) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"}) == bool 3)",
+    "unit": "failures",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:security_safeguard_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab:security_safeguard_state",
+        "producer": "security registry rules (security/generate.py)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Safeguards",
+    "panel": "State of each safeguard",
+    "query": "max by (line, safeguard, title, function) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:security_safeguard_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab:security_safeguard_state",
+        "producer": "security registry rules (security/generate.py)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Systems",
+    "panel": "Failing safeguards by system",
+    "query": "max by (system, system_type, safeguard) (homelab:security_control_state{k8s_cluster=~\"$cluster\"} == 3)",
+    "unit": "state",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:security_control_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab:security_control_state",
+        "producer": "security registry rules (security/generate.py)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Systems",
+    "panel": "Safeguards with a result",
+    "query": "count by (system, system_type) (homelab:security_control_state{k8s_cluster=~\"$cluster\"} > 0) or on (system, system_type) (0 * count by (system, system_type) (homelab:security_control_state{k8s_cluster=~\"$cluster\"}))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:security_control_state"
+    ],
+    "sources": [
+      {
+        "metric": "homelab:security_control_state",
+        "producer": "security registry rules (security/generate.py)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Systems",
+    "panel": "Systems in the registry",
+    "query": "max by (system, system_type, site, domain) (homelab:security_system_info{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab:security_system_info"
+    ],
+    "sources": [
+      {
+        "metric": "homelab:security_system_info",
+        "producer": "security registry rules (security/generate.py)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Sources",
+    "panel": "Age of the last result",
+    "query": "time() - max by (source, system) (homelab_security_last_result_timestamp_seconds{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_security_last_result_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_security_last_result_timestamp_seconds",
+        "producer": "security sources (security/README.md)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown: no source reports",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Sources",
+    "panel": "Late sources",
+    "query": "max by (source, system) (ALERTS{alertname=\"SecurityResultLate\",alertstate=\"firing\",cluster=~\"$cluster\"})",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "ALERTS"
+    ],
+    "sources": [
+      {
+        "metric": "ALERTS",
+        "producer": "local Prometheus alert rules (current state)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Sources",
+    "panel": "Failing checks",
+    "query": "count by (source, system) (homelab_security_check_result{k8s_cluster=~\"$cluster\"} > 0)",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_security_check_result"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_security_check_result",
+        "producer": "security sources (security/README.md)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Accepted findings",
+    "panel": "Accepted findings",
+    "query": "count(max by (source, check, system) (homelab_security_accepted_until_timestamp_seconds{k8s_cluster=~\"$cluster\"}))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_security_accepted_until_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_security_accepted_until_timestamp_seconds",
+        "producer": "security sources (security/README.md)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Accepted findings",
+    "panel": "Past their end date",
+    "query": "sum(max by (source, check, system) (homelab_security_accepted_until_timestamp_seconds{k8s_cluster=~\"$cluster\"}) < bool time())",
+    "unit": "failures",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_security_accepted_until_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_security_accepted_until_timestamp_seconds",
+        "producer": "security sources (security/README.md)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "Unknown \u2014 missing evidence",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Accepted findings",
+    "panel": "Accepted findings by system",
+    "query": "count by (system) (max by (source, check, system) (homelab_security_accepted_until_timestamp_seconds{k8s_cluster=~\"$cluster\"}))",
+    "unit": "short",
+    "query_mode": "instant",
+    "inputs": [
+      "homelab_security_accepted_until_timestamp_seconds"
+    ],
+    "sources": [
+      {
+        "metric": "homelab_security_accepted_until_timestamp_seconds",
+        "producer": "security sources (security/README.md)",
+        "availability": "configured"
+      }
+    ],
+    "observation_budget_seconds": 180,
+    "freshness_policy": "Interpret current state only with observations within 180s; range plots retain historical observations. Operational backup/restore objectives are separate from scrape freshness.",
+    "scope": "selected sites; explicitly described shared sources may span sites",
+    "missing": "None",
+    "query_error": "Grafana query error; never a healthy empty response",
+    "runbook": "security/README.md",
+    "owner": "homelab operator"
+  },
+  {
     "dashboard": "tnwks-alerts",
     "tab": "Current",
     "panel": "Firing now",

@@ -1792,6 +1792,118 @@
     "kiosk": false
   },
   {
+    "dashboard": "tnwks-security",
+    "tab": "Safeguards",
+    "title": "Safeguards in the registry",
+    "expr": "count(max by (safeguard) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"}))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Safeguards",
+    "title": "With a result",
+    "expr": "sum(max by (safeguard) (homelab:security_safeguard_has_result{k8s_cluster=~\"$cluster\"}))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Safeguards",
+    "title": "Passing",
+    "expr": "sum(max by (safeguard) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"}) == bool 1)",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Safeguards",
+    "title": "Failing",
+    "expr": "sum(max by (safeguard) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"}) == bool 3)",
+    "unit": "failures",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Safeguards",
+    "title": "State of each safeguard",
+    "expr": "max by (line, safeguard, title, function) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"})",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Systems",
+    "title": "Failing safeguards by system",
+    "expr": "max by (system, system_type, safeguard) (homelab:security_control_state{k8s_cluster=~\"$cluster\"} == 3)",
+    "unit": "state",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Systems",
+    "title": "Safeguards with a result",
+    "expr": "count by (system, system_type) (homelab:security_control_state{k8s_cluster=~\"$cluster\"} > 0) or on (system, system_type) (0 * count by (system, system_type) (homelab:security_control_state{k8s_cluster=~\"$cluster\"}))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Systems",
+    "title": "Systems in the registry",
+    "expr": "max by (system, system_type, site, domain) (homelab:security_system_info{k8s_cluster=~\"$cluster\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Sources",
+    "title": "Age of the last result",
+    "expr": "time() - max by (source, system) (homelab_security_last_result_timestamp_seconds{k8s_cluster=~\"$cluster\"})",
+    "unit": "s",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Sources",
+    "title": "Late sources",
+    "expr": "max by (source, system) (ALERTS{alertname=\"SecurityResultLate\",alertstate=\"firing\",cluster=~\"$cluster\"})",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Sources",
+    "title": "Failing checks",
+    "expr": "count by (source, system) (homelab_security_check_result{k8s_cluster=~\"$cluster\"} > 0)",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Accepted findings",
+    "title": "Accepted findings",
+    "expr": "count(max by (source, check, system) (homelab_security_accepted_until_timestamp_seconds{k8s_cluster=~\"$cluster\"}))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Accepted findings",
+    "title": "Past their end date",
+    "expr": "sum(max by (source, check, system) (homelab_security_accepted_until_timestamp_seconds{k8s_cluster=~\"$cluster\"}) < bool time())",
+    "unit": "failures",
+    "kiosk": false
+  },
+  {
+    "dashboard": "tnwks-security",
+    "tab": "Accepted findings",
+    "title": "Accepted findings by system",
+    "expr": "count by (system) (max by (source, check, system) (homelab_security_accepted_until_timestamp_seconds{k8s_cluster=~\"$cluster\"}))",
+    "unit": "short",
+    "kiosk": false
+  },
+  {
     "dashboard": "tnwks-alerts",
     "tab": "Current",
     "title": "Firing now",

@@ -19,6 +19,14 @@ result is a Prometheus series on the sites, and the board shows it.
 | `generated/` | The outputs of the generator that no cluster reads directly, and the tests of the rules |
 | `tests/` | The tests of the generator |
 
+Three parts are in other directories, by the conventions of the repository:
+
+| Path | What it is |
+| --- | --- |
+| `kubernetes/apps/monitoring/security-registry/` | The generated rules, and the Flux Kustomization that applies them on homelab-wsl-02 |
+| `observability/dashboards/boards/security.py` | The security board. It reads `generated/board.json` |
+| `kubernetes/apps/security/accepted-findings/` | The place of the encrypted list of accepted findings |
+
 ## Names
 
 | Name | Meaning |
@@ -122,6 +130,7 @@ The names and the labels stay. A new source maps to them.
 | `homelab:security_control_state` | The generated rules | `safeguard`, `system`, `system_type`, `k8s_cluster` | The state of one safeguard on one system |
 | `homelab:security_safeguard_state` | The generated rules | `safeguard`, `line`, `title`, `ig`, `function`, `k8s_cluster` | The state of one safeguard over the systems that have a check for it |
 | `homelab:security_safeguard_has_result` | The generated rules | `safeguard`, `ig`, `k8s_cluster` | 1 when one system or more has a fresh result for the safeguard, and 0 when none has |
+| `homelab_security_accepted_until_timestamp_seconds` | The reader of the list of accepted findings | `source`, `check`, `system` | The Unix time at which one accepted finding ends |
 
 The first two are the result series and the series with the time of the last
 result. The fourth is the control series.
@@ -261,10 +270,29 @@ each source in `sources` of each system. For each pair it has two terms:
   `absent()` with a stated window, so a source that serves no time reads as
   late.
 
+A second alert rule, `SecurityAcceptedFindingExpired`, fires for a system
+when the end date of one of its accepted findings has passed
+([Accepted findings](#accepted-findings)).
+
 The query window of each rule is 10 minutes. A rule reads the newest sample
-in the window, so one missed scrape or a restart of a source is no gap. The
-alert waits 10 minutes more before it fires. Its text has a system, a
-source, a severity and a link to the board, and no result.
+in the window, so one missed scrape or a restart of a source is no gap. An
+alert waits 10 minutes more before it fires.
+
+### The text of an alert
+
+An alert of the registry says a system, a severity and a link to the board,
+and no raw event. The late alert also names the source that is late. No
+alert names a check, a finding or a value of a result. The chat message is
+the labels and the annotations of the alert, so the rule is on both:
+
+- The labels are `alertname`, `severity`, `system`, and `source` for the
+  late alert. The alert for an accepted finding counts by system, so the
+  check of the finding is not a label.
+- The annotations are `summary`, `description` and `dashboard_url`, and
+  their only variable is the system, or the system and the source.
+
+`tests/test_generate.py` holds this rule for each generated alert, and the
+tests of the rules compare the whole text of a sample of each alert.
 
 The tests of the rules are generated too (`generated/rule-tests.yaml`,
 `generated/rule-tests-every-source.yaml`), and `promtool test rules` runs
@@ -289,6 +317,99 @@ check that the tool does not have.
 When a tool moves to a new release, update its catalogue in the same pull
 request. A check that the new release adds then shows in the list of gaps
 until a line names it.
+
+## The board
+
+The board `Security` (`tnwks-security`) is in Grafana with the other boards
+of the repository: `observability/generate.py` writes it from
+`observability/dashboards/boards/security.py` to
+`kubernetes/apps/monitoring/grafana/dashboards/`. It reads the names of the
+series and the values of state from `generated/board.json`, and its lines
+are series of the generated rules. A new safeguard, system or check needs no
+change to the board.
+
+| Tab | What it shows |
+| --- | --- |
+| Safeguards | One line for each safeguard with its state, and three counts: the lines with a result, the lines that pass and the lines that fail |
+| Systems | Each failing safeguard with its system, the count of safeguards with a result for each system, and the systems of the registry |
+| Sources | The age of the last result of each source for each system, the sources that are late, and the count of failing checks |
+| Accepted findings | The count of accepted findings, in all and by system, and the count past their end date |
+
+Before a source reports, the first tab shows each safeguard of the registry
+with the state "No evidence". The count of lines with a result is the sum of
+`homelab:security_safeguard_has_result`. It is apart from the count of lines
+that pass, because a line with a result on one system is a pass only when
+each system with a check for it passes. The board shows a state and a count. The
+security stream `findings` in Loki has the text of each finding.
+
+## When an alert fires
+
+| Alert | What it means | What to do |
+| --- | --- | --- |
+| `SecurityResultLate` | The newest result of a source for a system is older than `late_after` of the source, or the source serves no time. The safeguards that rest on it show "No evidence" | Open the tab Sources of the board. Then look at the last run of the source: its Job or its pod in the namespace `security`, or the agent on the host. The alert ends when the source reports again |
+| `SecurityAcceptedFindingExpired` | An accepted finding of the system has passed its end date | The owner reads the line in the list. The owner sets a new end date with a reason, or removes the line and the cause of the finding |
+
+## Accepted findings
+
+A finding that the owner accepts is a line of an encrypted list. The list is
+not in the registry, because a line can name an open weakness. An agent can
+draft a line. Only the owner accepts one, in a pull request that the owner
+merges.
+
+| What | Value |
+| --- | --- |
+| File | `kubernetes/apps/security/accepted-findings/app/accepted.sops.yaml` |
+| Flux Kustomization | `security-accepted-findings` (`kubernetes/apps/security/accepted-findings/ks.yaml`). It decrypts the file with the age key of the cluster |
+| Secret | `security-accepted-findings`, in the namespace `security` of homelab-wsl-02 |
+| Key of the Secret | `accepted.yaml`: a YAML list with one entry for each accepted finding |
+
+Each entry has five fields:
+
+| Field | Value |
+| --- | --- |
+| `source` | The `name` of the source in `sources.yaml` |
+| `check` | The check ID, as in `controls.yaml`. A check that no line names is also possible |
+| `system` | The `name` of the system in `systems.yaml` |
+| `reason` | Why the owner accepts the finding |
+| `until` | The end date, as `YYYY-MM-DD`. The finding is past its end date from the start of the next day, UTC |
+
+This is the form of the file before encryption. The values are invented:
+
+```yaml
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: security-accepted-findings
+type: Opaque
+stringData:
+  accepted.yaml: |
+    - source: prowler
+      check: example_check_id
+      system: example-system
+      reason: An invented reason, for the form only.
+      until: "2027-01-31"
+```
+
+The rule for `kubernetes/` in `.sops.yaml` encrypts the whole of
+`stringData`. So the list is one cipher text in git, and no field of a line
+is readable there.
+
+No cluster lists the Flux Kustomization before the list has its first file.
+To start the list, the owner does these steps in one pull request:
+
+1. Write the file in the form above, with the first accepted findings.
+2. Encrypt it: `sops --encrypt --in-place` on the file.
+3. Name the file under `resources` in `app/kustomization.yaml`.
+4. Add `ks.yaml` to `kubernetes/clusters/wsl-02/apps/kustomization.yaml`,
+   after the line of the namespace `security`.
+
+Each scanner reads the Secret as its list of exceptions. The part that reads
+the Secret for Prometheus serves one series for each entry:
+`homelab_security_accepted_until_timestamp_seconds`, with the labels
+`source`, `check` and `system`, and the Unix time of the end as its value.
+The alert and the board read this series, and nothing else of the list
+leaves the Secret.
 
 ## How to change the registry
 

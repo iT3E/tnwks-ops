@@ -23,7 +23,7 @@ def main():
     command = ["kustomize", "build"] if shutil.which("kustomize") else ["kubectl", "kustomize"]
     for path in ["grafana/dashboards", "observability-evidence/app", "garage/app",
                  "observability-pki/app", "thanos-metrics/app", "thanos-metrics/archive",
-                 "observability-evidence/rules"]:
+                 "observability-evidence/rules", "security-registry/rules"]:
         rendered = subprocess.run(command + [str(ROOT / "kubernetes/apps/monitoring" / path)],
                                   capture_output=True, text=True, check=True).stdout
         objects = list(yaml.safe_load_all(rendered))

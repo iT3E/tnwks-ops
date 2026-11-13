@@ -1,0 +1,2584 @@
+{
+  "apiVersion": "dashboard.grafana.app/v2",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "tnwks-security"
+  },
+  "spec": {
+    "annotations": [],
+    "cursorSync": "Crosshair",
+    "elements": {
+      "about": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1,
+          "title": "About this view",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "text",
+            "version": "",
+            "spec": {
+              "options": {
+                "mode": "markdown",
+                "content": "Which safeguards have a result, and which of them pass?\n\nMissing or partial evidence is Unknown. [Runbook](https://github.com/iT3E/tnwks-ops/blob/main/security/README.md)"
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+              }
+            }
+          },
+          "description": "Purpose, scope and the interpretation of missing evidence."
+        }
+      },
+      "panel-1": {
+        "kind": "Panel",
+        "spec": {
+          "id": 2,
+          "title": "Safeguards in the registry",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/security/README.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "count(max by (safeguard) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"}))",
+                        "instant": true,
+                        "legendFormat": "{{safeguard}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The lines of the control registry: 48 safeguards of CIS Controls v8.1. A count below that means that the rules of the registry do not run.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "id": 3,
+          "title": "With a result",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/security/README.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum(max by (safeguard) (homelab:security_safeguard_has_result{k8s_cluster=~\"$cluster\"}))",
+                        "instant": true,
+                        "legendFormat": "{{safeguard}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Safeguards for which one system or more has a fresh result, a pass or a fail. For the others no check exists, or its source is late.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-3": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4,
+          "title": "Passing",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/security/README.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum(max by (safeguard) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"}) == bool 1)",
+                        "instant": true,
+                        "legendFormat": "{{safeguard}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Safeguards for which each system that has a check passes. A safeguard with a result on one system and none on a second system is not in this count.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "id": 5,
+          "title": "Failing",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/security/README.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum(max by (safeguard) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"}) == bool 3)",
+                        "instant": true,
+                        "legendFormat": "{{safeguard}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "text"
+                      },
+                      {
+                        "value": 1,
+                        "color": "#c4302b"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Safeguards for which one check or more fails on a system. The Systems tab says where.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "id": 6,
+          "title": "State of each safeguard",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/security/README.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (line, safeguard, title, function) (homelab:security_safeguard_state{k8s_cluster=~\"$cluster\"})",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{line}} {{safeguard}} {{title}} {{function}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
+                        "Value": "State"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "line"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "line"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "State"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "0": {
+                                "text": "No evidence",
+                                "color": "#6b6b6b",
+                                "index": 0
+                              },
+                              "1": {
+                                "text": "Pass",
+                                "color": "#1a7f37",
+                                "index": 1
+                              },
+                              "3": {
+                                "text": "Fail",
+                                "color": "#c4302b",
+                                "index": 2
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background",
+                          "mode": "basic"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "One line for each safeguard: Fail when a check fails on one system or more, Pass when each system that has a check for it passes, and No evidence when one of those systems has no fresh result. A result counts only while its source is inside its limit. A line never shows Pass for a check that did not run.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "id": 7,
+          "title": "Failing safeguards by system",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/security/README.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (system, system_type, safeguard) (homelab:security_control_state{k8s_cluster=~\"$cluster\"} == 3)",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{system}} {{system_type}} {{safeguard}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "Value": 0,
+                        "k8s_cluster": 1,
+                        "app": 2,
+                        "db_cluster": 2
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
+                        "Value": "State"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "#6b6b6b"
+                      }
+                    ]
+                  },
+                  "noValue": "None",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "State"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "none"
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "0": {
+                                "text": "No evidence",
+                                "color": "#6b6b6b",
+                                "index": 0
+                              },
+                              "1": {
+                                "text": "Pass",
+                                "color": "#1a7f37",
+                                "index": 1
+                              },
+                              "3": {
+                                "text": "Fail",
+                                "color": "#c4302b",
+                                "index": 2
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background",
+                          "mode": "basic"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Each safeguard that fails, on the system where it fails. The security stream `findings` in Loki lists each failed finding.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "id": 8,
+          "title": "Safeguards with a result",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/security/README.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "count by (system, system_type) (homelab:security_control_state{k8s_cluster=~\"$cluster\"} > 0) or on (system, system_type) (0 * count by (system, system_type) (homelab:security_control_state{k8s_cluster=~\"$cluster\"}))",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{system}} {{system_type}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "k8s_cluster": 0,
+                        "client": 0,
+                        "app": 1,
+                        "db_cluster": 1
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
+                        "Value": "Safeguards with a result"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Safeguards with a result"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "For each system of the registry, the number of safeguards with a fresh result. A system at 0 has no source that reports.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "id": 9,
+          "title": "Systems in the registry",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/security/README.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (system, system_type, site, domain) (homelab:security_system_info{k8s_cluster=~\"$cluster\"})",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{system}} {{system_type}} {{site}} {{domain}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true,
+                        "Value": true
+                      },
+                      "indexByName": {
+                        "k8s_cluster": 0,
+                        "client": 0,
+                        "app": 1,
+                        "db_cluster": 1
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "Unknown — missing evidence",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Each system that the platform checks, from security/registry/systems.yaml. A new system is one line in that file.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-9": {
+        "kind": "Panel",
+        "spec": {
+          "id": 10,
+          "title": "Age of the last result",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/security/README.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "time() - max by (source, system) (homelab_security_last_result_timestamp_seconds{k8s_cluster=~\"$cluster\"})",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{source}} {{system}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "k8s_cluster": 0,
+                        "client": 0,
+                        "app": 1,
+                        "db_cluster": 1
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
+                        "Value": "Age of the last result"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "Age of the last result",
+                          "desc": true
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "Unknown: no source reports",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Age of the last result"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Time since the newest result of each source, for each system. A source is late after: Prowler 36h; Trivy Operator 36h; The host check 12h; The API checks 36h; The security streams 15m, k8s-audit 15m, routeros 15m, cloudtrail 2h; Wazuh 30m, laptop 7d. These limits are in security/registry/sources.yaml.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-10": {
+        "kind": "Panel",
+        "spec": {
+          "id": 11,
+          "title": "Late sources",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/security/README.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "max by (source, system) (ALERTS{alertname=\"SecurityResultLate\",alertstate=\"firing\",cluster=~\"$cluster\"})",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{source}} {{system}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true,
+                        "Value": true
+                      },
+                      "indexByName": {
+                        "k8s_cluster": 0,
+                        "client": 0,
+                        "app": 1,
+                        "db_cluster": 1
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "None",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Each source whose newest result is older than its limit, or that serves no time. The safeguards that rest on it show No evidence until it reports again.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-11": {
+        "kind": "Panel",
+        "spec": {
+          "id": 12,
+          "title": "Failing checks",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/security/README.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "count by (source, system) (homelab_security_check_result{k8s_cluster=~\"$cluster\"} > 0)",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{source}} {{system}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "k8s_cluster": 0,
+                        "client": 0,
+                        "app": 1,
+                        "db_cluster": 1
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
+                        "Value": "Failing checks"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "None",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Failing checks"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "The number of checks of each source that fail on each system.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-12": {
+        "kind": "Panel",
+        "spec": {
+          "id": 13,
+          "title": "Accepted findings",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/security/README.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "count(max by (source, check, system) (homelab_security_accepted_until_timestamp_seconds{k8s_cluster=~\"$cluster\"}))",
+                        "instant": true,
+                        "legendFormat": "{{source}} {{check}} {{system}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "The lines of the encrypted list of accepted findings. The owner writes each line, with a reason and an end date. No value means that the list has no line, or that nothing serves it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-13": {
+        "kind": "Panel",
+        "spec": {
+          "id": 14,
+          "title": "Past their end date",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/security/README.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "sum(max by (source, check, system) (homelab_security_accepted_until_timestamp_seconds{k8s_cluster=~\"$cluster\"}) < bool time())",
+                        "instant": true,
+                        "legendFormat": "{{source}} {{check}} {{system}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "justifyMode": "auto",
+                "textMode": "auto",
+                "wideLayout": true,
+                "showPercentChange": false,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "values": false
+                },
+                "percentChangeColorMode": "standard",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "text"
+                      },
+                      {
+                        "value": 1,
+                        "color": "#c4302b"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "Unknown — missing evidence"
+                },
+                "overrides": []
+              }
+            }
+          },
+          "description": "Accepted findings whose end date has passed. The owner renews each one or removes it.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      },
+      "panel-14": {
+        "kind": "Panel",
+        "spec": {
+          "id": 15,
+          "title": "Accepted findings by system",
+          "links": [
+            {
+              "title": "Runbook",
+              "url": "https://github.com/iT3E/tnwks-ops/blob/main/security/README.md",
+              "targetBlank": true
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "spec": {
+                        "expr": "count by (system) (max by (source, check, system) (homelab_security_accepted_until_timestamp_seconds{k8s_cluster=~\"$cluster\"}))",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{system}}",
+                        "range": false
+                      },
+                      "datasource": {
+                        "name": "${datasource}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "__name__": true,
+                        "Time": true,
+                        "__replica__": true,
+                        "alertstate": true,
+                        "cluster": true,
+                        "container": true,
+                        "endpoint": true,
+                        "instance": true,
+                        "job": true,
+                        "kind": true,
+                        "namespace": true,
+                        "observer_cluster": true,
+                        "pod": true,
+                        "prometheus": true,
+                        "service": true
+                      },
+                      "indexByName": {
+                        "k8s_cluster": 0,
+                        "client": 0,
+                        "app": 1,
+                        "db_cluster": 1
+                      },
+                      "renameByName": {
+                        "k8s_cluster": "Site",
+                        "app": "App",
+                        "db_cluster": "Database",
+                        "observer_cluster": "Observer",
+                        "alertname": "Alert",
+                        "severity": "Severity",
+                        "workload": "Workload",
+                        "tier": "Tier",
+                        "engine": "Engine",
+                        "cronjob": "Job",
+                        "kubernetes_node": "Node",
+                        "node": "Node",
+                        "hop": "Hop",
+                        "vip": "Shared VIP",
+                        "k8s_app": "Component",
+                        "component": "Component",
+                        "target_cluster": "Remote site",
+                        "served_cluster": "Served by",
+                        "routerboard_name": "Router",
+                        "version": "RouterOS",
+                        "name": "Name",
+                        "pool": "Pool",
+                        "current_firmware": "Installed firmware",
+                        "upgrade_firmware": "Available firmware",
+                        "host": "Host",
+                        "nic": "Adapter",
+                        "ap_name": "Access point",
+                        "resource": "Resource",
+                        "revision": "Revision",
+                        "app_version": "App version",
+                        "chart_version": "Chart",
+                        "release_status": "Release",
+                        "flux_kind": "Kind",
+                        "ready": "Ready",
+                        "kernel_version": "Kernel",
+                        "kubelet_version": "Kubelet",
+                        "os_image": "OS",
+                        "volume": "Volume",
+                        "collector": "Collector",
+                        "slo": "Objective",
+                        "area": "Area",
+                        "radio": "Band",
+                        "channel": "Channel",
+                        "client": "Device",
+                        "as_name": "Destination",
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
+                        "Value": "Accepted findings by system"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "",
+            "spec": {
+              "options": {
+                "frameIndex": 0,
+                "showHeader": true,
+                "showTypeIcons": false,
+                "footer": {
+                  "show": false,
+                  "reducer": [],
+                  "countRows": false
+                },
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "None",
+                  "custom": {
+                    "align": "auto",
+                    "inspect": false,
+                    "minWidth": 70
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": "—"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Accepted findings by system"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "description": "The number of accepted findings of each system.\n\nObservation budget: 180s for current evidence; backup/restore objectives and historical windows are separate. Source contract: observability/generated/panel-contracts.json."
+        }
+      }
+    },
+    "layout": {
+      "kind": "TabsLayout",
+      "spec": {
+        "tabs": [
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "RowsLayout",
+                "spec": {
+                  "rows": [
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-1"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-3"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 6,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-5"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Status",
+                        "collapse": false
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "about"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 1,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "About this view",
+                        "collapse": true
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Safeguards"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "RowsLayout",
+                "spec": {
+                  "rows": [
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-6"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Status",
+                        "collapse": false
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-7"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-8"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Detail",
+                        "collapse": false
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Systems"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "RowsLayout",
+                "spec": {
+                  "rows": [
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-9"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-10"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-11"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Sources"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "RowsLayout",
+                "spec": {
+                  "rows": [
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "short",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-12"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-13"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 6,
+                            "fillScreen": false
+                          }
+                        },
+                        "collapse": false,
+                        "hideHeader": true
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "layout": {
+                          "kind": "AutoGridLayout",
+                          "spec": {
+                            "columnWidthMode": "narrow",
+                            "rowHeightMode": "standard",
+                            "items": [
+                              {
+                                "kind": "AutoGridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-14"
+                                  }
+                                }
+                              }
+                            ],
+                            "maxColumnCount": 2,
+                            "fillScreen": false
+                          }
+                        },
+                        "title": "Detail",
+                        "collapse": false
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Accepted findings"
+            }
+          }
+        ]
+      }
+    },
+    "links": [
+      {
+        "title": "↑ Homelab",
+        "type": "link",
+        "icon": "dashboard",
+        "tooltip": "Up to the overview",
+        "tags": [],
+        "asDropdown": false,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true,
+        "url": "/d/home/view"
+      },
+      {
+        "title": "Dashboards",
+        "type": "dashboards",
+        "icon": "",
+        "tooltip": "",
+        "tags": [
+          "tnwks"
+        ],
+        "asDropdown": true,
+        "targetBlank": false,
+        "includeVars": true,
+        "keepTime": true
+      }
+    ],
+    "preload": false,
+    "tags": [
+      "tnwks",
+      "l2",
+      "security"
+    ],
+    "timeSettings": {
+      "from": "now-6h",
+      "to": "now",
+      "autoRefresh": "1m",
+      "autoRefreshIntervals": [
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h"
+      ],
+      "hideTimepicker": false,
+      "fiscalYearStartMonth": 0,
+      "timezone": "browser"
+    },
+    "title": "Security",
+    "variables": [
+      {
+        "kind": "DatasourceVariable",
+        "spec": {
+          "name": "datasource",
+          "pluginId": "prometheus",
+          "refresh": "never",
+          "regex": "/^(Global|Local|Site 1|Site 2)$/",
+          "current": {
+            "text": "Global",
+            "value": "prometheus-global"
+          },
+          "options": [],
+          "multi": false,
+          "includeAll": false,
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": true,
+          "label": "Metrics"
+        }
+      },
+      {
+        "kind": "CustomVariable",
+        "spec": {
+          "name": "cluster",
+          "query": "homelab-wsl,homelab-wsl-02",
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "multi": true,
+          "includeAll": true,
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": false,
+          "allValue": ".*",
+          "label": "Cluster"
+        }
+      }
+    ],
+    "description": "Which safeguards have a result, and which of them pass?",
+    "editable": false
+  }
+}

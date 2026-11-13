@@ -31,6 +31,9 @@ LABELS = {
     "os_image": "OS", "volume": "Volume", "collector": "Collector", "slo": "Objective",
     "area": "Area", "radio": "Band", "channel": "Channel", "client": "Device",
     "as_name": "Destination", "category": "Category",
+    # The security board (security/README.md).
+    "safeguard": "Safeguard", "title": "Title", "function": "Function", "system": "System",
+    "system_type": "Type", "site": "Site of the system", "domain": "Domain", "source": "Source",
 }
 
 

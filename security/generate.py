@@ -26,6 +26,7 @@ LAST_RESULT = "homelab_security_last_result_timestamp_seconds"
 SYSTEM_INFO = "homelab:security_system_info"
 CONTROL = "homelab:security_control_state"
 SAFEGUARD = "homelab:security_safeguard_state"
+ACCEPTED = "homelab_security_accepted_until_timestamp_seconds"
 HAS_RESULT = "homelab:security_safeguard_has_result"
 NO_EVIDENCE, PASS, FAIL = 0, 1, 3
 
@@ -304,8 +305,22 @@ def late_rule(expr):
                 "dashboard_url": BOARD_LINK}}
 
 
+def accepted_rule():
+    """The alert for an accepted finding whose end date has passed. Its text has a system,
+    a severity and a link. It names no check, so it names no finding."""
+    ends = f"max by (source, check, system) (last_over_time({ACCEPTED}[{WINDOW}]))"
+    return {"alert": "SecurityAcceptedFindingExpired", "expr": f"count by (system) ({ends} < time())",
+            "for": LATE_FOR, "labels": {"severity": "warning"},
+            "annotations": {
+                "summary": "An accepted finding of {{ $labels.system }} has passed its end date",
+                "description": ("{{ $labels.system }} has an accepted finding whose end date has passed. "
+                                "Renew it or remove it in the encrypted list of accepted findings."),
+                "dashboard_url": BOARD_LINK}}
+
+
 def alerts(registry):
-    return [late_rule(late_expr(registry))] if expected(registry) else []
+    late = [late_rule(late_expr(registry))] if expected(registry) else []
+    return [*late, accepted_rule()]
 
 
 def rule_resource(registry):
@@ -325,9 +340,8 @@ def rule_resource(registry):
                                    "function": line["function"], **site_labels()}})
         records.append({"record": HAS_RESULT, "expr": has_result_expr(line),
                         "labels": {"safeguard": line["id"], "ig": str(line["ig"]), **site_labels()}})
-    groups = [{"name": "homelab.security.controls", "interval": "1m", "rules": records}]
-    if alerts(registry):
-        groups.append({"name": "homelab.security.alerts", "interval": "1m", "rules": alerts(registry)})
+    groups = [{"name": "homelab.security.controls", "interval": "1m", "rules": records},
+              {"name": "homelab.security.alerts", "interval": "1m", "rules": alerts(registry)}]
     return {"apiVersion": "monitoring.coreos.com/v1", "kind": "PrometheusRule",
             "metadata": {"name": "homelab-security", "namespace": "monitoring"},
             "spec": {"groups": groups}}
@@ -388,7 +402,8 @@ def board_input(registry):
     return {
         "board": BOARD,
         "series": {"result": RESULT, "last_result": LAST_RESULT, "system": SYSTEM_INFO,
-                   "control": CONTROL, "safeguard": SAFEGUARD, "has_result": HAS_RESULT},
+                   "control": CONTROL, "safeguard": SAFEGUARD, "has_result": HAS_RESULT,
+                   "accepted": ACCEPTED},
         "states": {"no evidence": NO_EVIDENCE, "pass": PASS, "fail": FAIL},
         "safeguards": [{"id": line["id"], "line": line_number(line["id"]), "title": line["title"],
                         "ig": line["ig"], "function": line["function"]}
@@ -512,6 +527,18 @@ def fixtures(registry):
                                  source=source, check=check, system=system)],
          "promql_expr_test": [sample(safeguard, system_type, system, PASS, "5m"),
                               sample(safeguard, system_type, system, NO_EVIDENCE, f"{limit // 60 + 10}m")]})
+    system = registry["systems"][0]["name"]
+    source = registry["sources"][0]["name"]
+    tests.append(
+        {"name": "an accepted finding past its end date raises one alert for its system, with no check in its text",
+         "interval": "1m", "external_labels": {"cluster": "site"},
+         "input_series": [series(ACCEPTED, "1800+0x60", source=source, check="sample-check", system=system),
+                          series(ACCEPTED, "1200+0x60", source=source, check="other-check", system=system),
+                          series(ACCEPTED, "864000+0x60", source=source, check="later-check", system=system)],
+         "alert_rule_test": [
+             {"eval_time": "15m", "alertname": "SecurityAcceptedFindingExpired", "exp_alerts": []},
+             {"eval_time": "45m", "alertname": "SecurityAcceptedFindingExpired",
+              "exp_alerts": [alert_sample(accepted_rule(), system=system)]}]})
     tests += line_fixtures(registry)
     return {"rule_files": ["rules-for-test.yaml"], "evaluation_interval": "1m", "tests": tests}
 
@@ -590,12 +617,18 @@ def safeguard_labels(registry, safeguard):
             f'ig="{line["ig"]}",function="{line["function"]}",k8s_cluster="site"}}')
 
 
-def late_alert(source, system):
-    rule = late_rule("")
-    render = lambda text: (text.replace("{{ $labels.system }}", system).replace("{{ $labels.source }}", source)
-                           .replace("{{ $externalLabels.cluster }}", "site"))
-    return {"exp_labels": {"severity": "warning", "source": source, "system": system},
+def alert_sample(rule, **labels):
+    """The alert that promtool must see for a sample: each label and the whole text."""
+    def render(text):
+        for label, value in labels.items():
+            text = text.replace(f"{{{{ $labels.{label} }}}}", value)
+        return text.replace("{{ $externalLabels.cluster }}", "site")
+    return {"exp_labels": rule["labels"] | labels,
             "exp_annotations": {key: render(value) for key, value in rule["annotations"].items()}}
+
+
+def late_alert(source, system):
+    return alert_sample(late_rule(""), source=source, system=system)
 
 
 def late_fixtures(registry):

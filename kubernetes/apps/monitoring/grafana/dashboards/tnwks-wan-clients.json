@@ -471,6 +471,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Download"
                       }
                     }
@@ -676,6 +684,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Upload"
                       }
                     }
@@ -881,6 +897,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Data"
                       }
                     }
@@ -1354,6 +1378,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Traffic"
                       }
                     }
@@ -1559,6 +1591,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Data"
                       }
                     }

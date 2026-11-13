@@ -33,6 +33,12 @@ class Panel:
     per_site: str = ""
     # A row table's order by its value: "desc" puts the worst-first list's worst on top.
     sort: str = ""
+    # A state panel's own words for its values, as (value, word) pairs, in STATE's
+    # colours: a control is Pass or Fail, not Healthy or Failed. Empty: STATE's words.
+    states: tuple[tuple[str, str], ...] = ()
+    # A row table's order by a label whose values sort as the rows should (a safeguard's
+    # line number). The label's column is hidden: it orders, the other columns say.
+    order: str = ""
 
 
 @dataclass(frozen=True)
@@ -67,10 +73,12 @@ class Board:
 
 def p(title: str, expr: str, unit: str, explanation: str, kind="timeseries", link=None,
       empty="Unknown — missing evidence", column: str | None = "", words=("Yes", "No"), role="", per_site="",
-      sort=""):
+      sort="", states=(), order=""):
     assert sort in ("", "asc", "desc"), (title, sort)
+    assert not (sort and order), (title, "one order")
+    assert not states or unit == "state", (title, "state words are for a state")
     return Panel(title, expr, unit, explanation, kind, link, empty=empty, column=column, words=words, role=role,
-                 per_site=per_site, sort=sort)
+                 per_site=per_site, sort=sort, states=tuple(states), order=order)
 
 
 def role(panel: Panel) -> str:
@@ -104,6 +112,8 @@ def mapping(options: dict[str, tuple[str, str | None]]) -> list[dict]:
 
 
 def value_mappings(panel: Panel) -> list[dict]:
+    if panel.unit == "state" and panel.states:
+        return mapping({value: (word, STATE[value].color) for value, word in panel.states})
     if panel.unit == "state":
         return mapping({k: (v.text, v.color) for k, v in STATE.items()})
     if panel.unit == "coverage":

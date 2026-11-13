@@ -155,6 +155,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Ready"
                       }
                     }
@@ -354,6 +362,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Reconciling"
                       }
                     }
@@ -897,6 +913,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "When"
                       }
                     }
@@ -1078,6 +1102,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "When"
                       }
                     }
@@ -1259,6 +1291,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "When"
                       }
                     }
@@ -1440,6 +1480,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "When"
                       }
                     }

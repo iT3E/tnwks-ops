@@ -3729,3 +3729,18 @@ spec:
         safeguard: '17.3'
         ig: '1'
         k8s_cluster: ${CLUSTER_NAME}
+  - name: homelab.security.alerts
+    interval: 1m
+    rules:
+    - alert: SecurityAcceptedFindingExpired
+      expr: count by (system) (max by (source, check, system) (last_over_time(homelab_security_accepted_until_timestamp_seconds[10m]))
+        < time())
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: An accepted finding of {{ $labels.system }} has passed its end date
+        description: '{{ $labels.system }} has an accepted finding whose end date has passed. Renew it or remove
+          it in the encrypted list of accepted findings.'
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $externalLabels.cluster
+          }}
