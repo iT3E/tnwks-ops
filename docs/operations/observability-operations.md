@@ -18,7 +18,7 @@ them from site 2's distro with `kubectl port-forward`.
 | Metrics | Global datasource: each site's Thanos Query, partial with a warning when a site is gone | Grafana on site 2 reads its own Prometheus (Local) and the archive | Site 1's own 15 days. Older history is unavailable, because the archive is on WSL-02. |
 | Alerts | Each site's Alertmanager sends to Telegram; healthchecks.io notices silence | Site 2's Alertmanager still sends. Its UI is the Alertmanager datasource once Grafana runs on site 2. | Site 1's is unaffected |
 | SLOs | `pyrra.<internal>` (site 1's Pyrra) | Site 2's Pyrra keeps evaluating; `port-forward svc/pyrra-ui 9099` from site 2 | Unaffected |
-| Logs | Each site's own Loki, 14 days: site 1 holds the router's syslog and its Job pods' logs, site 2 its Job pods' logs. Grafana's Loki datasource reads the site it runs on, so reach site 2's Loki from its distro with `kubectl port-forward` | Grafana on site 2 reads site 2's Loki. Site 1's logs are unavailable until it returns | Site 1's Loki is unaffected. Site 2's logs are unavailable until it returns |
+| Logs | Each site's own Loki, 14 days: site 1 holds the router's syslog and its Job pods' logs, site 2 its Job pods' logs. On site 2 a stream with the label `security_stream` stays 90 days, and Prometheus scrapes Loki once a minute (`kubernetes/clusters/wsl-02/apps/kustomization.yaml`). Grafana's Loki datasource reads the site it runs on, so reach site 2's Loki from its distro with `kubectl port-forward` | Grafana on site 2 reads site 2's Loki. Site 1's logs are unavailable until it returns | Site 1's Loki is unaffected. Site 2's logs are unavailable until it returns |
 | Archive | Garage, Store and Compactor on site 2 | Unaffected | Gone until site 2 returns; the archive alerts fire and the archive panels read Unknown |
 
 Site 2 from a workstation: `observability/.cache/remote.py` runs a command on
@@ -37,6 +37,14 @@ WSL-02, which has that cluster's kubeconfig
   halted (`thanos_compact_halted`) and how many compactions it has left. Then
   check the sidecars' upload errors. `observability/verify_live_archive.py`
   proves Store-only history per site (read-only).
+- **Room on site 2:** three alerts of the group `homelab.capacity`
+  (`observability/rules.py`). `NodeContainerMemoryNearLimit`: worker 1 of
+  homelab-wsl-02 is past 90% of the memory limit of its node container (the
+  kubelet's `node_memory_working_set_bytes`, scraped on that site).
+  `LokiSecurityIngestAbovePlan`: its Loki took in more than twice the planned
+  bytes of its 90-day streams in a day, before compression.
+  `WslDriveSpaceLow`: the drive under the WSL disk of WSL-02 has less than
+  100 GB free (evaluated by site 1, which scrapes both Windows hosts).
 - **Evidence collector:** stateless. A restart loses nothing, and its panels
   read Unknown until it reports again. Peer-dependent prerequisites, such as
   the fence, need the other site's collector too.

@@ -1,3 +1,0 @@
-kind: Added
-body: 'security: the control registry of the security platform in `security/registry` (the systems in scope, the sources with their cycles, and the 48 safeguards of CIS Controls v8.1 IG1 with their checks for each type of system), its schema, and the contract of the result series and the control series in `security/README.md`'
-time: 2026-11-13T01:00:00.000000000-08:00

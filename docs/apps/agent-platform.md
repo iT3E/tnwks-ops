@@ -365,10 +365,30 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
   the provider `github-reviewer`.
 - **The providers** are in the store of the sandbox gateway. The CronJob
   `workflow-providers` (`app/providers.yaml`, every 15 minutes at :07, :22,
-  :37 and :52) imports or updates each provider profile of `app/providers/`,
-  gets a new installation token of the GitHub App of the reviewer
-  (`app/scripts/github_app_token.py`), and creates or updates each provider.
-  To run it now,
+  :37 and :52) runs `app/scripts/providers.sh`. Each run:
+  1. checks that the gateway answers;
+  2. imports each provider profile of `app/providers/` that is not in the
+     store, and updates each one whose file changed in git. The profile keeps
+     the sha256 of its file in the annotation
+     `workflow-agents/source-sha256`, so an unchanged profile is not touched.
+     An update sends the `resource_version` of the stored profile (from
+     `openshell profile export`), as the gateway requires;
+  3. updates `model-gateway` with `MODEL_GATEWAY_KEY`;
+  4. gets a new installation token of the GitHub App of the reviewer
+     (`app/scripts/github_app_token.py`);
+  5. updates `github-reviewer` with that token. (A provider that is not
+     there yet is created.)
+
+  The script runs no `openshell profile lint`. Import and update check the
+  profile themselves, and lint refuses a profile that is already in the
+  store, so the first version of the script failed on each run after its
+  first. A failure that a new token can't fix (the gateway, a profile, the
+  model provider) stops the run before the token call. Each failure logs one
+  line for an alert,
+  `workflow-providers result=failed step=<step> name=<name>`, with step
+  `gateway`, `profile-export`, `profile-import`, `profile-update`,
+  `provider-create`, `provider-update` or `github-token`; a good run logs
+  `workflow-providers result=ok`. To run it now,
   `kubectl -n agents-workflows create job --from=cronjob/workflow-providers providers-now`.
 
   | Provider (profile) | Credential | What the proxy of a sandbox allows with it |

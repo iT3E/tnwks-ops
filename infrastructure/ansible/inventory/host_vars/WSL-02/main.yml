@@ -62,6 +62,10 @@ lan_bridge_retired_tcp_ports: [50052]
 # on.
 host_settings_ethernet: ""
 host_settings_disabled_adapters: []
+# A larger VM than the role's default: worker 1 of homelab-wsl-02 has a
+# limit of 18 GiB (talos_clusters.wsl-02.memory_nodes), and the node limits
+# add to 35 GiB.
+wsl_memory: 45GB
 # No cluster here yet, so an apply (CI) may write .wslconfig; WSL reads it at
 # its next restart. Drop this once homelab-wsl-02 runs here, like
 # DESKTOP-HKE05KI (a .wslconfig change is then planned with a wsl --shutdown).

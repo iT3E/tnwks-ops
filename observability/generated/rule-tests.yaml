@@ -1087,3 +1087,100 @@ tests:
       value: 0
     - labels: homelab:host_state{k8s_cluster="one",instance="one",resource="WSL I/O stall"}
       value: 0
+- name: a node container past 90% of its memory limit alerts; another node at the same figure does not
+  interval: 1m
+  input_series:
+  - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl-02",node="homelab-wsl-02-worker-1"}
+    values: 17716740096+0x30
+  - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl-02",node="homelab-wsl-02-worker-2"}
+    values: 17716740096+0x30
+  alert_rule_test:
+  - alertname: NodeContainerMemoryNearLimit
+    eval_time: 10m
+    exp_alerts: []
+  - alertname: NodeContainerMemoryNearLimit
+    eval_time: 20m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl-02
+        node: homelab-wsl-02-worker-1
+      exp_annotations:
+        summary: homelab-wsl-02-worker-1 is above 90% of the memory limit of its node container
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster=homelab-wsl-02
+        description: The node container has a memory limit of 18 GiB. The scheduler does not see it, because the
+          node reports the memory of the whole WSL VM. Find the largest pods of the node, and move or shrink one.
+          The limit is memory_nodes of talos_clusters in the Ansible inventory.
+- name: a node container at 89% of its memory limit does not alert
+  interval: 1m
+  input_series:
+  - series: node_memory_working_set_bytes{k8s_cluster="homelab-wsl-02",node="homelab-wsl-02-worker-1"}
+    values: 17179869184+0x30
+  alert_rule_test:
+  - alertname: NodeContainerMemoryNearLimit
+    eval_time: 20m
+    exp_alerts: []
+- name: the 90-day streams above twice their plan alert, whatever the other streams take in
+  interval: 1m
+  input_series:
+  - series: loki_distributor_bytes_received_total{k8s_cluster="homelab-wsl-02",tenant="fake",retention_hours="2160"}
+    values: 0+2000000x1560
+  - series: loki_distributor_bytes_received_total{k8s_cluster="homelab-wsl-02",tenant="fake",retention_hours="336"}
+    values: 0+20000000x1560
+  alert_rule_test:
+  - alertname: LokiSecurityIngestAbovePlan
+    eval_time: 26h
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl-02
+      exp_annotations:
+        summary: Loki on homelab-wsl-02 took in more than twice the planned bytes of its 90-day streams in a day
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster=homelab-wsl-02
+        description: The streams that Loki keeps for 90 days took in more than 2.4 GB of lines in 24 hours, before
+          compression. The plan is 1.2 GB a day. Find the stream that grew (the label security_stream), then lower
+          its volume at the source or its retention.
+- name: the 90-day streams under twice their plan do not alert
+  interval: 1m
+  input_series:
+  - series: loki_distributor_bytes_received_total{k8s_cluster="homelab-wsl-02",tenant="fake",retention_hours="2160"}
+    values: 0+1500000x1560
+  - series: loki_distributor_bytes_received_total{k8s_cluster="homelab-wsl-02",tenant="fake",retention_hours="336"}
+    values: 0+20000000x1560
+  alert_rule_test:
+  - alertname: LokiSecurityIngestAbovePlan
+    eval_time: 26h
+    exp_alerts: []
+- name: the drive under the WSL disk with 90 GB free alerts; another volume or host does not
+  interval: 1m
+  input_series:
+  - series: windows_logical_disk_free_bytes{k8s_cluster="homelab-wsl-02",instance="WSL-02",volume="C:"}
+    values: 90000000000+0x30
+  - series: windows_logical_disk_free_bytes{k8s_cluster="homelab-wsl-02",instance="WSL-02",volume="D:"}
+    values: 1000000000+0x30
+  - series: windows_logical_disk_free_bytes{k8s_cluster="homelab-wsl-02",instance="other",volume="C:"}
+    values: 1000000000+0x30
+  alert_rule_test:
+  - alertname: WslDriveSpaceLow
+    eval_time: 20m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl-02
+        instance: WSL-02
+        volume: 'C:'
+      exp_annotations:
+        summary: The drive under the WSL disk of WSL-02 has less than 100 GB free
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster=homelab-wsl-02
+        description: 'C: of WSL-02 holds the WSL disk file of its cluster, and WSL stops when that drive is full.
+          The stores of the cluster delete at a set age: lower the age of the largest one, or free space on the
+          drive.'
+- name: the drive under the WSL disk with 110 GB free does not alert
+  interval: 1m
+  input_series:
+  - series: windows_logical_disk_free_bytes{k8s_cluster="homelab-wsl-02",instance="WSL-02",volume="C:"}
+    values: 110000000000+0x30
+  alert_rule_test:
+  - alertname: WslDriveSpaceLow
+    eval_time: 20m
+    exp_alerts: []

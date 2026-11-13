@@ -121,6 +121,9 @@ data:
   CILIUM_SERVICEMONITOR_ENABLED: "true"
   CILIUM_HUBBLE_UI_INGRESS_ENABLED: "false"
 
+  # The node of the security platform's pods (kubernetes/apps/security/README.md).
+  SECURITY_NODE: "homelab-wsl-worker-2"
+
   # ServiceMonitor / PodMonitor toggle. Set to "false" until
   # kube-prometheus-stack has reconciled and installed the
   # monitoring.coreos.com CRDs; flip to "true" thereafter so apps that

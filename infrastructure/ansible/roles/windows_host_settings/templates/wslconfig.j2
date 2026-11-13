@@ -12,7 +12,7 @@
 # (5 crashes on 2026-07-27, all during 70-110s qmd syncs; normal syncs are ~700ms).
 # NOT a VRAM problem - the 3080 had ~8GB of its 10GB free at crash time.
 # Host has 64GiB total - leaves ~24GiB for Windows + gaming.
-memory=40GB
+memory={{ wsl_memory }}
 processors=12
 swap=8GB
 # 2026-09-24: pin the Hyper-V clocksource. On `tsc` the VM's monotonic clock ran

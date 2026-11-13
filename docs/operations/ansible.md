@@ -17,7 +17,7 @@ infrastructure/ansible/
 │   ├── group_vars/      # all/ (connection, talos_clusters), windows_hosts, wsl_distros, mikrotik
 │   └── host_vars/       # per host; secrets in <host>/secrets.sops.yml
 ├── playbooks/
-│   ├── 01-05-*.yml      # Talos cluster bootstrap and upgrade (on the controller)
+│   ├── 01-06-*.yml      # Talos cluster bootstrap, upgrade and node memory (on the controller)
 │   ├── windows-host.yml # the Windows hosts
 │   ├── wsl-distro.yml   # the WSL distros
 │   ├── wsl-qmd.yml      # opt-in: QMD on a WSL distro

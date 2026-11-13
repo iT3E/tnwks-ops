@@ -23,6 +23,11 @@ talos_clusters:
   #   controlplane_patches      --config-patch-controlplanes
   #   worker2_augment           rebuild worker-2 with the USB devices and E:
   #                             (DESKTOP-HKE05KI's Coral and Z-Stick)
+  #   memory_nodes              a node with a memory limit of its own (node
+  #                             name without the cluster: size). talosctl
+  #                             gives every worker memory_workers, so
+  #                             06-talos-node-memory.yml sets these on the
+  #                             node containers, while they run.
   # homelab-wsl on DESKTOP-HKE05KI.
   wsl:
     provisioner: docker
@@ -43,8 +48,9 @@ talos_clusters:
     controlplane_patches: [patches/talos-api-access.yaml]
     worker2_augment: true
   # homelab-wsl-02 on WSL-02 (talos/wsl-02/README.md): Cilium, the
-  # multi-document patches (talosctl >= 1.14), no USB. Same sizes inside the
-  # same 40 GB .wslconfig.
+  # multi-document patches (talosctl >= 1.14), no USB. Worker 1 has 18 GiB
+  # (memory_nodes), so the limits add to 35 GiB (4 + 18 + 13) inside WSL-02's
+  # 45 GB .wslconfig (wsl_memory in host_vars/WSL-02).
   wsl-02:
     provisioner: docker
     subnet: 10.6.0.0/24
@@ -60,6 +66,8 @@ talos_clusters:
     cpus_workers: "4.0"
     memory_controlplanes: 4GiB
     memory_workers: 13GiB
+    memory_nodes:
+      worker-1: 18GiB
     config_patches: [patches/cluster.yaml]
     controlplane_patches: [patches/controlplane.yaml]
     # Flux from the committed flux-system/ manifests (public repo, HTTPS,

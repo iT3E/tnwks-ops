@@ -115,6 +115,9 @@ resources:
   - ../../../apps/kopiur-system/standby-restore/ks.yaml
   # Fence a warm app's Postgres when its site lease names this site.
   - ../../../apps/databases/site-lease-fence/ks.yaml
+  # The security platform's namespace (kubernetes/apps/security/README.md):
+  # baseline Pod Security, deny by default. Its apps join one by one.
+  - ../../../apps/security/namespace.yaml
   # CI: the network-device Terraform runner (wg03 sidecar), so those
   # workflows run while homelab-wsl is down.
   - ../../../apps/tools/namespace.yaml
@@ -219,6 +222,26 @@ patches:
                         labels:
                           source_site: ${PEER_CLUSTER_NAME}
                           k8s_cluster: ${PEER_CLUSTER_NAME}
+              # The kubelet's own figure of its node's memory (the working
+              # set of the node's root cgroup, which here is the node
+              # container), for NodeContainerMemoryNearLimit: one series for
+              # each node. cAdvisor's series of that cgroup are dropped by
+              # the chart's defaults, with every other cgroup that has no pod.
+              - op: add
+                path: /spec/values/kubelet/serviceMonitor/resource
+                value: true
+              - op: add
+                path: /spec/values/kubelet/serviceMonitor/resourcePath
+                value: /metrics/resource
+              - op: add
+                path: /spec/values/kubelet/serviceMonitor/resourceInterval
+                value: 1m
+              - op: add
+                path: /spec/values/kubelet/serviceMonitor/resourceMetricRelabelings
+                value:
+                  - sourceLabels: [__name__]
+                    regex: node_memory_working_set_bytes
+                    action: keep
               - op: replace
                 path: /spec/values/prometheus/prometheusSpec/resources
                 value:
@@ -246,6 +269,44 @@ patches:
               - op: replace
                 path: /spec/values/prometheus/prometheusSpec/retentionSize
                 value: 30GB
+  # Loki here is the long store of the security streams: a stream with the
+  # label security_stream stays 90 days, and every other stream keeps the
+  # 14 days of retention_period. The compactor applies both
+  # (retention_enabled in the shared values); a rule's period can't be under
+  # 24h. The chart's ServiceMonitor is on, once a minute, so this site's
+  # Prometheus has Loki's own series (what it takes in, per retention period,
+  # and the series of loki.rules). clusterLabelOverride: the ServiceMonitor
+  # writes a `cluster` label on every series, the release name by default,
+  # and an alert that keeps it would name that instead of the cluster.
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata:
+        name: loki
+        namespace: flux-system
+      spec:
+        patches:
+          - target:
+              kind: HelmRelease
+              name: loki
+            patch: |-
+              apiVersion: helm.toolkit.fluxcd.io/v2
+              kind: HelmRelease
+              metadata:
+                name: loki
+              spec:
+                values:
+                  clusterLabelOverride: ${CLUSTER_NAME}
+                  loki:
+                    limits_config:
+                      retention_stream:
+                        - selector: '{security_stream=~".+"}'
+                          priority: 1
+                          period: 90d
+                  monitoring:
+                    serviceMonitor:
+                      enabled: true
+                      interval: 1m
   - patch: |-
       apiVersion: kustomize.toolkit.fluxcd.io/v1
       kind: Kustomization
