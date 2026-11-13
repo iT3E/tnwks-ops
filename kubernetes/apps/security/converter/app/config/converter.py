@@ -582,7 +582,7 @@ MAX_API_BYTES = 16 * 1024 * 1024
 # A file of Prowler holds one record of some kB for each resource of each check: some
 # thousand records in an account. These limits keep the memory of the counts, and the
 # number of series, small for a file that is not a file of Prowler.
-MAX_RECORDS = 500_000
+MAX_RECORDS = 200_000
 MAX_CHECKS = 5_000
 # The values of the label `severity`, from low to high: the OCSF names in lower case,
 # as the rule of Trivy Operator writes them.
