@@ -157,8 +157,12 @@ NOT_KEPT = [
 ]
 
 
-def test_a_cluster_has_an_audit_policy():
-    assert FILES, "no talos/*/patches/audit-policy.yaml"
+# The directory under talos/ of each cluster that has the audit stream.
+CLUSTERS = {"wsl", "wsl-02"}
+
+
+def test_each_cluster_has_an_audit_policy():
+    assert {path.parts[-3] for path in FILES} == CLUSTERS
 
 
 def test_each_cluster_has_the_same_policy():
