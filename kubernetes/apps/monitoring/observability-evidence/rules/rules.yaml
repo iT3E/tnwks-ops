@@ -397,12 +397,21 @@ spec:
         "k8s-cis-1.23/$1", "compliance_id", "(.+)"), "system", "$1", "k8s_cluster", "(.+)"), "severity", "critical",
         "severity", "CRITICAL"), "severity", "high", "severity", "HIGH"), "severity", "medium", "severity", "MEDIUM"),
         "severity", "low", "severity", "LOW"), "severity", "unknown", "severity", "UNKNOWN")) or label_replace(label_replace(label_replace((sum
-        by (k8s_cluster) (max by (k8s_cluster, image_registry, image_repository, image_tag, image_digest) (max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h])))
-        or on (k8s_cluster) 0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h])))
-        > 0 or ((sum by (k8s_cluster) (max by (k8s_cluster, image_registry, image_repository, image_tag, image_digest)
-        (max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h]))) or on (k8s_cluster)
-        0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]))) unless on (k8s_cluster)
-        (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        by (k8s_cluster) (max by (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h]),
+        "digest", "$1", "image_digest", "(.+)")) and on (k8s_cluster, digest) count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)"))) or on (k8s_cluster) 0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]))
+        and on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)")))) > 0 or ((sum by (k8s_cluster) (max by (k8s_cluster, digest)
+        (label_replace(max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h]), "digest",
+        "$1", "image_digest", "(.+)")) and on (k8s_cluster, digest) count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)"))) or on (k8s_cluster) 0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]))
+        and on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)")))) unless on (k8s_cluster) (count by (k8s_cluster, digest)
+        (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
         "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
         "digest", "$1", "image_id", ".*@(sha256:.+)")) unless on (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
         "digest", "$1", "image_digest", "(.+)")))), "check", "image-vulnerabilities", "", ""), "severity", "critical",
@@ -414,12 +423,21 @@ spec:
         "k8s-cis-1.23/$1", "compliance_id", "(.+)"), "system", "$1", "k8s_cluster", "(.+)"), "severity", "critical",
         "severity", "CRITICAL"), "severity", "high", "severity", "HIGH"), "severity", "medium", "severity", "MEDIUM"),
         "severity", "low", "severity", "LOW"), "severity", "unknown", "severity", "UNKNOWN")) or label_replace(label_replace(label_replace((sum
-        by (k8s_cluster) (max by (k8s_cluster, image_registry, image_repository, image_tag, image_digest) (max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h])))
-        or on (k8s_cluster) 0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h])))
-        > 0 or ((sum by (k8s_cluster) (max by (k8s_cluster, image_registry, image_repository, image_tag, image_digest)
-        (max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h]))) or on (k8s_cluster)
-        0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]))) unless on (k8s_cluster)
-        (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        by (k8s_cluster) (max by (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h]),
+        "digest", "$1", "image_digest", "(.+)")) and on (k8s_cluster, digest) count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)"))) or on (k8s_cluster) 0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]))
+        and on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)")))) > 0 or ((sum by (k8s_cluster) (max by (k8s_cluster, digest)
+        (label_replace(max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h]), "digest",
+        "$1", "image_digest", "(.+)")) and on (k8s_cluster, digest) count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)"))) or on (k8s_cluster) 0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]))
+        and on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)")))) unless on (k8s_cluster) (count by (k8s_cluster, digest)
+        (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
         "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
         "digest", "$1", "image_id", ".*@(sha256:.+)")) unless on (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
         "digest", "$1", "image_digest", "(.+)")))), "check", "image-vulnerabilities", "", ""), "severity", "critical",
@@ -454,6 +472,8 @@ spec:
         "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
         "digest", "$1", "image_id", ".*@(sha256:.+)")) unless on (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
         "digest", "$1", "image_digest", "(.+)"))) > 0 and on (k8s_cluster) group by (k8s_cluster) (homelab_trivy_compliance_report_update_timestamp_seconds{source_site=""})
+        unless on (k8s_cluster) label_replace(last_over_time(homelab_security_accepted_until_timestamp_seconds{source="trivy",check="images-not-scanned"}[1d])
+        > time(), "k8s_cluster", "$1", "system", "(.+)")
       for: 36h
       labels:
         severity: warning
@@ -463,7 +483,9 @@ spec:
         description: 'Images that run on this cluster have had no vulnerability report for 36 hours: a private image,
           a registry that the network policy of the scan jobs does not name, or a scan that fails. While one image
           has no report, the check image-vulnerabilities of the cluster shows a fail, or no evidence in place of
-          a pass. kubernetes/apps/security/trivy-operator/README.md (When a scan fails) has the steps.'
+          a pass. kubernetes/apps/security/trivy-operator/README.md (When a scan fails) has the steps. For an image
+          that no scan can read, an entry of the accepted list with the check images-not-scanned mutes the alert
+          of the cluster until its end.'
     - alert: SecurityCertificateExpiring
       expr: min by (k8s_cluster, namespace, lease) (kube_lease_renew_time{namespace="security",lease=~"aws-security-.+-certificate"})
         - time() < 30 * 86400
