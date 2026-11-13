@@ -63,6 +63,7 @@ API server writes one line for each request, when its answer is complete.
 
 | Cluster | File | Form |
 | --- | --- | --- |
+| homelab-wsl | `talos/wsl/patches/audit-policy.yaml` | `cluster.apiServer.auditPolicy` of the v1alpha1 machine config. Talos refuses the document while the config has this field |
 | homelab-wsl-02 | `talos/wsl-02/patches/audit-policy.yaml` | The document `KubeAuditPolicyConfig` (the multi-document machine config of talosctl 1.14) |
 
 The rules are the same in each file. `security/tests/test_audit_policy.py`
