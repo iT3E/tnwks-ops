@@ -1,0 +1,35 @@
+{
+  admin off
+  auto_https off
+  persist_config off
+}
+
+https://:8443 {
+  # A sender shows a client certificate of the shared CA, or the handshake fails.
+  tls /tls/tls.crt /tls/tls.key {
+    client_auth {
+      mode require_and_verify
+      trust_pool file /tls/ca.crt
+    }
+  }
+
+  # A write path only: the push of log lines, and the root, which a sender
+  # asks for as its health check. No request through here reads a stream.
+  @push {
+    method POST
+    path /loki/api/v1/push
+  }
+  @health {
+    method GET
+    path /
+  }
+  handle @push {
+    reverse_proxy loki-gateway.monitoring.svc.cluster.local:80
+  }
+  handle @health {
+    reverse_proxy loki-gateway.monitoring.svc.cluster.local:80
+  }
+  handle {
+    respond 404
+  }
+}

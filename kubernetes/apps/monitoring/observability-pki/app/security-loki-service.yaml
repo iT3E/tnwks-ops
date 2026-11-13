@@ -1,0 +1,17 @@
+---
+# Exists on both sites; the only backend, the TLS proxy in front of Loki,
+# is on WSL-02 (../../security-loki-proxy).
+apiVersion: v1
+kind: Service
+metadata:
+  name: security-loki
+  annotations:
+    service.cilium.io/global: "true"
+spec:
+  ports:
+    - name: https
+      port: 443
+      targetPort: 8443
+  selector:
+    app.kubernetes.io/name: security-loki-proxy
+    app.kubernetes.io/instance: security-loki-proxy

@@ -4,6 +4,8 @@ kind: Kustomization
 namespace: monitoring
 resources:
   - ./helmrelease.yaml
+  - ./podmonitor.yaml
+  - ./service-audit.yaml
 configMapGenerator:
   - name: vector-aggregator-configmap
     files:

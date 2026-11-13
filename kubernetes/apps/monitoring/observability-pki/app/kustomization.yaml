@@ -7,3 +7,4 @@ resources:
   - ./objstore.sops.yaml
   - ./certificates.yaml
   - ./archive-service.yaml
+  - ./security-loki-service.yaml

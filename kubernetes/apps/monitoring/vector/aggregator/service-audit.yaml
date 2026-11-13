@@ -1,0 +1,18 @@
+---
+# The audit source of the aggregator (audit_source in config/vector.yaml),
+# for the audit reader of this cluster. A ClusterIP: the port is not on the
+# LoadBalancer Service of the HelmRelease.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vector-aggregator-audit
+spec:
+  type: ClusterIP
+  ports:
+    - name: audit
+      port: 6010
+      targetPort: 6010
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: vector-aggregator
+    app.kubernetes.io/instance: vector-aggregator

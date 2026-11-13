@@ -1,0 +1,33 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aws-credentials
+---
+# Patch the two session Secrets and the two Leases, by name, and nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aws-credentials
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["aws-security-audit-sts", "aws-security-trail-sts"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    resourceNames: ["aws-security-audit-certificate", "aws-security-trail-certificate"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aws-credentials
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: aws-credentials
+subjects:
+  - kind: ServiceAccount
+    name: aws-credentials
+    namespace: security
