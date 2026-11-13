@@ -10,6 +10,9 @@ from rules import records
 
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCERS = {
+    # Before "homelab_": the first prefix that fits names the producer.
+    "homelab_security_": "security sources (security/README.md)",
+    "homelab:security_": "security registry rules (security/generate.py)",
     "homelab_": "read-only evidence collector",
     "probe_": "evidence collector probes",
     "cnpg_": "CloudNativePG PostgreSQL exporter",

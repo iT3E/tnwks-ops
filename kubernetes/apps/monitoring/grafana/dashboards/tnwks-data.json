@@ -155,7 +155,15 @@
                         "channel": "Channel",
                         "client": "Device",
                         "as_name": "Destination",
-                        "category": "Category"
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source"
                       }
                     }
                   }
@@ -666,6 +674,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "State"
                       }
                     }
@@ -1452,6 +1468,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "Weekly PVC drill age"
                       }
                     }
@@ -2379,6 +2403,14 @@
                         "client": "Device",
                         "as_name": "Destination",
                         "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source",
                         "Value": "PVCs without a backup schedule"
                       }
                     }

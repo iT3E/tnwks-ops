@@ -155,7 +155,15 @@
                         "channel": "Channel",
                         "client": "Device",
                         "as_name": "Destination",
-                        "category": "Category"
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source"
                       }
                     }
                   }
@@ -324,7 +332,15 @@
                         "channel": "Channel",
                         "client": "Device",
                         "as_name": "Destination",
-                        "category": "Category"
+                        "category": "Category",
+                        "safeguard": "Safeguard",
+                        "title": "Title",
+                        "function": "Function",
+                        "system": "System",
+                        "system_type": "Type",
+                        "site": "Site of the system",
+                        "domain": "Domain",
+                        "source": "Source"
                       }
                     }
                   }

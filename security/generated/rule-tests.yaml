@@ -130,3 +130,29 @@ tests:
     exp_samples:
     - labels: homelab:security_control_state{safeguard="8.2",system="sce-rtr01",system_type="router",k8s_cluster="site"}
       value: 0
+- name: an accepted finding past its end date raises one alert for its system, with no check in its text
+  interval: 1m
+  external_labels:
+    cluster: site
+  input_series:
+  - series: homelab_security_accepted_until_timestamp_seconds{source="prowler",check="sample-check",system="aws-management"}
+    values: 86400+0x1600
+  - series: homelab_security_accepted_until_timestamp_seconds{source="prowler",check="other-check",system="aws-management"}
+    values: 7200+0x1600
+  - series: homelab_security_accepted_until_timestamp_seconds{source="prowler",check="later-check",system="aws-management"}
+    values: 864000+0x1600
+  alert_rule_test:
+  - eval_time: 1h
+    alertname: SecurityAcceptedFindingExpired
+    exp_alerts: []
+  - eval_time: 25h
+    alertname: SecurityAcceptedFindingExpired
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        system: aws-management
+      exp_annotations:
+        summary: An accepted finding of aws-management has passed its end date
+        description: aws-management has an accepted finding whose end date has passed. Renew it or remove it in
+          the encrypted list of accepted findings.
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site

@@ -176,6 +176,10 @@ def resource(board: Board) -> dict:
                     assert header, (panel.title, "sorting needs the value column")
                     data.transformation(dashboard.Transformation().group("sortBy").options({
                         "sort": [{"field": header, "desc": panel.sort == "desc"}]}))
+                if panel.order:
+                    assert panel.order not in LABELS, (panel.title, "the ordering label keeps its raw name")
+                    data.transformation(dashboard.Transformation().group("sortBy").options({
+                        "sort": [{"field": panel.order}]}))
             description = panel.description
             if not board.kiosk:
                 description += (f"\n\nObservation budget: {OBSERVATION_BUDGET_SECONDS}s for current evidence; "

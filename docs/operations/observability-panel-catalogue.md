@@ -230,6 +230,19 @@ Each row names the source metrics, observation budget and operator runbook. Proj
 | tnwks-observability / Archive and delivery / Archive free space | `garage_local_disk_avail`<br>`garage_local_disk_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Archive and delivery / Time since last upload | `thanos_objstore_bucket_last_successful_upload_time` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-observability / Archive and delivery / Notification failures | `alertmanager_notifications_failed_total` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/external-monitoring.md) |
+| tnwks-security / Safeguards / Safeguards in the registry | `homelab:security_safeguard_state` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
+| tnwks-security / Safeguards / With a result | `homelab:security_safeguard_state` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
+| tnwks-security / Safeguards / Failing | `homelab:security_safeguard_state` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
+| tnwks-security / Safeguards / State of each safeguard | `homelab:security_safeguard_state` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
+| tnwks-security / Systems / Failing safeguards by system | `homelab:security_control_state` | 180s | None | [Runbook](../../security/README.md) |
+| tnwks-security / Systems / Safeguards with a result | `homelab:security_control_state` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
+| tnwks-security / Systems / Systems in the registry | `homelab:security_system_info` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
+| tnwks-security / Sources / Age of the last result | `homelab_security_last_result_timestamp_seconds` | 180s | Unknown: no source reports | [Runbook](../../security/README.md) |
+| tnwks-security / Sources / Late sources | `ALERTS` | 180s | None | [Runbook](../../security/README.md) |
+| tnwks-security / Sources / Failing checks | `homelab_security_check_result` | 180s | None | [Runbook](../../security/README.md) |
+| tnwks-security / Accepted findings / Accepted findings | `homelab_security_accepted_until_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
+| tnwks-security / Accepted findings / Past their end date | `homelab_security_accepted_until_timestamp_seconds` | 180s | Unknown — missing evidence | [Runbook](../../security/README.md) |
+| tnwks-security / Accepted findings / Accepted findings by system | `homelab_security_accepted_until_timestamp_seconds` | 180s | None | [Runbook](../../security/README.md) |
 | tnwks-alerts / Current / Firing now | `ALERTS` | 180s | None | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-alerts / Current / Pending now | `ALERTS` | 180s | None | [Runbook](../../docs/operations/observability-implementation.md) |
 | tnwks-alerts / Alertmanager / Alerts in Alertmanager | `alertmanager_alerts` | 180s | Unknown — missing evidence | [Runbook](../../docs/operations/observability-implementation.md) |

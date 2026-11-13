@@ -150,13 +150,10 @@ def test_a_new_system_of_a_known_type_is_one_line(registry):
 
 
 def test_the_late_rule_watches_each_source_that_runs_and_no_other(registry):
-    assert [system.get("sources", []) for system in registry["systems"]] == [[]] * len(registry["systems"]) or \
-        generate.alerts(registry), "a source that runs has the rule for a late result"
     full = generate.every_source(registry)
     watched = generate.expected(full)
     assert len(watched) == len(set(watched)) > 0
-    (alert,) = generate.alerts(full)
-    assert alert["alert"] == "SecurityResultLate"
+    (alert,) = [rule for rule in generate.alerts(full) if rule["alert"] == "SecurityResultLate"]
     for source, system, check, limit in watched:
         labels = f'source="{source}",system="{system}"' + (f',check="{check}"' if check else "")
         window = f"{LAST_RESULT}{{{labels}}}[{generate.WINDOW}]"
@@ -167,7 +164,7 @@ def test_the_late_rule_watches_each_source_that_runs_and_no_other(registry):
     no_source = copy.deepcopy(registry)
     for system in no_source["systems"]:
         system.pop("sources", None)
-    assert generate.alerts(no_source) == []
+    assert "SecurityResultLate" not in [rule["alert"] for rule in generate.alerts(no_source)]
 
 
 def test_the_limits_come_from_sources_yaml(registry):
@@ -250,3 +247,48 @@ def test_the_rule_tests_cover_no_evidence_and_the_late_rule(registry):
     assert "a result with no time of the last result is no evidence, and never a pass" in names
     late = generate.late_fixtures(registry)["tests"]
     assert any(test["name"] == "a source that serves no time reads as late" for test in late)
+
+
+ALLOWED_LABELS = {"SecurityResultLate": {"source", "system"}, "SecurityAcceptedFindingExpired": {"system"}}
+
+
+def test_the_text_of_each_alert_is_a_system_a_severity_and_a_link_and_no_raw_event(registry):
+    """The Telegram template prints the description, each label of the alert and the
+    dashboard link (kubernetes/apps/monitoring/alertmanager/app/config/telegram.tmpl).
+    So the labels and the annotations of a rule are the whole text of its alert."""
+    found = generate.alerts(generate.every_source(registry))
+    assert {rule["alert"] for rule in found} == set(ALLOWED_LABELS)
+    for rule in found:
+        allowed = ALLOWED_LABELS[rule["alert"]]
+        assert rule["labels"] == {"severity": "warning"}
+        assert set(rule["annotations"]) == {"summary", "description", "dashboard_url"}
+        assert rule["annotations"]["dashboard_url"] == generate.BOARD_LINK
+        text = " ".join(rule["annotations"].values())
+        used = set(re.findall(r"\{\{ *(\$[A-Za-z.]+) *\}\}", text))
+        assert used <= {f"$labels.{label}" for label in allowed} | {"$externalLabels.cluster"}, used
+        assert "$value" not in text and "{{ ." not in text, "no value and no raw field in the text"
+        # Each term of the expression keeps only the labels of the text: a check, a pod
+        # or a path of a result can not reach the alert.
+        kept = set(re.findall(r"\bby \(([a-z_, ]+)\) \((?:time\(\) - last_over_time|absent_over_time|max by)", rule["expr"]))
+        assert kept == {", ".join(sorted(allowed))}, kept
+    template = (generate.ROOT / "kubernetes/apps/monitoring/alertmanager/app/config/telegram.tmpl").read_text()
+    printed = set(re.findall(r"\$a\.Annotations\.([a-z_]+)", template))
+    assert printed == {"description", "summary", "message", "runbook_url", "dashboard_url"}, printed
+
+
+def test_a_sample_of_each_alert_has_its_whole_text_in_the_rule_tests(registry):
+    """promtool compares each label and each annotation of the sample, so one more
+    label on an alert fails CI."""
+    late = generate.late_alert("prowler", "aws-prod")
+    assert late["exp_labels"] == {"severity": "warning", "source": "prowler", "system": "aws-prod"}
+    assert late["exp_annotations"] == {
+        "summary": "A security source is late for aws-prod",
+        "description": ("The newest result of prowler for aws-prod is older than its limit, or the source "
+                        "serves no time. The board shows no evidence for it."),
+        "dashboard_url": "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site"}
+    accepted = generate.alert_sample(generate.accepted_rule(), system="aws-prod")
+    assert accepted["exp_labels"] == {"severity": "warning", "system": "aws-prod"}
+    assert "check" not in json.dumps(accepted) and "prowler" not in json.dumps(accepted)
+    samples = json.dumps([generate.fixtures(registry), generate.late_fixtures(registry)])
+    assert samples.count('"alertname": "SecurityAcceptedFindingExpired"') == 2
+    assert samples.count('"alertname": "SecurityResultLate"') >= 4

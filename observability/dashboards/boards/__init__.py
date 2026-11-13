@@ -16,6 +16,7 @@ from . import (
     kubernetes,
     network,
     observability,
+    security,
     sites,
     wan_clients,
     wifi,
@@ -23,7 +24,7 @@ from . import (
 )
 
 ORDER = (homelab, sites, data, network, internet, wan_clients, wifi, wifi_clients, kubernetes, apps, home, hosts, host,
-         observability, alerts, house)
+         observability, security, alerts, house)
 
 
 def catalogue() -> list[Board]:

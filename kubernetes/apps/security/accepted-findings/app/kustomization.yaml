@@ -1,0 +1,9 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: security
+# The owner makes accepted.sops.yaml (security/README.md has its form), and
+# names it here:
+#   resources:
+#     - ./accepted.sops.yaml
+resources: []

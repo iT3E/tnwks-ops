@@ -12,6 +12,7 @@ RUNBOOKS = {
     "hosts": "docs/operations/grafana-resource-budget.md",
     "observability": "docs/operations/observability-implementation.md",
     "wifi": "docs/network/unifi.md",
+    "security": "security/README.md",
 }
 PANEL_RUNBOOKS = {
     "Windows disk free": "docs/operations/grafana-resource-budget.md",
