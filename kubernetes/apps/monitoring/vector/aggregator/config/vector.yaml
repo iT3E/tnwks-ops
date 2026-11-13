@@ -4,8 +4,18 @@ api:
   enabled: true
   address: 0.0.0.0:8686
 
+# An internal metric stays for an hour after its last change, not the default
+# five minutes. A counter that changes rarely, such as the errors of one sink,
+# is then still there when a rule compares it with its value of minutes before.
+expire_metrics_secs: 3600
+
 # Sources
 sources:
+  # Vector's own metrics: the events and the errors of each component below,
+  # by component_id. Served by the prometheus sink at the end of this file.
+  internal_metrics:
+    type: internal_metrics
+
   # Pod logs from vector-agent (MS-01 only; see ../ks-agent.yaml).
   kubernetes_source:
     address: 0.0.0.0:6000
@@ -66,3 +76,11 @@ sinks:
       job: routeros
       hostname: "{{ host }}"
       severity: "{{ severity }}"
+
+  # The metrics port (9598), scraped by the PodMonitor next to the
+  # HelmRelease. It is a port of the pod only: no Service carries it.
+  prometheus:
+    type: prometheus_exporter
+    inputs:
+      - internal_metrics
+    address: 0.0.0.0:9598

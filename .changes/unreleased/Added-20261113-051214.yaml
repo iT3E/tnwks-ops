@@ -1,0 +1,3 @@
+kind: Added
+body: 'monitoring: the Vector aggregator of each cluster serves its own metrics (an `internal_metrics` source and a `prometheus_exporter` sink on port 9598 of the pod), and a PodMonitor scrapes them. The port is not on the LoadBalancer Service. `kubernetes/apps/monitoring/vector/README.md` lists the ports and the series'
+time: 2026-11-13T05:12:14.75340885-08:00
