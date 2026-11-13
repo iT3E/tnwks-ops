@@ -336,3 +336,44 @@ groups:
         }}
       description: Garage shares its disk with the WSL-02 node. Shorten the Compactor's retention or free space
         before uploads fail.
+- name: homelab.capacity
+  interval: 1m
+  rules:
+  - alert: NodeContainerMemoryNearLimit
+    expr: max by (k8s_cluster, node) (node_memory_working_set_bytes{node="homelab-wsl-02-worker-1"}) > 0.9 * 18
+      * 1024^3
+    for: 15m
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $labels.node }} is above 90% of the memory limit of its node container'
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $labels.k8s_cluster }}
+      description: The node container has a memory limit of 18 GiB. The scheduler does not see it, because the node
+        reports the memory of the whole WSL VM. Find the largest pods of the node, and move or shrink one. The limit
+        is memory_nodes of talos_clusters in the Ansible inventory.
+  - alert: LokiSecurityIngestAbovePlan
+    expr: sum by (k8s_cluster) (increase(loki_distributor_bytes_received_total{retention_hours="2160"}[1d])) > 2
+      * 1.2e9
+    for: 1h
+    labels:
+      severity: warning
+    annotations:
+      summary: Loki on {{ $labels.k8s_cluster }} took in more than twice the planned bytes of its 90-day streams
+        in a day
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-observability?var-cluster={{ $labels.k8s_cluster
+        }}
+      description: The streams that Loki keeps for 90 days took in more than 2.4 GB of lines in 24 hours, before
+        compression. The plan is 1.2 GB a day. Find the stream that grew (the label security_stream), then lower
+        its volume at the source or its retention.
+  - alert: WslDriveSpaceLow
+    expr: min by (k8s_cluster, instance, volume) (windows_logical_disk_free_bytes{instance="WSL-02",volume="C:"})
+      < 100e9
+    for: 15m
+    labels:
+      severity: warning
+    annotations:
+      summary: The drive under the WSL disk of {{ $labels.instance }} has less than 100 GB free
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-hosts?var-cluster={{ $labels.k8s_cluster }}
+      description: '{{ $labels.volume }} of {{ $labels.instance }} holds the WSL disk file of its cluster, and WSL
+        stops when that drive is full. The stores of the cluster delete at a set age: lower the age of the largest
+        one, or free space on the drive.'

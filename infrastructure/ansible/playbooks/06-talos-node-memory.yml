@@ -1,0 +1,37 @@
+---
+# Set the memory limit of each node container that talos_clusters gives a
+# size of its own (memory_nodes, inventory/group_vars/all/talos.yml), on a
+# running Talos-in-Docker cluster. The cluster comes from talos_clusters by
+# talos_target: homelab-wsl (default) or homelab-wsl-02, run on the distro
+# that hosts it.
+#
+# Nothing restarts: `docker update` moves the limit of the running container
+# (tasks/talos-node-memory.yml). A node already at its size is left alone, so
+# a re-run changes nothing. The sizes must fit the VM (.wslconfig memory,
+# wsl_memory in the role windows_host_settings): raise that first, or with
+# it, when the limits grow.
+#
+# Run via:
+#   task talos:memory:wsl-02
+#   ansible-playbook playbooks/06-talos-node-memory.yml -e talos_target=wsl-02
+#
+# To go back: give the node its old size in memory_nodes and run it again.
+# Keep the entry until then: the play only sets the nodes that memory_nodes
+# names, so a node whose entry is gone keeps the limit it has.
+# 01-talos-bootstrap.yml runs the same tasks, so a cluster it creates gets
+# these sizes too.
+
+- name: Set the memory limits of Talos-in-Docker node containers
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+
+  vars:
+    cluster_target: "{{ talos_target | default('wsl') }}"
+    cluster_name: "homelab-{{ cluster_target }}"
+    talos_cluster: "{{ talos_clusters[cluster_target] }}"
+
+  tasks:
+    - name: Node memory limits
+      ansible.builtin.include_tasks: tasks/talos-node-memory.yml

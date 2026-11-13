@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/iT3E/tnwks-ops/blob/main/security/registry/schema.json",
+  "title": "The control registry",
+  "description": "The form of systems.yaml, sources.yaml and controls.yaml. security/generate.py checks each file against the entry of the same name in $defs, and CI fails on a line that does not fit.",
+  "$defs": {
+    "systemType": {
+      "description": "The fixed types of a system. `other` is a layer with no check.",
+      "enum": [
+        "aws-account",
+        "cloudflare-account",
+        "github-organization",
+        "terraform-cloud-organization",
+        "cluster",
+        "windows-host",
+        "wsl-distro",
+        "laptop",
+        "router",
+        "other"
+      ]
+    },
+    "site": {
+      "description": "The cluster name of a site, or `none` for a system that is on no site.",
+      "enum": ["homelab-wsl", "homelab-wsl-02", "none"]
+    },
+    "name": {
+      "description": "A name that is safe as a label value and in a file name.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*$"
+    },
+    "sourceName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "checkName": {
+      "description": "The ID of a check in its tool.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_./-]*$"
+    },
+    "duration": {
+      "description": "A whole number of minutes, hours or days.",
+      "type": "string",
+      "pattern": "^[1-9][0-9]*[mhd]$"
+    },
+    "cycle": {
+      "description": "The time between two runs, or `continuous` for a source that writes as events occur.",
+      "type": "string",
+      "pattern": "^(continuous|[1-9][0-9]*[mhd])$"
+    },
+    "systems": {
+      "description": "systems.yaml: one line for each system.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "type", "site", "domain"],
+        "properties": {
+          "name": { "$ref": "#/$defs/name" },
+          "type": { "$ref": "#/$defs/systemType" },
+          "site": { "$ref": "#/$defs/site" },
+          "domain": {
+            "description": "The domain of the system. It names no person and no age group.",
+            "enum": ["infrastructure"]
+          },
+          "sources": {
+            "description": "The sources that report on the system today. The rule for a late result watches each of them.",
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/sourceName" }
+          }
+        }
+      }
+    },
+    "sources": {
+      "description": "sources.yaml: one line for each source of results.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "title", "kind", "cycle", "late_after"],
+        "properties": {
+          "name": { "$ref": "#/$defs/sourceName" },
+          "title": { "type": "string", "minLength": 1 },
+          "kind": {
+            "description": "`results`: the source gives a result series for each check. `stream`: each check is a security stream, and its newest line is its result.",
+            "enum": ["results", "stream"]
+          },
+          "cycle": { "$ref": "#/$defs/cycle" },
+          "late_after": { "$ref": "#/$defs/duration" },
+          "checks": {
+            "description": "For the kind `stream` only: each stream, with its own times.",
+            "type": "object",
+            "propertyNames": { "$ref": "#/$defs/checkName" },
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["cycle", "late_after"],
+              "properties": {
+                "cycle": { "$ref": "#/$defs/cycle" },
+                "late_after": { "$ref": "#/$defs/duration" }
+              }
+            }
+          },
+          "by_type": {
+            "description": "A different `late_after` for one type of system.",
+            "type": "object",
+            "propertyNames": { "$ref": "#/$defs/systemType" },
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["late_after"],
+              "properties": {
+                "late_after": { "$ref": "#/$defs/duration" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "checkList": {
+      "description": "The checks that test a safeguard on one type of system. An empty list means no check: each system of the type shows \"no evidence\".",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "check"],
+        "properties": {
+          "source": { "$ref": "#/$defs/sourceName" },
+          "check": { "$ref": "#/$defs/checkName" }
+        }
+      }
+    },
+    "controls": {
+      "description": "controls.yaml: one line for each safeguard.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "ig", "function", "checks"],
+        "properties": {
+          "id": {
+            "description": "The ID of the safeguard in CIS Controls v8.1, as a string.",
+            "type": "string",
+            "pattern": "^[1-9][0-9]?\\.[1-9][0-9]?$"
+          },
+          "title": {
+            "description": "A short label in the words of this repository. Not the text of CIS.",
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 60
+          },
+          "ig": {
+            "description": "The lowest Implementation Group that holds the safeguard.",
+            "enum": [1, 2, 3]
+          },
+          "function": {
+            "description": "The function of NIST CSF 2.0.",
+            "enum": ["govern", "identify", "protect", "detect", "respond", "recover"]
+          },
+          "nist_800_53": {
+            "description": "The controls of NIST SP 800-53 that the checks of the line test.",
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[A-Z]{2}-[0-9]+(\\([0-9]+\\))?$" }
+          },
+          "attack": {
+            "description": "For detection: the ATT&CK techniques that the checks of the line see.",
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$" }
+          },
+          "checks": {
+            "description": "One list for each type of system that can have a check. Each type is present, so an empty list is a statement.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "aws-account",
+              "cloudflare-account",
+              "github-organization",
+              "terraform-cloud-organization",
+              "cluster",
+              "windows-host",
+              "wsl-distro",
+              "laptop",
+              "router"
+            ],
+            "properties": {
+              "aws-account": { "$ref": "#/$defs/checkList" },
+              "cloudflare-account": { "$ref": "#/$defs/checkList" },
+              "github-organization": { "$ref": "#/$defs/checkList" },
+              "terraform-cloud-organization": { "$ref": "#/$defs/checkList" },
+              "cluster": { "$ref": "#/$defs/checkList" },
+              "windows-host": { "$ref": "#/$defs/checkList" },
+              "wsl-distro": { "$ref": "#/$defs/checkList" },
+              "laptop": { "$ref": "#/$defs/checkList" },
+              "router": { "$ref": "#/$defs/checkList" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

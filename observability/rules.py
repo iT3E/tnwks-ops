@@ -363,6 +363,67 @@ def network_records():
     }
 
 
+# The capacity plan of homelab-wsl-02: the room of one node container, what
+# Loki takes in for its 90-day streams, and the drive under the WSL disk.
+#
+# The node container of worker 1 and its Docker memory limit, in GiB
+# (talos_clusters.wsl-02.memory_nodes in the Ansible inventory). No series
+# carries that limit, so it is stated again here.
+CAPACITY_NODE = "homelab-wsl-02-worker-1"
+CAPACITY_NODE_LIMIT_GIB = 18
+# Loki there keeps a stream with the label security_stream for 90 days
+# (kubernetes/clusters/wsl-02/apps), and counts the bytes it takes in by
+# retention period, before compression. The plan for those streams, in the
+# same unit: 1.2 GB of lines a day. That is 0.8 GB of audit logs (0.4 GB for
+# each of the two clusters), 0.09 GB of router log, 0.09 GB of scan findings
+# and 0.2 GB of the cloud trail (100,000 events of 2 kB).
+SECURITY_RETENTION_HOURS = 90 * 24
+SECURITY_INGEST_PLAN_GB = 1.2
+# The Windows host of that cluster, and the drive that holds its WSL disk.
+CAPACITY_DRIVE_HOST = "WSL-02"
+CAPACITY_DRIVE_VOLUME = "C:"
+CAPACITY_DRIVE_FLOOR_GB = 100
+
+
+def capacity_alerts():
+    """Each alert reads a series that only one site's Prometheus has, so the rule
+    is quiet on the other site: the kubelet's node figure and Loki's own series
+    are scraped on homelab-wsl-02, and the Windows hosts by homelab-wsl."""
+    def board(uid):
+        return f'https://grafana.${{INTERNAL_DOMAIN}}/d/{uid}?var-cluster={{{{ $labels.k8s_cluster }}}}'
+
+    return [
+        # The working set of the node's root cgroup, which is the node container
+        # (a private cgroup namespace): what the kubelet reports for its node.
+        {"alert": "NodeContainerMemoryNearLimit",
+         "expr": (f'max by (k8s_cluster, node) (node_memory_working_set_bytes{{node="{CAPACITY_NODE}"}})'
+                  f' > 0.9 * {CAPACITY_NODE_LIMIT_GIB} * 1024^3'),
+         "for": "15m", "labels": {"severity": "warning"},
+         "annotations": {"summary": "{{ $labels.node }} is above 90% of the memory limit of its node container",
+                         "dashboard_url": board("tnwks-kubernetes"),
+                         "description": (f"The node container has a memory limit of {CAPACITY_NODE_LIMIT_GIB} GiB. The scheduler does not see it,"
+                                         " because the node reports the memory of the whole WSL VM. Find the largest pods of the node,"
+                                         " and move or shrink one. The limit is memory_nodes of talos_clusters in the Ansible inventory.")}},
+        {"alert": "LokiSecurityIngestAbovePlan",
+         "expr": ('sum by (k8s_cluster) (increase(loki_distributor_bytes_received_total'
+                  f'{{retention_hours="{SECURITY_RETENTION_HOURS}"}}[1d])) > 2 * {SECURITY_INGEST_PLAN_GB}e9'),
+         "for": "1h", "labels": {"severity": "warning"},
+         "annotations": {"summary": "Loki on {{ $labels.k8s_cluster }} took in more than twice the planned bytes of its 90-day streams in a day",
+                         "dashboard_url": board("tnwks-observability"),
+                         "description": (f"The streams that Loki keeps for 90 days took in more than {2 * SECURITY_INGEST_PLAN_GB:g} GB of lines"
+                                         f" in 24 hours, before compression. The plan is {SECURITY_INGEST_PLAN_GB:g} GB a day. Find the stream that grew"
+                                         " (the label security_stream), then lower its volume at the source or its retention.")}},
+        {"alert": "WslDriveSpaceLow",
+         "expr": ('min by (k8s_cluster, instance, volume) (windows_logical_disk_free_bytes'
+                  f'{{instance="{CAPACITY_DRIVE_HOST}",volume="{CAPACITY_DRIVE_VOLUME}"}}) < {CAPACITY_DRIVE_FLOOR_GB}e9'),
+         "for": "15m", "labels": {"severity": "warning"},
+         "annotations": {"summary": f"The drive under the WSL disk of {{{{ $labels.instance }}}} has less than {CAPACITY_DRIVE_FLOOR_GB} GB free",
+                         "dashboard_url": board("tnwks-hosts"),
+                         "description": ("{{ $labels.volume }} of {{ $labels.instance }} holds the WSL disk file of its cluster, and WSL stops when that drive is full."
+                                         " The stores of the cluster delete at a set age: lower the age of the largest one, or free space on the drive.")}},
+    ]
+
+
 def rule_resource():
     rules = [{"record": name, "expr": expr} for name, expr in records().items()]
     rules += [
@@ -409,7 +470,8 @@ def rule_resource():
     ]
     return {"apiVersion": "monitoring.coreos.com/v1", "kind": "PrometheusRule",
             "metadata": {"name": "homelab-observability", "namespace": "monitoring"},
-            "spec": {"groups": [{"name": "homelab.evidence", "interval": "1m", "rules": rules}]}}
+            "spec": {"groups": [{"name": "homelab.evidence", "interval": "1m", "rules": rules},
+                                {"name": "homelab.capacity", "interval": "1m", "rules": capacity_alerts()}]}}
 
 
 def fixtures():
@@ -739,7 +801,88 @@ def fixtures():
         *other_database_fixtures(),
         *house_fixtures(),
         *host_fixtures(),
+        *capacity_fixtures(),
     ]}
+
+
+def capacity_fixtures():
+    site = "homelab-wsl-02"
+    gib = 1024 ** 3
+
+    def expected(name, **labels):
+        """The alert as promtool sees it: its annotations with the labels filled in."""
+        rule = next(rule for rule in capacity_alerts() if rule["alert"] == name)
+        labels = {"k8s_cluster": site, **labels}
+        annotations = {}
+        for key, text in rule["annotations"].items():
+            for label, value in labels.items():
+                text = text.replace("{{ $labels." + label + " }}", value)
+            annotations[key] = text
+        return {"exp_labels": {"severity": "warning", **labels}, "exp_annotations": annotations}
+
+    def node(name, value, extra=""):
+        return {"series": f'node_memory_working_set_bytes{{k8s_cluster="{site}",node="{name}"{extra}}}',
+                "values": f"{value}+0x30"}
+
+    def loki(retention_hours, per_minute):
+        return {"series": (f'loki_distributor_bytes_received_total{{k8s_cluster="{site}",tenant="fake",'
+                           f'retention_hours="{retention_hours}"}}'),
+                "values": f"0+{per_minute}x1560"}
+
+    def drive(instance, volume, free):
+        return {"series": f'windows_logical_disk_free_bytes{{k8s_cluster="{site}",instance="{instance}",volume="{volume}"}}',
+                "values": f"{free}+0x30"}
+
+    return [
+        {"name": "a node container past 90% of its memory limit alerts; another node at the same figure does not", "interval": "1m",
+         "input_series": [
+             # 16.5 of 18 GiB: 92%.
+             node(CAPACITY_NODE, int(16.5 * gib)),
+             # A node with no limit of its own here.
+             node("homelab-wsl-02-worker-2", int(16.5 * gib)),
+         ], "alert_rule_test": [
+             {"alertname": "NodeContainerMemoryNearLimit", "eval_time": "10m", "exp_alerts": []},
+             {"alertname": "NodeContainerMemoryNearLimit", "eval_time": "20m", "exp_alerts": [
+                 expected("NodeContainerMemoryNearLimit", node=CAPACITY_NODE)]},
+         ]},
+        {"name": "a node container at 89% of its memory limit does not alert", "interval": "1m",
+         "input_series": [node(CAPACITY_NODE, int(16 * gib))],
+         "alert_rule_test": [
+             {"alertname": "NodeContainerMemoryNearLimit", "eval_time": "20m", "exp_alerts": []},
+         ]},
+        # 2 MB a minute is 2.88 GB a day, past twice the plan of 1.2 GB. The
+        # streams with the default retention take in ten times that and don't count.
+        {"name": "the 90-day streams above twice their plan alert, whatever the other streams take in", "interval": "1m",
+         "input_series": [
+             loki(SECURITY_RETENTION_HOURS, 2_000_000),
+             loki(14 * 24, 20_000_000),
+         ], "alert_rule_test": [
+             {"alertname": "LokiSecurityIngestAbovePlan", "eval_time": "26h", "exp_alerts": [
+                 expected("LokiSecurityIngestAbovePlan")]},
+         ]},
+        # 1.5 MB a minute is 2.16 GB a day: over the plan, under twice the plan.
+        {"name": "the 90-day streams under twice their plan do not alert", "interval": "1m",
+         "input_series": [
+             loki(SECURITY_RETENTION_HOURS, 1_500_000),
+             loki(14 * 24, 20_000_000),
+         ], "alert_rule_test": [
+             {"alertname": "LokiSecurityIngestAbovePlan", "eval_time": "26h", "exp_alerts": []},
+         ]},
+        {"name": "the drive under the WSL disk with 90 GB free alerts; another volume or host does not", "interval": "1m",
+         "input_series": [
+             drive(CAPACITY_DRIVE_HOST, CAPACITY_DRIVE_VOLUME, 90_000_000_000),
+             drive(CAPACITY_DRIVE_HOST, "D:", 1_000_000_000),
+             drive("other", CAPACITY_DRIVE_VOLUME, 1_000_000_000),
+         ], "alert_rule_test": [
+             {"alertname": "WslDriveSpaceLow", "eval_time": "20m", "exp_alerts": [
+                 expected("WslDriveSpaceLow", instance=CAPACITY_DRIVE_HOST, volume=CAPACITY_DRIVE_VOLUME)]},
+         ]},
+        {"name": "the drive under the WSL disk with 110 GB free does not alert", "interval": "1m",
+         "input_series": [drive(CAPACITY_DRIVE_HOST, CAPACITY_DRIVE_VOLUME, 110_000_000_000)],
+         "alert_rule_test": [
+             {"alertname": "WslDriveSpaceLow", "eval_time": "20m", "exp_alerts": []},
+         ]},
+    ]
 
 
 def host_fixtures():

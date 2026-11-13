@@ -1,0 +1,1228 @@
+---
+# The safeguards of CIS Controls v8.1, Implementation Group 1, that apply: 48 lines.
+# One line for each safeguard. For each type of system, `checks` lists the checks
+# that test it. An empty list means that no check tests it on that type: each
+# system of the type then shows "no evidence". The form is in schema.json, and
+# security/README.md says how to add a check. Run security/generate.py after a change.
+#
+# A title is a short label in the words of this repository, not the text of CIS.
+# The registry names controls, systems and checks. It holds no result.
+- id: "1.1"
+  title: Asset inventory
+  ig: 1
+  function: identify
+  checks:
+    aws-account:
+      - { source: prowler, check: config_recorder_all_regions_enabled }
+      - { source: prowler, check: resourceexplorer2_indexes_found }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host:
+      - { source: wazuh, check: inventory-hardware }
+    wsl-distro:
+      - { source: wazuh, check: inventory-hardware }
+    laptop: []
+    router: []
+- id: "1.2"
+  title: Unauthorized assets handled
+  ig: 1
+  function: respond
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "2.1"
+  title: Software inventory
+  ig: 1
+  function: identify
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host:
+      - { source: wazuh, check: inventory-packages }
+    wsl-distro:
+      - { source: wazuh, check: inventory-packages }
+    laptop: []
+    router: []
+- id: "2.2"
+  title: Supported software only
+  ig: 1
+  function: identify
+  checks:
+    aws-account:
+      - { source: prowler, check: awslambda_function_using_supported_runtimes }
+      - { source: prowler, check: ec2_instance_with_outdated_ami }
+      - { source: prowler, check: eks_cluster_uses_a_supported_version }
+      - { source: prowler, check: elasticbeanstalk_environment_php_platform_updated }
+      - { source: prowler, check: kafka_cluster_uses_latest_version }
+      - { source: prowler, check: rds_instance_deprecated_engine_version }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "2.3"
+  title: Unauthorized software handled
+  ig: 1
+  function: respond
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host:
+      - { source: wazuh, check: "26367" }
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "3.1"
+  title: Data management process
+  ig: 1
+  function: govern
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "3.2"
+  title: Data inventory
+  ig: 1
+  function: identify
+  checks:
+    aws-account:
+      - { source: prowler, check: macie_automated_sensitive_data_discovery_enabled }
+      - { source: prowler, check: macie_is_enabled }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "3.3"
+  title: Data access control lists
+  ig: 1
+  function: protect
+  checks:
+    aws-account:
+      - { source: prowler, check: awslambda_function_not_publicly_accessible }
+      - { source: prowler, check: cloudtrail_logs_s3_bucket_is_not_publicly_accessible }
+      - { source: prowler, check: cloudwatch_log_group_not_publicly_accessible }
+      - { source: prowler, check: codebuild_project_not_publicly_accessible }
+      - { source: prowler, check: dynamodb_table_cross_account_access }
+      - { source: prowler, check: ec2_ami_public }
+      - { source: prowler, check: ecr_repositories_not_publicly_accessible }
+      - { source: prowler, check: efs_access_point_enforce_root_directory }
+      - { source: prowler, check: efs_access_point_enforce_user_identity }
+      - { source: prowler, check: efs_mount_target_not_publicly_accessible }
+      - { source: prowler, check: efs_not_publicly_accessible }
+      - { source: prowler, check: eventbridge_bus_cross_account_access }
+      - { source: prowler, check: eventbridge_bus_exposed }
+      - { source: prowler, check: glacier_vaults_policy_public_access }
+      - { source: prowler, check: glue_data_catalogs_not_publicly_accessible }
+      - { source: prowler, check: kms_key_not_publicly_accessible }
+      - { source: prowler, check: s3_access_point_public_access_block }
+      - { source: prowler, check: s3_account_level_public_access_blocks }
+      - { source: prowler, check: s3_bucket_acl_prohibited }
+      - { source: prowler, check: s3_bucket_cross_account_access }
+      - { source: prowler, check: s3_bucket_level_public_access_block }
+      - { source: prowler, check: s3_bucket_policy_public_write_access }
+      - { source: prowler, check: s3_bucket_public_access }
+      - { source: prowler, check: s3_bucket_public_list_acl }
+      - { source: prowler, check: s3_bucket_public_write_acl }
+      - { source: prowler, check: s3_multi_region_access_point_public_access_block }
+      - { source: prowler, check: secretsmanager_has_restrictive_resource_policy }
+      - { source: prowler, check: secretsmanager_not_publicly_accessible }
+      - { source: prowler, check: ses_identity_not_publicly_accessible }
+      - { source: prowler, check: sns_topics_not_publicly_accessible }
+      - { source: prowler, check: sqs_queues_not_publicly_accessible }
+      - { source: prowler, check: ssm_documents_set_as_public }
+    cloudflare-account: []
+    github-organization:
+      - { source: prowler, check: organization_default_repository_permission_strict }
+    terraform-cloud-organization: []
+    cluster:
+      - { source: trivy, check: k8s-cis-1.23/5.1.2 }
+    windows-host: []
+    wsl-distro:
+      - { source: wazuh, check: "35512" }
+      - { source: wazuh, check: "35513" }
+      - { source: wazuh, check: "35515" }
+      - { source: wazuh, check: "35516" }
+      - { source: wazuh, check: "35517" }
+      - { source: wazuh, check: "35518" }
+      - { source: wazuh, check: "35519" }
+      - { source: wazuh, check: "35520" }
+      - { source: wazuh, check: "35521" }
+      - { source: wazuh, check: "35522" }
+      - { source: wazuh, check: "35523" }
+      - { source: wazuh, check: "35524" }
+      - { source: wazuh, check: "35525" }
+      - { source: wazuh, check: "35526" }
+      - { source: wazuh, check: "35527" }
+      - { source: wazuh, check: "35529" }
+      - { source: wazuh, check: "35530" }
+      - { source: wazuh, check: "35531" }
+      - { source: wazuh, check: "35533" }
+      - { source: wazuh, check: "35534" }
+      - { source: wazuh, check: "35535" }
+      - { source: wazuh, check: "35536" }
+      - { source: wazuh, check: "35537" }
+      - { source: wazuh, check: "35538" }
+      - { source: wazuh, check: "35539" }
+      - { source: wazuh, check: "35540" }
+      - { source: wazuh, check: "35541" }
+      - { source: wazuh, check: "35549" }
+      - { source: wazuh, check: "35550" }
+      - { source: wazuh, check: "35551" }
+      - { source: wazuh, check: "35594" }
+      - { source: wazuh, check: "35595" }
+      - { source: wazuh, check: "35596" }
+      - { source: wazuh, check: "35597" }
+      - { source: wazuh, check: "35598" }
+      - { source: wazuh, check: "35599" }
+      - { source: wazuh, check: "35600" }
+      - { source: wazuh, check: "35601" }
+      - { source: wazuh, check: "35640" }
+      - { source: wazuh, check: "35641" }
+      - { source: wazuh, check: "35642" }
+      - { source: wazuh, check: "35643" }
+      - { source: wazuh, check: "35668" }
+      - { source: wazuh, check: "35672" }
+      - { source: wazuh, check: "35700" }
+      - { source: wazuh, check: "35701" }
+      - { source: wazuh, check: "35702" }
+      - { source: wazuh, check: "35703" }
+      - { source: wazuh, check: "35706" }
+      - { source: wazuh, check: "35719" }
+      - { source: wazuh, check: "35722" }
+      - { source: wazuh, check: "35749" }
+      - { source: wazuh, check: "35751" }
+      - { source: wazuh, check: "35752" }
+      - { source: wazuh, check: "35753" }
+      - { source: wazuh, check: "35754" }
+      - { source: wazuh, check: "35755" }
+      - { source: wazuh, check: "35756" }
+      - { source: wazuh, check: "35757" }
+      - { source: wazuh, check: "35761" }
+      - { source: wazuh, check: "35762" }
+      - { source: wazuh, check: "35763" }
+      - { source: wazuh, check: "35764" }
+      - { source: wazuh, check: "35765" }
+      - { source: wazuh, check: "35766" }
+      - { source: wazuh, check: "35767" }
+      - { source: wazuh, check: "35768" }
+      - { source: wazuh, check: "35769" }
+      - { source: wazuh, check: "35770" }
+      - { source: wazuh, check: "35773" }
+      - { source: wazuh, check: "35774" }
+    laptop: []
+    router: []
+- id: "3.4"
+  title: Data retention
+  ig: 1
+  function: protect
+  checks:
+    aws-account:
+      - { source: prowler, check: cloudwatch_log_group_retention_policy_specific_days_enabled }
+      - { source: prowler, check: ecr_repositories_lifecycle_policy_enabled }
+      - { source: prowler, check: kinesis_stream_data_retention_period }
+      - { source: prowler, check: s3_bucket_lifecycle_enabled }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host:
+      - { source: wazuh, check: "26430" }
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "3.5"
+  title: Secure data disposal
+  ig: 1
+  function: protect
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "3.6"
+  title: Encrypted end-user devices
+  ig: 1
+  function: protect
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host:
+      - { source: wazuh, check: "26306" }
+      - { source: wazuh, check: "26307" }
+      - { source: wazuh, check: "26308" }
+      - { source: wazuh, check: "26309" }
+      - { source: wazuh, check: "26310" }
+      - { source: wazuh, check: "26311" }
+      - { source: wazuh, check: "26312" }
+      - { source: wazuh, check: "26313" }
+      - { source: wazuh, check: "26320" }
+      - { source: wazuh, check: "26321" }
+      - { source: wazuh, check: "26322" }
+      - { source: wazuh, check: "26323" }
+      - { source: wazuh, check: "26324" }
+      - { source: wazuh, check: "26325" }
+      - { source: wazuh, check: "26326" }
+      - { source: wazuh, check: "26327" }
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "4.1"
+  title: Secure configuration process
+  ig: 1
+  function: govern
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster:
+      - { source: trivy, check: k8s-cis-1.23/1.3.1 }
+      - { source: trivy, check: k8s-cis-1.23/4.1.1 }
+      - { source: trivy, check: k8s-cis-1.23/4.1.2 }
+      - { source: trivy, check: k8s-cis-1.23/4.1.5 }
+      - { source: trivy, check: k8s-cis-1.23/4.1.6 }
+      - { source: trivy, check: k8s-cis-1.23/4.1.9 }
+      - { source: trivy, check: k8s-cis-1.23/4.1.10 }
+      - { source: trivy, check: k8s-cis-1.23/4.2.5 }
+      - { source: trivy, check: k8s-cis-1.23/4.2.9 }
+    windows-host:
+      - { source: wazuh, check: "26023" }
+      - { source: wazuh, check: "26038" }
+      - { source: wazuh, check: "26052" }
+      - { source: wazuh, check: "26063" }
+      - { source: wazuh, check: "26168" }
+      - { source: wazuh, check: "26176" }
+      - { source: wazuh, check: "26181" }
+      - { source: wazuh, check: "26182" }
+      - { source: wazuh, check: "26206" }
+      - { source: wazuh, check: "26209" }
+      - { source: wazuh, check: "26239" }
+      - { source: wazuh, check: "26240" }
+      - { source: wazuh, check: "26241" }
+      - { source: wazuh, check: "26242" }
+      - { source: wazuh, check: "26244" }
+      - { source: wazuh, check: "26272" }
+      - { source: wazuh, check: "26283" }
+      - { source: wazuh, check: "26284" }
+    wsl-distro:
+      - { source: wazuh, check: "35696" }
+    laptop: []
+    router: []
+- id: "4.2"
+  title: Secure configuration of network gear
+  ig: 1
+  function: govern
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host:
+      - { source: wazuh, check: "26184" }
+      - { source: wazuh, check: "26188" }
+      - { source: wazuh, check: "26189" }
+      - { source: wazuh, check: "26199" }
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "4.3"
+  title: Automatic session lock
+  ig: 1
+  function: protect
+  checks:
+    aws-account:
+      - { source: prowler, check: appstream_fleet_maximum_session_duration }
+      - { source: prowler, check: appstream_fleet_session_disconnect_timeout }
+      - { source: prowler, check: appstream_fleet_session_idle_disconnect_timeout }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host:
+      - { source: wazuh, check: "26025" }
+      - { source: wazuh, check: "26030" }
+      - { source: wazuh, check: "26187" }
+    wsl-distro:
+      - { source: wazuh, check: "35555" }
+      - { source: wazuh, check: "35705" }
+    laptop: []
+    router: []
+- id: "4.4"
+  title: Firewall on servers
+  ig: 1
+  function: protect
+  checks:
+    aws-account:
+      - { source: prowler, check: ec2_instance_port_cassandra_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_cifs_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_elasticsearch_kibana_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_ftp_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_kafka_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_kerberos_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_ldap_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_memcached_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_mongodb_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_mysql_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_oracle_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_postgresql_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_rdp_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_redis_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_sqlserver_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_ssh_exposed_to_internet }
+      - { source: prowler, check: ec2_instance_port_telnet_exposed_to_internet }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_all_ports }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_any_port }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_any_port_from_ip }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_high_risk_tcp_ports }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_22 }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_3389 }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_cassandra_7199_9160_8888 }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_elasticsearch_kibana_9200_9300_5601 }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_ftp_20_21 }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_kafka_9092 }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_memcached_11211 }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_mongodb_27017_27018 }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_mysql_3306 }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_oracle_1521_2483 }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_postgres_5432 }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_redis_6379 }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_sql_server_1433_1434 }
+      - { source: prowler, check: ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_telnet_23 }
+      - { source: prowler, check: ec2_securitygroup_allow_wide_open_public_ipv4 }
+      - { source: prowler, check: ec2_securitygroup_default_restrict_traffic }
+      - { source: prowler, check: ec2_securitygroup_with_many_ingress_egress_rules }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster:
+      - { source: trivy, check: k8s-cis-1.23/4.2.7 }
+    windows-host:
+      - { source: host-check, check: firewall-enabled }
+    wsl-distro:
+      - { source: wazuh, check: "35619" }
+      - { source: wazuh, check: "35620" }
+      - { source: wazuh, check: "35621" }
+      - { source: wazuh, check: "35622" }
+      - { source: wazuh, check: "35623" }
+      - { source: wazuh, check: "35624" }
+      - { source: wazuh, check: "35625" }
+      - { source: wazuh, check: "35626" }
+      - { source: wazuh, check: "35627" }
+      - { source: wazuh, check: "35628" }
+      - { source: wazuh, check: "35629" }
+      - { source: wazuh, check: "35630" }
+      - { source: wazuh, check: "35631" }
+      - { source: wazuh, check: "35632" }
+      - { source: wazuh, check: "35633" }
+      - { source: wazuh, check: "35634" }
+      - { source: wazuh, check: "35635" }
+      - { source: wazuh, check: "35636" }
+      - { source: wazuh, check: "35637" }
+      - { source: wazuh, check: "35638" }
+      - { source: wazuh, check: "35639" }
+    laptop: []
+    router: []
+- id: "4.5"
+  title: Firewall on end-user devices
+  ig: 1
+  function: protect
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host:
+      - { source: host-check, check: firewall-enabled }
+      - { source: wazuh, check: "26116" }
+      - { source: wazuh, check: "26117" }
+      - { source: wazuh, check: "26118" }
+      - { source: wazuh, check: "26121" }
+      - { source: wazuh, check: "26122" }
+      - { source: wazuh, check: "26123" }
+      - { source: wazuh, check: "26124" }
+      - { source: wazuh, check: "26125" }
+      - { source: wazuh, check: "26128" }
+      - { source: wazuh, check: "26129" }
+      - { source: wazuh, check: "26130" }
+      - { source: wazuh, check: "26131" }
+      - { source: wazuh, check: "26132" }
+      - { source: wazuh, check: "26133" }
+      - { source: wazuh, check: "26134" }
+      - { source: wazuh, check: "26137" }
+      - { source: wazuh, check: "26138" }
+    wsl-distro:
+      - { source: wazuh, check: "35619" }
+      - { source: wazuh, check: "35620" }
+      - { source: wazuh, check: "35621" }
+      - { source: wazuh, check: "35622" }
+      - { source: wazuh, check: "35623" }
+      - { source: wazuh, check: "35624" }
+      - { source: wazuh, check: "35625" }
+      - { source: wazuh, check: "35626" }
+      - { source: wazuh, check: "35627" }
+      - { source: wazuh, check: "35628" }
+      - { source: wazuh, check: "35629" }
+      - { source: wazuh, check: "35630" }
+      - { source: wazuh, check: "35631" }
+      - { source: wazuh, check: "35632" }
+      - { source: wazuh, check: "35633" }
+      - { source: wazuh, check: "35634" }
+      - { source: wazuh, check: "35635" }
+      - { source: wazuh, check: "35636" }
+      - { source: wazuh, check: "35637" }
+      - { source: wazuh, check: "35638" }
+      - { source: wazuh, check: "35639" }
+    laptop: []
+    router: []
+- id: "4.6"
+  title: Secure management of assets and software
+  ig: 1
+  function: protect
+  checks:
+    aws-account:
+      - { source: prowler, check: autoscaling_group_launch_configuration_requires_imdsv2 }
+      - { source: prowler, check: ec2_instance_account_imdsv2_enabled }
+      - { source: prowler, check: ec2_instance_imdsv2_enabled }
+      - { source: prowler, check: ec2_instance_managed_by_ssm }
+      - { source: prowler, check: ec2_launch_template_imdsv2_required }
+    cloudflare-account:
+      - { source: prowler, check: zone_automatic_https_rewrites_enabled }
+      - { source: prowler, check: zone_https_redirect_enabled }
+      - { source: prowler, check: zone_min_tls_version_secure }
+      - { source: prowler, check: zone_ssl_strict }
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster:
+      - { source: trivy, check: k8s-cis-1.23/1.3.7 }
+      - { source: trivy, check: k8s-cis-1.23/1.4.2 }
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "4.7"
+  title: Default accounts managed
+  ig: 1
+  function: protect
+  checks:
+    aws-account:
+      - { source: prowler, check: iam_avoid_root_usage }
+      - { source: prowler, check: iam_no_root_access_key }
+      - { source: prowler, check: iam_root_credentials_management_enabled }
+      - { source: prowler, check: rds_cluster_default_admin }
+      - { source: prowler, check: rds_instance_default_admin }
+      - { source: prowler, check: redshift_cluster_non_default_username }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster:
+      - { source: trivy, check: k8s-cis-1.23/1.2.1 }
+      - { source: trivy, check: k8s-cis-1.23/4.2.1 }
+    windows-host:
+      - { source: wazuh, check: "26009" }
+      - { source: wazuh, check: "26011" }
+      - { source: wazuh, check: "26012" }
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "5.1"
+  title: Account inventory
+  ig: 1
+  function: identify
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "5.2"
+  title: Unique passwords
+  ig: 1
+  function: protect
+  checks:
+    aws-account:
+      - { source: prowler, check: cognito_user_pool_password_policy_lowercase }
+      - { source: prowler, check: cognito_user_pool_password_policy_minimum_length_14 }
+      - { source: prowler, check: cognito_user_pool_password_policy_number }
+      - { source: prowler, check: cognito_user_pool_password_policy_symbol }
+      - { source: prowler, check: cognito_user_pool_password_policy_uppercase }
+      - { source: prowler, check: iam_password_policy_lowercase }
+      - { source: prowler, check: iam_password_policy_minimum_length_14 }
+      - { source: prowler, check: iam_password_policy_number }
+      - { source: prowler, check: iam_password_policy_reuse_24 }
+      - { source: prowler, check: iam_password_policy_symbol }
+      - { source: prowler, check: iam_password_policy_uppercase }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host:
+      - { source: wazuh, check: "26000" }
+      - { source: wazuh, check: "26001" }
+      - { source: wazuh, check: "26002" }
+      - { source: wazuh, check: "26003" }
+      - { source: wazuh, check: "26004" }
+      - { source: wazuh, check: "26010" }
+      - { source: wazuh, check: "26020" }
+      - { source: wazuh, check: "26264" }
+      - { source: wazuh, check: "26265" }
+      - { source: wazuh, check: "26266" }
+      - { source: wazuh, check: "26315" }
+      - { source: wazuh, check: "26318" }
+      - { source: wazuh, check: "26329" }
+      - { source: wazuh, check: "26333" }
+      - { source: wazuh, check: "26346" }
+    wsl-distro:
+      - { source: wazuh, check: "35648" }
+      - { source: wazuh, check: "35650" }
+      - { source: wazuh, check: "35658" }
+      - { source: wazuh, check: "35661" }
+      - { source: wazuh, check: "35674" }
+      - { source: wazuh, check: "35675" }
+      - { source: wazuh, check: "35679" }
+      - { source: wazuh, check: "35680" }
+      - { source: wazuh, check: "35681" }
+      - { source: wazuh, check: "35682" }
+      - { source: wazuh, check: "35683" }
+      - { source: wazuh, check: "35684" }
+      - { source: wazuh, check: "35685" }
+      - { source: wazuh, check: "35686" }
+      - { source: wazuh, check: "35687" }
+      - { source: wazuh, check: "35688" }
+      - { source: wazuh, check: "35690" }
+      - { source: wazuh, check: "35691" }
+      - { source: wazuh, check: "35694" }
+      - { source: wazuh, check: "35695" }
+      - { source: wazuh, check: "35698" }
+      - { source: wazuh, check: "35772" }
+    laptop: []
+    router: []
+- id: "5.3"
+  title: Dormant accounts disabled
+  ig: 1
+  function: protect
+  checks:
+    aws-account:
+      - { source: prowler, check: iam_user_accesskey_unused }
+      - { source: prowler, check: iam_user_console_access_unused }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "5.4"
+  title: Admin rights on dedicated accounts
+  ig: 1
+  function: protect
+  checks:
+    aws-account:
+      - { source: prowler, check: iam_aws_attached_policy_no_administrative_privileges }
+      - { source: prowler, check: iam_customer_attached_policy_no_administrative_privileges }
+      - { source: prowler, check: iam_group_administrator_access_policy }
+      - { source: prowler, check: iam_inline_policy_no_administrative_privileges }
+      - { source: prowler, check: iam_role_administratoraccess_policy }
+      - { source: prowler, check: iam_user_administrator_access_policy }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster:
+      - { source: trivy, check: k8s-cis-1.23/5.1.1 }
+    windows-host: []
+    wsl-distro:
+      - { source: wazuh, check: "35659" }
+      - { source: wazuh, check: "35662" }
+      - { source: wazuh, check: "35663" }
+      - { source: wazuh, check: "35665" }
+      - { source: wazuh, check: "35666" }
+      - { source: wazuh, check: "35667" }
+    laptop: []
+    router: []
+- id: "6.1"
+  title: Access granting process
+  ig: 1
+  function: govern
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "6.2"
+  title: Access revoking process
+  ig: 1
+  function: govern
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro:
+      - { source: wazuh, check: "35673" }
+      - { source: wazuh, check: "35676" }
+      - { source: wazuh, check: "35677" }
+      - { source: wazuh, check: "35678" }
+    laptop: []
+    router: []
+- id: "6.3"
+  title: MFA for exposed applications
+  ig: 1
+  function: protect
+  checks:
+    aws-account:
+      - { source: prowler, check: cognito_user_pool_mfa_enabled }
+      - { source: prowler, check: iam_user_hardware_mfa_enabled }
+      - { source: prowler, check: iam_user_mfa_enabled_console_access }
+    cloudflare-account: []
+    github-organization:
+      - { source: prowler, check: organization_members_mfa_required }
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "6.4"
+  title: MFA for remote network access
+  ig: 1
+  function: protect
+  checks:
+    aws-account:
+      - { source: prowler, check: directoryservice_radius_server_security_protocol }
+      - { source: prowler, check: directoryservice_supported_mfa_radius_enabled }
+    cloudflare-account: []
+    github-organization:
+      - { source: prowler, check: organization_members_mfa_required }
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "6.5"
+  title: MFA for admin access
+  ig: 1
+  function: protect
+  checks:
+    aws-account:
+      - { source: prowler, check: iam_administrator_access_with_mfa }
+      - { source: prowler, check: iam_root_hardware_mfa_enabled }
+      - { source: prowler, check: iam_root_mfa_enabled }
+    cloudflare-account: []
+    github-organization:
+      - { source: prowler, check: organization_members_mfa_required }
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "7.1"
+  title: Vulnerability management process
+  ig: 1
+  function: govern
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "7.2"
+  title: Remediation process
+  ig: 1
+  function: govern
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "7.3"
+  title: Automated OS patching
+  ig: 1
+  function: protect
+  checks:
+    aws-account:
+      - { source: prowler, check: ssm_managed_compliant_patching }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host:
+      - { source: host-check, check: updates-pending }
+      - { source: wazuh, check: "26368" }
+      - { source: wazuh, check: "26441" }
+      - { source: wazuh, check: "26473" }
+      - { source: wazuh, check: "26474" }
+      - { source: wazuh, check: "26475" }
+      - { source: wazuh, check: "26477" }
+      - { source: wazuh, check: "26479" }
+      - { source: wazuh, check: "26480" }
+      - { source: wazuh, check: "26481" }
+    wsl-distro:
+      - { source: host-check, check: updates-pending }
+    laptop: []
+    router: []
+- id: "7.4"
+  title: Automated application patching
+  ig: 1
+  function: protect
+  checks:
+    aws-account:
+      - { source: prowler, check: dms_instance_minor_version_upgrade_enabled }
+      - { source: prowler, check: elasticache_redis_cluster_auto_minor_version_upgrades }
+      - { source: prowler, check: elasticbeanstalk_environment_managed_updates_enabled }
+      - { source: prowler, check: memorydb_cluster_auto_minor_version_upgrades }
+      - { source: prowler, check: mq_broker_auto_minor_version_upgrades }
+      - { source: prowler, check: rds_cluster_minor_version_upgrade_enabled }
+      - { source: prowler, check: rds_instance_minor_version_upgrade_enabled }
+      - { source: prowler, check: redshift_cluster_automatic_upgrades }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster:
+      - { source: trivy, check: image-vulnerabilities }
+    windows-host:
+      - { source: wazuh, check: vulnerabilities }
+    wsl-distro:
+      - { source: wazuh, check: vulnerabilities }
+    laptop: []
+    router: []
+- id: "8.1"
+  title: Audit log process
+  ig: 1
+  function: govern
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "8.2"
+  title: Audit logs collected
+  ig: 1
+  function: detect
+  checks:
+    aws-account:
+      - { source: prowler, check: apigateway_restapi_logging_enabled }
+      - { source: prowler, check: apigatewayv2_api_access_logging_enabled }
+      - { source: prowler, check: appsync_field_level_logging_enabled }
+      - { source: prowler, check: athena_workgroup_logging_enabled }
+      - { source: prowler, check: awslambda_function_invoke_api_operations_cloudtrail_logging_enabled }
+      - { source: prowler, check: bedrock_model_invocation_logging_enabled }
+      - { source: prowler, check: cloudfront_distributions_logging_enabled }
+      - { source: prowler, check: cloudtrail_bedrock_logging_enabled }
+      - { source: prowler, check: cloudtrail_cloudwatch_logging_enabled }
+      - { source: prowler, check: cloudtrail_logs_s3_bucket_access_logging_enabled }
+      - { source: prowler, check: cloudtrail_multi_region_enabled }
+      - { source: prowler, check: cloudtrail_multi_region_enabled_logging_management_events }
+      - { source: prowler, check: codebuild_project_logging_enabled }
+      - { source: prowler, check: config_recorder_all_regions_enabled }
+      - { source: prowler, check: datasync_task_logging_enabled }
+      - { source: prowler, check: directoryservice_directory_log_forwarding_enabled }
+      - { source: prowler, check: dms_replication_task_source_logging_enabled }
+      - { source: prowler, check: dms_replication_task_target_logging_enabled }
+      - { source: prowler, check: documentdb_cluster_cloudwatch_log_export }
+      - { source: prowler, check: ec2_client_vpn_endpoint_connection_logging_enabled }
+      - { source: prowler, check: ecs_task_definitions_logging_enabled }
+      - { source: prowler, check: eks_control_plane_logging_all_types_enabled }
+      - { source: prowler, check: elasticbeanstalk_environment_cloudwatch_logging_enabled }
+      - { source: prowler, check: elb_logging_enabled }
+      - { source: prowler, check: elbv2_logging_enabled }
+      - { source: prowler, check: mq_broker_logging_enabled }
+      - { source: prowler, check: neptune_cluster_integration_cloudwatch_logs }
+      - { source: prowler, check: networkfirewall_logging_enabled }
+      - { source: prowler, check: opensearch_service_domains_cloudwatch_logging_enabled }
+      - { source: prowler, check: rds_cluster_integration_cloudwatch_logs }
+      - { source: prowler, check: rds_instance_integration_cloudwatch_logs }
+      - { source: prowler, check: redshift_cluster_audit_logging }
+      - { source: prowler, check: s3_bucket_server_access_logging_enabled }
+      - { source: prowler, check: stepfunctions_statemachine_logging_enabled }
+      - { source: prowler, check: vpc_flow_logs_enabled }
+      - { source: prowler, check: waf_global_webacl_logging_enabled }
+      - { source: prowler, check: wafv2_webacl_logging_enabled }
+      - { source: stream, check: cloudtrail }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster:
+      - { source: trivy, check: k8s-cis-1.23/1.2.19 }
+      - { source: stream, check: k8s-audit }
+    windows-host:
+      - { source: wazuh, check: "26119" }
+      - { source: wazuh, check: "26126" }
+      - { source: wazuh, check: "26135" }
+      - { source: wazuh, check: "26404" }
+    wsl-distro:
+      - { source: wazuh, check: "35653" }
+      - { source: wazuh, check: "35707" }
+      - { source: wazuh, check: "35708" }
+      - { source: wazuh, check: "35709" }
+      - { source: wazuh, check: "35710" }
+      - { source: wazuh, check: "35711" }
+      - { source: wazuh, check: "35713" }
+      - { source: wazuh, check: "35714" }
+      - { source: wazuh, check: "35715" }
+      - { source: wazuh, check: "35716" }
+      - { source: wazuh, check: "35717" }
+      - { source: wazuh, check: "35718" }
+      - { source: wazuh, check: "35719" }
+      - { source: wazuh, check: "35720" }
+      - { source: wazuh, check: "35724" }
+      - { source: wazuh, check: "35725" }
+      - { source: wazuh, check: "35726" }
+      - { source: wazuh, check: "35729" }
+      - { source: wazuh, check: "35730" }
+      - { source: wazuh, check: "35744" }
+      - { source: wazuh, check: "35745" }
+      - { source: wazuh, check: "35746" }
+      - { source: wazuh, check: "35747" }
+    laptop: []
+    router:
+      - { source: stream, check: routeros }
+- id: "8.3"
+  title: Audit log storage
+  ig: 1
+  function: protect
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster:
+      - { source: trivy, check: k8s-cis-1.23/1.2.21 }
+      - { source: trivy, check: k8s-cis-1.23/1.2.22 }
+    windows-host:
+      - { source: wazuh, check: "26014" }
+      - { source: wazuh, check: "26120" }
+      - { source: wazuh, check: "26127" }
+      - { source: wazuh, check: "26136" }
+      - { source: wazuh, check: "26190" }
+      - { source: wazuh, check: "26373" }
+      - { source: wazuh, check: "26374" }
+      - { source: wazuh, check: "26375" }
+      - { source: wazuh, check: "26376" }
+      - { source: wazuh, check: "26377" }
+      - { source: wazuh, check: "26378" }
+      - { source: wazuh, check: "26379" }
+      - { source: wazuh, check: "26380" }
+    wsl-distro:
+      - { source: wazuh, check: "35528" }
+      - { source: wazuh, check: "35532" }
+      - { source: wazuh, check: "35714" }
+      - { source: wazuh, check: "35727" }
+      - { source: wazuh, check: "35728" }
+      - { source: wazuh, check: "35729" }
+      - { source: wazuh, check: "35730" }
+    laptop: []
+    router: []
+- id: "9.1"
+  title: Supported browsers and mail clients
+  ig: 1
+  function: protect
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "9.2"
+  title: DNS filtering
+  ig: 1
+  function: protect
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "10.1"
+  title: Anti-malware deployed
+  ig: 1
+  function: detect
+  checks:
+    aws-account:
+      - { source: prowler, check: guardduty_ec2_malware_protection_enabled }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host:
+      - { source: host-check, check: defender-enabled }
+      - { source: wazuh, check: "26393" }
+      - { source: wazuh, check: "26394" }
+      - { source: wazuh, check: "26395" }
+      - { source: wazuh, check: "26401" }
+      - { source: wazuh, check: "26402" }
+      - { source: wazuh, check: "26403" }
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "10.2"
+  title: Anti-malware signatures updated
+  ig: 1
+  function: protect
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host:
+      - { source: host-check, check: defender-signatures }
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "10.3"
+  title: Autorun off for removable media
+  ig: 1
+  function: protect
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host:
+      - { source: wazuh, check: "26301" }
+      - { source: wazuh, check: "26302" }
+      - { source: wazuh, check: "26303" }
+    wsl-distro:
+      - { source: wazuh, check: "35508" }
+      - { source: wazuh, check: "35556" }
+      - { source: wazuh, check: "35558" }
+      - { source: wazuh, check: "35559" }
+      - { source: wazuh, check: "35561" }
+    laptop: []
+    router: []
+- id: "11.1"
+  title: Data recovery process
+  ig: 1
+  function: govern
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "11.2"
+  title: Automated backups
+  ig: 1
+  function: recover
+  checks:
+    aws-account:
+      - { source: prowler, check: backup_plans_exist }
+      - { source: prowler, check: backup_vaults_exist }
+      - { source: prowler, check: dlm_ebs_snapshot_lifecycle_policy_exists }
+      - { source: prowler, check: documentdb_cluster_backup_enabled }
+      - { source: prowler, check: drs_job_exist }
+      - { source: prowler, check: dynamodb_table_protected_by_backup_plan }
+      - { source: prowler, check: dynamodb_tables_pitr_enabled }
+      - { source: prowler, check: ec2_ebs_volume_protected_by_backup_plan }
+      - { source: prowler, check: ec2_ebs_volume_snapshots_exists }
+      - { source: prowler, check: efs_have_backup_enabled }
+      - { source: prowler, check: elasticache_redis_cluster_backup_enabled }
+      - { source: prowler, check: lightsail_instance_automated_snapshots }
+      - { source: prowler, check: neptune_cluster_backup_enabled }
+      - { source: prowler, check: rds_cluster_backtrack_enabled }
+      - { source: prowler, check: rds_cluster_protected_by_backup_plan }
+      - { source: prowler, check: rds_instance_backup_enabled }
+      - { source: prowler, check: rds_instance_protected_by_backup_plan }
+      - { source: prowler, check: redshift_cluster_automated_snapshot }
+      - { source: prowler, check: s3_bucket_object_versioning }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "11.3"
+  title: Recovery data protected
+  ig: 1
+  function: protect
+  checks:
+    aws-account:
+      - { source: prowler, check: backup_recovery_point_encrypted }
+      - { source: prowler, check: backup_vaults_encrypted }
+      - { source: prowler, check: documentdb_cluster_public_snapshot }
+      - { source: prowler, check: ec2_ebs_public_snapshot }
+      - { source: prowler, check: ec2_ebs_snapshot_account_block_public_access }
+      - { source: prowler, check: ec2_ebs_snapshots_encrypted }
+      - { source: prowler, check: neptune_cluster_public_snapshot }
+      - { source: prowler, check: neptune_cluster_snapshot_encrypted }
+      - { source: prowler, check: rds_snapshots_encrypted }
+      - { source: prowler, check: rds_snapshots_public_access }
+      - { source: prowler, check: s3_bucket_no_mfa_delete }
+      - { source: prowler, check: s3_bucket_object_lock }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "11.4"
+  title: Isolated copy of recovery data
+  ig: 1
+  function: recover
+  checks:
+    aws-account:
+      - { source: prowler, check: s3_bucket_cross_region_replication }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "12.1"
+  title: Network gear up to date
+  ig: 1
+  function: protect
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router:
+      - { source: api-check, check: routeros-firmware }
+- id: "15.1"
+  title: Service provider inventory
+  ig: 1
+  function: identify
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "17.1"
+  title: Incident handling roles
+  ig: 1
+  function: respond
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "17.2"
+  title: Incident contact list
+  ig: 1
+  function: govern
+  checks:
+    aws-account:
+      - { source: prowler, check: account_maintain_current_contact_details }
+      - { source: prowler, check: account_maintain_different_contact_details_to_security_billing_and_operations }
+      - { source: prowler, check: account_security_contact_information_is_registered }
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []
+- id: "17.3"
+  title: Incident reporting process
+  ig: 1
+  function: govern
+  checks:
+    aws-account: []
+    cloudflare-account: []
+    github-organization: []
+    terraform-cloud-organization: []
+    cluster: []
+    windows-host: []
+    wsl-distro: []
+    laptop: []
+    router: []

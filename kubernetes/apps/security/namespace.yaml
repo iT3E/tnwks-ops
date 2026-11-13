@@ -1,0 +1,22 @@
+---
+# The security platform: the scanners, the converter of their results, and
+# the parts that move audit logs (README.md has the contract for an app
+# here). Pods meet the `baseline` Pod Security level, and the network policy
+# below denies by default: each app brings the policy for what it needs.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: security
+  labels:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: security
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]

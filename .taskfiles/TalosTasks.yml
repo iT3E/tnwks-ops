@@ -28,6 +28,11 @@ tasks:
     cmds:
       - "{{.ANSIBLE}} ansible-playbook {{.ANSIBLE_DIR}}/playbooks/05-talos-upgrade.yml -e talos_target=wsl-02"
 
+  memory:wsl-02:
+    desc: Set the memory limits of the homelab-wsl-02 node containers from talos_clusters, no restart (run on WSL-02's distro)
+    cmds:
+      - "{{.ANSIBLE}} ansible-playbook {{.ANSIBLE_DIR}}/playbooks/06-talos-node-memory.yml -e talos_target=wsl-02"
+
   upgrade:wsl:
     desc: Roll the WSL Talos node containers onto talos/wsl/versions.yaml (one node at a time)
     cmds:

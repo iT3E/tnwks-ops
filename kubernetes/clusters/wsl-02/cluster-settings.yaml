@@ -86,6 +86,9 @@ data:
   # kube-prometheus-stack runs here since 2026-11-05, so apps' ServiceMonitors
   # can be created.
   SERVICE_MONITOR_ENABLED: "true"
+  # The node of the security platform's pods (kubernetes/apps/security/README.md):
+  # worker 1, the node container with the 18 GiB limit.
+  SECURITY_NODE: "homelab-wsl-02-worker-1"
   # Backups: the shared bucket; this cluster's own kopia repository prefix
   # (write) next to homelab-wsl's kopiur/ (read-only, kopiur-standby).
   BACKUP_S3_BUCKET: "tnwks-homelab-backups-654654262098"

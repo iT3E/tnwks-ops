@@ -1,9 +1,11 @@
 ---
 # The providers of the workflow agents (scripts/providers.sh). Every 15
-# minutes it imports or updates each provider profile (providers/) in the
-# sandbox gateway, gets a new installation token of the GitHub App of the
-# reviewer, and creates or updates each provider: model-gateway with the key
-# from the Secret workflow-providers-secret, github-reviewer with the token.
+# minutes it imports each new provider profile (providers/) into the sandbox
+# gateway and updates each one that changed in git, updates model-gateway
+# with the key from the Secret workflow-providers-secret, then gets a new
+# installation token of the GitHub App of the reviewer and updates
+# github-reviewer with it. A failure logs one line,
+# "workflow-providers result=failed step=<step> name=<name>".
 #
 # Why every 15 minutes: an installation token lives one hour, and a sandbox
 # keeps the token of its start for its whole life (the gateway keeps the old

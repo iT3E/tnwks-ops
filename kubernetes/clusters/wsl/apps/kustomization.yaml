@@ -66,6 +66,9 @@ resources:
   - ../../../apps/monitoring/grafana/dashboards-ks.yaml
   - ../../../apps/monitoring/thanos-metrics/ks.yaml
   - ../../../apps/monitoring/observability-storage/ks.yaml
+  # The security platform's namespace (kubernetes/apps/security/README.md):
+  # baseline Pod Security, deny by default. Its apps join one by one.
+  - ../../../apps/security/namespace.yaml
   - ../../../apps/selfhosted
   # Immich (photo library for the kitchen screensaver): WSL-only, its library
   # sits on local-path-bulk. See docs/apps/immich.md.

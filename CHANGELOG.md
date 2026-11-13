@@ -3,6 +3,42 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.101.0 - 2026-11-13
+
+### Added
+
+* security: the control registry of the security platform in `security/registry` (the systems in scope, the sources with their cycles, and the 48 safeguards of CIS Controls v8.1 IG1 with their checks for each type of system), its schema, and the contract of the result series and the control series in `security/README.md`
+
+## v2.100.1 - 2026-11-13
+
+### Fixed
+
+* agents: the providers job of the workflow agents runs again after its first run. It ran `openshell profile lint`, which refuses a profile that is already in the gateway, so no later run updated the GitHub token and the reviewer got 401 after one hour. It now imports a new profile, updates a changed one (by the sha256 of its file), checks the gateway and the profiles before it asks for a token, and logs one line for each failed step
+
+## v2.100.0 - 2026-11-13
+
+### Added
+
+* monitoring: three alerts for the room on homelab-wsl-02, each with a promtool fixture (NodeContainerMemoryNearLimit: worker 1 past 90% of the 18 GiB limit of its node container, from the kubelet resource endpoint scraped there; LokiSecurityIngestAbovePlan: the 90-day streams of its Loki above twice their plan of 1.2 GB of lines a day; WslDriveSpaceLow: under 100 GB free on the drive of its WSL disk)
+
+## v2.99.0 - 2026-11-13
+
+### Changed
+
+* monitoring: the Loki of homelab-wsl-02 keeps a stream with the label security_stream for 90 days (the other streams stay at 14 days), and its ServiceMonitor is on with an interval of 1 minute; the rates of loki.rules read 5 minutes, and LokiRequestLatency leaves out the querier loop, as the Loki mixin does
+
+## v2.98.0 - 2026-11-13
+
+### Changed
+
+* wsl-02: worker 1 of homelab-wsl-02 has a memory limit of 18 GiB (talos_clusters memory_nodes; task talos:memory:wsl-02 sets it on the running node container, with no restart), and the WSL VM of WSL-02 has 45 GB (wsl_memory in the role windows_host_settings, read at the next WSL restart)
+
+## v2.97.0 - 2026-11-13
+
+### Added
+
+* security: the namespace security on homelab-wsl and homelab-wsl-02 (baseline Pod Security, a network policy that denies by default), SECURITY_NODE in each cluster-settings for the node selector of its pods, and the contract for its apps in kubernetes/apps/security/README.md
+
 ## v2.96.1 - 2026-11-13
 
 ### Fixed
