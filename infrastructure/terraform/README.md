@@ -49,7 +49,7 @@ module conventions.
    | `tnwks-ops-aws-identity` | `environments/bootstrap/aws-identity` | remote | API/CLI, by hand |
    | `tnwks-ops-aws-prod` | `environments/prod/aws` | remote | `.github/workflows/terraform.yaml` |
    | `tnwks-cloudflare-prod` | `environments/prod/cloudflare` | local | `.github/workflows/terraform.yaml` (self-hosted runner) |
-   | `tnwks-github-prod` | `environments/prod/github` | local | `.github/workflows/terraform.yaml` (self-hosted runner), once `GITHUB_TERRAFORM_ENABLED` is `true` ([`docs/operations/github.md`](../../docs/operations/github.md)) |
+   | `tnwks-github-prod` | `environments/prod/github` | local | `.github/workflows/terraform.yaml` (self-hosted runner), once `TERRAFORM_GITHUB_ENABLED` is `true` ([`docs/operations/github.md`](../../docs/operations/github.md)) |
 
    None of these workspaces currently has a VCS connection; runs are created by
    the GitHub Actions workflows (prod) or from the CLI.

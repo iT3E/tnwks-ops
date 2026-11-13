@@ -98,7 +98,7 @@ Left alone on purpose:
 - **Labels.** The `meta-sync-labels` workflow owns them.
 - **Releases.** `release.yaml` cuts them.
 - **Runner scale sets.** ARC registers them.
-- **`GITHUB_TERRAFORM_ENABLED`.** It switches this root on in CI, so it
+- **`TERRAFORM_GITHUB_ENABLED`.** It switches this root on in CI, so it
   can't be managed by the root it switches.
 - **Environment variables and all secrets** (Actions, environment,
   Dependabot) and webhooks, for now (later phases).
@@ -256,13 +256,13 @@ each step without taking it.
    4. **What's left.** It re-checks the token file and prints the
       `git add` (the token file, and `aws-init/imports.tf` if it changed).
 2. **Commit and merge** what it printed: a branch, a Changie fragment, a PR.
-   `GITHUB_TERRAFORM_ENABLED` is still unset, so CI skips this root on that
+   `TERRAFORM_GITHUB_ENABLED` is still unset, so CI skips this root on that
    PR and its merge.
 3. **`task github:enable`** (`bin/github-terraform enable`). It fetches
    `origin/main` and refuses unless `main` has the encrypted token (for the
    rule's recipients), the root's `mask_sops` with both files, the mask
    script, and the mask step before Terraform in both jobs. Then it sets
-   `GITHUB_TERRAFORM_ENABLED=true` (`env -u GITHUB_TOKEN gh variable set`)
+   `TERRAFORM_GITHUB_ENABLED=true` (`env -u GITHUB_TOKEN gh variable set`)
    and reads it back. Nothing else turns this root on in CI.
 4. **First apply.** The next merge that touches the root applies it, or
    dispatch it now: `env -u GITHUB_TOKEN gh workflow run deploy.yaml

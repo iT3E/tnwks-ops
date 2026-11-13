@@ -34,7 +34,7 @@ enable, after that PR is merged: fetches origin/main and refuses unless it
 holds the encrypted token, the root's mask_sops entry in
 .github/ci/domains.toml and the masking step before Terraform in both
 terraform.yaml jobs. Then sets the repository variable
-GITHUB_TERRAFORM_ENABLED=true (`env -u GITHUB_TOKEN gh variable set`), the
+TERRAFORM_GITHUB_ENABLED=true (`env -u GITHUB_TOKEN gh variable set`), the
 only thing that turns the root on in CI.
 
 --dry-run prints each step instead of taking it. bootstrap's dry run reads
@@ -71,7 +71,7 @@ GH_REPO = f"{OWNER}/tnwks-ops"
 ROOT = "infrastructure/terraform/environments/prod/github"
 SOPS_FILE = f"{ROOT}/secrets.sops.yaml"
 AWS_INIT_IMPORTS = "infrastructure/terraform/environments/bootstrap/aws-init/imports.tf"
-ENABLED_VAR = "GITHUB_TERRAFORM_ENABLED"
+ENABLED_VAR = "TERRAFORM_GITHUB_ENABLED"
 GITHUB_API = "https://api.github.com"
 TFC_API = "https://app.terraform.io/api/v2"
 TFC_ORG = "tnwks-ops"
@@ -515,6 +515,18 @@ def check_main() -> None:
     say(f"  origin/main: mask_sops {masks}, and the masking step before Terraform in plan and apply")
 
 
+def read_variable(gh: list[str]) -> str | None:
+    """The variable's value, or None when it isn't set. Through the API: older
+    gh releases have no `gh variable get`. The name can't start with GITHUB_,
+    which GitHub reserves (the set would fail with a 422)."""
+    r = run([*gh, "api", f"repos/{GH_REPO}/actions/variables/{ENABLED_VAR}", "--jq", ".value"])
+    if r.returncode == 0:
+        return r.stdout.strip()
+    if "HTTP 404" in r.stderr:
+        return None
+    raise Stop(f"reading {ENABLED_VAR} failed (gh api exit {r.returncode})")
+
+
 def enable(args) -> int:
     gh = ["env", "-u", "GITHUB_TOKEN", "gh"]
     if args.dry_run:
@@ -524,8 +536,7 @@ def enable(args) -> int:
     if r.returncode != 0:
         raise Stop("git fetch origin main failed")
     check_main()
-    r = run([*gh, "variable", "get", ENABLED_VAR, "--repo", GH_REPO])
-    current = r.stdout.strip() if r.returncode == 0 else None
+    current = read_variable(gh)
     if current == "true":
         say(f"  {ENABLED_VAR} is already true; nothing to do")
         return 0
@@ -537,8 +548,7 @@ def enable(args) -> int:
     r = run(cmd)
     if r.returncode != 0:
         raise Stop(f"gh variable set failed (exit {r.returncode}); run it by hand to see why")
-    r = run([*gh, "variable", "get", ENABLED_VAR, "--repo", GH_REPO])
-    if r.stdout.strip() != "true":
+    if read_variable(gh) != "true":
         raise Stop(f"{ENABLED_VAR} doesn't read back as true")
     say(f"  {ENABLED_VAR}=true. CI now plans the root on PRs and applies it on merge.")
     say("  The first apply (the imports) runs on the next merge that touches the root, or now with:")
