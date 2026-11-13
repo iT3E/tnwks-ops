@@ -9,7 +9,7 @@ spec:
   interval: 30m
   url: https://github.com/kubernetes-sigs/agent-sandbox
   ref:
-    tag: v1.0.10
+    tag: v1.0.11
   ignore: |
     # exclude all
     /*
