@@ -161,10 +161,14 @@ of Trivy on that cluster, while such a pod has its scan:
 | By | The operator | The scan job | Sum |
 | --- | --- | --- | --- |
 | Limits | 256 MiB | 6 x 512 MiB | 3328 MiB |
-| Measured use | 162 MiB | 6 x 56 MiB | 498 MiB |
+| Estimate | 162 MiB | 6 x 56 MiB | 498 MiB |
 
-The measured line is from the test cluster: the operator and one scan job
-took 218 MiB, of which 56 MiB was the scan container. Each container of a
+The estimate is not a measure of a job of 6 containers: on the test cluster
+the operator and a scan job of one container took 218 MiB, of which 56 MiB
+was the scan container, and the estimate takes that container 6 times. A
+scan of a pod of 6 containers on homelab-wsl-02 (the Cilium agent pods have
+6 there too) measures it before homelab-wsl lists the app (step 8 of
+"Tests"). The owner decides the limit with that number. Each container of a
 scan job also has a CPU limit of 500m, so such a job can take 3 cores of
 `SECURITY_NODE` for the length of the scan. Its first container downloads the database (about 140 MB
 compressed) to `trivy-cache`, and a later job reads it from there. Without
@@ -190,6 +194,18 @@ A merge that changes `app/` makes Flux upgrade the HelmRelease on each
 cluster that lists `ks.yaml`. The operator restarts. It then checks the
 workloads again, and a scan job starts for each image that has no report.
 
+**A chart release that moves a rule.** A `test` op of the post-render patch
+fails, and the upgrade stops before Helm applies a resource: the running
+operator and its narrow roles stay, and the HelmRelease is not ready
+(`homelab_flux_resource_ready`). helm-controller applies the CRDs of the new
+chart before the upgrade (`crds: CreateReplace`), so the new CRDs are in the
+cluster; they add fields, and the old operator works with them. The fix:
+read the rules of the new chart's ClusterRole, and change the two indexes of
+the patch. `bin/trivy-operator-roles` checks the rendered ClusterRole of
+each cluster that lists the app: a rule with a write outside the reports, or
+a log read, fails it. Run it with each chart release (Tests, below); it is
+not yet a step of `.github/workflows/kubernetes.yaml`.
+
 ## The way back
 
 1. Remove `ks.yaml` from the `apps/kustomization.yaml` of the cluster. Flux
@@ -205,6 +221,7 @@ Offline, before a merge:
 
 ```bash
 kustomize build kubernetes/apps/security/trivy-operator/app
+bin/trivy-operator-roles kubernetes/clusters/wsl kubernetes/clusters/wsl-02
 flate test all -p kubernetes/clusters/wsl-02
 flate test all -p kubernetes/clusters/wsl
 helm template trivy-operator aquasecurity/trivy-operator --version 0.38.1 \
@@ -235,3 +252,9 @@ After a merge, on the cluster, with reads only:
    for this cluster.
 7. The memory of the operator stays under its limit for a full cycle:
    `max_over_time(container_memory_working_set_bytes{namespace="security",container="trivy-operator"}[1d])`.
+8. On homelab-wsl-02, before homelab-wsl lists the app: the peak memory of
+   the scan job of the pod with the most containers (a Cilium agent pod has
+   6), summed over its containers:
+   `max_over_time(sum by (pod) (container_memory_working_set_bytes{namespace="security",pod=~"scan-vulnerabilityreport-.+",container!=""})[1d:1m])`,
+   with `kubectl -n security get jobs -l app.kubernetes.io/managed-by=trivy-operator`
+   for the job of that pod. Write it in "Memory" in place of the estimate.
