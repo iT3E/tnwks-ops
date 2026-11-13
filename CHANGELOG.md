@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.115.0 - 2026-11-13
+
+### Added
+
+* monitoring: the audit reader, a small Vector DaemonSet on the control plane node that reads the audit log of the API server and sends it to the audit source of the aggregator, with acknowledgements. It runs as user 65534 with no capability and no ServiceAccount token, and it keeps its positions on the node. homelab-wsl-02 lists it, and the registry of the security platform lists the stream as a source of that cluster. `kubernetes/apps/monitoring/vector/README.md` has its properties
+
 ## v2.114.1 - 2026-11-13
 
 ### Fixed
