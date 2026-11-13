@@ -1,8 +1,9 @@
 ---
 # The converter (security/converter/README.md), in the form of the evidence
 # collector (monitoring/observability-evidence): the pinned Python image, with
-# its code and its maps from a ConfigMap, and the list of accepted findings
-# from its Secret. Reloader restarts it when one of them changes.
+# its code and its maps from a ConfigMap, the list of accepted findings from
+# its Secret, and the volume of results. Reloader restarts it when the
+# ConfigMap or the Secret changes.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -94,6 +95,17 @@ spec:
             optional: true
         globalMounts:
           - path: /accepted
+            readOnly: true
+      # The volume of results (security/converter/README.md, "The files of
+      # results"): the OCSF files of Prowler and the result file of the API
+      # checks. The whole volume, read-only: the converter never writes to it.
+      # The claim is ./pvc.yaml. The class puts the volume on the node of its
+      # first pod, and the node selector above keeps each pod on that node.
+      results:
+        type: persistentVolumeClaim
+        existingClaim: security-results
+        globalMounts:
+          - path: /results
             readOnly: true
     serviceMonitor:
       app:
