@@ -227,8 +227,14 @@ the sandbox plugin copies the workspace only.
   keeps the prompt cache, and it sends the effort as set. Change it in the
   same PR as a move of the name to a different model. The tools `code_execution`,
   `file_fetch`, `file_write`, `dir_list`, `dir_fetch` and `gateway` (the
-  agent's own reads and changes of its config) are denied. The agent has
-  no `message` tool: the product leaves it out of a sandboxed session by
+  agent's own reads and changes of its config) are denied, and so is
+  `github_publish`. The product puts that tool in a sandboxed session by
+  default, and it opens a draft pull request from the session's
+  repository. It would exist only with a repository workspace in the
+  session, a GitHub credential on the gateway and a route to GitHub, and
+  the pilot has none of these. The deny keeps the pilot's outward paths
+  (R4) on a written rule, not on a missing credential and a network rule.
+  The agent has no `message` tool: the product leaves it out of a sandboxed session by
   default (`tools.sandbox.tools`), and every session of the pilot is
   sandboxed. So the agent answers in the chat that wrote to it, and can't
   send to an address that it names. Adding `message` to that list is a
