@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.95.0 - 2026-11-13
+
+### Removed
+
+* agents: the message hold plugin of the pilot, as a sandboxed session has no message tool for it to hold
+
 ## v2.94.1 - 2026-11-13
 
 ### Fixed
