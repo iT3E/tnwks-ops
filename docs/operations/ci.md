@@ -54,7 +54,7 @@ them before it decides anything.
 | Domain | Workflow | What it checks |
 | --- | --- | --- |
 | `kubernetes` | [`kubernetes.yaml`](../../.github/workflows/kubernetes.yaml) | flate renders every Kustomization and HelmRelease, per cluster entrypoint; every image a PR adds exists; the rendered diff as a PR comment (never blocks) |
-| `observability` | [`observability.yaml`](../../.github/workflows/observability.yaml) | Generated resources, schemas, recording rules, storage contracts. The Garage/Thanos and Grafana rehearsals only when `observability_rehearsals` is on |
+| `observability` | [`observability.yaml`](../../.github/workflows/observability.yaml) | Generated resources, schemas, recording rules, storage contracts. The control registry in `security/`: its schema, its generated outputs and its rule tests. The Garage/Thanos and Grafana rehearsals only when `observability_rehearsals` is on |
 | `home_assistant` | [`home-assistant.yaml`](../../.github/workflows/home-assistant.yaml) | `check_config` against the pinned image, integration tests |
 | `ansible` | [`ansible.yaml`](../../.github/workflows/ansible.yaml) | Playbook syntax and ansible-lint on the pinned controller |
 | `security_regressions` | [`security-regressions.yaml`](../../.github/workflows/security-regressions.yaml) | Router output, service and OAuth callback regression tests |
