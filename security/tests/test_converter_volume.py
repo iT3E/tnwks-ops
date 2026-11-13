@@ -142,3 +142,47 @@ def test_a_run_mutes_what_the_converter_serves_as_accepted_on_that_day(run, tmp_
             open_ = {check for (source, check, name), end in served.items()
                      if source == "prowler" and name == system and end > start}
             assert muted == open_, (day, system)
+
+
+# Each reason form, as the owner can write it, by the check that it is the reason of. The
+# readers must agree, or the converter must be the one that accepts less.
+REASON_FORMS = {
+    "check_no_reason_key": None,
+    "check_reason_nothing": "  reason:\n",
+    "check_reason_single_empty": "  reason: ''\n",
+    "check_reason_double_empty": '  reason: ""\n',
+    "check_reason_null": "  reason: null\n",
+    "check_reason_tilde": "  reason: ~\n",
+    "check_reason_false": "  reason: false\n",
+    "check_reason_no": "  reason: no\n",
+    "check_reason_zero": "  reason: 0\n",
+    "check_reason_octal_zero": "  reason: 00\n",
+    "check_reason_empty_block": "  reason: |\n",
+    "check_reason_text": "  reason: An invented reason.\n",
+    "check_reason_yes": "  reason: yes\n",
+    "check_reason_quoted_zero": "  reason: '0'\n",
+    "check_reason_number": "  reason: 26001\n",
+    "check_reason_block": "  reason: |\n    An invented reason.\n",
+    "check_reason_wrapped": "  reason: 'Accepted: an invented reason,\n    on two lines.'\n",
+    "check_reason_space_on_two_lines": "  reason: '\n    '\n",
+}
+# PyYAML folds this reason to one space, which run.py takes. The converter does not fold
+# a value, and takes only a reason with a character that is not space.
+CONVERTER_ACCEPTS_LESS = {"check_reason_space_on_two_lines"}
+
+
+def test_the_run_and_the_converter_skip_the_same_entries_with_no_reason(run, tmp_path):
+    text = "".join(f"- source: prowler\n  check: {check}\n  system: aws-prod\n{reason or ''}  until: '2027-01-31'\n"
+                   for check, reason in REASON_FORMS.items())
+    path = tmp_path / "accepted.yaml"
+    path.write_text(text)
+    registry = generate.converter_registry(generate.load())
+    served, skipped = converter.accepted_entries(text, set(registry["sources"]), set(registry["systems"]))
+    muted, not_fit = run.accepted_checks(path, "aws-prod", datetime.date(2026, 11, 13))
+    by_converter = {check for _, check, _ in served}
+    assert by_converter <= set(muted), "the converter never accepts what the run does not"
+    assert set(muted) - by_converter == CONVERTER_ACCEPTS_LESS
+    assert by_converter == {check for check in REASON_FORMS
+                            if "reason_" in check and check.split("reason_")[1] in (
+                                "text", "yes", "quoted_zero", "number", "block", "wrapped")}
+    assert skipped == not_fit + len(CONVERTER_ACCEPTS_LESS)
