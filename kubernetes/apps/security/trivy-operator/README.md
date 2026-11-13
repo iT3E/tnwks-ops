@@ -95,7 +95,9 @@ Trivy sends a version check and usage data to its vendor unless
 `scan.skip-version-check` and `scan.disable-telemetry` are both on. The
 values set both (`trivy.configFile`), and the policy names no host of the
 vendor. `trivy.offlineScan` keeps a scan off the package indexes, such as
-the one of Maven. `operator.accessGlobalSecretsAndServiceAccount` is off, so
+the one of Maven. The operator downloads no bundle of checks: the checks are
+the ones in its image, and `policiesBundle` is empty, so CI does not test an
+artifact that is not a container image. `operator.accessGlobalSecretsAndServiceAccount` is off, so
 the operator reads no pull secret, and an image of a private registry has no
 scan.
 
