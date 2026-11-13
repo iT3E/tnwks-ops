@@ -162,7 +162,7 @@ ID, its name: `Refreshing state... [id=...]`) and the state never reach
 the log. Addresses use the neutral keys. On success, no name of a
 repository held in SOPS reaches a public log or the PR.
 
-**On failure, one can.** With `-no-color`, Terraform prints an error's
+**On failure, one can, without the mask below.** With `-no-color`, Terraform prints an error's
 summary on the `Error:` line, and for an API error the provider's summary
 is the request: `Error: GET https://api.github.com/repos/iT3E/<name>: 502
 ...`. Any error reading or changing a repository held in SOPS (rate limit,
@@ -173,40 +173,107 @@ doesn't exist reports `Cannot import non-existent remote object` without
 the ID. The `tail -5` fallback (output with no `Error` line, such as a
 provider crash) could show progress lines too.
 
-Proposed mitigation, before `GITHUB_TERRAFORM_ENABLED` is set: a step in
-`terraform.yaml`, for the `github` root only and before the plan or apply,
-that decrypts `repositories.sops.yaml` with the runner's CI age key and
-prints `::add-mask::<value>` for every name and description. GitHub then
-shows `***` for them anywhere in the job's log. Whether `sops` is on the
-runner image is unconfirmed; the step may need to install it. A narrower
-alternative belongs in github-workflows: an input to the action that masks
-or drops error lines matching a pattern, at the cost of less useful errors.
+### The mask
+
+Before Terraform runs, `terraform.yaml`'s plan and apply jobs mask every
+value of the SOPS files that the root's entry in `.github/ci/domains.toml`
+lists in `mask_sops`. For this root that is `repositories.sops.yaml` (the
+names and descriptions) and `secrets.sops.yaml` (the token). The step
+("Mask SOPS values") downloads a pinned sops release, checks its SHA-256,
+and runs `.github/scripts/sops-mask.py`, which decrypts each file with the
+runner's CI age key and prints `::add-mask::<line>` for each non-blank line
+of each string value, and nothing else. From then on the runner shows `***`
+for those strings anywhere in the job's log, and also for its encoded forms
+(JSON, URL, XML and base64 escapes).
+
+It fails closed: if the download or checksum fails, a file is missing or
+doesn't decrypt, or no value comes out, the step fails and Terraform is
+skipped. Its errors name the file, never a value or sops's own output. It
+runs only for a root with `mask_sops` that is switched on (`enabled_var`).
+The workflow conformance check fails a `terraform.yaml` whose Terraform
+jobs lose the step or run it after Terraform, and `task github:enable`
+refuses to switch the root on until `main` has it.
+
+What it can't do:
+
+- **Only exact strings.** A value that reaches the log changed (in another
+  case, cut short, or broken over two lines) is not masked. GitHub API URLs
+  use the repository name as it is, so the known leak path (the `Error:`
+  line) is covered.
+- **Only this job's log.** The PR comment and the job summary carry the
+  plan summary, which has only addresses with neutral keys. Anything a later
+  change sends elsewhere (an artifact, a comment with error text) is not
+  masked.
+- **Nothing printed before it.** It runs after checkout and before
+  Terraform; the checkout prints no values.
+- **New values need a commit.** A repository added to
+  `repositories.sops.yaml` is masked from the commit that adds it, because
+  the step reads the file from the same checkout.
+- **Proven only in CI.** Locally the script is tested against a stub sops
+  and run on the real `repositories.sops.yaml` with only its output lines
+  counted. That the runner masks the values in a real failed run can only
+  be seen there.
 
 ## One-time bootstrap
 
-In this order:
+Two commands, from the repo root on the workstation (direnv loaded, so
+`bin/sops` and the age key work). Both take `-- --dry-run`, which prints
+each step without taking it.
 
-1. **Create the token** (above) and add it to the root, from the repo root:
-   `cp infrastructure/terraform/environments/prod/github/secrets.sops.yaml.example infrastructure/terraform/environments/prod/github/secrets.sops.yaml`,
-   set `github_token`, then
-   `bin/sops -e -i infrastructure/terraform/environments/prod/github/secrets.sops.yaml`.
-   Commit only the encrypted file.
-2. **Create the workspace.** Apply `environments/bootstrap/aws-init` by hand
-   (README in `infrastructure/terraform/`). It adds `tnwks-github-prod`
-   (execution mode local, `modules/tfc/workspaces.tf`).
-3. **Check locally**: `task github:init` and `task github:plan`. The plan
-   imports every resource in `imports.tf` (36) and adds, changes and
-   destroys nothing.
-4. **Mask the names** in CI's log (Public logs, the proposed step).
-5. **Turn CI on**: set the repository variable
-   `GITHUB_TERRAFORM_ENABLED=true` (Settings > Secrets and variables >
-   Actions > Variables).
-6. **First apply.** Open the PR with the encrypted token. Its plan comment
-   reads `0 to add, 0 to change, 0 to destroy, 0 to move` with no
-   addresses: the action counts only changes, not imports, so check the
-   imports in step 3's local plan. The plan still reports changes
-   (`-detailed-exitcode` 2), so merging applies it (`deploy.yaml`), or run
-   `task github:apply`. After that apply, `imports.tf` can go.
+1. **`task github:bootstrap`** (`bin/github-terraform bootstrap`). It stops
+   at the first thing that is wrong, and can be run again: each step
+   checks before it acts.
+   1. **Token.** Skipped if `secrets.sops.yaml` is already encrypted.
+      Otherwise it prints the GitHub page for a new classic token (scope
+      `repo`, the description filled in) and reads the token without echo.
+      It checks it with `GET /user`: the login must be `iT3E`, the scopes
+      must include `repo` and must not include `delete_repo`. A
+      fine-grained token has no scopes to read and can delete repositories,
+      so it asks you to type `I understand`. Then it writes the file
+      (umask 077), encrypts it with `bin/sops`, and checks that every value
+      is encrypted, for every recipient of the `.sops.yaml` rule (CI's age
+      key among them), and that it decrypts back to the token. On any
+      failure, or Ctrl-C, it removes the file. The token is never on a
+      command line, in an environment variable or on screen.
+   2. **Workspace.** Skipped if `tnwks-github-prod` exists with the
+      settings in `modules/tfc/workspaces.tf` (it checks with a GET, and
+      stops if they differ). Otherwise, after you type `yes`, it creates
+      the workspace through the Terraform Cloud API (project `AWS_Project`,
+      working directory `environments/prod/github`, execution mode local)
+      and adds the two import blocks that adopt it to
+      `environments/bootstrap/aws-init/imports.tf`. That is how the
+      mikrotik, unifi, healthchecks and cloudflare workspaces were added:
+      `aws-init` itself can't be applied today (its state predates its
+      `moved` blocks, which reach an IAM resource its static credentials
+      can't read, and a `-target` apply must include every moved resource),
+      so it adopts them on its next apply.
+   3. **Plan.** `terraform init` and `terraform plan` in the root. It
+      passes only if the plan imports and does nothing else
+      (`36 to import, 0 to add, 0 to change, 0 to destroy`), or has no
+      changes, and prints that line and the imports by type, never the plan
+      (which names the private repositories). If it fails, run
+      `task github:plan` to see why.
+   4. **What's left.** It re-checks the token file and prints the
+      `git add` (the token file, and `aws-init/imports.tf` if it changed).
+2. **Commit and merge** what it printed: a branch, a Changie fragment, a PR.
+   `GITHUB_TERRAFORM_ENABLED` is still unset, so CI skips this root on that
+   PR and its merge.
+3. **`task github:enable`** (`bin/github-terraform enable`). It fetches
+   `origin/main` and refuses unless `main` has the encrypted token (for the
+   rule's recipients), the root's `mask_sops` with both files, the mask
+   script, and the mask step before Terraform in both jobs. Then it sets
+   `GITHUB_TERRAFORM_ENABLED=true` (`env -u GITHUB_TOKEN gh variable set`)
+   and reads it back. Nothing else turns this root on in CI.
+4. **First apply.** The next merge that touches the root applies it, or
+   dispatch it now: `env -u GITHUB_TOKEN gh workflow run deploy.yaml
+   --repo iT3E/tnwks-ops -f roots=github`. The apply imports and changes
+   nothing (step 1.3 checked that locally; CI's PR comment counts only
+   changes, so it shows `0 to add, 0 to change, 0 to destroy, 0 to move`
+   for an imports-only plan). After it, `imports.tf` can go.
+
+What stays your decision: the token type and its expiry (a fine-grained
+token can delete repositories), confirming the workspace, reviewing the PR,
+and when to turn CI on.
 
 ## Safety
 
@@ -249,8 +316,6 @@ small PRs.
   sends each repository's current settings back unchanged
   (`PATCH /repos/{owner}/{repo}`) while Terraform records the value in its
   state.
-- The log mask for the repositories held in SOPS (Public logs), if it isn't
-  in place before CI is turned on.
 - Actions, environment and Dependabot secrets, and the webhook, from SOPS.
 - The account's SSH keys.
 - GitHub App installations and their repository access.
