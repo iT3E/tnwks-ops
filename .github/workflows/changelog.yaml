@@ -29,7 +29,7 @@ jobs:
     name: changelog
     permissions:
       contents: read
-    uses: iT3E/github-workflows/.github/workflows/changelog.yaml@4968e2ea41429e3b8e9b1e77f41d222a5ea01436 # v1.8.1
+    uses: iT3E/github-workflows/.github/workflows/changelog.yaml@447a36cf89cd163004fcf7b574955c6c6deb2f92 # v1.9.2
     with:
       exempt-paths: |
         kubernetes/apps/home-automation/home-assistant/app/config/
