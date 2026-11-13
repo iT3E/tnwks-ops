@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.110.0 - 2026-11-13
+
+### Added
+
+* monitoring: the alert `SecurityAuditLinesRefused` (group `homelab.security`), with promtool fixtures: the sink of a Vector aggregator that writes the audit log to the Loki of the security streams dropped a request that Loki refused. It reads `vector_component_errors_total` of that sink only, and it fires at the first refused request, though the counter starts at 1
+
 ## v2.109.0 - 2026-11-13
 
 ### Added
