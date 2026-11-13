@@ -1,0 +1,38 @@
+---
+# The provider profile of GitHub for the Renovate reviewer: the calls of the
+# reviewer and no other, on iT3E/tnwks-ops only. The credential is an
+# installation token of the GitHub App of the reviewer (contents read, pull
+# requests write for the comment, checks read), which the providers job gets
+# every 15 minutes. In a sandbox, GITHUB_TOKEN holds a placeholder; the proxy
+# of the sandbox puts the token in the Authorization header of these calls. The reviewer reads the pull request,
+# its files, a file at the head, the comments and the checks, and posts one
+# comment. Nothing here can merge, push, approve or change a label, whatever
+# the token allows.
+id: workflow-github-reviewer
+display_name: GitHub for the Renovate reviewer
+description: Read one pull request and post one comment, on iT3E/tnwks-ops
+category: source_control
+credentials:
+  - name: api_token
+    description: An installation token of the GitHub App of the reviewer, for iT3E/tnwks-ops only
+    env_vars: [GITHUB_TOKEN]
+    required: true
+    auth_style: bearer
+    header_name: authorization
+discovery:
+  credentials: [api_token]
+endpoints:
+  - host: api.github.com
+    port: 443
+    protocol: rest
+    enforcement: enforce
+    rules:
+      - allow: { method: GET, path: "/repos/iT3E/tnwks-ops/pulls/*" }
+      - allow: { method: GET, path: "/repos/iT3E/tnwks-ops/pulls/*/files" }
+      - allow: { method: GET, path: "/repos/iT3E/tnwks-ops/contents/**" }
+      - allow: { method: GET, path: "/repos/iT3E/tnwks-ops/issues/*/comments" }
+      - allow: { method: GET, path: "/repos/iT3E/tnwks-ops/commits/*/check-runs" }
+      - allow: { method: POST, path: "/repos/iT3E/tnwks-ops/issues/*/comments" }
+binaries:
+  - /usr/local/bin/python3.13
+  - /usr/local/bin/python3

@@ -1,0 +1,30 @@
+---
+# The provider profile of the model gateway for the workflow agents (from
+# examples/providers/ of iT3E/tnwks-workflow-agents). In a sandbox,
+# MODEL_GATEWAY_KEY holds a placeholder; the proxy of the sandbox puts the key
+# of this trust domain (agents-workflows) in the Authorization header of a
+# call to the Messages API of the model gateway, and of no other call.
+id: workflow-model-gateway
+display_name: Model gateway of the workflow agents
+description: The Anthropic Messages API of the model gateway, and nothing else
+category: inference
+credentials:
+  - name: api_key
+    description: The key of the model gateway for the workflow trust domain
+    env_vars: [MODEL_GATEWAY_KEY]
+    required: true
+    auth_style: bearer
+    header_name: authorization
+discovery:
+  credentials: [api_key]
+endpoints:
+  - host: litellm-app.ai.svc.cluster.local
+    port: 4000
+    protocol: rest
+    tls: ""
+    enforcement: enforce
+    rules:
+      - allow: { method: POST, path: "/v1/messages" }
+binaries:
+  - /usr/local/bin/python3.13
+  - /usr/local/bin/python3

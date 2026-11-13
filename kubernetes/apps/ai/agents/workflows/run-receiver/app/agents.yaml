@@ -62,9 +62,7 @@ agents:
                   - name: SANDBOX_POLICY
                     value: /etc/workflow-run/policy.yaml
                   # The providers of the agent, in the store of the sandbox
-                  # gateway. The provider of the reviewer and its Job come
-                  # with the test repository; until then a run fails at the
-                  # start of its sandbox.
+                  # gateway (providers.yaml makes them).
                   - name: SANDBOX_PROVIDERS
                     value: model-gateway,github-reviewer
                   - name: SANDBOX_MEMORY
@@ -75,14 +73,20 @@ agents:
                   - name: RUN_TIMEOUT_SECONDS
                     value: "1800"
                   # AGENT_ENV_<NAME> goes into the sandbox as <NAME>. The
-                  # model name of this trust domain at the model gateway
-                  # (docs/apps/litellm.md). The repositories the reviewer may
-                  # review (REVIEWER_REPOSITORIES) come with the test
-                  # repository.
+                  # reviewer calls the Messages API at the root URL of the
+                  # model gateway (POST /v1/messages), with the model name of
+                  # this trust domain (docs/apps/litellm.md) and the effort of
+                  # each call.
                   - name: AGENT_ENV_MODEL_GATEWAY_URL
-                    value: http://litellm-app.ai.svc.cluster.local:4000/v1
+                    value: http://litellm-app.ai.svc.cluster.local:4000
                   - name: AGENT_ENV_MODEL_ID
                     value: agents-workflows
+                  - name: AGENT_ENV_REVIEW_EFFORT
+                    value: high
+                  # The one repository it may review. The GitHub provider
+                  # allows the calls of the reviewer on this one only.
+                  - name: AGENT_ENV_REVIEWER_REPOSITORIES
+                    value: iT3E/tnwks-ops
                   - name: AGENT_ENV_OTEL_EXPORTER_OTLP_ENDPOINT
                     value: http://alloy.monitoring.svc.cluster.local:4318
                 securityContext:

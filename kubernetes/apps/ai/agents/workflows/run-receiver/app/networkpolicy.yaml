@@ -74,3 +74,31 @@ spec:
         - ports:
             - port: "8080"
               protocol: TCP
+---
+# The providers job (providers.yaml). Nothing comes in. Out: the sandbox
+# gateway of this trust domain, and the GitHub API for the installation token
+# of the App (and DNS, through allow-dns).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: workflow-providers
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: workflow-providers
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: agents-workflows
+            app.kubernetes.io/instance: openshell
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - toFQDNs:
+        - matchName: api.github.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

@@ -1,0 +1,129 @@
+---
+# The providers of the workflow agents (scripts/providers.sh). Every 15
+# minutes it imports or updates each provider profile (providers/) in the
+# sandbox gateway, gets a new installation token of the GitHub App of the
+# reviewer, and creates or updates each provider: model-gateway with the key
+# from the Secret workflow-providers-secret, github-reviewer with the token.
+#
+# Why every 15 minutes: an installation token lives one hour, and a sandbox
+# keeps the token of its start for its whole life (the gateway keeps the old
+# revision of a credential for a process that has it). A run job lives 40
+# minutes at most (agents.yaml). So a token is at most 15 minutes old when a
+# run starts, and at most 55 minutes old when it ends: each run has a valid
+# token to its end. To run it now:
+# `kubectl -n agents-workflows create job --from=cronjob/workflow-providers providers-now`.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: workflow-providers
+  labels: &labels
+    app.kubernetes.io/name: workflow-providers
+spec:
+  schedule: "7,22,37,52 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels: *labels
+        spec:
+          restartPolicy: Never
+          serviceAccountName: workflow-run
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            # The client certificate (mode 0440) is readable by the group.
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: providers
+              # The image of the workflow agents holds the OpenShell CLI.
+              image: ghcr.io/it3e/tnwks-workflow-agents:0.1.1@sha256:4ce4f5b0e57e3bde22d08f15d2d2ea42eca17b35a4992a12b56d822b8122b0c8
+              imagePullPolicy: IfNotPresent
+              command: ["sh", "/scripts/providers.sh"]
+              env:
+                - name: OPENSHELL_GATEWAY_URL
+                  value: https://openshell.agents-workflows.svc.cluster.local:8080
+                - name: NO_COLOR
+                  value: "1"
+                # The key of this trust domain at the model gateway (the
+                # entry agents-workflows of keys.json in the model gateway).
+                - name: MODEL_GATEWAY_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: workflow-providers-secret
+                      key: MODEL_GATEWAY_KEY
+                # The GitHub App of the reviewer, installed on iT3E/tnwks-ops
+                # only. Its ID is not a secret; its private key is a file
+                # (/github-app), read by openssl only.
+                - name: GITHUB_APP_ID
+                  value: "5740538"
+                - name: GITHUB_APP_KEY_FILE
+                  value: /github-app/private-key.pem
+                # What the reviewer may do at GitHub, in one place: the one
+                # repository and the permissions of each token. A token never
+                # has more, whatever the App was granted; the job logs an
+                # "app-drift" line when the App or its installation has more,
+                # and fails when it has less. A change here goes with the
+                # owner's change in the App settings (docs/apps/agent-platform.md).
+                - name: GITHUB_REPOSITORY
+                  value: iT3E/tnwks-ops
+                - name: GITHUB_APP_PERMISSIONS
+                  value: contents:read,pull_requests:write,checks:read
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                - name: mtls
+                  mountPath: /mtls
+                  readOnly: true
+                - name: profiles
+                  mountPath: /profiles
+                  readOnly: true
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: github-app
+                  mountPath: /github-app
+                  readOnly: true
+          volumes:
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi
+            # The client certificate of the sandbox gateway.
+            - name: mtls
+              secret:
+                secretName: openshell-client-tls
+                defaultMode: 0440
+            - name: profiles
+              configMap:
+                name: workflow-provider-profiles
+            - name: scripts
+              configMap:
+                name: workflow-providers-script
+            # The private key of the GitHub App, readable by the group only.
+            - name: github-app
+              secret:
+                secretName: workflow-providers-secret
+                defaultMode: 0440
+                items:
+                  - key: GITHUB_APP_PRIVATE_KEY
+                    path: private-key.pem
