@@ -61,7 +61,7 @@ to this table first, because the sum is the budget of the node.
 | Part | Runs on | Memory limit |
 | --- | --- | --- |
 | Trivy Operator | each cluster | 256 MiB for the operator, 512 MiB for a scan job, one scan job at a time |
-| Prowler job | homelab-wsl-02, one run a day | 768 MiB |
+| Prowler job | homelab-wsl-02, one run at a time: one for each system each day, at different hours | 768 MiB |
 | The converter | homelab-wsl-02 | 128 MiB |
 | Trail copy job | homelab-wsl-02 | 128 MiB |
 | API checks job | homelab-wsl-02 | 128 MiB |
