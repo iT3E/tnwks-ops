@@ -9,7 +9,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest==9.2.0", "ruff==0.17.5", "playwright==1.65.1"]
+dev = ["pytest==9.2.0", "ruff==0.17.5", "playwright==1.65.2"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
