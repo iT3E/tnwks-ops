@@ -64,7 +64,7 @@
   type: router
   site: none
   domain: infrastructure
-  sources: [stream]
+  sources: [stream, api-check]
 - name: sce-ep01
   type: other
   site: none

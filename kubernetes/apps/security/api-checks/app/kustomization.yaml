@@ -1,0 +1,20 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: security
+# The test of Terraform Cloud runs only when its token is there (../README.md,
+# "The token of Terraform Cloud"). The owner names the Secret here after
+# making the token:
+#   - ./secret-terraform-cloud.sops.yaml
+resources:
+  - ./networkpolicy.yaml
+  - ./cronjob.yaml
+configMapGenerator:
+  # Tests: security/tests/test_api_checks.py.
+  - name: api-checks-scripts
+    files:
+      - ./scripts/api_checks.py
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled

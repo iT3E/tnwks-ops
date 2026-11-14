@@ -9,7 +9,7 @@ tests:
   external_labels:
     cluster: site
   input_series:
-  - &id020
+  - &id021
     series: homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-management"}
     values: 0+60x3000
   - &id001
@@ -28,45 +28,48 @@ tests:
     series: homelab_security_last_result_timestamp_seconds{source="prowler",system="iT3E"}
     values: 0+60x3000
   - &id006
-    series: homelab_security_last_result_timestamp_seconds{source="trivy",system="homelab-wsl"}
+    series: homelab_security_last_result_timestamp_seconds{source="api-check",system="tnwks-ops"}
     values: 0+60x3000
   - &id007
-    series: homelab_security_last_result_timestamp_seconds{source="stream",system="homelab-wsl",check="k8s-audit"}
+    series: homelab_security_last_result_timestamp_seconds{source="trivy",system="homelab-wsl"}
     values: 0+60x3000
   - &id008
-    series: homelab_security_last_result_timestamp_seconds{source="trivy",system="homelab-wsl-02"}
+    series: homelab_security_last_result_timestamp_seconds{source="stream",system="homelab-wsl",check="k8s-audit"}
     values: 0+60x3000
   - &id009
-    series: homelab_security_last_result_timestamp_seconds{source="stream",system="homelab-wsl-02",check="k8s-audit"}
+    series: homelab_security_last_result_timestamp_seconds{source="trivy",system="homelab-wsl-02"}
     values: 0+60x3000
   - &id010
-    series: homelab_security_last_result_timestamp_seconds{source="host-check",system="DESKTOP-HKE05KI"}
+    series: homelab_security_last_result_timestamp_seconds{source="stream",system="homelab-wsl-02",check="k8s-audit"}
     values: 0+60x3000
   - &id011
-    series: homelab_security_last_result_timestamp_seconds{source="wazuh",system="DESKTOP-HKE05KI"}
+    series: homelab_security_last_result_timestamp_seconds{source="host-check",system="DESKTOP-HKE05KI"}
     values: 0+60x3000
   - &id012
-    series: homelab_security_last_result_timestamp_seconds{source="host-check",system="WSL-02"}
+    series: homelab_security_last_result_timestamp_seconds{source="wazuh",system="DESKTOP-HKE05KI"}
     values: 0+60x3000
   - &id013
-    series: homelab_security_last_result_timestamp_seconds{source="wazuh",system="WSL-02"}
+    series: homelab_security_last_result_timestamp_seconds{source="host-check",system="WSL-02"}
     values: 0+60x3000
   - &id014
-    series: homelab_security_last_result_timestamp_seconds{source="host-check",system="DESKTOP-HKE05KI-ubuntu"}
+    series: homelab_security_last_result_timestamp_seconds{source="wazuh",system="WSL-02"}
     values: 0+60x3000
   - &id015
-    series: homelab_security_last_result_timestamp_seconds{source="wazuh",system="DESKTOP-HKE05KI-ubuntu"}
+    series: homelab_security_last_result_timestamp_seconds{source="host-check",system="DESKTOP-HKE05KI-ubuntu"}
     values: 0+60x3000
   - &id016
-    series: homelab_security_last_result_timestamp_seconds{source="host-check",system="WSL-02-ubuntu"}
+    series: homelab_security_last_result_timestamp_seconds{source="wazuh",system="DESKTOP-HKE05KI-ubuntu"}
     values: 0+60x3000
   - &id017
-    series: homelab_security_last_result_timestamp_seconds{source="wazuh",system="WSL-02-ubuntu"}
+    series: homelab_security_last_result_timestamp_seconds{source="host-check",system="WSL-02-ubuntu"}
     values: 0+60x3000
   - &id018
-    series: homelab_security_last_result_timestamp_seconds{source="api-check",system="sce-rtr01"}
+    series: homelab_security_last_result_timestamp_seconds{source="wazuh",system="WSL-02-ubuntu"}
     values: 0+60x3000
   - &id019
+    series: homelab_security_last_result_timestamp_seconds{source="api-check",system="sce-rtr01"}
+    values: 0+60x3000
+  - &id020
     series: homelab_security_last_result_timestamp_seconds{source="stream",system="sce-rtr01",check="routeros"}
     values: 0+60x3000
   alert_rule_test:
@@ -97,6 +100,7 @@ tests:
   - *id017
   - *id018
   - *id019
+  - *id020
   alert_rule_test:
   - eval_time: 5m
     alertname: SecurityResultLate
@@ -136,6 +140,7 @@ tests:
   - *id017
   - *id018
   - *id019
+  - *id020
   - series: homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-management"}
     values: 0+0x2220
   - series: homelab_security_last_result_timestamp_seconds{source="stream",system="aws-management",check="cloudtrail"}
@@ -179,7 +184,7 @@ tests:
   external_labels:
     cluster: site
   input_series:
-  - *id020
+  - *id021
   - *id001
   - *id002
   - *id003
@@ -188,7 +193,7 @@ tests:
   - *id006
   - *id007
   - *id008
-  - *id010
+  - *id009
   - *id011
   - *id012
   - *id013
@@ -198,6 +203,7 @@ tests:
   - *id017
   - *id018
   - *id019
+  - *id020
   alert_rule_test:
   - eval_time: 5m
     alertname: SecurityResultLate

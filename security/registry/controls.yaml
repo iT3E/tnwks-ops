@@ -725,7 +725,8 @@
     cloudflare-account: []
     github-organization:
       - { source: prowler, check: organization_members_mfa_required }
-    terraform-cloud-organization: []
+    terraform-cloud-organization:
+      - { source: api-check, check: tfc-mfa-required }
     cluster: []
     windows-host: []
     wsl-distro: []
@@ -760,7 +761,8 @@
     cloudflare-account: []
     github-organization:
       - { source: prowler, check: organization_members_mfa_required }
-    terraform-cloud-organization: []
+    terraform-cloud-organization:
+      - { source: api-check, check: tfc-mfa-required }
     cluster: []
     windows-host: []
     wsl-distro: []

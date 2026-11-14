@@ -144,6 +144,10 @@ resources:
   # cloud and SaaS account. A provider starts when the owner names its CronJob
   # in the app, after its credentials exist.
   - ../../../apps/security/prowler/ks.yaml
+  # The API checks (kubernetes/apps/security/api-checks/README.md): the
+  # firmware of the router and the settings of Terraform Cloud, each day, as
+  # a result file for the converter.
+  - ../../../apps/security/api-checks/ks.yaml
   # CI: the network-device Terraform runner (wg03 sidecar), so those
   # workflows run while homelab-wsl is down.
   - ../../../apps/tools/namespace.yaml
