@@ -476,9 +476,15 @@ lock, so it never plans beside a PR plan or an apply. It reads the same
 state in Terraform Cloud and takes the state lock for the plan, as a PR
 plan does.
 
-It sees only what the root manages. A change to anything under "What stays
-by hand", or to the ruleset setting in the next section (the provider has no
-argument for it), never shows in the plan.
+It sees only what the root manages and compares. A change to anything under
+"What stays by hand", to the `flux` webhook's events, URL or active flag
+(ignored on purpose, see The webhook's secret; only a deleted webhook
+shows), or to the ruleset setting in the next section (the provider has no
+argument for it), never shows in the plan. An import block still in the
+root (Adopting something that already exists) plans nothing once its
+resource is in the state, so it doesn't read as drift until the PR that
+takes it out; if that resource has left the state, it plans an import,
+which does.
 
 ## Caveat: the ruleset's unattributed changes setting
 
