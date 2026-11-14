@@ -5,13 +5,14 @@ namespace: security
 # Nothing of a provider runs before its credentials exist (../README.md, "To
 # start a provider"). The owner names the files of a provider here, after
 # that step:
-#   - ./cronjob-aws.yaml          after the first run of ../../aws-credentials
 #   - ./secret-cloudflare.sops.yaml
 #   - ./lease-cloudflare-token.yaml
 #   - ./cronjob-cloudflare.yaml
 # GitHub has no run: the API checks take its lines (../README.md, "GitHub").
 resources:
   - ./networkpolicy.yaml
+  # The AWS session Secret aws-security-audit-sts exists (../../aws-credentials).
+  - ./cronjob-aws.yaml
 configMapGenerator:
   # The script of each run. Tests: security/tests/test_prowler.py.
   - name: prowler-scripts

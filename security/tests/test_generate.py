@@ -359,3 +359,30 @@ def test_a_sample_of_each_alert_has_its_whole_text_in_the_rule_tests(registry):
     samples = json.dumps([generate.fixtures(registry), generate.late_fixtures(registry)])
     assert samples.count('"alertname": "SecurityAcceptedFindingExpired"') == 2
     assert samples.count('"alertname": "SecurityResultLate"') >= 4
+
+
+# The app of a cluster that gives a source a result for that cluster. A merge
+# of two branches that each add a source to the same line of systems.yaml can
+# keep one and drop the other: this test fails then.
+SOURCE_OF_APP = {
+    "../../../apps/monitoring/vector/ks-audit-reader.yaml": "stream",
+    "../../../apps/security/trivy-operator/ks.yaml": "trivy",
+}
+
+
+def test_each_cluster_lists_the_sources_that_its_apps_give(registry):
+    clusters = Path(__file__).resolve().parents[2] / "kubernetes" / "clusters"
+    systems = {system["name"]: system for system in registry["systems"]}
+    checked = 0
+    for settings in sorted(clusters.glob("*/cluster-settings.yaml")):
+        name = yaml.safe_load(settings.read_text())["data"]["CLUSTER_NAME"]
+        apps = settings.parent / "apps" / "kustomization.yaml"
+        if name not in systems or not apps.exists():
+            continue
+        resources = yaml.safe_load(apps.read_text()).get("resources", [])
+        for app, source in SOURCE_OF_APP.items():
+            if app in resources:
+                checked += 1
+                assert source in systems[name].get("sources", []), (
+                    f"{name} runs {app}, so systems.yaml must list `{source}` in its sources")
+    assert checked, "no cluster runs an app of SOURCE_OF_APP: the paths are out of date"

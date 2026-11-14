@@ -450,6 +450,173 @@ AUDIT_SINK_WINDOW = "15m"
 ACCEPTED_LIST_READ = "homelab_security_converter_accepted_list_read"
 ACCEPTED_SKIPPED = "homelab_security_converter_accepted_skipped_entries"
 
+# The source `trivy` of the security registry (security/README.md, "The
+# series"): Trivy Operator on each cluster (kubernetes/apps/security/trivy-operator).
+# The rules below run on each site, for the series of that site only, and the
+# federation brings the two series of homelab-wsl to homelab-wsl-02.
+TRIVY_COMPLIANCE_SPEC = "k8s-cis-1.23"
+TRIVY_COMPLIANCE_TITLE = "CIS Kubernetes Benchmarks v1.23"
+# The controls that have no input on these clusters. The node collector is off
+# (1.1.x, 4.1.x, 4.2.x read the files and the settings of a node), and Talos
+# runs etcd as a service of the OS and not as a pod (2.x). Trivy counts a
+# control with no input as a pass, so these stay out: "no evidence", never a
+# pass. The README of trivy-operator says why the node collector is off.
+TRIVY_CONTROLS_WITH_NO_INPUT = r"1\.1\..+|2\..+|4\.[12]\..+"
+TRIVY_SEVERITIES = ("critical", "high", "medium", "low", "unknown")
+# The pods of the scan jobs of Trivy Operator. The operator does not scan its
+# own jobs, so their image is not a running image that needs a report.
+TRIVY_SCAN_POD = "scan-vulnerabilityreport-.+"
+# An image whose report is gone for less than this still counts as scanned,
+# and its vulnerabilities still count: the operator deletes a report at its end
+# (24h) and then scans the image again.
+TRIVY_REPORT_GAP = "1h"
+# How long a running image may have no report before SecurityImagesNotScanned
+# fires: the late_after of the source `trivy` (security/registry/sources.yaml).
+TRIVY_UNSCANNED_HOLD = "36h"
+# How long the rule keeps the last value of the accepted list when its series
+# stops: the list is served on homelab-wsl-02 only, and homelab-wsl reads it
+# through the federation. An entry taken out of the list early stays muted for
+# up to this long.
+TRIVY_ACCEPTED_HOLD = "1d"
+# The check of an entry of the accepted list that mutes SecurityImagesNotScanned
+# for its cluster (a private image that no scan can read). It is not a check of
+# the registry: it names the alert, not a result.
+TRIVY_UNSCANNED_CHECK = "images-not-scanned"
+# A new finding of high severity (design table "The cycle of each check"). The
+# alert reads high and critical: the severities that the design asks to alert
+# on. The others are on the board only. The alert holds for one hour.
+SECURITY_FINDING_SEVERITY = "high|critical"
+SECURITY_FINDING_HOLD = "1h"
+# One value for each check: no pod, instance, container or endpoint (they change
+# when the pod that serves a result starts again), and no severity (a check
+# whose severity changes is not a new finding).
+SECURITY_FINDING_LABELS = "k8s_cluster, source, check, system"
+SECURITY_FINDING_RECORD = "homelab:security_check_result_high:max"
+
+
+def security_selector(metric, **labels):
+    """A selector of this site's own series: a federated copy has source_site."""
+    matchers = ['source_site=""'] + [f'{key}{value}' for key, value in labels.items()]
+    return f'{metric}{{{",".join(matchers)}}}'
+
+
+def trivy_running_digests():
+    """The digests of the images that run on this site now, one series for each
+    (k8s_cluster, digest). A container that has not started yet has an empty
+    image_id, and an image with no digest of a registry (loaded on the node) can
+    not have a report: neither counts. The pods of the scan jobs do not count
+    either: the operator does not scan its own jobs."""
+    not_a_scan = f'!~"{TRIVY_SCAN_POD}"'
+    with_digest = '=~".+@sha256:.+"'
+    running = " or ".join(
+        f'label_replace({security_selector(metric, pod=not_a_scan, image_id=with_digest)},'
+        ' "digest", "$1", "image_id", ".*@(sha256:.+)")'
+        for metric in ("kube_pod_container_info", "kube_pod_init_container_info"))
+    return f"count by (k8s_cluster, digest) ({running})"
+
+
+def trivy_report_digests(expr):
+    """A metric of the reports of Trivy Operator, with its image digest in the label
+    `digest` too, to join it with trivy_running_digests()."""
+    return f'label_replace({expr}, "digest", "$1", "image_digest", "(.+)")'
+
+
+def trivy_accepted(check=None):
+    """The accepted findings of `trivy` that have not ended, with the last value of
+    the last TRIVY_ACCEPTED_HOLD, so an entry stays while its series is gone."""
+    labels = {"source": '="trivy"'} | ({"check": f'="{check}"'} if check else {})
+    series = "homelab_security_accepted_until_timestamp_seconds{" + ",".join(
+        f"{key}{value}" for key, value in labels.items()) + "}"
+    return f"last_over_time({series}[{TRIVY_ACCEPTED_HOLD}]) > time()"
+
+
+def trivy_unscanned_images():
+    """The digests of the images that run on this site (trivy_running_digests()),
+    one series for each, with no report of Trivy Operator in the last
+    TRIVY_REPORT_GAP."""
+    reported = trivy_report_digests(
+        f'max_over_time({security_selector("trivy_image_vulnerabilities")}[{TRIVY_REPORT_GAP}])')
+    return f"{trivy_running_digests()} unless on (k8s_cluster, digest) ({reported})"
+
+
+def security_records():
+    """The two series of the contract for the source `trivy`, from the metrics of
+    Trivy Operator and of kube-state-metrics on this site.
+
+    A control of the compliance report: trivy_compliance_info has the number of
+    failed resources for a control that fails, and 1 for a control that passes.
+    The result is that number, or 0. The image scans: the sum, over the distinct
+    images that run on this site now, of the critical vulnerabilities that have
+    a fix (the scan reports only those). A site with scan reports and none of
+    them gives 0; with no running image known (kube-state-metrics down), no
+    result. A running image with no report for the last hour (its scan failed,
+    or has not run yet) keeps a fail, and makes a pass "no evidence". The
+    image digest of a report and the digest of the running image (`image_id`
+    of kube-state-metrics) are the same digest: the one of the reference in
+    the registry.
+
+    An accepted finding of `trivy` (the reader of the encrypted list) gives 0
+    until its end. That is the list of exceptions of the scanner: no second list.
+    The severity of the control, in lower case, is a label of the source."""
+    accepted = trivy_accepted()
+    selector = security_selector
+
+    def lower_severity(expr):
+        for value in TRIVY_SEVERITIES:
+            expr = f'label_replace({expr}, "severity", "{value}", "severity", "{value.upper()}")'
+        return expr
+
+    def as_system(expr):
+        return f'label_replace({expr}, "system", "$1", "k8s_cluster", "(.+)")'
+
+    def except_accepted(expr):
+        return f'({expr} unless on (check, system) ({accepted})) or 0 * {expr}'
+
+    # PromQL reads a backslash in a string as an escape, so the regex has two.
+    no_input = TRIVY_CONTROLS_WITH_NO_INPUT.replace("\\", "\\\\")
+
+    def info(status):
+        return selector("trivy_compliance_info", title=f'="{TRIVY_COMPLIANCE_TITLE}"',
+                        compliance_id=f'!~"{no_input}"', status=f'="{status}"')
+
+    by_control = f'max by (k8s_cluster, compliance_id, severity) ({info("Fail")} or 0 * {info("Pass")})'
+    controls = ("max by (k8s_cluster, system, check, severity) ("
+                + lower_severity(as_system(
+                    f'label_replace({by_control}, "check", "{TRIVY_COMPLIANCE_SPEC}/$1", "compliance_id", "(.+)")'))
+                + ")")
+    # Over the same window as the coverage: a report that is gone during its new
+    # scan still counts, so the sum does not fall for those minutes.
+    critical_only = '="Critical"'
+    critical = f'max_over_time({selector("trivy_image_vulnerabilities", severity=critical_only)}[{TRIVY_REPORT_GAP}])'
+    any_report = f'max_over_time({selector("trivy_image_vulnerabilities")}[{TRIVY_REPORT_GAP}])'
+    # Only the digests that run now: after a rollout, the report of the old image
+    # (it can stay for a day) leaves the sum when its pods stop.
+    running = trivy_running_digests()
+    images = (f"sum by (k8s_cluster) (max by (k8s_cluster, digest) ({trivy_report_digests(critical)})"
+              f" and on (k8s_cluster, digest) {running})"
+              f" or on (k8s_cluster) 0 * count by (k8s_cluster) ({any_report})"
+              f" and on (k8s_cluster) count by (k8s_cluster) ({running})")
+    # A fail stays a fail with an image that has no report. A pass with such an
+    # image is no evidence: no result. SecurityImagesNotScanned tells the owner.
+    images = f"({images}) > 0 or (({images}) unless on (k8s_cluster) ({trivy_unscanned_images()}))"
+    images = as_system(
+        f'label_replace(label_replace({images}, "check", "image-vulnerabilities", "", ""), "severity", "critical", "", "")')
+    report = selector("homelab_trivy_compliance_report_update_timestamp_seconds", name=f'="{TRIVY_COMPLIANCE_SPEC}"')
+    return [
+        {"record": "homelab_security_check_result", "expr": except_accepted(f"({controls} or {images})"),
+         "labels": {"source": "trivy"}},
+        {"record": "homelab_security_last_result_timestamp_seconds",
+         "expr": f"max by (k8s_cluster, system) ({as_system(report)})", "labels": {"source": "trivy"}},
+    ]
+
+
+def security_finding_records():
+    """The input of SecurityFindingNew: the result of each check of high or critical
+    severity on this site, one series for each check (SECURITY_FINDING_LABELS). The
+    alert reads a day of this record, so it reads each sample once."""
+    series = security_selector("homelab_security_check_result", severity=f'=~"{SECURITY_FINDING_SEVERITY}"')
+    return [{"record": SECURITY_FINDING_RECORD, "expr": f"max by ({SECURITY_FINDING_LABELS}) ({series})"}]
+
 
 def security_alerts():
     """The certificate alert reads a series of homelab-wsl-02 only, where the
@@ -464,7 +631,45 @@ def security_alerts():
     and had none one window before. Both terms keep the labels of the pod, so
     the counter of a new pod is a new series; the sum then takes them away."""
     errors = f'vector_component_errors_total{{component_id="{AUDIT_SINK}"}}'
+    # The record of security_finding_records(): one value for each check.
+    result = SECURITY_FINDING_RECORD
+    day_before = f"max_over_time({result}[1d] offset {SECURITY_FINDING_HOLD})"
+    hold_before = f"{result} offset {SECURITY_FINDING_HOLD}"
+    # A result above 0 that is above each value of the day before, or was 0 one
+    # hold before, or has no value in the day before (a new check, or one back
+    # after more than a day). Each term holds until the hold has passed.
     return [
+        {"alert": "SecurityFindingNew",
+         "expr": (f"max by (k8s_cluster, source, system) ({result} > 0 and ("
+                  f"{result} > {day_before}"
+                  f" or {hold_before} == 0"
+                  f" or {result} unless {day_before}))"),
+         "for": "10m", "labels": {"severity": "warning"},
+         "annotations": {"summary": "A new finding of high severity on {{ $labels.system }}, from {{ $labels.source }}",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": ("A check of high or critical severity fails: with more failed resources than at each time of the day before,"
+                                         " after an hour with none, or with no result in the day before."
+                                         " The board shows the failing safeguards of the system, and the reports of the source have the detail."
+                                         " Fix the cause, or accept the finding in the encrypted list with a reason and an end date"
+                                         f" (security/README.md, Accepted findings). The alert ends after {SECURITY_FINDING_HOLD[:-1]} hour.")}},
+        {"alert": "SecurityImagesNotScanned",
+         # Only where Trivy Operator runs: its compliance report exists there.
+         "expr": (f"count by (k8s_cluster) ({trivy_unscanned_images()}) > 0 and on (k8s_cluster)"
+                  " group by (k8s_cluster) ("
+                  + security_selector("homelab_trivy_compliance_report_update_timestamp_seconds") + ")"
+                  # An entry of the accepted list for the cluster mutes it until its end.
+                  f' unless on (k8s_cluster) label_replace({trivy_accepted(TRIVY_UNSCANNED_CHECK)},'
+                  ' "k8s_cluster", "$1", "system", "(.+)")'),
+         "for": TRIVY_UNSCANNED_HOLD, "labels": {"severity": "warning"},
+         "annotations": {"summary": "{{ $value }} running images on {{ $labels.k8s_cluster }} have no scan report of Trivy Operator",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": ("Images that run on this cluster have had no vulnerability report for"
+                                         f" {TRIVY_UNSCANNED_HOLD[:-1]} hours: a private image, a registry that the network policy"
+                                         " of the scan jobs does not name, or a scan that fails. While one image has no report,"
+                                         " the check image-vulnerabilities of the cluster shows a fail, or no evidence in place of a pass."
+                                         " kubernetes/apps/security/trivy-operator/README.md (When a scan fails) has the steps."
+                                         f" For an image that no scan can read, an entry of the accepted list with the check {TRIVY_UNSCANNED_CHECK}"
+                                         " mutes the alert of the cluster until its end.")}},
         {"alert": "SecurityCertificateExpiring",
          "expr": ('min by (k8s_cluster, namespace, lease) (kube_lease_renew_time'
                   f'{{namespace="security",lease=~"{SECURITY_CERTIFICATE_LEASES}"}}) - time()'
@@ -574,7 +779,8 @@ def rule_resource():
             "metadata": {"name": "homelab-observability", "namespace": "monitoring"},
             "spec": {"groups": [{"name": "homelab.evidence", "interval": "1m", "rules": rules},
                                 {"name": "homelab.capacity", "interval": "1m", "rules": capacity_alerts()},
-                                {"name": "homelab.security", "interval": "1m", "rules": security_alerts()}]}}
+                                {"name": "homelab.security", "interval": "1m",
+                                 "rules": security_records() + security_finding_records() + security_alerts()}]}}
 
 
 def fixtures():
@@ -908,6 +1114,7 @@ def fixtures():
         *security_fixtures(),
         *audit_sink_fixtures(),
         *accepted_list_fixtures(),
+        *trivy_fixtures(),
     ]}
 
 
@@ -1043,6 +1250,313 @@ def accepted_list_fixtures():
         {"name": "a federated copy of the series does not alert", "interval": "1m",
          "input_series": lists("0+0x90", "2+0x90", labels=f'{target},source_site="homelab-wsl-01"'),
          "alert_rule_test": [at(unread, 90, []), at(skipped, 90, [])]},
+    ]
+
+
+def trivy_fixtures():
+    site = "homelab-wsl"
+    rule = next(rule for rule in security_alerts() if rule["alert"] == "SecurityFindingNew")
+    unscanned = next(rule for rule in security_alerts() if rule["alert"] == "SecurityImagesNotScanned")
+
+    def control(control_id, status, value, severity="HIGH", title=TRIVY_COMPLIANCE_TITLE, extra=""):
+        return {"series": (f'trivy_compliance_info{{k8s_cluster="{site}",namespace="security",title="{title}",'
+                           f'description="CIS Kubernetes Benchmarks",compliance_id="{control_id}",compliance_name="A control",'
+                           f'status="{status}",severity="{severity}"{extra}}}'),
+                "values": value}
+
+    def image(namespace, repository, severity, value, digest="sha256:1"):
+        return {"series": (f'trivy_image_vulnerabilities{{k8s_cluster="{site}",namespace="{namespace}",name="replicaset-{repository}",'
+                           f'resource_kind="ReplicaSet",resource_name="{repository}",container_name="app",image_registry="ghcr.io",'
+                           f'image_repository="{repository}",image_tag="1.0",image_digest="{digest}",severity="{severity}"}}'),
+                "values": value}
+
+    def running(pod, digest, metric="kube_pod_container_info", values="1+0x90"):
+        return {"series": (f'{metric}{{k8s_cluster="{site}",namespace="a",pod="{pod}",container="app",'
+                           f'image="ghcr.io/x:1.0",image_id="ghcr.io/x@{digest}"}}'),
+                "values": values}
+
+    def accepted(check, until):
+        return {"series": (f'homelab_security_accepted_until_timestamp_seconds{{k8s_cluster="homelab-wsl-02",'
+                           f'source_site="homelab-wsl-02",source="trivy",check="{check}",system="{site}"}}'),
+                "values": f"{until}+0x20"}
+
+    def result(check, severity, value):
+        return {"labels": (f'homelab_security_check_result{{k8s_cluster="{site}",system="{site}",source="trivy",'
+                           f'check="{check}",severity="{severity}"}}'),
+                "value": value}
+
+    labels = {"k8s_cluster": site, "source": "trivy", "system": site}
+    annotations = {}
+    for key, text in rule["annotations"].items():
+        for label, value in labels.items():
+            text = text.replace("{{ $labels." + label + " }}", value)
+        annotations[key] = text
+    fires = [{"exp_labels": {"severity": "warning", **labels}, "exp_annotations": annotations}]
+
+    def at(minute, exp_alerts):
+        return {"alertname": rule["alert"], "eval_time": f"{minute}m", "exp_alerts": exp_alerts}
+
+    # One day and one hour of a steady value, then a change at minute 1500.
+    before, after = 1500, 120
+    return [
+        {"name": "a control of the CIS report gives its failed resources, or 0; a control with no input gives nothing",
+         "interval": "1m",
+         "input_series": [
+             control("1.2.1", "Fail", "3+0x10", severity="MEDIUM"),
+             control("5.1.1", "Pass", "1+0x10"),
+             control("1.4.2", "Pass", "1+0x10", severity="CRITICAL"),
+             # Read nodes or etcd: no input on these clusters.
+             control("1.1.1", "Pass", "1+0x10"),
+             control("2.1", "Pass", "1+0x10"),
+             control("4.1.1", "Fail", "1+0x10"),
+             control("4.2.10", "Pass", "1+0x10"),
+             # Another report, and a copy of the other site.
+             control("1.2.2", "Fail", "4+0x10", title="NSA"),
+             control("1.2.3", "Fail", "5+0x10", extra=',source_site="homelab-wsl-02"'),
+         ], "promql_expr_test": [
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "5m", "exp_samples": [
+                 result("k8s-cis-1.23/1.2.1", "medium", 3),
+                 result("k8s-cis-1.23/1.4.2", "critical", 0),
+                 result("k8s-cis-1.23/5.1.1", "high", 0)]},
+         ]},
+        {"name": "the image scans give the critical vulnerabilities with a fix over the distinct images that run",
+         "interval": "1m",
+         "input_series": [
+             running("one-abc", "sha256:1"),
+             running("two-abc", "sha256:2"),
+             running("three-abc", "sha256:3"),
+             # One image in two workloads counts one time.
+             image("a", "one", "Critical", "2+0x10"),
+             image("b", "one", "Critical", "2+0x10"),
+             image("a", "one", "High", "7+0x10"),
+             image("a", "two", "Critical", "1+0x10", digest="sha256:2"),
+             image("a", "three", "Critical", "0+0x10", digest="sha256:3"),
+             # The report of an image that does not run (an old ReplicaSet) does not count.
+             image("a", "old", "Critical", "5+0x10", digest="sha256:4"),
+         ], "promql_expr_test": [
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "5m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 3)]},
+         ]},
+        {"name": "scan reports with no critical vulnerability give 0, and no scan report gives nothing",
+         "interval": "1m",
+         "input_series": [running("one-abc", "sha256:1"),
+                          image("a", "one", "Critical", "0+0x5"), image("a", "one", "High", "4+0x5")],
+         "promql_expr_test": [
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "5m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 0)]},
+             # A report counts for an hour after its last sample.
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "70m", "exp_samples": []},
+         ]},
+        {"name": "a fail stays while a running image has no report, and a scan pod or a starting container is not a running image",
+         "interval": "1m",
+         "input_series": [
+             running("one-abc", "sha256:1"),
+             running("one-abc", "sha256:2", metric="kube_pod_init_container_info"),
+             running("scan-vulnerabilityreport-123", "sha256:9"),
+             # A container that has not started has no image_id yet.
+             {"series": f'kube_pod_container_info{{k8s_cluster="{site}",namespace="a",pod="new-abc",container="app",image="ghcr.io/y:1.0",image_id=""}}',
+              "values": "1+0x90"},
+             image("a", "one", "Critical", "2+0x90"),
+             # The report of the init image: there at the start, then its scan
+             # fails at minute 10 and the report is not there again.
+             image("a", "init", "Critical", "0+0x10", digest="sha256:2"),
+         ], "promql_expr_test": [
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "5m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 2)]},
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "80m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 2)]},
+         ]},
+        {"name": "a pass while a running image has no report for an hour is no evidence",
+         "interval": "1m",
+         "input_series": [
+             running("one-abc", "sha256:1"),
+             running("one-abc", "sha256:2", metric="kube_pod_init_container_info"),
+             image("a", "one", "Critical", "0+0x90"),
+             image("a", "init", "Critical", "0+0x10", digest="sha256:2"),
+         ], "promql_expr_test": [
+             # The report of a scan that runs again is gone for less than an hour.
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "40m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 0)]},
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "80m", "exp_samples": []},
+         ]},
+        {"name": "a running image with no report for 36 hours alerts on a cluster that runs Trivy Operator, and not before",
+         "interval": "2m",
+         "input_series": [
+             running("one-abc", "sha256:1", values="1+0x1200"),
+             running("one-abc", "sha256:2", values="1+0x1200"),
+             image("a", "one", "Critical", "0+0x1200"),
+             {"series": (f'homelab_trivy_compliance_report_update_timestamp_seconds{{k8s_cluster="{site}",'
+                         'name="k8s-cis-1.23"}'), "values": "1700000000+0x1200"},
+             # A cluster with no Trivy Operator: its images have no report, and no alert.
+             {"series": ('kube_pod_container_info{k8s_cluster="homelab-wsl-02",namespace="a",pod="one-abc",container="app",'
+                         'image="ghcr.io/x:1.0",image_id="ghcr.io/x@sha256:3"}'), "values": "1+0x1200"},
+         ], "alert_rule_test": [
+             {"alertname": "SecurityImagesNotScanned", "eval_time": "35h", "exp_alerts": []},
+             {"alertname": "SecurityImagesNotScanned", "eval_time": "37h", "exp_alerts": [
+                 {"exp_labels": {"severity": "warning", "k8s_cluster": site},
+                  "exp_annotations": {key: text.replace("{{ $labels.k8s_cluster }}", site).replace("{{ $value }}", "1")
+                                      for key, text in unscanned["annotations"].items()}}]},
+         ]},
+        {"name": "an accepted entry for the images with no report mutes the alert of its cluster until its end",
+         "interval": "2m",
+         "input_series": [
+             running("one-abc", "sha256:2", values="1+0x2340"),
+             {"series": (f'homelab_trivy_compliance_report_update_timestamp_seconds{{k8s_cluster="{site}",'
+                         'name="k8s-cis-1.23"}'), "values": "1700000000+0x2340"},
+             # Served on homelab-wsl-02 and gone for 4 hours; it ends at 40 hours.
+             {"series": ('homelab_security_accepted_until_timestamp_seconds{k8s_cluster="homelab-wsl-02",'
+                         f'source_site="homelab-wsl-02",source="trivy",check="{TRIVY_UNSCANNED_CHECK}",system="{site}"}}'),
+              "values": f"{40 * 3600}+0x500 stale _x119 {40 * 3600}+0x1720"},
+         ], "alert_rule_test": [
+             {"alertname": "SecurityImagesNotScanned", "eval_time": "37h", "exp_alerts": []},
+             # The 36 hours start at its end.
+             {"alertname": "SecurityImagesNotScanned", "eval_time": "75h", "exp_alerts": []},
+             {"alertname": "SecurityImagesNotScanned", "eval_time": "77h", "exp_alerts": [
+                 {"exp_labels": {"severity": "warning", "k8s_cluster": site},
+                  "exp_annotations": {key: text.replace("{{ $labels.k8s_cluster }}", site).replace("{{ $value }}", "1")
+                                      for key, text in unscanned["annotations"].items()}}]},
+         ]},
+        {"name": "scan reports with no running image known (kube-state-metrics down) give nothing",
+         "interval": "1m",
+         "input_series": [image("a", "one", "Critical", "2+0x10"), image("a", "two", "Critical", "0+0x10", digest="sha256:2")],
+         "promql_expr_test": [
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "5m", "exp_samples": []},
+         ]},
+        # A rollout at minute 1500: the old pods stop at minute 1503, the scan
+        # of the new image ends at minute 1505, and the old report stays.
+        {"name": "a rollout to an image with the same critical count does not alert, and the old report does not count",
+         "interval": "1m",
+         "input_series": [
+             running("one-old", "sha256:1", values=f"1+0x{before + 2} stale"),
+             running("one-new", "sha256:5", values=f"_x{before} 1+0x{after}"),
+             image("a", "one", "Critical", f"2+0x{before + after}"),
+             image("a", "one", "Critical", f"_x{before + 5} 2+0x{after - 5}", digest="sha256:5"),
+         ], "promql_expr_test": [
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": f"{before + 1}m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 2)]},
+             # The new image has no report yet: no evidence.
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": f"{before + 4}m", "exp_samples": []},
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": f"{before + 10}m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 2)]},
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": f"{before + 100}m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 2)]},
+         ], "alert_rule_test": [at(before + 10, []), at(before + 20, []), at(before + 70, [])]},
+        {"name": "a rollout to an image with more critical vulnerabilities alerts",
+         "interval": "1m",
+         "input_series": [
+             running("one-old", "sha256:1", values=f"1+0x{before + 2} stale"),
+             running("one-new", "sha256:5", values=f"_x{before} 1+0x{after}"),
+             image("a", "one", "Critical", f"2+0x{before + after}"),
+             image("a", "one", "Critical", f"_x{before + 5} 3+0x{after - 5}", digest="sha256:5"),
+         ], "alert_rule_test": [at(before + 10, []), at(before + 20, fires)]},
+        {"name": "a report gone for 15 minutes during its new scan changes no result and does not alert",
+         "interval": "1m",
+         "input_series": [
+             running("one-abc", "sha256:1", values=f"1+0x{before + after}"),
+             image("a", "one", "Critical", f"2+0x{before} stale _x14 2+0x{after - 15}"),
+         ], "promql_expr_test": [
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": f"{before + 10}m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 2)]},
+         ], "alert_rule_test": [at(before + 15, []), at(before + 70, []), at(before + 80, [])]},
+        # time() is 300 at minute 5. The accepted list is served on
+        # homelab-wsl-02, and homelab-wsl reads it by its federation.
+        {"name": "an accepted check gives 0 until its end, then its result again",
+         "interval": "1m",
+         "input_series": [
+             control("1.2.1", "Fail", "3+0x10"),
+             control("1.2.8", "Fail", "1+0x10"),
+             running("one-abc", "sha256:1"),
+             image("a", "one", "Critical", "2+0x10"),
+             accepted("k8s-cis-1.23/1.2.1", 100000),
+             accepted("image-vulnerabilities", 100000),
+             accepted("k8s-cis-1.23/1.2.8", 200),
+         ], "promql_expr_test": [
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": "5m", "exp_samples": [
+                 result("image-vulnerabilities", "critical", 0),
+                 result("k8s-cis-1.23/1.2.1", "high", 0),
+                 result("k8s-cis-1.23/1.2.8", "high", 1)]},
+         ]},
+        {"name": "the time of the last result is the time of the compliance report of this site",
+         "interval": "1m",
+         "input_series": [
+             {"series": (f'homelab_trivy_compliance_report_update_timestamp_seconds{{k8s_cluster="{site}",'
+                         'customresource_group="aquasecurity.github.io",customresource_kind="ClusterComplianceReport",'
+                         'customresource_version="v1alpha1",name="k8s-cis-1.23"}'), "values": "1700000000+0x10"},
+             {"series": ('homelab_trivy_compliance_report_update_timestamp_seconds{k8s_cluster="homelab-wsl-02",'
+                         'source_site="homelab-wsl-02",name="k8s-cis-1.23"}'), "values": "1800000000+0x10"},
+         ], "promql_expr_test": [
+             {"expr": 'homelab_security_last_result_timestamp_seconds{source="trivy"}', "eval_time": "5m", "exp_samples": [
+                 {"labels": (f'homelab_security_last_result_timestamp_seconds{{k8s_cluster="{site}",system="{site}",'
+                             'source="trivy"}'), "value": 1700000000}]},
+         ]},
+        {"name": "a result of high severity above each value of the day before alerts for one hour",
+         "interval": "1m",
+         "input_series": [control("5.1.2", "Fail", f"1+0x{before} 2+0x{after}")],
+         "alert_rule_test": [at(before - 10, []), at(before + 5, []), at(before + 15, fires),
+                             at(before + 55, fires), at(before + 70, [])]},
+        {"name": "a result that fails again after an hour at 0 alerts, also below a larger fail of the day before",
+         "interval": "1m",
+         "input_series": [control("5.1.2", "Fail", f"3+0x600 0+0x600 1+0x{after}")],
+         "alert_rule_test": [at(1205, []), at(1215, fires), at(1255, fires), at(1270, [])]},
+        {"name": "a check with no result in the day before alerts when its first result fails", "interval": "1m",
+         "input_series": [
+             {"series": ('homelab_security_check_result{k8s_cluster="homelab-wsl-02",source="prowler",system="aws-prod",'
+                         'check="iam_root_mfa_enabled",severity="critical"}'),
+              "values": f"_x{before} 1+0x{after}"},
+             # A new check that passes does not alert.
+             {"series": ('homelab_security_check_result{k8s_cluster="homelab-wsl-02",source="prowler",system="aws-prod",'
+                         'check="iam_root_hardware_mfa_enabled",severity="critical"}'),
+              "values": f"_x{before} 0+0x{after}"},
+         ],
+         "alert_rule_test": [
+             {"alertname": rule["alert"], "eval_time": f"{before + 15}m", "exp_alerts": [
+                 {"exp_labels": {"severity": "warning", "k8s_cluster": "homelab-wsl-02", "source": "prowler",
+                                 "system": "aws-prod"},
+                  "exp_annotations": {key: text.replace("{{ $labels.system }}", "aws-prod")
+                                      .replace("{{ $labels.source }}", "prowler")
+                                      .replace("{{ $labels.k8s_cluster }}", "homelab-wsl-02")
+                                      for key, text in rule["annotations"].items()}}]},
+             {"alertname": rule["alert"], "eval_time": f"{before + 75}m", "exp_alerts": []}]},
+        {"name": "a control whose severity changes from high to critical does not alert", "interval": "1m",
+         "input_series": [control("5.1.2", "Fail", f"1+0x{before} _x{after}"),
+                          control("5.1.2", "Fail", f"_x{before} 1+0x{after}", severity="CRITICAL")],
+         "alert_rule_test": [at(before + 15, []), at(before + 60, [])]},
+        {"name": "an accepted check of homelab-wsl stays muted while the federated list is gone for hours", "interval": "1m",
+         "input_series": [
+             control("1.2.1", "Fail", f"1+0x{before + 400}"),
+             {"series": ('homelab_security_accepted_until_timestamp_seconds{k8s_cluster="homelab-wsl-02",'
+                         f'source_site="homelab-wsl-02",source="trivy",check="k8s-cis-1.23/1.2.1",system="{site}"}}'),
+              "values": f"1000000000+0x{before} stale _x239 1000000000+0x160"},
+         ], "promql_expr_test": [
+             {"expr": 'homelab_security_check_result{source="trivy"}', "eval_time": f"{before + 120}m", "exp_samples": [
+                 result("k8s-cis-1.23/1.2.1", "high", 0)]},
+         ], "alert_rule_test": [at(before + 20, []), at(before + 120, []), at(before + 250, [])]},
+        {"name": "a result whose pod label changes during the day does not alert", "interval": "1m",
+         "input_series": [
+             {"series": ('homelab_security_check_result{k8s_cluster="homelab-wsl-02",source="prowler",system="aws-prod",'
+                         'check="iam_root_mfa_enabled",severity="critical",pod="converter-a",instance="10.0.0.1:9090"}'),
+              "values": f"2+0x{before} _x{after}"},
+             {"series": ('homelab_security_check_result{k8s_cluster="homelab-wsl-02",source="prowler",system="aws-prod",'
+                         'check="iam_root_mfa_enabled",severity="critical",pod="converter-b",instance="10.0.0.2:9090"}'),
+              "values": f"_x{before} 2+0x{after}"},
+         ],
+         "alert_rule_test": [at(before + 15, []), at(before + 60, [])]},
+        {"name": "a control of high severity that changes from pass to fail alerts", "interval": "1m",
+         "input_series": [control("5.1.2", "Pass", f"1+0x{before}"),
+                          control("5.1.2", "Fail", f"_x{before} 1+0x{after}")],
+         "alert_rule_test": [at(before - 10, []), at(before + 15, fires)]},
+        {"name": "a result of low severity, a steady result, a result that falls and a copy of the other site do not alert",
+         "interval": "1m",
+         "input_series": [
+             control("1.2.19", "Fail", f"1+0x{before} 2+0x{after}", severity="LOW"),
+             control("5.1.1", "Fail", f"2+0x{before + after}"),
+             control("5.1.3", "Fail", f"3+0x{before} 1+0x{after}"),
+             control("5.1.5", "Fail", f"1+0x{before} 2+0x{after}", extra=',source_site="homelab-wsl-02"'),
+         ],
+         "alert_rule_test": [at(before + 15, []), at(before + 60, [])]},
+        {"name": "a result that comes back after a gap of less than a day does not alert", "interval": "1m",
+         "input_series": [control("5.1.2", "Fail", f"2+0x600 _x600 2+0x{after}")],
+         "alert_rule_test": [at(1215, []), at(1260, [])]},
     ]
 
 

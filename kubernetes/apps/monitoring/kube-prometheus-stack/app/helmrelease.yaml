@@ -85,6 +85,37 @@ spec:
     kube-state-metrics:
       metricLabelsAllowlist:
         - "persistentvolumeclaims=[*]"
+      # The time of the last result of Trivy Operator, for the security
+      # registry (security/README.md, "What a source must do"): the time at
+      # which the operator wrote its compliance report, as
+      # homelab_trivy_compliance_report_update_timestamp_seconds. The rule in
+      # observability/rules.py turns it into the series of the contract. A
+      # cluster with no Trivy Operator has no such CRD, and no series.
+      customResourceState:
+        enabled: true
+        config:
+          kind: CustomResourceStateMetrics
+          spec:
+            resources:
+              - groupVersionKind:
+                  group: aquasecurity.github.io
+                  version: v1alpha1
+                  kind: ClusterComplianceReport
+                metricNamePrefix: homelab_trivy
+                labelsFromPath:
+                  name: [metadata, name]
+                metrics:
+                  - name: compliance_report_update_timestamp_seconds
+                    help: The time at which Trivy Operator wrote the compliance report.
+                    each:
+                      type: Gauge
+                      gauge:
+                        path: [status, updateTimestamp]
+      rbac:
+        extraRules:
+          - apiGroups: ["aquasecurity.github.io"]
+            resources: ["clustercompliancereports"]
+            verbs: ["list", "watch"]
       prometheus:
         monitor:
           enabled: true
