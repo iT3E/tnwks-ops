@@ -433,14 +433,18 @@
       "type": "wsl-distro",
       "site": "homelab-wsl",
       "domain": "infrastructure",
-      "sources": []
+      "sources": [
+        "host-check"
+      ]
     },
     {
       "name": "WSL-02-ubuntu",
       "type": "wsl-distro",
       "site": "homelab-wsl-02",
       "domain": "infrastructure",
-      "sources": []
+      "sources": [
+        "host-check"
+      ]
     },
     {
       "name": "sce-rtr01",
@@ -587,6 +591,16 @@
     {
       "source": "host-check",
       "system": "WSL-02",
+      "late_after_seconds": 43200
+    },
+    {
+      "source": "host-check",
+      "system": "DESKTOP-HKE05KI-ubuntu",
+      "late_after_seconds": 43200
+    },
+    {
+      "source": "host-check",
+      "system": "WSL-02-ubuntu",
       "late_after_seconds": 43200
     },
     {

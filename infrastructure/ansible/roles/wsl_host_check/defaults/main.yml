@@ -1,0 +1,26 @@
+---
+# wsl_host_check: the host check of the security platform in the WSL distro
+# (security/README.md, "The host check"). A timer runs
+# /usr/local/bin/tnwks-host-check every 6 hours, as wsl_distro_user. It
+# simulates an upgrade with apt-get and writes a .prom file into the
+# directory that role windows_host_check makes for the distro, which the
+# Windows host's windows_exporter reads.
+#
+# present: installs and starts the check. absent: stops it and removes its
+# units, its script, its state and its .prom file.
+wsl_host_check_state: present
+
+wsl_host_check_name: tnwks-host-check
+
+# The distro's path of the Windows directory host_check_distro_dir of role
+# windows_host_check.
+wsl_host_check_textfile_dir: /mnt/c/Program Files/windows_exporter/textfile_inputs/wsl-distro
+# A name that no file of the Windows host has: the exporter refuses two
+# files with the same name.
+wsl_host_check_file: tnwks_security_host_check_distro.prom
+
+# An upgrade fails the check when it has waited longer than this, the same
+# limit as the Windows hosts.
+wsl_host_check_updates_max_age_days: 14
+# Older package lists give no result.
+wsl_host_check_lists_max_age_hours: 72

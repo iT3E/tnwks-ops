@@ -1,0 +1,70 @@
+---
+- name: The host check is in place
+  when: wsl_host_check_state == 'present'
+  block:
+    - name: Host check script
+      ansible.builtin.copy:
+        src: tnwks-host-check.py
+        dest: /usr/local/bin/{{ wsl_host_check_name }}
+        owner: root
+        group: root
+        mode: "0755"
+      notify: Run the host check
+
+    - name: Host check service
+      ansible.builtin.template:
+        src: tnwks-host-check.service.j2
+        dest: /etc/systemd/system/{{ wsl_host_check_name }}.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify: [Reload systemd, Run the host check]
+
+    - name: Host check timer
+      ansible.builtin.copy:
+        src: tnwks-host-check.timer
+        dest: /etc/systemd/system/{{ wsl_host_check_name }}.timer
+        owner: root
+        group: root
+        mode: "0644"
+      register: wsl_host_check_timer_file
+      notify: Reload systemd
+
+    - name: Flush the systemd reload before enabling the timer
+      ansible.builtin.meta: flush_handlers
+
+    - name: Host check timer is enabled and running
+      ansible.builtin.systemd:
+        name: "{{ wsl_host_check_name }}.timer"
+        enabled: true
+        state: started
+      # A check run doesn't write a new timer's unit, so systemd can't find it yet.
+      when: not (ansible_check_mode and wsl_host_check_timer_file is changed)
+
+# The way back: the timer stops first, so no run starts while the files go.
+- name: The host check is gone
+  when: wsl_host_check_state == 'absent'
+  block:
+    - name: Host check timer is stopped and disabled
+      ansible.builtin.systemd:
+        name: "{{ wsl_host_check_name }}.timer"
+        enabled: false
+        state: stopped
+      failed_when: false
+
+    - name: Host check units, script, state and file are gone
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/systemd/system/{{ wsl_host_check_name }}.timer
+        - /etc/systemd/system/{{ wsl_host_check_name }}.service
+        - /usr/local/bin/{{ wsl_host_check_name }}
+        - /var/lib/{{ wsl_host_check_name }}
+        - "{{ wsl_host_check_textfile_dir }}/{{ wsl_host_check_file }}"
+      register: wsl_host_check_removed
+
+    - name: Reload systemd after removing the units
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: wsl_host_check_removed is changed  # noqa: no-handler

@@ -58,10 +58,12 @@
   type: wsl-distro
   site: homelab-wsl
   domain: infrastructure
+  sources: [host-check]
 - name: WSL-02-ubuntu
   type: wsl-distro
   site: homelab-wsl-02
   domain: infrastructure
+  sources: [host-check]
 - name: sce-rtr01
   type: router
   site: none
