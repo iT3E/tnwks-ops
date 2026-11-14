@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.122.0 - 2026-11-14
+
+### Added
+
+* aws: the AWS parts of the security platform in `modules/aws/security`, called by the prod root. An organization trail in the management account (management events, every Region, log file validation) writes to a private bucket in the prod account that deletes each object after 90 days. Two read-only IAM Roles Anywhere roles, each for one certificate CN: an audit role for Prowler and a reader of the trail bucket. An audit role in the management account that the audit role of the prod account can assume. Each plan warns while an account lists another trail
+
 ## v2.121.0 - 2026-11-14
 
 ### Changed
