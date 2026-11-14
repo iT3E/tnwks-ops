@@ -278,9 +278,14 @@ and when to turn CI on.
 ## Safety
 
 - **No deletes.** Every repository has `lifecycle { prevent_destroy = true }`,
-  so a plan that would destroy one fails. `archive_on_destroy = true`
-  (archive instead of delete, should the guard be lifted) is not set in
-  this phase; see "Later phases".
+  so a plan that would destroy one fails. Should the guard ever be lifted,
+  `archive_on_destroy = true` archives the repository instead of deleting
+  it. GitHub never reports that setting, so it lives only in Terraform's
+  state: an import can't fill it in, and a repository imported later plans
+  as an import plus an in-place update that records it. That update
+  resends the repository's settings as Terraform read them
+  (`PATCH /repos/{owner}/{repo}`; visibility and secret scanning only when
+  they change).
 - **No replacements.** No repository sets `template`, `fork` or `source_*`:
   on an existing repository they force a replacement, which is a delete.
 - **A token that can't delete repositories** (a classic PAT without
@@ -310,12 +315,6 @@ small PRs.
 
 ## Later phases
 
-- `archive_on_destroy = true` on every repository, in its own PR after the
-  first apply. GitHub never reports the setting, so an import can't fill it
-  in: the plan shows it as one in-place update per repository, and the apply
-  sends each repository's current settings back unchanged
-  (`PATCH /repos/{owner}/{repo}`) while Terraform records the value in its
-  state.
 - Actions, environment and Dependabot secrets, and the webhook, from SOPS.
 - The account's SSH keys.
 - GitHub App installations and their repository access.
