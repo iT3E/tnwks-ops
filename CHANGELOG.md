@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.117.0 - 2026-11-14
+
+### Added
+
+* terraform: every repository of the GitHub root has archive_on_destroy, so a destroy that ever gets past prevent_destroy archives instead of deleting; the apply is one in-place update per repository that resends its current settings
+
 ## v2.116.0 - 2026-11-14
 
 ### Removed

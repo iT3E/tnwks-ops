@@ -1,3 +1,0 @@
-kind: Added
-body: 'terraform: every repository of the GitHub root has archive_on_destroy, so a destroy that ever gets past prevent_destroy archives instead of deleting; the apply is one in-place update per repository that resends its current settings'
-time: 2026-11-13T16:35:00.000000000Z
