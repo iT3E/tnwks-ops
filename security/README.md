@@ -132,7 +132,7 @@ The names and the labels stay. A new source maps to them.
 | `homelab:security_control_state` | The generated rules | `safeguard`, `system`, `system_type`, `k8s_cluster` | The state of one safeguard on one system |
 | `homelab:security_safeguard_state` | The generated rules | `safeguard`, `line`, `title`, `ig`, `function`, `k8s_cluster` | The state of one safeguard over the systems that have a check for it |
 | `homelab:security_safeguard_has_result` | The generated rules | `safeguard`, `ig`, `k8s_cluster` | 1 when one system or more has a fresh result for the safeguard, and 0 when none has |
-| `homelab_security_accepted_until_timestamp_seconds` | The reader of the list of accepted findings | `source`, `check`, `system` | The Unix time at which one accepted finding ends |
+| `homelab_security_accepted_until_timestamp_seconds` | The converter, from the list of accepted findings | `source`, `check`, `system` | The Unix time at which one accepted finding ends |
 
 The first two are the result series and the series with the time of the last
 result. The fourth is the control series.
@@ -184,8 +184,11 @@ and the state "No evidence" at the same time.
   `system` is the `name` of the system in `systems.yaml`. A result for a
   system that the registry does not name gives no line.
 - **Give one result series for each check and system.** Serve the newest
-  result until the next run. A source can add labels of its own, such as a
-  severity. The rules read only the three labels of the contract.
+  result until the next run. A source can add labels of its own. The rules
+  read only the three labels of the contract. A source with a severity for
+  each check gives it in the label `severity`, in lower case: `critical`,
+  `high`, `medium`, `low`, `informational` or `unknown`, one value for each
+  check and system. The alert for a new finding of high severity reads it.
 - **Give the time of the last result for each system.** It is the time at
   which the tool made the result, not the time of the scrape. A source that
   does not know the time serves no time. The rules then read the source as
