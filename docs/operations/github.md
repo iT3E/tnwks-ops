@@ -7,7 +7,7 @@ of the infrastructure: `infrastructure/terraform/environments/prod/github`
 holds the values, `infrastructure/terraform/modules/github` the resources.
 
 This first phase only codifies what exists. Every value was read from the
-API and is imported as it was, including settings that differ between
+API and was imported as it was, including settings that differ between
 repositories for no reason. Making them consistent is a later change, one
 PR at a time, each with its own plan.
 
@@ -69,15 +69,46 @@ To add one:
    opens the decrypted file in your editor and encrypts it on save. Add
    `privateN` with `name` and, if the repository has one, `description`.
 2. Add `privateN` to `local.sops_repositories` in `main.tf` with its
-   settings. While the repository exists on GitHub and not in the state,
-   it also needs an import block (the `sops_repositories` one in
-   `imports.tf` covers every key).
+   settings. If the repository already exists on GitHub, it also needs an
+   import block (below).
 3. Check that the file is encrypted (`sops` metadata, every value
    `ENC[...]`) before `git add`, and run `task github:plan`.
 
 Refer to the repository only by its key in commit messages, PR titles and
 bodies, comments and reviews. The privacy checks don't know these names, so
 nothing stops one from being pasted there.
+
+### Adopting something that already exists
+
+The first apply adopted everything the root lists with import blocks, which
+were then removed. Anything added to `main.tf` later that already exists on
+GitHub (a repository, an environment, a variable, a ruleset) needs an import
+block in the root first, or the apply fails on "already exists". Put it in
+`environments/prod/github/imports.tf` and take the file out again in a later
+PR, once an apply has imported it. The plan should import it and change
+nothing; if it also shows an update, the values in `main.tf` differ from
+GitHub's.
+
+```hcl
+import {
+  to = module.github.github_repository.this["some-repo"]
+  id = "some-repo"
+}
+
+# A repository held in SOPS: the import ID is its name, and an import ID
+# can't be sensitive, so nonsensitive() here, and only here.
+import {
+  to = module.github.github_repository.this["private6"]
+  id = nonsensitive(data.sops_file.repositories.data["private6.name"])
+}
+```
+
+Other IDs: `<repo>:<ruleset id>` for a ruleset,
+`<repo>:<environment>` for an environment,
+`<repo>:<environment>:<policy id>` for a deployment policy,
+`<repo>:<variable>` for a variable, and the repository name for the
+Actions settings and Dependabot alerts. Terraform prints import IDs in its
+progress lines, which CI keeps out of the log (Public logs).
 
 ## What stays by hand, and why
 
@@ -269,7 +300,9 @@ each step without taking it.
    --repo iT3E/tnwks-ops -f roots=github`. The apply imports and changes
    nothing (step 1.3 checked that locally; CI's PR comment counts only
    changes, so it shows `0 to add, 0 to change, 0 to destroy, 0 to move`
-   for an imports-only plan). After it, `imports.tf` can go.
+   for an imports-only plan). It ran on 2026-11-13, imported all 36
+   objects and changed nothing, and the import blocks were removed after
+   it.
 
 What stays your decision: the token type and its expiry (a fine-grained
 token can delete repositories), confirming the workspace, reviewing the PR,
