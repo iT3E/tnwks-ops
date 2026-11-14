@@ -142,8 +142,10 @@ agent (key agents-<name>) -> model gateway, name agents-<name>
   the Anthropic SDK 2 times for a 429 or a 5xx, and an agent framework can
   retry on top of it (Strands retries a 429 up to 6 attempts in all, from
   4 s to 64 s apart).
-  At the usage limit of the plan a model call of a workflow agent reaches
-  the bridge 18 times at most (3 by the SDK times 6 by Strands), not 54.
+  At the usage limit of the plan one model call of a workflow agent reaches
+  the bridge 18 times at most in one run (3 by the SDK times 6 by Strands).
+  Before this change it was 54. A caller that makes its 3 attempts for one
+  review starts 3 runs, so one review can still reach 54 over the three.
 - **No fallback.** The gateway config has none. Each key lists its one name,
   so a call to any other name, or a fallback in a request, gets 403. The
   config of each agent names its one model, with no fallback list.
