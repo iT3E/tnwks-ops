@@ -1,8 +1,11 @@
 ---
-# The Pushgateway takes pushes from this cluster's ops runner pods only
-# (terraform.yaml's drift job; ARC labels each runner pod with its scale set),
-# scrapes from this cluster's Prometheus, and the kubelet's probes, which come
-# from the host. Anything else could overwrite a result, so it can't connect.
+# Only this cluster's ops runner pods (the tnwks-ops-runner-${CLUSTER_NAME}
+# scale set: ARC labels each runner pod app.kubernetes.io/component=runner
+# and actions.github.com/scale-set-name=<scale set>) and this cluster's
+# Prometheus connect to 9091, plus the host for the kubelet's probes. The
+# runner pushes (terraform.yaml's drift job), Prometheus scrapes. What a push
+# can turn into in Prometheus is limited at the scrape (the ServiceMonitor in
+# helmrelease.yaml), not here.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:

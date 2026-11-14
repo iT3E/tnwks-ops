@@ -9,7 +9,8 @@
 #
 # Nothing on disk: Prometheus keeps what it scraped, and the alerts read the
 # last value within a window, so a restart loses nothing they need.
-# networkpolicy.yaml limits who can push.
+# networkpolicy.yaml limits who can connect; the ServiceMonitor below limits
+# what a push can become in Prometheus.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -55,14 +56,25 @@ spec:
         memory: 16Mi
       limits:
         memory: 64Mi
+    # A push can't put anything else into Prometheus. The target's labels
+    # win: a pushed job, namespace, k8s_cluster and the like arrive as
+    # exported_<name> (the grouping key's job as exported_job). Then only the
+    # four drift gauges pushed under job terraform_drift are kept (not even
+    # the Pushgateway's own series), and of their labels only the target's,
+    # root and exported_job; any other label a pusher sends is dropped.
+    # pod and instance go too: they change
+    # when the pod is replaced, and without them a root stays one series, so
+    # "the last value" means the last push. up and scrape_* aren't scraped
+    # samples and keep their labels.
     serviceMonitor:
       enabled: true
       namespace: monitoring
       interval: 1m
-      # The pushed job and root labels win over the target's.
-      honorLabels: true
-      # The pod's name changes when the pod is replaced; without it a root's
-      # series stays one series, so "the last value" means the last push.
+      honorLabels: false
       metricRelabelings:
-        - action: labeldrop
-          regex: pod|instance
+        - action: keep
+          sourceLabels: [__name__, exported_job, root]
+          separator: ";"
+          regex: tnwks_terraform_drift_check_(timestamp_seconds|drifted|changed|failed);terraform_drift;[a-z0-9][a-z0-9_-]*
+        - action: labelkeep
+          regex: __name__|job|namespace|service|endpoint|container|k8s_cluster|root|exported_job

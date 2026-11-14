@@ -157,7 +157,9 @@ terraform-drift.yaml (13:15 UTC, or dispatch on main)
   alert and the job summary show it. One that can't plan fails, and is
   reported as failed.
 
-The metrics, per root (`root` label, job `terraform_drift`):
+The metrics, per root. In Prometheus each carries `root`, `exported_job="terraform_drift"`
+(the push's job; the target's own labels win) and the Pushgateway target's
+`job`, `namespace`, `service`, `endpoint`, `container` and `k8s_cluster`:
 
 | Metric | Value |
 | --- | --- |
@@ -203,10 +205,28 @@ The Pushgateway
 is the in-cluster counterpart of the textfile directory: the job writes its
 last result, Prometheus scrapes it. It runs on homelab-wsl only, so the
 drift job runs on that site's ops runner (`tnwks-ops-homelab-wsl`), whatever
-the root's own `runner`; a `CiliumNetworkPolicy` lets in that runner,
-Prometheus and the kubelet's probes, and nothing else. It keeps nothing on
-disk: Prometheus has what it scraped, and the alerts read the last value
-within a window, so a restart loses nothing they need.
+the root's own `runner`. It keeps nothing on disk: Prometheus has what it
+scraped, and the alerts read the last value within a window, so a restart
+loses nothing they need.
+
+Two limits keep it from being a way into Prometheus:
+
+- **Who connects.** A `CiliumNetworkPolicy` lets only that site's ops
+  runner pods (scale set `tnwks-ops-runner-homelab-wsl`: ARC labels each
+  runner pod `app.kubernetes.io/component=runner` and
+  `actions.github.com/scale-set-name=<scale set>`) and that site's
+  Prometheus connect to port 9091, plus the host for the kubelet's probes.
+  It works at L4: it doesn't tell a push from a scrape.
+- **What a push becomes.** Anything that can push can send any series with
+  any labels, so the ServiceMonitor filters at the scrape. With
+  `honorLabels: false` the target's labels win: a pushed `job`, `namespace`,
+  `k8s_cluster` and so on arrive as `exported_<name>`. Then only the four
+  `tnwks_terraform_drift_check_*` gauges pushed under job `terraform_drift`
+  with a root-shaped `root` are kept (not even the Pushgateway's own
+  series), and of their labels only the target's, `root` and
+  `exported_job`. A fake `kube_*` or `up` series, or a label a pusher
+  invents, never reaches Prometheus. `pod` and `instance` are dropped too,
+  so a root stays one series when the pod is replaced.
 
 **Turning it off for a root** is the PR that removes `drift`. Its last
 result stays in the Pushgateway until the pod is next replaced (a chart
