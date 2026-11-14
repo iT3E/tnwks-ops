@@ -110,6 +110,9 @@ resources:
   - ../../../apps/tools/actions-runner-controller/openclaw-runner/ks.yaml
   # Checks of the private docs repo when its CI_RUNNER variable names it.
   - ../../../apps/tools/actions-runner-controller/coe-runner/ks.yaml
+  # Checks of two private app repos, except their image jobs.
+  - ../../../apps/tools/actions-runner-controller/agent-image-runner/ks.yaml
+  - ../../../apps/tools/actions-runner-controller/packing-api-runner/ks.yaml
 
   # Trimmed namespaces — per-namespace overlays sit alongside this file
   - ./home-automation
