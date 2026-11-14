@@ -508,6 +508,82 @@ curl -s localhost:8080/healthz
 curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8080/runs -d '{}'
 ```
 
+## Logs
+
+Loki has the logs of each Job pod of the platform (the run jobs, the
+providers job, the sweep and the checks), and of the long-running pods on an
+allowlist. A pod ships only when its pod template has the label
+`logs.home.arpa/ship: "true"`; a new pod in the same namespace stays out
+until its manifest has the label too. The sandbox supervisors are made by the
+gateway, so their namespace opts in instead
+(`logs.home.arpa/ship-supervisors: "true"`, `agents-workflows` only), and
+only pods with the labels `openshell.ai/component: supervisor` and
+`openshell.ai/boundary-role: supervisor` ship. A pod with
+`openshell.ai/boundary-role: workload` never ships, even with the allowlist
+label.
+
+A Vector agent of its own reads them: the platform agent, a DaemonSet that
+only homelab-wsl runs (`kubernetes/apps/monitoring/vector/agent-platform/`,
+the sources `allowlist` and `supervisors` of its `config/vector.yaml`). The
+shared Vector agent and the aggregator stay the same on each cluster. Query
+the lines by namespace and app, for example
+`{namespace="agents-workflows", app="run-receiver"} |= "result kept"`.
+
+Before a line leaves the node, the platform agent changes it as follows (its
+tests are in `observability/vector-tests/agent-platform-logs.yaml`):
+
+- **The sandbox gateway** (`openshell-gateway`). The colour codes go. From
+  the first field that can hold a command, or its input or output, to the
+  end of the line, the line becomes `(dropped)`: a `[cmd:` context, or a key
+  that ends in `preview`, `stdin`, `stdout`, `stderr`, `input`, `output` or
+  `body`, or `cmd`, `cmd_line`, `cmdline`, `command`, `args`, `argv` or
+  `env`, before `=` or `:`, in any case. An `error=` or `detail=` field
+  ships: the gateway writes its own error text there. The gateway logs the first 120 or
+  so characters of each command it relays to a sandbox (`command_preview=`),
+  and Loki gets `command_preview=(dropped)`. The query string of each URL,
+  path or host becomes `?(dropped)`. A JSON OCSF record (it holds
+  `class_uid`) becomes `(dropped: OCSF JSON record)`: it is off by default,
+  and can hold the command line of a process.
+- **A sandbox supervisor** (`supervisor`). The same, and then the line
+  stays only when it is a known line type of OpenShell 0.1.8 (SSH, NET,
+  HTTP, CONFIG, an SSH relay EVENT, LIFECYCLE, PROC, or a plain log line of
+  the supervisor) and holds only the characters and fields that type allows:
+  an SSH auth field is one of the labels of the format, a CONFIG field is
+  one the format writes (version, hash, source and the like, never
+  `rejection_reason`), and a LIFECYCLE line names an `openshell` program.
+  Any other line becomes `(dropped: unknown line type)`. A new release that
+  logs a new kind of line shows the marker, and a test of the new line
+  moves it to the list.
+
+  What still ships by design: the host and port of each connection out of
+  the sandbox; the method, host and path of each HTTP request (a token
+  inside a path ships; the query string does not); and the short text (up
+  to 120 characters) of a CONFIG line or a plain log line.
+- **Every other container** (the run receiver, the model bridge and the
+  pilot's pod) ships its line as it is. Their lines are the program's own
+  (below), and the bridge's JSON lines stay whole.
+
+| Pod | What its log holds | About a day |
+| --- | --- | --- |
+| The run receiver (`agents-workflows`) | One line for each run made or found, and for each answer kept (`result kept (succeeded)`, `result kept (failed)`), and the errors of the cluster API. Never the token or the input of a run | Some KB |
+| The sandbox gateway of `agents-workflows` (`openshell-0`) | Each call to its API (method, request id, status), each sign-in (`OCSF AUTH:LOGON`, allowed or denied, with the address of the caller), the sandboxes it makes and removes, and each command it relays to a sandbox, by length only once the preview is dropped. The text of an `error=` or `detail=` field ships. No credential | 2 to 7 MB |
+| A sandbox supervisor of `agents-workflows` (`os-supervisor-*`) | The policy it loaded, each SSH session into the sandbox, and each connection out of it, by host and port (`OCSF NET:OPEN`), or by method, host and path for HTTP. A token inside a path ships; a query string does not. The short text of a CONFIG or plain line ships. Any other line is the marker | Some KB for a run |
+| The agent pod of the pilot: the init containers and the `backup` and `sandbox-start` containers | `prepare`: nothing. `archive`: one `archive-state result=ok release=... name=... bytes=...` line, and an `archive-state removed=<file>` line for each old archive. `doctor`: the report of the product's doctor (what it changed in the config copy, the plugins and skills it found, warnings), with file and setting names. `backup`: the output of the product's backup command (the paths it took or skipped, the archive name, `Archive verification: passed`), `daily-backup result=ok\|failed day=...`, `daily-backup removed=<file>`, `instruction-check file=<name> change=new\|changed\|gone` and `instruction-check result=first\|ok ...`. `sandbox-start`: `sandbox-start name=<name> result=ok\|failed` | Some KB, most of it at a start of the pod |
+| The model bridge (`ai`) | One JSON line for each event: `call` (domain, model, status, time), `engine_error` (domain, kind), `engine_init`, `conversation_end`, `rebuild` and `listening`. A conversation is an id; no prompt and no answer | Some KB |
+
+Not in Loki, on purpose:
+
+- **The agent container of an agent pod.** The pilot's pod excludes it with
+  the annotation `vector.dev/exclude-containers: agent`: its log can hold
+  chat content and the name of its bot.
+- **Every other pod of the trust domains**: the gateways and supervisors of
+  `agents-pilot`, `agents-main` and `agents-finance`, the agent pods of main
+  and finance, and the Signal daemon (its log holds phone numbers). Read
+  them with `kubectl logs`; a pod's log is gone when the pod goes.
+- **The workload pod of a sandbox** (`openshell.ai/boundary-role: workload`):
+  the code that an agent runs. The run job logs the result of a run.
+- **The other pods of `ai`**: the model gateway and the browser tool.
+
 ## Checks
 
 Two CronJobs in each trust domain test the boundaries every day
@@ -542,7 +618,13 @@ pod's log goes to Loki. `AgentPlatformCronJobFailed` and
 The rules are in `monitoring/app/prometheusrule.yaml` (the Flux
 Kustomization `agents-monitoring`, homelab-wsl only). Each alert goes to the
 War Room, the default Telegram route of Alertmanager, with severity
-`warning`. Each one reads kube-state-metrics, except `WorkflowAppDrift`.
+`warning`. Most read kube-state-metrics; `WorkflowAppDrift`,
+`AgentInstructionFileChanged`, `AgentInstructionCheckStale` and
+`ModelBridgeRateLimited` read lines of the logs, as gauges of Vector: the
+aggregator for the `<check> result=` lines (`WorkflowAppDrift`,
+`AgentInstructionCheckStale`), the platform agent for the
+`instruction-check file=` lines and the bridge (`AgentInstructionFileChanged`,
+`ModelBridgeRateLimited`) ([Logs](#logs)).
 
 | Alert | Fires when | `for` | First step |
 | --- | --- | --- | --- |
@@ -554,11 +636,15 @@ War Room, the default Telegram route of Alertmanager, with severity
 | `AgentRunSandboxTooOld` | A run sandbox (`default--run-*`) in `agents-workflows` is older than 80 minutes: the run job and the sweep both failed to delete it | 10m | The CronJob `workflow-sweep`, then delete the sandbox through the gateway |
 | `AgentWorkflowRunFailed` | A run job failed, for 2 hours from its start | none | The annotation `workflow-agents/result` of the Job, and the run log in Loki. A 502 from the model gateway can be the limit of the Claude plan |
 | `AgentDailyArchiveFailed` | The `backup` container of an agent pod started again in the last 2 hours after an exit with an error: the daily archive failed. A restart of the node (reason `Unknown`) does not count | none | `kubectl -n <namespace> logs <pod> -c backup --previous` |
+| `AgentInstructionFileChanged` | An `instruction-check file=<name> change=<change>` line in the last 20 minutes: an instruction file of the agent's workspace (`AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md`, `skills/`) is new, changed or gone since the day before | none | The lines in Loki name each file. Compare it with the daily archive, and find what made the change before the agent runs on it |
+| `AgentInstructionCheckStale` | No `instruction-check result=` line of the pilot's agent pod in 26 hours, once its `backup` container has run for 26 hours | 15m | `kubectl -n agents-pilot logs deploy/agent -c backup`. A backup that waits on a gateway that is not ready logs nothing |
+| `ModelBridgeRateLimited` | An `engine_error` line of the model bridge with the kind `rate_limit` in the last 20 minutes, for each trust domain: the limit of the Claude plan stopped a call | none | The calls of that domain fail until the limit resets. The `engine_error` lines in Loki (`{namespace="ai", app="model-bridge"}`) |
 
 - **Logs in Loki.** `{namespace="agents-workflows", app="workflow-providers"}`,
   `{namespace="agents-workflows", app="workflow-run"}`, and
-  `{namespace="agents-<name>", app="platform-checks"}`. Only Job pods ship
-  logs on this cluster (`kubernetes/apps/monitoring/vector/README.md`).
+  `{namespace="agents-<name>", app="platform-checks"}`. Job pods ship
+  logs on this cluster, and the long-running pods of the allowlist
+  ([Logs](#logs)).
 - **A failed Job.** The chart rule `KubeJobFailed` also fires for each
   failed Job, and keeps firing while the Job is kept: a run job for 7 days,
   a failed CronJob run until three newer runs fail. Read
@@ -570,13 +656,21 @@ War Room, the default Telegram route of Alertmanager, with severity
   line becomes a label. Each sample carries the time of its line, so
   Prometheus holds it for 5 minutes only: a rule reads it with
   `max_over_time` over a window longer than the time between two lines
-  (20 minutes for the drift line, which comes every 15).
+  (20 minutes for the drift line, which comes every 15). A line
+  `instruction-check file=<name> change=<change>` becomes the check
+  `instruction-file` with the change as its result; the file name stays in
+  Loki. A kind or domain of the bridge outside a short pattern becomes
+  `other`. The bridge's `engine_error` lines become
+  `homelab_model_bridge_engine_error_timestamp_seconds{domain, kind}` the
+  same way. A line read again from the start of its file keeps its old time,
+  so it does not fire an alert again. The aggregator makes the gauge of
+  each `<check> result=` line; the platform agent makes the gauge of the
+  `instruction-check file=` lines and of the bridge, on its own port
+  (`homelab-wsl` only).
 - **The snapshots** of a state volume have the kopiur chart's rules,
   which match each SnapshotPolicy, `agent-state` too: `KopiurLastBackupFailed`
   and `KopiurBackupStale` (48 hours).
 - **Not alerted yet.** The scheduled turn of a personal agent (no turn in
-  26 hours), the age of the agent image against the upstream releases, the
-  changed instruction files and the `instruction-check` line of 26 hours,
-  the model errors of a trust domain (an `engine_error` of the model bridge),
-  and a Sandbox record with no pod. Each needs a part or a log that the
-  cluster does not have yet.
+  26 hours), the age of the agent image against the upstream releases (a
+  check of the agent image's repository), an `engine_error` of another kind
+  than `rate_limit`, and a Sandbox record with no pod.

@@ -34,6 +34,10 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: model-bridge
+        # Its log goes to Loki: one JSON line per call, error and
+        # conversation, with no prompt or answer text
+        # (kubernetes/apps/monitoring/vector/agent-platform/config/vector.yaml).
+        logs.home.arpa/ship: "true"
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false

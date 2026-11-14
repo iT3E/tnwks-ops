@@ -1,0 +1,232 @@
+# The log agent of the agent platform (../README.md, docs/apps/agent-platform.md
+# "Logs"). homelab-wsl only. It reads the logs of the long-running pods on an
+# allowlist and of the sandbox supervisors of agents-workflows, drops what can
+# hold content before a line leaves the node, and sends the rest to the
+# aggregator, as the pod-log agent does. It also serves two gauges for the
+# alerts of the platform. The tests are in
+# observability/vector-tests/agent-platform-logs.yaml.
+data_dir: /vector-data-dir
+# A counter or gauge stays one hour after its last change, as on the
+# aggregator.
+expire_metrics_secs: 3600
+
+api:
+  enabled: false
+
+sources:
+  # A long-running pod ships only when its pod template has the label
+  # logs.home.arpa/ship=true; nothing ships by default. Never a Job pod (the
+  # pod-log agent has them) and never the workload pod of a sandbox, whatever
+  # its labels.
+  allowlist:
+    type: kubernetes_logs
+    use_apiserver_cache: true
+    extra_label_selector: "logs.home.arpa/ship=true,!batch.kubernetes.io/job-name,openshell.ai/boundary-role!=workload"
+    # Look for new files every 2s, not the default 60s.
+    glob_minimum_cooldown_ms: 2000
+
+  # The sandbox supervisors of a namespace labelled
+  # logs.home.arpa/ship-supervisors=true (agents-workflows only). The gateway
+  # makes these pods, so their labels can't carry the allowlist label. Two
+  # labels pin the supervisor, so one label alone never takes a workload pod.
+  supervisors:
+    type: kubernetes_logs
+    use_apiserver_cache: true
+    extra_namespace_label_selector: "logs.home.arpa/ship-supervisors=true"
+    extra_label_selector: "openshell.ai/component=supervisor,openshell.ai/boundary-role=supervisor"
+    glob_minimum_cooldown_ms: 2000
+
+  internal_metrics:
+    type: internal_metrics
+
+transforms:
+  # The gateway's lines lose, in order: colour codes; a whole OCSF JSON
+  # record (any prefix), which becomes a marker; everything from the first
+  # field that can hold a command or its input or output to the end of the
+  # line (a key that ends in "preview", "stdin", "stdout", "stderr",
+  # "input", "output" or "body", or cmd, cmd_line, cmdline, command, args,
+  # argv or env, with = or :, in any case, or "[cmd:"); and the query string
+  # of each word with a "/" or "." before its "?". An error= or detail=
+  # field ships: the gateway writes its own error text there. The other pods on the allowlist (run
+  # receiver, model bridge, pilot agent pod) pass as they are: their code
+  # writes no content, and the bridge's lines are JSON that a text rule would
+  # break.
+  # No regex replacement here uses a capture group: Flux and Vector would
+  # both read its dollar sign as a variable.
+  allowlist_redact:
+    type: remap
+    inputs:
+      - allowlist
+    source: |
+      if (string(.kubernetes.container_name) ?? "") == "openshell-gateway" {
+        msg = replace(string(.message) ?? "", r'\x1b\[[0-9;]*[A-Za-z]', "")
+        if match(msg, r'\{.*"class_uid"') {
+          msg = "(dropped: OCSF JSON record)"
+        } else {
+          cut, err = parse_regex(msg, r'(?is)\A(?P<head>.*?)(?P<key>\[cmd:|\b(?:[a-z0-9_]*(?:preview|stdin|stdout|stderr|input|output|body)|cmd|cmd_line|cmdline|command|args|argv|env)"?\s*[=:])')
+          if err == null {
+            head = string(cut.head) ?? ""
+            key = string(cut.key) ?? ""
+            msg = if starts_with(key, "[") { head + "[cmd:(dropped)]" } else { head + replace(key, r'\s', "") + "(dropped)" }
+          }
+          words = map_values(split(msg, r'\s+')) -> |word| {
+            parts = split(word, "?", limit: 2)
+            if length(parts) == 2 && match(string!(parts[0]), r'[/.]') {
+              end = if ends_with(string!(parts[1]), "]") { "]" } else { "" }
+              string!(parts[0]) + "?(dropped)" + end
+            } else {
+              word
+            }
+          }
+          msg = join(words, " ")
+        }
+        .message = msg
+      }
+
+  # A supervisor's line ships only when it is one of the line types below,
+  # after the gateway's rules for command fields and query strings. Each other
+  # line becomes a fixed marker, so its count stays in Loki. The types: an
+  # SSH session event; a network event by host and port, with its policy; an
+  # HTTP request by method, host and path, with its policy; a policy or
+  # config change with a short text and the fields of the 0.1.8 format
+  # (version, hash, source and the like, never rejection_reason); an SSH
+  # relay opened or closed; a lifecycle event of an openshell program; a
+  # process event by name and pid; and a log line of the supervisor with a
+  # short text (letters only, no fields). By design the host and port of a
+  # connection, the path of an HTTP request (a token inside a path ships)
+  # and those short texts ship. The line types come from the OpenShell
+  # 0.1.8 shorthand format (crates/openshell-ocsf, format/shorthand.rs) and
+  # from the logs of the pilot's supervisors.
+  supervisor_filter:
+    type: remap
+    inputs:
+      - supervisors
+    source: |
+      msg = replace(string(.message) ?? "", r'\x1b\[[0-9;]*[A-Za-z]', "")
+      if match(msg, r'\{.*"class_uid"') {
+        msg = "(dropped: OCSF JSON record)"
+      } else {
+        cut, err = parse_regex(msg, r'(?is)\A(?P<head>.*?)(?P<key>\[cmd:|\b(?:[a-z0-9_]*(?:preview|stdin|stdout|stderr|input|output|body)|cmd|cmd_line|cmdline|command|args|argv|env)"?\s*[=:])')
+        if err == null {
+          head = string(cut.head) ?? ""
+          key = string(cut.key) ?? ""
+          msg = if starts_with(key, "[") { head + "[cmd:(dropped)]" } else { head + replace(key, r'\s', "") + "(dropped)" }
+        }
+        words = map_values(split(msg, r'\s+')) -> |word| {
+          parts = split(word, "?", limit: 2)
+          if length(parts) == 2 && match(string!(parts[0]), r'[/.]') {
+            end = if ends_with(string!(parts[1]), "]") { "]" } else { "" }
+            string!(parts[0]) + "?(dropped)" + end
+          } else {
+            word
+          }
+        }
+        msg = join(words, " ")
+        known = match_any(msg, [
+          r'\A(?:\d{4}-\d\d-\d\dT[0-9:.]+Z )?OCSF SSH:[A-Z_]+ \[[A-Z]+\](?: [A-Z]+)?(?: [A-Za-z0-9.:_-]+)?(?: \[auth:(?:NSSH1|Unknown|Certificate Based|GSSAPI|Host Based|Keyboard Interactive|Password|Public Key|Other)\])?\z',
+          r'\A(?:\d{4}-\d\d-\d\dT[0-9:.]+Z )?OCSF NET:[A-Z_]+ \[[A-Z]+\](?: [A-Z]+)?(?: [A-Za-z0-9._-]+\(\d+\))?(?: (?:-> )?[A-Za-z0-9.:_-]+(?:/[A-Za-z0-9]+)?)?(?: \[policy:[A-Za-z0-9._:-]+ engine:[A-Za-z0-9._-]+\])?(?: \[reason:[A-Za-z0-9_.-]+\])?\z',
+          r'\A(?:\d{4}-\d\d-\d\dT[0-9:.]+Z )?OCSF HTTP:[A-Z]+ \[[A-Z]+\](?: [A-Z]+)?(?: [A-Za-z0-9._-]+\(\d+\) ->)? [A-Z]+ [a-z]+://[A-Za-z0-9.:_-]+(?:/[A-Za-z0-9._~%!&()*+,;=:@/-]*)?(?:\?\(dropped\))?(?: \[policy:[A-Za-z0-9._:-]+ engine:[A-Za-z0-9._-]+\])?(?: \[reason:[A-Za-z0-9_.-]+\])?\z',
+          r'\A(?:\d{4}-\d\d-\d\dT[0-9:.]+Z )?OCSF CONFIG:[A-Z_]+ \[[A-Z]+\] [A-Za-z][A-Za-z0-9 ,;:._()/-]{0,120}(?: \[(?:auto|source|prover_delta|resolved_from|chunk_id|actor|version|hash|require_binary_identity):[A-Za-z0-9._:/-]+(?: (?:auto|source|prover_delta|resolved_from|chunk_id|actor|version|hash|require_binary_identity):[A-Za-z0-9._:/-]+)*\])*\z',
+          r'\A(?:\d{4}-\d\d-\d\dT[0-9:.]+Z )?OCSF EVENT \[[A-Z]+\] ssh relay [a-z]+ \(channel_id=[0-9a-f-]+, target=unix:[A-Za-z0-9/._-]+\)\z',
+          r'\A(?:\d{4}-\d\d-\d\dT[0-9:.]+Z )?OCSF LIFECYCLE:[A-Z_]+ \[[A-Z]+\] openshell[a-z0-9-]* [a-z_]*\z',
+          r'\A(?:\d{4}-\d\d-\d\dT[0-9:.]+Z )?OCSF PROC:[A-Z_]+ \[[A-Z]+\] [A-Za-z0-9._-]+\(-?\d+\)(?: \[exit:-?\d+\])?(?: \[cmd:\(dropped\)\])?\z',
+          r'\A(?:\d{4}-\d\d-\d\dT[0-9:.]+Z )?(?:INFO|WARN|ERROR) [a-z_]+(?:::[a-z_]+)*: [A-Za-z][A-Za-z ,-]{0,120}\z'
+        ])
+        if !known {
+          msg = "(dropped: unknown line type)"
+        }
+      }
+      .message = msg
+
+  # The gauges of the alerts (docs/apps/agent-platform.md, "Alerts"), each the
+  # time of the newest line of its kind. Only short names become labels.
+  #   - homelab_agent_platform_result_timestamp_seconds{check="instruction-file"}:
+  #     a line `instruction-check file=<name> change=<new|changed|gone>` of the
+  #     backup container of an agent pod; the change is the result, and the
+  #     file name stays in Loki. (The aggregator serves the other checks of
+  #     the same series.)
+  #   - homelab_model_bridge_engine_error_timestamp_seconds{domain, kind}: a
+  #     JSON line of the model bridge with event engine_error. A kind or
+  #     domain that is not a short lowercase name becomes "other".
+  platform_gauges:
+    type: remap
+    inputs:
+      - allowlist
+    source: |
+      ns = string(.kubernetes.pod_namespace) ?? ""
+      container = string(.kubernetes.container_name) ?? ""
+      msg = string(.message) ?? ""
+      ts = to_unix_timestamp(timestamp(.timestamp) ?? parse_timestamp(string(.timestamp) ?? "", "%+") ?? now())
+      if starts_with(ns, "agents-") && container == "backup" {
+        line, err = parse_regex(msg, r'\Ainstruction-check file=.+ change=(?P<result>new|changed|gone)\z')
+        if err != null { abort }
+        . = {"gauge": "instruction", "pod_namespace": ns, "app": "agent", "check": "instruction-file", "result": string(line.result) ?? "other", "time": ts}
+      } else if ns == "ai" && container == "model-bridge" {
+        parsed, err = parse_json(msg)
+        if err != null { abort }
+        line = object(parsed) ?? {}
+        if (string(line.event) ?? "") != "engine_error" { abort }
+        kind = string(line.kind) ?? ""
+        if !match(kind, r'\A[a-z_]{1,32}\z') { kind = "other" }
+        domain = string(line.domain) ?? ""
+        if !match(domain, r'\A[a-z0-9-]{1,32}\z') { domain = "other" }
+        . = {"gauge": "bridge", "domain": domain, "kind": kind, "time": ts}
+      } else {
+        abort
+      }
+
+  platform_gauge_route:
+    type: route
+    inputs:
+      - platform_gauges
+    route:
+      instruction: '.gauge == "instruction"'
+      bridge: '.gauge == "bridge"'
+
+  instruction_metrics:
+    type: log_to_metric
+    inputs:
+      - platform_gauge_route.instruction
+    metrics:
+      - type: gauge
+        field: time
+        namespace: homelab
+        name: agent_platform_result_timestamp_seconds
+        tags:
+          pod_namespace: "{{ pod_namespace }}"
+          app: "{{ app }}"
+          check: "{{ check }}"
+          result: "{{ result }}"
+
+  bridge_metrics:
+    type: log_to_metric
+    inputs:
+      - platform_gauge_route.bridge
+    metrics:
+      - type: gauge
+        field: time
+        namespace: homelab
+        name: model_bridge_engine_error_timestamp_seconds
+        tags:
+          domain: "{{ domain }}"
+          kind: "{{ kind }}"
+
+sinks:
+  # To the kubernetes source of the aggregator, as the pod-log agent sends.
+  aggregator:
+    type: vector
+    compression: gzip
+    inputs:
+      - allowlist_redact
+      - supervisor_filter
+    address: "vector-aggregator.monitoring.svc.cluster.local:6000"
+    version: "2"
+
+  # The metrics port, scraped by the PodMonitor next to this config.
+  prometheus:
+    type: prometheus_exporter
+    inputs:
+      - internal_metrics
+      - instruction_metrics
+      - bridge_metrics
+    address: 0.0.0.0:9598

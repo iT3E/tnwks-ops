@@ -31,6 +31,14 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: agent
+        # The logs of this pod go to Loki, but the agent container's: its
+        # log can hold chat content. What ships is the record of the backup,
+        # of the instruction check, of the sandbox start and of each start
+        # of the pod
+        # (kubernetes/apps/monitoring/vector/agent-platform/config/vector.yaml).
+        logs.home.arpa/ship: "true"
+      annotations:
+        vector.dev/exclude-containers: agent
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false

@@ -7,6 +7,7 @@ listens and what it reports about itself.
 | --- | --- | --- | --- |
 | The aggregator | `aggregator/` (`ks.yaml`) | Each cluster, one pod | Takes in pod logs and the router's syslog, and writes them to the Loki of its cluster. Takes in the audit log of the API server, and writes the security streams |
 | The agent | `agent/` (`ks-agent.yaml`) | Each cluster that lists it, one pod on each node | Reads pod logs on its node and sends them to the aggregator. On the WSL clusters, Job pods only (`VECTOR_AGENT_POD_SELECTOR`) |
+| The platform agent | `agent-platform/` (`ks-agent-platform.yaml`) | homelab-wsl, one pod on each node | Reads the logs of the long-running pods of the agent platform on an allowlist (pod label `logs.home.arpa/ship=true`) and of the sandbox supervisors of a namespace labeled `logs.home.arpa/ship-supervisors=true`. Drops what can hold content from the gateway's and the supervisors' lines on the node, and sends the rest to the aggregator. Serves two gauges for the alerts of the platform on its port 9598 (`docs/apps/agent-platform.md`, "Logs") |
 | The audit reader | `audit-reader/` (`ks-audit-reader.yaml`) | Each cluster that lists it, one pod on the control plane node | Reads the audit log of the API server on its node and sends it to the audit source of the aggregator |
 
 The config of the aggregator is one file, `aggregator/config/vector.yaml`,
@@ -142,6 +143,22 @@ it, and the alert `WorkflowAppDrift` reads it
 its line, so Prometheus holds it for 5 minutes, its lookback, and the sink
 drops the series a minute after its last line. A rule on it reads
 `max_over_time` over a window longer than the time between two lines.
+
+The platform agent serves two more series of the same kind on its own port
+9598, through the PodMonitor `vector-agent-platform`, so that the aggregator
+stays the same on each cluster:
+
+- `homelab_agent_platform_result_timestamp_seconds{check="instruction-file"}`,
+  the time of the newest `instruction-check` line of a backup container in a
+  namespace `agents-*`. The alert `AgentInstructionFileChanged` reads it.
+  (`AgentInstructionCheckStale` reads the aggregator's gauge of the
+  `instruction-check result=` line.)
+- `homelab_model_bridge_engine_error_timestamp_seconds{domain, kind}`, the
+  time of the newest `engine_error` line of the model bridge. The alert
+  `ModelBridgeRateLimited` reads it.
+
+The tests of the platform agent are in
+`observability/vector-tests/agent-platform-logs.yaml`.
 
 Two settings shape these series:
 
