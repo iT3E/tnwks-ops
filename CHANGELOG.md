@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.129.1 - 2026-11-14
+
+### Fixed
+
+* security: Trivy Operator gets 512 MiB on each cluster (it was 256 MiB, too low for a burst of scans), a request of 256 MiB, and `GOMEMLIMIT` at 460 MiB. On homelab-wsl-02 the operator pod restarts once
+
 ## v2.129.0 - 2026-11-14
 
 ### Added
