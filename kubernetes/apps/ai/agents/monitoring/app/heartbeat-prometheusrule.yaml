@@ -1,0 +1,67 @@
+---
+# The alerts on the scheduled turn (heartbeat) of the personal agents
+# (docs/apps/agent-platform.md, "Alerts"). They read kube-state-metrics for
+# the CronJob agent-heartbeat-check (heartbeat-check.yaml): a failed run
+# means Tempo had no completed heartbeat of an agent in 26 hours.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: agent-heartbeat
+  namespace: monitoring
+spec:
+  groups:
+    - name: agent-heartbeat
+      rules:
+        - alert: AgentHeartbeatMissing
+          # The last run of the check failed, and no run passed since. It
+          # resolves at the next good run (the next day, or a run started by
+          # hand). reason!="" is a Job that failed for good, not a pod that
+          # failed while the Job could still retry. The right side of each
+          # join takes the max, so the two pods of a kube-state-metrics
+          # rollout don't make it fail.
+          expr: |
+            max by (namespace, cronjob) (
+              kube_job_status_start_time{namespace="monitoring"}
+              * on (namespace, job_name) group_left (cronjob)
+                max by (namespace, job_name, cronjob) (label_replace(kube_job_owner{namespace="monitoring", owner_kind="CronJob", owner_name="agent-heartbeat-check"}, "cronjob", "$1", "owner_name", "(.+)"))
+              and on (namespace, job_name) (kube_job_status_failed{namespace="monitoring", reason!=""} > 0)
+            )
+            > on (namespace, cronjob)
+            max by (namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace="monitoring", cronjob="agent-heartbeat-check"})
+            or
+            max by (namespace, cronjob) (
+              kube_job_status_start_time{namespace="monitoring"}
+              * on (namespace, job_name) group_left (cronjob)
+                max by (namespace, job_name, cronjob) (label_replace(kube_job_owner{namespace="monitoring", owner_kind="CronJob", owner_name="agent-heartbeat-check"}, "cronjob", "$1", "owner_name", "(.+)"))
+              and on (namespace, job_name) (kube_job_status_failed{namespace="monitoring", reason!=""} > 0)
+            )
+            unless on (namespace, cronjob)
+            kube_cronjob_status_last_successful_time{namespace="monitoring", cronjob="agent-heartbeat-check"}
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            summary: "A personal agent had no completed scheduled turn in 26 hours, or Tempo could not answer."
+            description: "The log of the last run ({namespace=\"monitoring\", app=\"agent-heartbeat-check\"} in Loki) names the service: result=missing is an agent that did not run its heartbeat, result=error a check that could not ask Tempo."
+
+        - alert: AgentHeartbeatCheckStale
+          # The check itself did not run: no schedule in 26 hours, a CronJob
+          # that was never scheduled 26 hours after it was made, or no
+          # CronJob at all.
+          expr: |
+            (time() - max by (namespace, cronjob) (kube_cronjob_status_last_schedule_time{namespace="monitoring", cronjob="agent-heartbeat-check"})) > 26 * 3600
+            or
+            (time() - max by (namespace, cronjob) (kube_cronjob_created{namespace="monitoring", cronjob="agent-heartbeat-check"})) > 26 * 3600
+            unless on (namespace, cronjob)
+            kube_cronjob_status_last_schedule_time{namespace="monitoring", cronjob="agent-heartbeat-check"}
+            or
+            absent(kube_cronjob_created{namespace="monitoring", cronjob="agent-heartbeat-check"})
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            summary: "The check of the agents' scheduled turn has not run in 26 hours."
+            description: "kubectl -n monitoring get cronjob agent-heartbeat-check: a suspended CronJob, or one that Flux did not apply (Kustomization agents-monitoring)."

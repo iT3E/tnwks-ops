@@ -1,0 +1,159 @@
+# Cases for the alerts on the scheduled turn of the personal agents
+# (kubernetes/apps/ai/agents/monitoring/app/heartbeat-prometheusrule.yaml).
+rule_files:
+  - kubernetes/apps/ai/agents/monitoring/app/heartbeat-prometheusrule.yaml
+evaluation_interval: 1m
+tests:
+  - name: a failed check fires until a good run; another CronJob does not count
+    interval: 1m
+    input_series:
+      # The check started at 10m and failed; the last good run was at 0.
+      - series: kube_job_status_start_time{namespace="monitoring", job_name="agent-heartbeat-check-2"}
+        values: 600x60
+      - series: kube_job_owner{namespace="monitoring", job_name="agent-heartbeat-check-2", owner_kind="CronJob", owner_name="agent-heartbeat-check"}
+        values: 1x60
+      - series: kube_job_status_failed{namespace="monitoring", job_name="agent-heartbeat-check-2", reason="BackoffLimitExceeded"}
+        values: _x11 1x49
+      # A run started by hand at 30m passed.
+      - series: kube_cronjob_status_last_successful_time{namespace="monitoring", cronjob="agent-heartbeat-check"}
+        values: 0x30 1830x30
+      # A failed run of another CronJob in the namespace.
+      - series: kube_job_status_start_time{namespace="monitoring", job_name="trace-filter-check-1"}
+        values: 600x60
+      - series: kube_job_owner{namespace="monitoring", job_name="trace-filter-check-1", owner_kind="CronJob", owner_name="trace-filter-check"}
+        values: 1x60
+      - series: kube_job_status_failed{namespace="monitoring", job_name="trace-filter-check-1", reason="BackoffLimitExceeded"}
+        values: 1x60
+    alert_rule_test:
+      - alertname: AgentHeartbeatMissing
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: AgentHeartbeatMissing
+        eval_time: 12m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: monitoring, cronjob: agent-heartbeat-check}
+      - alertname: AgentHeartbeatMissing
+        eval_time: 32m
+        exp_alerts: []
+
+  - name: a check that never passed fires; a pod that fails while the Job retries does not
+    interval: 1m
+    input_series:
+      - series: kube_job_status_start_time{namespace="monitoring", job_name="agent-heartbeat-check-1"}
+        values: 60x30
+      - series: kube_job_owner{namespace="monitoring", job_name="agent-heartbeat-check-1", owner_kind="CronJob", owner_name="agent-heartbeat-check"}
+        values: 1x30
+      # A failed pod (no reason) from 2m, then the Job fails for good at 10m.
+      - series: kube_job_status_failed{namespace="monitoring", job_name="agent-heartbeat-check-1", reason=""}
+        values: _x2 1x28
+      - series: kube_job_status_failed{namespace="monitoring", job_name="agent-heartbeat-check-1", reason="BackoffLimitExceeded"}
+        values: _x10 1x20
+    alert_rule_test:
+      - alertname: AgentHeartbeatMissing
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: AgentHeartbeatMissing
+        eval_time: 11m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: monitoring, cronjob: agent-heartbeat-check}
+
+  - name: a first pod that fails and a retry that passes do not fire
+    interval: 1m
+    input_series:
+      # The Job started at 1m. Its first pod failed at 5m (no reason: the
+      # Job retries, backoffLimit 1), and the second pod passed at 10m.
+      - series: kube_job_status_start_time{namespace="monitoring", job_name="agent-heartbeat-check-4"}
+        values: 60x60
+      - series: kube_job_owner{namespace="monitoring", job_name="agent-heartbeat-check-4", owner_kind="CronJob", owner_name="agent-heartbeat-check"}
+        values: 1x60
+      - series: kube_job_status_failed{namespace="monitoring", job_name="agent-heartbeat-check-4", reason=""}
+        values: _x5 1x55
+      - series: kube_cronjob_status_last_successful_time{namespace="monitoring", cronjob="agent-heartbeat-check"}
+        values: _x10 600x50
+    alert_rule_test:
+      - alertname: AgentHeartbeatMissing
+        eval_time: 7m
+        exp_alerts: []
+      - alertname: AgentHeartbeatMissing
+        eval_time: 30m
+        exp_alerts: []
+
+  - name: two kube-state-metrics pods in a rollout serve the same series
+    interval: 1m
+    input_series:
+      - series: kube_job_status_start_time{namespace="monitoring", job_name="agent-heartbeat-check-3", pod="ksm-a"}
+        values: 600x20
+      - series: kube_job_status_start_time{namespace="monitoring", job_name="agent-heartbeat-check-3", pod="ksm-b"}
+        values: 600x20
+      - series: kube_job_owner{namespace="monitoring", job_name="agent-heartbeat-check-3", owner_kind="CronJob", owner_name="agent-heartbeat-check", pod="ksm-a"}
+        values: 1x20
+      - series: kube_job_owner{namespace="monitoring", job_name="agent-heartbeat-check-3", owner_kind="CronJob", owner_name="agent-heartbeat-check", pod="ksm-b"}
+        values: 1x20
+      - series: kube_job_status_failed{namespace="monitoring", job_name="agent-heartbeat-check-3", reason="BackoffLimitExceeded", pod="ksm-a"}
+        values: 1x20
+      - series: kube_job_status_failed{namespace="monitoring", job_name="agent-heartbeat-check-3", reason="BackoffLimitExceeded", pod="ksm-b"}
+        values: 1x20
+      - series: kube_cronjob_status_last_successful_time{namespace="monitoring", cronjob="agent-heartbeat-check", pod="ksm-a"}
+        values: 0x20
+      - series: kube_cronjob_status_last_successful_time{namespace="monitoring", cronjob="agent-heartbeat-check", pod="ksm-b"}
+        values: 0x20
+    alert_rule_test:
+      - alertname: AgentHeartbeatMissing
+        eval_time: 15m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: monitoring, cronjob: agent-heartbeat-check}
+
+  - name: a check not scheduled in 26 hours is stale; a daily schedule is not
+    interval: 2m
+    input_series:
+      # Scheduled at 0, then never again.
+      - series: kube_cronjob_status_last_schedule_time{namespace="monitoring", cronjob="agent-heartbeat-check"}
+        values: "0x900"
+      - series: kube_cronjob_created{namespace="monitoring", cronjob="agent-heartbeat-check"}
+        values: "0x900"
+    alert_rule_test:
+      - alertname: AgentHeartbeatCheckStale
+        eval_time: 26h
+        exp_alerts: []
+      - alertname: AgentHeartbeatCheckStale
+        eval_time: 26h20m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: monitoring, cronjob: agent-heartbeat-check}
+
+  - name: a check scheduled each day is not stale
+    interval: 2m
+    input_series:
+      # Scheduled at 0 and again at 24h.
+      - series: kube_cronjob_status_last_schedule_time{namespace="monitoring", cronjob="agent-heartbeat-check"}
+        values: "0x719 86400x200"
+      - series: kube_cronjob_created{namespace="monitoring", cronjob="agent-heartbeat-check"}
+        values: "0x920"
+    alert_rule_test:
+      - alertname: AgentHeartbeatCheckStale
+        eval_time: 30h
+        exp_alerts: []
+
+  - name: a CronJob never scheduled, and one that is gone
+    interval: 2m
+    input_series:
+      - series: kube_cronjob_created{namespace="monitoring", cronjob="agent-heartbeat-check"}
+        values: "0x900"
+    alert_rule_test:
+      - alertname: AgentHeartbeatCheckStale
+        eval_time: 26h20m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: monitoring, cronjob: agent-heartbeat-check}
+
+  - name: no CronJob at all is stale after 15 minutes
+    interval: 1m
+    input_series:
+      - series: kube_cronjob_created{namespace="monitoring", cronjob="trace-filter-check"}
+        values: 0x30
+    alert_rule_test:
+      - alertname: AgentHeartbeatCheckStale
+        eval_time: 14m
+        exp_alerts: []
+      - alertname: AgentHeartbeatCheckStale
+        eval_time: 16m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: monitoring, cronjob: agent-heartbeat-check}

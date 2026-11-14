@@ -1,0 +1,80 @@
+---
+# The scheduled turn (heartbeat) of each personal agent
+# (scripts/heartbeat_check.py): once a day, Tempo must have a completed
+# heartbeat run of each service in SERVICES in the last 26 hours. The
+# heartbeat of the pilot comes at about 01:40 UTC; this runs at 06:33, so a
+# missed one shows the same morning. The script asks Tempo up to 3 times,
+# 60 seconds apart, and a pod that still fails gets one more try
+# (backoffLimit: 1), so one short break of Tempo or of the node does not
+# page for a day. A missing run fails the Job, and the alerts in
+# heartbeat-prometheusrule.yaml read the CronJob.
+# SERVICES names the agents that run now: add the service name
+# (diagnostics.otel.serviceName in its openclaw.json) when a trust domain
+# gets its agent, so a domain with no agent never alerts.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: agent-heartbeat-check
+  labels:
+    app.kubernetes.io/name: agent-heartbeat-check
+spec:
+  schedule: "33 6 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Two pods at most, each up to about 4 minutes (3 tries of up to 30 s,
+      # 2 waits of 60 s), well inside the deadline.
+      backoffLimit: 1
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: agent-heartbeat-check
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: check
+              image: docker.io/library/python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
+              command:
+                - python3
+                - /scripts/heartbeat_check.py
+              env:
+                - name: SERVICES
+                  value: openclaw-agents-pilot
+                - name: WINDOW_HOURS
+                  value: "26"
+                - name: ATTEMPTS
+                  value: "3"
+                - name: WAIT_SECONDS
+                  value: "60"
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+          volumes:
+            - name: scripts
+              configMap:
+                name: agent-heartbeat-check
