@@ -1,5 +1,5 @@
 """Make the rules, the scan lists, the Wazuh map, the board input, the list of gaps and
-the stream map of the converter from the control registry, or reject stale copies (--check).
+the maps of the converter from the control registry, or reject stale copies (--check).
 
 The contract of the series and of the registry is in security/README.md. The
 script uses the Python standard library and PyYAML, from the pinned project of
@@ -446,6 +446,14 @@ def stream_map(registry):
     return {"series": LAST_RESULT, "streams": entries}
 
 
+def converter_registry(registry):
+    """The names of the registry that the converter takes a value of a file against: a
+    line of the list of accepted findings names a source and a system of the registry."""
+    return {"series": {"accepted": ACCEPTED},
+            "sources": [source["name"] for source in registry["sources"]],
+            "systems": [system["name"] for system in registry["systems"]]}
+
+
 # --- The tests of the rules -------------------------------------------------------------
 
 
@@ -740,6 +748,7 @@ def artifacts(registry=None):
         GENERATED / "board.json": dump_json(board_input(registry)),
         GENERATED / "gaps.json": dump_json(gaps(registry)),
         CONVERTER_CONFIG / "streams.json": dump_json(stream_map(registry)),
+        CONVERTER_CONFIG / "registry.json": dump_json(converter_registry(registry)),
         CONVERTER_CONFIG / "converter.py": CONVERTER.read_text(),
     }
 

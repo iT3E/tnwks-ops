@@ -439,6 +439,13 @@ AUDIT_SINK = "loki_security_audit"
 AUDIT_SINK_WINDOW = "15m"
 
 
+# The series of the security converter about the list of accepted findings
+# (security/converter/README.md, "A file that gives no entry" and "An entry that
+# the converter skips"). The converter runs on homelab-wsl-02 only.
+ACCEPTED_LIST_READ = "homelab_security_converter_accepted_list_read"
+ACCEPTED_SKIPPED = "homelab_security_converter_accepted_skipped_entries"
+
+
 def security_alerts():
     """The certificate alert reads a series of homelab-wsl-02 only, where the
     refresher runs. The audit alert reads a series of the Vector aggregator of
@@ -476,6 +483,29 @@ def security_alerts():
                                          f" in the last {AUDIT_SINK_WINDOW[:-1]} minutes, and Vector does not send it again. Loki refuses a line that is older than"
                                          " 7 days, or more than one hour older than the newest line of its stream. The log of the aggregator pod has the"
                                          " answer of Loki, and vector_component_discarded_events_total has the number of lines.")}},
+        # A list that gives no entry mutes no Trivy finding and shows no accepted
+        # finding on the board, while a Prowler run can still mute: no check may
+        # go silent. With no list at all the converter serves 1 and 0, so no alert.
+        {"alert": "SecurityAcceptedListUnread",
+         "expr": f'max by (k8s_cluster) ({ACCEPTED_LIST_READ}{{source_site=""}}) == 0',
+         "for": "30m", "labels": {"severity": "warning"},
+         "annotations": {"summary": "The list of accepted findings on {{ $labels.k8s_cluster }} gives no entry",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": ("The security converter can not read the list of accepted findings in the Secret"
+                                         " security-accepted-findings, so it serves no accepted finding: the board shows none, and"
+                                         " the rule of Trivy Operator mutes none. The log of the converter has the number of the line"
+                                         " and the kind of its form. security/converter/README.md, \"The form that the converter"
+                                         " reads\", has the form. The alert ends in the cycle after the list is fixed.")}},
+        {"alert": "SecurityAcceptedEntriesSkipped",
+         "expr": f'max by (k8s_cluster) ({ACCEPTED_SKIPPED}{{source_site=""}}) > 0',
+         "for": "1h", "labels": {"severity": "warning"},
+         "annotations": {"summary": "Entries of the list of accepted findings on {{ $labels.k8s_cluster }} are skipped",
+                         "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
+                         "description": ("{{ $value }} entries of the list of accepted findings do not fit, so the security converter"
+                                         " skips them: their findings show as fails on the board. The Prowler runs skip the"
+                                         " entries that are not in the form, and take an entry whose source or system is not in"
+                                         " the registry. The log of the converter has the number of each entry and why. security/converter/README.md, \"An entry that the"
+                                         " converter skips\", has the rules. The alert ends in the cycle after the list is fixed.")}},
     ]
 
 
@@ -860,6 +890,7 @@ def fixtures():
         *capacity_fixtures(),
         *security_fixtures(),
         *audit_sink_fixtures(),
+        *accepted_list_fixtures(),
     ]}
 
 
@@ -947,6 +978,46 @@ def audit_sink_fixtures():
         {"name": "a refused request of another sink does not alert", "interval": "1m",
          "input_series": [errors("_x20 1+1x40", component="loki_kubernetes")],
          "alert_rule_test": [at(20, []), at(30, [])]},
+    ]
+
+
+def accepted_list_fixtures():
+    site = "homelab-wsl-02"
+    target = f'k8s_cluster="{site}",job="security-converter",namespace="security",service="security-converter"'
+
+    def fires(name, value):
+        rule = next(rule for rule in security_alerts() if rule["alert"] == name)
+        annotations = {key: text.replace("{{ $labels.k8s_cluster }}", site).replace("{{ $value }}", value)
+                       for key, text in rule["annotations"].items()}
+        return [{"exp_labels": {"severity": "warning", "k8s_cluster": site}, "exp_annotations": annotations}]
+
+    def lists(read, skipped, labels=target):
+        return [{"series": f"{ACCEPTED_LIST_READ}{{{labels}}}", "values": read},
+                {"series": f"{ACCEPTED_SKIPPED}{{{labels}}}", "values": skipped}]
+
+    def at(name, minute, exp_alerts):
+        return {"alertname": name, "eval_time": f"{minute}m", "exp_alerts": exp_alerts}
+
+    unread, skipped = "SecurityAcceptedListUnread", "SecurityAcceptedEntriesSkipped"
+    return [
+        {"name": "a list that gives no entry alerts after 30 minutes", "interval": "1m",
+         "input_series": lists("0+0x90", "0+0x90"),
+         "alert_rule_test": [at(unread, 29, []), at(unread, 31, fires(unread, "0")), at(skipped, 90, [])]},
+        {"name": "skipped entries alert after one hour", "interval": "1m",
+         "input_series": lists("1+0x90", "2+0x90"),
+         "alert_rule_test": [at(skipped, 59, []), at(skipped, 61, fires(skipped, "2")), at(unread, 90, [])]},
+        # The converter serves the same two values for a list that it read with no
+        # entry skipped, and for no list at all (no Secret).
+        {"name": "a list that is read with nothing skipped, or no list, does not alert", "interval": "1m",
+         "input_series": lists("1+0x150", "0+0x150"),
+         "alert_rule_test": [at(unread, 150, []), at(skipped, 150, [])]},
+        {"name": "a list that is fixed within 30 minutes does not alert", "interval": "1m",
+         "input_series": lists("0+0x20 1+0x60", "3+0x40 0+0x40"),
+         "alert_rule_test": [at(unread, 31, []), at(skipped, 61, [])]},
+        # The federated copy of another site's series: that site alerts on its own.
+        {"name": "a federated copy of the series does not alert", "interval": "1m",
+         "input_series": lists("0+0x90", "2+0x90", labels=f'{target},source_site="homelab-wsl-01"'),
+         "alert_rule_test": [at(unread, 90, []), at(skipped, 90, [])]},
     ]
 
 
