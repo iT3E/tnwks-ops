@@ -42,7 +42,7 @@ spec:
             severity: warning
           annotations:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
-            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentplatformworkloadnotready"
             summary: "{{ $labels.namespace }}/{{ $labels.workload }} has {{ $value }} pod(s) less ready than wanted."
             description: "kubectl -n {{ $labels.namespace }} describe pod of {{ $labels.workload }}: an init container that failed (archive, doctor) or a lock on the state volume; revert the last image if it came with an update."
 
@@ -80,7 +80,7 @@ spec:
             severity: warning
           annotations:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
-            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentplatformcronjobfailed"
             summary: "The last run of {{ $labels.namespace }}/{{ $labels.cronjob }} failed."
             description: "Read its log in Loki: {namespace=\"{{ $labels.namespace }}\", app=~\"workflow-.+|platform-checks\"}; a result=failed line names the step. For the providers job, fix it within the hour: a run token lives one hour."
 
@@ -102,7 +102,7 @@ spec:
             severity: warning
           annotations:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
-            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#workflowprovidersstale"
             summary: "The providers job of agents-workflows has had no good run in 35 minutes."
             description: "kubectl -n agents-workflows get cronjob,jobs; read the last run in Loki ({namespace=\"agents-workflows\", app=\"workflow-providers\"}); after a fix, run it now with create job --from=cronjob/workflow-providers."
 
@@ -122,7 +122,7 @@ spec:
             severity: warning
           annotations:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
-            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#workflowappdrift"
             summary: "The GitHub App of the reviewer has more permissions than the list in git."
             description: "The detail= of the app-drift line in Loki ({namespace=\"agents-workflows\", app=\"workflow-providers\"} |= \"app-drift\") names each extra one; set the App back in its settings, or change the list in app/providers.yaml by a pull request."
 
@@ -141,7 +141,7 @@ spec:
             severity: warning
           annotations:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
-            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentplatformcheckstale"
             summary: "{{ $labels.namespace }}/{{ $labels.cronjob }} has not passed in 26 hours."
             description: "kubectl -n {{ $labels.namespace }} get cronjob {{ $labels.cronjob }} (suspended?) and its Jobs; the log of the last run is in Loki ({namespace=\"{{ $labels.namespace }}\", app=\"platform-checks\"})."
 
@@ -162,7 +162,7 @@ spec:
             severity: warning
           annotations:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
-            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentrunsandboxtooold"
             summary: "The run sandbox {{ $labels.sandbox }} is {{ $value | humanizeDuration }} old."
             description: "The sweep did not delete it: check the CronJob workflow-sweep in agents-workflows, then delete the sandbox through the sandbox gateway."
 
@@ -180,7 +180,7 @@ spec:
             severity: warning
           annotations:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
-            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentworkflowrunfailed"
             summary: "The run {{ $labels.job_name }} of a workflow agent failed."
             description: "Its answer is the annotation workflow-agents/result of the Job, and its log is in Loki ({namespace=\"agents-workflows\", app=\"workflow-run\"}); a 502 from the model gateway can be the limit of the Claude plan."
 
@@ -198,7 +198,7 @@ spec:
             severity: warning
           annotations:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
-            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentdailyarchivefailed"
             summary: "The daily archive of {{ $labels.namespace }}/{{ $labels.pod }} failed, and its backup container started again."
             description: "kubectl -n {{ $labels.namespace }} logs {{ $labels.pod }} -c backup --previous shows the daily-backup line and the error of the backup command."
 
@@ -217,7 +217,7 @@ spec:
             severity: warning
           annotations:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
-            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentinstructionfilechanged"
             summary: "An instruction file of the agent in {{ $labels.pod_namespace }} is {{ $labels.result }} since the day before."
             description: "The instruction-check lines in Loki ({namespace=\"{{ $labels.pod_namespace }}\", app=\"agent\"} |= \"instruction-check\") name each file; read the change in the daily archive before the agent runs on it."
 
@@ -241,7 +241,7 @@ spec:
             severity: warning
           annotations:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
-            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentinstructioncheckstale"
             summary: "The instruction check of the agent in {{ $labels.namespace }} has not run in 26 hours."
             description: "kubectl -n {{ $labels.namespace }} logs deploy/agent -c backup shows the last daily-backup and instruction-check lines; a backup that waits on a gateway that is not ready logs nothing."
 
@@ -256,6 +256,6 @@ spec:
             severity: warning
           annotations:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
-            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#modelbridgeratelimited"
             summary: "The limit of the Claude plan stopped a call of the {{ $labels.domain }} trust domain."
             description: "The engine_error lines of the bridge are in Loki ({namespace=\"ai\", app=\"model-bridge\"} |= \"engine_error\"); the calls of that trust domain fail until the limit resets."
