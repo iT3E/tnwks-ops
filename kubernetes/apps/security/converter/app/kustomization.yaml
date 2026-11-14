@@ -14,6 +14,9 @@ configMapGenerator:
     files:
       - config/converter.py
       - config/streams.json
+      # The names of the registry that the converter reads, also from
+      # security/generate.py.
+      - config/registry.json
 generatorOptions:
   disableNameSuffixHash: true
   annotations:
