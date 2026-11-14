@@ -321,20 +321,31 @@ volume, with the start archives and the evidence of the change.
 1. **Read the change.** Owner approval, by the owner, while the pod runs.
    The file and the archive hold private text, and an archive holds
    credentials, so they stay in the owner's terminal: no Job (its log goes
-   to Loki), no issue, no pull request.
+   to Loki), no issue, no pull request. `<file>` is the name in the alert
+   line, under the workspace: `AGENTS.md`, `SOUL.md`, `USER.md`,
+   `IDENTITY.md` or `skills/<path>`.
    ```sh
-   kubectl -n agents-pilot exec deploy/agent -c backup --      cat /home/node/data/state/workspace/AGENTS.md
-   kubectl -n agents-pilot exec deploy/agent -c backup --      tar -xzOf /home/node/data/archives/daily/openclaw-backup-<day before>.tar.gz      --wildcards '*/state/workspace/AGENTS.md'
+   kubectl -n agents-pilot exec deploy/agent -c backup -- \
+     cat /home/node/data/state/workspace/<file>
+   kubectl -n agents-pilot exec deploy/agent -c backup -- \
+     tar -xzOf /home/node/data/archives/daily/openclaw-backup-<day before>.tar.gz \
+     --wildcards '*/state/workspace/<file>'
    ```
    The daily archive of the day of the alert already holds the change: the
    check runs after the backup of that day. The archive of the day before
    holds the file before the change.
 2. **Stop the agent.** Owner approval: a pull request sets `replicas: 0`.
 3. **Restore the archive of the day before.** Owner approval:
-   [the restore Job](#the-restore-job) with
-   `ARCHIVE=daily/openclaw-backup-<day before>.tar.gz`. The Job refuses an
-   archive of another release than its image. The state goes back to that
-   day, and the state of now stays in `state.before-restore-<time>`.
+   [the restore Job](#the-restore-job) `agent-restore` with
+   `ARCHIVE=daily/openclaw-backup-<day before>.tar.gz`. The state goes back
+   to that day, and the state of now stays in `state.before-restore-<time>`.
+   The Job refuses an archive of another release than its image
+   (`restore result=failed reason=release archive=<release> image=<release>`):
+   this happens when an update came after the day before. Then the next pull
+   request removes that Job and adds `agent-restore-2` with the image of the
+   release of the archive (its tag and digest are in the history of
+   `deployment.yaml`). The agent keeps its own image: its `doctor` moves the
+   restored state to its release at the start, as at an update.
 4. **Start the agent.** Owner approval: a pull request removes the Job and
    sets `replicas: 1`.
 
@@ -583,14 +594,14 @@ account can stop to work after new messages.
 
 **The result of a Job or a Restore.** The pod GC of this cluster deletes an
 ended pod within seconds, so `kubectl logs job/<name>` often fails. Read the
-state of the object: `kubectl -n agents-pilot get job agent-restore` shows
+state of the object: `kubectl -n agents-pilot get job <name>` shows
 `1/1` when the script ended with exit 0 (it runs with `set -eu`, so each
 failed command fails the Job), and `kubectl -n agents-pilot get restores`
 shows the phase. Then read the lines in Loki. Job pods ship through the
 shared log agent on this cluster (`VECTOR_AGENT_POD_SELECTOR` in
 `kubernetes/clusters/wsl/cluster-settings.yaml`), with the `app` label from
-`app.kubernetes.io/name`: the restore Job is
-`{namespace="agents-pilot", app="agent-restore"}`. On 2026-11-14 Loki held the
+`app.kubernetes.io/name`: each run of the restore Job, whatever its name,
+is `{namespace="agents-pilot", app="agent-restore"}`. On 2026-11-14 Loki held the
 lines of the Job pods of the checks in `agents-pilot`; the restore Job
 itself has not run.
 
@@ -603,9 +614,20 @@ no `${...}`, because Flux substitutes those in this directory.
 
 Add it as `kubernetes/apps/ai/agents/pilot/agent/app/restore-job.yaml`, with
 the image and the `nodeSelector` of `deployment.yaml`, the archive in
-`ARCHIVE`, and the file in the `kustomization.yaml` of the directory. With
-`ARCHIVE=list` it changes nothing: it lists the archives with their sizes
-and times, for the steps that pick one.
+`ARCHIVE`, and the file in the `kustomization.yaml` of the directory.
+
+- **`ARCHIVE=list`** changes nothing: it lists the archives with their sizes
+  and times, for the steps that pick one.
+- **`ARCHIVE=daily/newest`** takes the newest daily archive on the volume,
+  and logs its name (`restore archive=<name>`). Use it only when the volume
+  holds a snapshot and nothing newer, as after the populator form below.
+- **One name for each run.** A Job cannot run again, and its template
+  cannot change: Flux fails with "field is immutable", and no Kustomization here
+  sets `force`. So each run gets its own name: `agent-restore-list` for a
+  list, `agent-restore` for the restore, `agent-restore-2` for a retry. The
+  pull request that adds one removes the one before. The label
+  `app.kubernetes.io/name: agent-restore` stays the same, so one Loki query
+  finds each run.
 
 ```yaml
 ---
@@ -614,6 +636,7 @@ and times, for the steps that pick one.
 apiVersion: batch/v1
 kind: Job
 metadata:
+  # One name for each run: agent-restore-list, agent-restore, agent-restore-2.
   name: agent-restore
 spec:
   backoffLimit: 0
@@ -638,7 +661,7 @@ spec:
           image: ghcr.io/it3e/tnwks-agent-image:<the tag and digest of deployment.yaml>
           env:
             # start/openclaw-state-<release>-<time>.tar.gz, or
-            # daily/openclaw-backup-<day>.tar.gz, or list
+            # daily/openclaw-backup-<day>.tar.gz, daily/newest, or list
             - name: ARCHIVE
               value: daily/openclaw-backup-YYYY-MM-DD.tar.gz
             - name: OPENCLAW_OFFLINE
@@ -648,6 +671,10 @@ spec:
             - |
               set -eu
               DATA=/home/node/data
+              if [ "$ARCHIVE" = daily/newest ]; then
+                ARCHIVE=daily/$(cd "$DATA/archives/daily" && ls openclaw-backup-*.tar.gz | tail -n 1)
+                echo "restore archive=$ARCHIVE"
+              fi
               A="$DATA/archives/$ARCHIVE"
               stamp=$(date -u +%Y%m%dT%H%M%SZ)
               stage="$DATA/restore-$stamp"
@@ -718,7 +745,9 @@ spec:
 (OpenClaw 2026.11.3), as uid 1000 with a read-only root, on a scratch Docker
 volume. It put back the start archive and the daily archive (the file
 changed after the archive came back to its old text), and it failed on an
-archive that is not there. `ARCHIVE=list` listed the archives. A daily
+archive that is not there. `ARCHIVE=list` listed the archives.
+`ARCHIVE=daily/newest` took the newest of two daily archives, and with no
+daily archive it failed with exit 1 and changed nothing. A daily
 archive with another release in its manifest failed with
 `restore result=failed reason=release` and left the state as it was. The
 `tar -xzOf` read of one file of a daily archive (in
@@ -730,6 +759,12 @@ file. Not tested: the Job on the cluster.
 The node or its disk is gone, or the volume is empty or broken. The newest
 daily archive from before the fault is in a good snapshot. None of these
 steps is tested.
+
+The backup container makes the daily archive of a UTC day in the first hour
+of that day, or at the first start of the pod that day: it checks once an
+hour (`agent/config/scripts/daily-backup.sh`). The snapshot runs each day at
+10:30 UTC, so the snapshot of a day holds the daily archive of that day when
+the pod ran.
 
 1. **Read the state of the backups and of the volume.** Read only.
    ```sh
@@ -744,31 +779,41 @@ steps is tested.
    10:30 UTC during an outage too, so the newest can be a copy of an empty
    or broken volume. The read of 2026-11-14 showed one snapshot each day,
    each `Succeeded` from 2026-11-12.
-2. **Decide the node and the volume first.** This decides the form of
-   step 4. A `local-path` volume lives on one node (its PV has a node
-   affinity, and the class binds at the first pod: `WaitForFirstConsumer`).
-   The agent and the restore Job run only on the node of their
-   `nodeSelector`. A Restore has no node setting for its mover
+2. **Decide the node and the volume first.** This decides each step after
+   it. A `local-path` volume lives on one node (its PV has a node affinity,
+   and the class binds at the first pod: `WaitForFirstConsumer`). The agent
+   and the restore Job run only on the node of their `nodeSelector`. A
+   Restore has no node setting for its mover
    (`kubectl explain restores.spec.mover`), so its mover can bind a new
-   volume on any node.
-   - **The PV is there, and its node is up** (the data is broken): the
+   volume on any node. The PV and the class have the reclaim policy
+   `Delete`: a delete of the PVC deletes the PV, and the provisioner wipes
+   its directory on the node.
+   - **A: the PV is there, and its node is up** (the data is broken): the
      `pvcRef` form, into the volume that is there.
-   - **The PV is gone, and the node is up:** always the populator form. The
-     restore Job (step 5) is the first pod of the new volume, and its
-     `nodeSelector` puts the volume on the node of the agent. Flux makes a
-     new PVC only after the old object is gone: delete the old PVC (owner
-     approval, after step 3: `kubectl -n agents-pilot delete pvc agent-state`).
-   - **The node is gone:** first a pull request changes the `nodeSelector`
-     of `deployment.yaml` (and of the restore Job) to a node that is there
-     (owner approval). Then delete the old PVC (owner approval, after step 3). Its reclaim
-     policy is `Delete`, so the PV goes with it; check `kubectl get pv`, as
-     the delete can wait on the node that is gone. Then the populator form.
+   - **B: the PV is gone, and the node is up:** the populator form. The stop
+     pull request (step 3) takes `pvc.yaml` out of the `kustomization.yaml`
+     of the directory, so Flux deletes the PVC through git: the
+     Kustomization `agents-pilot-agent` has `prune: true`, and the PVC has
+     no annotation that turns pruning off (read on 2026-11-14: only the
+     usual `kubernetes.io/pvc-protection` finalizer, which waits until no
+     pod uses the volume). No hand delete: Flux would make the PVC again at
+     once, with no `dataSourceRef`.
+   - **C: the node is gone for good:** as B, and the stop pull request also
+     changes the `nodeSelector` of `deployment.yaml` to a node that is there.
+     Only for a node that does not come back. A node that is only down still
+     holds the data newer than the snapshot, and when it comes back the
+     provisioner wipes that directory for a deleted PVC. So wait for the
+     node, or first set the PV to `Retain` (owner approval:
+     `kubectl patch pv <pv> -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'`).
 3. **Stop the agent and the snapshots.** Owner approval. One pull request
    sets `replicas: 0` in `pilot/agent/app/deployment.yaml`, and
    `suspend: true` in the SnapshotSchedule `agent-state` of `backup.yaml`, so
-   no new snapshot copies the broken volume. After the merge, wait until
+   no new snapshot copies the broken volume. For B and C it also takes
+   `./pvc.yaml` out of `kustomization.yaml`, and for C it changes the
+   `nodeSelector`. After the merge, wait until
    `kubectl -n agents-pilot get pods -l app.kubernetes.io/name=agent` shows
-   no pod.
+   no pod, and for B and C until `kubectl -n agents-pilot get pvc` shows no
+   `agent-state`.
 4. **Restore the snapshot.** Owner approval. A pull request adds a kopiur
    `Restore` to `pilot/agent/app/` (the form is in
    [`backups.md`](../operations/backups.md#a-pvc-kopiur)), with
@@ -776,36 +821,45 @@ steps is tested.
    `credentialProjection.enabled: true`, and the `podSecurityContext` and
    `securityContext` of the mover in `backup.yaml` (uid 1000, the restricted
    level).
-   - **The `pvcRef` form:** `target.pvcRef.name: agent-state`, with no
+   - **A, the `pvcRef` form.** First a pull request adds the restore Job as
+     `agent-restore-list` with `ARCHIVE=list`. If the archives read back,
+     skip the Restore: step 5 uses the newest daily archive from before the
+     fault, from that list. Else the next pull request removes the list Job
+     and adds the Restore with `target.pvcRef.name: agent-state` and no
      `enableFileDeletion`. That option makes an exact mirror, and it deletes
      each file the snapshot does not have, the start archives made since the
-     snapshot too. If the volume still mounts and its archives read back
-     (`ARCHIVE=list` of the restore Job), skip this step: step 5 uses the
-     archive on the volume.
-   - **The populator form:** `target.populator: {}`, and in the same pull
-     request `pvc.yaml` gets
+     snapshot too. With no file deletion, `state/` comes out as a mix of the
+     snapshot and the broken files. That does no harm: step 5 moves all of
+     `state/` aside and puts the archive in its place.
+   - **B and C, the populator form.** `target.populator: {}`, and in the same
+     pull request `pvc.yaml` goes back into `kustomization.yaml` with
      `dataSourceRef: {apiGroup: kopiur.home-operations.com, kind: Restore, name: <the Restore>}`.
-     The field cannot change on a PVC that exists, so this form needs the
-     new PVC of step 2. The restore Job of step 5 goes in the same pull
-     request, as the first pod of the volume.
+     The same pull request adds the restore Job as `agent-restore-list` with
+     `ARCHIVE=list`: it is the first pod of the new volume, so its
+     `nodeSelector` puts the volume on the node of the agent, and its list
+     shows what the snapshot holds once the volume is filled.
 
    Wait for the phase `Completed` of the Restore
    (`kubectl -n agents-pilot get restores`). `KopiurRestoreFailed` fires on
    a failed one.
 5. **Restore the daily archive.** Owner approval. The snapshot copies the
    live files of a running pod, so its database can be torn; the daily
-   archive in it is the consistent copy. A pull request adds
-   [the restore Job](#the-restore-job) with
-   `ARCHIVE=daily/openclaw-backup-<the day of the snapshot>.tar.gz`, with the
-   image of the release that made it. Wait until
-   `kubectl -n agents-pilot get job agent-restore` shows `1/1`, then read
-   `restore result=ok` in Loki
+   archive in it is the consistent copy. A pull request removes the list
+   Job and adds [the restore Job](#the-restore-job) as `agent-restore`, with
+   the image of the release that made the archive. For A,
+   `ARCHIVE=daily/openclaw-backup-<the newest day from before the fault>.tar.gz`,
+   from the list. For B and C, the same name from the list after the fill,
+   or `ARCHIVE=daily/newest`: the new volume holds the snapshot and nothing
+   newer. Wait until `kubectl -n agents-pilot get job agent-restore` shows
+   `1/1`, then read `restore result=ok` in Loki
    (`{namespace="agents-pilot", app="agent-restore"}`). The script was tested
-   locally (above).
+   locally (above). After a refused archive, a retry is `agent-restore-2`.
 6. **Start the agent and the snapshots.** Owner approval. A pull request
    removes the Restore and the Job, sets `replicas: 1`, and removes
-   `suspend: true`. The `archive` init container makes an archive of the
-   restored state, and `doctor` checks it.
+   `suspend: true`. For B and C, keep `dataSourceRef` in `pvc.yaml`: the
+   field cannot change on a PVC that exists, so a removal fails the apply.
+   The `archive` init container makes an archive of the restored state, and
+   `doctor` checks it.
 7. **Check.** Read only: the pod is ready, the `sandbox-start` lines, an
    answer on the test channel (the owner), and the next
    `instruction-check result=` line. The restored state goes back to the
@@ -813,7 +867,7 @@ steps is tested.
    the state of each channel go back too).
 8. **Remove the old state.** Owner approval, later: the
    `state.before-restore-<time>` directory, by a Job in a pull request as
-   above.
+   above, with a name of its own.
 
 ### After a failed update
 
@@ -832,18 +886,20 @@ state. None of these steps is tested on the cluster.
    2026-11-14, when the logs of the agent pod started to ship. With no line,
    use the name: the file name holds the release and the UTC time of the
    start, so the earliest name with the failed release is the one. List the
-   names with `ARCHIVE=list` of [the restore Job](#the-restore-job) after
-   step 2 (owner approval), in Loki under `app="agent-restore"`.
+   names after step 2 with [the restore Job](#the-restore-job) as
+   `agent-restore-list` and `ARCHIVE=list` (owner approval), in Loki under
+   `app="agent-restore"`.
 2. **Stop the agent and set the image back.** Owner approval. One pull
    request sets `replicas: 0` and reverts the image in `deployment.yaml` to
    the release before (a revert of the Renovate merge, with
    `replicas: 0` on top). Wait until no agent pod is there.
-3. **Restore the archive.** Owner approval. A pull request adds
-   [the restore Job](#the-restore-job) with
+3. **Restore the archive.** Owner approval. A pull request removes the list
+   Job, if there is one, and adds [the restore Job](#the-restore-job) as
+   `agent-restore` with
    `ARCHIVE=start/openclaw-state-<failed release>-<time>.tar.gz`, and the
-   image of the release before. Wait until
-   `kubectl -n agents-pilot get job agent-restore` shows `1/1`, then read
-   `restore result=ok` in Loki. The script was tested locally (above).
+   image of the release before. A start archive has no release check. Wait
+   until `kubectl -n agents-pilot get job agent-restore` shows `1/1`, then
+   read `restore result=ok` in Loki. The script was tested locally (above).
 4. **Start the agent.** Owner approval. A pull request removes the Job and
    sets `replicas: 1`. The start makes a new archive with the name of the
    release before.
