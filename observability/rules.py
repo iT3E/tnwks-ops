@@ -502,8 +502,9 @@ def security_alerts():
          "annotations": {"summary": "Entries of the list of accepted findings on {{ $labels.k8s_cluster }} are skipped",
                          "dashboard_url": 'https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}',
                          "description": ("{{ $value }} entries of the list of accepted findings do not fit, so the security converter"
-                                         " and the Prowler runs skip them: their findings show as fails. The log of the converter"
-                                         " has the number of each entry and why. security/converter/README.md, \"An entry that the"
+                                         " skips them: their findings show as fails on the board. The Prowler runs skip the"
+                                         " entries that are not in the form, and take an entry whose source or system is not in"
+                                         " the registry. The log of the converter has the number of each entry and why. security/converter/README.md, \"An entry that the"
                                          " converter skips\", has the rules. The alert ends in the cycle after the list is fixed.")}},
     ]
 
@@ -990,9 +991,9 @@ def accepted_list_fixtures():
                        for key, text in rule["annotations"].items()}
         return [{"exp_labels": {"severity": "warning", "k8s_cluster": site}, "exp_annotations": annotations}]
 
-    def lists(read, skipped):
-        return [{"series": f"{ACCEPTED_LIST_READ}{{{target}}}", "values": read},
-                {"series": f"{ACCEPTED_SKIPPED}{{{target}}}", "values": skipped}]
+    def lists(read, skipped, labels=target):
+        return [{"series": f"{ACCEPTED_LIST_READ}{{{labels}}}", "values": read},
+                {"series": f"{ACCEPTED_SKIPPED}{{{labels}}}", "values": skipped}]
 
     def at(name, minute, exp_alerts):
         return {"alertname": name, "eval_time": f"{minute}m", "exp_alerts": exp_alerts}
@@ -1013,6 +1014,10 @@ def accepted_list_fixtures():
         {"name": "a list that is fixed within 30 minutes does not alert", "interval": "1m",
          "input_series": lists("0+0x20 1+0x60", "3+0x40 0+0x40"),
          "alert_rule_test": [at(unread, 31, []), at(skipped, 61, [])]},
+        # The federated copy of another site's series: that site alerts on its own.
+        {"name": "a federated copy of the series does not alert", "interval": "1m",
+         "input_series": lists("0+0x90", "2+0x90", labels=f'{target},source_site="homelab-wsl-01"'),
+         "alert_rule_test": [at(unread, 90, []), at(skipped, 90, [])]},
     ]
 
 
