@@ -360,20 +360,28 @@ deletes the sandbox. The image is `ghcr.io/it3e/tnwks-workflow-agents`
     stays as a record. The agent must be safe to run twice for the same
     work: the Renovate reviewer posts one comment for each head.
 - **The answer of a run stays with its Job.** The answer is the last line
-  of the log of the run pod, and the pod GC of this cluster
-  (`terminated-pod-gc-threshold: 1`, `talos/wsl/cluster-config.yaml`) deletes
-  that pod soon after the Job ends: 35 s on the first run. So the receiver
-  keeps the answer in the annotation `workflow-agents/result` of the Job when
-  it first reads it, on a call or in a loop every 10 s over the ended Jobs
-  with no kept answer (`RUN_RECEIVER_RECORD_SECONDS`). A later call with
-  the same key reads the annotation.
-  - An answer of more than 64 KiB is kept without its `output`.
-  - If the pod went before the receiver read it (the receiver was down for
-    that time), the answer is the state of the Job (`succeeded`, `failed` or
+  of the log of the run pod. The pod GC of this cluster
+  (`terminated-pod-gc-threshold: 1`, `talos/wsl/cluster-config.yaml`) checks
+  every 20 s and deletes each terminated pod of the whole cluster but the one
+  created last (Kubernetes `pkg/controller/podgc`). A run pod can go seconds
+  after it ends, for example when another pod started at the same second (the
+  providers job at :07) or a CronJob of another namespace ends.
+  - So the receiver follows the log of each running run as it is written
+    (`follow=true`), from the call that makes or finds the run, and from its
+    loop every 10 s (`RUN_RECEIVER_RECORD_SECONDS`) for a run that no call
+    started. The run job writes the result line last, and the pod GC deletes
+    only a pod that has ended, so the line is in hand before the pod can go.
+    This needs no right beyond `pods`: `list` and `pods/log`: `get`.
+  - The receiver keeps the answer in the annotation `workflow-agents/result`
+    of the Job. A later call with the same key reads the annotation.
+  - An answer of more than 64 KiB is kept, and answered, without its
+    `output`.
+  - If the receiver was down for the whole end of a run and the pod went,
+    the answer is the state of the Job (`succeeded`, `failed` or
     `timed_out`), with `"output_kept": false`.
-  - For this, the Role of the receiver has `jobs`: `list` and `patch`. The
-    patch changes only the annotations, and the admission policy checks it
-    as it checks a new Job (it matches `UPDATE` too).
+  - For the annotation, the Role of the receiver has `jobs`: `list` and
+    `patch`. The patch changes only the annotations, and the admission
+    policy checks it as it checks a new Job (it matches `UPDATE` too).
 - **The Renovate reviewer** is the one agent. It reviews pull requests of
   `iT3E/tnwks-ops` only (`REVIEWER_REPOSITORIES`), and posts one comment for
   each head: it never merges, approves, pushes or changes a label. It calls
