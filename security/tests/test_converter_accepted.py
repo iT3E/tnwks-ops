@@ -148,6 +148,11 @@ SKIPPED = {
     "a date that is no day": entry(until="2027-02-30"),
     "a date that is not a date": entry(until="soon"),
     "a date with a time": entry(until="2027-01-31T10:00:00"),
+    "a date without dashes": entry(until="20271231"),
+    "a date of a week": entry(until="2027-W05-1"),
+    "a date with a line end": entry(until="2027-01-31\n"),
+    "a date of other digits": entry(until="\u0662\u0660\u0662\u0667-\u0660\u0661-\u0663\u0661"),
+    "a date with space": entry(until=" 2027-01-31"),
 }
 
 
