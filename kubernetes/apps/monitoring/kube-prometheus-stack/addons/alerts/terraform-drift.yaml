@@ -31,6 +31,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $externalLabels.cluster }}"
             runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/ci.md#terraform-drift"
             summary: "Terraform root differs from tnwks-ops main, or its drift check failed"
             description: >-
@@ -51,6 +52,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-kubernetes?var-cluster={{ $externalLabels.cluster }}"
             runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/operations/ci.md#terraform-drift"
             summary: "The Terraform drift check hasn't reported for over a day"
             description: >-
