@@ -56,6 +56,48 @@ transforms:
       del(.kubernetes.node_labels)
       del(.kubernetes.namespace_labels)
 
+  # The result lines of the agent platform, for its alerts
+  # (docs/apps/agent-platform.md, "Alerts"). A line of a pod in a namespace
+  # `agents-*` that starts with `<check> result=<result>` (for example
+  # `app-drift result=drift detail=...`) becomes the gauge
+  # homelab_agent_platform_result_timestamp_seconds: the time of the newest
+  # line for each check and result. Only these two words go on as labels,
+  # never the rest of the line. The other events end here; the Loki sink
+  # gets every line from kubernetes_remap.
+  agent_platform_results:
+    type: remap
+    inputs:
+      - kubernetes_remap
+    source: |
+      ns = string(.kubernetes.pod_namespace) ?? ""
+      if !starts_with(ns, "agents-") { abort }
+      line, err = parse_regex(string(.message) ?? "", r'^(?P<check>[a-z][a-z0-9-]{0,39}) result=(?P<result>[a-z]{1,20})(?: |$)')
+      if err != null { abort }
+      # The time of the line; the time it got here if it has none.
+      ts = to_unix_timestamp(timestamp(.timestamp) ?? parse_timestamp(string(.timestamp) ?? "", "%+") ?? now())
+      . = {
+        "pod_namespace": ns,
+        "app": string(.custom_app_name) ?? "unknown",
+        "check": line.check,
+        "result": line.result,
+        "time": ts
+      }
+
+  agent_platform_result_metrics:
+    type: log_to_metric
+    inputs:
+      - agent_platform_results
+    metrics:
+      - type: gauge
+        field: time
+        namespace: homelab
+        name: agent_platform_result_timestamp_seconds
+        tags:
+          pod_namespace: "{{ pod_namespace }}"
+          app: "{{ app }}"
+          check: "{{ check }}"
+          result: "{{ result }}"
+
   # The time of an audit line is the time of its event (stageTimestamp), not
   # the time it got here: a line that waited on the node rests at its own
   # time. The line itself goes on as the API server wrote it.
@@ -151,8 +193,13 @@ sinks:
 
   # The metrics port (9598), scraped by the PodMonitor next to the
   # HelmRelease. It is a port of the pod only: no Service carries it.
+  # A series that gets no new value for flush_period_secs goes away. The
+  # default is 60 s; a result line comes every 15 minutes, so its series
+  # stays for one hour, as the internal metrics do (expire_metrics_secs).
   prometheus:
     type: prometheus_exporter
     inputs:
       - internal_metrics
+      - agent_platform_result_metrics
     address: 0.0.0.0:9598
+    flush_period_secs: 3600

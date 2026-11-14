@@ -127,7 +127,15 @@ transform or the sink in `vector.yaml`.
 | `vector_buffer_discarded_events_total` | The events that the buffer of a sink dropped because it was full |
 | `vector_http_client_responses_total` | The answers that a sink got, by HTTP `status` |
 
-Two settings shape these series:
+The sink also serves one series that is not Vector's own:
+`homelab_agent_platform_result_timestamp_seconds{pod_namespace, app, check,
+result}`, the time of the newest result line of a pod in a namespace
+`agents-*` (a line that starts with `<check> result=<result>`). The
+transforms `agent_platform_results` and `agent_platform_result_metrics` make
+it, and the alert `WorkflowAppDrift` reads it
+(`docs/apps/agent-platform.md`, "Alerts").
+
+Three settings shape these series:
 
 - **A counter starts at its first event.** Vector makes the series of an
   error when the first error happens, so its first value is 1, and
@@ -137,6 +145,9 @@ Two settings shape these series:
   (`expire_metrics_secs`). The default of Vector is five minutes, and a
   counter that went away that fast could come back at the same value, which
   no rule can see.
+- **The sink keeps a series for one hour after its last value**
+  (`flush_period_secs: 3600`). The default is 60 seconds, and a result
+  line comes every 15 minutes.
 
 The PodMonitor drops the histogram buckets (26 for each histogram), which
 leaves about 170 series for each aggregator, and it drops Vector's `host`
