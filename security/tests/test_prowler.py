@@ -31,8 +31,8 @@ def run():
 
 
 def accepted_file(tmp_path, entries):
-    path = tmp_path / "accepted.yaml"
-    path.write_text(yaml.safe_dump(entries))
+    path = tmp_path / "accepted.json"
+    path.write_text(json.dumps(entries))
     return path
 
 
@@ -53,26 +53,45 @@ def test_only_the_open_entries_of_prowler_for_the_system_are_accepted(run, tmp_p
 
 
 def test_no_list_accepts_nothing(run, tmp_path):
-    assert run.accepted_checks(tmp_path / "absent.yaml", "aws-prod", NOW.date()) == ({}, 0)
+    assert run.accepted_checks(tmp_path / "absent.json", "aws-prod", NOW.date()) == ({}, 0)
     assert run.accepted_checks(accepted_file(tmp_path, []), "aws-prod", NOW.date()) == ({}, 0)
 
 
 def test_a_bad_entry_is_skipped_and_counted_and_its_values_stay_out_of_the_log(run, tmp_path, capsys):
-    bad_date = entry("check_bad_date", "next spring")
-    no_check = entry("", "2027-01-31")
-    no_reason = {key: value for key, value in entry("check_no_reason", "2027-01-31").items() if key != "reason"}
-    path = accepted_file(tmp_path, ["a line", bad_date, no_check, no_reason, entry("check_open", "2027-01-31")])
-    assert run.accepted_checks(path, "aws-prod", NOW.date()) == ({"check_open": "2027-01-31"}, 4)
+    good = entry("check_open", "2027-01-31")
+    bad = [
+        "a line",
+        entry("check_bad_date", "next spring"),
+        entry("check_with_time", "2027-01-31T00:00:00"),
+        entry("", "2027-01-31"),
+        entry("check_blank_reason", "2027-01-31") | {"reason": "   "},
+        {key: value for key, value in entry("check_no_reason", "2027-01-31").items() if key != "reason"},
+        entry("check_extra_key", "2027-01-31") | {"owner": "adult1"},
+        entry("check_not_a_string", "2027-01-31") | {"reason": 7},
+        entry("check_until_a_number", 20270131),
+        entry("check_null", "2027-01-31") | {"system": None},
+    ]
+    path = accepted_file(tmp_path, [*bad, good])
+    assert run.accepted_checks(path, "aws-prod", NOW.date()) == ({"check_open": "2027-01-31"}, len(bad))
     out = capsys.readouterr().out
-    assert all(f"entry {index} " in out for index in (1, 2, 3, 4))
-    assert "next spring" not in out and "invented reason" not in out and "a line" not in out
+    assert all(f"entry {index} " in out for index in range(1, len(bad) + 1))
+    assert f"entry {len(bad) + 1} " not in out
+    assert "next spring" not in out and "invented reason" not in out and "a line" not in out and "adult1" not in out
 
 
-@pytest.mark.parametrize("text", ["source: prowler\n", "- [unclosed\n  reason: An invented reason.\n"])
+@pytest.mark.parametrize("text", [
+    '{"source": "prowler"}',
+    '[{"source": "prowler", "reason": "An invented reason."',
+    "- source: prowler\n  reason: An invented reason.\n",
+    ('[{"source": "prowler", "check": "check_open", "system": "aws-prod", "reason": "An invented reason.",'
+     ' "until": "2027-01-31", "check": "check_other"}]'),
+    "",
+])
 def test_a_list_that_can_not_be_read_stops_the_run_and_its_text_stays_out_of_the_log(run, tmp_path, capsys, text):
-    (tmp_path / "accepted.yaml").write_text(text)
+    """Not JSON (YAML is not read), not an array, or a key twice in one object."""
+    (tmp_path / "accepted.json").write_text(text)
     with pytest.raises(run.UnreadableList):
-        run.accepted_checks(tmp_path / "accepted.yaml", "aws-prod", NOW.date())
+        run.accepted_checks(tmp_path / "accepted.json", "aws-prod", NOW.date())
     call, calls = fake_prowler()
     assert run.run(args(run, tmp_path), now=lambda: NOW, call=call) == 2
     assert calls == []
@@ -119,7 +138,7 @@ def fake_prowler(code=0, write=True, content='[{"status_code": "FAIL"}]'):
 def args(run, tmp_path, *extra):
     (tmp_path / "work").mkdir(exist_ok=True)
     return run.parse(["--provider=aws", "--system=aws-prod", f"--checks={tmp_path / 'checks.json'}",
-                      f"--results={tmp_path / 'results'}", f"--accepted={tmp_path / 'accepted.yaml'}",
+                      f"--results={tmp_path / 'results'}", f"--accepted={tmp_path / 'accepted.json'}",
                       f"--work={tmp_path / 'work'}", "--", *extra])
 
 

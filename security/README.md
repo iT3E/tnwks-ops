@@ -380,26 +380,29 @@ merges.
 | Secret | `security-accepted-findings`, in the namespace `security` of homelab-wsl-02 |
 | Key of the Secret | `accepted.json`: one JSON array, with one object for each accepted finding |
 
-Each object has these five keys and no other, and each value is a JSON
-string. Each reader of the list (the security converter, the Prowler job,
-the API checks job) reads it with `json.loads`, never with a YAML parser:
-
+Each object has exactly these five fields, and each value is a JSON string:
 
 | Field | Value |
 | --- | --- |
 | `source` | The `name` of the source in `sources.yaml` |
 | `check` | The check ID, as in `controls.yaml`. A check that no line names is also possible |
 | `system` | The `name` of the system in `systems.yaml` |
-| `reason` | Why the owner accepts the finding. Not empty, and not only space |
-| `until` | The end date, as `YYYY-MM-DD` (`datetime.date.fromisoformat`), with no time. The finding is past its end date from the start of the next day, UTC |
+| `reason` | Why the owner accepts the finding. An entry whose reason is empty, or only spaces, is skipped: it accepts nothing |
+| `until` | The end date, as `YYYY-MM-DD` (read with `date.fromisoformat`), with no time: a reader skips an entry whose end has a time. The finding is past its end date from the start of the next day, UTC |
 
-A reader skips and counts an item that is not an object, a key that is
-missing or is not one of the five, a value that is not a string, and an
-entry whose value does not fit. A list that is not one JSON array (a comma
-at the end, a comment, a byte order mark, a key two times in one object)
-gives no entry at all: the converter then serves none, and a Prowler run
-fails and mutes nothing. `security/converter/README.md`, "The list of
-accepted findings", has each rule and the alerts.
+Each reader reads the list with `json.loads` on its UTF-8 text, never with
+a YAML parser:
+
+- A text that `json.loads` refuses, a key twice in one object, or a top
+  level that is not an array: the reader fails and mutes nothing.
+- An item that is not an object, a field that is missing, a key that is not
+  one of the five fields, a value that is not a string, an empty field, or
+  an end that `date.fromisoformat` refuses: the reader skips that entry and
+  counts it. Its log has the number of the entry and why, never a value.
+
+The converter also skips an entry whose source or system is not in the
+registry, or whose check is not a check ID, and it alerts on both cases
+(`converter/README.md`, "The list of accepted findings").
 
 This is the form of the file before encryption. The values are invented:
 
