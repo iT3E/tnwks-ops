@@ -208,7 +208,8 @@ The converter skips an item of the array, and counts it in
   `_./:-`, 200 characters at most. So no text of another form, and no lone
   surrogate of a `\ud800` escape, reaches a label.
 - `until` is not a day of the form `YYYY-MM-DD`: it must match
-  `^\d{4}-\d{2}-\d{2}$`, and `datetime.date.fromisoformat` must read it.
+  `[0-9]{4}-[0-9]{2}-[0-9]{2}` as a whole, in ASCII digits, and
+  `datetime.date.fromisoformat` must read it.
   So `2027-02-30` is skipped, and so are `20271231` and `2027-W52-5`, which
   `fromisoformat` reads since Python 3.11.
 
