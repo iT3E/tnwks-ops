@@ -2,11 +2,11 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: security
-# The owner makes the two certificates (../README.md has their form), and
-# names them here before a cluster lists ../ks.yaml:
-#   - ./secret-certificate-audit.sops.yaml
-#   - ./secret-certificate-trail.sops.yaml
 resources:
+  # The two certificates for IAM Roles Anywhere, made by the owner
+  # (../README.md has their form and the renewal).
+  - ./secret-certificate-audit.sops.yaml
+  - ./secret-certificate-trail.sops.yaml
   - ./secret-sts.yaml
   - ./lease.yaml
   - ./rbac.yaml
