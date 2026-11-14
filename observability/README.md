@@ -85,6 +85,15 @@ S3 operations, verified HTTPS, mutual TLS StoreAPI, historical queries, normal
 restart, SIGKILL recovery, cache rebuild and unavailable-store behavior. A process
 kill does not simulate a Windows power loss or prove SSD flush durability.
 
+A rule or a Vector transform written by hand in `kubernetes/` gets its cases in
+`observability/rule-tests/` (promtool; `rule_files` name PrometheusRule
+manifests by their repo path) or `observability/vector-tests/` (`vector test`,
+with a `config` key naming the Vector config). `pytest observability/tests`
+runs them in containers (`test_hand_written_rules.py`): promtool with the
+`PROMETHEUS` image, and Vector with the image of the HelmRelease next to the
+config. Each alert of a rule file named there needs at least one case, in any
+of the fixtures. The tests skip without Docker, but fail in CI.
+
 To change canonical definitions, run `python observability/generate.py` inside the
 environment, then review and commit generated files together with the source.
 Never hand-edit generated dashboard JSON, copied exporter code, rule fixtures or
