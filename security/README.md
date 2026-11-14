@@ -406,6 +406,8 @@ security stream `findings` in Loki has the text of each finding.
 | `SecurityAcceptedFindingExpired` | An accepted finding of the system has passed its end date | The owner reads the line in the list. The owner sets a new end date with a reason, or removes the line and the cause of the finding |
 | `SecurityAcceptedListUnread` | The security converter gets no entry from the list of accepted findings, for 30 minutes. The board shows no accepted finding, and the rule of Trivy Operator mutes none | The log of the converter names the line and the kind of its form. Fix that line of the list (`converter/README.md`, "The form that the converter reads") |
 | `SecurityAcceptedEntriesSkipped` | Entries of the list do not fit, for one hour, so their findings show as fails | The log of the converter names each entry by its number, and why. Fix those entries (`converter/README.md`, "An entry that the converter skips") |
+| `SecurityFindingNew` | A check of high or critical severity on the system fails, and one of these is true: it has more failed resources than at each time of the day before; it had none one hour before; or it had no result in the day before (a new check, or one that comes back after more than a day). Only high and critical alert, as the design asks for "a new failed check of high severity"; the other severities are on the board. A check that fails again after less than one hour at 0 does not alert again. It compares one value for each check (the labels `k8s_cluster`, `source`, `check` and `system`, from the record `homelab:security_check_result_high:max`), so a new pod of a source, with new `pod` and `instance` labels, or a change of the severity of a check, is not a new result. It is in `observability/rules.py`, and each site fires it for its own results. It ends after one hour. On the first day of a source, and on the first day of the record, each system with a check of high or critical severity that fails alerts one time | Open the tab Systems of the board, then the reports of the source (for Trivy Operator, `kubectl get clustercompliancereport k8s-cis-1.23 -o yaml` and the vulnerability reports in the namespace of the workload). Fix the cause, or accept the finding in the encrypted list |
+| `SecurityImagesNotScanned` | Images that run on a cluster with Trivy Operator have had no vulnerability report for 36 hours (the `late_after` of `trivy`). While one image has no report, the check `image-vulnerabilities` of the cluster keeps a fail, and shows "no evidence" in place of a pass. It is in `observability/rules.py`; each site fires it for its own cluster | List the scan jobs and the log of the operator (`kubernetes/apps/security/trivy-operator/README.md`, "When a scan fails"). Add the registry to the policy of the scan jobs, or move the image to a public registry. For an image that no scan can read, add an entry to the accepted list (`accepted.json`), an object in the form `{"source": "trivy", "check": "images-not-scanned", "system": "<the cluster>", "reason": "<why>", "until": "YYYY-MM-DD"}`. It mutes the alert of that cluster until its end, and `SecurityAcceptedFindingExpired` tells the owner at the end. The entry also mutes a new image with no report on the cluster, so keep the end near. Its 36 hours start again at the end, and each time the count of images with no report is 0 for one evaluation |
 
 ## Accepted findings
 
@@ -429,7 +431,7 @@ the API checks job) reads it with `json.loads`, never with a YAML parser:
 | Field | Value |
 | --- | --- |
 | `source` | The `name` of the source in `sources.yaml` |
-| `check` | The check ID, as in `controls.yaml`. A check that no line names is also possible |
+| `check` | The check ID, as in `controls.yaml`. A check that no line names is also possible. `images-not-scanned` mutes `SecurityImagesNotScanned` of the cluster (`trivy` only) |
 | `system` | The `name` of the system in `systems.yaml` |
 | `reason` | Why the owner accepts the finding. Not empty, and not only space |
 | `until` | The end date, exactly `YYYY-MM-DD` with ASCII digits, then read with `date.fromisoformat`. A reader skips an entry whose end has another form (a time, `20270131`, a week date). The finding is past its end date from the start of the next day, UTC |
@@ -487,6 +489,13 @@ list of accepted findings"), and serves one series for each entry:
 `source`, `check` and `system`, and the Unix time of the end as its value.
 The alert and the board read this series, and nothing else of the list
 leaves the Secret.
+
+The rule of the result series of `trivy` reads the last value of this series
+of the last day (`last_over_time`), so an accepted finding stays muted while
+the series is gone for a while: homelab-wsl reads it through the federation,
+and the reader can start again. The cost: an entry that the owner takes out
+of the list before its end date stays muted on the board for up to a day.
+The end date still holds, as it is the value of the series.
 
 ## How to change the registry
 

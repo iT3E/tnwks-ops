@@ -43,7 +43,7 @@
   type: cluster
   site: homelab-wsl-02
   domain: infrastructure
-  sources: [stream]
+  sources: [stream, trivy]
 - name: DESKTOP-HKE05KI
   type: windows-host
   site: homelab-wsl
