@@ -45,7 +45,9 @@
           $acl.SetAccessRuleProtection($true, $false)
           foreach ($item in $want) {
               $rights = [System.Security.AccessControl.FileSystemRights]$item[1]
-              $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule((New-Object $sid $item[0]), $rights, $inherit, $none, $allow)))
+              $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                  (New-Object $sid $item[0]), $rights, $inherit, $none, $allow)
+              $acl.AddAccessRule($rule)
           }
           $have = Get-Acl -LiteralPath $Path
           $same = $have.AreAccessRulesProtected -and
@@ -62,7 +64,9 @@
           }
           foreach ($child in $children) {
               if ($PSCmdlet.ShouldProcess($child.FullName, 'take the rules of the host check directory')) {
-                  $reset = if ($child.PSIsContainer) { New-Object System.Security.AccessControl.DirectorySecurity } else { New-Object System.Security.AccessControl.FileSecurity }
+                  $kind = 'System.Security.AccessControl.FileSecurity'
+                  if ($child.PSIsContainer) { $kind = 'System.Security.AccessControl.DirectorySecurity' }
+                  $reset = New-Object $kind
                   $reset.SetOwner($admins)
                   $reset.SetAccessRuleProtection($false, $false)
                   Set-Acl -LiteralPath $child.FullName -AclObject $reset
