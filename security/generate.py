@@ -23,6 +23,9 @@ RULES = ROOT / "kubernetes/apps/monitoring/security-registry/rules/rules.yaml"
 # from a ConfigMap, and kustomize takes a file only from the directory of the app.
 CONVERTER = ROOT / "security/converter/converter.py"
 CONVERTER_CONFIG = ROOT / "kubernetes/apps/security/converter/app/config"
+# The CronJobs of Prowler (kubernetes/apps/security/prowler) read the scan list of
+# their provider from a ConfigMap of their app, for the same reason.
+PROWLER_CONFIG = ROOT / "kubernetes/apps/security/prowler/app/config"
 
 # The series of the contract (security/README.md).
 RESULT = "homelab_security_check_result"
@@ -766,6 +769,8 @@ def artifacts(registry=None):
         CONVERTER_CONFIG / "streams.json": dump_json(stream_map(registry)),
         CONVERTER_CONFIG / "registry.json": dump_json(converter_registry(registry)),
         CONVERTER_CONFIG / "converter.py": CONVERTER.read_text(),
+        **{PROWLER_CONFIG / f"checks-{provider}.json": dump_json({provider: checks})
+           for provider, checks in scan_lists(registry)["prowler"].items()},
     }
 
 

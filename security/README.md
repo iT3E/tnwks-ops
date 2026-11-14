@@ -223,7 +223,7 @@ does. Its value is the site whose Prometheus runs the rules. The label
 
 ## The generator
 
-`generate.py` reads the registry and writes six outputs. It uses the Python
+`generate.py` reads the registry and writes seven outputs. It uses the Python
 standard library and PyYAML, from the pinned project of `observability/`.
 
 ```bash
@@ -236,6 +236,7 @@ uv run --project observability pytest security/tests -q
 | --- | --- | --- |
 | Rules | `kubernetes/apps/monitoring/security-registry/rules/rules.yaml` | One recording rule for each safeguard and type, the state of each safeguard over its systems, whether it has a result, and the rule for a late result |
 | Scan lists | `generated/scan-lists.json` | The checks that Prowler runs for each provider, in the form of its `--checks-file` |
+| The scan list of each provider | `kubernetes/apps/security/prowler/app/config/checks-<provider>.json` | The same checks, one file for each provider, for the ConfigMap of the Prowler runs (`kubernetes/apps/security/prowler/README.md`) |
 | The Wazuh map | `generated/wazuh-map.json` | The safeguards of each host check: the CIS tags of the release in `catalog/wazuh.json`, carried to the same check IDs, with the lines of the registry. And the checks with no tag |
 | Board input | `generated/board.json` | The safeguards, the systems and the cycles that the board shows |
 | The list of gaps | `generated/gaps.json` | Each check of a tool that no line names. The quarterly review reads it |

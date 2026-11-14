@@ -5,6 +5,7 @@ namespace: security
 resources:
   - ./helmrelease.yaml
   - ./networkpolicy.yaml
+  - ./pvc.yaml
 # security/generate.py writes both files: the copy of
 # security/converter/converter.py, and the map of the streams from the
 # registry. Never edit them here.

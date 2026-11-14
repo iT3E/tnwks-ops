@@ -61,7 +61,7 @@ to this table first, because the sum is the budget of the node.
 | Part | Runs on | Memory limit |
 | --- | --- | --- |
 | Trivy Operator | each cluster | 512 MiB for the operator, 512 MiB for each container of a scan job, one scan job at a time as a rule (two for a short while in a burst of scans). On homelab-wsl the worst sum is 3584 MiB by limits and 572 MiB or more by an estimate (the operator in a burst, and one measured scan container of 56 MiB, times 6), for a pod of 6 containers (`trivy-operator/README.md`, "Memory") |
-| Prowler job | homelab-wsl-02, one run a day | 768 MiB |
+| Prowler job | homelab-wsl-02, one run at a time: one for each system each day, at different hours | 768 MiB |
 | The converter | homelab-wsl-02 | 128 MiB |
 | Trail copy job | homelab-wsl-02 | 128 MiB |
 | API checks job | homelab-wsl-02 | 128 MiB |
@@ -75,7 +75,7 @@ to this table first, because the sum is the budget of the node.
 | Budget | Sum |
 | --- | --- |
 | homelab-wsl | 1 GiB |
-| homelab-wsl-02, worker 1 | 6 GiB: about 1.4 GiB in step 1 (with the operator of Trivy at 512 MiB), and 4.6 GiB for the Wazuh server in step 2. The two steps take the whole budget |
+| homelab-wsl-02, worker 1 | 6 GiB. Step 1: about 1.6 GiB (1602 MiB). The parts that always run, by their limits: the operator of Trivy 512, the converter 128, the TLS proxy 64. The jobs, by their measured peak or else their limit: two scan jobs 2 x 56, Prowler 466, the trail copy 128, the API checks 128, the credential refresher 64. Step 2: 4.6 GiB (4672 MiB) for the Wazuh server. The two steps sum to about 6.1 GiB, about 0.1 GiB over the budget: a part goes down, or the budget up, before step 2 |
 
 The audit reader reads files of the control plane node, so it does not run
 on `SECURITY_NODE`, and its 128 MiB are not in the budget of worker 1.
