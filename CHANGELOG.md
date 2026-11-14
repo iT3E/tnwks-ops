@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.134.0 - 2026-11-14
+
+### Added
+
+* security: the Prowler runs of the AWS accounts start on homelab-wsl-02: `prowler-aws-prod` each day at 03:17 UTC and `prowler-aws-management` at 05:17 UTC, now that the AWS session Secret exists
+
 ## v2.133.0 - 2026-11-14
 
 ### Added
