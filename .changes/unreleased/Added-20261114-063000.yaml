@@ -1,0 +1,3 @@
+kind: Added
+body: 'monitoring: the logs of the long-running pods of the agent platform go to Loki (the sandbox gateways, the run receiver, the sandbox supervisors). A namespace opts in with the label logs.home.arpa/ship=true, and the Vector agent reads it in a second source. An agent pod, the Signal daemon and the workload pod of a sandbox stay out.'
+time: 2026-11-14T06:30:00.000000+00:00

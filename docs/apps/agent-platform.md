@@ -508,6 +508,31 @@ curl -s localhost:8080/healthz
 curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8080/runs -d '{}'
 ```
 
+## Logs
+
+Loki has the logs of each Job pod of the platform (the run jobs, the
+providers job, the sweep and the checks), and of the long-running pods of
+each trust domain: each namespace has the label `logs.home.arpa/ship: "true"`,
+which the Vector agent reads (`kubernetes/apps/monitoring/vector/agent/config/vector.yaml`,
+the source `kubernetes_logs_opt_in`). Query them by namespace and pod, for
+example `{namespace="agents-workflows"} |= "result kept"`.
+
+| Pod | What its log holds | About a day |
+| --- | --- | --- |
+| The run receiver | One line for each run made or found, and for each answer kept (`result kept (succeeded)`, `result kept (failed)`), and the errors of the cluster API. Never the token or the input of a run | Some KB |
+| The sandbox gateway (`openshell-0`) | Each call to its API (method, request id, status), each sign-in (`OCSF AUTH:LOGON`, allowed or denied, with the address of the caller), and the sandboxes it makes and stops. No credential and no command | 2 to 7 MB, with colour codes |
+| A sandbox supervisor (`os-supervisor-*`) | The policy it loaded (its hash), each SSH session into the sandbox, and each network connection out of it, by host and port (`OCSF NET:OPEN`) | Some KB for a run, about 70 KB for a long-lived sandbox of the pilot |
+
+Not in Loki, on purpose:
+
+- **The workload pod of a sandbox** (`openshell.ai/boundary-role: workload`):
+  the code that an agent runs. The run job logs the result of a run.
+- **An agent pod and the Signal daemon** (`app.kubernetes.io/name` `agent`
+  or `signal-daemon`). The log of a personal agent can hold chat content
+  and the name of its bot, and the daemon's the phone numbers. Shipping
+  them is the owner's call. Until then, read them with `kubectl logs`,
+  and a pod's log is gone when the pod goes.
+
 ## Checks
 
 Two CronJobs in each trust domain test the boundaries every day

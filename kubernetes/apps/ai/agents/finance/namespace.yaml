@@ -11,6 +11,9 @@ metadata:
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: latest
     agents.home.arpa/trust-domain: finance
+    # The logs of its long-running pods go to Loki, but the agent pod's
+    # (kubernetes/apps/monitoring/vector/agent/config/vector.yaml).
+    logs.home.arpa/ship: "true"
 ---
 # Deny by default. A sandbox has two pods, and its sandbox gateway gives each
 # one its own policies when it makes it: the workload pod gets no egress at

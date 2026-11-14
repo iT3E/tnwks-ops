@@ -20,6 +20,25 @@ sources:
     # file it has open after the kubelet deletes it.
     glob_minimum_cooldown_ms: 2000
 
+  # Long-running pods of a namespace that opts in with the label
+  # logs.home.arpa/ship=true (on the WSL clusters: the trust domains of the
+  # agent platform, whose gateways, run receiver and sandbox supervisors
+  # leave the record of what an agent did). A label selector can't say "Job
+  # pods or these pods", so this is a second source. Not taken here:
+  #   - Job pods: the source above has them;
+  #   - the workload pod of a sandbox (openshell.ai/boundary-role=workload):
+  #     the code an agent runs;
+  #   - a pod named agent or signal-daemon (app.kubernetes.io/name): the log
+  #     of a personal agent can hold chat content, and shipping it is the
+  #     owner's call (docs/apps/agent-platform.md, "Logs").
+  # A cluster whose source above takes every pod (MS-01) labels no namespace.
+  kubernetes_logs_opt_in:
+    type: kubernetes_logs
+    use_apiserver_cache: true
+    extra_namespace_label_selector: "logs.home.arpa/ship=true"
+    extra_label_selector: "!batch.kubernetes.io/job-name,openshell.ai/boundary-role!=workload,app.kubernetes.io/name notin (agent,signal-daemon)"
+    glob_minimum_cooldown_ms: 2000
+
 # Sinks
 sinks:
   kubernetes_sink:
@@ -27,5 +46,6 @@ sinks:
     compression: true
     inputs:
       - kubernetes_logs
+      - kubernetes_logs_opt_in
     address: "vector-aggregator.monitoring.svc.cluster.local:6000"
     version: "2"
