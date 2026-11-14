@@ -1,0 +1,3 @@
+kind: Changed
+body: 'github: Owner label is a required check of the main ruleset, from GitHub Actions. An impact/high or impact/critical PR merges only with the label of the owner (docs/operations/renovate.md).'
+time: 2026-11-14T13:00:00.000000+00:00
