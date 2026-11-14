@@ -92,8 +92,12 @@ with a `config` key naming the Vector config). `pytest observability/tests`
 runs them in containers (`test_hand_written_rules.py`): promtool with the
 `PROMETHEUS` image, and Vector with the image of the HelmRelease next to the
 config. Each alert of a rule file named there needs at least one case that
-expects it to fire, in any of the fixtures, and an empty folder fails. The
-tests skip without Docker, but fail in CI.
+expects it to fire, in any of the fixtures, and an empty folder fails.
+`vector test` never opens a sink, so `test_vector_sinks.py` starts each
+`vector` sink of `kubernetes/apps/monitoring/vector/*/config` as written, with
+the image of its HelmRelease, and checks that one event reaches the
+aggregator's `vector` source on the same port. The tests skip without Docker,
+but fail in CI.
 
 To change canonical definitions, run `python observability/generate.py` inside the
 environment, then review and commit generated files together with the source.
