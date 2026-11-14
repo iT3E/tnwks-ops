@@ -239,15 +239,19 @@ distro's file has its own name, because the collector refuses two files
 with one name. The series that both files have use the same text, because
 the collector refuses a series with two texts.
 
-Each check gives the number of items that fail it, and 0 is a pass:
+Each check gives the number of items that fail it, and 0 is a pass. Each
+result carries the label `severity`. `SecurityFindingNew` reads `high` and
+`critical` only, so the checks that section 4.1.4 of Design Doc 0004 names
+for the alert are `high`, and old signatures, which it does not name, are
+`medium`: they show on the board and do not alert.
 
-| Check | What it reads | What fails |
-| --- | --- | --- |
-| `defender-enabled` | `Get-MpComputerStatus` | Each of the Defender service, the antivirus and real-time protection that is off |
-| `defender-signatures` | `Get-MpComputerStatus` | Signatures older than 7 days, the age at which Defender counts them as out of date |
-| `firewall-enabled` | `Get-NetFirewallProfile -PolicyStore ActiveStore` | Each of the Domain, Private and Public profiles that is off |
-| `updates-pending` | An online search of Windows Update for software updates that are not installed, not hidden and not optional | Each such update released more than 14 days ago (Design Doc 0004, section 4.1.4) |
-| `updates-pending` (distro) | `apt-get -s dist-upgrade`, a simulation that installs nothing, on the package lists of the distro | Each package whose upgrade this check first saw more than 14 days ago. A package list does not say when an upgrade came out, so the check keeps the first time it saw each upgrade in `/var/lib/tnwks-host-check/state.json`, and the clock of a package starts at the first run that sees it |
+| Check | What it reads | What fails | Severity |
+| --- | --- | --- | --- |
+| `defender-enabled` | `Get-MpComputerStatus` | Each of the Defender service, the antivirus and real-time protection that is off | `high` |
+| `defender-signatures` | `Get-MpComputerStatus` | Signatures older than 7 days, the age at which Defender counts them as out of date | `medium` |
+| `firewall-enabled` | `Get-NetFirewallProfile -PolicyStore ActiveStore` | Each of the Domain, Private and Public profiles that is off | `high` |
+| `updates-pending` | An online search of Windows Update for software updates that are not installed, not hidden and not optional | Each such update released more than 14 days ago (Design Doc 0004, section 4.1.4) | `high` |
+| `updates-pending` (distro) | `apt-get -s dist-upgrade`, a simulation that installs nothing, on the package lists of the distro | Each package whose upgrade this check first saw more than 14 days ago. A package list does not say when an upgrade came out, so the check keeps the first time it saw each upgrade in `/var/lib/tnwks-host-check/state.json`, and the clock of a package starts at the first run that sees it | `high` |
 
 The file also has series of the host check itself, which no rule of the
 registry reads: each protection and profile, the time of the signatures and
@@ -259,12 +263,27 @@ install, a restart that an update waits for, and
 the run writes no result series and no time, and
 `homelab_security_host_check_failed_queries` says how many failed. The rules
 then read each line of the host as "No evidence", and
-`SecurityResultLate` fires for the host. The run never writes 0 for a check
+`SecurityResultLate` fires for a host that lists `host-check` in its
+`sources`. The run never writes 0 for a check
 that it could not do. A fact that no check reads (the newest install, a
 pending restart) only leaves out its own series when its query fails. In a
 distro, package lists older than 72 hours, or a state file that can not be
 read, are a failed query too: a simulation on old lists can not see a new
 upgrade.
+
+SYSTEM runs the script from `C:\ProgramData\tnwks-host-check`. The role sets
+the rules of that directory on each run: no inherited rule, the
+Administrators own it, SYSTEM and the Administrators have full control, and
+Users may read. A file below it with a rule of its own, or another owner,
+gets the rules of the directory again. The account of the WSL distro may
+write only its own directory of the textfile collector.
+
+**The first result, then the source.** A host lists `host-check` in
+`sources` of `systems.yaml` only after its first result is on the board of
+homelab-wsl-02, in a pull request of its own. Before that, the rule for a
+late result would fire at once. The results reach the lines of the registry
+without it: `sources` only says which sources the rule for a late result
+watches.
 
 To run it now on a host: `Start-ScheduledTask -TaskName tnwks-host-check`.
 In a distro: `sudo systemctl start tnwks-host-check.service`.

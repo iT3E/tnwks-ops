@@ -65,6 +65,18 @@ $script:Help = [ordered]@{
 }
 
 $script:Source = 'host-check'
+
+# The severity of each check, in the label severity of its result. The
+# alert for a new finding (SecurityFindingNew) reads high and critical only.
+# Design Doc 0004, section 4.1.4, alerts for Defender off, the firewall off
+# and updates pending for more than 14 days, so those are high. Old
+# signatures are not in that list: they show on the board and do not alert.
+$script:Severity = [ordered]@{
+    'defender-enabled'    = 'high'
+    'defender-signatures' = 'medium'
+    'firewall-enabled'    = 'high'
+    'updates-pending'     = 'high'
+}
 $script:Profiles = @('Domain', 'Private', 'Public')
 
 # --- The queries. Each one reads, and the tests replace it. -----------------
@@ -232,7 +244,7 @@ function Format-TnwksHostCheck {
     }
     if ($Measure.Failed.Count -eq 0) {
         foreach ($check in $Measure.Results.Keys) {
-            Add-Line 'homelab_security_check_result' (Format-TnwksSeries 'homelab_security_check_result' ([ordered]@{ source = $script:Source; check = $check; system = $System }) $Measure.Results[$check])
+            Add-Line 'homelab_security_check_result' (Format-TnwksSeries 'homelab_security_check_result' ([ordered]@{ source = $script:Source; check = $check; system = $System; severity = $script:Severity[$check] }) $Measure.Results[$check])
         }
         Add-Line 'homelab_security_last_result_timestamp_seconds' (Format-TnwksSeries 'homelab_security_last_result_timestamp_seconds' ([ordered]@{ source = $script:Source; system = $System }) (ConvertTo-TnwksUnixTime $Now))
     }

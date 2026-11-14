@@ -9,6 +9,71 @@
       ansible.windows.win_file:
         path: "{{ host_check_dir }}"
         state: directory
+      register: host_check_dir_result
+
+    # SYSTEM runs the script in this directory, so only SYSTEM and the
+    # Administrators may change it: no inherited rule, the owner is the
+    # Administrators group, Users may read. A file below it with a rule of its
+    # own, or another owner, gets the rules of the directory again. This runs
+    # before the copy of the script.
+    - name: Only SYSTEM and the Administrators may change the host check directory
+      ansible.windows.win_powershell:
+        parameters:
+          Path: "{{ host_check_dir }}"
+        script: |
+          [CmdletBinding(SupportsShouldProcess)]
+          param([string]$Path)
+          $ErrorActionPreference = 'Stop'
+          $sid = [System.Security.Principal.SecurityIdentifier]
+          $admins = New-Object $sid 'S-1-5-32-544'
+          $want = @(
+              @('S-1-5-18', 'FullControl'),
+              @('S-1-5-32-544', 'FullControl'),
+              @('S-1-5-32-545', 'ReadAndExecute, Synchronize')
+          )
+          $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+          $none = [System.Security.AccessControl.PropagationFlags]::None
+          $allow = [System.Security.AccessControl.AccessControlType]::Allow
+          function Get-RuleKey($rules) {
+              @($rules | ForEach-Object {
+                  '{0}|{1}|{2}|{3}|{4}' -f $_.IdentityReference.Value, [int]$_.FileSystemRights,
+                      [int]$_.InheritanceFlags, [int]$_.PropagationFlags, $_.AccessControlType
+              } | Sort-Object) -join ';'
+          }
+          $acl = New-Object System.Security.AccessControl.DirectorySecurity
+          $acl.SetOwner($admins)
+          $acl.SetAccessRuleProtection($true, $false)
+          foreach ($item in $want) {
+              $rights = [System.Security.AccessControl.FileSystemRights]$item[1]
+              $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                  (New-Object $sid $item[0]), $rights, $inherit, $none, $allow)
+              $acl.AddAccessRule($rule)
+          }
+          $have = Get-Acl -LiteralPath $Path
+          $same = $have.AreAccessRulesProtected -and
+              $have.GetOwner($sid).Value -eq $admins.Value -and
+              (Get-RuleKey $have.GetAccessRules($true, $true, $sid)) -eq (Get-RuleKey $acl.GetAccessRules($true, $false, $sid))
+          $children = @(Get-ChildItem -LiteralPath $Path -Recurse -Force | Where-Object {
+              $child = Get-Acl -LiteralPath $_.FullName
+              $child.AreAccessRulesProtected -or $child.GetOwner($sid).Value -ne $admins.Value -or
+                  @($child.GetAccessRules($true, $false, $sid)).Count -gt 0
+          })
+          $Ansible.Changed = (-not $same) -or $children.Count -gt 0
+          if (-not $same -and $PSCmdlet.ShouldProcess($Path, 'set the rules of the host check directory')) {
+              Set-Acl -LiteralPath $Path -AclObject $acl
+          }
+          foreach ($child in $children) {
+              if ($PSCmdlet.ShouldProcess($child.FullName, 'take the rules of the host check directory')) {
+                  $kind = 'System.Security.AccessControl.FileSecurity'
+                  if ($child.PSIsContainer) { $kind = 'System.Security.AccessControl.DirectorySecurity' }
+                  $reset = New-Object $kind
+                  $reset.SetOwner($admins)
+                  $reset.SetAccessRuleProtection($false, $false)
+                  Set-Acl -LiteralPath $child.FullName -AclObject $reset
+              }
+          }
+      # A check run does not make the directory, so it has no ACL to read yet.
+      when: not (ansible_check_mode and host_check_dir_result is changed)
 
     - name: Host check script
       ansible.windows.win_copy:

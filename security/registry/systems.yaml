@@ -48,12 +48,10 @@
   type: windows-host
   site: homelab-wsl
   domain: infrastructure
-  sources: [host-check]
 - name: WSL-02
   type: windows-host
   site: homelab-wsl-02
   domain: infrastructure
-  sources: [host-check]
 - name: DESKTOP-HKE05KI-ubuntu
   type: wsl-distro
   site: homelab-wsl
