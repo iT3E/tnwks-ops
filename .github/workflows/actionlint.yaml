@@ -23,13 +23,13 @@ jobs:
     name: actionlint
     permissions:
       contents: read
-    uses: iT3E/github-workflows/.github/workflows/actionlint.yaml@447a36cf89cd163004fcf7b574955c6c6deb2f92 # v1.9.2
+    uses: iT3E/github-workflows/.github/workflows/actionlint.yaml@49f998b9ac2a57f441c9380cce88bfcd9abf7ffa # v1.9.3
 
   zizmor:
     name: zizmor
     permissions:
       contents: read
-    uses: iT3E/github-workflows/.github/workflows/zizmor.yaml@447a36cf89cd163004fcf7b574955c6c6deb2f92 # v1.9.2
+    uses: iT3E/github-workflows/.github/workflows/zizmor.yaml@49f998b9ac2a57f441c9380cce88bfcd9abf7ffa # v1.9.3
     with:
       runs-on: ubuntu-26.04
 
@@ -48,7 +48,7 @@ jobs:
       # Timeouts, runner labels, SHA pins, permissions, checkout credentials
       # and self-hosted jobs on PRs.
       - name: Workflow conventions
-        uses: iT3E/github-workflows/actions/workflow-conformance@447a36cf89cd163004fcf7b574955c6c6deb2f92 # v1.9.2
+        uses: iT3E/github-workflows/actions/workflow-conformance@49f998b9ac2a57f441c9380cce88bfcd9abf7ffa # v1.9.3
 
       # This repo's own: ci.yaml covers every domain in .github/ci/domains.toml,
       # and each Terraform job masks SOPS values before Terraform runs and

@@ -91,7 +91,7 @@ jobs:
       - name: Plan
         id: tf
         if: matrix.backend == 'local' && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
-        uses: iT3E/github-workflows/actions/terraform@447a36cf89cd163004fcf7b574955c6c6deb2f92 # v1.9.2
+        uses: iT3E/github-workflows/actions/terraform@49f998b9ac2a57f441c9380cce88bfcd9abf7ffa # v1.9.3
         with:
           working-directory: infrastructure/terraform/environments/${{ matrix.root }}
           mode: plan
@@ -109,7 +109,7 @@ jobs:
 
       - name: Comment
         if: steps.tf.outcome == 'success'
-        uses: iT3E/github-workflows/actions/sticky-comment@447a36cf89cd163004fcf7b574955c6c6deb2f92 # v1.9.2
+        uses: iT3E/github-workflows/actions/sticky-comment@49f998b9ac2a57f441c9380cce88bfcd9abf7ffa # v1.9.3
         with:
           marker: "<!-- ${{ matrix.name }}-plan -->"
           body-file: ${{ runner.temp }}/plan-comment.md
@@ -217,7 +217,7 @@ jobs:
 
       - name: Plan and apply
         if: matrix.backend == 'local' && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
-        uses: iT3E/github-workflows/actions/terraform@447a36cf89cd163004fcf7b574955c6c6deb2f92 # v1.9.2
+        uses: iT3E/github-workflows/actions/terraform@49f998b9ac2a57f441c9380cce88bfcd9abf7ffa # v1.9.3
         with:
           working-directory: infrastructure/terraform/environments/${{ matrix.root }}
           mode: apply
@@ -301,7 +301,7 @@ jobs:
       - name: Plan
         id: tf
         if: matrix.backend == 'local' && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
-        uses: iT3E/github-workflows/actions/terraform@447a36cf89cd163004fcf7b574955c6c6deb2f92 # v1.9.2
+        uses: iT3E/github-workflows/actions/terraform@49f998b9ac2a57f441c9380cce88bfcd9abf7ffa # v1.9.3
         with:
           working-directory: infrastructure/terraform/environments/${{ matrix.root }}
           mode: plan
