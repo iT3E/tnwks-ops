@@ -329,9 +329,10 @@ curl -s localhost:8080/api/v1/rpc -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":2,"method":"finishLink","params":{"deviceLinkUri":"<uri>","deviceName":"agents-pilot"}}'
 ```
 
-Then start the agent pod again
-(`kubectl -n agents-pilot rollout restart deploy/agent`), so the Signal
-channel finds the account.
+Then start the agent pod again by a delete of the pod
+(`kubectl -n agents-pilot delete pod -l app.kubernetes.io/name=agent`), so
+the Signal channel finds the account. Not `rollout restart`: Flux removes
+its annotation at the next reconcile, which starts the pod one more time.
 
 ## The run receiver
 
@@ -637,6 +638,12 @@ aggregator for the `<check> result=` lines (`WorkflowAppDrift`,
 `instruction-check file=` lines and the bridge (`AgentInstructionFileChanged`,
 `ModelBridgeRateLimited`) ([Logs](#logs)).
 
+[`agent-platform-runbook.md`](agent-platform-runbook.md) has a section for
+each alert (what it means, the first checks, what was seen so far, the fix),
+and each rule's `runbook_url` links to it. It also has the restore of the
+state of an agent, the fast stop of the workflow agent, the move to Bedrock
+by hand, and the steps at a limit of the Claude plan.
+
 | Alert | Fires when | `for` | First step |
 | --- | --- | --- | --- |
 | `AgentPlatformWorkloadNotReady` | A Deployment or StatefulSet of a trust domain or of the sandbox controller, or the model gateway or the model bridge, has fewer ready pods than wanted | 10m | `kubectl -n <namespace> describe pod`: a failed `archive` or `doctor` init container, or a lock on the state volume. Revert the last image if it came with an update |
@@ -681,8 +688,10 @@ aggregator for the `<check> result=` lines (`WorkflowAppDrift`,
   `instruction-check file=` lines and of the bridge, on its own port
   (`homelab-wsl` only).
 - **The snapshots** of a state volume have the kopiur chart's rules,
-  which match each SnapshotPolicy, `agent-state` too: `KopiurLastBackupFailed`
-  and `KopiurBackupStale` (48 hours).
+  which match each SnapshotPolicy, `agent-state` too: `KopiurLastBackupFailed`,
+  `KopiurBackupStale` (48 hours), `KopiurSnapshotFailed`,
+  `KopiurBackupConsecutiveFailures`, and `KopiurRestoreFailed` for a restore.
+  They have no runbook link; the runbook has a section for each.
 - **The heartbeat check** reads one span of each agent's heartbeat trace:
   `openclaw.run` with `openclaw.trigger=heartbeat` and
   `openclaw.outcome=completed`, for each service in its env `SERVICES`
