@@ -1,0 +1,3 @@
+kind: Added
+body: 'ci: the Owner label check (.github/scripts/owner-label-check.py, with its tests). It passes an impact/high PR only when the owner added owner/review, and an impact/critical PR only when the owner added owner/approved, after the push of the head commit. A label from a bot, a GitHub App or a workflow token fails it. Every other PR passes, so the automerge tiers keep merging. The workflow that runs it and the ruleset entry come from the owner (docs/operations/renovate.md).'
+time: 2026-11-14T12:00:00.000000+00:00
