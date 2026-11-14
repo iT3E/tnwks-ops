@@ -158,8 +158,9 @@ marks it sensitive itself), and changing it here changes nothing on GitHub
 
 ### Adopting something that already exists
 
-The first apply adopted everything the root lists with import blocks, which
-were then removed. Anything added to `main.tf` later that already exists on
+The first apply adopted everything the root lists with import blocks, and a
+later one the `flux` webhook and the `openclaw-hooks` variables; the blocks
+were removed after each. Anything added to `main.tf` later that already exists on
 GitHub (a repository, an environment, a variable, a ruleset) needs an import
 block in the root first, or the apply fails on "already exists". Put it in
 `environments/prod/github/imports.tf` and take the file out again in a later
