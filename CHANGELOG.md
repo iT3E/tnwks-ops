@@ -3,6 +3,18 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.131.0 - 2026-11-14
+
+### Added
+
+* security: Prowler 5.49.0 for the AWS accounts (`kubernetes/apps/security/prowler`): a CronJob each day for `aws-prod` and one for `aws-management`, with the scan list of the registry, an OCSF file for the converter on the new claim `security-results`, the accepted findings (now the JSON key `accepted.json` of the Secret) as its only mutelist, nothing sent to the vendor, and a network policy that names the AWS API domains. No run starts until the owner names the CronJobs in the app, after the AWS sessions exist. `security/generate.py` writes the scan list of each provider for the app
+
+## v2.130.0 - 2026-11-14
+
+### Added
+
+* security: the converter sends each finding that fails in the newest file of a system as one line of the security stream `findings` in the Loki of homelab-wsl-02 (labels `security_stream`, `source`, `system`; kept 90 days by the rule of the security streams). A line is a part of the OCSF record: what failed, where and why, with no data, tag or label of a resource. The lines of a file go one time, wait for the next cycle when Loki does not answer, and `homelab_security_converter_findings_pending` shows them. A batch is 1 MiB at most in bytes on the wire, a 413 waits too, and one stream does not stop the others
+
 ## v2.129.1 - 2026-11-14
 
 ### Fixed
