@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+"""Edit the privacy denylist and copy it to every PRIVACY_TERMS secret.
+
+    bin/privacy-terms edit [--dry-run]   (task privacy:edit)
+    bin/privacy-terms sync [--dry-run]   (task privacy:sync)
+
+The list is `terms` in .github/privacy-terms.sops.yaml. CI can't read that
+file (its rule has no CI key): each repository's CI reads a copy from its
+PRIVACY_TERMS Actions secret, which bin/privacy-check parses the same way in
+every repository (one term per line, `#` comments).
+
+edit opens the file in sops (bin/sops, the editor in $EDITOR). When the
+editor closes:
+  - sops exits 200 ("file has not changed"), or the file's bytes or its terms
+    are the same as before: nothing to sync, exit 0;
+  - sops fails (the editor exited non-zero, Ctrl-C, a YAML error left
+    unfixed): sops writes nothing, so the file is as it was; not synced,
+    exit 1;
+  - the file no longer decrypts, or has no terms: not synced, exit 1;
+  - otherwise it syncs, as below. A failed sync exits 1 and says which
+    repositories still have the old list; `task privacy:sync` retries.
+
+sync decrypts the terms and sets PRIVACY_TERMS on every repository of iT3E
+that already has the secret, found at run time: GET /user/repos (owned),
+then GET /repos/iT3E/<repo>/actions/secrets/PRIVACY_TERMS for each (200 has
+it, 404 hasn't). It never creates the secret where there is none, and skips
+archived repositories (read-only). Any other answer stops it before it sets
+anything. Repository names print for public repositories only; private ones
+are counted, since some of their names stay out of this public repo
+(docs/operations/github.md).
+
+--dry-run does every read (the decrypt and the GETs) and prints what it
+would set, without setting anything.
+
+The terms never reach argv, the environment or the terminal: they go from
+sops's stdout to `gh secret set`'s stdin, in this process. gh runs without
+GITHUB_TOKEN in its environment, so it uses its own login.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+SOPS = REPO / "bin/sops"
+TERMS_FILE = ".github/privacy-terms.sops.yaml"
+OWNER = "iT3E"
+# The Actions secret that holds each repository's copy of the list. Messages
+# are built from constants like this one, counts, exit codes and the public
+# names GitHub returns (the login, public repositories): never from gh's or
+# sops's stderr, which can quote what they were given.
+COPY_NAME = "PRIVACY_TERMS"
+# sops 3.7: codes.FileHasNotBeenModified.
+SOPS_UNCHANGED = 200
+
+
+class Stop(Exception):
+    """A check failed: the message says what and what to do."""
+
+
+def say(msg: str = "") -> None:
+    print(msg, flush=True)
+
+
+def gh_env() -> dict[str, str]:
+    return {k: v for k, v in os.environ.items() if k != "GITHUB_TOKEN"}
+
+
+def gh(args: list[str], stdin: str | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(["gh", *args], input=stdin, capture_output=True, text=True,
+                          env=gh_env(), cwd=REPO, check=False)
+
+
+# --- the list ----------------------------------------------------------------
+
+
+def decrypt_terms() -> str:
+    """The `terms` value, decrypted. Never printed."""
+    r = subprocess.run([str(SOPS), "-d", "--extract", '["terms"]', TERMS_FILE],
+                       capture_output=True, text=True, cwd=REPO, check=False)
+    if r.returncode != 0:
+        # sops's own output isn't printed: it can quote the file.
+        raise Stop(f"{TERMS_FILE} doesn't decrypt (sops exit {r.returncode})")
+    return r.stdout
+
+
+def count_terms(raw: str) -> int:
+    """As bin/privacy-check reads them: trimmed, no blank or # lines."""
+    return sum(1 for line in raw.replace("\r", "").splitlines()
+               if line.strip() and not line.strip().startswith("#"))
+
+
+def file_digest() -> str:
+    return hashlib.sha256((REPO / TERMS_FILE).read_bytes()).hexdigest()
+
+
+# --- targets -----------------------------------------------------------------
+
+
+class Repo:
+    def __init__(self, name: str, private: bool, archived: bool):
+        self.name, self.private, self.archived = name, private, archived
+
+
+def describe(repos: list[Repo]) -> str:
+    public = sorted(r.name for r in repos if not r.private)
+    private = sum(1 for r in repos if r.private)
+    parts = []
+    if public:
+        parts.append(f"{len(public)} public ({', '.join(public)})")
+    if private:
+        parts.append(f"{private} private (not named)")
+    return " and ".join(parts) or "none"
+
+
+def owned_repos() -> list[Repo]:
+    r = gh(["api", "user", "--jq", ".login"])
+    login = r.stdout.strip()
+    if r.returncode != 0:
+        raise Stop("gh can't read GET /user: run `gh auth login` (or `gh auth status`)")
+    if login != OWNER:
+        raise Stop(f"gh is logged in as {login or '?'}, not {OWNER}")
+    r = gh(["api", "--paginate", "user/repos?affiliation=owner&per_page=100",
+            "--jq", '.[] | [.name, .private, .archived] | @json'])
+    if r.returncode != 0:
+        raise Stop("GET /user/repos failed")
+    repos = []
+    for line in r.stdout.splitlines():
+        if line.strip():
+            name, private, archived = json.loads(line)
+            repos.append(Repo(name, bool(private), bool(archived)))
+    if not repos:
+        raise Stop("GET /user/repos listed no repositories")
+    return repos
+
+
+def has_copy(repo: Repo) -> bool:
+    r = gh(["api", f"repos/{OWNER}/{repo.name}/actions/secrets/{COPY_NAME}", "--jq", ".name"])
+    if r.returncode == 0 and r.stdout.strip() == COPY_NAME:
+        return True
+    if r.returncode != 0 and "HTTP 404" in r.stderr:
+        return False
+    where = repo.name if not repo.private else "a private repository"
+    raise Stop(f"can't tell whether {where} has {COPY_NAME} (gh exit {r.returncode}); nothing was set")
+
+
+def targets() -> tuple[list[Repo], list[Repo]]:
+    """Repositories with the secret: (to set, archived and skipped)."""
+    found = [r for r in owned_repos() if has_copy(r)]
+    return [r for r in found if not r.archived], [r for r in found if r.archived]
+
+
+# --- commands ----------------------------------------------------------------
+
+
+def sync(dry_run: bool) -> int:
+    raw = decrypt_terms()
+    n = count_terms(raw)
+    if n == 0:
+        raise Stop(f"{TERMS_FILE} has no terms: not syncing an empty list")
+    say(f"{TERMS_FILE}: {n} terms")
+    todo, archived = targets()
+    if archived:
+        say(f"Archived, skipped: {describe(archived)}")
+    if not todo:
+        raise Stop(f"no repository of {OWNER} has a {COPY_NAME} secret: nothing to sync")
+    say(f"Repositories with a {COPY_NAME} secret: {describe(todo)}")
+    if dry_run:
+        say(f"--dry-run: would set {COPY_NAME} on these {len(todo)} repositories (gh secret set, terms on stdin)")
+        return 0
+    failed = []
+    for repo in todo:
+        r = gh(["secret", "set", COPY_NAME, "--repo", f"{OWNER}/{repo.name}"], stdin=raw)
+        if r.returncode != 0:
+            failed.append(repo)
+            # Only the exit code: gh's stderr isn't printed (see COPY_NAME), and
+            # a private repository's name stays unprinted.
+            where = repo.name if not repo.private else "a private repository"
+            say(f"  {where}: gh exit {r.returncode}")
+    done = [r for r in todo if r not in failed]
+    say(f"Set {COPY_NAME} on {describe(done)}")
+    if failed:
+        say(f"\nFAILED on {describe(failed)}: those still have the old list, and CI there checks against it.")
+        say("Retry with `task privacy:sync` (it sets every repository again).")
+        return 1
+    return 0
+
+
+def edit(dry_run: bool) -> int:
+    if not (REPO / TERMS_FILE).is_file():
+        raise Stop(f"no {TERMS_FILE}")
+    before = decrypt_terms()
+    digest = file_digest()
+    r = subprocess.run([str(SOPS), TERMS_FILE], cwd=REPO, check=False)
+    if r.returncode == SOPS_UNCHANGED:
+        say("The list didn't change: nothing to sync.")
+        return 0
+    if r.returncode != 0:
+        changed = file_digest() != digest
+        say(f"sops exited {r.returncode}: the edit was aborted or failed, "
+            f"{'and the file CHANGED anyway: check it' if changed else 'and the file is as it was'}. Not synced.")
+        return 1
+    if file_digest() == digest:
+        say("The file didn't change: nothing to sync.")
+        return 0
+    try:
+        after = decrypt_terms()
+    except Stop as e:
+        raise Stop(f"{e} after the edit. Not synced; fix it with `task privacy:edit`") from None
+    if count_terms(after) == 0:
+        raise Stop(f"{TERMS_FILE} has no terms after the edit. Not synced; fix it with `task privacy:edit`")
+    if after == before:
+        say("The terms didn't change (only the file's encryption did): nothing to sync.")
+        return 0
+    say("The list changed: syncing it.")
+    try:
+        rc = sync(dry_run)
+    except Stop as e:
+        say(f"privacy-terms: {e}")
+        rc = 1
+    if rc != 0:
+        say("The edit is saved; the sync is what failed: CI still checks against the old list. "
+            "Retry with `task privacy:sync`.")
+    else:
+        say(f"Commit {TERMS_FILE} in a PR as usual.")
+    return rc
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    for name in ("edit", "sync"):
+        p = sub.add_parser(name)
+        p.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args(argv)
+    try:
+        return (edit if args.cmd == "edit" else sync)(args.dry_run)
+    except Stop as e:
+        say(f"privacy-terms: {e}")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

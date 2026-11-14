@@ -52,8 +52,9 @@ tuppr reaches the Talos API from inside the cluster through a `talos.dev`
 ServiceAccount, which needs `machine.features.kubernetesTalosAPIAccess`
 (`os:admin` for the `system-upgrade` namespace) on the control plane nodes
 (Talos rejects it on workers). On WSL that is
-`talos/wsl/patches/talos-api-access.yaml`, included at cluster creation and
-applied to the running control plane with:
+`talos/wsl/patches/talos-api-access.yaml`, applied to the running control
+plane with the command below (a new cluster gets it from
+`talos/wsl/patches/controlplane.yaml`):
 
 ```bash
 talosctl --talosconfig ~/.talos/config-homelab-wsl \

@@ -5,7 +5,9 @@ name: "Terraform"
 # to main) the Terraform roots a change touched: one matrix entry per root,
 # from [groups.terraform.<name>] in .github/ci/domains.toml. Each root's
 # runner, backend, endpoint overrides and lock come from there, so adding a
-# root is one entry (docs/operations/ci.md).
+# root is one entry (docs/operations/ci.md). In drift mode (called nightly by
+# terraform-drift.yaml) it plans main for the roots with `drift = true`,
+# never applies, and reports the result to Prometheus.
 #
 # Logs are public: local roots print only counts and addresses
 # (github-workflows' actions/terraform), and a root's mask_sops values are
@@ -18,7 +20,7 @@ on:
         type: string
         required: true
       mode:
-        description: plan or apply
+        description: plan, apply or drift
         type: string
         required: true
     secrets:
@@ -71,7 +73,8 @@ jobs:
       # Before Terraform, so an error that quotes a value from one of the
       # root's SOPS files (mask_sops in domains.toml) shows *** in this
       # public log. Fails the job, and Terraform is skipped, if sops is
-      # missing, a file does not decrypt or no value comes out.
+      # missing, a file does not decrypt, no value comes out, or a value is
+      # too short to mask (sops-mask.py, MIN_LENGTH).
       # SOPS_AGE_KEY is in the runner pod's env.
       - name: Mask SOPS values
         if: matrix.backend == 'local' && matrix.mask_sops && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
@@ -88,7 +91,7 @@ jobs:
       - name: Plan
         id: tf
         if: matrix.backend == 'local' && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
-        uses: iT3E/github-workflows/actions/terraform@447a36cf89cd163004fcf7b574955c6c6deb2f92 # v1.9.2
+        uses: iT3E/github-workflows/actions/terraform@49f998b9ac2a57f441c9380cce88bfcd9abf7ffa # v1.9.3
         with:
           working-directory: infrastructure/terraform/environments/${{ matrix.root }}
           mode: plan
@@ -106,7 +109,7 @@ jobs:
 
       - name: Comment
         if: steps.tf.outcome == 'success'
-        uses: iT3E/github-workflows/actions/sticky-comment@447a36cf89cd163004fcf7b574955c6c6deb2f92 # v1.9.2
+        uses: iT3E/github-workflows/actions/sticky-comment@49f998b9ac2a57f441c9380cce88bfcd9abf7ffa # v1.9.3
         with:
           marker: "<!-- ${{ matrix.name }}-plan -->"
           body-file: ${{ runner.temp }}/plan-comment.md
@@ -197,7 +200,8 @@ jobs:
       # Before Terraform, so an error that quotes a value from one of the
       # root's SOPS files (mask_sops in domains.toml) shows *** in this
       # public log. Fails the job, and Terraform is skipped, if sops is
-      # missing, a file does not decrypt or no value comes out.
+      # missing, a file does not decrypt, no value comes out, or a value is
+      # too short to mask (sops-mask.py, MIN_LENGTH).
       # SOPS_AGE_KEY is in the runner pod's env.
       - name: Mask SOPS values
         if: matrix.backend == 'local' && matrix.mask_sops && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
@@ -213,7 +217,7 @@ jobs:
 
       - name: Plan and apply
         if: matrix.backend == 'local' && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
-        uses: iT3E/github-workflows/actions/terraform@447a36cf89cd163004fcf7b574955c6c6deb2f92 # v1.9.2
+        uses: iT3E/github-workflows/actions/terraform@49f998b9ac2a57f441c9380cce88bfcd9abf7ffa # v1.9.3
         with:
           working-directory: infrastructure/terraform/environments/${{ matrix.root }}
           mode: apply
@@ -231,3 +235,92 @@ jobs:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
         with:
           workspace: ${{ matrix.workspace }}
+
+  # Nightly, from terraform-drift.yaml: plans main for each root with
+  # `drift = true` and never applies (the action in plan mode). Drift is a
+  # plan with changes. The job log gets what a PR plan's gets (counts and
+  # addresses), and the result goes to Prometheus as four gauges per root
+  # (.github/scripts/terraform-drift.py), pushed to homelab-wsl's Pushgateway
+  # (kubernetes/apps/monitoring/pushgateway): alerts TerraformDrift and
+  # TerraformDriftCheckStale. Hence that site's ops runner, whatever the
+  # root's own runner: only it reaches that Pushgateway, and that site's
+  # Prometheus holds the alerts, as for the Windows hosts' drift. A check
+  # that finds drift passes, like the Ansible host check; one that can't
+  # plan fails.
+  drift:
+    if: inputs.mode == 'drift' && github.ref == 'refs/heads/main'
+    name: Drift ${{ matrix.title }}
+    runs-on: tnwks-ops-homelab-wsl
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.roots) }}
+    # The root's lock (a root with drift must have one): never beside its PR
+    # plans or its applies.
+    concurrency:
+      group: ${{ matrix.lock }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      PUSHGATEWAY_URL: http://pushgateway.monitoring.svc.cluster.local:9091
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Nothing is pushed, so TerraformDriftCheckStale fires once the last
+      # result is 30 hours old.
+      - name: Switched off
+        if: matrix.enabled_var && vars[matrix.enabled_var] != 'true'
+        env:
+          TITLE: ${{ matrix.title }}
+          ENABLED_VAR: ${{ matrix.enabled_var }}
+        run: echo "::notice::${TITLE} is off (${ENABLED_VAR} is not true); not checked"
+
+      # Before Terraform, so an error that quotes a value from one of the
+      # root's SOPS files (mask_sops in domains.toml) shows *** in this
+      # public log. Fails the job, and Terraform is skipped, if sops is
+      # missing, a file does not decrypt, no value comes out, or a value is
+      # too short to mask (sops-mask.py, MIN_LENGTH).
+      # SOPS_AGE_KEY is in the runner pod's env.
+      - name: Mask SOPS values
+        if: matrix.backend == 'local' && matrix.mask_sops && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
+        working-directory: infrastructure/terraform/environments/${{ matrix.root }}
+        env:
+          MASK_SOPS: ${{ toJSON(matrix.mask_sops) }}
+        run: |
+          install -d "$RUNNER_TEMP/sops-mask"
+          curl -fsSL -o "$RUNNER_TEMP/sops-mask/sops" "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64"
+          echo "${SOPS_SHA256}  $RUNNER_TEMP/sops-mask/sops" | sha256sum -c --quiet -
+          chmod +x "$RUNNER_TEMP/sops-mask/sops"
+          python3 -I "$GITHUB_WORKSPACE/.github/scripts/sops-mask.py" --sops "$RUNNER_TEMP/sops-mask/sops" --json "$MASK_SOPS"
+
+      - name: Plan
+        id: tf
+        if: matrix.backend == 'local' && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
+        uses: iT3E/github-workflows/actions/terraform@49f998b9ac2a57f441c9380cce88bfcd9abf7ffa # v1.9.3
+        with:
+          working-directory: infrastructure/terraform/environments/${{ matrix.root }}
+          mode: plan
+          terraform-version: "1.17.1"
+          tf-vars: ${{ matrix.tf_vars }}
+          tf-api-token: ${{ secrets.TF_API_TOKEN }}
+
+      # Also after a failed mask or plan (the plan's outcome is then failure
+      # or skipped): a check that can't run is reported as failed. Prints
+      # one line of counts.
+      - name: Report
+        if: ${{ !cancelled() && matrix.backend == 'local' && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true') }}
+        env:
+          ROOT_NAME: ${{ matrix.name }}
+          OUTCOME: ${{ steps.tf.outcome }}
+          CHANGES: ${{ steps.tf.outputs.changes }}
+          TF_SUMMARY: ${{ steps.tf.outputs.summary }}
+        run: |
+          python3 -I .github/scripts/terraform-drift.py --root "$ROOT_NAME" --outcome "$OUTCOME" \
+            --changes "$CHANGES" --prom "$RUNNER_TEMP/drift.prom"
+          curl -fsS --max-time 30 --retry 3 -X PUT --data-binary "@$RUNNER_TEMP/drift.prom" \
+            "$PUSHGATEWAY_URL/metrics/job/terraform_drift/root/$ROOT_NAME"

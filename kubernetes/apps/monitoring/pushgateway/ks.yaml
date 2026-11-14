@@ -1,0 +1,22 @@
+---
+# The Pushgateway that CI jobs on this site's ops runner report to (today the
+# nightly Terraform drift check, docs/operations/ci.md#terraform-drift).
+# homelab-wsl only: listed in kubernetes/clusters/wsl/apps/kustomization.yaml.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: pushgateway
+  namespace: flux-system
+spec:
+  interval: 30m
+  path: ./kubernetes/apps/monitoring/pushgateway/app
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: false
+  # The ServiceMonitor CRD.
+  dependsOn:
+    - name: kube-prometheus-stack
+  retryInterval: 1m
+  timeout: 5m

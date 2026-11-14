@@ -11,7 +11,8 @@
 #
 # Terms come from $PRIVACY_TERMS (CI: the PRIVACY_TERMS Actions secret) or
 # else from .github/privacy-terms.sops.yaml (`terms`, one per line). Edit the
-# list with `sops .github/privacy-terms.sops.yaml`, then `task privacy:sync`.
+# list with `task privacy:edit`, which copies a changed list to every
+# PRIVACY_TERMS secret (bin/privacy-terms; `task privacy:sync` retries).
 #
 # Matching is case-insensitive. A term with "@" or "." matches anywhere. Any
 # other term matches as a word: no letter directly before it, and no letter
