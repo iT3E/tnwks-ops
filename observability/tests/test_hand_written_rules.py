@@ -92,20 +92,24 @@ def vector_image(config):
     return found[0]
 
 
-@pytest.mark.parametrize("fixture", RULE_TESTS, ids=[p.name for p in RULE_TESTS])
-def test_rule_fixture_covers_each_alert_of_its_rules(fixture):
-    spec = yaml.safe_load(fixture.read_text())
-    tested = {
-        case["alertname"]
-        for test in spec["tests"]
-        for case in test.get("alert_rule_test", [])
-    }
-    for name in spec["rule_files"]:
-        assert (ROOT / name).is_file(), f"{fixture.name}: {name} is not in the repo"
+def test_each_alert_of_a_tested_rule_file_has_a_case():
+    """A rule file can have its cases in more than one fixture."""
+    tested = {}
+    for fixture in RULE_TESTS:
+        spec = yaml.safe_load(fixture.read_text())
+        names = {
+            case["alertname"]
+            for test in spec["tests"]
+            for case in test.get("alert_rule_test", [])
+        }
+        for name in spec["rule_files"]:
+            assert (ROOT / name).is_file(), f"{fixture.name}: {name} is not in the repo"
+            tested.setdefault(name, set()).update(names)
+    for name, names in tested.items():
         for group in plain_rules(ROOT / name)["groups"]:
             for rule in group["rules"]:
                 if "alert" in rule:
-                    assert rule["alert"] in tested, f"{fixture.name}: no case for {rule['alert']}"
+                    assert rule["alert"] in names, f"{name}: no case for {rule['alert']}"
 
 
 @pytest.mark.parametrize("fixture", RULE_TESTS, ids=[p.name for p in RULE_TESTS])

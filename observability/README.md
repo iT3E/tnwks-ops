@@ -77,7 +77,13 @@ uv run --project observability python observability/rehearse_grafana.py --browse
 ```
 
 Generation/validation needs `kustomize` or `kubectl kustomize`; neither contacts a
-cluster.
+cluster. Archive rehearsal needs Docker and OpenSSL. It uses loopback ports
+13103–13113, synthetic samples, temporary credentials and named disposable
+containers. It removes only its own containers and temporary data, including on
+failure. Registry pulls may populate the Docker image cache. The rehearsal checks
+S3 operations, verified HTTPS, mutual TLS StoreAPI, historical queries, normal
+restart, SIGKILL recovery, cache rebuild and unavailable-store behavior. A process
+kill does not simulate a Windows power loss or prove SSD flush durability.
 
 A rule or a Vector transform written by hand in `kubernetes/` gets its cases in
 `observability/rule-tests/` (promtool; `rule_files` name PrometheusRule
@@ -85,14 +91,8 @@ manifests by their repo path) or `observability/vector-tests/` (`vector test`,
 with a `config` key naming the Vector config). `pytest observability/tests`
 runs them in containers (`test_hand_written_rules.py`): promtool with the
 `PROMETHEUS` image, and Vector with the image of the HelmRelease next to the
-config. Each alert of a rule file named there needs at least one case. The
-tests skip without Docker, but fail in CI. Archive rehearsal needs Docker and OpenSSL. It uses loopback ports
-13103–13113, synthetic samples, temporary credentials and named disposable
-containers. It removes only its own containers and temporary data, including on
-failure. Registry pulls may populate the Docker image cache. The rehearsal checks
-S3 operations, verified HTTPS, mutual TLS StoreAPI, historical queries, normal
-restart, SIGKILL recovery, cache rebuild and unavailable-store behavior. A process
-kill does not simulate a Windows power loss or prove SSD flush durability.
+config. Each alert of a rule file named there needs at least one case, in any
+of the fixtures. The tests skip without Docker, but fail in CI.
 
 To change canonical definitions, run `python observability/generate.py` inside the
 environment, then review and commit generated files together with the source.
