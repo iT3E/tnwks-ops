@@ -4,10 +4,16 @@
 ## and secrets.sops.yaml the token.
 ##
 ## The repositories of the iT3E account, as they were when this root was
-## added: every value below was read from the API and imported as is
-## (imports.tf). An entry lists only what differs from a new repository's
-## defaults (modules/github/variables.tf). Private repositories have no
+## added: every value below was read from the API and imported as is. An
+## entry lists only what differs from a new repository's defaults
+## (modules/github/variables.tf). Private repositories have no
 ## security_and_analysis or rulesets: the account's plan doesn't offer them.
+##
+## Anything added here that already exists on GitHub needs an import block
+## in this root first (in an imports.tf, removed once applied), or the apply
+## fails on "already exists". The import ID of a repository is its name; for
+## one held in SOPS, wrap the name in nonsensitive(), since an import ID
+## can't be sensitive (docs/operations/github.md).
 ##
 ## This root manages the ruleset and the prod environment that gate its own
 ## apply. A change that locks CI out is undone with `task github:apply`
@@ -71,13 +77,15 @@ locals {
         external-contributions = {
           reviewer_users = [local.owner_user_id]
         }
-        # Deployments from main only.
+        # Deployments from main only. Its variables' values come from SOPS
+        # (local.openclaw_hooks_variables).
         openclaw-hooks = {
           deployment_branch_policy = {
             protected_branches     = false
             custom_branch_policies = true
           }
           branch_patterns = ["main"]
+          variables       = local.openclaw_hooks_variables
         }
         # Terraform applies (terraform.yaml, apply): protected branches only.
         prod = {
@@ -85,6 +93,17 @@ locals {
             protected_branches     = true
             custom_branch_policies = false
           }
+        }
+      }
+
+      # Flux's notification receiver: a push reconciles the clusters without
+      # waiting for the interval. Its URL is under SECRET_DOMAIN, so it comes
+      # from tnwks-ops.sops.yaml. Its secret belongs to the receiver and is
+      # never in this root (modules/github/webhooks.tf).
+      webhooks = {
+        flux = {
+          url    = data.sops_file.tnwks_ops.data["webhooks.flux.url"]
+          events = ["push"]
         }
       }
 
@@ -273,6 +292,25 @@ locals {
       has_wiki   = false
     }
   }
+
+  # The openclaw-hooks environment's variables: names here, values in SOPS
+  # (they may identify a person). tnwks-ops.sops.yaml is masked in CI's log;
+  # OPENCLAW_NOTIFY_ACCOUNT is too short to mask (sops-mask.py refuses it),
+  # so it is in unmasked.sops.yaml. nonsensitive(), as for the repository
+  # names below: GitHub returns variable values unmarked, so marked values
+  # plan as an in-place update of each variable (sensitivity only, same
+  # value). What keeps them out of public CI logs is the action printing no
+  # plan body, and the mask for the masked file (docs/operations/github.md).
+  openclaw_hooks_variables = merge(
+    {
+      for name in ["OPENCLAW_NOTIFY_CHANNEL", "OPENCLAW_NOTIFY_TO"] :
+      name => nonsensitive(data.sops_file.tnwks_ops.data["environments.openclaw-hooks.variables.${name}"])
+    },
+    {
+      for name in ["OPENCLAW_NOTIFY_ACCOUNT"] :
+      name => nonsensitive(data.sops_file.unmasked.data["environments.openclaw-hooks.variables.${name}"])
+    },
+  )
 }
 
 module "github" {

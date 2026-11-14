@@ -16,3 +16,4 @@ resources:
   - ./alertmanager.yaml
   - ./wifi.yaml
   - ./site-overrides.yaml
+  - ./terraform-drift.yaml

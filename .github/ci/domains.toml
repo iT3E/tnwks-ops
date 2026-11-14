@@ -30,6 +30,8 @@ paths = [
   "observability/**",
   # The control registry and its generated rules, scan lists and board input.
   "security/**",
+  # security/tests/test_audit_policy.py reads each cluster's audit policy.
+  "talos/*/patches/audit-policy*.yaml",
   # validate_health.py scans every manifest.
   "kubernetes/**",
   "bin/site-failover-apps.json",
@@ -58,6 +60,8 @@ paths = [
 [domains.ansible]
 paths = [
   "infrastructure/ansible/**",
+  # The Talos patches 01-talos-bootstrap.yml reads (tests/test_talos_patches.py).
+  "talos/**",
   ".github/workflows/ansible.yaml",
 ]
 
@@ -89,6 +93,8 @@ paths = [
   ".github/scripts/**",
   ".github/actionlint.yaml",
   ".github/zizmor.yml",
+  # Tested in actionlint.yaml (.github/scripts/test_privacy_terms.py).
+  "bin/privacy-terms",
 ]
 
 # Groups list which of their members changed, as a JSON array of objects for
@@ -108,8 +114,18 @@ paths = [
 #   enabled_var  repository variable that must be "true" to run. Not a
 #                GITHUB_ name: GitHub reserves the prefix and refuses to set it.
 #   mask_sops    SOPS files, relative to root, whose every value is masked in
-#                the job log before Terraform runs (.github/scripts/sops-mask.py),
-#                for values a Terraform error could quote. local backend only.
+#                the job log from the mask step on, before Terraform runs
+#                (.github/scripts/sops-mask.py), for values a Terraform error
+#                could quote. Each line of a value must be 6 characters or
+#                more (shorter ones would be masked inside other words and
+#                could be read off; the step fails on them): keep such a value
+#                in a SOPS file not listed here. local backend only.
+#   drift       true: .github/workflows/terraform-drift.yaml plans the root at
+#                main every night, never applies, and reports drift (a plan
+#                with changes) to Prometheus (TerraformDrift). local backend
+#                with a lock only, and a runner homelab-wsl's ops runner
+#                stands in for (tnwks-ops-runner or tnwks-ops-homelab-wsl):
+#                the check runs there, beside the Pushgateway it reports to.
 # Adding a root is one entry here.
 
 [groups.terraform.aws]
@@ -148,8 +164,12 @@ runner = "tnwks-ops-runner"
 backend = "local"
 lock = "github-terraform"
 enabled_var = "TERRAFORM_GITHUB_ENABLED"
-# Private repositories' names and descriptions, and the token.
-mask_sops = ["repositories.sops.yaml", "secrets.sops.yaml"]
+# Private repositories' names and descriptions, the token, and tnwks-ops'
+# Flux webhook URL and openclaw-hooks variables. unmasked.sops.yaml is left
+# out on purpose: its values are too short to mask (docs/operations/github.md).
+mask_sops = ["repositories.sops.yaml", "secrets.sops.yaml", "tnwks-ops.sops.yaml"]
+# Settings change in the web UI; the nightly plan notices.
+drift = true
 paths = [
   "infrastructure/terraform/environments/prod/github/**",
   "infrastructure/terraform/modules/github/**",
