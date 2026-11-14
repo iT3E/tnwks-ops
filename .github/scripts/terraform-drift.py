@@ -36,8 +36,8 @@ import os
 import re
 import sys
 import time
-from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
 # The counts line of actions/terraform's summary (github-workflows v1.9.2).
 COUNTS = re.compile(r"\*\*Plan:\*\* (\d+) to add, (\d+) to change, (\d+) to destroy, (\d+) to move")
@@ -52,8 +52,10 @@ HELP = {
 }
 
 
-@dataclass
-class Result:
+# A NamedTuple, not a dataclass: test_terraform_drift.py loads this file by
+# path without putting it in sys.modules, as the other tests here do, and on
+# Python 3.12 @dataclass looks the module up there and fails.
+class Result(NamedTuple):
     failed: bool
     drifted: bool
     changed: int
