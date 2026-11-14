@@ -52,8 +52,13 @@ What stays here:
 
 - The privacy denylist, `.github/privacy-terms.sops.yaml`. Every app repo
   (and the two public repos above) reads it from its `PRIVACY_TERMS`
-  Actions secret; re-sync them after `task privacy:edit`
-  (`task privacy:sync` in each repo).
+  Actions secret. `task privacy:edit` here copies a changed list to every
+  repository of the account that has that secret, found through the API
+  (`bin/privacy-terms`); `task privacy:sync` here retries a failed copy. A
+  new repo gets the secret once, by hand, with its own `task privacy:sync`
+  from a tnwks-ops checkout; from then on edits here reach it. Every repo
+  must read the secret the same way (one term per line, `#` comments, as
+  `bin/privacy-check` does), since they all get the same value.
 - The shared Renovate presets `commitMessage.json5`, `labels.json5` and
   `semanticCommits.json5`, which github-workflows' `renovate/default.json5`
   extends.

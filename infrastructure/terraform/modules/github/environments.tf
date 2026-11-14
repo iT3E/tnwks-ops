@@ -1,7 +1,8 @@
 ## ---------------------------------------------------------------------------------------------------------------------
 ## ENVIRONMENTS
-## Deployment environments and their branch policies, from each repository's
-## environments map. Environment secrets and variables are not managed here.
+## Deployment environments, their branch policies and their Actions variables,
+## from each repository's environments map. Environment secrets are not
+## managed here.
 ## ---------------------------------------------------------------------------------------------------------------------
 
 locals {
@@ -17,6 +18,17 @@ locals {
       for pattern in env.branch_patterns : "${key}/${pattern}" => {
         environment_key = key
         branch_pattern  = pattern
+      }
+    }
+  ]...)
+
+  # One variable per name of an environment's variables.
+  environment_variables = merge([
+    for key, env in local.environments : {
+      for name, value in env.variables : "${key}/${name}" => {
+        environment_key = key
+        name            = name
+        value           = value
       }
     }
   ]...)
@@ -53,4 +65,13 @@ resource "github_repository_environment_deployment_policy" "this" {
   repository     = github_repository_environment.this[each.value.environment_key].repository
   environment    = github_repository_environment.this[each.value.environment_key].environment
   branch_pattern = each.value.branch_pattern
+}
+
+resource "github_actions_environment_variable" "this" {
+  for_each = local.environment_variables
+
+  repository    = github_repository_environment.this[each.value.environment_key].repository
+  environment   = github_repository_environment.this[each.value.environment_key].environment
+  variable_name = each.value.name
+  value         = each.value.value
 }

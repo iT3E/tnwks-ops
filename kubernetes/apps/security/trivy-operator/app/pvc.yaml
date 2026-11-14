@@ -1,0 +1,16 @@
+---
+# The cache of the scan jobs: the vulnerability database and the Java
+# database of Trivy. Without it each scan job downloads the database again
+# (about 140 MB compressed, once for each workload each day). Scan jobs run
+# one at a time on SECURITY_NODE, so one ReadWriteOnce claim serves them all.
+# The class does not enforce the size: the two databases take about 2 GB.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: trivy-cache
+spec:
+  storageClassName: ${STORAGE_CLASS_DEFAULT}
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 4Gi

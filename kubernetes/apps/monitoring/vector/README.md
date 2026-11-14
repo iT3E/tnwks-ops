@@ -96,7 +96,7 @@ line to `vector-aggregator-audit:6010`.
 | Audit files | The host path `/var/log/audit/kube`, read-only |
 | Positions | The host path `/var/lib/vector-audit`. An init container gives the directory to user 65534: it runs as root with the capability `CHOWN` only |
 | Sending | 200 events in a batch, one request at a time, a buffer of 200 events, 2 threads |
-| Memory | A request of 64 MiB and a limit of 128 MiB |
+| Memory | A request of 64 MiB and a limit of 192 MiB. On homelab-wsl-02 the reader used 115.6 MiB at its peak while it sent its first backlog of about 880,000 lines |
 
 The audit files on the node are the buffer of the path. The reader moves its
 position in a file only when Loki took the line, so when the aggregator or
