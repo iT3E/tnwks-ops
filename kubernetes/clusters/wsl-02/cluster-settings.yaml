@@ -89,6 +89,9 @@ data:
   # The node of the security platform's pods (kubernetes/apps/security/README.md):
   # worker 1, the node container with the 18 GiB limit.
   SECURITY_NODE: "homelab-wsl-02-worker-1"
+  # The bucket of the AWS trail (the output security_trail_bucket of
+  # infrastructure/terraform/environments/prod/aws): the trail copy job reads it.
+  SECURITY_TRAIL_BUCKET: "tnwks-cloudtrail-654654262098"
   # Backups: the shared bucket; this cluster's own kopia repository prefix
   # (write) next to homelab-wsl's kopiur/ (read-only, kopiur-standby).
   BACKUP_S3_BUCKET: "tnwks-homelab-backups-654654262098"
