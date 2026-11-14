@@ -688,8 +688,10 @@ by hand, and the steps at a limit of the Claude plan.
   `instruction-check file=` lines and of the bridge, on its own port
   (`homelab-wsl` only).
 - **The snapshots** of a state volume have the kopiur chart's rules,
-  which match each SnapshotPolicy, `agent-state` too: `KopiurLastBackupFailed`
-  and `KopiurBackupStale` (48 hours).
+  which match each SnapshotPolicy, `agent-state` too: `KopiurLastBackupFailed`,
+  `KopiurBackupStale` (48 hours), `KopiurSnapshotFailed`,
+  `KopiurBackupConsecutiveFailures`, and `KopiurRestoreFailed` for a restore.
+  They have no runbook link; the runbook has a section for each.
 - **The heartbeat check** reads one span of each agent's heartbeat trace:
   `openclaw.run` with `openclaw.trigger=heartbeat` and
   `openclaw.outcome=completed`, for each service in its env `SERVICES`

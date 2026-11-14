@@ -22,8 +22,10 @@ section here (`runbook_url`).
   template, Flux removes it at its next reconcile, and the pod starts one
   more time.
 - **Each alert has severity `warning`** and goes to the default Telegram
-  route of Alertmanager. The message links to the board of the site and to
-  this page.
+  route of Alertmanager. The message of each rule of the platform links to
+  the board of the site and to its section here. The rules of the backup
+  operator have no runbook link: find their sections here by the name of the
+  alert.
 - **Logs in Loki.** `{namespace="agents-workflows", app="workflow-providers"}`
   (the providers job), `app="workflow-run"` (the run jobs),
   `app="run-receiver"`, `{namespace="agents-<name>", app="platform-checks"}`,
@@ -36,10 +38,12 @@ section here (`runbook_url`).
 
 ## The alerts
 
-15 alerts cover the platform: the 13 rules of
+18 alerts cover the platform: the 13 rules of
 `kubernetes/apps/ai/agents/monitoring/app/` (11 in `prometheusrule.yaml`, 2
-in `heartbeat-prometheusrule.yaml`), and the 2 rules of the kopiur chart that
-match the snapshot policy of each state volume. No alert of the platform has
+in `heartbeat-prometheusrule.yaml`), and the 5 rules of the backup operator
+(the kopiur chart) that match the snapshot policy, the snapshots and the
+restores of a state volume. The other rules of the backup operator are about
+its repository and its controller, and `backups.md` covers them. No alert of the platform has
 fired live yet; the rule tests (`observability/tests/test_hand_written_rules.py`)
 are the proof of each expression.
 
@@ -70,7 +74,8 @@ kubectl -n flux-system get kustomizations | grep -E 'agents|litellm|model-bridge
   mounts each volume at its root for this reason.
 - After a restart of the host, the sandbox gateway stops each sandbox it had.
   The agent pod stays ready; the `sandbox-start` container starts each one
-  within a minute (`sandbox-start name=<name> result=ok`).
+  within a minute (`sandbox-start name=<name> result=ok`). It logs nothing
+  when no sandbox is stopped, so an empty log is normal.
 
 **Fix.**
 
@@ -149,8 +154,10 @@ Then the last run in Loki, as for
 the job is suspended on purpose ([stop the workflow agent](#stop-the-workflow-agent-fast)).
 
 **Fix.** As for [AgentPlatformCronJobFailed](#agentplatformcronjobfailed).
-A run in flight keeps the token of its start for its whole life, so only new
-runs fail.
+Each run gets the newest token at its start and keeps it for its whole
+life. That token ends one hour after the providers run that made it. So a
+run fails when its token ends before the run does: a new run, and also a run
+in flight that started late in that hour.
 
 ### WorkflowAppDrift
 
@@ -220,10 +227,14 @@ The log of the sweep is in Loki,
 
 **Seen so far.** Never. The stopped-run drill below is the test of this path.
 
-**Fix.** Delete the sandbox through the sandbox gateway, not as a Kubernetes
-object, so the gateway's record goes too. Fix the sweep in git, then run it
-now (owner approval):
+**Fix.** The route that deletes a sandbox through the sandbox gateway is the
+sweep: it deletes each run sandbox older than one hour, by its name and
+label, so the gateway's record goes too. The gateway takes calls only from
+pods of its namespace, so there is no route from a workstation, and a delete
+of the Sandbox object leaves the record of the gateway. Fix the sweep in git
+first if its last run failed. Then run it now (owner approval):
 `kubectl -n agents-workflows create job --from=cronjob/workflow-sweep sweep-now`.
+Its log is in Loki, `{namespace="agents-workflows", app="workflow-sweep"}`.
 
 ### AgentWorkflowRunFailed
 
@@ -303,11 +314,31 @@ each file: `instruction-check file=<name> change=new|changed|gone`.
 the product makes the workspace at the first turn.
 
 **Fix.** Ask the user of the agent if they asked for the change. If not,
-treat it as an instruction the agent took from what it read: stop the agent
-(scale it to zero in a pull request, owner approval), read the file in the
-daily archive of the day before and of today, and restore the archive from
-before the change ([after the loss of the volume](#after-the-loss-of-the-volume),
-with that archive in place of the newest).
+treat it as an instruction the agent took from what it read. Never use a
+snapshot restore here: a kopiur Restore puts last night's copy over the live
+volume, with the start archives and the evidence of the change.
+
+1. **Read the change.** Owner approval, by the owner, while the pod runs.
+   The file and the archive hold private text, and an archive holds
+   credentials, so they stay in the owner's terminal: no Job (its log goes
+   to Loki), no issue, no pull request.
+   ```sh
+   kubectl -n agents-pilot exec deploy/agent -c backup --      cat /home/node/data/state/workspace/AGENTS.md
+   kubectl -n agents-pilot exec deploy/agent -c backup --      tar -xzOf /home/node/data/archives/daily/openclaw-backup-<day before>.tar.gz      --wildcards '*/state/workspace/AGENTS.md'
+   ```
+   The daily archive of the day of the alert already holds the change: the
+   check runs after the backup of that day. The archive of the day before
+   holds the file before the change.
+2. **Stop the agent.** Owner approval: a pull request sets `replicas: 0`.
+3. **Restore the archive of the day before.** Owner approval:
+   [the restore Job](#the-restore-job) with
+   `ARCHIVE=daily/openclaw-backup-<day before>.tar.gz`. The Job refuses an
+   archive of another release than its image. The state goes back to that
+   day, and the state of now stays in `state.before-restore-<time>`.
+4. **Start the agent.** Owner approval: a pull request removes the Job and
+   sets `replicas: 1`.
+
+Not tested.
 
 ### AgentInstructionCheckStale
 
@@ -433,6 +464,55 @@ and `kubectl -n agents-pilot get snapshotschedules`.
 
 **Fix.** As for [KopiurLastBackupFailed](#kopiurlastbackupfailed).
 
+### KopiurSnapshotFailed
+
+**What it means.** A rule of the kopiur chart: a Snapshot of a policy is in
+phase `Failed` for 10 minutes, and the policy has no good backup since.
+
+**First checks.** As for [KopiurLastBackupFailed](#kopiurlastbackupfailed):
+`kubectl -n agents-pilot describe snapshot <snapshot>` names the error.
+
+**Seen so far.** The first snapshot of `agent-state`, on 2026-11-12 (see
+KopiurLastBackupFailed).
+
+**Fix.** As for [KopiurLastBackupFailed](#kopiurlastbackupfailed).
+
+### KopiurBackupConsecutiveFailures
+
+**What it means.** A rule of the kopiur chart: 3 or more snapshots of a
+policy failed in a row, for 15 minutes. One fault repeats each night.
+
+**First checks.** As for [KopiurLastBackupFailed](#kopiurlastbackupfailed),
+on the newest Snapshots.
+
+**Seen so far.** Never.
+
+**Fix.** As for [KopiurLastBackupFailed](#kopiurlastbackupfailed). The days
+since the last good snapshot have only the archives on the volume.
+
+### KopiurRestoreFailed
+
+**What it means.** A rule of the kopiur chart: a Restore is in phase
+`Failed` for 10 minutes. On the platform it can come only from a restore of
+this runbook ([after the loss of the volume](#after-the-loss-of-the-volume)).
+
+**First checks.**
+
+```sh
+kubectl -n agents-pilot get restores
+kubectl -n agents-pilot describe restore <restore>
+```
+
+The mover pod can be gone already (the pod GC), so its log is in Loki. A
+mover has no name label: the read of 2026-11-14 found the snapshot mover of
+`agent-state` under `{namespace="agents-pilot", app="unknown"}`.
+
+**Seen so far.** Never. No restore has run on the platform.
+
+**Fix.** Keep the agent at zero replicas. Fix the Restore in its pull request
+(the snapshot, the mover user, the network rule of the mover), and remove the
+failed Restore in the same pull request, as the restore steps say.
+
 ## An agent does not answer on its channel
 
 The pod is ready, and a message to the agent gets no answer. No alert reads
@@ -474,7 +554,7 @@ workflow agent ends with exit 3.
    Each sandbox of the product (`oc-`) should be `Ready`. The
    `sandbox-start` container starts a `Stopped` one within a minute
    (`sandbox-start name=<name> result=ok`); `result=failed` repeats each
-   minute.
+   minute. No line at all is normal: it logs only when it starts a sandbox.
 2. **Seen so far.** After a power cut restarted the host on 2026-11-12, the
    sandbox gateway left each sandbox of the pilot `Stopped`, and the product
    does not start a stopped one. The `sandbox-start` container
@@ -496,6 +576,24 @@ snapshot.
 Two cases, each step marked with its test. The owner runs a restore; each
 step that changes the cluster is a pull request with owner approval.
 
+**The Signal daemon is off today.** When it is on, its volume `signal-state`
+has its own start archive and snapshot policy, and its restore needs steps
+of its own, which this page does not have yet: an old copy of a Signal
+account can stop to work after new messages.
+
+**The result of a Job or a Restore.** The pod GC of this cluster deletes an
+ended pod within seconds, so `kubectl logs job/<name>` often fails. Read the
+state of the object: `kubectl -n agents-pilot get job agent-restore` shows
+`1/1` when the script ended with exit 0 (it runs with `set -eu`, so each
+failed command fails the Job), and `kubectl -n agents-pilot get restores`
+shows the phase. Then read the lines in Loki. Job pods ship through the
+shared log agent on this cluster (`VECTOR_AGENT_POD_SELECTOR` in
+`kubernetes/clusters/wsl/cluster-settings.yaml`), with the `app` label from
+`app.kubernetes.io/name`: the restore Job is
+`{namespace="agents-pilot", app="agent-restore"}`. On 2026-11-14 Loki held the
+lines of the Job pods of the checks in `agents-pilot`; the restore Job
+itself has not run.
+
 ### The restore Job
 
 One Job does the restore inside the volume, with the agent at zero
@@ -505,7 +603,9 @@ no `${...}`, because Flux substitutes those in this directory.
 
 Add it as `kubernetes/apps/ai/agents/pilot/agent/app/restore-job.yaml`, with
 the image and the `nodeSelector` of `deployment.yaml`, the archive in
-`ARCHIVE`, and the file in the `kustomization.yaml` of the directory:
+`ARCHIVE`, and the file in the `kustomization.yaml` of the directory. With
+`ARCHIVE=list` it changes nothing: it lists the archives with their sizes
+and times, for the steps that pick one.
 
 ```yaml
 ---
@@ -538,7 +638,7 @@ spec:
           image: ghcr.io/it3e/tnwks-agent-image:<the tag and digest of deployment.yaml>
           env:
             # start/openclaw-state-<release>-<time>.tar.gz, or
-            # daily/openclaw-backup-<day>.tar.gz
+            # daily/openclaw-backup-<day>.tar.gz, or list
             - name: ARCHIVE
               value: daily/openclaw-backup-YYYY-MM-DD.tar.gz
             - name: OPENCLAW_OFFLINE
@@ -551,6 +651,10 @@ spec:
               A="$DATA/archives/$ARCHIVE"
               stamp=$(date -u +%Y%m%dT%H%M%SZ)
               stage="$DATA/restore-$stamp"
+              if [ "$ARCHIVE" = list ]; then
+                ls -l --time-style=+%Y-%m-%dT%H:%MZ "$DATA/archives/start" "$DATA/archives/daily"
+                exit 0
+              fi
               test -f "$A"
               case "$ARCHIVE" in
                 start/*)
@@ -614,64 +718,102 @@ spec:
 (OpenClaw 2026.11.3), as uid 1000 with a read-only root, on a scratch Docker
 volume. It put back the start archive and the daily archive (the file
 changed after the archive came back to its old text), and it failed on an
-archive that is not there. Not tested: the release check with a different
-release, and the Job on the cluster.
+archive that is not there. `ARCHIVE=list` listed the archives. A daily
+archive with another release in its manifest failed with
+`restore result=failed reason=release` and left the state as it was. The
+`tar -xzOf` read of one file of a daily archive (in
+[AgentInstructionFileChanged](#agentinstructionfilechanged)) printed the
+file. Not tested: the Job on the cluster.
 
 ### After the loss of the volume
 
 The node or its disk is gone, or the volume is empty or broken. The newest
-daily archive is in the newest good snapshot.
+daily archive from before the fault is in a good snapshot. None of these
+steps is tested.
 
-1. **Read the state of the backups.** Read only.
+1. **Read the state of the backups and of the volume.** Read only.
    ```sh
    kubectl -n agents-pilot get snapshots --sort-by=.metadata.creationTimestamp
    kubectl -n agents-pilot get pvc agent-state
-   kubectl get pv | grep agents-pilot
+   kubectl get pv "$(kubectl -n agents-pilot get pvc agent-state -o jsonpath='{.spec.volumeName}')" \
+     -o jsonpath='{.spec.nodeAffinity.required.nodeSelectorTerms[0].matchExpressions[0].values}'
+   kubectl get nodes
    ```
-   Pick the snapshot (the newest with phase `Succeeded`, or an older one
-   from before the fault). The read of 2026-11-14 showed one snapshot each
-   day at 10:30 UTC, each `Succeeded` from 2026-11-12. Not tested as a step
-   of a restore.
-2. **Stop the agent.** Owner approval. A pull request sets `replicas: 0` in
-   `pilot/agent/app/deployment.yaml`. After the merge, wait until
+   Pick the snapshot by its name, from before the fault, with phase
+   `Succeeded`. Not the newest by default: the schedule runs each day at
+   10:30 UTC during an outage too, so the newest can be a copy of an empty
+   or broken volume. The read of 2026-11-14 showed one snapshot each day,
+   each `Succeeded` from 2026-11-12.
+2. **Decide the node and the volume first.** This decides the form of
+   step 4. A `local-path` volume lives on one node (its PV has a node
+   affinity, and the class binds at the first pod: `WaitForFirstConsumer`).
+   The agent and the restore Job run only on the node of their
+   `nodeSelector`. A Restore has no node setting for its mover
+   (`kubectl explain restores.spec.mover`), so its mover can bind a new
+   volume on any node.
+   - **The PV is there, and its node is up** (the data is broken): the
+     `pvcRef` form, into the volume that is there.
+   - **The PV is gone, and the node is up:** always the populator form. The
+     restore Job (step 5) is the first pod of the new volume, and its
+     `nodeSelector` puts the volume on the node of the agent. Flux makes a
+     new PVC only after the old object is gone: delete the old PVC (owner
+     approval, after step 3: `kubectl -n agents-pilot delete pvc agent-state`).
+   - **The node is gone:** first a pull request changes the `nodeSelector`
+     of `deployment.yaml` (and of the restore Job) to a node that is there
+     (owner approval). Then delete the old PVC (owner approval, after step 3). Its reclaim
+     policy is `Delete`, so the PV goes with it; check `kubectl get pv`, as
+     the delete can wait on the node that is gone. Then the populator form.
+3. **Stop the agent and the snapshots.** Owner approval. One pull request
+   sets `replicas: 0` in `pilot/agent/app/deployment.yaml`, and
+   `suspend: true` in the SnapshotSchedule `agent-state` of `backup.yaml`, so
+   no new snapshot copies the broken volume. After the merge, wait until
    `kubectl -n agents-pilot get pods -l app.kubernetes.io/name=agent` shows
-   no pod. Not tested.
-3. **Restore the snapshot into the volume.** Owner approval. A pull request
-   adds a kopiur `Restore` to `pilot/agent/app/` (the form is in
-   [`backups.md`](../operations/backups.md#a-pvc-kopiur)):
-   `source.fromPolicy.name: agent-state` (or `source.snapshotRef.name` for an
-   older one), `target.pvcRef.name: agent-state`,
-   `options.enableFileDeletion: true`, `credentialProjection.enabled: true`,
-   and the `podSecurityContext` and `securityContext` of the mover in
-   `backup.yaml` (uid 1000, the restricted level). Wait for the Restore's
-   phase `Completed` (`kubectl -n agents-pilot get restores`). Not tested.
-   - If the volume itself is gone, Flux makes a new empty PVC from
-     `pvc.yaml`. A `local-path` volume binds to the node of its first pod,
-     and the agent runs only on the node of its `nodeSelector`, so the mover
-     must be that first pod on that node. A Restore has no node setting
-     (`kubectl explain restores.spec.mover`). Check where the volume landed
-     (`kubectl get pv`) before the next step; if it is on another node, the
-     populator form of a Restore (`target.populator`, a PVC with a
-     `dataSourceRef`) binds it at the agent's first start. Not tested.
-4. **Restore the newest daily archive.** Owner approval. The snapshot copies
-   the live files of a running pod, so its database can be torn; the daily
+   no pod.
+4. **Restore the snapshot.** Owner approval. A pull request adds a kopiur
+   `Restore` to `pilot/agent/app/` (the form is in
+   [`backups.md`](../operations/backups.md#a-pvc-kopiur)), with
+   `source.snapshotRef.name` set to the snapshot of step 1,
+   `credentialProjection.enabled: true`, and the `podSecurityContext` and
+   `securityContext` of the mover in `backup.yaml` (uid 1000, the restricted
+   level).
+   - **The `pvcRef` form:** `target.pvcRef.name: agent-state`, with no
+     `enableFileDeletion`. That option makes an exact mirror, and it deletes
+     each file the snapshot does not have, the start archives made since the
+     snapshot too. If the volume still mounts and its archives read back
+     (`ARCHIVE=list` of the restore Job), skip this step: step 5 uses the
+     archive on the volume.
+   - **The populator form:** `target.populator: {}`, and in the same pull
+     request `pvc.yaml` gets
+     `dataSourceRef: {apiGroup: kopiur.home-operations.com, kind: Restore, name: <the Restore>}`.
+     The field cannot change on a PVC that exists, so this form needs the
+     new PVC of step 2. The restore Job of step 5 goes in the same pull
+     request, as the first pod of the volume.
+
+   Wait for the phase `Completed` of the Restore
+   (`kubectl -n agents-pilot get restores`). `KopiurRestoreFailed` fires on
+   a failed one.
+5. **Restore the daily archive.** Owner approval. The snapshot copies the
+   live files of a running pod, so its database can be torn; the daily
    archive in it is the consistent copy. A pull request adds
    [the restore Job](#the-restore-job) with
-   `ARCHIVE=daily/openclaw-backup-<newest day>.tar.gz`, with the image of the
-   release that made it. Wait for `restore result=ok` in
-   `kubectl -n agents-pilot logs job/agent-restore`. Not tested on the
-   cluster; the script was tested locally (above).
-5. **Start the agent.** Owner approval. A pull request removes the Restore
-   and the Job, and sets `replicas: 1`. The `archive` init container makes
-   an archive of the restored state, and `doctor` checks it. Not tested.
-6. **Check.** Read only: the pod is ready, the `sandbox-start` lines, an
+   `ARCHIVE=daily/openclaw-backup-<the day of the snapshot>.tar.gz`, with the
+   image of the release that made it. Wait until
+   `kubectl -n agents-pilot get job agent-restore` shows `1/1`, then read
+   `restore result=ok` in Loki
+   (`{namespace="agents-pilot", app="agent-restore"}`). The script was tested
+   locally (above).
+6. **Start the agent and the snapshots.** Owner approval. A pull request
+   removes the Restore and the Job, sets `replicas: 1`, and removes
+   `suspend: true`. The `archive` init container makes an archive of the
+   restored state, and `doctor` checks it.
+7. **Check.** Read only: the pod is ready, the `sandbox-start` lines, an
    answer on the test channel (the owner), and the next
    `instruction-check result=` line. The restored state goes back to the
    time of the archive; the product says so in its warnings (approvals and
-   the state of each channel go back too). Not tested.
-7. **Remove the old state.** Owner approval, later: the
+   the state of each channel go back too).
+8. **Remove the old state.** Owner approval, later: the
    `state.before-restore-<time>` directory, by a Job in a pull request as
-   above. Not tested.
+   above.
 
 ### After a failed update
 
@@ -680,63 +822,89 @@ does not run. The way back is the release before, with the state from before
 the update. The first start archive with the name of the failed release holds
 that state: the archive step ran before the `doctor` of the new release. The
 newest archive is the wrong one: a later start made it from the changed
-state.
+state. None of these steps is tested on the cluster.
 
 1. **Find the archive.** Read only. In Loki,
    `{namespace="agents-pilot", app="agent"} |= "archive-state result=ok"`:
    each line names the release and the file
    (`release=<release> name=openclaw-state-<release>-<time>.tar.gz`). Take the
-   first line with the failed release. Not tested.
+   first line with the failed release. Loki holds these lines only from
+   2026-11-14, when the logs of the agent pod started to ship. With no line,
+   use the name: the file name holds the release and the UTC time of the
+   start, so the earliest name with the failed release is the one. List the
+   names with `ARCHIVE=list` of [the restore Job](#the-restore-job) after
+   step 2 (owner approval), in Loki under `app="agent-restore"`.
 2. **Stop the agent and set the image back.** Owner approval. One pull
    request sets `replicas: 0` and reverts the image in `deployment.yaml` to
    the release before (a revert of the Renovate merge, with
-   `replicas: 0` on top). Wait until no agent pod is there. Not tested.
+   `replicas: 0` on top). Wait until no agent pod is there.
 3. **Restore the archive.** Owner approval. A pull request adds
    [the restore Job](#the-restore-job) with
    `ARCHIVE=start/openclaw-state-<failed release>-<time>.tar.gz`, and the
-   image of the release before. Wait for `restore result=ok`. Not tested on
-   the cluster; the script was tested locally (above).
+   image of the release before. Wait until
+   `kubectl -n agents-pilot get job agent-restore` shows `1/1`, then read
+   `restore result=ok` in Loki. The script was tested locally (above).
 4. **Start the agent.** Owner approval. A pull request removes the Job and
    sets `replicas: 1`. The start makes a new archive with the name of the
-   release before. Not tested.
-5. **Check, and keep Renovate off that release.** Read only: as step 6
+   release before.
+5. **Check, and keep Renovate off that release.** Read only: as step 7
    above. The update comes back as a new Renovate pull request; hold it
-   until the cause is known. Not tested.
-6. **Remove the old state.** As step 7 above. Not tested.
+   until the cause is known.
+6. **Remove the old state.** As step 8 above.
 
 ## Stop the workflow agent fast
 
 The Renovate reviewer has three parts that let it act: the App at GitHub, the
 receiver that makes its runs, and the providers job that gives a run its
-tokens. Stop them in this order. None is tested yet.
+tokens. The route that holds is a pull request; the steps before it act at
+once. None is tested yet.
 
 1. **Suspend the App installation.** The owner, in the browser, in seconds:
    the settings of the installed App on the account (Installed GitHub Apps,
    Configure), Suspend. GitHub's docs ("Suspending a GitHub App
    installation"): a suspended App "cannot access resources owned by that
-   installation account". A run in flight can't comment, and no new token
-   works. The providers job then fails at `github-token`, which is
-   expected.
-2. **Stop the receiver and the providers job.** Owner approval. One pull
+   installation account". A run cannot comment, and no new token works.
+   - The receiver still makes a run for each call until step 3 lands, and
+     each run can spend the plan for up to 40 minutes
+     (`activeDeadlineSeconds: 2400`) before it fails at GitHub.
+   - The providers job fails at `github-token` each 15 minutes. So
+     [AgentPlatformCronJobFailed](#agentplatformcronjobfailed) fires and
+     stays firing for the whole stop, and
+     [WorkflowProvidersStale](#workflowprovidersstale) fires after 35
+     minutes. Both are expected.
+2. **End the runs in flight.** Owner approval, with no pull request, so it
+   can come before step 3 merges. First read the result of each run job
+   (`kubectl -n agents-workflows get jobs -l app.kubernetes.io/name=workflow-run`),
+   then `kubectl -n agents-workflows delete job <job>`. The pod gets SIGTERM
+   and deletes its sandbox in its grace period of 90 seconds; the Job and its
+   kept answer go with it.
+3. **Stop the receiver and the providers job.** Owner approval. One pull
    request:
    - `replicas: 0` in `workflows/run-receiver/app/deployment.yaml`: no new
      run. A caller gets no answer.
    - `suspend: true` in the CronJob of `workflows/run-receiver/app/providers.yaml`:
-     no new token.
+     no new token, and no more failed runs.
    - Leave the sweep on: it deletes each run sandbox that is left.
 
-   After the merge, `WorkflowProvidersStale` fires after 35 minutes; that is
-   expected while the stop holds. `AgentPlatformWorkloadNotReady` does not
-   fire for a workload scaled to zero by a merge.
-3. **A run in flight.** Read only first: read the result of each run job
-   (`kubectl -n agents-workflows get jobs -l app.kubernetes.io/name=workflow-run`).
-   A run lives 40 minutes at most and deletes its sandbox at its end. To end
-   one now (owner approval): `kubectl -n agents-workflows delete job <job>`.
-   The pod gets SIGTERM and deletes its sandbox in its grace period of 90
-   seconds; the Job and its kept answer go with it.
-4. **The way back.** Revert the pull request, then the owner resumes the App
-   installation. The next run of the providers job makes new tokens; check
-   two runs in a row before the first review.
+   The time: the checks of a pull request of this repository took about 15
+   minutes on 2026-11-14, and Flux applies a merge within about a minute
+   (the git source polls each minute, and a webhook receiver is there).
+   `AgentPlatformWorkloadNotReady` does not fire for a workload scaled to
+   zero by a merge. Repeat step 2 for any run that started before the merge.
+4. **The way back.** First the owner resumes the App installation. Then
+   revert the pull request: the first providers run after the revert then
+   gets a token. Check two good runs in a row before the first review.
+
+**Proposal, not approved: a hand step before the merge.** The owner can
+decide to stop the receiver by hand while the pull request of step 3 waits
+for its checks: `flux suspend kustomization agents-workflows-run-receiver`,
+then `kubectl -n agents-workflows scale deploy/run-receiver --replicas=0`.
+This is a live change outside git, which R3 of the charter does not allow
+as a normal step, so it is not part of the steps above. Git catches up when
+the pull request of step 3 merges and the owner runs
+`flux resume kustomization agents-workflows-run-receiver`: Flux then applies
+`replicas: 0` from git. A resume before that merge starts the receiver
+again.
 
 ## Move a trust domain to Bedrock by hand
 
@@ -744,16 +912,18 @@ Only a person moves a trust domain from the Claude plan to Bedrock: the
 config of the model gateway has no fallback, so nothing moves by itself. The
 owner decides each move.
 
-1. **Check the Bedrock path.** Read only:
-   `LiteLLMBedrockCertificateExpiring` is not firing, and the owner runs
-   "Test a name" of [`litellm.md`](litellm.md#test-a-name) for a name
-   already on Bedrock, if one is.
+1. **Check the Bedrock path.** Read only: `LiteLLMBedrockCertificateExpiring`
+   is not firing. Owner approval: the owner runs "Test a name" of
+   [`litellm.md`](litellm.md#test-a-name) for a name already on Bedrock, if
+   one is. That test reads the master key of the model gateway from a
+   Secret, and it makes a call that Bedrock bills.
 2. **Move the name.** Owner approval. One pull request changes the one line
    of the trust domain in `router_settings.model_group_alias` of
    `kubernetes/apps/ai/litellm/app/configmap.yaml`, for example
-   `agents-pilot: claude-opus-bedrock`. The finance agent follows the main
-   agent in the same pull request. [`litellm.md`](litellm.md#moving-a-name-and-back)
-   has the rule.
+   `agents-pilot: claude-opus-bedrock` for the pilot alone. A move of the
+   main agent (`agents-main`) also moves the finance agent
+   (`agents-finance`), in the same pull request.
+   [`litellm.md`](litellm.md#moving-a-name-and-back) has the rule.
 3. **After the merge.** Reloader starts LiteLLM again, and calls to every
    model fail for the time of one start. A conversation goes on with its
    history; on Bedrock each call is billed by token, and there is no spend
@@ -773,15 +943,18 @@ at the same time, until the limit resets. Nothing moves to Bedrock by itself.
 
 1. **Confirm.** Read only. `ModelBridgeRateLimited` names the trust domain.
    In Loki, `{namespace="ai", app="model-bridge"} |= "engine_error"` shows
-   `kind` `rate_limit`, and the `call` lines show 429. Release 0.2.3 sends a
-   `retry-after` only when the engine gives the reset time. No call has gone
-   through 0.2.3 at a real limit yet.
+   `kind` `rate_limit`. From release 0.2.3 the caller gets HTTP 429 with the
+   error type `rate_limit_error`, and the `call` lines show 429. Release
+   0.2.3 sends a `retry-after` only when the engine gives the reset time. No
+   call has gone through 0.2.3 at a real limit yet.
 2. **What fails.** A workflow run fails, and its caller tries again with a
    new key at most 3 times; at a limit each attempt fails, so expect
    `AgentWorkflowRunFailed`. The model gateway sends each call to the bridge
    one time (`1e7d81c2`); the Anthropic SDK of the caller tries 2 more times
-   and the reviewer's framework up to 6 attempts, so one model call reaches
-   the bridge 18 times at most. The pilot answers the chat with an error.
+   and the reviewer's framework up to 6 attempts. So one model call reaches
+   the bridge 18 times at most in one run, and up to 54 times for one review
+   when the caller makes its 3 attempts. The pilot answers the chat with an
+   error.
 3. **Decide.** The owner: wait for the reset, use less of the plan (the
    build sessions too), or [move a trust domain to Bedrock](#move-a-trust-domain-to-bedrock-by-hand).
    Nothing here is a fix in git.
@@ -790,11 +963,15 @@ at the same time, until the limit resets. Nothing moves to Bedrock by itself.
    `call` lines with status 200.
 
 **Seen so far.** 2026-11-14, from 02:29 to about 05:30 UTC: the 5-hour limit
-of the plan. The run of a review got a 502 in 32 seconds, and the bridge
-logged `rate_limit` and then an error of the kind `success` with status 200.
-Release 0.2.3 of the bridge (`04d7b4a3`) answers a limit with 429 and logs
-the real status; the gateway's one attempt (`1e7d81c2`) keeps its retries
-from multiplying.
+of the plan, on the bridge before 0.2.3. That bridge logged an
+`engine_error` of the kind `rate_limit`, then one of the kind `success`, and
+a `call` line with status 200. The caller got an error of the type
+`api_error` with the text "the engine ended the turn with an error
+(success)", and the run of the review failed with a 502 in 32 seconds. From
+release 0.2.3 (`04d7b4a3`) the bridge logs one `engine_error` of the kind
+`rate_limit`, the caller gets a 429 `rate_limit_error`, and the `call` line
+logs 429. The gateway's one attempt (`1e7d81c2`) keeps its retries from
+multiplying.
 
 ## Drill: a run job stopped in the middle
 
