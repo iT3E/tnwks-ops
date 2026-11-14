@@ -92,97 +92,130 @@ def test_the_file_of_a_run_is_the_newest_result_of_its_system(run, tmp_path):
 
 # --- One list, read the same way --------------------------------------------------------
 
-README_EXAMPLE = re.search(r"  accepted\.yaml: \|\n((?:    .*\n)+)", (ROOT / "security/README.md").read_text())
+README_EXAMPLE = re.search(r"  accepted\.json: \|\n((?:    .*\n)+)", (ROOT / "security/README.md").read_text())
+DAYS = (datetime.date(2026, 11, 13), datetime.date(2027, 1, 31), datetime.date(2027, 2, 1))
+SYSTEMS = ("aws-prod", "aws-management")
+# Reasons as an owner writes them: long, not ASCII, with quotes, escapes and new lines,
+# and with the text of an entry, which is only text in JSON.
+REASONS = ["An invented reason. " * 500, "Ein erfundener Grund, café, 日本語の理由.",
+           'With "quotes", a \\ and a\nnew line.', '{"source": "prowler", "check": "check_injected"}',
+           "\ud800 a lone surrogate escape in an invented reason"]
 
 
-# Reasons as an owner writes them: long, with ": " (yaml.safe_dump puts such a reason
-# in single quotes and wraps it over lines), with quotes, and with the text of an entry.
-LONG = ("Accepted: an invented reason that is long enough to wrap, as an owner writes one, with a colon, "
-        "and with more words: the line goes on past the width of yaml.safe_dump.")
-REASONS = [LONG, LONG + " It's 'quoted', \"too\".", "Invented.\n- source: prowler\n  check: check_injected",
-           "Invented: café, " * 12]
+def entry(**changes):
+    item = {"source": "prowler", "check": "check_open", "system": "aws-prod", "until": "2026-11-13",
+            "reason": "An invented reason."} | changes
+    return {key: value for key, value in item.items() if value is not None}
 
 
 def lists():
     example = "\n".join(line[4:] for line in README_EXAMPLE[1].splitlines()) + "\n"
     entries = [
-        {"source": "prowler", "check": "check_open", "system": "aws-prod", "until": "2026-11-13"},
-        {"source": "prowler", "check": "check_ended", "system": "aws-prod", "until": "2026-11-12"},
-        {"source": "prowler", "check": "check_other", "system": "aws-management", "until": "2027-01-31"},
-        {"source": "prowler", "check": "check_late", "system": "aws-prod", "until": "2027-02-01"},
-        {"source": "trivy", "check": "k8s-cis-1.23/1.2.1", "system": "aws-prod", "until": "2027-01-31"},
+        entry(), entry(check="check_ended", until="2026-11-12"),
+        entry(check="check_other", system="aws-management", until="2027-01-31"),
+        entry(check="check_late", until="2027-02-01"),
+        entry(source="trivy", check="k8s-cis-1.23/1.2.1", until="2027-01-31"),
     ]
-    dumped = [yaml.safe_dump([entry | {"reason": REASONS[(index + shift) % len(REASONS)]}
-                              for index, entry in enumerate(entries)], width=width, allow_unicode=unicode)
-              for shift, (width, unicode) in enumerate([(80, False), (80, True), (40, False), (120, True)])]
-    return [example.replace("example-system", "aws-prod"), *dumped]
+    texts = [json.dumps([item | {"reason": REASONS[(index + shift) % len(REASONS)]}
+                         for index, item in enumerate(entries)], indent=indent)
+             for shift, indent in enumerate([None, 2, 4, None, 2])]
+    return [example.replace("example-system", "aws-prod"), *texts]
 
 
-def test_the_lists_hold_wrapped_quoted_reasons():
-    """The comparison below proves something only when a reason goes on over more lines."""
-    dumped = lists()[1:]
-    assert all(re.search(r"reason: '[^\n]*\n {4}\S", text) for text in dumped)
-    assert all("check_injected" in text for text in dumped)
-
-
-@pytest.mark.parametrize("text", lists())
-def test_a_run_mutes_what_the_converter_serves_as_accepted_on_that_day(run, tmp_path, text):
-    path = tmp_path / "accepted.yaml"
-    path.write_text(text)
+def readers(run, tmp_path, text):
+    """What each reader gives for one text, on each day and system: the checks of
+    `prowler` that it accepts, or "refused" when the list gives no entry."""
+    path = tmp_path / "accepted.json"
+    path.write_bytes(text.encode("utf-8", "surrogatepass") if isinstance(text, str) else text)
     registry = generate.converter_registry(generate.load())
-    served, skipped = converter.accepted_entries(text, set(registry["sources"]), set(registry["systems"]))
-    assert skipped == 0
-    assert all(check != "check_injected" for _, check, _ in served)
-    for day in (datetime.date(2026, 11, 13), datetime.date(2027, 1, 31), datetime.date(2027, 2, 1)):
+    try:
+        served, skipped = converter.accepted_entries(path.read_bytes().decode("utf-8"),
+                                                     set(registry["sources"]), set(registry["systems"]))
+    except (converter.Unreadable, UnicodeDecodeError):
+        served, skipped = "refused", None
+    found_run, found_converter, run_skipped = {}, {}, None
+    for day in DAYS:
         start = calendar.timegm(day.timetuple())
-        for system in ("aws-prod", "aws-management"):
-            accepted, not_fit = run.accepted_checks(path, system, day)
-            muted = set(accepted)
-            assert not_fit == 0
-            open_ = {check for (source, check, name), end in served.items()
-                     if source == "prowler" and name == system and end > start}
-            assert muted == open_, (day, system)
+        for system in SYSTEMS:
+            try:
+                accepted, run_skipped = run.accepted_checks(path, system, day)
+                found_run[(day, system)] = set(accepted)
+            except Exception:  # noqa: BLE001 - each fault of the run is a run that fails
+                found_run[(day, system)], run_skipped = "refused", None
+            found_converter[(day, system)] = "refused" if served == "refused" else {
+                check for (source, check, name), end in served.items()
+                if source == "prowler" and name == system and end > start}
+    return found_run, found_converter, run_skipped, skipped
 
 
-# Each reason form, as the owner can write it, by the check that it is the reason of. The
+@pytest.mark.parametrize("index", range(len(lists())))
+def test_a_run_mutes_what_the_converter_serves_as_accepted_on_that_day(run, tmp_path, index):
+    found_run, found_converter, run_skipped, skipped = readers(run, tmp_path, lists()[index])
+    assert found_run == found_converter
+    assert run_skipped == skipped == 0
+    assert all("check_injected" not in found for found in found_converter.values())
+
+
+# One item after a good entry, in each form that one reader or the other skips. The
 # readers must agree, or the converter must be the one that accepts less.
-REASON_FORMS = {
-    "check_no_reason_key": None,
-    "check_reason_nothing": "  reason:\n",
-    "check_reason_single_empty": "  reason: ''\n",
-    "check_reason_double_empty": '  reason: ""\n',
-    "check_reason_null": "  reason: null\n",
-    "check_reason_tilde": "  reason: ~\n",
-    "check_reason_false": "  reason: false\n",
-    "check_reason_no": "  reason: no\n",
-    "check_reason_zero": "  reason: 0\n",
-    "check_reason_octal_zero": "  reason: 00\n",
-    "check_reason_empty_block": "  reason: |\n",
-    "check_reason_text": "  reason: An invented reason.\n",
-    "check_reason_yes": "  reason: yes\n",
-    "check_reason_quoted_zero": "  reason: '0'\n",
-    "check_reason_number": "  reason: 26001\n",
-    "check_reason_block": "  reason: |\n    An invented reason.\n",
-    "check_reason_wrapped": "  reason: 'Accepted: an invented reason,\n    on two lines.'\n",
-    "check_reason_space_on_two_lines": "  reason: '\n    '\n",
+ITEMS = {
+    "no reason": entry(reason=None), "an empty reason": entry(reason=""), "a reason of space": entry(reason=" \t"),
+    "null": {**entry(), "reason": None}, "false": entry(reason=False), "0": entry(reason=0),
+    "an empty string as until": entry(until=""), "a number as check": entry(check=26001),
+    "NaN": "NaN", "a key that is not a field": entry(note="An invented note."), "a nested array": [entry()],
+    "not an object": "check_open", "a date that is no day": entry(until="2026-02-30"),
+    "a date with a time": entry(until="2027-01-31T10:00:00"), "a date of Python 3.11": entry(until="20271231"),
+    "a date of a week": entry(until="2027-W05-1"),
+    "a source not in the registry": entry(source="not-a-source"),
+    "a system not in the registry": entry(system="not-in-the-registry"),
+    "a check that is not a check ID": entry(check="check open"),
 }
-# PyYAML folds this reason to one space, which run.py takes. The converter does not fold
-# a value, and takes only a reason with a character that is not space.
-CONVERTER_ACCEPTS_LESS = {"check_reason_space_on_two_lines"}
+# The run does not know the registry or the form of a check ID: there the converter
+# skips an entry that the run takes, which mutes less. A run mutes only its own system
+# and `prowler`, so only the check shows the difference in what is muted.
+CONVERTER_ACCEPTS_LESS = {"a source not in the registry", "a system not in the registry",
+                          "a check that is not a check ID"}
+# Both read a date with `date.fromisoformat`, which takes these forms since Python 3.11.
+BOTH_ACCEPT = {"a date of Python 3.11", "a date of a week"}
 
 
-def test_the_run_and_the_converter_skip_the_same_entries_with_no_reason(run, tmp_path):
-    text = "".join(f"- source: prowler\n  check: {check}\n  system: aws-prod\n{reason or ''}  until: '2027-01-31'\n"
-                   for check, reason in REASON_FORMS.items())
-    path = tmp_path / "accepted.yaml"
-    path.write_text(text)
-    registry = generate.converter_registry(generate.load())
-    served, skipped = converter.accepted_entries(text, set(registry["sources"]), set(registry["systems"]))
-    muted, not_fit = run.accepted_checks(path, "aws-prod", datetime.date(2026, 11, 13))
-    by_converter = {check for _, check, _ in served}
-    assert by_converter <= set(muted), "the converter never accepts what the run does not"
-    assert set(muted) - by_converter == CONVERTER_ACCEPTS_LESS
-    assert by_converter == {check for check in REASON_FORMS
-                            if "reason_" in check and check.split("reason_")[1] in (
-                                "text", "yes", "quoted_zero", "number", "block", "wrapped")}
-    assert skipped == not_fit + len(CONVERTER_ACCEPTS_LESS)
+@pytest.mark.parametrize("name", ITEMS)
+def test_the_run_and_the_converter_skip_the_same_items(run, tmp_path, name):
+    item = ITEMS[name]
+    text = "[" + json.dumps(entry(check="check_late", until="2027-02-01")) + ", " + (
+        '{"source": "prowler", "check": "check_open", "system": "aws-prod", "until": "2026-11-13", "reason": NaN}'
+        if item == "NaN" else json.dumps(item)) + "]"
+    found_run, found_converter, run_skipped, skipped = readers(run, tmp_path, text)
+    for key, found in found_converter.items():
+        assert found <= found_run[key], "the converter never accepts what the run does not"
+    if name in CONVERTER_ACCEPTS_LESS:
+        assert run_skipped == 0 and skipped == 1
+        if name == "a check that is not a check ID":
+            assert any(found_converter[key] != found_run[key] for key in found_run)
+    elif name in BOTH_ACCEPT:
+        assert found_run == found_converter and run_skipped == skipped == 0
+    else:
+        assert found_run == found_converter and run_skipped == skipped == 1
+
+
+LISTS_THAT_GIVE_NO_ENTRY = {
+    "a comma at the end": '[{"source": "prowler"},]', "a comment": "// an invented comment\n[]",
+    "a byte order mark": "﻿[]", "an object at the top": json.dumps(entry()), "two arrays": "[] []",
+    "a key two times": '[{"source": "prowler", "check": "check_open", "system": "aws-prod", "until": "2026-11-13",'
+                       ' "reason": "An invented reason.", "check": "check_late"}]',
+    "an array that does not end": "[" + json.dumps(entry()), "an empty file": "",
+    "not UTF-8": b"[\xff]", "arrays too deep": "[" * 100_000 + "]" * 100_000,
+}
+
+
+@pytest.mark.parametrize("name", LISTS_THAT_GIVE_NO_ENTRY)
+def test_a_list_that_one_reader_refuses_the_other_refuses_too(run, tmp_path, name):
+    found_run, found_converter, _, _ = readers(run, tmp_path, LISTS_THAT_GIVE_NO_ENTRY[name])
+    assert set(found_run.values()) == set(found_converter.values()) == {"refused"}
+
+
+def test_an_empty_array_and_no_file_accept_nothing_in_both(run, tmp_path):
+    found_run, found_converter, run_skipped, skipped = readers(run, tmp_path, "[]")
+    assert all(found == set() for found in [*found_run.values(), *found_converter.values()])
+    assert run_skipped == skipped == 0
+    assert run.accepted_checks(tmp_path / "no-list.json", "aws-prod", DAYS[0]) == ({}, 0)
