@@ -1,0 +1,3 @@
+kind: Added
+body: 'aws: the AWS parts of the security platform in `modules/aws/security`, called by the prod root. An organization trail in the management account (management events, every Region, log file validation) writes to a private bucket in the prod account that deletes each object after 90 days. Two read-only IAM Roles Anywhere roles, each for one certificate CN: an audit role for Prowler and a reader of the trail bucket. An audit role in the management account that the audit role of the prod account can assume. Each plan warns while an account lists another trail'
+time: 2026-11-13T05:14:04.410437024-08:00
