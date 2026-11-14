@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.135.0 - 2026-11-14
+
+### Added
+
+* security: the Prowler run for Cloudflare (`kubernetes/apps/security/prowler`), each day with the scan list of the registry, and a network policy for `api.cloudflare.com`. It does not run until the owner adds its read-only token as a SOPS Secret and names it in the app; the README has the steps and the least scope of the token. The new alert `SecurityTokenExpiring` fires 30 days before the end date that the owner writes to the Lease of a token. GitHub has no Prowler run, as it would fail each day on a personal account: the API checks take its lines of the registry
+
 ## v2.134.0 - 2026-11-14
 
 ### Added
