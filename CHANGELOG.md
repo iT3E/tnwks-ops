@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.125.0 - 2026-11-14
+
+### Changed
+
+* privacy: task privacy:edit copies the denylist to the PRIVACY_TERMS secret when the editor closes, if the list changed and still decrypts; an aborted or failed edit copies nothing. The copy goes to every repository of the account that already has the secret, found through the API (bin/privacy-terms), and names only public ones. task privacy:sync stays as the retry
+
 ## v2.124.0 - 2026-11-14
 
 ### Added
