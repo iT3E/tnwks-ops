@@ -329,9 +329,10 @@ curl -s localhost:8080/api/v1/rpc -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":2,"method":"finishLink","params":{"deviceLinkUri":"<uri>","deviceName":"agents-pilot"}}'
 ```
 
-Then start the agent pod again
-(`kubectl -n agents-pilot rollout restart deploy/agent`), so the Signal
-channel finds the account.
+Then start the agent pod again by a delete of the pod
+(`kubectl -n agents-pilot delete pod -l app.kubernetes.io/name=agent`), so
+the Signal channel finds the account. Not `rollout restart`: Flux removes
+its annotation at the next reconcile, which starts the pod one more time.
 
 ## The run receiver
 
@@ -636,6 +637,12 @@ aggregator for the `<check> result=` lines (`WorkflowAppDrift`,
 `AgentInstructionCheckStale`), the platform agent for the
 `instruction-check file=` lines and the bridge (`AgentInstructionFileChanged`,
 `ModelBridgeRateLimited`) ([Logs](#logs)).
+
+[`agent-platform-runbook.md`](agent-platform-runbook.md) has a section for
+each alert (what it means, the first checks, what was seen so far, the fix),
+and each rule's `runbook_url` links to it. It also has the restore of the
+state of an agent, the fast stop of the workflow agent, the move to Bedrock
+by hand, and the steps at a limit of the Claude plan.
 
 | Alert | Fires when | `for` | First step |
 | --- | --- | --- | --- |

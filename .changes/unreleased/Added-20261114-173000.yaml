@@ -1,0 +1,3 @@
+kind: Added
+body: 'ai: a runbook of the agent platform (docs/apps/agent-platform-runbook.md), with a section for each of its alerts, the restore of the state of an agent, the fast stop of the workflow agent, the move to Bedrock by hand and the steps at a limit of the Claude plan. Each rule of the platform links to its own section, and a test checks that each runbook link into this repository has its section'
+time: 2026-11-14T17:30:00.000000000Z

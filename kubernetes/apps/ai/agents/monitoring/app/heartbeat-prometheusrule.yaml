@@ -41,7 +41,7 @@ spec:
             severity: warning
           annotations:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
-            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentheartbeatmissing"
             summary: "A personal agent had no completed scheduled turn in 26 hours, or Tempo could not answer."
             description: "The log of the last run ({namespace=\"monitoring\", app=\"agent-heartbeat-check\"} in Loki) names the service: result=missing is an agent that did not run its heartbeat, result=error a check that could not ask Tempo."
 
@@ -62,6 +62,6 @@ spec:
             severity: warning
           annotations:
             dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
-            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform-runbook.md#agentheartbeatcheckstale"
             summary: "The check of the agents' scheduled turn has not run in 26 hours."
             description: "kubectl -n monitoring get cronjob agent-heartbeat-check: a suspended CronJob, or one that Flux did not apply (Kustomization agents-monitoring)."
