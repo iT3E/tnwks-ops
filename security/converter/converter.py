@@ -448,7 +448,7 @@ class AcceptedList(Loop):
 # --- The files of results --------------------------------------------------------------
 
 # prowler/<provider>/<system>.<YYYYMMDDTHHMMSSZ>.ocsf.json (README, "The OCSF files").
-OCSF_NAME = re.compile(r"^(?P<system>[^/]+)\.(?P<stamp>\d{8}T\d{6}Z)\.ocsf\.json$")
+OCSF_NAME = re.compile(r"(?P<system>[^/]+)\.(?P<stamp>[0-9]{8}T[0-9]{6}Z)\.ocsf\.json")
 API_FILE = Path("api-check/results.json")
 # A time of a result that is this far in the future is no result.
 CLOCK_SKEW_SECONDS = 300
@@ -554,7 +554,7 @@ def ocsf_checks(records) -> dict[str, tuple[int, str]]:
         metadata = record.get("metadata")
         check = metadata.get("event_code") if isinstance(metadata, dict) else None
         status = record.get("status_code")
-        if not isinstance(check, str) or not CHECK_ID.match(check):
+        if not isinstance(check, str) or not CHECK_ID.fullmatch(check):
             raise BadFile(f"record {index} has no check ID")
         if not isinstance(status, str):
             raise BadFile(f"record {index} has no status")
@@ -610,7 +610,7 @@ def api_results(payload: object, now: float) -> tuple[float, list[dict]]:
         if not isinstance(entry, dict):
             raise BadFile(f"result {index} is not an object")
         check, system, failed = entry.get("check"), entry.get("system"), entry.get("failed")
-        if not isinstance(check, str) or not CHECK_ID.match(check):
+        if not isinstance(check, str) or not CHECK_ID.fullmatch(check):
             raise BadFile(f"result {index} has no check ID")
         if not isinstance(system, str) or not system:
             raise BadFile(f"result {index} has no system")
@@ -677,7 +677,7 @@ class ResultFiles(Loop):
         for entry in entries:
             if entry.name == "tmp" or not entry.is_file(follow_symlinks=False):
                 continue
-            match = OCSF_NAME.match(entry.name)
+            match = OCSF_NAME.fullmatch(entry.name)
             if not match:
                 self.note(f"prowler/{provider}/{entry.name} is not the name of an OCSF file: not read")
                 continue
