@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.142.0 - 2026-11-14
+
+### Added
+
+* security: the host check on each Windows host (Ansible role `windows_host_check`, source `host-check`). A SYSTEM scheduled task reads Defender, the updates and the firewall every 6 hours and writes the result for the textfile collector of windows_exporter. Each result carries a severity, so a failed check of Defender, the firewall or the updates alerts. Only SYSTEM and the Administrators may change the directory of the script. A query that fails gives no result. A follow-up adds `host-check` to the sources of the hosts after their first result
+
 ## v2.141.0 - 2026-11-14
 
 ### Added
