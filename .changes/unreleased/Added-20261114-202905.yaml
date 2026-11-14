@@ -1,3 +1,0 @@
-kind: Added
-body: 'ai: memory search for the pilot agent. Its embeddings come from a new entry of the model gateway, agents-pilot-embeddings, on the Ollama of the host (docs/apps/agent-platform.md).'
-time: 2026-11-14T20:29:05.000000+00:00

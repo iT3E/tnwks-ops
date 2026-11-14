@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.149.0 - 2026-11-14
+
+### Added
+
+* ai: memory search for the pilot agent. Its embeddings come from a new entry of the model gateway, agents-pilot-embeddings, on the Ollama of the host (docs/apps/agent-platform.md).
+
 ## v2.148.1 - 2026-11-14
 
 ### Security
