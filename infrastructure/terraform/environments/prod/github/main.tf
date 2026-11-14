@@ -77,8 +77,8 @@ locals {
         external-contributions = {
           reviewer_users = [local.owner_user_id]
         }
-        # Deployments from main only. Its variables' values come from
-        # tnwks-ops.sops.yaml.
+        # Deployments from main only. Its variables' values come from SOPS
+        # (local.openclaw_hooks_variables).
         openclaw-hooks = {
           deployment_branch_policy = {
             protected_branches     = false
@@ -293,16 +293,24 @@ locals {
     }
   }
 
-  # The openclaw-hooks environment's variables: names here, values in
-  # tnwks-ops.sops.yaml (they may identify a person). nonsensitive(), as for
-  # the repository names below: GitHub returns variable values unmarked, so
-  # marked values plan as an in-place update of each variable (sensitivity
-  # only, same value). What keeps them out of public CI logs is the action
-  # printing no plan body and the mask (docs/operations/github.md).
-  openclaw_hooks_variables = {
-    for name in ["OPENCLAW_NOTIFY_ACCOUNT", "OPENCLAW_NOTIFY_CHANNEL", "OPENCLAW_NOTIFY_TO"] :
-    name => nonsensitive(data.sops_file.tnwks_ops.data["environments.openclaw-hooks.variables.${name}"])
-  }
+  # The openclaw-hooks environment's variables: names here, values in SOPS
+  # (they may identify a person). tnwks-ops.sops.yaml is masked in CI's log;
+  # OPENCLAW_NOTIFY_ACCOUNT is too short to mask (sops-mask.py refuses it),
+  # so it is in unmasked.sops.yaml. nonsensitive(), as for the repository
+  # names below: GitHub returns variable values unmarked, so marked values
+  # plan as an in-place update of each variable (sensitivity only, same
+  # value). What keeps them out of public CI logs is the action printing no
+  # plan body, and the mask for the masked file (docs/operations/github.md).
+  openclaw_hooks_variables = merge(
+    {
+      for name in ["OPENCLAW_NOTIFY_CHANNEL", "OPENCLAW_NOTIFY_TO"] :
+      name => nonsensitive(data.sops_file.tnwks_ops.data["environments.openclaw-hooks.variables.${name}"])
+    },
+    {
+      for name in ["OPENCLAW_NOTIFY_ACCOUNT"] :
+      name => nonsensitive(data.sops_file.unmasked.data["environments.openclaw-hooks.variables.${name}"])
+    },
+  )
 }
 
 module "github" {

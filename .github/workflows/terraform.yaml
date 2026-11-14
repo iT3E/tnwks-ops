@@ -71,7 +71,8 @@ jobs:
       # Before Terraform, so an error that quotes a value from one of the
       # root's SOPS files (mask_sops in domains.toml) shows *** in this
       # public log. Fails the job, and Terraform is skipped, if sops is
-      # missing, a file does not decrypt or no value comes out.
+      # missing, a file does not decrypt, no value comes out, or a value is
+      # too short to mask (sops-mask.py, MIN_LENGTH).
       # SOPS_AGE_KEY is in the runner pod's env.
       - name: Mask SOPS values
         if: matrix.backend == 'local' && matrix.mask_sops && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')
@@ -197,7 +198,8 @@ jobs:
       # Before Terraform, so an error that quotes a value from one of the
       # root's SOPS files (mask_sops in domains.toml) shows *** in this
       # public log. Fails the job, and Terraform is skipped, if sops is
-      # missing, a file does not decrypt or no value comes out.
+      # missing, a file does not decrypt, no value comes out, or a value is
+      # too short to mask (sops-mask.py, MIN_LENGTH).
       # SOPS_AGE_KEY is in the runner pod's env.
       - name: Mask SOPS values
         if: matrix.backend == 'local' && matrix.mask_sops && (!matrix.enabled_var || vars[matrix.enabled_var] == 'true')

@@ -57,14 +57,19 @@ Pro"), so those entries have none. The module rejects them.
 
 ### Values held in SOPS
 
-Two files in the root hold values that stay out of this public repo, both
-masked in CI's log (The mask, below):
+Three files in the root hold values that stay out of this public repo:
 
 - `repositories.sops.yaml`: the names and descriptions of private
   repositories (this section);
 - `tnwks-ops.sops.yaml`: the `flux` webhook's URL (its host is under the
-  cluster's `SECRET_DOMAIN`) and the `openclaw-hooks` environment's
-  variable values, which may identify a person (next section).
+  cluster's `SECRET_DOMAIN`) and two of the `openclaw-hooks` environment's
+  variable values, which may identify a person (next section);
+- `unmasked.sops.yaml`: values too short to mask, today
+  `OPENCLAW_NOTIFY_ACCOUNT` (next section).
+
+The first two (and `secrets.sops.yaml`, the token) are masked in CI's log;
+`unmasked.sops.yaml` is not, on purpose (The mask, below). All of them are
+encrypted in git the same way.
 
 #### Private repositories
 
@@ -112,27 +117,38 @@ nothing stops one from being pasted there.
 
 #### tnwks-ops' webhook URL and environment variables
 
-`tnwks-ops.sops.yaml` follows the shape of the `tnwks-ops` entry; the names
-are in `main.tf` (`webhooks.flux`, `local.openclaw_hooks_variables`):
+`tnwks-ops.sops.yaml` and `unmasked.sops.yaml` follow the shape of the
+`tnwks-ops` entry; the names are in `main.tf` (`webhooks.flux`,
+`local.openclaw_hooks_variables`, which says which file each variable is
+in):
 
 ```yaml
+# tnwks-ops.sops.yaml
 webhooks:
   flux:
     url: (redacted)
 environments:
   openclaw-hooks:
     variables:
-      OPENCLAW_NOTIFY_ACCOUNT: (redacted)
       OPENCLAW_NOTIFY_CHANNEL: (redacted)
       OPENCLAW_NOTIFY_TO: (redacted)
+---
+# unmasked.sops.yaml
+environments:
+  openclaw-hooks:
+    variables:
+      OPENCLAW_NOTIFY_ACCOUNT: (redacted)
 ```
 
-To change a value, `bin/sops infrastructure/terraform/environments/prod/github/tnwks-ops.sops.yaml`
+To change a value, `bin/sops infrastructure/terraform/environments/prod/github/<file>`
 from the repo root, then check it as in step 3 above and run
 `task github:plan`: a variable shows as an in-place update, which the apply
 sends to GitHub. A new variable needs its name in
-`local.openclaw_hooks_variables` and its value here. sops leaves an empty
-string unencrypted, so an empty value doesn't go in this file. The root
+`local.openclaw_hooks_variables` and its value in one of the two files: in
+`tnwks-ops.sops.yaml` if it is at least 6 characters long (each line, for a
+multi-line value), else in `unmasked.sops.yaml`; CI's mask step fails on a
+shorter value in a masked file (The mask). sops leaves an empty string
+unencrypted, so an empty value doesn't go in either file. The root
 passes the values through `nonsensitive()`, as it does the repository
 names: GitHub returns them unmarked, so a marked value would plan as an
 update of each variable. Locally, `task github:plan` prints them when they
@@ -219,9 +235,9 @@ Account-level, outside any repository:
 
 The root reads one value, `github_token`, from `secrets.sops.yaml` (template:
 `secrets.sops.yaml.example`). The `.sops.yaml` rule for this root includes
-the CI age key, so the self-hosted runner can decrypt it,
-`repositories.sops.yaml` and `tnwks-ops.sops.yaml`. The token is (redacted)
-and never goes in a doc or a log.
+the CI age key, so the self-hosted runner can decrypt it and the other
+SOPS files of the root. The token is (redacted) and never goes in a doc or
+a log.
 
 The owner has to choose the token type. What this phase needs:
 
@@ -271,9 +287,11 @@ The plan body, Terraform's progress lines (which print each repository's
 ID, its name: `Refreshing state... [id=...]`) and the state never reach
 the log. Addresses use the neutral keys. On success, no name of a
 repository held in SOPS reaches a public log or the PR. The values in
-`tnwks-ops.sops.yaml` are in no address or ID either: an environment
-variable's ID is `tnwks-ops:openclaw-hooks:<name>`, the webhook's its
-number.
+`tnwks-ops.sops.yaml` and `unmasked.sops.yaml` are in no address or ID
+either: an environment variable's ID is `tnwks-ops:openclaw-hooks:<name>`,
+the webhook's its number. An API error about an environment variable is the
+request line and GitHub's message: the URL names the variable, and the value
+is only in the request body, which the error doesn't print.
 
 **On failure, one can, without the mask below.** With `-no-color`, Terraform prints an error's
 summary on the `Error:` line, and for an API error the provider's summary
@@ -292,19 +310,34 @@ Before Terraform runs, `terraform.yaml`'s plan and apply jobs mask every
 value of the SOPS files that the root's entry in `.github/ci/domains.toml`
 lists in `mask_sops`. For this root that is `repositories.sops.yaml` (the
 names and descriptions), `secrets.sops.yaml` (the token) and
-`tnwks-ops.sops.yaml` (the webhook URL and the environment variables'
+`tnwks-ops.sops.yaml` (the webhook URL and two environment variables'
 values). The step
 ("Mask SOPS values") downloads a pinned sops release, checks its SHA-256,
 and runs `.github/scripts/sops-mask.py`, which decrypts each file with the
 runner's CI age key and prints `::add-mask::<line>` for each non-blank line
 of each string value, and nothing else. From then on the runner shows `***`
-for those strings anywhere in the job's log, and also for its encoded forms
-(JSON, URL, XML and base64 escapes).
+for those strings anywhere in the job's log, also inside longer words, and
+also for their encoded forms (JSON, URL, XML and base64 escapes). The runner
+masks a string of any length (actions/runner's `SecretMasker.AddValue` has
+no minimum).
+
+That is why a short value can't be masked safely. A value of a few
+characters occurs inside ordinary words, paths and IDs, so the log shows
+`***` in the middle of them, often next to the same text printed unmasked
+before the mask step, and the value can be read off. So `sops-mask.py`
+refuses a line shorter than 6 characters: the step fails,
+naming the file and key path. A value that short goes in
+`unmasked.sops.yaml`, which is not in `mask_sops`: CI decrypts it for
+Terraform but doesn't mask it, so it reaches the log only if Terraform
+prints it, which it doesn't on success (Public logs). 6 is a judgment, not a
+runner limit; a longer value that is a common word has the same problem, and
+no check can see that.
 
 It fails closed: if the download or checksum fails, a file is missing or
-doesn't decrypt, or no value comes out, the step fails and Terraform is
-skipped. Its errors name the file, never a value or sops's own output. It
-runs only for a root with `mask_sops` that is switched on (`enabled_var`).
+doesn't decrypt, no value comes out, or a value is too short, the step
+fails and Terraform is skipped. Its errors name the file (and, for a short
+value, its key path), never a value or sops's own output. It runs only for a
+root with `mask_sops` that is switched on (`enabled_var`).
 The workflow conformance check fails a `terraform.yaml` whose Terraform
 jobs lose the step or run it after Terraform, and `task github:enable`
 refuses to switch the root on until `main` has it.
@@ -319,16 +352,20 @@ What it can't do:
   plan summary, which has only addresses with neutral keys. Anything a later
   change sends elsewhere (an artifact, a comment with error text) is not
   masked.
-- **Nothing printed before it.** It runs after checkout and before
-  Terraform; the checkout prints no values.
+- **Nothing printed before it.** Masks aren't retroactive. It runs after
+  checkout and before Terraform; the checkout prints no values, only text
+  that a short value could occur in (above).
+- **Not `unmasked.sops.yaml`.** Its values are protected by nothing but
+  Terraform not printing them.
 - **New values need a commit.** A repository added to
   `repositories.sops.yaml`, or a value added to `tnwks-ops.sops.yaml`, is
   masked from the commit that adds it, because the step reads the file from
   the same checkout.
-- **Proven only in CI.** Locally the script is tested against a stub sops
-  and run on the real `repositories.sops.yaml` and `tnwks-ops.sops.yaml`
-  with only its output lines counted. That the runner masks the values in a
-  real failed run can only be seen there.
+- **Proven in CI only for what has happened.** Locally the script is tested
+  against a stub sops and run on the real files with only its output lines
+  counted. Real job logs show the runner masking values after the step,
+  inside longer words too; that it masks a value in a real `Error:` line
+  has not been seen yet.
 
 ## One-time bootstrap
 
