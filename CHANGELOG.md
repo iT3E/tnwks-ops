@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.148.1 - 2026-11-14
+
+### Security
+
+* agents: an admission rule refuses each ConfigMap write of a backup mover in the namespaces of the agent trust domains
+
 ## v2.148.0 - 2026-11-14
 
 ### Changed
