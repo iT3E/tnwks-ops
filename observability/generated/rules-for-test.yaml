@@ -406,3 +406,28 @@ groups:
         a request in the last 15 minutes, and Vector does not send it again. Loki refuses a line that is older than
         7 days, or more than one hour older than the newest line of its stream. The log of the aggregator pod has
         the answer of Loki, and vector_component_discarded_events_total has the number of lines.
+  - alert: SecurityAcceptedListUnread
+    expr: max by (k8s_cluster) (homelab_security_converter_accepted_list_read{source_site=""}) == 0
+    for: 30m
+    labels:
+      severity: warning
+    annotations:
+      summary: The list of accepted findings on {{ $labels.k8s_cluster }} gives no entry
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+      description: 'The security converter can not read the list of accepted findings in the Secret security-accepted-findings,
+        so it serves no accepted finding: the board shows none, and the rule of Trivy Operator mutes none. The log
+        of the converter has the number of the line and the kind of its form. security/converter/README.md, "The
+        form that the converter reads", has the form. The alert ends in the cycle after the list is fixed.'
+  - alert: SecurityAcceptedEntriesSkipped
+    expr: max by (k8s_cluster) (homelab_security_converter_accepted_skipped_entries{source_site=""}) > 0
+    for: 1h
+    labels:
+      severity: warning
+    annotations:
+      summary: Entries of the list of accepted findings on {{ $labels.k8s_cluster }} are skipped
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+      description: '{{ $value }} entries of the list of accepted findings do not fit, so the security converter
+        skips them: their findings show as fails on the board. The Prowler runs skip the entries that are not in
+        the form, and take an entry whose source or system is not in the registry. The log of the converter has
+        the number of each entry and why. security/converter/README.md, "An entry that the converter skips", has
+        the rules. The alert ends in the cycle after the list is fixed.'

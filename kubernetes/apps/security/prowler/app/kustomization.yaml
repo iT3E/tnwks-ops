@@ -1,0 +1,26 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: security
+# Nothing of a provider runs before its credentials exist (../README.md, "To
+# start a provider"). The owner names the CronJob of a provider here, after
+# that step:
+#   - ./cronjob-aws.yaml          after the first run of ../../aws-credentials
+resources:
+  - ./networkpolicy.yaml
+configMapGenerator:
+  # The script of each run. Tests: security/tests/test_prowler.py.
+  - name: prowler-scripts
+    files:
+      - ./scripts/run.py
+  # The checks of each provider, from security/registry
+  # (security/generate.py writes them; never edit them).
+  - name: prowler-config
+    files:
+      - ./config/checks-aws.json
+      - ./config/checks-cloudflare.json
+      - ./config/checks-github.json
+generatorOptions:
+  disableNameSuffixHash: true
+  annotations:
+    kustomize.toolkit.fluxcd.io/substitute: disabled

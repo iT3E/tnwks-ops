@@ -1,0 +1,210 @@
+---
+# Prowler for the AWS prod account, each day (../README.md). The session comes
+# from aws-security-audit-sts, which the refresher of ../../aws-credentials
+# writes. A run that fails moves no file and raises KubeJobFailed; the next
+# run is the next day.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: prowler-aws-prod
+spec:
+  # UTC. One run at a time on the node: the management account runs later.
+  schedule: "17 3 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 86400
+      # Under the 4 hours of the session that the run starts with.
+      activeDeadlineSeconds: 10800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: prowler
+            security.tnwks.us/prowler-provider: aws
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          nodeSelector:
+            kubernetes.io/hostname: ${SECURITY_NODE}
+          securityContext:
+            # The user of the Prowler image.
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: prowler
+              image: docker.io/prowlercloud/prowler:5.49.0@sha256:0113d8ee9d42674d1b1baf3b64505835fd2f14b0bb0ab2bbe5d4a52f49ff3d22
+              command: ["/home/prowler/.venv/bin/python", "/app/run.py"]
+              args:
+                - --provider=aws
+                - --system=aws-prod
+                - --checks=/config/checks-aws.json
+              env:
+                - name: HOME
+                  value: /tmp
+                - name: PYTHONUNBUFFERED
+                  value: "1"
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+              envFrom:
+                - secretRef:
+                    name: aws-security-audit-sts
+              # The limit of ../../README.md, "Memory". A scan of one cluster
+              # measured 466 MiB at peak; the first run of an account measures
+              # it here: the script prints the peak of the container.
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 512Mi
+                limits:
+                  memory: 768Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /app
+                  readOnly: true
+                - name: config
+                  mountPath: /config
+                  readOnly: true
+                - name: accepted
+                  mountPath: /accepted
+                  readOnly: true
+                # The whole volume, not a subPath (security/converter/README.md).
+                - name: results
+                  mountPath: /results
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: scripts
+              configMap:
+                name: prowler-scripts
+            - name: config
+              configMap:
+                name: prowler-config
+            # The list of accepted findings: the exception list of the run.
+            # Optional: with no list, nothing is muted.
+            - name: accepted
+              secret:
+                secretName: security-accepted-findings
+                optional: true
+            - name: results
+              persistentVolumeClaim:
+                claimName: security-results
+            # Prowler's own output (the OCSF file and the compliance tables)
+            # before the script copies the OCSF file to the volume.
+            - name: tmp
+              emptyDir:
+                sizeLimit: 1Gi
+---
+# Prowler for the AWS management account, each day. The same session assumes
+# the read-only role of that account: a role assumed from a role lasts one
+# hour at most, so this is a run of its own (../../aws-credentials/README.md).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: prowler-aws-management
+spec:
+  schedule: "17 5 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 86400
+      activeDeadlineSeconds: 10800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: prowler
+            security.tnwks.us/prowler-provider: aws
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          nodeSelector:
+            kubernetes.io/hostname: ${SECURITY_NODE}
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: prowler
+              image: docker.io/prowlercloud/prowler:5.49.0@sha256:0113d8ee9d42674d1b1baf3b64505835fd2f14b0bb0ab2bbe5d4a52f49ff3d22
+              command: ["/home/prowler/.venv/bin/python", "/app/run.py"]
+              args:
+                - --provider=aws
+                - --system=aws-management
+                - --checks=/config/checks-aws.json
+                - --
+                # Prowler assumes the role again before the hour ends.
+                - --role=arn:aws:iam::654654220436:role/tnwks-security-audit
+                - --session-duration=3600
+              env:
+                - name: HOME
+                  value: /tmp
+                - name: PYTHONUNBUFFERED
+                  value: "1"
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+              envFrom:
+                - secretRef:
+                    name: aws-security-audit-sts
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 512Mi
+                limits:
+                  memory: 768Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /app
+                  readOnly: true
+                - name: config
+                  mountPath: /config
+                  readOnly: true
+                - name: accepted
+                  mountPath: /accepted
+                  readOnly: true
+                - name: results
+                  mountPath: /results
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: scripts
+              configMap:
+                name: prowler-scripts
+            - name: config
+              configMap:
+                name: prowler-config
+            - name: accepted
+              secret:
+                secretName: security-accepted-findings
+                optional: true
+            - name: results
+              persistentVolumeClaim:
+                claimName: security-results
+            - name: tmp
+              emptyDir:
+                sizeLimit: 1Gi

@@ -1,8 +1,8 @@
 ---
 # The converter (security/converter/README.md), in the form of the evidence
 # collector (monitoring/observability-evidence): the pinned Python image, with
-# its code and the map of the streams from a ConfigMap. Reloader restarts it
-# when one of them changes.
+# its code and its maps from a ConfigMap, and the list of accepted findings
+# from its Secret. Reloader restarts it when one of them changes.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -82,6 +82,20 @@ spec:
         globalMounts:
           - path: /config
             readOnly: true
+      # The list of accepted findings (security/README.md, "Accepted
+      # findings"): the Secret that Flux decrypts, with the JSON array in its
+      # key accepted.json, read at /accepted/accepted.json. Optional: before the owner
+      # makes the first list, the Secret does not exist and the list is empty.
+      # The chart's secret type has no `optional`, so the volume is custom.
+      accepted:
+        type: custom
+        volumeSpec:
+          secret:
+            secretName: security-accepted-findings
+            optional: true
+        globalMounts:
+          - path: /accepted
+            readOnly: true
     serviceMonitor:
       app:
         enabled: true
@@ -90,3 +104,12 @@ spec:
           - port: http
             interval: 1m
             scrapeTimeout: 10s
+            metricRelabelings:
+              # The series of the converter carry the labels of the contract
+              # only. The pod and its address change at each restart, and an
+              # alert that compares a series with the day before
+              # (SecurityFindingNew) matches on all labels. No rule or board
+              # reads these four. One pod runs (Recreate), so two series can
+              # not meet after the drop.
+              - regex: pod|instance|container|endpoint
+                action: labeldrop
