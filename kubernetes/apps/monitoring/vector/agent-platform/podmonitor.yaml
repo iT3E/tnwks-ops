@@ -1,0 +1,21 @@
+---
+# The gauges of the agent platform and Vector's own metrics of the platform
+# agent (config/vector.yaml), as for the aggregator (../aggregator/podmonitor.yaml).
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: vector-agent-platform
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vector-agent-platform
+      app.kubernetes.io/instance: vector-agent-platform
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: vector_.+_bucket
+          action: drop
+        - regex: host
+          action: labeldrop

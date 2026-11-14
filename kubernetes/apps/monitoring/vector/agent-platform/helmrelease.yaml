@@ -1,0 +1,103 @@
+---
+# The log agent of the agent platform (config/vector.yaml, ../README.md): one
+# Vector pod on each node of homelab-wsl. It is apart from the pod-log agent
+# (../agent), which every cluster shares, so a change here starts no pod
+# outside this cluster and no other agent. The image of the aggregator: both
+# ends of the Vector protocol are one release.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: vector-agent-platform
+  namespace: monitoring
+spec:
+  chart:
+    spec:
+      chart: app-template
+      version: 3.7.3
+      interval: 30m
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  interval: 30m
+  values:
+    defaultPodOptions:
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      # Root, to read the pod logs of the node (owned by root), with no
+      # capability and no privilege. It only reads them.
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault
+    controllers:
+      vector-agent-platform:
+        type: daemonset
+        strategy: RollingUpdate
+        annotations:
+          reloader.stakater.com/auto: "true"
+        containers:
+          app:
+            image:
+              repository: timberio/vector
+              tag: 0.61.0-distroless-libc@sha256:1a3451978644d5cd4b99a0b28c990791e2f7e1efbea4184122f1c59a56448143
+            args: ["--config", "/etc/vector/vector.yaml"]
+            env:
+              VECTOR_SELF_NODE_NAME:
+                valueFrom:
+                  fieldRef:
+                    apiVersion: v1
+                    fieldPath: spec.nodeName
+              VECTOR_SELF_POD_NAME:
+                valueFrom:
+                  fieldRef:
+                    apiVersion: v1
+                    fieldPath: metadata.name
+              VECTOR_SELF_POD_NAMESPACE:
+                valueFrom:
+                  fieldRef:
+                    apiVersion: v1
+                    fieldPath: metadata.namespace
+            # The gauges of the platform and Vector's own metrics, for the
+            # PodMonitor (podmonitor.yaml).
+            ports:
+              - name: metrics
+                containerPort: 9598
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            resources:
+              requests:
+                cpu: 10m
+                memory: 64Mi
+              limits:
+                memory: 256Mi
+    serviceAccount:
+      create: true
+      name: vector-agent-platform
+    persistence:
+      config:
+        type: configMap
+        name: vector-agent-platform-configmap
+        globalMounts:
+          - path: /etc/vector/vector.yaml
+            subPath: vector.yaml
+            readOnly: true
+      # The positions in the log files. An emptyDir: a new pod reads the
+      # files of the pods it selects from their start again.
+      data:
+        type: emptyDir
+        globalMounts:
+          - path: /vector-data-dir
+      var-log:
+        type: hostPath
+        hostPath: /var/log
+        hostPathType: Directory
+        globalMounts:
+          - path: /var/log
+            readOnly: true

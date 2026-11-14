@@ -13,7 +13,7 @@ metadata:
     agents.home.arpa/trust-domain: workflows
     # The logs of the sandbox supervisors here go to Loki (never those of a
     # workload pod). The other pods that ship carry their own label
-    # (kubernetes/apps/monitoring/vector/agent/config/vector.yaml).
+    # (kubernetes/apps/monitoring/vector/agent-platform/config/vector.yaml).
     logs.home.arpa/ship-supervisors: "true"
 ---
 # Deny by default. A sandbox has two pods, and its sandbox gateway gives each

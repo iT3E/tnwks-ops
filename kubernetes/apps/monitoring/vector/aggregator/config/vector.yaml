@@ -62,10 +62,7 @@ transforms:
   # `app-drift result=drift detail=...`) becomes the gauge
   # homelab_agent_platform_result_timestamp_seconds: the time of the newest
   # line for each check and result. Only these two words go on as labels,
-  # never the rest of the line. A line `instruction-check file=<name>
-  # change=<new|changed|gone>` of the backup container of an agent pod
-  # becomes the check instruction-file with the change as its result: the
-  # name of the file stays in Loki. The other events end here; the Loki sink
+  # never the rest of the line. The other events end here; the Loki sink
   # gets every line from kubernetes_remap.
   agent_platform_results:
     type: remap
@@ -74,13 +71,8 @@ transforms:
     source: |
       ns = string(.kubernetes.pod_namespace) ?? ""
       if !starts_with(ns, "agents-") { abort }
-      msg = string(.message) ?? ""
-      line, err = parse_regex(msg, r'^(?P<check>[a-z][a-z0-9-]{0,39}) result=(?P<result>[a-z]{1,20})(?: |$)')
-      if err != null {
-        line, err = parse_regex(msg, r'^instruction-check file=.+ change=(?P<result>new|changed|gone)$')
-        if err != null { abort }
-        line.check = "instruction-file"
-      }
+      line, err = parse_regex(string(.message) ?? "", r'^(?P<check>[a-z][a-z0-9-]{0,39}) result=(?P<result>[a-z]{1,20})(?: |$)')
+      if err != null { abort }
       # The time of the line; the time it got here if it has none.
       ts = to_unix_timestamp(timestamp(.timestamp) ?? parse_timestamp(string(.timestamp) ?? "", "%+") ?? now())
       . = {
@@ -105,43 +97,6 @@ transforms:
           app: "{{ app }}"
           check: "{{ check }}"
           result: "{{ result }}"
-
-  # The errors of the model bridge in `ai`, for its alert
-  # (docs/apps/agent-platform.md, "Alerts"). The bridge writes one JSON line
-  # for each event; a line with event engine_error becomes the gauge
-  # homelab_model_bridge_engine_error_timestamp_seconds: the time of the
-  # newest error for each trust domain and kind (rate_limit when the plan
-  # limit stops a call). A kind or domain outside a short lowercase name
-  # goes on as "other", so a label never holds more than a name.
-  model_bridge_errors:
-    type: remap
-    inputs:
-      - kubernetes_remap
-    source: |
-      if (string(.kubernetes.pod_namespace) ?? "") != "ai" || (string(.custom_app_name) ?? "") != "model-bridge" { abort }
-      parsed, err = parse_json(string(.message) ?? "")
-      if err != null { abort }
-      line = object(parsed) ?? {}
-      if (string(line.event) ?? "") != "engine_error" { abort }
-      kind = string(line.kind) ?? ""
-      if !match(kind, r'^[a-z_]{1,32}$') { kind = "other" }
-      domain = string(line.domain) ?? ""
-      if !match(domain, r'^[a-z0-9-]{1,32}$') { domain = "other" }
-      ts = to_unix_timestamp(timestamp(.timestamp) ?? parse_timestamp(string(.timestamp) ?? "", "%+") ?? now())
-      . = {"domain": domain, "kind": kind, "time": ts}
-
-  model_bridge_error_metrics:
-    type: log_to_metric
-    inputs:
-      - model_bridge_errors
-    metrics:
-      - type: gauge
-        field: time
-        namespace: homelab
-        name: model_bridge_engine_error_timestamp_seconds
-        tags:
-          domain: "{{ domain }}"
-          kind: "{{ kind }}"
 
   # The time of an audit line is the time of its event (stageTimestamp), not
   # the time it got here: a line that waited on the node rests at its own
@@ -246,5 +201,4 @@ sinks:
     inputs:
       - internal_metrics
       - agent_platform_result_metrics
-      - model_bridge_error_metrics
     address: 0.0.0.0:9598

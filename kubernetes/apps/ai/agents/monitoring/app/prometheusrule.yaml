@@ -2,8 +2,10 @@
 # The alerts of the agent platform (docs/apps/agent-platform.md, "Alerts").
 # Most read kube-state-metrics. WorkflowAppDrift, AgentInstructionFileChanged,
 # AgentInstructionCheckStale and ModelBridgeRateLimited read the time of the
-# newest line of a kind that the Vector aggregator serves
-# (kubernetes/apps/monitoring/vector/aggregator).
+# newest line of a kind, a gauge that Vector serves: the aggregator for the
+# result lines (kubernetes/apps/monitoring/vector/aggregator), the platform
+# log agent for instruction-file and the model bridge
+# (kubernetes/apps/monitoring/vector/agent-platform).
 # Already covered elsewhere, so not here: a failed or late snapshot of a
 # state volume (the kopiur chart's rules, KopiurLastBackupFailed and
 # KopiurBackupStale, match each SnapshotPolicy), and a crash loop (the

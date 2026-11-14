@@ -517,24 +517,41 @@ allowlist. A pod ships only when its pod template has the label
 until its manifest has the label too. The sandbox supervisors are made by the
 gateway, so their namespace opts in instead
 (`logs.home.arpa/ship-supervisors: "true"`, `agents-workflows` only), and
-only pods with the label `openshell.ai/component: supervisor` ship. The
-Vector agent reads both (`kubernetes/apps/monitoring/vector/agent/config/vector.yaml`,
-the sources `kubernetes_logs_allowlist` and `kubernetes_logs_supervisors`).
-Query them by namespace and app, for example
+only pods with the labels `openshell.ai/component: supervisor` and
+`openshell.ai/boundary-role: supervisor` ship. A pod with
+`openshell.ai/boundary-role: workload` never ships, even with the allowlist
+label.
+
+A Vector agent of its own reads them: the platform agent, a DaemonSet that
+only homelab-wsl runs (`kubernetes/apps/monitoring/vector/agent-platform/`,
+the sources `allowlist` and `supervisors` of its `config/vector.yaml`). The
+shared Vector agent and the aggregator stay the same on each cluster. Query
+the lines by namespace and app, for example
 `{namespace="agents-workflows", app="run-receiver"} |= "result kept"`.
 
-Before a line leaves the node, the Vector agent removes from it (the
-transform `agent_platform_redact`, with its tests in
-`observability/vector-tests/agent-platform-redact.yaml`):
+Before a line leaves the node, the platform agent changes it as follows (its
+tests are in `observability/vector-tests/agent-platform-logs.yaml`):
 
-- the colour codes;
-- the rest of the line from a field whose name ends in `_preview`: the
-  gateway logs the first 120 or so characters of each command it relays to
-  a sandbox (`command_preview=`), and Loki gets `command_preview=(dropped)`;
-- the query string of each URL or path (`?(dropped)` takes its place);
-- the `[cmd:...]` context of a process event, and a supervisor's full OCSF
-  JSON record (it is off by default, and can hold the command line of a
-  process).
+- **The sandbox gateway** (`openshell-gateway`). The colour codes go. From
+  the first field that can hold the text of a command to the end of the line,
+  the line becomes `(dropped)`: a `[cmd:` context, or a key that ends in
+  `preview`, or `cmd`, `cmd_line`, `cmdline`, `command`, `args`, `argv` or
+  `env`, before `=` or `:`, in any case. The gateway logs the first 120 or
+  so characters of each command it relays to a sandbox (`command_preview=`),
+  and Loki gets `command_preview=(dropped)`. The query string of each URL,
+  path or host becomes `?(dropped)`. A JSON OCSF record (it holds
+  `class_uid`) becomes `(dropped: OCSF JSON record)`: it is off by default,
+  and can hold the command line of a process.
+- **A sandbox supervisor** (`supervisor`). The same, and then the line
+  stays only when it is a known line type of OpenShell 0.1.8 (SSH, NET,
+  HTTP, CONFIG, an SSH relay EVENT, LIFECYCLE, PROC, or a plain log line of
+  the supervisor) and holds only the characters that type allows. Any other
+  line becomes `(dropped: unknown line type)`. A new release that logs a new
+  kind of line shows the marker, and a test of the new line moves it to the
+  list.
+- **Every other container** (the run receiver, the model bridge and the
+  pilot's pod) ships its line as it is. Their lines are the program's own
+  (below), and the bridge's JSON lines stay whole.
 
 | Pod | What its log holds | About a day |
 | --- | --- | --- |
@@ -593,8 +610,9 @@ Kustomization `agents-monitoring`, homelab-wsl only). Each alert goes to the
 War Room, the default Telegram route of Alertmanager, with severity
 `warning`. Most read kube-state-metrics; `WorkflowAppDrift`,
 `AgentInstructionFileChanged`, `AgentInstructionCheckStale` and
-`ModelBridgeRateLimited` read lines of the logs, as gauges of the Vector
-aggregator.
+`ModelBridgeRateLimited` read lines of the logs, as gauges of Vector: the
+aggregator for `WorkflowAppDrift`, the platform agent for the other three
+([Logs](#logs)).
 
 | Alert | Fires when | `for` | First step |
 | --- | --- | --- | --- |
@@ -629,10 +647,14 @@ aggregator.
   (20 minutes for the drift line, which comes every 15). A line
   `instruction-check file=<name> change=<change>` becomes the check
   `instruction-file` with the change as its result; the file name stays in
-  Loki. The bridge's `engine_error` lines become
+  Loki. A kind or domain of the bridge outside a short pattern becomes
+  `other`. The bridge's `engine_error` lines become
   `homelab_model_bridge_engine_error_timestamp_seconds{domain, kind}` the
   same way. A line read again from the start of its file keeps its old time,
-  so it does not fire an alert again.
+  so it does not fire an alert again. The aggregator makes the gauge of
+  each `<check> result=` line; the platform agent makes the gauge of the
+  `instruction-check file=` lines and of the bridge, on its own port
+  (`homelab-wsl` only).
 - **The snapshots** of a state volume have the kopiur chart's rules,
   which match each SnapshotPolicy, `agent-state` too: `KopiurLastBackupFailed`
   and `KopiurBackupStale` (48 hours).

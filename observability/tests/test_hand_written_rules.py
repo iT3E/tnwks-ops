@@ -92,8 +92,16 @@ def vector_image(config):
     return found[0]
 
 
-def test_each_alert_of_a_tested_rule_file_has_a_case():
-    """A rule file can have its cases in more than one fixture."""
+def test_fixture_folders_are_not_empty():
+    """A lost glob or a moved folder must not pass as zero cases."""
+    assert RULE_TESTS, "observability/rule-tests has no fixture"
+    assert VECTOR_TESTS, "observability/vector-tests has no fixture"
+
+
+def test_each_alert_of_a_tested_rule_file_has_a_case_that_fires():
+    """A rule file can have its cases in more than one fixture. A case counts
+    for an alert only when it expects the alert to fire: a rule that never
+    fires passes every case that expects nothing."""
     tested = {}
     for fixture in RULE_TESTS:
         spec = yaml.safe_load(fixture.read_text())
@@ -101,6 +109,7 @@ def test_each_alert_of_a_tested_rule_file_has_a_case():
             case["alertname"]
             for test in spec["tests"]
             for case in test.get("alert_rule_test", [])
+            if case.get("exp_alerts")
         }
         for name in spec["rule_files"]:
             assert (ROOT / name).is_file(), f"{fixture.name}: {name} is not in the repo"
@@ -109,7 +118,7 @@ def test_each_alert_of_a_tested_rule_file_has_a_case():
         for group in plain_rules(ROOT / name)["groups"]:
             for rule in group["rules"]:
                 if "alert" in rule:
-                    assert rule["alert"] in names, f"{name}: no case for {rule['alert']}"
+                    assert rule["alert"] in names, f"{name}: no case where {rule['alert']} fires"
 
 
 @pytest.mark.parametrize("fixture", RULE_TESTS, ids=[p.name for p in RULE_TESTS])

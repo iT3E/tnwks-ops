@@ -20,79 +20,6 @@ sources:
     # file it has open after the kubelet deletes it.
     glob_minimum_cooldown_ms: 2000
 
-  # The allowlist: a long-running pod ships only when its pod template
-  # carries the label logs.home.arpa/ship=true. Nothing ships by default, and
-  # a new pod in the same namespace stays out until its manifest names it.
-  # On the WSL clusters the label is on the run receiver and the sandbox
-  # gateway of the workflows trust domain, the agent pod of the pilot (only
-  # its backup, sandbox-start and init containers: the pod excludes the agent
-  # container with vector.dev/exclude-containers), and the model bridge
-  # (docs/apps/agent-platform.md, "Logs"). A label selector can't say "Job
-  # pods or these pods", so this is a second source; Job pods are the first
-  # source's. Each source keeps its own checkpoints and adds its watches. A
-  # cluster whose first source takes every pod (MS-01) labels no pod.
-  kubernetes_logs_allowlist:
-    type: kubernetes_logs
-    use_apiserver_cache: true
-    extra_label_selector: "logs.home.arpa/ship=true,!batch.kubernetes.io/job-name"
-    glob_minimum_cooldown_ms: 2000
-
-  # The sandbox supervisors of a namespace labelled
-  # logs.home.arpa/ship-supervisors=true (agents-workflows only). The gateway
-  # makes these pods, so their labels can't carry the allowlist label; the
-  # namespace opts in, and only pods with the supervisor component label
-  # ship. Never the workload pod of a sandbox: that is the code an agent
-  # runs.
-  kubernetes_logs_supervisors:
-    type: kubernetes_logs
-    use_apiserver_cache: true
-    extra_namespace_label_selector: "logs.home.arpa/ship-supervisors=true"
-    extra_label_selector: "openshell.ai/component=supervisor"
-    glob_minimum_cooldown_ms: 2000
-
-# Transforms
-transforms:
-  # Content leaves the line here, on the node, before it reaches the
-  # aggregator or Loki. In order:
-  #   - colour codes go (the gateway writes them), so the patterns below see
-  #     plain text;
-  #   - a full OCSF JSON record of a supervisor goes: the short line of the
-  #     same event ships, and the JSON one can hold the command line of the
-  #     process that made a connection;
-  #   - the rest of a line from a field whose name ends in _preview (the
-  #     gateway logs the first characters of each command it relays as
-  #     command_preview, the last field of the line);
-  #   - the [cmd:...] context of a process event;
-  #   - the query string of each URL or path (it can hold search text or a
-  #     token): ?(dropped) takes its place.
-  # The tests of this transform are in observability/vector-tests/.
-  agent_platform_redact:
-    type: remap
-    inputs:
-      - kubernetes_logs_allowlist
-      - kubernetes_logs_supervisors
-    source: |
-      if is_string(.message) {
-        msg = replace(string!(.message), r'\x1b\[[0-9;]*[A-Za-z]', "")
-        if starts_with(msg, "{") && contains(msg, "\"class_uid\"") {
-          abort
-        }
-        msg = replace(msg, r'\b[a-z_]*_preview=.*', "command_preview=(dropped)")
-        msg = replace(msg, r'\[cmd:[^\]]*\]', "[cmd:(dropped)]")
-        # No capture group in a replacement here: Flux and Vector would
-        # both read its dollar sign as a variable.
-        words = map_values(split(msg, " ")) -> |word| {
-          parts = split(word, "?", limit: 2)
-          if length(parts) == 2 && contains(string!(parts[0]), "/") {
-            end = if ends_with(string!(parts[1]), "]") { "]" } else { "" }
-            string!(parts[0]) + "?(dropped)" + end
-          } else {
-            word
-          }
-        }
-        .message = join!(words, " ")
-      }
-
 # Sinks
 sinks:
   kubernetes_sink:
@@ -100,6 +27,5 @@ sinks:
     compression: true
     inputs:
       - kubernetes_logs
-      - agent_platform_redact
     address: "vector-aggregator.monitoring.svc.cluster.local:6000"
     version: "2"

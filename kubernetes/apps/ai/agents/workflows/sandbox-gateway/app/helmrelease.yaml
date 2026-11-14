@@ -45,10 +45,10 @@ spec:
       # list also names an `openshell` namespace, which isn't ours.
       serverDnsNames: []
     # The log of this gateway goes to Loki: each sandbox it made or removed
-    # and each command it relayed, with no command text (the Vector agent
-    # drops the preview of the command on the node,
-    # kubernetes/apps/monitoring/vector/agent/config/vector.yaml). Only this
-    # trust domain's gateway ships.
+    # and each command it relayed, with no command text (the platform log
+    # agent drops the preview of the command on the node,
+    # kubernetes/apps/monitoring/vector/agent-platform/config/vector.yaml).
+    # Only this trust domain's gateway ships.
     podLabels:
       logs.home.arpa/ship: "true"
     # 40 to 145 MiB in use on a test cluster (the agent platform design,
