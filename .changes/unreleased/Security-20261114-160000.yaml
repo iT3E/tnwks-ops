@@ -1,3 +1,0 @@
-kind: Security
-body: 'privacy: bin/privacy-check reads the denylist in two forms, the plain list and one opaque line that `bin/privacy-check --encode` makes from it; a value that reads as neither stops the check. Hits print as "hit: <where>" with every term in it replaced by "[term]", case is ignored outside ASCII too whatever the locale, paths print as they are rather than as escapes, and a failed search stops the check. task privacy:sync gives a repository the opaque line once its bin/privacy-check reads it and its comment check pins the fixed shared workflow, and the plain list until then, and says which. Tests in .github/scripts/test_privacy_terms.py.'
-time: 2026-11-14T16:00:00.000000+00:00
