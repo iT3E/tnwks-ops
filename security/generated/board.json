@@ -407,7 +407,8 @@
       "site": "homelab-wsl-02",
       "domain": "infrastructure",
       "sources": [
-        "stream"
+        "stream",
+        "trivy"
       ]
     },
     {
@@ -575,6 +576,11 @@
       "system": "homelab-wsl-02",
       "late_after_seconds": 900,
       "check": "k8s-audit"
+    },
+    {
+      "source": "trivy",
+      "system": "homelab-wsl-02",
+      "late_after_seconds": 129600
     },
     {
       "source": "stream",
