@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.115.2 - 2026-11-14
+
+### Security
+
+* agents: the pilot denies the tool github_publish, so its outward paths rest on a written rule
+
 ## v2.115.1 - 2026-11-13
 
 ### Fixed
