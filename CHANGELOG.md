@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.138.0 - 2026-11-14
+
+### Added
+
+* ai: a daily check that Tempo has a completed heartbeat run of each personal agent in the last 26 hours (CronJob agent-heartbeat-check, which asks up to 3 times and retries a failed pod once), with the alerts AgentHeartbeatMissing and AgentHeartbeatCheckStale.
+
 ## v2.137.0 - 2026-11-14
 
 ### Added
