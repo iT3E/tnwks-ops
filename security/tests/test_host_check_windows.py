@@ -27,6 +27,10 @@ REGISTRY = ROOT / "security/registry"
 PWSH = shutil.which("pwsh")
 NOW = datetime.datetime(2026, 11, 13, 12, 0, tzinfo=datetime.UTC)
 CHECKS = ("defender-enabled", "defender-signatures", "firewall-enabled", "updates-pending")
+# Design Doc 0004, section 4.1.4: the alert covers Defender off, the firewall off and
+# updates pending past 14 days. Old signatures show on the board and do not alert.
+SEVERITY = {"defender-enabled": "high", "defender-signatures": "medium",
+            "firewall-enabled": "high", "updates-pending": "high"}
 RESULT = "homelab_security_check_result"
 LAST = "homelab_security_last_result_timestamp_seconds"
 FAILED = "homelab_security_host_check_failed_queries"
@@ -79,7 +83,8 @@ def host_check(fakes: str = "") -> dict:
 def test_a_host_where_each_check_passes_gives_four_results_of_0_and_the_time():
     families = host_check()
     assert textfile.series(families, RESULT) == {
-        (("check", check), ("source", "host-check"), ("system", "HOST-A")): 0 for check in CHECKS}
+        (("check", check), ("severity", SEVERITY[check]), ("source", "host-check"), ("system", "HOST-A")): 0
+        for check in CHECKS}
     assert textfile.value(families, LAST, source="host-check", system="HOST-A") == NOW.timestamp()
     assert textfile.value(families, FAILED, system="HOST-A") == 0
     assert textfile.value(families, "homelab_security_host_defender_signature_timestamp_seconds",
@@ -130,13 +135,15 @@ function Get-TnwksDefenderStatus {
     [pscustomobject]@{ AMServiceEnabled = $true; AntivirusEnabled = $true; RealTimeProtectionEnabled = $true
         AntivirusSignatureLastUpdated = $now.AddDays(-7); QuickScanEndTime = $null; FullScanEndTime = $null }
 }""")
-    assert textfile.value(at_limit, RESULT, source="host-check", check="defender-signatures", system="HOST-A") == 0
+    assert textfile.value(at_limit, RESULT, source="host-check", check="defender-signatures", system="HOST-A",
+                         severity="medium") == 0
     past = host_check(r"""
 function Get-TnwksDefenderStatus {
     [pscustomobject]@{ AMServiceEnabled = $true; AntivirusEnabled = $true; RealTimeProtectionEnabled = $true
         AntivirusSignatureLastUpdated = $now.AddDays(-7).AddMinutes(-1); QuickScanEndTime = $null; FullScanEndTime = $null }
 }""")
-    assert textfile.value(past, RESULT, source="host-check", check="defender-signatures", system="HOST-A") == 1
+    assert textfile.value(past, RESULT, source="host-check", check="defender-signatures", system="HOST-A",
+                         severity="medium") == 1
 
 
 BROKEN = {
@@ -260,6 +267,15 @@ def test_a_label_value_is_escaped():
     assert output == r'x{a="b\"c\\d"} 1'
 
 
+def test_each_check_has_a_severity_and_the_alert_reads_the_checks_that_4_1_4_names():
+    """SecurityFindingNew reads severity high and critical only (observability/rules.py)."""
+    text = SCRIPT.read_text()
+    block = text[text.index("$script:Severity"):text.index("}", text.index("$script:Severity"))]
+    assert dict(re.findall(r"'([a-z-]+)'\s+=\s+'([a-z]+)'", block)) == SEVERITY
+    rules = (ROOT / "observability/rules.py").read_text()
+    assert 'SECURITY_FINDING_SEVERITY = "high|critical"' in rules
+
+
 def test_the_script_is_ascii_for_windows_powershell():
     """Windows PowerShell 5.1 reads a script with no byte order mark in the code page
     of the system, so a letter outside ASCII would change."""
@@ -297,6 +313,29 @@ def test_the_role_changes_nothing_in_a_check_run():
     assert "ansible_check_mode" in acl["when"], "a check run has no new directory to read an ACL of"
 
 
+def test_only_system_and_the_administrators_may_change_the_directory_of_the_script():
+    """SYSTEM runs the script: the directory has no inherited rule, the Administrators
+    own it, SYSTEM and the Administrators have full control and Users read. The rules are
+    set before the copy of the script, in a check run only through ShouldProcess, and
+    the account of the distro gets no right there."""
+    tasks = flat(yaml.safe_load((ROLE / "tasks/main.yml").read_text()))
+    names = [task["name"] for task in tasks]
+    lock = next(task for task in tasks if task["name"].startswith("Only SYSTEM and the Administrators"))
+    assert names.index(lock["name"]) < names.index("Host check script")
+    script = lock["ansible.windows.win_powershell"]["script"]
+    assert "SetAccessRuleProtection($true, $false)" in script, "no inherited rule"
+    assert "$acl.SetOwner($admins)" in script and "'S-1-5-32-544'" in script
+    assert re.findall(r"@\('(S-[0-9-]+)', '([^']+)'\)", script) == [
+        ("S-1-5-18", "FullControl"), ("S-1-5-32-544", "FullControl"), ("S-1-5-32-545", "ReadAndExecute, Synchronize")]
+    assert "$Ansible.Changed" in script
+    assert "ansible_check_mode" in lock["when"]
+    for task in tasks:
+        if "ansible.windows.win_acl" in task:
+            assert task["ansible.windows.win_acl"]["path"] == "{{ host_check_distro_dir }}", task["name"]
+    defaults = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
+    assert not defaults["host_check_distro_dir"].startswith(defaults["host_check_dir"])
+
+
 def test_the_way_back_removes_the_task_before_the_files():
     blocks = yaml.safe_load((ROLE / "tasks/main.yml").read_text())
     assert [block["when"] for block in blocks] == ["host_check_state == 'present'", "host_check_state == 'absent'"]
@@ -327,13 +366,20 @@ def test_the_task_runs_the_script_with_the_name_of_the_host_and_the_limits_of_th
     assert defaults["host_check_updates_max_age_days"] == 14, "Design Doc 0004, section 4.1.4"
 
 
-def test_each_windows_host_of_the_inventory_lists_the_host_check_in_the_registry():
+def test_each_windows_host_of_the_inventory_is_a_system_with_the_checks_of_the_host_check():
+    """A system lists the source in `sources` only after its first result is on site 2
+    (a follow-up pull request): before that, the rule for a late result would fire. The
+    result series reach the lines of the registry without it."""
     hosts = yaml.safe_load((ANSIBLE / "inventory/hosts.yml").read_text())
     windows = set(hosts["all"]["children"]["windows_hosts"]["hosts"])
     systems = yaml.safe_load((REGISTRY / "systems.yaml").read_text())
     of_type = {system["name"]: system for system in systems if system["type"] == "windows-host"}
     assert set(of_type) == windows
     for system in of_type.values():
-        assert "host-check" in system.get("sources", []), system["name"]
+        assert "host-check" not in system.get("sources", []), system["name"]
+    controls = yaml.safe_load((REGISTRY / "controls.yaml").read_text())
+    named = {item["check"] for line in controls for item in line["checks"].get("windows-host", [])
+             if item["source"] == "host-check"}
+    assert named == set(CHECKS)
     sources = {source["name"]: source for source in yaml.safe_load((REGISTRY / "sources.yaml").read_text())}
     assert (sources["host-check"]["cycle"], sources["host-check"]["late_after"]) == ("6h", "12h")

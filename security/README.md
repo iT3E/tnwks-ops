@@ -233,14 +233,18 @@ of homelab-wsl-02 brings the two series of the registry to its rules.
 | --- | --- | --- |
 | Each Windows host | The SYSTEM scheduled task `tnwks-host-check`, every 6 hours and 10 minutes after boot (role `windows_host_check`) | `textfile_inputs\tnwks_security_host_check.prom` |
 
-Each check gives the number of items that fail it, and 0 is a pass:
+Each check gives the number of items that fail it, and 0 is a pass. Each
+result carries the label `severity`. `SecurityFindingNew` reads `high` and
+`critical` only, so the checks that section 4.1.4 of Design Doc 0004 names
+for the alert are `high`, and old signatures, which it does not name, are
+`medium`: they show on the board and do not alert.
 
-| Check | What it reads | What fails |
-| --- | --- | --- |
-| `defender-enabled` | `Get-MpComputerStatus` | Each of the Defender service, the antivirus and real-time protection that is off |
-| `defender-signatures` | `Get-MpComputerStatus` | Signatures older than 7 days, the age at which Defender counts them as out of date |
-| `firewall-enabled` | `Get-NetFirewallProfile -PolicyStore ActiveStore` | Each of the Domain, Private and Public profiles that is off |
-| `updates-pending` | An online search of Windows Update for software updates that are not installed, not hidden and not optional | Each such update released more than 14 days ago (Design Doc 0004, section 4.1.4) |
+| Check | What it reads | What fails | Severity |
+| --- | --- | --- | --- |
+| `defender-enabled` | `Get-MpComputerStatus` | Each of the Defender service, the antivirus and real-time protection that is off | `high` |
+| `defender-signatures` | `Get-MpComputerStatus` | Signatures older than 7 days, the age at which Defender counts them as out of date | `medium` |
+| `firewall-enabled` | `Get-NetFirewallProfile -PolicyStore ActiveStore` | Each of the Domain, Private and Public profiles that is off | `high` |
+| `updates-pending` | An online search of Windows Update for software updates that are not installed, not hidden and not optional | Each such update released more than 14 days ago (Design Doc 0004, section 4.1.4) | `high` |
 
 The file also has series of the host check itself, which no rule of the
 registry reads: each protection and profile, the time of the signatures and
@@ -252,9 +256,24 @@ install, a restart that an update waits for, and
 the run writes no result series and no time, and
 `homelab_security_host_check_failed_queries` says how many failed. The rules
 then read each line of the host as "No evidence", and
-`SecurityResultLate` fires for the host. The run never writes 0 for a check
+`SecurityResultLate` fires for a host that lists `host-check` in its
+`sources`. The run never writes 0 for a check
 that it could not do. A fact that no check reads (the newest install, a
 pending restart) only leaves out its own series when its query fails.
+
+SYSTEM runs the script from `C:\ProgramData\tnwks-host-check`. The role sets
+the rules of that directory on each run: no inherited rule, the
+Administrators own it, SYSTEM and the Administrators have full control, and
+Users may read. A file below it with a rule of its own, or another owner,
+gets the rules of the directory again. The account of the WSL distro may
+write only its own directory of the textfile collector.
+
+**The first result, then the source.** A host lists `host-check` in
+`sources` of `systems.yaml` only after its first result is on the board of
+homelab-wsl-02, in a pull request of its own. Before that, the rule for a
+late result would fire at once. The results reach the lines of the registry
+without it: `sources` only says which sources the rule for a late result
+watches.
 
 To run it now on a host: `Start-ScheduledTask -TaskName tnwks-host-check`.
 The way back (Design Doc 0004, section 4.3): set `host_check_state: absent`

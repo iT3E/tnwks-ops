@@ -416,18 +416,14 @@
       "type": "windows-host",
       "site": "homelab-wsl",
       "domain": "infrastructure",
-      "sources": [
-        "host-check"
-      ]
+      "sources": []
     },
     {
       "name": "WSL-02",
       "type": "windows-host",
       "site": "homelab-wsl-02",
       "domain": "infrastructure",
-      "sources": [
-        "host-check"
-      ]
+      "sources": []
     },
     {
       "name": "DESKTOP-HKE05KI-ubuntu",
@@ -584,16 +580,6 @@
       "source": "trivy",
       "system": "homelab-wsl-02",
       "late_after_seconds": 129600
-    },
-    {
-      "source": "host-check",
-      "system": "DESKTOP-HKE05KI",
-      "late_after_seconds": 43200
-    },
-    {
-      "source": "host-check",
-      "system": "WSL-02",
-      "late_after_seconds": 43200
     },
     {
       "source": "stream",
