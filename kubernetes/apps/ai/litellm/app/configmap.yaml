@@ -44,21 +44,31 @@ data:
       # Claude Opus on the Claude plan, through the model bridge: one entry
       # for each trust domain, each with the bridge key of that trust domain
       # (sent as x-api-key; the bridge knows the trust domain by it).
+      #
+      # num_retries: 0 on each bridge entry (a decision of the owner,
+      # 2026-11-14): the gateway sends each request to the bridge one time,
+      # for every error, a 429 at the usage limit of the plan too. The router
+      # default is 2 retries. The value is on the entry, so it goes where the
+      # bridge goes: a name moved to Bedrock gets the retries of the Bedrock
+      # entry, and every other entry keeps the default.
       - model_name: claude-opus-bridge-main
         litellm_params:
           model: anthropic/claude-opus-5-5
           api_base: http://model-bridge.ai.svc.cluster.local:8080
           api_key: os.environ/BRIDGE_KEY_MAIN
+          num_retries: 0
       - model_name: claude-opus-bridge-finance
         litellm_params:
           model: anthropic/claude-opus-5-5
           api_base: http://model-bridge.ai.svc.cluster.local:8080
           api_key: os.environ/BRIDGE_KEY_FINANCE
+          num_retries: 0
       - model_name: claude-opus-bridge-workflows
         litellm_params:
           model: anthropic/claude-opus-5-5
           api_base: http://model-bridge.ai.svc.cluster.local:8080
           api_key: os.environ/BRIDGE_KEY_WORKFLOWS
+          num_retries: 0
       # Claude Opus on Bedrock (cross-region inference profile), the provider
       # after a move. The invoke route keeps a /v1/messages call in the
       # Messages format end to end; the converse route would translate it.

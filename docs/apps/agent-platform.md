@@ -136,6 +136,14 @@ agent (key agents-<name>) -> model gateway, name agents-<name>
   line, by a person, in a pull request, and a revert is the way back. The
   finance agent follows the main agent in the same pull request.
   `docs/apps/litellm.md` ("The agent platform") has the steps.
+- **One attempt at the gateway.** The gateway sends a call to the bridge
+  one time, with no retry of its own (a decision of the owner, 2026-11-14;
+  `docs/apps/litellm.md`, "One attempt to the bridge"). The caller retries:
+  the Anthropic SDK 2 times for a 429 or a 5xx, and an agent framework can
+  retry on top of it (Strands retries a 429 up to 6 attempts in all, from
+  4 s to 64 s apart).
+  At the usage limit of the plan a model call of a workflow agent reaches
+  the bridge 18 times at most (3 by the SDK times 6 by Strands), not 54.
 - **No fallback.** The gateway config has none. Each key lists its one name,
   so a call to any other name, or a fallback in a request, gets 403. The
   config of each agent names its one model, with no fallback list.
@@ -177,8 +185,8 @@ homelab-wsl lists it next to `agents/`.
   domain, not starting with `sk-ant-`). The model gateway gets the same
   three keys for its entries, in `litellm-secret`.
 - **Stop:** a `preStop` sleep of 5 s, then SIGTERM. The bridge drains:
-  `/health` answers 503, a new call gets a 503 that a
-  caller retries, and the calls in work run to their end for up to
+  `/health` answers 503, a new call gets a 503 that the
+  SDK of the caller retries (the gateway does not), and the calls in work run to their end for up to
   `BRIDGE_DRAIN_SECONDS` (75 s). The grace period is 90 s. A rollout starts
   the new pod before it stops the old one (`maxSurge: 1`,
   `maxUnavailable: 0`).
