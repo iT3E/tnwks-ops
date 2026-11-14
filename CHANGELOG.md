@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.138.1 - 2026-11-14
+
+### Fixed
+
+* monitoring: the platform log agent (vector-agent-platform) sends to the aggregator over plain HTTP. Its sink address had no scheme, which Vector 0.61 reads as https, so no line of the agent platform reached Loki. A container test now sends one event through each vector sink to the aggregator.
+
 ## v2.138.0 - 2026-11-14
 
 ### Added
