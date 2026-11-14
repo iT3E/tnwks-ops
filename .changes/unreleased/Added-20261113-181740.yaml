@@ -1,3 +1,0 @@
-kind: Added
-body: 'security: `peer-federate` of homelab-wsl-02 brings the two series of the registry of the host check (`host-check`) from homelab-wsl, which scrapes the textfile collector of both Windows hosts. Nothing writes the series yet: the Ansible roles of the host check start it'
-time: 2026-11-13T18:17:40.230695745-08:00

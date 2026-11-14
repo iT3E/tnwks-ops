@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.139.0 - 2026-11-14
+
+### Added
+
+* security: `peer-federate` of homelab-wsl-02 brings the two series of the registry of the host check (`host-check`) from homelab-wsl, which scrapes the textfile collector of both Windows hosts. Nothing writes the series yet: the Ansible roles of the host check start it
+
 ## v2.138.1 - 2026-11-14
 
 ### Fixed
