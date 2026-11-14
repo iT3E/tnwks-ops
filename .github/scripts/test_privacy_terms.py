@@ -198,9 +198,6 @@ class StubGuard(unittest.TestCase):
     def test_no_answer(self):
         self.check_broken(f"#!{sys.executable}\nimport sys; sys.exit(0)\n", 0o700)
 
-    def test_gh_points_at_the_stub(self):
-        self.assertTrue(Path(privacy_terms.GH).is_absolute() or privacy_terms.GH == "gh")
-
 
 class PrivacyTerms(unittest.TestCase):
     def setUp(self):
@@ -216,7 +213,7 @@ class PrivacyTerms(unittest.TestCase):
         sops.chmod(0o700)
         # The real encoder of this repo.
         (self.repo / "bin/privacy-check").write_text((ROOT / "bin/privacy-check").read_text())
-        ghdir = d / "ghbin"
+        ghdir = self.ghdir = d / "ghbin"
         ghdir.mkdir()
         gh = write_stub(ghdir)
         self.state = d / "state.json"
@@ -433,7 +430,18 @@ class PrivacyTerms(unittest.TestCase):
         rc, out = self.run_main("sync")
         self.assertEqual(rc, 0, out)
         self.assertTrue(self.calls(), "the stub logged the calls")
-        self.assertTrue(Path(privacy_terms.GH).is_absolute())
+        self.assert_gh_is_the_stub()
+
+    def assert_gh_is_the_stub(self):
+        gh = Path(privacy_terms.GH)
+        self.assertTrue(gh.is_absolute(), privacy_terms.GH)
+        self.assertEqual(gh.parent.resolve(), self.ghdir.resolve())
+        self.assertEqual(gh.read_text(), GH_STUB)
+
+    def test_gh_points_at_the_stub(self):
+        # Every test calls gh by this absolute path, never by name.
+        self.assert_gh_is_the_stub()
+        self.assertNotEqual(privacy_terms.GH, "gh")
 
     # --- edit ----------------------------------------------------------------
 

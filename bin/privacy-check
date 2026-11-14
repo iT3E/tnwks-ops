@@ -20,7 +20,11 @@
 # base64). A value that is neither, or one that doesn't decode, stops the
 # check with exit 2: it never runs on a list it couldn't read.
 #
-# Matching is case-insensitive. A term with "@" or "." matches anywhere. Any
+# Matching is case-insensitive, outside ASCII too: every search and the
+# mask run under a UTF-8 locale that the script sets itself, and git prints
+# paths unescaped (core.quotePath=false). A letter written as a base letter
+# plus a combining mark doesn't match the same letter written as one
+# character, or the other way round. A term with "@" or "." matches anywhere. Any
 # other term matches as a word: no letter directly before it, and no letter
 # after it except a plural/possessive "s" (so "driver" passes, "chore_x_1"
 # and "xs-api" are hits). Text in $PRIVACY_EXTRA_TEXT (CI: the PR title and
@@ -48,6 +52,16 @@ broken() {
   echo "privacy-check: $1; nothing was checked" >&2
   exit 2
 }
+
+# One matching rule whatever the caller's locale: grep -P and git grep -P
+# fold case outside ASCII only under a UTF-8 locale.
+for loc in C.UTF-8 en_US.UTF-8 ""; do
+  [[ -n "${loc}" ]] || broken "no UTF-8 locale"
+  if LC_ALL="${loc}" grep -qiP 'é' <<<'É' 2>/dev/null; then break; fi
+done
+export LC_ALL="${loc}"
+# Paths print as they are, not as octal escapes, in every git call.
+git() { command git -c core.quotePath=false "$@"; }
 
 # The terms of a list in either form, one per line, on stdout. Returns 1 if
 # the value is neither form, or doesn't decode. A value that mentions the
@@ -179,7 +193,8 @@ for t in "${terms[@]}"; do patterns+=("$(pattern "${t}")"); done
 # "[term]" (case-insensitive, also inside a longer word), so a hit in a path
 # or a name never prints a term.
 masked() {
-  perl -e 'my $s = shift; for my $t (@ARGV) { $s =~ s/\Q$t\E/[term]/gi } print $s' -- "$1" "${terms[@]}" 2>/dev/null
+  perl -MEncode -e 'binmode STDOUT, ":encoding(UTF-8)"; my ($s, @t) = map { decode("UTF-8", $_) } @ARGV;
+    for my $t (@t) { $s =~ s/\Q$t\E/[term]/gi } print $s' -- "$1" "${terms[@]}" 2>/dev/null
 }
 hits=0
 report() {
@@ -192,13 +207,13 @@ report() {
 # isn't printed, since it can quote the pattern.
 has() {
   local st=0
-  grep -q -P -e "$1" <<<"$2" 2>/dev/null || st=$?
+  grep -a -q -P -e "$1" <<<"$2" 2>/dev/null || st=$?
   ((st <= 1)) || broken "a search failed"
   return "${st}"
 }
 matches() {
   local st=0
-  grep -P -e "$1" <<<"$2" 2>/dev/null || st=$?
+  grep -a -P -e "$1" <<<"$2" 2>/dev/null || st=$?
   ((st <= 1)) || broken "a search failed"
 }
 
@@ -217,7 +232,8 @@ if [[ -n "${PRIVACY_EXTRA_TEXT:-}" ]] && has "${attribution}" "${PRIVACY_EXTRA_T
 fi
 if [[ -n "${range}" ]]; then
   shas="$(git log --format='%H%x09%B%x00' "${range}" 2>/dev/null |
-    perl -0 -ne 'BEGIN { $re = shift @ARGV } print substr($_, 0, 40), "\n" if /$re/' "${attribution}" 2>/dev/null)" ||
+    perl -MEncode -0 -ne 'BEGIN { $re = decode("UTF-8", shift @ARGV) }
+        print substr($_, 0, 40), "\n" if decode("UTF-8", $_) =~ /$re/' "${attribution}" 2>/dev/null)" ||
     broken "git log or a search failed"
   while IFS= read -r sha; do
     [[ -n "${sha}" ]] && attr_report "commit ${sha:0:12} (message)"
@@ -262,7 +278,8 @@ for p in "${patterns[@]}"; do
 
   if [[ -n "${range}" ]]; then
     shas="$(git log --format='%H%x09%an <%ae>%x09%cn <%ce>%x09%B%x00' "${range}" 2>/dev/null |
-      perl -0 -ne 'BEGIN { $re = shift @ARGV } print substr($_, 0, 40), "\n" if /$re/' "${p}" 2>/dev/null)" ||
+      perl -MEncode -0 -ne 'BEGIN { $re = decode("UTF-8", shift @ARGV) }
+        print substr($_, 0, 40), "\n" if decode("UTF-8", $_) =~ /$re/' "${p}" 2>/dev/null)" ||
       broken "git log or a search failed"
     while IFS= read -r sha; do
       [[ -n "${sha}" ]] && report "commit ${sha:0:12} (message or author/committer)"
