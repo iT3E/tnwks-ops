@@ -102,11 +102,12 @@ data:
   # The AWS sessions of the security platform
   # (kubernetes/apps/security/aws-credentials): the two read-only Roles
   # Anywhere roles of environments/prod/aws (module security), on the same
-  # trust anchor. Their profiles (RA_SECURITY_AUDIT_PROFILE_ARN,
-  # RA_SECURITY_TRAIL_PROFILE_ARN) come from that root's outputs
-  # rolesanywhere_security_*_profile_arn, with the two certificates.
+  # trust anchor, and their profiles (that root's outputs
+  # rolesanywhere_security_*_profile_arn and rolesanywhere_security_*_role_arn).
   RA_SECURITY_AUDIT_ROLE_ARN: "arn:aws:iam::654654262098:role/tnwks-rolesanywhere-security-audit"
   RA_SECURITY_TRAIL_ROLE_ARN: "arn:aws:iam::654654262098:role/tnwks-rolesanywhere-security-trail"
+  RA_SECURITY_AUDIT_PROFILE_ARN: "arn:aws:rolesanywhere:us-west-2:654654262098:profile/1e6611a4-e36b-4357-b32f-e64a1575dd4b"
+  RA_SECURITY_TRAIL_PROFILE_ARN: "arn:aws:rolesanywhere:us-west-2:654654262098:profile/5361edab-11b2-46f5-b3dd-0cc08064fde9"
   # The vEthernet (WSL) address of WSL-02 (inventory/host_vars/WSL-02).
   WINDOWS_HOST_IP: "172.25.16.1"
   # The Windows computer name, and the other site's Windows host for its

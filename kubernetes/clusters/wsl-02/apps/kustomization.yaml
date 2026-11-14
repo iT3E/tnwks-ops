@@ -127,6 +127,9 @@ resources:
   # The security platform's namespace (kubernetes/apps/security/README.md):
   # baseline Pod Security, deny by default. Its apps join one by one.
   - ../../../apps/security/namespace.yaml
+  # The AWS sessions of the security platform: two certificates for IAM Roles
+  # Anywhere -> two read-only sessions in Secrets (security/aws-credentials/README.md).
+  - ../../../apps/security/aws-credentials/ks.yaml
   # The converter (security/converter/README.md): the time of the newest line
   # of each security stream in this site's Loki, as the time of the last result.
   - ../../../apps/security/converter/ks.yaml
