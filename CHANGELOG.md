@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.146.0 - 2026-11-14
+
+### Added
+
+* ai: a runbook of the agent platform (docs/apps/agent-platform-runbook.md), with a section for each of its alerts, the restore of the state of an agent, the fast stop of the workflow agent, the move to Bedrock by hand and the steps at a limit of the Claude plan. Each rule of the platform links to its own section, and a test checks that each runbook link into this repository has its section
+
 ## v2.145.0 - 2026-11-14
 
 ### Added
