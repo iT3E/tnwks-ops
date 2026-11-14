@@ -119,6 +119,8 @@ unlabeled), so the workflow and the script come from `main` and a PR can't
 change what decides. It checks out only the script, from `main`, runs no PR
 code, holds no secret, and its token can only read. Each run reports on the
 head commit of its event.
+The Actions event policy of the repository must allow that trigger for
+this workflow ([GitHub settings](github.md#what-stays-by-hand-and-why)).
 
 What it can't tell apart: anything that acts with the owner's own account
 and no GitHub App in between (the browser, `gh`, a personal access token).

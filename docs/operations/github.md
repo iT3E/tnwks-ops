@@ -197,6 +197,14 @@ The provider has no resource for these:
 
 - private vulnerability reporting;
 - the approval policy for workflows from fork PRs;
+- the Actions event policy of this repository (policy `14029`, made through
+  the REST API). It allows the events `pull_request_target`,
+  `workflow_run`, `schedule` and `workflow_dispatch` for
+  `renovate-review.yaml` and `owner-label.yaml`, and for no other workflow.
+  GitHub blocks `pull_request_target` in public repositories by default
+  from 2026-12-02, so a new workflow with that trigger, or a new trigger on
+  one of the two, needs a change of this policy first. Read it with
+  `gh api repos/iT3E/tnwks-ops/actions/policies/14029`;
 - artifact and log retention;
 - GHCR packages and their visibility;
 - SSH signing keys;
