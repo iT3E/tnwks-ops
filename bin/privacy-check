@@ -60,6 +60,8 @@ for loc in C.UTF-8 en_US.UTF-8 ""; do
   if LC_ALL="${loc}" grep -qiP 'é' <<<'É' 2>/dev/null; then break; fi
 done
 export LC_ALL="${loc}"
+# Every grep reads its input as text (-a): under this locale, grep turns a
+# line with a byte that isn't UTF-8 into "binary file matches" otherwise.
 # Paths print as they are, not as octal escapes, in every git call.
 git() { command git -c core.quotePath=false "$@"; }
 
@@ -82,7 +84,7 @@ read_terms() {
     done <<<"${payload}"
     return 0
   fi
-  lines="$(sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' <<<"${raw}" | grep -v -e '^$' || true)"
+  lines="$(sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' <<<"${raw}" | grep -a -v -e '^$' || true)"
   while IFS= read -r line; do
     # A long run of base64 with no space is an encoded list that lost its
     # prefix, not a term.
@@ -109,7 +111,7 @@ encode() {
     )"
     ok=1
     for t in "${list[@]}"; do
-      if grep -q -i -F -e "${t}" <<<"${value}"; then ok=""; break; fi
+      if grep -a -q -i -F -e "${t}" <<<"${value}"; then ok=""; break; fi
     done
     [[ -n "${ok}" ]] || continue
     # It must read back as the same list.
@@ -259,7 +261,7 @@ for p in "${patterns[@]}"; do
   ((st <= 1)) || broken "git grep failed"
   while IFS= read -r loc; do
     [[ -n "${loc}" ]] && report "${loc}"
-  done < <(grep -v -F 'privacy:allow' <<<"${found}" | cut -d: -f1,2 || true)
+  done < <(grep -a -v -F 'privacy:allow' <<<"${found}" | cut -d: -f1,2 || true)
 
   # File and directory names.
   names="$(matches "${p}" "${files}")" || exit 2
