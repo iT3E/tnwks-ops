@@ -13,13 +13,15 @@ Python image. It reads, and it never writes to a source.
 | Path | What it is |
 | --- | --- |
 | `converter.py` | The service |
-| `../tests/test_converter.py` | Its tests, with a fake Loki on the loopback address |
+| `../tests/test_converter.py` | The tests of the stream source, with a fake Loki on the loopback address |
+| `../tests/test_converter_accepted.py` | The tests of the list of accepted findings, and of the loop of the parts |
 | `kubernetes/apps/security/converter/` | The Flux Kustomization, the HelmRelease and the network policy |
-| `kubernetes/apps/security/converter/app/config/` | What the pod runs: the copy of `converter.py`, and `streams.json`. `security/generate.py` writes both, so never edit them there |
+| `kubernetes/apps/security/converter/app/config/` | What the pod runs: the copy of `converter.py`, `streams.json`, and `registry.json` (the names of the sources, the systems and the series). `security/generate.py` writes them, so never edit them there |
 
 | Source | State |
 | --- | --- |
 | The security streams | Here. [The stream source](#the-stream-source) |
+| The list of accepted findings | Here. [The list of accepted findings](#the-list-of-accepted-findings) |
 | The OCSF files of Prowler, and the result file of the API checks | The contract is fixed: [The files of results](#the-files-of-results). The converter reads them when the scanners start |
 | The state of the Wazuh indexer | Step 2 of the platform |
 
@@ -149,6 +151,114 @@ the contract of the registry.
 | `homelab_security_converter_streams` | None | The number of entries in the map |
 | `homelab_security_converter_last_cycle_timestamp_seconds` | None | The Unix time at which the last cycle ended |
 | `homelab_security_converter_stream_query_success` | `source`, `check`, `system` | 1 when Loki gave an answer in the last cycle, with a line or with none. 0 for an error or no answer |
+| `homelab_security_converter_accepted_list_read` | None | 1 when the converter read the list of accepted findings in its last cycle, or found no list. 0 when it gave no entry of a list that is there ([A file that gives no entry](#a-file-that-gives-no-entry)) |
+| `homelab_security_converter_accepted_skipped_entries` | None | The number of entries of the list of accepted findings that the converter skipped in its last cycle ([An entry that the converter skips](#an-entry-that-the-converter-skips)) |
+
+## The list of accepted findings
+
+The owner keeps the accepted findings in an encrypted list
+([`../README.md`](../README.md), "Accepted findings"). Flux decrypts it to
+the Secret `security-accepted-findings`, and the pod mounts the Secret at
+`/accepted`. Each 5 minutes the converter reads `accepted.json` and serves one
+series for each entry:
+
+```text
+homelab_security_accepted_until_timestamp_seconds{source="prowler",check="example_check_id",system="example-system"} 1801353600
+```
+
+| Label | Value |
+| --- | --- |
+| `source` | The `source` of the entry, a name of `registry/sources.yaml` |
+| `check` | The `check` of the entry |
+| `system` | The `system` of the entry, a name of `registry/systems.yaml` |
+
+The value is the Unix time at which the finding ends: the start of the day
+after `until`, UTC. So `SecurityAcceptedFindingExpired` fires from the first
+second of the next day, and a scanner mutes the finding to the end of its
+`until` day. Two entries of one finding give one series, with the later end.
+
+Nothing else of the list leaves the file. The `reason` is in no series and in
+no log, and a log line about an entry names its number in the list only.
+
+The mount is optional. Before the owner makes the first list the Secret does
+not exist, and the converter serves no entry. When Flux makes or changes the
+Secret, the kubelet changes the file in the pod within a minute or two, and
+the converter reads the file again in each cycle. So the new list is served
+in 10 minutes at the latest, with no restart. On a change, Reloader can also
+restart the pod.
+
+### The form that the converter reads
+
+The list is one JSON array, with one object for each accepted finding
+(`../README.md`, "Accepted findings"). The converter reads it with
+`json.loads` of the Python standard library, as the Prowler job does, so the
+two read each list the same way. It reads no YAML.
+
+### An entry that the converter skips
+
+The converter skips an item of the array, and counts it in
+`homelab_security_converter_accepted_skipped_entries`, when:
+
+- It is not an object (a string, a number, a nested array).
+- A key of the five is missing, or the object has a key that is not one of
+  the five. A key that is not a field is most often a field with a typo, so
+  the converter does not guess.
+- A value is not a JSON string: a number, `true`, `null`, an array, and
+  also `NaN` and `Infinity`, which `json.loads` reads as numbers.
+- A value is empty, or `reason` holds only space. An accepted finding has a
+  reason (Design Doc, section 4.1.2). The reason stays in the file: the
+  converter checks only that it is there.
+- The source or the system is not in the registry.
+- The check is not a check ID: a letter or a digit, then letters, digits and
+  `_./:-`, 200 characters at most, matched as a whole (so no line feed at the
+  end). So no text of another form, and no lone surrogate of a `\ud800`
+  escape, reaches a label.
+- `until` is not a day of the form `YYYY-MM-DD`: it must match
+  `[0-9]{4}-[0-9]{2}-[0-9]{2}` as a whole, in ASCII digits, and
+  `datetime.date.fromisoformat` must read it.
+  So `2027-02-30` is skipped, and so are `20271231` and `2027-W52-5`, which
+  `fromisoformat` reads since Python 3.11. Each day that a Python date holds
+  is taken, `0001-01-01` to `9999-12-31`: the converter adds the next day in
+  seconds, so `9999-12-31` ends at the start of the year 10000.
+
+The other entries are served. A skipped entry has no series, so the board
+does not show it, and the rule of Trivy Operator does not mute it: the
+finding shows as a fail. `SecurityAcceptedEntriesSkipped` fires when an
+entry is skipped for one hour.
+
+### A file that gives no entry
+
+The converter serves no entry, sets
+`homelab_security_converter_accepted_list_read` to 0, and logs the kind of
+the fault and its line (no text of the file), when the list:
+
+- Is not JSON for `json.loads`: a comma at the end, a comment, a byte order
+  mark, an array that does not end, an empty file, arrays in arrays deeper
+  than the decoder goes.
+- Is not one array at the top: an object, or two arrays.
+- Has a key two times in one object. `json.loads` would keep the last value
+  with no word, so the converter refuses the file, and the Prowler job does
+  the same.
+- Can not be read, is not UTF-8, or is larger than 1 MiB.
+- Is in the key `accepted.yaml` of the Secret, and `accepted.json` is not
+  there. That is the key of the list before it was JSON, and no reader reads
+  it, so the converter does not take it for no list.
+
+A fault of the reader itself (an error that none of the rules above names)
+also sets the value to 0 and logs the kind of the error. So a fault never
+looks like no list.
+
+`SecurityAcceptedListUnread` fires when this lasts 30 minutes. With no list
+(the Secret does not exist) the converter serves no entry, the value is 1,
+and no alert fires.
+
+## The loop of the parts
+
+One loop runs the parts of the converter one after the other, each 5
+minutes: the stream source, then the list of accepted findings. A fault of
+one part does not stop the others: the part serves nothing in that cycle,
+and the log says the kind of the fault. Each part keeps the result of its last
+cycle only, and serves nothing that no cycle replaced in 10 minutes.
 
 ## The service
 
@@ -157,11 +267,11 @@ the contract of the registry.
 | Where | homelab-wsl-02, the namespace `security`, on `SECURITY_NODE` (`kubernetes/apps/security/README.md`) |
 | Flux Kustomization | `security-converter` (`kubernetes/apps/security/converter/ks.yaml`) |
 | Workload | The HelmRelease `security-converter`: one pod, as user 65534, with a read-only root file system and no capability |
-| Code | The ConfigMap `security-converter-code`: `converter.py` and `streams.json`. The image is the pinned Python image of the evidence collector, by digest. The converter has no image of its own |
+| Code | The ConfigMap `security-converter-code`: `converter.py`, `streams.json` and `registry.json`. The image is the pinned Python image of the evidence collector, by digest. The converter has no image of its own |
 | Port | 9877: `/metrics` and `/healthz` |
 | Scrape | The ServiceMonitor `security-converter`, each minute, by the Prometheus of homelab-wsl-02. The rules of the registry run there |
 | Service account | The default one of the namespace, with no token in the pod. The converter does not ask the API server |
-| Credentials | None |
+| Credentials | None. The pod mounts the Secret `security-accepted-findings`, read-only and optional: the list holds no credential |
 | Memory | A request of 32 MiB and a limit of 128 MiB, the line of the converter in `kubernetes/apps/security/README.md` |
 
 The CiliumNetworkPolicy `security-converter` names each path. In: the

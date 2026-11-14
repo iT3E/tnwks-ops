@@ -1,8 +1,8 @@
 ---
 # The converter (security/converter/README.md), in the form of the evidence
 # collector (monitoring/observability-evidence): the pinned Python image, with
-# its code and the map of the streams from a ConfigMap. Reloader restarts it
-# when one of them changes.
+# its code and its maps from a ConfigMap, and the list of accepted findings
+# from its Secret. Reloader restarts it when one of them changes.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -81,6 +81,20 @@ spec:
         name: security-converter-code
         globalMounts:
           - path: /config
+            readOnly: true
+      # The list of accepted findings (security/README.md, "Accepted
+      # findings"): the Secret that Flux decrypts, with the JSON array in its
+      # key accepted.json, read at /accepted/accepted.json. Optional: before the owner
+      # makes the first list, the Secret does not exist and the list is empty.
+      # The chart's secret type has no `optional`, so the volume is custom.
+      accepted:
+        type: custom
+        volumeSpec:
+          secret:
+            secretName: security-accepted-findings
+            optional: true
+        globalMounts:
+          - path: /accepted
             readOnly: true
     serviceMonitor:
       app:

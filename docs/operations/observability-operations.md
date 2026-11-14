@@ -61,6 +61,14 @@ WSL-02, which has that cluster's kubeconfig
   and `vector_component_discarded_events_total` of the sink has the number
   of lines. A request that got no answer is not in this alert: Vector sends
   it again (`kubernetes/apps/monitoring/vector/README.md`).
+- **The list of accepted findings:** `SecurityAcceptedListUnread` and
+  `SecurityAcceptedEntriesSkipped`, of the group `homelab.security`
+  (`observability/rules.py`). The first fires when the security converter
+  on homelab-wsl-02 gets no entry from a list that is there, for 30
+  minutes; the second when entries of the list are skipped, for one hour.
+  With no list at all, neither fires. The log of the converter has the
+  number of the line or the entry and why, and no text of the list
+  (`security/converter/README.md`, "The list of accepted findings").
 - **Evidence collector:** stateless. A restart loses nothing, and its panels
   read Unknown until it reports again. Peer-dependent prerequisites, such as
   the fence, need the other site's collector too.

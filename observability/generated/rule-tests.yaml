@@ -1324,3 +1324,100 @@ tests:
   - alertname: SecurityAuditLinesRefused
     eval_time: 30m
     exp_alerts: []
+- name: a list that gives no entry alerts after 30 minutes
+  interval: 1m
+  input_series:
+  - series: homelab_security_converter_accepted_list_read{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter"}
+    values: 0+0x90
+  - series: homelab_security_converter_accepted_skipped_entries{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter"}
+    values: 0+0x90
+  alert_rule_test:
+  - alertname: SecurityAcceptedListUnread
+    eval_time: 29m
+    exp_alerts: []
+  - alertname: SecurityAcceptedListUnread
+    eval_time: 31m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl-02
+      exp_annotations:
+        summary: The list of accepted findings on homelab-wsl-02 gives no entry
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        description: 'The security converter can not read the list of accepted findings in the Secret security-accepted-findings,
+          so it serves no accepted finding: the board shows none, and the rule of Trivy Operator mutes none. The
+          log of the converter has the number of the line and the kind of its form. security/converter/README.md,
+          "The form that the converter reads", has the form. The alert ends in the cycle after the list is fixed.'
+  - alertname: SecurityAcceptedEntriesSkipped
+    eval_time: 90m
+    exp_alerts: []
+- name: skipped entries alert after one hour
+  interval: 1m
+  input_series:
+  - series: homelab_security_converter_accepted_list_read{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter"}
+    values: 1+0x90
+  - series: homelab_security_converter_accepted_skipped_entries{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter"}
+    values: 2+0x90
+  alert_rule_test:
+  - alertname: SecurityAcceptedEntriesSkipped
+    eval_time: 59m
+    exp_alerts: []
+  - alertname: SecurityAcceptedEntriesSkipped
+    eval_time: 61m
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        k8s_cluster: homelab-wsl-02
+      exp_annotations:
+        summary: Entries of the list of accepted findings on homelab-wsl-02 are skipped
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=homelab-wsl-02
+        description: '2 entries of the list of accepted findings do not fit, so the security converter skips them:
+          their findings show as fails on the board. The Prowler runs skip the entries that are not in the form,
+          and take an entry whose source or system is not in the registry. The log of the converter has the number
+          of each entry and why. security/converter/README.md, "An entry that the converter skips", has the rules.
+          The alert ends in the cycle after the list is fixed.'
+  - alertname: SecurityAcceptedListUnread
+    eval_time: 90m
+    exp_alerts: []
+- name: a list that is read with nothing skipped, or no list, does not alert
+  interval: 1m
+  input_series:
+  - series: homelab_security_converter_accepted_list_read{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter"}
+    values: 1+0x150
+  - series: homelab_security_converter_accepted_skipped_entries{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter"}
+    values: 0+0x150
+  alert_rule_test:
+  - alertname: SecurityAcceptedListUnread
+    eval_time: 150m
+    exp_alerts: []
+  - alertname: SecurityAcceptedEntriesSkipped
+    eval_time: 150m
+    exp_alerts: []
+- name: a list that is fixed within 30 minutes does not alert
+  interval: 1m
+  input_series:
+  - series: homelab_security_converter_accepted_list_read{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter"}
+    values: 0+0x20 1+0x60
+  - series: homelab_security_converter_accepted_skipped_entries{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter"}
+    values: 3+0x40 0+0x40
+  alert_rule_test:
+  - alertname: SecurityAcceptedListUnread
+    eval_time: 31m
+    exp_alerts: []
+  - alertname: SecurityAcceptedEntriesSkipped
+    eval_time: 61m
+    exp_alerts: []
+- name: a federated copy of the series does not alert
+  interval: 1m
+  input_series:
+  - series: homelab_security_converter_accepted_list_read{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter",source_site="homelab-wsl-01"}
+    values: 0+0x90
+  - series: homelab_security_converter_accepted_skipped_entries{k8s_cluster="homelab-wsl-02",job="security-converter",namespace="security",service="security-converter",source_site="homelab-wsl-01"}
+    values: 2+0x90
+  alert_rule_test:
+  - alertname: SecurityAcceptedListUnread
+    eval_time: 90m
+    exp_alerts: []
+  - alertname: SecurityAcceptedEntriesSkipped
+    eval_time: 90m
+    exp_alerts: []
