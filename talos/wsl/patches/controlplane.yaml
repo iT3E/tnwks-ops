@@ -9,7 +9,9 @@ extraArgs:
   terminated-pod-gc-threshold: "1"
 ---
 # tuppr (system-upgrade) drives the Talos API from inside the cluster
-# (patches/talos-api-access.yaml). Talos 1.14 has no document for it.
+# (patches/talos-api-access.yaml). The v1alpha1 key, as homelab-wsl-02 and the
+# live node have it. Talos 1.14 also has the document KubeTalosAPIAccessConfig,
+# the form for the conversion of the live node.
 machine:
   features:
     kubernetesTalosAPIAccess:

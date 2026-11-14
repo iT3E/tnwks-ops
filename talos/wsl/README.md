@@ -103,8 +103,8 @@ to all three nodes; the command and the reason are in the file.
 `patches/audit-policy.yaml` (the audit policy) is applied to the control
 plane; the command is in the file.
 
-A new cluster gets the same settings in the multi-document form, which
-talosctl 1.14 needs: `patches/cluster.yaml`, `patches/controlplane.yaml` and
+A new cluster gets the settings of these files in the multi-document form,
+which talosctl 1.14 needs: `patches/cluster.yaml`, `patches/controlplane.yaml` and
 `patches/audit-policy-multidoc.yaml`, from `talos_clusters`. A change to a
 setting goes into both forms; `talos/README.md`, "The audit policy", says
 how CI holds them equal. The conversion of the live node ends the double set.

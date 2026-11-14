@@ -101,8 +101,10 @@ its v1alpha1 files (`cluster-config.yaml`, `patches/kubelet-image-gc.yaml`,
 `talosctl patch mc` commands in their headers. Its lists name the
 multi-document set (`patches/cluster.yaml`, `patches/controlplane.yaml`,
 `patches/audit-policy-multidoc.yaml`). A change to a setting goes into both
-sets: the tests below fail when the two differ. The conversion of the live
-node to the multi-document form ends the double set.
+sets: the tests below fail when the two differ. The tests compare the
+settings in the files. Talos 1.14 also generates defaults that the older
+release behind the live node did not, and nothing compares those. The
+conversion of the live node to the multi-document form ends the double set.
 
 **What CI checks.** A change under `talos/` runs the `ansible` domain
 (`.github/workflows/ansible.yaml`):

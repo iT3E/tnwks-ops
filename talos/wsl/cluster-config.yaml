@@ -26,9 +26,10 @@
 #
 # This file is in the v1alpha1 form, which Talos rejects when the config comes
 # from talosctl >= 1.14 ("cluster network config is already set in the
-# v1alpha1 config"). It is the config of the live node, which keeps it until
-# its conversion. A new cluster gets the same settings in the multi-document
-# form from patches/cluster.yaml and patches/controlplane.yaml (talos_clusters
+# v1alpha1 config"). It holds settings of the live node, which keeps its
+# v1alpha1 config until its conversion. A new cluster gets the settings of
+# this file in the multi-document form from patches/cluster.yaml and
+# patches/controlplane.yaml (talos_clusters
 # in infrastructure/ansible/inventory/group_vars/all/talos.yml); the usage
 # above is the old create.
 #

@@ -56,8 +56,7 @@ LIVE_ONLY = {
     ],
 }
 
-# homelab-wsl: each field of a LIVE_ONLY file (other than the audit policy)
-# and where its list file has it. Each entry is (live file, field path, list
+# homelab-wsl: each field of a LIVE_ONLY file and where its list file has it. Each entry is (live file, field path, list
 # file, document, field path). The document is a kind, or "v1alpha1" for a
 # key that Talos 1.14 still takes in the v1alpha1 document. A field path of
 # None means the setting is the document deleted ($patch: delete) or present.
@@ -76,7 +75,13 @@ SAME_SETTING = [
     ("patches/kubelet-image-gc.yaml", "machine.kubelet.extraConfig", "patches/cluster.yaml", "KubeletConfig", "config"),
     ("patches/talos-api-access.yaml", "machine.features.kubernetesTalosAPIAccess", "patches/controlplane.yaml",
      "v1alpha1", "machine.features.kubernetesTalosAPIAccess"),
+    # security/tests/test_audit_policy.py also checks the rules of each policy file.
+    ("patches/audit-policy.yaml", "cluster.apiServer.auditPolicy", "patches/audit-policy-multidoc.yaml",
+     "KubeAuditPolicyConfig", "configuration"),
 ]
+
+# Fields that each document has, which hold no setting.
+DOCUMENT_KEYS = {"apiVersion", "kind", "name", "$patch"}
 
 # The value of a live field that a deleted or present document stands for.
 DOCUMENT_MEANS = {
@@ -105,7 +110,7 @@ def leaves(data, prefix=""):
     if isinstance(data, dict) and data:
         for key, value in data.items():
             yield from leaves(value, f"{prefix}.{key}" if prefix else key)
-    else:
+    elif prefix:
         yield prefix
 
 
@@ -222,11 +227,19 @@ class TwoForms(unittest.TestCase):
 
     def test_each_list_setting_comes_from_a_live_file(self):
         listed = {p for name in LISTS for p in CLUSTERS["wsl"].get(name, [])}
-        for new in sorted(listed - {"patches/audit-policy-multidoc.yaml"}):
+        for new in sorted(listed):
             covered = {(d, p) for _, _, f, d, p in SAME_SETTING if f == new}
-            for kind in kinds(self.TARGET / new):
+            for kind, doc in kinds(self.TARGET / new).items():
                 with self.subTest(new=new, kind=kind):
                     self.assertIn(kind, {d for d, _ in covered})
+                # Each field of a document that is kept is a mapped field, or lies under one.
+                if doc.get("$patch") == "delete":
+                    continue
+                fields = {p for d, p in covered if d == kind and p is not None}
+                for leaf in leaves({k: v for k, v in doc.items() if k not in DOCUMENT_KEYS}):
+                    with self.subTest(new=new, kind=kind, field=leaf):
+                        self.assertTrue(any(leaf == p or leaf.startswith(p + ".") for p in fields),
+                                        f"{new}: {kind}.{leaf} is in no SAME_SETTING entry")
             for leaf in leaves(merged(self.TARGET / new)):
                 with self.subTest(new=new, field=leaf):
                     self.assertTrue(any(d == "v1alpha1" and (leaf == p or leaf.startswith(p + "."))
