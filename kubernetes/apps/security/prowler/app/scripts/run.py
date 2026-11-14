@@ -40,6 +40,10 @@ MEMORY_PEAK = Path("/sys/fs/cgroup/memory.peak")
 
 
 FIELDS = frozenset({"source", "check", "system", "reason", "until"})
+# The form of an end date. date.fromisoformat also takes 20271231 and 2027-W05-1
+# (since Python 3.11): the form is checked first, so both readers take one form.
+# ASCII digits only (\d also takes other digits), and the whole value (fullmatch).
+DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
 
 class UnreadableList(Exception):
@@ -65,6 +69,8 @@ def _why_skipped(entry: object) -> tuple[str | None, datetime.date | None]:
         return "a value is not a string", None
     if not all(entry[field].strip() for field in FIELDS):
         return "a field is empty", None
+    if not DATE.fullmatch(entry["until"]):
+        return "the end is not a date YYYY-MM-DD", None
     try:
         return None, datetime.date.fromisoformat(entry["until"])
     except ValueError:
@@ -84,17 +90,19 @@ def accepted_checks(path: Path, system: str, today: datetime.date) -> tuple[dict
     The converter reads the same list the same way: an item that does not fit
     (not an object, a field missing, a key that is not a field, a value that is not
     a string, a field empty, the reason too, as each accepted finding has a reason
-    (Design Doc 4.1.2), an end that date.fromisoformat refuses) is skipped and
+    (Design Doc 4.1.2), an end that is not YYYY-MM-DD or that date.fromisoformat
+    refuses) is skipped and
     counted, and the log has its number and why, never a value of the list. One bad
     entry then does not stop each run until the list is fixed. A list that can not
-    be read at all (not UTF-8, not JSON, a key twice in one object, not an array)
+    be read at all (not UTF-8, not JSON, nested too deep for the parser, a key twice
+    in one object, not an array)
     raises UnreadableList: the run then fails and mutes nothing, as it can not know
     what to mute."""
     if not path.is_file():
         return {}, 0
     try:
         entries = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_no_duplicate_keys)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, RecursionError) as error:
         # The type only: a parse error can quote the text, and the text can hold a reason.
         raise UnreadableList(type(error).__name__) from None
     if not isinstance(entries, list):
