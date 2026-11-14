@@ -62,6 +62,9 @@ resources:
   # The audit log of this cluster's API server, as the security stream
   # "k8s-audit" (apps/monitoring/vector/README.md).
   - ../../../apps/monitoring/vector/ks-audit-reader.yaml
+  # The logs of the agent platform's long-running pods, on an allowlist
+  # (docs/apps/agent-platform.md, "Logs").
+  - ../../../apps/monitoring/vector/ks-agent-platform.yaml
   - ../../../apps/monitoring/observability-pki/ks.yaml
   - ../../../apps/monitoring/observability-evidence/ks.yaml
   - ../../../apps/monitoring/observability-evidence/rules-ks.yaml
@@ -107,6 +110,9 @@ resources:
   - ../../../apps/tools/actions-runner-controller/openclaw-runner/ks.yaml
   # Checks of the private docs repo when its CI_RUNNER variable names it.
   - ../../../apps/tools/actions-runner-controller/coe-runner/ks.yaml
+  # Checks of two private app repos, except their image jobs.
+  - ../../../apps/tools/actions-runner-controller/agent-image-runner/ks.yaml
+  - ../../../apps/tools/actions-runner-controller/packing-api-runner/ks.yaml
 
   # Trimmed namespaces — per-namespace overlays sit alongside this file
   - ./home-automation

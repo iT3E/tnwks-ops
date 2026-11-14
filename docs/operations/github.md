@@ -209,7 +209,10 @@ Left alone on purpose:
   rotates it.
 - **Labels.** The `meta-sync-labels` workflow owns them.
 - **Releases.** `release.yaml` cuts them.
-- **Runner scale sets.** ARC registers them.
+- **Runner scale sets.** ARC registers them. A repo-scoped set needs its
+  repository in the installation of the GitHub App behind
+  `sites-runner-github-app`; the owner adds it in the installation's
+  settings, outside any repository.
 - **`TERRAFORM_GITHUB_ENABLED`.** It switches this root on in CI, so it
   can't be managed by the root it switches.
 - **Secrets whose values only the owner holds**: `TF_API_TOKEN` (on the

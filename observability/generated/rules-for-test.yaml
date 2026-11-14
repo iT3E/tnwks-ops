@@ -488,6 +488,18 @@ groups:
       description: 'The AWS sessions of one tool of the security platform come from this certificate, and stop when
         it ends. Make a new certificate and put it in its SOPS Secret: kubernetes/apps/security/aws-credentials/README.md
         has the steps. The alert ends at the next run of the refresher.'
+  - alert: SecurityTokenExpiring
+    expr: min by (k8s_cluster, namespace, lease) (kube_lease_renew_time{namespace="security",lease=~"prowler-.+-token"})
+      - time() < 30 * 86400
+    for: 1h
+    labels:
+      severity: warning
+    annotations:
+      summary: 'An API token of Prowler on {{ $labels.k8s_cluster }} ends within 30 days: {{ $labels.lease }}'
+      dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+      description: 'The daily Prowler run of one provider reads with this token, and fails when it ends. Make a
+        new token, put it in its SOPS Secret, and write its end date to its Lease: kubernetes/apps/security/prowler/README.md
+        has the steps. The alert ends when the Lease has the new date.'
   - alert: SecurityAuditLinesRefused
     expr: sum by (k8s_cluster, component_id) (increase(vector_component_errors_total{component_id="loki_security_audit"}[15m])
       > 0 or (vector_component_errors_total{component_id="loki_security_audit"} > 0 unless vector_component_errors_total{component_id="loki_security_audit"}

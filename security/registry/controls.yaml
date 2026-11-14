@@ -7,6 +7,11 @@
 #
 # A title is a short label in the words of this repository, not the text of CIS.
 # The registry names controls, systems and checks. It holds no result.
+#
+# github-organization: no Prowler run reads GitHub (kubernetes/apps/security/
+# prowler/README.md, "GitHub"). Its lines keep `source: prowler` until the API
+# checks give them their check IDs. The system lists no source in systems.yaml,
+# so no rule waits for a result of these lines, and no late alert fires.
 - id: "1.1"
   title: Asset inventory
   ig: 1
@@ -725,7 +730,8 @@
     cloudflare-account: []
     github-organization:
       - { source: prowler, check: organization_members_mfa_required }
-    terraform-cloud-organization: []
+    terraform-cloud-organization:
+      - { source: api-check, check: tfc-mfa-required }
     cluster: []
     windows-host: []
     wsl-distro: []
@@ -760,7 +766,8 @@
     cloudflare-account: []
     github-organization:
       - { source: prowler, check: organization_members_mfa_required }
-    terraform-cloud-organization: []
+    terraform-cloud-organization:
+      - { source: api-check, check: tfc-mfa-required }
     cluster: []
     windows-host: []
     wsl-distro: []

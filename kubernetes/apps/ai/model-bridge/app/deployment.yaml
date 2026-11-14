@@ -34,6 +34,10 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: model-bridge
+        # Its log goes to Loki: one JSON line per call, error and
+        # conversation, with no prompt or answer text
+        # (kubernetes/apps/monitoring/vector/agent-platform/config/vector.yaml).
+        logs.home.arpa/ship: "true"
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
@@ -50,7 +54,7 @@ spec:
       containers:
         - name: model-bridge
           # A release, by digest: what runs only changes through git.
-          image: ghcr.io/it3e/tnwks-model-bridge:0.2.2@sha256:c7cafe470e2e653ee95ee2e485c0b7d131e41bddb48f85b7dac0d628308579c1
+          image: ghcr.io/it3e/tnwks-model-bridge:0.2.3@sha256:dbd5c984064c17f6ce43337c410df4c05da6103709aaaa4b67e56043a3ff8c70
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

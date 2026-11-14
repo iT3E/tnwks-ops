@@ -1,0 +1,14 @@
+---
+# The end date of the API token in secret-cloudflare.sops.yaml, as the renew time
+# of this Lease: kube-state-metrics serves it as kube_lease_renew_time, and
+# SecurityTokenExpiring fires 30 days before it (observability/rules.py, in
+# the form of the certificates of ../../aws-credentials). Nothing renews a
+# token, so the owner writes its end date here when the token is made, in the
+# same pull request as the Secret (../README.md, "To start a provider"). A
+# date in the past fires the alert, so a Lease that nobody set is seen.
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata:
+  name: prowler-cloudflare-token
+spec:
+  renewTime: "2000-01-01T00:00:00.000000Z"

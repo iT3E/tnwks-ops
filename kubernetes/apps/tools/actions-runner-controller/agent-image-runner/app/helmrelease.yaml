@@ -1,0 +1,76 @@
+---
+# Repo-scoped runner for the private image repo (iT3E/tnwks-agent-image).
+# Its CI callers run here by default (`runs-on: tnwks-agent-image`); the
+# repository variable CI_RUNNER=ubuntu-latest sends them back to
+# GitHub-hosted runners. Its jobs (privacy, secret scan, actionlint,
+# changelog, labeler, release, the Python check and the daily image age
+# check) need bash, git, curl and python3, or actions that download their
+# own tools (setup-python), all without root.
+#
+# No Docker: the image job (the Docker build, its tests and a kind cluster)
+# stays on GitHub-hosted runners. Running it here would need a privileged
+# dind sidecar, which no runner set has today. Code from a PR runs here, and
+# only the owner and the owner's agents can push to that private repo.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: tnwks-agent-image
+  namespace: tools
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: gha-runner-scale-set
+      version: 0.15.1
+      sourceRef:
+        kind: HelmRepository
+        name: actions-runner-controller
+        namespace: flux-system
+  maxHistory: 2
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
+  dependsOn:
+    - name: gha-runner-scale-set-controller
+  values:
+    githubConfigUrl: "https://github.com/iT3E/tnwks-agent-image"
+    runnerScaleSetName: tnwks-agent-image
+    # Same GitHub App as sites-builder, with tnwks-agent-image added to its installation.
+    githubConfigSecret: sites-runner-github-app
+    minRunners: 0
+    # A PR starts about five jobs; two at a time keeps the queue short.
+    maxRunners: 2
+    controllerServiceAccount:
+      namespace: tools
+      name: gha-runner-scale-set-controller-gha-rs-controller
+    template:
+      spec:
+        # The runner talks to GitHub only, never to the Kubernetes API.
+        automountServiceAccountToken: false
+        securityContext:
+          # The image's USER is the name `runner`; runAsNonRoot needs the uid.
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          seccompProfile:
+            type: RuntimeDefault
+        containers:
+          - name: runner
+            image: ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232
+            command: ["/home/runner/run.sh"]
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                memory: 1Gi

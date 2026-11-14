@@ -1,0 +1,292 @@
+# Cases for the alerts of the agent platform
+# (kubernetes/apps/ai/agents/monitoring/app/prometheusrule.yaml). Each case
+# that guards a fix was checked to fail on the rule before the fix.
+rule_files:
+  - kubernetes/apps/ai/agents/monitoring/app/prometheusrule.yaml
+evaluation_interval: 1m
+tests:
+  - name: a workload with fewer ready pods than wanted, and one scaled to zero
+    interval: 1m
+    input_series:
+      - series: kube_deployment_spec_replicas{namespace="agents-pilot", deployment="agent"}
+        values: 1x30
+      - series: kube_deployment_status_replicas_ready{namespace="agents-pilot", deployment="agent"}
+        values: 0x30
+      - series: kube_deployment_spec_replicas{namespace="ai", deployment="model-bridge"}
+        values: 0x30
+      - series: kube_deployment_status_replicas_ready{namespace="ai", deployment="model-bridge"}
+        values: 0x30
+      - series: kube_deployment_spec_replicas{namespace="ai", deployment="other"}
+        values: 1x30
+      - series: kube_deployment_status_replicas_ready{namespace="ai", deployment="other"}
+        values: 0x30
+      - series: kube_statefulset_replicas{namespace="agents-main", statefulset="openshell"}
+        values: 1x30
+      - series: kube_statefulset_status_replicas_ready{namespace="agents-main", statefulset="openshell"}
+        values: 1x5 0x25
+    alert_rule_test:
+      - alertname: AgentPlatformWorkloadNotReady
+        eval_time: 9m
+        exp_alerts: []
+      - alertname: AgentPlatformWorkloadNotReady
+        eval_time: 11m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-pilot, deployment: agent, workload: agent}
+      - alertname: AgentPlatformWorkloadNotReady
+        eval_time: 17m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-pilot, deployment: agent, workload: agent}
+          - exp_labels: {severity: warning, namespace: agents-main, statefulset: openshell, workload: openshell}
+
+  - name: the last run of the providers job failed, then a good run resolves it
+    interval: 1m
+    input_series:
+      # A failed Job that started at 10m; the last success was at 0.
+      - series: kube_job_status_start_time{namespace="agents-workflows", job_name="workflow-providers-2"}
+        values: 600x40
+      - series: kube_job_owner{namespace="agents-workflows", job_name="workflow-providers-2", owner_kind="CronJob", owner_name="workflow-providers"}
+        values: 1x40
+      - series: kube_job_status_failed{namespace="agents-workflows", job_name="workflow-providers-2", reason="BackoffLimitExceeded"}
+        values: _x10 1x30
+      # A good run at 25m.
+      - series: kube_cronjob_status_last_successful_time{namespace="agents-workflows", cronjob="workflow-providers"}
+        values: 0x24 1500x15
+      # A failed check Job of a CronJob that never passed.
+      - series: kube_job_status_start_time{namespace="agents-main", job_name="platform-check-probe-1"}
+        values: 60x40
+      - series: kube_job_owner{namespace="agents-main", job_name="platform-check-probe-1", owner_kind="CronJob", owner_name="platform-check-probe"}
+        values: 1x40
+      - series: kube_job_status_failed{namespace="agents-main", job_name="platform-check-probe-1", reason="BackoffLimitExceeded"}
+        values: 1x40
+    alert_rule_test:
+      - alertname: AgentPlatformCronJobFailed
+        eval_time: 5m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-main, cronjob: platform-check-probe}
+      - alertname: AgentPlatformCronJobFailed
+        eval_time: 15m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-main, cronjob: platform-check-probe}
+          - exp_labels: {severity: warning, namespace: agents-workflows, cronjob: workflow-providers}
+      - alertname: AgentPlatformCronJobFailed
+        eval_time: 30m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-main, cronjob: platform-check-probe}
+
+  - name: no good run of the providers job in 35 minutes
+    interval: 1m
+    input_series:
+      - series: kube_cronjob_created{namespace="agents-workflows", cronjob="workflow-providers"}
+        values: 0x60
+      - series: kube_cronjob_status_last_successful_time{namespace="agents-workflows", cronjob="workflow-providers"}
+        values: 0x60
+    alert_rule_test:
+      - alertname: WorkflowProvidersStale
+        eval_time: 34m
+        exp_alerts: []
+      - alertname: WorkflowProvidersStale
+        eval_time: 37m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-workflows, cronjob: workflow-providers}
+
+  - name: a providers CronJob that never passed, and one that is gone
+    interval: 1m
+    input_series:
+      - series: kube_cronjob_created{namespace="agents-workflows", cronjob="workflow-providers"}
+        values: 0x60
+    alert_rule_test:
+      - alertname: WorkflowProvidersStale
+        eval_time: 40m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-workflows, cronjob: workflow-providers}
+  - name: the providers CronJob is gone
+    interval: 1m
+    input_series:
+      - series: kube_cronjob_created{namespace="agents-workflows", cronjob="workflow-sweep"}
+        values: 0x20
+    alert_rule_test:
+      - alertname: WorkflowProvidersStale
+        eval_time: 4m
+        exp_alerts: []
+      - alertname: WorkflowProvidersStale
+        eval_time: 6m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-workflows, cronjob: workflow-providers}
+
+  - name: a drift line fires for 20 minutes; an ok line never
+    interval: 1m
+    input_series:
+      # The newest drift line came at 1m.
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-workflows", app="workflow-providers", check="app-drift", result="drift"}
+        values: _ 60x40
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-workflows", app="workflow-providers", check="app-drift", result="ok"}
+        values: 60x40
+    alert_rule_test:
+      - alertname: WorkflowAppDrift
+        eval_time: 10m
+        exp_alerts:
+          - exp_labels: {severity: warning, pod_namespace: agents-workflows, app: workflow-providers}
+      - alertname: WorkflowAppDrift
+        eval_time: 22m
+        exp_alerts: []
+
+  - name: a daily check that has not passed in 26 hours
+    interval: 2m
+    input_series:
+      - series: kube_cronjob_created{namespace="agents-finance", cronjob="platform-check-isolation"}
+        values: 0x900
+      - series: kube_cronjob_status_last_successful_time{namespace="agents-finance", cronjob="platform-check-isolation"}
+        values: 0x900
+    alert_rule_test:
+      - alertname: AgentPlatformCheckStale
+        eval_time: 26h
+        exp_alerts: []
+      - alertname: AgentPlatformCheckStale
+        eval_time: 26h20m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-finance, cronjob: platform-check-isolation}
+
+  - name: a run sandbox older than 90 minutes; the pilot's long-lived sandbox and the probe do not count
+    interval: 1m
+    input_series:
+      - series: kube_pod_created{namespace="agents-workflows", pod="os-supervisor-1"}
+        values: 0x120
+      - series: kube_pod_owner{namespace="agents-workflows", pod="os-supervisor-1", owner_kind="Sandbox", owner_name="default--run-abc1234-xyz"}
+        values: 1x120
+      - series: kube_pod_created{namespace="agents-workflows", pod="default--platform-probe"}
+        values: 0x120
+      - series: kube_pod_owner{namespace="agents-workflows", pod="default--platform-probe", owner_kind="Sandbox", owner_name="default--platform-probe"}
+        values: 1x120
+      - series: kube_pod_created{namespace="agents-pilot", pod="default--oc-1"}
+        values: 0x120
+      - series: kube_pod_owner{namespace="agents-pilot", pod="default--oc-1", owner_kind="Sandbox", owner_name="default--oc-1"}
+        values: 1x120
+    alert_rule_test:
+      - alertname: AgentRunSandboxTooOld
+        eval_time: 85m
+        exp_alerts: []
+      - alertname: AgentRunSandboxTooOld
+        eval_time: 91m
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-workflows, sandbox: default--run-abc1234-xyz}
+
+  - name: a failed run fires for two hours from its start
+    interval: 5m
+    input_series:
+      - series: kube_job_status_failed{namespace="agents-workflows", job_name="run-abc", reason="BackoffLimitExceeded"}
+        values: _x2 1x40
+      - series: kube_job_status_start_time{namespace="agents-workflows", job_name="run-abc"}
+        values: 0x42
+    alert_rule_test:
+      - alertname: AgentWorkflowRunFailed
+        eval_time: 1h
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-workflows, job_name: run-abc}
+      - alertname: AgentWorkflowRunFailed
+        eval_time: 2h5m
+        exp_alerts: []
+
+  - name: a restart of the backup container fires for two hours
+    interval: 5m
+    input_series:
+      - series: kube_pod_container_status_restarts_total{namespace="agents-pilot", pod="agent-1", container="backup"}
+        values: 0x6 1x40
+      - series: kube_pod_container_status_restarts_total{namespace="agents-pilot", pod="agent-1", container="agent"}
+        values: 0x6 1x40
+      - series: kube_pod_container_status_last_terminated_reason{namespace="agents-pilot", pod="agent-1", container="backup", reason="Error"}
+        values: _x6 1x40
+    alert_rule_test:
+      - alertname: AgentDailyArchiveFailed
+        eval_time: 20m
+        exp_alerts: []
+      - alertname: AgentDailyArchiveFailed
+        eval_time: 1h
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-pilot, pod: agent-1}
+      - alertname: AgentDailyArchiveFailed
+        eval_time: 2h40m
+        exp_alerts: []
+
+  - name: review fixture, one drift line at 10m holds 20 minutes
+    interval: 1m
+    input_series:
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-workflows", app="workflow-providers", check="app-drift", result="drift"}
+        values: _x10 600 _x40
+    alert_rule_test:
+      - {alertname: WorkflowAppDrift, eval_time: 25m, exp_alerts: [{exp_labels: {severity: warning, pod_namespace: agents-workflows, app: workflow-providers}}]}
+      - {alertname: WorkflowAppDrift, eval_time: 31m, exp_alerts: []}
+
+  - name: drift lines every 15 minutes, one sample each, fire without a gap
+    interval: 1m
+    input_series:
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-workflows", app="workflow-providers", check="app-drift", result="drift"}
+        values: _x10 600 _x14 1500 _x14 2400 _x30
+    alert_rule_test:
+      - {alertname: WorkflowAppDrift, eval_time: 9m, exp_alerts: []}
+      - {alertname: WorkflowAppDrift, eval_time: 17m, exp_alerts: [{exp_labels: {severity: warning, pod_namespace: agents-workflows, app: workflow-providers}}]}
+      - {alertname: WorkflowAppDrift, eval_time: 24m, exp_alerts: [{exp_labels: {severity: warning, pod_namespace: agents-workflows, app: workflow-providers}}]}
+      - {alertname: WorkflowAppDrift, eval_time: 33m, exp_alerts: [{exp_labels: {severity: warning, pod_namespace: agents-workflows, app: workflow-providers}}]}
+      - {alertname: WorkflowAppDrift, eval_time: 48m, exp_alerts: [{exp_labels: {severity: warning, pod_namespace: agents-workflows, app: workflow-providers}}]}
+      - {alertname: WorkflowAppDrift, eval_time: 61m, exp_alerts: []}
+
+  - name: a Job that fails one pod, retries and passes, does not fire
+    interval: 1m
+    input_series:
+      - series: kube_job_status_start_time{namespace="agents-workflows", job_name="workflow-providers-3"}
+        values: 600x30
+      - series: kube_job_owner{namespace="agents-workflows", job_name="workflow-providers-3", owner_kind="CronJob", owner_name="workflow-providers"}
+        values: 1x30
+      # kube-state-metrics counts the failed pod with reason="" while the Job retries.
+      - series: kube_job_status_failed{namespace="agents-workflows", job_name="workflow-providers-3", reason=""}
+        values: _x10 1x20
+      - series: kube_cronjob_status_last_successful_time{namespace="agents-workflows", cronjob="workflow-providers"}
+        values: 0x14 900x15
+      - series: kube_job_status_failed{namespace="agents-workflows", job_name="run-def", reason=""}
+        values: 1x30
+      - series: kube_job_status_start_time{namespace="agents-workflows", job_name="run-def"}
+        values: 0x30
+    alert_rule_test:
+      - {alertname: AgentPlatformCronJobFailed, eval_time: 12m, exp_alerts: []}
+      - {alertname: AgentPlatformCronJobFailed, eval_time: 20m, exp_alerts: []}
+      - {alertname: AgentWorkflowRunFailed, eval_time: 10m, exp_alerts: []}
+
+  - name: a node restart (reason Unknown) does not count as a failed archive
+    interval: 5m
+    input_series:
+      - series: kube_pod_container_status_restarts_total{namespace="agents-pilot", pod="agent-2", container="backup"}
+        values: 0x6 1x40
+      - series: kube_pod_container_status_last_terminated_reason{namespace="agents-pilot", pod="agent-2", container="backup", reason="Unknown"}
+        values: _x6 1x40
+    alert_rule_test:
+      - {alertname: AgentDailyArchiveFailed, eval_time: 1h, exp_alerts: []}
+
+  - name: two kube-state-metrics pods in a rollout serve the same series
+    interval: 1m
+    input_series:
+      - series: kube_job_status_start_time{namespace="agents-main", job_name="platform-check-probe-9", instance="ksm-a"}
+        values: 600x20
+      - series: kube_job_status_start_time{namespace="agents-main", job_name="platform-check-probe-9", instance="ksm-b"}
+        values: 600x20
+      - series: kube_job_owner{namespace="agents-main", job_name="platform-check-probe-9", owner_kind="CronJob", owner_name="platform-check-probe", instance="ksm-a"}
+        values: 1x20
+      - series: kube_job_owner{namespace="agents-main", job_name="platform-check-probe-9", owner_kind="CronJob", owner_name="platform-check-probe", instance="ksm-b"}
+        values: 1x20
+      - series: kube_job_status_failed{namespace="agents-main", job_name="platform-check-probe-9", reason="BackoffLimitExceeded", instance="ksm-a"}
+        values: 1x20
+      - series: kube_job_status_failed{namespace="agents-main", job_name="platform-check-probe-9", reason="BackoffLimitExceeded", instance="ksm-b"}
+        values: 1x20
+      - series: kube_cronjob_status_last_successful_time{namespace="agents-main", cronjob="platform-check-probe", instance="ksm-a"}
+        values: 0x20
+      - series: kube_cronjob_status_last_successful_time{namespace="agents-main", cronjob="platform-check-probe", instance="ksm-b"}
+        values: 0x20
+      - series: kube_pod_created{namespace="agents-workflows", pod="os-supervisor-9", instance="ksm-a"}
+        values: 0x120
+      - series: kube_pod_created{namespace="agents-workflows", pod="os-supervisor-9", instance="ksm-b"}
+        values: 0x120
+      - series: kube_pod_owner{namespace="agents-workflows", pod="os-supervisor-9", owner_kind="Sandbox", owner_name="default--run-9999999-abc", instance="ksm-a"}
+        values: 1x120
+      - series: kube_pod_owner{namespace="agents-workflows", pod="os-supervisor-9", owner_kind="Sandbox", owner_name="default--run-9999999-abc", instance="ksm-b"}
+        values: 1x120
+    alert_rule_test:
+      - {alertname: AgentPlatformCronJobFailed, eval_time: 15m, exp_alerts: [{exp_labels: {severity: warning, namespace: agents-main, cronjob: platform-check-probe}}]}
+      - {alertname: AgentRunSandboxTooOld, eval_time: 91m, exp_alerts: [{exp_labels: {severity: warning, namespace: agents-workflows, sandbox: default--run-9999999-abc}}]}

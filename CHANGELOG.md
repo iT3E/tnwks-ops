@@ -3,6 +3,60 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.142.0 - 2026-11-14
+
+### Added
+
+* security: the host check on each Windows host (Ansible role `windows_host_check`, source `host-check`). A SYSTEM scheduled task reads Defender, the updates and the firewall every 6 hours and writes the result for the textfile collector of windows_exporter. Each result carries a severity, so a failed check of Defender, the firewall or the updates alerts. Only SYSTEM and the Administrators may change the directory of the script. A query that fails gives no result. A follow-up adds `host-check` to the sources of the hosts after their first result
+
+## v2.141.0 - 2026-11-14
+
+### Added
+
+* tools: runner scale sets for the checks of two private app repos, with no Docker; their image jobs stay on GitHub-hosted runners
+
+## v2.140.0 - 2026-11-14
+
+### Added
+
+* security: the API checks on homelab-wsl-02 (`kubernetes/apps/security/api-checks`, source `api-check`). A CronJob tests each day whether the router runs the newest stable release of RouterOS, from the series of mktxp and the release feed of the vendor (safeguard 12.1), and, once the owner adds its token, whether the Terraform Cloud organization requires two factors (safeguards 6.3 and 6.5). It keeps each newest release it sees, so a router two releases behind fails too. It writes the result file that the converter reads. A test that does not run has no entry. A follow-up adds `api-check` to the sources of the router after its first result
+
+## v2.139.0 - 2026-11-14
+
+### Added
+
+* security: `peer-federate` of homelab-wsl-02 brings the two series of the registry of the host check (`host-check`) from homelab-wsl, which scrapes the textfile collector of both Windows hosts. Nothing writes the series yet: the Ansible roles of the host check start it
+
+## v2.138.1 - 2026-11-14
+
+### Fixed
+
+* monitoring: the platform log agent (vector-agent-platform) sends to the aggregator over plain HTTP. Its sink address had no scheme, which Vector 0.61 reads as https, so no line of the agent platform reached Loki. A container test now sends one event through each vector sink to the aggregator.
+
+## v2.138.0 - 2026-11-14
+
+### Added
+
+* ai: a daily check that Tempo has a completed heartbeat run of each personal agent in the last 26 hours (CronJob agent-heartbeat-check, which asks up to 3 times and retries a failed pod once), with the alerts AgentHeartbeatMissing and AgentHeartbeatCheckStale.
+
+## v2.137.0 - 2026-11-14
+
+### Added
+
+* monitoring: the logs of some long-running pods of the agent platform go to Loki, on an allowlist (the pod label logs.home.arpa/ship=true): the run receiver and the sandbox gateway of the workflows trust domain, its sandbox supervisors, the backup, sandbox-start and init containers of the pilot agent pod, and the model bridge. A new Vector DaemonSet on homelab-wsl only (vector-agent-platform) reads them, drops command text and query strings from the gateway lines, keeps only known line types of the supervisors, and serves the gauges of the new alerts AgentInstructionFileChanged and ModelBridgeRateLimited. The new alert AgentInstructionCheckStale reads the result gauge of the aggregator. The shared Vector agent and the aggregator do not change.
+
+## v2.136.0 - 2026-11-14
+
+### Added
+
+* ai: alerts of the agent platform: a workload that is not ready, a failed last run and a stale run of its CronJobs (the providers job after 35 minutes, the daily checks after 26 hours), a drift of the GitHub App of the reviewer, an old run sandbox, a failed run, and a failed daily archive. The Vector aggregator serves the time of the newest result line of the platform, for the drift alert.
+
+## v2.135.0 - 2026-11-14
+
+### Added
+
+* security: the Prowler run for Cloudflare (`kubernetes/apps/security/prowler`), each day with the scan list of the registry, and a network policy for `api.cloudflare.com`. It does not run until the owner adds its read-only token as a SOPS Secret and names it in the app; the README has the steps and the least scope of the token. The new alert `SecurityTokenExpiring` fires 30 days before the end date that the owner writes to the Lease of a token. GitHub has no Prowler run, as it would fail each day on a personal account: the API checks take its lines of the registry
+
 ## v2.134.0 - 2026-11-14
 
 ### Added
