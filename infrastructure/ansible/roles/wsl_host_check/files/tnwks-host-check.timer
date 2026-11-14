@@ -1,0 +1,10 @@
+[Unit]
+Description=The host check of the security platform, every 6 hours
+
+[Timer]
+OnCalendar=*-*-* 00/6:38:00
+OnBootSec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

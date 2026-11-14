@@ -223,8 +223,8 @@ does. Its value is the site whose Prometheus runs the rules. The label
 
 ## The host check
 
-The source `host-check` runs on each host of both sites, with the same
-settings. It writes a `.prom` file for the textfile collector of
+The source `host-check` runs on each host and each WSL distro of both
+sites, with the same settings. It writes a `.prom` file for the textfile collector of
 `windows_exporter` (`infrastructure/ansible/roles/windows_monitoring`).
 homelab-wsl scrapes the exporter of both Windows hosts, and `peer-federate`
 of homelab-wsl-02 brings the two series of the registry to its rules.
@@ -232,6 +232,12 @@ of homelab-wsl-02 brings the two series of the registry to its rules.
 | Where | What runs | File |
 | --- | --- | --- |
 | Each Windows host | The SYSTEM scheduled task `tnwks-host-check`, every 6 hours and 10 minutes after boot (role `windows_host_check`) | `textfile_inputs\tnwks_security_host_check.prom` |
+| Each WSL distro | The systemd timer `tnwks-host-check`, as `wsl_distro_user`, every 6 hours and 10 minutes after boot (role `wsl_host_check`) | `textfile_inputs\wsl-distro\tnwks_security_host_check_distro.prom`, through `/mnt/c` |
+
+The collector reads the subdirectories of `textfile_inputs` too. The
+distro's file has its own name, because the collector refuses two files
+with one name. The series that both files have use the same text, because
+the collector refuses a series with two texts.
 
 Each check gives the number of items that fail it, and 0 is a pass. Each
 result carries the label `severity`. `SecurityFindingNew` reads `high` and
@@ -245,6 +251,7 @@ for the alert are `high`, and old signatures, which it does not name, are
 | `defender-signatures` | `Get-MpComputerStatus` | Signatures older than 7 days, the age at which Defender counts them as out of date | `medium` |
 | `firewall-enabled` | `Get-NetFirewallProfile -PolicyStore ActiveStore` | Each of the Domain, Private and Public profiles that is off | `high` |
 | `updates-pending` | An online search of Windows Update for software updates that are not installed, not hidden and not optional | Each such update released more than 14 days ago (Design Doc 0004, section 4.1.4) | `high` |
+| `updates-pending` (distro) | `apt-get -s dist-upgrade`, a simulation that installs nothing, on the package lists of the distro | Each package whose upgrade this check first saw more than 14 days ago. A package list does not say when an upgrade came out, so the check keeps the first time it saw each upgrade in `/var/lib/tnwks-host-check/state.json`, and the clock of a package starts at the first run that sees it | `high` |
 
 The file also has series of the host check itself, which no rule of the
 registry reads: each protection and profile, the time of the signatures and
@@ -259,7 +266,16 @@ then read each line of the host as "No evidence", and
 `SecurityResultLate` fires for a host that lists `host-check` in its
 `sources`. The run never writes 0 for a check
 that it could not do. A fact that no check reads (the newest install, a
-pending restart) only leaves out its own series when its query fails.
+pending restart) only leaves out its own series when its query fails. In a
+distro, old package lists are a failed query too, because a simulation on
+old lists can not see a new upgrade. The age is the one of the oldest
+Release file of the updates and the security fixes of the distribution
+(Origin Ubuntu or Debian, a Suite that ends in `-updates` or `-security`),
+and over 72 hours gives no result. A list of another source, or of the base
+suite, does not count, so a fresh one does not hide an old one. With no such
+Release file there is no result. A state file that is there and can not be
+read is a failed query too, and the run leaves it as it is, so the clock of
+each pending upgrade does not start again.
 
 SYSTEM runs the script from `C:\ProgramData\tnwks-host-check`. The role sets
 the rules of that directory on each run: no inherited rule, the
@@ -268,7 +284,7 @@ Users may read. A file below it with a rule of its own, or another owner,
 gets the rules of the directory again. The account of the WSL distro may
 write only its own directory of the textfile collector.
 
-**The first result, then the source.** A host lists `host-check` in
+**The first result, then the source.** A host or a distro lists `host-check` in
 `sources` of `systems.yaml` only after its first result is on the board of
 homelab-wsl-02, in a pull request of its own. Before that, the rule for a
 late result would fire at once. The results reach the lines of the registry
@@ -276,10 +292,12 @@ without it: `sources` only says which sources the rule for a late result
 watches.
 
 To run it now on a host: `Start-ScheduledTask -TaskName tnwks-host-check`.
-The way back (Design Doc 0004, section 4.3): set `host_check_state: absent`
-in the defaults of the role, which removes the task, the script and the
-files on each host, and remove `host-check` from `sources` of the hosts in
-`systems.yaml`, in the same pull request.
+In a distro: `sudo systemctl start tnwks-host-check.service`.
+The way back (Design Doc 0004, section 4.3): set `wsl_host_check_state:
+absent` and `host_check_state: absent` in the defaults of the two roles,
+which removes the timer, the task, the scripts and the files on each host
+and distro, and remove `host-check` from `sources` of the hosts and distros
+in `systems.yaml`, in the same pull request.
 
 ## The generator
 

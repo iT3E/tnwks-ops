@@ -1,0 +1,3 @@
+kind: Added
+body: 'security: the host check in each WSL distro (Ansible role `wsl_host_check`, source `host-check`). A systemd timer simulates an upgrade with apt-get every 6 hours and writes the result into a directory of the Windows host for its windows_exporter. An upgrade fails the check after it has waited 14 days. The result carries the severity high. The age of the lists is the oldest list of the updates and the security fixes of the distribution, and over 72 hours, a query that fails or a state file that can not be read gives no result. A follow-up adds `host-check` to the sources of the distros after their first result'
+time: 2026-11-14T06:15:00.000000000-08:00

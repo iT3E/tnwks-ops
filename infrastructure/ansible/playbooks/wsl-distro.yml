@@ -7,7 +7,7 @@
 #   task wsl-host:distro-apply
 #
 # One role with `--tags docker` / `cluster-tools` / `ci-access` / `lan-bridge` /
-# `site-routing` / `usb-attach` / `backups` / `drift-check`. A distro with
+# `site-routing` / `usb-attach` / `backups` / `drift-check` / `host-check`. A distro with
 # nothing for a role sets its list empty in host_vars (or leaves its
 # `_enabled` off), and the role is skipped.
 #
@@ -58,3 +58,9 @@
     # now (.github/workflows/ansible-hosts.yaml).
     - role: wsl_drift_check
       tags: [drift-check]
+    # The host check of the security platform: the distro's pending upgrades,
+    # as a .prom file for the Windows host's windows_exporter
+    # (security/README.md, "The host check"). windows-host.yml makes the
+    # directory first (role windows_host_check).
+    - role: wsl_host_check
+      tags: [host-check]

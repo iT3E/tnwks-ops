@@ -1,0 +1,27 @@
+[Unit]
+Description=The host check of the security platform: the updates of this distro, for windows_exporter
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User={{ wsl_distro_user }}
+# The first time each pending upgrade was seen.
+StateDirectory={{ wsl_host_check_name }}
+StateDirectoryMode=0700
+# It reads, and writes only its state and its .prom file.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+CapabilityBoundingSet=
+TimeoutStartSec=15min
+ExecStart=/usr/local/bin/{{ wsl_host_check_name }} \
+  --system "{{ inventory_hostname }}" \
+  --textfile-dir "{{ wsl_host_check_textfile_dir }}" \
+  --file-name "{{ wsl_host_check_file }}" \
+  --state-file "/var/lib/{{ wsl_host_check_name }}/state.json" \
+  --updates-max-age-days {{ wsl_host_check_updates_max_age_days }} \
+  --lists-max-age-hours {{ wsl_host_check_lists_max_age_hours }}
