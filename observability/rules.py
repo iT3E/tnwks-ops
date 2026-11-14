@@ -430,7 +430,7 @@ def capacity_alerts():
 # serves that time: a CronJob has no endpoint of its own to scrape.
 SECURITY_CERTIFICATE_LEASES = "aws-security-.+-certificate"
 SECURITY_CERTIFICATE_DAYS = 30
-# The API tokens of the Prowler runs for Cloudflare and GitHub
+# The API token of the Prowler run for Cloudflare, and of a later run of the kind
 # (kubernetes/apps/security/prowler). Nothing renews a token, so the owner
 # writes its end date to the renew time of its Lease when the token is made,
 # in the form of the certificates above.
@@ -914,7 +914,7 @@ def security_fixtures():
                  expected("aws-security-audit-certificate")]},
          ]},
         {"name": "a token with 29 days left alerts; one with 40 days does not", "interval": "5m",
-         "input_series": [lease("prowler-cloudflare-token", 29 * day), lease("prowler-github-token", 40 * day)],
+         "input_series": [lease("prowler-cloudflare-token", 29 * day), lease("prowler-example-token", 40 * day)],
          "alert_rule_test": [
              {"alertname": "SecurityTokenExpiring", "eval_time": "30m", "exp_alerts": []},
              {"alertname": "SecurityTokenExpiring", "eval_time": "70m", "exp_alerts": [

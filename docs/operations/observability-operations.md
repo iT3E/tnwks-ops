@@ -53,7 +53,7 @@ WSL-02, which has that cluster's kubeconfig
   (`kubernetes/apps/security/aws-credentials/README.md` has the renewal).
 - **API tokens of Prowler:** `SecurityTokenExpiring` (group
   `homelab.security`) fires 30 days before the token of the Prowler run for
-  Cloudflare or GitHub ends. The owner writes the end date to the renew time
+  Cloudflare ends. The owner writes the end date to the renew time
   of the token's Lease (`kubernetes/apps/security/prowler/README.md`, "When a
   token ends").
 - **Audit lines refused:** `SecurityAuditLinesRefused`, of the group

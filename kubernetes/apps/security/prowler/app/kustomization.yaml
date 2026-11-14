@@ -9,11 +9,7 @@ namespace: security
 #   - ./secret-cloudflare.sops.yaml
 #   - ./lease-cloudflare-token.yaml
 #   - ./cronjob-cloudflare.yaml
-# GitHub stays out until the owner decides how its run gives a result (a
-# token of a personal account reads no check of the organization):
-#   - ./secret-github.sops.yaml
-#   - ./lease-github-token.yaml
-#   - ./cronjob-github.yaml
+# GitHub has no run: the API checks take its lines (../README.md, "GitHub").
 resources:
   - ./networkpolicy.yaml
 configMapGenerator:
@@ -27,7 +23,6 @@ configMapGenerator:
     files:
       - ./config/checks-aws.json
       - ./config/checks-cloudflare.json
-      - ./config/checks-github.json
 generatorOptions:
   disableNameSuffixHash: true
   annotations:

@@ -1218,7 +1218,7 @@ tests:
   input_series:
   - series: kube_lease_renew_time{k8s_cluster="homelab-wsl-02",namespace="security",lease="prowler-cloudflare-token"}
     values: 2505600+0x320
-  - series: kube_lease_renew_time{k8s_cluster="homelab-wsl-02",namespace="security",lease="prowler-github-token"}
+  - series: kube_lease_renew_time{k8s_cluster="homelab-wsl-02",namespace="security",lease="prowler-example-token"}
     values: 3456000+0x320
   alert_rule_test:
   - alertname: SecurityTokenExpiring

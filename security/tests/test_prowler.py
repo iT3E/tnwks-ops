@@ -268,7 +268,9 @@ def test_each_token_has_a_lease_that_the_token_alert_reads():
     import rules
     alert = next(rule for rule in rules.security_alerts() if rule["alert"] == "SecurityTokenExpiring")
     assert rules.SECURITY_TOKEN_LEASES in alert["expr"]
-    for provider, variable in (("cloudflare", "CLOUDFLARE_API_TOKEN"), ("github", "GITHUB_PERSONAL_ACCESS_TOKEN")):
+    tokens = {"cloudflare": "CLOUDFLARE_API_TOKEN"}
+    assert sorted(path.name for path in APP.glob("lease-*.yaml")) == [f"lease-{provider}-token.yaml" for provider in tokens]
+    for provider, variable in tokens.items():
         lease = yaml.safe_load((APP / f"lease-{provider}-token.yaml").read_text())
         assert lease["kind"] == "Lease"
         assert re.fullmatch(rules.SECURITY_TOKEN_LEASES, lease["metadata"]["name"])
@@ -284,9 +286,23 @@ def test_each_token_has_a_lease_that_the_token_alert_reads():
 def test_a_listed_run_with_a_token_lists_its_lease_and_its_secret():
     """Without its Lease, SecurityTokenExpiring has no series for a token, and the
     run fails on the day the token ends with no warning before."""
-    # By the file name, so "cronjob-github.yaml" and "./cronjob-github.yaml" are the same entry.
+    # By the file name, so "cronjob-cloudflare.yaml" and "./cronjob-cloudflare.yaml" are the same entry.
     resources = {Path(item).name for item in yaml.safe_load((APP / "kustomization.yaml").read_text())["resources"]}
     for provider in ("cloudflare", "github"):
         parts = {f"cronjob-{provider}.yaml", f"lease-{provider}-token.yaml", f"secret-{provider}.sops.yaml"}
         listed = parts & resources
         assert listed in (set(), parts), f"{provider}: list the Secret, the Lease and the CronJob together, not {sorted(listed)}"
+
+
+def test_github_has_no_run_and_each_run_has_its_scan_list():
+    """A Prowler run for GitHub would fail each day (a token of a personal account
+    reads no check of the organization): the API checks take its lines."""
+    import sys
+    sys.path.insert(0, str(ROOT / "security"))
+    import generate
+    assert "github" not in generate.PROWLER_RUNS
+    assert sorted(path.name for path in (APP / "config").glob("checks-*.json")) == sorted(
+        f"checks-{provider}.json" for provider in generate.PROWLER_RUNS)
+    assert not list(APP.glob("*github*"))
+    policies = (APP / "networkpolicy.yaml").read_text()
+    assert "github" not in policies

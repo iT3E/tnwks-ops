@@ -1,10 +1,11 @@
 # prowler
 
-Prowler checks each cloud and SaaS account of the security registry each
-day. It is the source `prowler` of the registry (`security/README.md`). Each
-CronJob runs one system with the scan list of its provider, and leaves one
-OCSF file on the volume of results. The converter reads the file and serves
-the result series (`security/converter/README.md`, "The files of results").
+Prowler checks each AWS account and the Cloudflare account of the security
+registry each day. GitHub has no run ("GitHub", below). It is the source
+`prowler` of the registry (`security/README.md`). Each CronJob runs one
+system with the scan list of its provider, and leaves one OCSF file on the
+volume of results. The converter reads the file and serves the result
+series (`security/converter/README.md`, "The files of results").
 On homelab-wsl-02 only.
 
 The release is Prowler 5.49.0, the release of `security/catalog/prowler.json`.
@@ -20,7 +21,6 @@ request.
 | `prowler-aws-prod` | `aws-prod` | `aws` | 03:17 | The Secret `aws-security-audit-sts` (`../aws-credentials/README.md`) |
 | `prowler-aws-management` | `aws-management` | `aws` | 05:17 | The same Secret, and the role `tnwks-security-audit` of the management account (`--role`) |
 | `prowler-cloudflare` | `cloudflare` | `cloudflare` | 07:17 | The Secret `prowler-cloudflare`, key `CLOUDFLARE_API_TOKEN` |
-| `prowler-github` | `iT3E` | `github` | 07:47 | The Secret `prowler-github`, key `GITHUB_PERSONAL_ACCESS_TOKEN` |
 
 The times keep one run at a time on the node.
 
@@ -30,10 +30,11 @@ The times keep one run at a time on the node.
 | --- | --- |
 | `ks.yaml` | The Flux Kustomization `security-prowler`. It waits for `security-converter`, which has the claim of the volume |
 | `app/cronjob-aws.yaml` | The two runs of AWS |
-| `app/cronjob-cloudflare.yaml`, `app/cronjob-github.yaml` | The run of each SaaS account |
-| `app/secret-cloudflare.sops.yaml`, `app/secret-github.sops.yaml` | The owner's tokens, encrypted. Not in git until the owner makes them |
+| `app/cronjob-cloudflare.yaml` | The run of the Cloudflare account |
+| `app/lease-cloudflare-token.yaml` | The end date of the Cloudflare token ("When a token ends") |
+| `app/secret-cloudflare.sops.yaml` | The owner's token, encrypted. Not in git until the owner makes it |
 | `app/scripts/run.py` | One run: the mutelist, Prowler, the file for the converter, the files older than 14 days, the peak of memory. Tests: `security/tests/test_prowler.py` |
-| `app/config/checks-<provider>.json` | The scan list of each provider, in the form of `--checks-file`. `security/generate.py` writes them from the registry; never edit them |
+| `app/config/checks-<provider>.json` | The scan list of each provider that has a run (`aws`, `cloudflare`), in the form of `--checks-file`. `security/generate.py` writes them from the registry; never edit them |
 | `app/networkpolicy.yaml` | What a run of each provider can reach |
 
 The claim `security-results` is in `../converter/app/pvc.yaml`.
@@ -85,7 +86,6 @@ a run calls no API server (`automountServiceAccountToken: false`).
 | --- | --- | --- |
 | `aws` | `*.amazonaws.com`, `*.*.amazonaws.com`, `api.ecr.*.amazonaws.com`, `*.s3.*.amazonaws.com`, `*.s3-control.*.amazonaws.com` | The API of each service in each Region, the global ones (IAM, CloudFront, WAF, S3), the buckets, S3 Control with the account in the name, and the public list of IP ranges |
 | `cloudflare` | `api.cloudflare.com` | The API of Cloudflare |
-| `github` | `api.github.com` | The REST API of GitHub. `--no-github-actions` turns off the scan of the workflows, so the run clones nothing |
 
 One `*` is one label of a name. The list is the names that the AWS SDK of
 Prowler 5.49.0 resolves for each client of the checks in
@@ -133,15 +133,13 @@ has written `aws-security-audit-sts` (the annotation
 2. Merge. The first runs are at the next 03:17 and 05:17 UTC. To run one now:
    `kubectl -n security create job --from=cronjob/prowler-aws-prod prowler-aws-prod-first`.
 
-**Cloudflare and GitHub.** Each token is the owner's, read-only, with the
-least scope that its checks need. Prowler reads it from the environment, and
-the run never prints it. The run for GitHub stays out of the app until the
-owner decides how the registry checks that account (below). For each
-provider, in one pull request:
+**Cloudflare.** The token is the owner's, read-only, with the least scope
+that its checks need. Prowler reads it from the environment, and the run
+never prints it. In one pull request:
 
 1. Make the token (the tables below). Give it an end date of one year at
    most, and write that date as `spec.renewTime` of
-   `app/lease-cloudflare-token.yaml` (or `app/lease-github-token.yaml`), in
+   `app/lease-cloudflare-token.yaml`, in
    the form `2027-11-13T00:00:00.000000Z`. `SecurityTokenExpiring` fires 30
    days before it ("When a token ends").
 2. Write the Secret in this form, with the token in place of the text in
@@ -152,18 +150,18 @@ provider, in one pull request:
    apiVersion: v1
    kind: Secret
    metadata:
-     name: prowler-cloudflare  # or prowler-github
+     name: prowler-cloudflare
    type: Opaque
    stringData:
-     CLOUDFLARE_API_TOKEN: <the token>  # or GITHUB_PERSONAL_ACCESS_TOKEN
+     CLOUDFLARE_API_TOKEN: <the token>
    ```
 
-   as `app/secret-cloudflare.sops.yaml` (or `app/secret-github.sops.yaml`).
+   as `app/secret-cloudflare.sops.yaml`.
 3. Encrypt it: `sops --encrypt --in-place` on the file. The rule for
    `kubernetes/` in `.sops.yaml` encrypts the whole of `stringData`.
 4. Name the Secret, the Lease and the CronJob under `resources` in
    `app/kustomization.yaml`, the Secret first.
-5. Merge. The run is at the next 07:17 (Cloudflare) or 07:47 (GitHub) UTC.
+5. Merge. The run is at the next 07:17 UTC.
 
 The Cloudflare token: **My Profile, API Tokens, Create Custom Token.**
 
@@ -185,29 +183,24 @@ no ID (the firewall rules and the WAF rulesets, both from the rulesets of the
 zone). Another class, such as `AuthenticationError` (HTTP 401, a token that
 is wrong or has ended), or a 403 for the zone settings, is a fault.
 
-The GitHub token: **Settings, Developer settings, Fine-grained tokens,
-Generate new token.**
+## GitHub
 
-| Field | Value | Why |
-| --- | --- | --- |
-| Resource owner | `iT3E` | The system of the registry |
-| Repository access | Public repositories | Read-only, and no permission to add |
-| Account or organization permissions | None | See below |
-
-The two checks of the registry for GitHub
+GitHub has no Prowler run. The two checks of the registry for GitHub
 (`organization_members_mfa_required`,
 `organization_default_repository_permission_strict`) read the settings of
 an organization. `iT3E` is a personal account, so Prowler has no such
 settings to read: it makes no finding for these checks. With no finding,
-Prowler writes no file, so the run fails and `KubeJobFailed` fires each day.
-Do not start the run for GitHub before the owner decides how the registry
-checks this account. If the account becomes an organization, the token needs
-the organization permission Administration, Read, and the run gives a
-result.
+Prowler writes no file, so a run would fail each day and fire
+`KubeJobFailed`. The API checks of the security platform take the GitHub
+lines of the registry. Until then, the system `iT3E` lists no source in
+`security/registry/systems.yaml`, so no rule waits for a result of it and
+no late alert fires. `security/generate.py` writes a scan list only for the
+providers with a run (`PROWLER_RUNS`), and a test fails if a GitHub run, its
+scan list or its network policy comes back.
 
 ## When a token ends
 
-A token of Cloudflare or GitHub does not renew itself. The owner writes its
+The Cloudflare token does not renew itself. The owner writes its
 end date to the renew time of its Lease (`app/lease-*-token.yaml`), and
 kube-state-metrics serves it as `kube_lease_renew_time`, in the form of the
 certificates of `../aws-credentials`. The alert `SecurityTokenExpiring`

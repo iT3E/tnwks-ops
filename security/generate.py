@@ -53,6 +53,10 @@ TYPES = ("aws-account", "cloudflare-account", "github-organization",
 # The name of each type in the `--checks-file` of Prowler.
 PROWLER_PROVIDERS = {"aws-account": "aws", "cloudflare-account": "cloudflare",
                      "github-organization": "github"}
+# The providers that have a Prowler run (kubernetes/apps/security/prowler): each
+# gets the scan list of its CronJob. GitHub has none, as a run would fail each
+# day: the API checks take its lines.
+PROWLER_RUNS = ("aws", "cloudflare")
 UNITS = {"m": 60, "h": 3600, "d": 86400}
 
 
@@ -745,7 +749,7 @@ def artifacts(registry=None):
         CONVERTER_CONFIG / "streams.json": dump_json(stream_map(registry)),
         CONVERTER_CONFIG / "converter.py": CONVERTER.read_text(),
         **{PROWLER_CONFIG / f"checks-{provider}.json": dump_json({provider: checks})
-           for provider, checks in scan_lists(registry)["prowler"].items()},
+           for provider, checks in scan_lists(registry)["prowler"].items() if provider in PROWLER_RUNS},
     }
 
 
