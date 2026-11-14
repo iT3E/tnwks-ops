@@ -6,8 +6,8 @@
 
 The list is `terms` in .github/privacy-terms.sops.yaml. CI can't read that
 file (its rule has no CI key): each repository's CI reads a copy from its
-PRIVACY_TERMS Actions secret, which bin/privacy-check parses the same way in
-every repository (one term per line, `#` comments).
+PRIVACY_TERMS Actions secret, which bin/privacy-check reads in one of two
+forms (below).
 
 edit opens the file in sops (bin/sops, the editor in $EDITOR). When the
 editor closes:
@@ -32,22 +32,47 @@ are counted, since some of their names stay out of this public repo
 --dry-run does every read (the decrypt and the GETs) and prints what it
 would set, without setting anything.
 
+Each repository gets the plain list, or the opaque one-line form that this
+repo's `bin/privacy-check --encode` makes from it once the repository is
+ready for it. Ready means both, on its default branch:
+  - its bin/privacy-check reads the opaque form (it has the reader);
+  - its .github/workflows/privacy-text.yaml runs the fixed comment check:
+    the reusable workflow it pins (iT3E/github-workflows at a commit SHA),
+    or the file itself in iT3E/github-workflows, checks the author.
+A repository that isn't ready keeps the plain list, and the output says so.
+This is the only place that writes the opaque form; each repository's own
+`task privacy:sync` writes the plain list.
+
 The terms never reach argv, the environment or the terminal: they go from
-sops's stdout to `gh secret set`'s stdin, in this process. gh runs without
+sops's stdout to `gh secret set`'s stdin (or through `bin/privacy-check
+--encode`'s stdin first), in this process. gh runs without
 GITHUB_TOKEN in its environment, so it uses its own login.
 """
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SOPS = REPO / "bin/sops"
+ENCODER = REPO / "bin/privacy-check"
+# The gh binary. Tests point it at their stub.
+GH = "gh"
+# What a bin/privacy-check that reads the opaque form contains, and how that
+# form starts.
+OPAQUE = "#privacy-terms:v1:"
+# The reusable comment check, and what its fixed version contains.
+WORKFLOWS_REPO = "github-workflows"
+PRIVACY_TEXT = ".github/workflows/privacy-text.yaml"
+PRIVACY_TEXT_FIXED = "author_association"
+PIN = re.compile(r"uses:\s*iT3E/github-workflows/\.github/workflows/privacy-text\.yaml@([0-9a-f]{40})\b")
 TERMS_FILE = ".github/privacy-terms.sops.yaml"
 OWNER = "iT3E"
 # The Actions secret that holds each repository's copy of the list. Messages
@@ -72,7 +97,7 @@ def gh_env() -> dict[str, str]:
 
 
 def gh(args: list[str], stdin: str | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(["gh", *args], input=stdin, capture_output=True, text=True,
+    return subprocess.run([GH, *args], input=stdin, capture_output=True, text=True,
                           env=gh_env(), cwd=REPO, check=False)
 
 
@@ -93,6 +118,17 @@ def count_terms(raw: str) -> int:
     """As bin/privacy-check reads them: trimmed, no blank or # lines."""
     return sum(1 for line in raw.replace("\r", "").splitlines()
                if line.strip() and not line.strip().startswith("#"))
+
+
+def encode(raw: str) -> str:
+    """The opaque one-line form of the list. Never printed."""
+    r = subprocess.run(["bash", str(ENCODER), "--encode"], input=raw, capture_output=True,
+                       text=True, cwd=REPO, check=False)
+    value = r.stdout.strip()
+    if r.returncode != 0 or not value.startswith(OPAQUE) or "\n" in value:
+        # Its stderr isn't printed: only the exit code.
+        raise Stop(f"bin/privacy-check --encode failed (exit {r.returncode}); nothing was set")
+    return value + "\n"
 
 
 def file_digest() -> str:
@@ -149,6 +185,41 @@ def has_copy(repo: Repo) -> bool:
     raise Stop(f"can't tell whether {where} has {COPY_NAME} (gh exit {r.returncode}); nothing was set")
 
 
+def fetch(repo: Repo, path: str, ref: str | None = None) -> str | None:
+    """A file of a repository, on its default branch or at ref. None: no
+    such file (404). Anything else stops the sync before it sets anything."""
+    url = f"repos/{OWNER}/{repo.name}/contents/{path}" + (f"?ref={ref}" if ref else "")
+    r = gh(["api", url, "--jq", ".content"])
+    if r.returncode != 0 and "HTTP 404" in r.stderr:
+        return None
+    if r.returncode == 0:
+        try:
+            return base64.b64decode("".join(r.stdout.split()), validate=True).decode("utf-8", "replace")
+        except ValueError:
+            pass
+    where = repo.name if not repo.private else "a private repository"
+    raise Stop(f"can't read {path} of {where} (gh exit {r.returncode}); nothing was set")
+
+
+def not_ready(repo: Repo) -> str | None:
+    """Why the repository can't take the opaque form yet, or None if it can."""
+    script = fetch(repo, "bin/privacy-check")
+    if script is None or OPAQUE not in script:
+        return "its bin/privacy-check doesn't read the opaque form"
+    caller = fetch(repo, PRIVACY_TEXT)
+    if caller is None:
+        return f"it has no {PRIVACY_TEXT}"
+    pin = PIN.search(caller)
+    if pin:
+        pinned = fetch(Repo(WORKFLOWS_REPO, False, False), PRIVACY_TEXT, ref=pin.group(1))
+        if pinned is not None and PRIVACY_TEXT_FIXED in pinned:
+            return None
+        return f"its {PRIVACY_TEXT} pins a release without the fixed comment check"
+    if repo.name == WORKFLOWS_REPO and "workflow_call:" in caller and PRIVACY_TEXT_FIXED in caller:
+        return None
+    return f"its {PRIVACY_TEXT} doesn't run the fixed comment check"
+
+
 def targets() -> tuple[list[Repo], list[Repo]]:
     """Repositories with the secret: (to set, archived and skipped)."""
     found = [r for r in owned_repos() if has_copy(r)]
@@ -163,19 +234,28 @@ def sync(dry_run: bool) -> int:
     n = count_terms(raw)
     if n == 0:
         raise Stop(f"{TERMS_FILE} has no terms: not syncing an empty list")
-    say(f"{TERMS_FILE}: {n} terms")
     todo, archived = targets()
     if archived:
         say(f"Archived, skipped: {describe(archived)}")
     if not todo:
         raise Stop(f"no repository of {OWNER} has a {COPY_NAME} secret: nothing to sync")
     say(f"Repositories with a {COPY_NAME} secret: {describe(todo)}")
+    why = {r.name: not_ready(r) for r in todo}
+    opaque = [r for r in todo if why[r.name] is None]
+    plain = [r for r in todo if why[r.name] is not None]
+    value = encode(raw) if opaque else ""
+    say(f"  the opaque form: {describe(opaque)}")
+    say(f"  the plain list, not ready for the opaque form: {describe(plain)}")
+    for r in plain:
+        if not r.private:
+            say(f"    {r.name}: {why[r.name]}")
     if dry_run:
-        say(f"--dry-run: would set {COPY_NAME} on these {len(todo)} repositories (gh secret set, terms on stdin)")
+        say(f"--dry-run: would set {COPY_NAME} on these {len(todo)} repositories (gh secret set, on stdin)")
         return 0
     failed = []
     for repo in todo:
-        r = gh(["secret", "set", COPY_NAME, "--repo", f"{OWNER}/{repo.name}"], stdin=raw)
+        r = gh(["secret", "set", COPY_NAME, "--repo", f"{OWNER}/{repo.name}"],
+               stdin=value if repo in opaque else raw)
         if r.returncode != 0:
             failed.append(repo)
             # Only the exit code: gh's stderr isn't printed (see COPY_NAME), and
