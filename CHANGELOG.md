@@ -3,6 +3,16 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.120.0 - 2026-11-14
+
+### Removed
+
+* terraform: the GitHub root's import blocks for the Flux webhook and the openclaw-hooks variables (imports.tf), now that an apply has imported them; docs/operations/github.md keeps how to adopt something that already exists on GitHub
+
+### Security
+
+* ci: sops-mask.py refuses a value shorter than 6 characters, naming its file and key path. The runner masks a value of any length, also inside longer words, so a short value showed as *** in ordinary text and could be read off. The GitHub root keeps such a value in unmasked.sops.yaml, which CI decrypts but does not mask, and the docs state what the mask guarantees
+
 ## v2.119.0 - 2026-11-14
 
 ### Added

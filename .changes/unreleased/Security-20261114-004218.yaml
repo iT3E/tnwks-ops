@@ -1,3 +1,0 @@
-kind: Security
-body: 'ci: sops-mask.py refuses a value shorter than 6 characters, naming its file and key path. The runner masks a value of any length, also inside longer words, so a short value showed as *** in ordinary text and could be read off. The GitHub root keeps such a value in unmasked.sops.yaml, which CI decrypts but does not mask, and the docs state what the mask guarantees'
-time: 2026-11-14T00:42:18.000000000Z
