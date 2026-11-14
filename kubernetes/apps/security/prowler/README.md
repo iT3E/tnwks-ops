@@ -46,12 +46,11 @@ The claim `security-results` is in `../converter/app/pvc.yaml`.
    The script reads it with `json.loads`, never with a YAML parser. An
    entry that does not fit (not an object, a field missing, a key that is
    not a field, a value that is not a string, a field empty, the reason too,
-   an end that `date.fromisoformat` refuses) is skipped and counted, as the
-   converter does: the
-   log has its number and why, never a value of the list. So one bad entry
+   an end that is not `YYYY-MM-DD` or that `date.fromisoformat` refuses) is
+   skipped and counted, as the converter does: the log has its number and why, never a value of the list. So one bad entry
    does not stop each run until the list is fixed. A list that can not be
-   read at all (not UTF-8, not JSON, a key twice in one object, not an
-   array) stops the run with code 2 and mutes nothing: the run can not know
+   read at all (not UTF-8, not JSON, nested too deep for the parser, a key
+   twice in one object, not an array) stops the run with code 2 and mutes nothing: the run can not know
    what to mute.
 2. **Prowler,** with `--checks-file`, the output format `json-ocsf`,
    `--no-banner` and `--ignore-exit-code-3` (a failed check is a result, not

@@ -63,6 +63,11 @@ def test_a_bad_entry_is_skipped_and_counted_and_its_values_stay_out_of_the_log(r
         "a line",
         entry("check_bad_date", "next spring"),
         entry("check_with_time", "2027-01-31T00:00:00"),
+        # date.fromisoformat takes these two; the form YYYY-MM-DD does not.
+        entry("check_basic_date", "20270131"),
+        entry("check_week_date", "2027-W05-1"),
+        entry("check_other_digits", "\u0662\u0660\u0662\u0667-01-31"),
+        entry("check_newline", "2027-01-31\n"),
         entry("", "2027-01-31"),
         entry("check_blank_reason", "2027-01-31") | {"reason": "   "},
         {key: value for key, value in entry("check_no_reason", "2027-01-31").items() if key != "reason"},
@@ -86,9 +91,11 @@ def test_a_bad_entry_is_skipped_and_counted_and_its_values_stay_out_of_the_log(r
     ('[{"source": "prowler", "check": "check_open", "system": "aws-prod", "reason": "An invented reason.",'
      ' "until": "2027-01-31", "check": "check_other"}]'),
     "",
+    # Nested too deep for the parser: RecursionError, not a crash.
+    "[" * 100_000 + "]" * 100_000,
 ])
 def test_a_list_that_can_not_be_read_stops_the_run_and_its_text_stays_out_of_the_log(run, tmp_path, capsys, text):
-    """Not JSON (YAML is not read), not an array, or a key twice in one object."""
+    """Not JSON (YAML is not read), not an array, nested too deep, or a key twice in one object."""
     (tmp_path / "accepted.json").write_text(text)
     with pytest.raises(run.UnreadableList):
         run.accepted_checks(tmp_path / "accepted.json", "aws-prod", NOW.date())

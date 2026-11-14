@@ -393,12 +393,14 @@ Each object has exactly these five fields, and each value is a JSON string:
 Each reader reads the list with `json.loads` on its UTF-8 text, never with
 a YAML parser:
 
-- A text that `json.loads` refuses, a key twice in one object, or a top
-  level that is not an array: the reader fails and mutes nothing.
+- A text that `json.loads` refuses (also one nested too deep for the
+  parser), a key twice in one object, or a top level that is not an array:
+  the reader fails and mutes nothing.
 - An item that is not an object, a field that is missing, a key that is not
   one of the five fields, a value that is not a string, an empty field, or
-  an end that `date.fromisoformat` refuses: the reader skips that entry and
-  counts it. Its log has the number of the entry and why, never a value.
+  an end that is not `YYYY-MM-DD` or that `date.fromisoformat` refuses: the
+  reader skips that entry and counts it. Its log has the number of the entry
+  and why, never a value.
 
 The converter also skips an entry whose source or system is not in the
 registry, or whose check is not a check ID, and it alerts on both cases
