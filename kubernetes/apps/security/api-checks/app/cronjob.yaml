@@ -1,0 +1,98 @@
+---
+# The API checks, each day (../README.md). Each test reads, and a test that
+# does not run has no entry in the result file, so its system reads as late
+# after 36 hours. A run where a test did not run fails, and raises
+# KubeJobFailed; the next run is the next day.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: api-checks
+spec:
+  # UTC. Between the runs of Prowler (03:17 and 05:17), one job at a time on
+  # the node.
+  schedule: "47 6 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 86400
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: api-checks
+        spec:
+          restartPolicy: Never
+          # The job calls Prometheus and two hosts on the internet, and never
+          # the API server: no token.
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          # Placement and memory: ../../README.md.
+          nodeSelector:
+            kubernetes.io/hostname: ${SECURITY_NODE}
+          securityContext:
+            runAsUser: 65534
+            runAsGroup: 65534
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: api-checks
+              # The image of the converter (../../converter): the script uses
+              # the Python standard library only.
+              image: docker.io/library/python:3.15-alpine@sha256:a0f2e268f2ce8f3709611a90054ec6a8ae31f6251f5896b8648b9bb99835e30a
+              command: ["python3", "-u", "/app/api_checks.py"]
+              args:
+                # The Prometheus of homelab-wsl, where mktxp reads the router,
+                # at the address that peer-federate of this site scrapes.
+                - --prometheus=http://${PEER_WINDOWS_HOST_ADDR}:9090
+              env:
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+                # The token of Terraform Cloud (../README.md). Optional: with
+                # no Secret, the test of Terraform Cloud does not run.
+                - name: TFE_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: api-check-terraform-cloud
+                      key: TFE_TOKEN
+                      optional: true
+              # The limit of ../../README.md, "Memory".
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /app
+                  readOnly: true
+                - name: accepted
+                  mountPath: /accepted
+                  readOnly: true
+                # The whole volume, not a subPath (security/converter/README.md).
+                - name: results
+                  mountPath: /results
+          volumes:
+            - name: scripts
+              configMap:
+                name: api-checks-scripts
+            # The list of accepted findings. Optional: with no list, nothing
+            # is accepted.
+            - name: accepted
+              secret:
+                secretName: security-accepted-findings
+                optional: true
+            - name: results
+              persistentVolumeClaim:
+                claimName: security-results

@@ -1,0 +1,3 @@
+kind: Added
+body: 'security: the API checks on homelab-wsl-02 (`kubernetes/apps/security/api-checks`, source `api-check`). A CronJob tests each day whether the router runs the newest stable release of RouterOS, from the series of mktxp and the release feed of the vendor (safeguard 12.1), and, once the owner adds its token, whether the Terraform Cloud organization requires two factors (safeguards 6.3 and 6.5). It keeps each newest release it sees, so a router two releases behind fails too. It writes the result file that the converter reads. A test that does not run has no entry. A follow-up adds `api-check` to the sources of the router after its first result'
+time: 2026-11-14T06:30:00.000000000-08:00
