@@ -11,8 +11,9 @@
 # (aquasecurity.github.io), a rule may only get, list or watch, and may not
 # name Secrets or every resource ("*"): that read is what
 # accessGlobalSecretsAndServiceAccount=false keeps away. No rule names
-# pods/log. A binding of the service account to a ClusterRole that is not in
-# the render (a built-in role) fails too. The test ops of the patch guard the
+# pods/log. A rule of nonResourceURLs is outside the report CRDs too, so it
+# may only get, list or watch. A binding of the service account to a
+# ClusterRole that is not in the render (a built-in role) fails too. The test ops of the patch guard the
 # order of the chart's rules; this check guards the result, so a chart release
 # that adds a rule, a role or a binding fails here. Needs flate (FLATE_SUPPLY
 # set, as in kubernetes.yaml) and yq.
@@ -54,13 +55,16 @@ for cluster in "$@"; do
       status=1
       continue
     fi
-    # yq reads a "*" after == as a wildcard, so "*" is matched by a regex.
+    # yq reads a "*" after == as a wildcard, so "*" is matched by a regex. A rule
+    # with no apiGroups (nonResourceURLs) is not a rule of the report CRDs.
+    # shellcheck disable=SC2016 # the $ names are variables of yq, not of the shell
     wide="$(yq -o=json -I=0 '(.rules // []) | .[]
       | ((.resources // []) | any_c(. == "pods/log")) as $log
+      | ((.apiGroups // []) | length > 0) as $groups
       | ((.apiGroups // []) | all_c(. == "aquasecurity.github.io")) as $reports
       | ([.verbs[] | select(. != "get" and . != "list" and . != "watch")] | length > 0) as $writes
       | ((.resources // []) | any_c(test("^(secrets|[*])$"))) as $secrets
-      | select($log or (($reports | not) and ($writes or $secrets)))' <<<"${role}")"
+      | select($log or ((($groups and $reports) | not) and ($writes or $secrets)))' <<<"${role}")"
     if [[ -n "${wide}" ]]; then
       echo "::error::${cluster}: the ClusterRole ${name} is wider than the README says:"
       echo "${wide}"
