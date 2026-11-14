@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.143.0 - 2026-11-14
+
+### Changed
+
+* ai: the model gateway sends each request to the model bridge one time (`num_retries: 0` on the three bridge entries). At the usage limit of the plan a call no longer reaches the bridge 3 times from the gateway alone. The Bedrock entry and every other entry keep the router default of 2 retries
+
 ## v2.142.0 - 2026-11-14
 
 ### Added
