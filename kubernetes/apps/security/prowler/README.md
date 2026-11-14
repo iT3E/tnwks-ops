@@ -195,17 +195,22 @@ is wrong or has ended), or a 403 for the zone settings, is a fault.
 ## GitHub
 
 GitHub has no Prowler run. The two checks of the registry for GitHub
-(`organization_members_mfa_required`,
-`organization_default_repository_permission_strict`) read the settings of
-an organization. `iT3E` is a personal account, so Prowler has no such
-settings to read: it makes no finding for these checks. With no finding,
-Prowler writes no file, so a run would fail each day and fire
-`KubeJobFailed`. The API checks of the security platform take the GitHub
-lines of the registry. Until then, the system `iT3E` lists no source in
-`security/registry/systems.yaml`, so no rule waits for a result of it and
-no late alert fires. `security/generate.py` writes a scan list only for the
-providers with a run (`PROWLER_RUNS`), and a test fails if a GitHub run, its
-scan list or its network policy comes back.
+(`organization_members_mfa_required` on three lines,
+`organization_default_repository_permission_strict` on one) read the
+settings of an organization. `iT3E` is a personal account, so Prowler has
+no such settings to read: it makes no finding for these checks. With no
+finding, Prowler writes no file, so a run would fail each day and fire
+`KubeJobFailed`.
+
+The API checks of the security platform take the GitHub lines of the
+registry: their workstream gives each line its API check ID in
+`security/registry/controls.yaml`, in place of `source: prowler`. Until
+then, the lines keep `source: prowler` (a comment there says why). The
+system `iT3E` lists no source in `security/registry/systems.yaml`, so no
+rule waits for a result of it and no late alert fires.
+`security/generate.py` writes a scan list only for the providers with a run
+(`PROWLER_RUNS`), and a test fails if a GitHub run, its scan list or its
+network policy comes back.
 
 ## When a token ends
 
