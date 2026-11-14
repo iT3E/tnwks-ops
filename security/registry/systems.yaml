@@ -38,6 +38,7 @@
   type: cluster
   site: homelab-wsl
   domain: infrastructure
+  sources: [stream]
 - name: homelab-wsl-02
   type: cluster
   site: homelab-wsl-02

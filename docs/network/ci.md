@@ -58,8 +58,9 @@ tells it to inside the LAN. The controls:
 5. **Public logs show no plan body.** The composite action prints only the
    counts and addresses of changing resources, and Terraform's error blocks
    on failure. The full plan never reaches the job log or the PR. A root
-   with `mask_sops` (GitHub) masks its SOPS values before Terraform runs,
-   so those error blocks show `***` for them
+   with `mask_sops` (GitHub) masks the values of those SOPS files before
+   Terraform runs, so those error blocks show `***` for them; values too
+   short to mask stay in an unlisted file
    ([`docs/operations/github.md`](../operations/github.md#the-mask)).
 
 ## Local runs

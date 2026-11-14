@@ -7,8 +7,9 @@
 # each cluster: talos/README.md, "The audit policy", says what they keep.
 #
 # The form is cluster.apiServer.auditPolicy of the v1alpha1 machine config,
-# which this cluster has (cluster-config.yaml). Talos refuses the document
-# KubeAuditPolicyConfig of talos/wsl-02 while the config has this field.
+# which the live node has (cluster-config.yaml). Talos refuses the document
+# KubeAuditPolicyConfig while the config has this field. A new cluster gets
+# the same rules in that document, from patches/audit-policy-multidoc.yaml.
 #
 # A change of this file reaches the running cluster only when it is patched
 # in. It needs no reboot: Talos writes the policy file, and the API server
