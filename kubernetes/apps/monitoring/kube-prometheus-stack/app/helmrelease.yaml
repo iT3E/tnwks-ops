@@ -206,6 +206,10 @@ spec:
                 # UniFi (unpoller runs where the controller runs), so the
                 # dashboards on either site see the APs.
                 - '{__name__=~"unpoller_.*"}'
+                # The accepted findings of Trivy Operator, from the reader of
+                # the encrypted list on homelab-wsl-02: the exception list of
+                # the rule of the result series here (observability/rules.py).
+                - 'homelab_security_accepted_until_timestamp_seconds{source="trivy",source_site=""}'
             static_configs:
               - targets:
                   - ${PEER_WINDOWS_HOST_ADDR}:9090

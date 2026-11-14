@@ -232,6 +232,12 @@ patches:
                       match[]:
                         - 'cnpg_pg_stat_archiver_last_archived_wal_start_lsn'
                         - 'cnpg_pg_replication_in_recovery'
+                        # The two series of the security registry from the
+                        # sources of homelab-wsl (security/README.md, "What a
+                        # source must do"): the rules of the registry run
+                        # here only. Its own series, not a copy of this site's.
+                        - 'homelab_security_check_result{source="trivy",source_site=""}'
+                        - 'homelab_security_last_result_timestamp_seconds{source="trivy",source_site=""}'
                     static_configs:
                       - targets:
                           - ${PEER_WINDOWS_HOST_ADDR}:9090

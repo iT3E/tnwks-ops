@@ -1,0 +1,3 @@
+kind: Added
+body: 'security: Trivy Operator on homelab-wsl, with the values of homelab-wsl-02. `peer-federate` of homelab-wsl-02 brings the two series of the registry of `trivy` from homelab-wsl, and `peer-federate` of homelab-wsl brings the accepted findings of `trivy` from homelab-wsl-02. homelab-wsl lists `trivy` in its sources, so the late alert watches it'
+time: 2026-11-13T13:31:21.352406621-08:00
