@@ -1,6 +1,7 @@
 # Agent platform runbook
 
-What to do when an alert of the agent platform fires, how to restore the
+What to do when an alert of the agent platform fires, when an agent does
+not answer on its channel or a sandbox does not start, how to restore the
 state of an agent, how to stop the workflow agent fast, how to move a trust
 domain to Bedrock by hand, and what to do at a limit of the Claude plan. The
 parts and their config are in [`agent-platform.md`](agent-platform.md); this
@@ -431,6 +432,58 @@ and `kubectl -n agents-pilot get snapshotschedules`.
 **Seen so far.** Never.
 
 **Fix.** As for [KopiurLastBackupFailed](#kopiurlastbackupfailed).
+
+## An agent does not answer on its channel
+
+The pod is ready, and a message to the agent gets no answer. No alert reads
+the receive path of a channel; `AgentHeartbeatMissing` fires on the next
+morning when the scheduled turn did not complete.
+
+1. **Read only.** The pod, the sandboxes and the model path:
+   ```sh
+   kubectl -n agents-pilot get pods
+   kubectl -n agents-pilot logs deploy/agent -c sandbox-start --tail=20
+   kubectl -n agents-pilot get sandboxes.agents.x-k8s.io
+   ```
+   In Loki, the `call` and `engine_error` lines of the bridge
+   (`{namespace="ai", app="model-bridge"}`) for the minutes of the message.
+   A plan limit is [its own case](#at-a-limit-of-the-claude-plan).
+2. **Read only, by the owner.** The log of the `agent` container
+   (`kubectl -n agents-pilot logs deploy/agent -c agent --since=30m`). It
+   can hold chat content, so it never ships to Loki; the owner reads it, and
+   nothing of it goes into an issue or a pull request.
+3. **Start the pod again.** Owner approval: a delete of the pod
+   (`kubectl -n agents-pilot delete pod -l app.kubernetes.io/name=agent`).
+   The archive step and `doctor` run as at each start; a start took 32 to
+   42 seconds on 2026-11-12.
+4. **Revert the last update** if the agent still does not answer, in a pull
+   request (owner approval).
+
+## A sandbox does not start
+
+A tool call of the agent fails with "sandbox is not ready", or a run of a
+workflow agent ends with exit 3.
+
+1. **Read only.**
+   ```sh
+   kubectl -n <namespace> get sandboxes.agents.x-k8s.io
+   kubectl -n <namespace> get pods
+   kubectl -n agent-sandbox-system get pods
+   kubectl -n <namespace> logs deploy/agent -c sandbox-start --tail=20   # a personal agent
+   ```
+   Each sandbox of the product (`oc-`) should be `Ready`. The
+   `sandbox-start` container starts a `Stopped` one within a minute
+   (`sandbox-start name=<name> result=ok`); `result=failed` repeats each
+   minute.
+2. **Seen so far.** After a power cut restarted the host on 2026-11-12, the
+   sandbox gateway left each sandbox of the pilot `Stopped`, and the product
+   does not start a stopped one. The `sandbox-start` container
+   (`fcce4f2a`) starts them; a sandbox stopped on purpose that day was back
+   in 47 seconds.
+3. **Fix.** A sandbox gateway or a sandbox controller that is not ready is
+   [AgentPlatformWorkloadNotReady](#agentplatformworkloadnotready). Else
+   read the `result=failed` lines and the events of the sandbox pods, and
+   fix the cause in git.
 
 ## Restore the state of an agent
 
