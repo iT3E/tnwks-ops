@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.148.0 - 2026-11-14
+
+### Changed
+
+* github: Owner label is a required check of the main ruleset, from GitHub Actions. An impact/high or impact/critical PR merges only with the label of the owner (docs/operations/renovate.md).
+
 ## v2.147.0 - 2026-11-14
 
 ### Added
