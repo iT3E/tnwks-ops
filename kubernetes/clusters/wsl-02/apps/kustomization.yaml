@@ -127,9 +127,15 @@ resources:
   # The security platform's namespace (kubernetes/apps/security/README.md):
   # baseline Pod Security, deny by default. Its apps join one by one.
   - ../../../apps/security/namespace.yaml
+  # The AWS sessions of the security platform: two certificates for IAM Roles
+  # Anywhere -> two read-only sessions in Secrets (security/aws-credentials/README.md).
+  - ../../../apps/security/aws-credentials/ks.yaml
   # The converter (security/converter/README.md): the time of the newest line
   # of each security stream in this site's Loki, as the time of the last result.
   - ../../../apps/security/converter/ks.yaml
+  # The copy of the AWS trail (apps/security/trail-copy/README.md): the new
+  # files of the trail bucket, to a volume and to this site's Loki.
+  - ../../../apps/security/trail-copy/ks.yaml
   # CI: the network-device Terraform runner (wg03 sidecar), so those
   # workflows run while homelab-wsl is down.
   - ../../../apps/tools/namespace.yaml

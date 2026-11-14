@@ -16,10 +16,12 @@
   type: aws-account
   site: none
   domain: infrastructure
+  sources: [stream]
 - name: aws-prod
   type: aws-account
   site: none
   domain: infrastructure
+  sources: [stream]
 - name: cloudflare
   type: cloudflare-account
   site: none
@@ -36,6 +38,7 @@
   type: cluster
   site: homelab-wsl
   domain: infrastructure
+  sources: [stream]
 - name: homelab-wsl-02
   type: cluster
   site: homelab-wsl-02
