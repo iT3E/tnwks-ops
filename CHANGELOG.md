@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.141.0 - 2026-11-14
+
+### Added
+
+* tools: runner scale sets for the checks of two private app repos, with no Docker; their image jobs stay on GitHub-hosted runners
+
 ## v2.140.0 - 2026-11-14
 
 ### Added
