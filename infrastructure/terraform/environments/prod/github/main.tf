@@ -128,6 +128,8 @@ locals {
               "Build Success"             = local.github_actions_app_id
               "betterleaks / betterleaks" = local.github_actions_app_id
               "privacy / privacy"         = local.github_actions_app_id
+              # Only the owner's label passes it (docs/operations/renovate.md).
+              "Owner label" = local.github_actions_app_id
             }
           }
         }
