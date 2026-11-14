@@ -170,12 +170,16 @@ ITEMS = {
     "a source not in the registry": entry(source="not-a-source"),
     "a system not in the registry": entry(system="not-in-the-registry"),
     "a check that is not a check ID": entry(check="check open"),
+    "a check that ends in a line feed": entry(check="check_open\n"),
+    "the last day a date holds": entry(until="9999-12-31"),
 }
 # The run does not know the registry or the form of a check ID: there the converter
 # skips an entry that the run takes, which mutes less. A run mutes only its own system
 # and `prowler`, so only the check shows the difference in what is muted.
 CONVERTER_ACCEPTS_LESS = {"a source not in the registry", "a system not in the registry",
-                          "a check that is not a check ID"}
+                          "a check that is not a check ID", "a check that ends in a line feed"}
+# An entry that fits: both take it, and add one more accepted finding to the good one.
+BOTH_ACCEPT = {"the last day a date holds"}
 
 
 @pytest.mark.parametrize("name", ITEMS)
@@ -189,8 +193,11 @@ def test_the_run_and_the_converter_skip_the_same_items(run, tmp_path, name):
         assert found <= found_run[key], "the converter never accepts what the run does not"
     if name in CONVERTER_ACCEPTS_LESS:
         assert run_skipped == 0 and skipped == 1
-        if name == "a check that is not a check ID":
+        if name in {"a check that is not a check ID", "a check that ends in a line feed"}:
             assert any(found_converter[key] != found_run[key] for key in found_run)
+    elif name in BOTH_ACCEPT:
+        assert found_run == found_converter and run_skipped == skipped == 0
+        assert any("check_open" in found for found in found_converter.values())
     else:
         assert found_run == found_converter and run_skipped == skipped == 1
 
