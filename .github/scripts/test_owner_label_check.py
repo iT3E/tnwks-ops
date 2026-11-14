@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("owner_label_check", HERE / "owner-label-check.py")
 check = importlib.util.module_from_spec(spec)
+# dataclasses looks the module up in sys.modules (Python 3.12 fails without it).
+sys.modules[spec.name] = check
 spec.loader.exec_module(check)
 
 REPO = "example/ops"
