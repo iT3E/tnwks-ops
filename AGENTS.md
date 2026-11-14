@@ -352,8 +352,10 @@ comments, reviews and review comments.
 - Use neutral keys (`adult1`, `kid1`) in IDs. Real display names go in a
   SOPS Secret and reach the app at runtime (Home Assistant: `!env_var`).
 - `bin/privacy-check` (`task privacy:check`) checks a denylist kept in
-  `.github/privacy-terms.sops.yaml`. After editing the list
-  (`task privacy:edit`), run `task privacy:sync`.
+  `.github/privacy-terms.sops.yaml`. Edit it with `task privacy:edit`: when
+  the list changed, it copies it to the `PRIVACY_TERMS` secret of every
+  repository that has one (CI checks against those). If that copy fails,
+  `task privacy:sync` retries it.
   - Commits: `task precommit:init` installs a pre-commit hook (staged files
     and git identity) and a commit-msg hook (the message).
   - PRs: `.github/workflows/privacy.yaml` (required) checks the tree, the

@@ -218,7 +218,10 @@ Left alone on purpose:
   resource that is later removed from the code deletes the secret, and CI
   depends on each of them. Managing their values would mean copying them
   into SOPS here.
-- **`PRIVACY_TERMS`**, for now: a separate change, waiting on a decision.
+- **`PRIVACY_TERMS`** on every repository that has it. Terraform would put
+  the family denylist in Terraform Cloud's state and need the CI runner's
+  key as a recipient of `.github/privacy-terms.sops.yaml`. `task privacy:edit`
+  copies a changed list to each of them (`bin/privacy-terms`, AGENTS.md).
 - **Dependabot secrets**, and Actions or environment secrets of other
   repositories.
 - **The `flux` webhook's secret.** It belongs to the Flux receiver in the
@@ -509,7 +512,6 @@ small PRs.
 
 ## Later phases
 
-- `PRIVACY_TERMS`, once its owner decision is made.
 - Secrets whose values Terraform could hold in SOPS here. The owner-held
   secrets above stay by hand unless that changes, and never existence-only.
 - Updating the `flux` webhook from Terraform: only with its secret in this

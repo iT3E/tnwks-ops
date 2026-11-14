@@ -61,3 +61,6 @@ jobs:
 
       - name: Test the Terraform drift report
         run: python3 -m unittest discover -s .github/scripts -p test_terraform_drift.py
+
+      - name: Test the privacy denylist edit and sync
+        run: python3 -m unittest discover -s .github/scripts -p test_privacy_terms.py
