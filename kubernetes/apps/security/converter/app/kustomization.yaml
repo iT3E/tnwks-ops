@@ -6,16 +6,14 @@ resources:
   - ./helmrelease.yaml
   - ./networkpolicy.yaml
   - ./pvc.yaml
-# security/generate.py writes both files: the copy of
-# security/converter/converter.py, and the map of the streams from the
-# registry. Never edit them here.
+# security/generate.py writes these files: the copy of
+# security/converter/converter.py, the map of the streams, and the names of
+# the registry that the converter reads. Never edit them here.
 configMapGenerator:
   - name: security-converter-code
     files:
       - config/converter.py
       - config/streams.json
-      # The names of the registry that the converter reads, also from
-      # security/generate.py.
       - config/registry.json
 generatorOptions:
   disableNameSuffixHash: true

@@ -389,6 +389,103 @@ spec:
   - name: homelab.security
     interval: 1m
     rules:
+    - record: homelab_security_check_result
+      expr: ((max by (k8s_cluster, system, check, severity) (label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(max
+        by (k8s_cluster, compliance_id, severity) (trivy_compliance_info{source_site="",title="CIS Kubernetes Benchmarks
+        v1.23",compliance_id!~"1\\.1\\..+|2\\..+|4\\.[12]\\..+",status="Fail"} or 0 * trivy_compliance_info{source_site="",title="CIS
+        Kubernetes Benchmarks v1.23",compliance_id!~"1\\.1\\..+|2\\..+|4\\.[12]\\..+",status="Pass"}), "check",
+        "k8s-cis-1.23/$1", "compliance_id", "(.+)"), "system", "$1", "k8s_cluster", "(.+)"), "severity", "critical",
+        "severity", "CRITICAL"), "severity", "high", "severity", "HIGH"), "severity", "medium", "severity", "MEDIUM"),
+        "severity", "low", "severity", "LOW"), "severity", "unknown", "severity", "UNKNOWN")) or label_replace(label_replace(label_replace((sum
+        by (k8s_cluster) (max by (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h]),
+        "digest", "$1", "image_digest", "(.+)")) and on (k8s_cluster, digest) count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)"))) or on (k8s_cluster) 0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]))
+        and on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)")))) > 0 or ((sum by (k8s_cluster) (max by (k8s_cluster, digest)
+        (label_replace(max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h]), "digest",
+        "$1", "image_digest", "(.+)")) and on (k8s_cluster, digest) count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)"))) or on (k8s_cluster) 0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]))
+        and on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)")))) unless on (k8s_cluster) (count by (k8s_cluster, digest)
+        (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)")) unless on (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
+        "digest", "$1", "image_digest", "(.+)")))), "check", "image-vulnerabilities", "", ""), "severity", "critical",
+        "", ""), "system", "$1", "k8s_cluster", "(.+)")) unless on (check, system) (last_over_time(homelab_security_accepted_until_timestamp_seconds{source="trivy"}[1d])
+        > time())) or 0 * (max by (k8s_cluster, system, check, severity) (label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(max
+        by (k8s_cluster, compliance_id, severity) (trivy_compliance_info{source_site="",title="CIS Kubernetes Benchmarks
+        v1.23",compliance_id!~"1\\.1\\..+|2\\..+|4\\.[12]\\..+",status="Fail"} or 0 * trivy_compliance_info{source_site="",title="CIS
+        Kubernetes Benchmarks v1.23",compliance_id!~"1\\.1\\..+|2\\..+|4\\.[12]\\..+",status="Pass"}), "check",
+        "k8s-cis-1.23/$1", "compliance_id", "(.+)"), "system", "$1", "k8s_cluster", "(.+)"), "severity", "critical",
+        "severity", "CRITICAL"), "severity", "high", "severity", "HIGH"), "severity", "medium", "severity", "MEDIUM"),
+        "severity", "low", "severity", "LOW"), "severity", "unknown", "severity", "UNKNOWN")) or label_replace(label_replace(label_replace((sum
+        by (k8s_cluster) (max by (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h]),
+        "digest", "$1", "image_digest", "(.+)")) and on (k8s_cluster, digest) count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)"))) or on (k8s_cluster) 0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]))
+        and on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)")))) > 0 or ((sum by (k8s_cluster) (max by (k8s_cluster, digest)
+        (label_replace(max_over_time(trivy_image_vulnerabilities{source_site="",severity="Critical"}[1h]), "digest",
+        "$1", "image_digest", "(.+)")) and on (k8s_cluster, digest) count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)"))) or on (k8s_cluster) 0 * count by (k8s_cluster) (max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]))
+        and on (k8s_cluster) count by (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)")))) unless on (k8s_cluster) (count by (k8s_cluster, digest)
+        (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)")) unless on (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
+        "digest", "$1", "image_digest", "(.+)")))), "check", "image-vulnerabilities", "", ""), "severity", "critical",
+        "", ""), "system", "$1", "k8s_cluster", "(.+)"))
+      labels:
+        source: trivy
+    - record: homelab_security_last_result_timestamp_seconds
+      expr: max by (k8s_cluster, system) (label_replace(homelab_trivy_compliance_report_update_timestamp_seconds{source_site="",name="k8s-cis-1.23"},
+        "system", "$1", "k8s_cluster", "(.+)"))
+      labels:
+        source: trivy
+    - record: homelab:security_check_result_high:max
+      expr: max by (k8s_cluster, source, check, system) (homelab_security_check_result{source_site="",severity=~"high|critical"})
+    - alert: SecurityFindingNew
+      expr: max by (k8s_cluster, source, system) (homelab:security_check_result_high:max > 0 and (homelab:security_check_result_high:max
+        > max_over_time(homelab:security_check_result_high:max[1d] offset 1h) or homelab:security_check_result_high:max
+        offset 1h == 0 or homelab:security_check_result_high:max unless max_over_time(homelab:security_check_result_high:max[1d]
+        offset 1h)))
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: A new finding of high severity on {{ $labels.system }}, from {{ $labels.source }}
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        description: 'A check of high or critical severity fails: with more failed resources than at each time of
+          the day before, after an hour with none, or with no result in the day before. The board shows the failing
+          safeguards of the system, and the reports of the source have the detail. Fix the cause, or accept the
+          finding in the encrypted list with a reason and an end date (security/README.md, Accepted findings). The
+          alert ends after 1 hour.'
+    - alert: SecurityImagesNotScanned
+      expr: count by (k8s_cluster) (count by (k8s_cluster, digest) (label_replace(kube_pod_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)") or label_replace(kube_pod_init_container_info{source_site="",pod!~"scan-vulnerabilityreport-.+",image_id=~".+@sha256:.+"},
+        "digest", "$1", "image_id", ".*@(sha256:.+)")) unless on (k8s_cluster, digest) (label_replace(max_over_time(trivy_image_vulnerabilities{source_site=""}[1h]),
+        "digest", "$1", "image_digest", "(.+)"))) > 0 and on (k8s_cluster) group by (k8s_cluster) (homelab_trivy_compliance_report_update_timestamp_seconds{source_site=""})
+        unless on (k8s_cluster) label_replace(last_over_time(homelab_security_accepted_until_timestamp_seconds{source="trivy",check="images-not-scanned"}[1d])
+        > time(), "k8s_cluster", "$1", "system", "(.+)")
+      for: 36h
+      labels:
+        severity: warning
+      annotations:
+        summary: '{{ $value }} running images on {{ $labels.k8s_cluster }} have no scan report of Trivy Operator'
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster={{ $labels.k8s_cluster }}
+        description: 'Images that run on this cluster have had no vulnerability report for 36 hours: a private image,
+          a registry that the network policy of the scan jobs does not name, or a scan that fails. While one image
+          has no report, the check image-vulnerabilities of the cluster shows a fail, or no evidence in place of
+          a pass. kubernetes/apps/security/trivy-operator/README.md (When a scan fails) has the steps. For an image
+          that no scan can read, an entry of the accepted list with the check images-not-scanned mutes the alert
+          of the cluster until its end.'
     - alert: SecurityCertificateExpiring
       expr: min by (k8s_cluster, namespace, lease) (kube_lease_renew_time{namespace="security",lease=~"aws-security-.+-certificate"})
         - time() < 30 * 86400

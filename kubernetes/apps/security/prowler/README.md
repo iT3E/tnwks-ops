@@ -126,13 +126,11 @@ request, inside the 6 GiB of homelab-wsl-02, and change the line in
 Nothing of a provider runs before its credentials exist. The app has no
 CronJob until the owner names it in `app/kustomization.yaml`.
 
-**AWS.** After `../aws-credentials` runs on homelab-wsl-02 and its first run
-has written `aws-security-audit-sts` (the annotation
-`security.tnwks.us/expires` of the Secret has a time):
-
-1. Add `- ./cronjob-aws.yaml` under `resources` in `app/kustomization.yaml`.
-2. Merge. The first runs are at the next 03:17 and 05:17 UTC. To run one now:
-   `kubectl -n security create job --from=cronjob/prowler-aws-prod prowler-aws-prod-first`.
+**AWS.** Started: `app/kustomization.yaml` names `./cronjob-aws.yaml`, as
+`../aws-credentials` runs on homelab-wsl-02 and has written
+`aws-security-audit-sts` (the annotation `security.tnwks.us/expires` of the
+Secret has a time). The runs are at 03:17 and 05:17 UTC. To run one now:
+`kubectl -n security create job --from=cronjob/prowler-aws-prod prowler-aws-prod-first`.
 
 ## When a run fails
 

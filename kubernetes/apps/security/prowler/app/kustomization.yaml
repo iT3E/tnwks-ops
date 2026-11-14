@@ -4,10 +4,11 @@ kind: Kustomization
 namespace: security
 # Nothing of a provider runs before its credentials exist (../README.md, "To
 # start a provider"). The owner names the CronJob of a provider here, after
-# that step:
-#   - ./cronjob-aws.yaml          after the first run of ../../aws-credentials
+# that step.
 resources:
   - ./networkpolicy.yaml
+  # The AWS session Secret aws-security-audit-sts exists (../../aws-credentials).
+  - ./cronjob-aws.yaml
 configMapGenerator:
   # The script of each run. Tests: security/tests/test_prowler.py.
   - name: prowler-scripts
