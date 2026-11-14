@@ -373,17 +373,27 @@ merges.
 | File | `kubernetes/apps/security/accepted-findings/app/accepted.sops.yaml` |
 | Flux Kustomization | `security-accepted-findings` (`kubernetes/apps/security/accepted-findings/ks.yaml`). It decrypts the file with the age key of the cluster |
 | Secret | `security-accepted-findings`, in the namespace `security` of homelab-wsl-02 |
-| Key of the Secret | `accepted.yaml`: a YAML list with one entry for each accepted finding |
+| Key of the Secret | `accepted.json`: one JSON array, with one object for each accepted finding |
 
-Each entry has five fields:
+Each object has exactly these five fields, and each value is a JSON string:
 
 | Field | Value |
 | --- | --- |
 | `source` | The `name` of the source in `sources.yaml` |
 | `check` | The check ID, as in `controls.yaml`. A check that no line names is also possible |
 | `system` | The `name` of the system in `systems.yaml` |
-| `reason` | Why the owner accepts the finding. An entry with no reason is skipped: it accepts nothing |
-| `until` | The end date, as `YYYY-MM-DD`, with no time: a reader skips an entry whose end has a time. The finding is past its end date from the start of the next day, UTC |
+| `reason` | Why the owner accepts the finding. An entry whose reason is empty, or only spaces, is skipped: it accepts nothing |
+| `until` | The end date, as `YYYY-MM-DD` (read with `date.fromisoformat`), with no time: a reader skips an entry whose end has a time. The finding is past its end date from the start of the next day, UTC |
+
+Each reader reads the list with `json.loads` on its UTF-8 text, never with
+a YAML parser:
+
+- A text that `json.loads` refuses, a key twice in one object, or a top
+  level that is not an array: the reader fails and mutes nothing.
+- An item that is not an object, a field that is missing, a key that is not
+  one of the five fields, a value that is not a string, an empty field, or
+  an end that `date.fromisoformat` refuses: the reader skips that entry and
+  counts it. Its log has the number of the entry and why, never a value.
 
 This is the form of the file before encryption. The values are invented:
 
@@ -395,12 +405,16 @@ metadata:
   name: security-accepted-findings
 type: Opaque
 stringData:
-  accepted.yaml: |
-    - source: prowler
-      check: example_check_id
-      system: example-system
-      reason: An invented reason, for the form only.
-      until: "2027-01-31"
+  accepted.json: |
+    [
+      {
+        "source": "prowler",
+        "check": "example_check_id",
+        "system": "example-system",
+        "reason": "An invented reason, for the form only.",
+        "until": "2027-01-31"
+      }
+    ]
 ```
 
 The rule for `kubernetes/` in `.sops.yaml` encrypts the whole of
