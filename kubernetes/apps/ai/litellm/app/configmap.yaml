@@ -1,9 +1,9 @@
 ---
 # LiteLLM proxy config. Mounted into the pod at /etc/litellm/config.yaml and
-# passed via `--config`. The three local models proxy to Ollama running
-# natively on the WSL host (see OLLAMA_BASE_URL in cluster-settings; Flux
-# substitutes it). claude-sonnet is Bedrock, through the Converse API, with
-# credentials from the aws-credentials sidecar (helmrelease.yaml). The
+# passed via `--config`. The three local models, and the embedding model of
+# the pilot agent, proxy to Ollama running natively on the WSL host (see
+# OLLAMA_BASE_URL in cluster-settings; Flux substitutes it). claude-sonnet is
+# Bedrock, through the Converse API, with credentials from the aws-credentials sidecar (helmrelease.yaml). The
 # claude-opus-* entries and model_group_alias serve the agent platform.
 #
 # Secrets (master key, DB URL, bridge keys) are NOT in this ConfigMap; litellm
@@ -76,6 +76,14 @@ data:
         litellm_params:
           model: bedrock/invoke/us.anthropic.claude-opus-5-5
           aws_region_name: us-east-1
+      # The memory search of the pilot agent: embeddings of its memory files
+      # and of its search queries, on the Ollama of the host, so no vendor
+      # gets that text. Only the pilot's key lists this name. It is an entry,
+      # not a name of model_group_alias, and it does not move with a name.
+      - model_name: agents-pilot-embeddings
+        litellm_params:
+          model: ollama/embeddinggemma-300m-q8
+          api_base: ${OLLAMA_BASE_URL}
 
     router_settings:
       # The name of each trust domain of the agent platform, and the one
