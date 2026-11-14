@@ -77,8 +77,53 @@ changes in the app repos release nothing, so they never reach this repo.
 
 The agent pushes and merges as the owner's GitHub account, so `owner/approved` is a
 rule the workflow and the agent follow, not something GitHub enforces.
-Moving Ori onto its own GitHub App identity would make it enforceable with a
-ruleset.
+Moving Ori onto its own GitHub App identity makes it enforceable: the
+owner label check below fails a PR of the two upper tiers until the owner
+adds its label, and the App's token can't pass it.
+
+## The owner label check
+
+`Owner label` ([`owner-label.yaml`](../../.github/workflows/owner-label.yaml),
+logic and rules in
+[`owner-label-check.py`](../../.github/scripts/owner-label-check.py)) is a
+check on every PR. It is meant to be a required check of the `main` ruleset,
+from GitHub Actions.
+
+| PR | Passes when |
+| --- | --- |
+| No `impact/high` or `impact/critical`, now or before (automerge tier, the owner's own PRs) | Always, at once. Renovate's automerge waits on it like any other check |
+| `impact/high` | `owner/review` is on, and the owner added it after the push of the head commit |
+| `impact/critical` | `owner/approved` is on, and the owner added it after the push of the head commit |
+
+"The owner added it" means the most recent `labeled` event of that label
+(issue events API) has the repository owner's user ID as its actor, the
+actor type `User`, and no `performed_via_github_app`. A label from
+Renovate, from a workflow's `GITHUB_TOKEN`, from the reviewer's GitHub App
+(its installation token, or a user token it holds for the owner) or from
+anyone else fails. A label taken off and put back by someone else fails,
+because the latest event counts. "After the push" compares that event with
+the newest entry of the activity API for the PR branch, which must be the
+head commit. So a new push needs a new label, whoever pushed. The check
+verifies this itself and doesn't rely on `renovate-review.yaml` clearing
+labels on a push. Taking `impact/high` off doesn't take a PR out of its
+tier: a `labeled` event in its history is enough.
+
+It fails closed. An API error, a page of events it can't read, more than 20
+pages, a missing event or push (retried 3 times, 10 seconds apart, for the
+APIs' lag), a head that moved, a PR in a tier from another repository, or
+one of the four labels missing from the repository (renamed or deleted)
+fails it with one error line saying why.
+
+It runs on `pull_request_target` (opened, reopened, synchronize, labeled,
+unlabeled), so the workflow and the script come from `main` and a PR can't
+change what decides. It checks out only the script, from `main`, runs no PR
+code, holds no secret, and its token can only read. Each run reports on the
+head commit of its event.
+
+What it can't tell apart: anything that acts with the owner's own account
+and no GitHub App in between (the browser, `gh`, a personal access token).
+The reviewer on the host today pushes and labels that way, so the check
+doesn't bind it; it binds the reviewer once it runs as its GitHub App.
 
 ## How an impact/high PR reaches Ori
 
@@ -133,6 +178,7 @@ instead of starting a second review (while the gateway still has it in memory).
 | Runner scale set `openclaw-hooks` | `kubernetes/apps/tools/actions-runner-controller/openclaw-runner/` | `minRunners: 0`, `maxRunners: 1`, no secrets, runs as uid 1001. Same GitHub App as `sites-builder` |
 | Environment `openclaw-hooks` | repo settings | Secret `OPENCLAW_HOOK_TOKEN`; variables `OPENCLAW_NOTIFY_CHANNEL` / `_ACCOUNT` / `_TO` (where the agent's reply goes). Deployment branches: `main` only |
 | Label `owner/review` | `.github/labels.yaml` | Only the owner sets it. Required for any review. Cleared by a Renovate push |
+| Check `Owner label` | `.github/workflows/owner-label.yaml`, `.github/scripts/owner-label-check.py` | Fails an `impact/high` PR without the owner's `owner/review`, and an `impact/critical` PR without the owner's `owner/approved`, added after the head's push. Passes every other PR (above) |
 | Label `ori/blocked` | `.github/labels.yaml` | Set by the agent, cleared by a new push or by hand |
 | Labels `impact/critical`, `ori/awaiting-approval`, `owner/approved` | `.github/labels.yaml` | Critical tier: Renovate or the agent sets the first, the agent sets the second, only the owner sets the third. A new push clears the last two |
 | OpenClaw hook | `~/.openclaw/openclaw.json` on the WSL host, `hooks.*` | `allowedAgentIds: ["renovate"]`, no caller session keys. Token copy in `~/.openclaw/credentials/openclaw-hooks.env` |
@@ -156,5 +202,8 @@ token in the GitHub environment.
 - **An `impact/critical` PR you want merged.** Read Ori's "ready" comment,
   then add `owner/approved`. If Renovate or Ori pushed after that comment, the
   push cleared the approval and the PR gets a fresh review first.
+- **`Owner label` red on a PR you labeled.** Its error line says why. If
+  the label is older than the last push, or someone else added it last,
+  remove the label and add it again. An API hiccup: re-run the job.
 - **Gateway down.** Review jobs fail; nothing is lost. The daily sweep picks
   everything up once it's back.
