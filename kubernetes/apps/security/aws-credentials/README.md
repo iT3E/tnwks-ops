@@ -60,32 +60,37 @@ the end of each certificate to the renew time of its Lease, and
 kube-state-metrics serves that time as `kube_lease_renew_time`. A CronJob has
 no endpoint to scrape, so the Lease carries the date.
 
+**The two certificates end on 2027-11-14 (01:18 UTC)**, so the alert fires
+from 2027-10-15. The refresher reads that date from each certificate, so
+nothing else holds it.
+
 A run that fails raises `KubeJobFailed`. The sessions that it wrote before
 stay valid for up to 4 hours.
 
-To renew, make a new certificate for the same CN (step 2 below), put it in
-its file with `sops <file>`, and merge. The next run reads it.
+To renew, make a new certificate for the same CN (step 2 of "How it
+started"), put it in its file with `sops <file>`, and merge. The next run
+reads it.
 
 To end the access of a certificate at once, remove its CN from its list in
 `infrastructure/terraform/environments/prod/aws/main.tf` and apply.
 
-## To start it
+## How it started (done 2026-11-14)
 
-No cluster lists `ks.yaml` until the two certificates exist. The owner makes
-them, after the apply of `environments/prod/aws` made the roles. These steps
-are one pull request:
+What was done, in order, in one pull request. The apply of
+`environments/prod/aws` made the roles and the profiles first.
 
-1. Put the two profiles in `kubernetes/clusters/wsl-02/cluster-settings.yaml`,
-   next to the two roles. Their values are outputs of the Terraform workspace
-   `tnwks-ops-aws-prod`:
+1. **The profiles:** the two profiles went into
+   `kubernetes/clusters/wsl-02/cluster-settings.yaml`, next to the two roles.
+   Their values are outputs of the Terraform workspace `tnwks-ops-aws-prod`:
 
    | Setting | Output |
    | --- | --- |
    | `RA_SECURITY_AUDIT_PROFILE_ARN` | `rolesanywhere_security_audit_profile_arn` |
    | `RA_SECURITY_TRAIL_PROFILE_ARN` | `rolesanywhere_security_trail_profile_arn` |
 
-2. Make the two certificates, with the script of the backups. A key is made
-   in the directory and stays there:
+2. **The certificates:** the owner made the two certificates, of 365 days,
+   with the script of the backups. A key is made in the directory and stays
+   there:
 
    ```bash
    T=$(mktemp -d)
@@ -93,10 +98,10 @@ are one pull request:
    infrastructure/terraform/environments/prod/aws/rolesanywhere/issue-cert.sh homelab-wsl-02-security-trail "$T" 365
    ```
 
-3. Make one Secret file for each, encrypted from the start. `sops <file>`
-   opens an editor on a new file. Replace its sample content with this form,
-   where `tls.crt` is the content of `$T/<CN>.pem` and `tls.key` is the
-   content of `$T/<CN>.key`:
+3. **The Secret files:** one for each certificate, encrypted from the start.
+   `sops <file>` opens an editor on a new file. Its sample content is replaced
+   with this form, where `tls.crt` is the content of `$T/<CN>.pem` and
+   `tls.key` is the content of `$T/<CN>.key`:
 
    ```bash
    sops kubernetes/apps/security/aws-credentials/app/secret-certificate-audit.sops.yaml
@@ -118,10 +123,11 @@ are one pull request:
        (the key)
    ```
 
-4. Name the two files under `resources` in `app/kustomization.yaml`.
-5. Add `../../../apps/security/aws-credentials/ks.yaml` to
-   `kubernetes/clusters/wsl-02/apps/kustomization.yaml`, after the line of
-   the namespace `security`.
+4. **The app:** the two files are named under `resources` in
+   `app/kustomization.yaml`.
+5. **The cluster:** `kubernetes/clusters/wsl-02/apps/kustomization.yaml` lists
+   `../../../apps/security/aws-credentials/ks.yaml`, after the line of the
+   namespace `security`.
 
 After the merge, Flux makes the parts, and the first run comes within 30
 minutes. To see it:

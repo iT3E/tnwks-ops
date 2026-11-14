@@ -11,7 +11,7 @@ on each cluster. It is the source `trivy` of the security registry
 - **The controls of the CIS Kubernetes Benchmark**, as the compliance report
   `k8s-cis-1.23`, every 6 hours. The registry reads one control as
   `k8s-cis-1.23/<control ID>`.
-- **The images of each workload**, one scan job at a time, for the
+- **The images of each workload**, one scan job at a time as a rule, for the
   vulnerabilities that have a fixed version. A report lives 24 hours, then
   the image has a new scan. The registry reads the sum as
   `image-vulnerabilities`.
@@ -199,8 +199,15 @@ scan.
 
 | Part | Request | Limit | Source |
 | --- | --- | --- | --- |
-| The operator | 128 MiB | 256 MiB | `../README.md`, "Memory". The operator and one scan job measured 218 MiB together on a test cluster |
-| Each container of a scan job | 64 MiB | 512 MiB | `../README.md`. One scan container measured 56 MiB at peak. One job at a time (`operator.scanJobsConcurrentLimit: 1`) |
+| The operator | 256 MiB | 512 MiB | `../README.md`, "Memory". On homelab-wsl-02 it works at about 168 MiB at rest. The first limit, 256 MiB, killed it 3 times in the first burst of scans (236 MiB in the last sample before a kill). `GOMEMLIMIT` is 460 MiB, 90% of the limit (go.dev/doc/gc-guide) |
+| Each container of a scan job | 64 MiB | 512 MiB | `../README.md`. One scan container measured 56 MiB at peak. One job at a time as a rule (`operator.scanJobsConcurrentLimit: 1`) |
+
+The operator counts its scan jobs from its cache before it starts one
+(`pkg/operator/jobs/limit_checker.go` of the release). A job that it has
+just made can be missing from that count, so in a burst of scans two jobs
+can run at the same time for a short while. A burst comes after a start of
+the operator, each day when the reports end after 24 hours, and with a
+rollout of many images.
 
 A scan job has one container for each container of the workload, its init
 containers too, each with the limit, and they run at the same time. On
@@ -211,12 +218,13 @@ of Trivy on that cluster, while such a pod has its scan:
 
 | By | The operator | The scan job | Sum |
 | --- | --- | --- | --- |
-| Limits | 256 MiB | 6 x 512 MiB | 3328 MiB |
-| Estimate | 162 MiB | 6 x 56 MiB | 498 MiB |
+| Limits | 512 MiB | 6 x 512 MiB | 3584 MiB |
+| Estimate | 236 MiB or more | 6 x 56 MiB | 572 MiB or more |
 
-The estimate is not a measure of a job of 6 containers: on the test cluster
-the operator and a scan job of one container took 218 MiB, of which 56 MiB
-was the scan container, and the estimate takes that container 6 times. A
+The estimate is not a measure of a job of 6 containers. The operator line
+is the last sample before a kill on homelab-wsl-02, in a burst of scans;
+homelab-wsl runs more workloads, and the cache of the operator grows with
+them. The scan line takes one measured scan container of 56 MiB 6 times. A
 scan of a pod of 6 containers on homelab-wsl-02 (the Cilium agent pods have
 6 there too) measures it before homelab-wsl lists the app (step 8 of
 "Tests"). The owner decides the limit with that number. Each container of a

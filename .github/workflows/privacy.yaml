@@ -8,8 +8,8 @@ name: "Privacy"
 #
 # bin/privacy-check on every tracked file and path, the commits the event
 # adds (messages and identities) and the PR title and body, against the
-# PRIVACY_TERMS secret (synced from .github/privacy-terms.sops.yaml with
-# `task privacy:sync`). Hits print as "term #N: path:line" without the
+# PRIVACY_TERMS secret (copied from .github/privacy-terms.sops.yaml by
+# `task privacy:edit`, or `task privacy:sync`). Hits print as "term #N: path:line" without the
 # matched text. The repo is public and fork PRs get no secrets, so a missing
 # secret warns instead of failing. Comments and reviews are
 # privacy-text.yaml. Exceptions: .github/privacy-allow. Required by the main
@@ -37,7 +37,7 @@ jobs:
     name: privacy
     permissions:
       contents: read
-    uses: iT3E/github-workflows/.github/workflows/privacy.yaml@447a36cf89cd163004fcf7b574955c6c6deb2f92 # v1.9.2
+    uses: iT3E/github-workflows/.github/workflows/privacy.yaml@49f998b9ac2a57f441c9380cce88bfcd9abf7ffa # v1.9.3
     with:
       allow-missing-terms: true
     secrets:

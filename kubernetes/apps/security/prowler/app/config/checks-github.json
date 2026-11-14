@@ -1,0 +1,6 @@
+{
+  "github": [
+    "organization_default_repository_permission_strict",
+    "organization_members_mfa_required"
+  ]
+}

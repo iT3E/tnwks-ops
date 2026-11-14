@@ -30,8 +30,9 @@ on it only when a sender outside the cluster needs it.
 ## The security streams
 
 A security stream is a log that the security platform reads
-(`security/README.md`). The aggregator of each cluster writes each one to the
-Loki of homelab-wsl-02, which keeps a stream with the label `security_stream`
+(`security/README.md`). The aggregator of each cluster writes the audit log
+and the router log to the Loki of homelab-wsl-02, and the security converter
+writes the findings there, which keeps a stream with the label `security_stream`
 for 90 days. This section is the contract for a part that sends such a log or
 reads it.
 
@@ -39,11 +40,15 @@ reads it.
 | --- | --- | --- |
 | The audit log of an API server | `security_stream="k8s-audit"`, `k8s_cluster="<cluster>"` | One audit event, the JSON line as the API server wrote it. The time of the line is the `stageTimestamp` of the event |
 | The router log | `security_stream="routeros"`, `k8s_cluster="<cluster>"` | One syslog message as JSON, the same as in the stream `job="routeros"` |
+| The findings of Prowler and the API checks | `security_stream="findings"`, `source="<prowler or api-check>"`, `system="<system>"` | One finding that fails, a part of its OCSF record as JSON. The security converter of homelab-wsl-02 sends it, not Vector. Its contract is `security/converter/README.md`, "The stream `findings`" |
 
 `k8s_cluster` is the name of the cluster that the log comes from
 (`CLUSTER_NAME`: `homelab-wsl`, `homelab-wsl-02`), also for a line of
-homelab-wsl that rests in the Loki of homelab-wsl-02. A security stream has
-these two labels and no other, so each one is two streams in Loki at most.
+homelab-wsl that rests in the Loki of homelab-wsl-02. A security stream of
+Vector has these two labels and no other, so each one is two streams in Loki
+at most. The stream `findings` has no `k8s_cluster`: its `system` is a name of
+`security/registry/systems.yaml`, and it is one stream for each source and
+system.
 
 | What | Address |
 | --- | --- |
@@ -54,8 +59,8 @@ these two labels and no other, so each one is two streams in Loki at most.
 The aggregator takes the Loki address from `SECURITY_LOKI_ENDPOINT` of
 `cluster-settings`. A cluster that does not set it writes to its own Loki.
 
-The two streams behave in two ways when that Loki is away, and each way is on
-purpose:
+The two streams of Vector behave in two ways when that Loki is away, and
+each way is on purpose:
 
 | Stream | Path in `vector.yaml` | When Loki is away |
 | --- | --- | --- |
@@ -91,7 +96,7 @@ line to `vector-aggregator-audit:6010`.
 | Audit files | The host path `/var/log/audit/kube`, read-only |
 | Positions | The host path `/var/lib/vector-audit`. An init container gives the directory to user 65534: it runs as root with the capability `CHOWN` only |
 | Sending | 200 events in a batch, one request at a time, a buffer of 200 events, 2 threads |
-| Memory | A request of 64 MiB and a limit of 128 MiB |
+| Memory | A request of 64 MiB and a limit of 192 MiB. On homelab-wsl-02 the reader used 115.6 MiB at its peak while it sent its first backlog of about 880,000 lines |
 
 The audit files on the node are the buffer of the path. The reader moves its
 position in a file only when Loki took the line, so when the aggregator or
