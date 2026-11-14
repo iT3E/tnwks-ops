@@ -15,3 +15,5 @@ resources:
   - ./pilot
   # The alert rules of the platform.
   - ./monitoring/ks.yaml
+  # The admission rules of the platform.
+  - ./admission/ks.yaml

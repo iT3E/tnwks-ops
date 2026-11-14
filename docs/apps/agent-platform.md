@@ -110,6 +110,33 @@ charts make have no cluster label; they stay local because Cilium 1.19 sets
 HelmRelease (`kubernetes/apps/kube-system/cilium/app/helmrelease.yaml`) does
 not change it.
 
+## The backup mover and ConfigMaps
+
+The mover roles of kopiur give `get` and `patch` on each ConfigMap of the
+namespace where a mover runs. In a trust domain that reaches the config and
+the scripts of the agent pod, and Reloader starts the pod again on a change.
+At kopiur 0.10.20 a mover writes a ConfigMap only for the result of a
+repository bootstrap or discovery run, and those runs go in `kopiur-system`.
+A snapshot or a restore writes none.
+
+So the admission rule `agents-backup-mover-configmaps`
+(`kubernetes/apps/ai/agents/admission/`) refuses each create, change or
+delete of a ConfigMap by a mover ServiceAccount (`kopiur-mover`,
+`kopiur-snapshot-replication-mover`, `kopiur-stream-mover`) in a namespace
+with the label `agents.home.arpa/trust-domain`. Reads, and the status writes
+of the mover, are not affected. A namespaced `Repository` in a trust domain
+would bootstrap there and need a change of the rule.
+
+What the rule does not change: the mover still runs with the credentials of
+the shared repository that kopiur projects before each run
+(`docs/operations/backups.md`, "Credentials"). A repository of their own for
+the trust domains is a later step.
+
+To check: `kubectl get validatingadmissionpolicy agents-backup-mover-configmaps`,
+and after the next snapshot of a trust domain,
+`kubectl -n agents-pilot get snapshots.kopiur.home-operations.com` shows the
+newest one `Succeeded`.
+
 ## The model path
 
 Every model call of an agent goes to the model gateway (LiteLLM,
