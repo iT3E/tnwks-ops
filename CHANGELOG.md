@@ -3,6 +3,18 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.129.1 - 2026-11-14
+
+### Fixed
+
+* security: Trivy Operator gets 512 MiB on each cluster (it was 256 MiB, too low for a burst of scans), a request of 256 MiB, and `GOMEMLIMIT` at 460 MiB. On homelab-wsl-02 the operator pod restarts once
+
+## v2.129.0 - 2026-11-14
+
+### Added
+
+* security: the converter reads the files of results: the newest OCSF file of each system that Prowler writes, and the result file of the API checks. It serves `homelab_security_check_result` (the number of resources that fail, with a lowercase `severity` label; a finding that the accepted list muted does not fail) and the time of the newest whole file of each system. A file that does not fit gives no result and no time for its system, so the late alert fires, and `homelab_security_converter_files_skipped` counts it. It reads an OCSF file one record at a time, opens only a regular file, and takes only a check ID as a check. The ServiceMonitor drops the labels of the pod, so a restart makes no new series. Nothing is read before the converter mounts the volume `security-results`
+
 ## v2.128.0 - 2026-11-14
 
 ### Added

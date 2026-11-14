@@ -1,7 +1,7 @@
 ---
 # Trivy Operator (../README.md). The operator reads the workloads of this
 # cluster, checks their settings and the roles in its own process, and starts
-# one scan job at a time for the images. Each cluster that lists ../ks.yaml
+# scan jobs for the images, one at a time as a rule. Each cluster that lists ../ks.yaml
 # gets these values, so each cluster has the same checks.
 # yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
 apiVersion: helm.toolkit.fluxcd.io/v2
@@ -35,7 +35,9 @@ spec:
 
     operator:
       # One scan job at a time (../../README.md, "Memory"). The chart's
-      # default is 10.
+      # default is 10. The operator counts its jobs from its cache, so a job it
+      # has just made can be missing from the count: in a burst of scans, two
+      # jobs can run at the same time for a short while.
       scanJobsConcurrentLimit: 1
       # Off: the operator gets no read of the Secrets and service accounts of
       # each namespace (R2). It then reads no pull secret of a workload, so an
@@ -153,14 +155,25 @@ spec:
       runAsNonRoot: true
       seccompProfile:
         type: RuntimeDefault
-    # The limit of ../../README.md, "Memory". The operator and one scan job
-    # measured 218 MiB together on a test cluster.
+    # The limit of ../../README.md, "Memory". On homelab-wsl-02 the operator
+    # works at about 168 MiB at rest, and the limit of 256 MiB killed it 3
+    # times in the first burst of scans (236 MiB in the last sample before a
+    # kill). A burst comes again each day, when the reports end after 24 hours,
+    # and with each rollout. 512 MiB is twice the old limit and 3 times the
+    # rest.
     resources:
       requests:
         cpu: 25m
-        memory: 128Mi
-      limits:
         memory: 256Mi
+      limits:
+        memory: 512Mi
+    # The Go runtime collects its garbage harder near this value, so a burst
+    # of short-lived objects stays under the limit: 90% of it, the margin
+    # that "A Guide to the Go Garbage Collector" (go.dev/doc/gc-guide) gives
+    # for memory outside the heap.
+    extraEnv:
+      - name: GOMEMLIMIT
+        value: 460MiB
 
   # The chart's ClusterRole gives create and delete on Jobs and a read of pod
   # logs in every namespace, and has no value to narrow it. With

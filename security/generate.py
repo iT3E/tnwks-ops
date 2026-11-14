@@ -451,10 +451,13 @@ def stream_map(registry):
 
 def converter_registry(registry):
     """The names of the registry that the converter takes a value of a file against: a
-    line of the list of accepted findings names a source and a system of the registry."""
-    return {"series": {"accepted": ACCEPTED},
+    line of the list of accepted findings names a source and a system of the registry,
+    and an OCSF file of a provider of Prowler names a system of the type of the provider."""
+    return {"series": {"result": RESULT, "last_result": LAST_RESULT, "accepted": ACCEPTED},
             "sources": [source["name"] for source in registry["sources"]],
-            "systems": [system["name"] for system in registry["systems"]]}
+            "systems": [system["name"] for system in registry["systems"]],
+            "prowler": {provider: [system["name"] for system in registry["systems"] if system["type"] == system_type]
+                        for system_type, provider in PROWLER_PROVIDERS.items()}}
 
 
 # --- The tests of the rules -------------------------------------------------------------
@@ -531,6 +534,19 @@ def fixtures(registry):
                               sample(safeguard, system_type, system, NO_EVIDENCE, late),
                               {"expr": f'{SAFEGUARD}{{safeguard="{safeguard}"}}', "eval_time": "30m",
                                "exp_samples": [{"labels": safeguard_labels(registry, safeguard), "value": FAIL}]}]},
+        # The converter drops its target labels (its HelmRelease), and the rules read
+        # each series by the labels of the contract only: a restart of a pod in the day
+        # changes no state.
+        {"name": "a result whose pod changes in the day is one result: a pass, then a fail",
+         "interval": "1m",
+         "input_series": [
+             series(RESULT, "0+0x9", source=source, check=check, system=system, pod="converter-a"),
+             series(LAST_RESULT, "0+0x9", source=source, system=system, pod="converter-a"),
+             series(RESULT, "_x11 2+0x20", source=source, check=check, system=system, pod="converter-b"),
+             series(LAST_RESULT, "_x11 0+0x20", source=source, system=system, pod="converter-b")],
+         "promql_expr_test": [sample(safeguard, system_type, system, PASS, "5m"),
+                              sample(safeguard, system_type, system, FAIL, "15m"),
+                              sample(safeguard, system_type, system, FAIL, "30m")]},
         {"name": "a time of the last result in the future is no evidence", "interval": "1m",
          "input_series": [series(RESULT, "0+0x10", source=source, check=check, system=system),
                           series(LAST_RESULT, "100000+0x10", source=source, system=system)],

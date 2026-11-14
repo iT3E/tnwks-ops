@@ -15,6 +15,7 @@ Python image. It reads, and it never writes to a source.
 | `converter.py` | The service |
 | `../tests/test_converter.py` | The tests of the stream source, with a fake Loki on the loopback address |
 | `../tests/test_converter_accepted.py` | The tests of the list of accepted findings, and of the loop of the parts |
+| `../tests/test_converter_files.py` | The tests of the files of results, with invented OCSF files and result files |
 | `kubernetes/apps/security/converter/` | The Flux Kustomization, the HelmRelease and the network policy |
 | `kubernetes/apps/security/converter/app/config/` | What the pod runs: the copy of `converter.py`, `streams.json`, and `registry.json` (the names of the sources, the systems and the series). `security/generate.py` writes them, so never edit them there |
 
@@ -22,7 +23,7 @@ Python image. It reads, and it never writes to a source.
 | --- | --- |
 | The security streams | Here. [The stream source](#the-stream-source) |
 | The list of accepted findings | Here. [The list of accepted findings](#the-list-of-accepted-findings) |
-| The OCSF files of Prowler, and the result file of the API checks | The contract is fixed: [The files of results](#the-files-of-results). The converter reads them when the scanners start |
+| The OCSF files of Prowler, and the result file of the API checks | Here. [The files of results](#the-files-of-results). The converter reads them from the volume `security-results` |
 | The state of the Wazuh indexer | Step 2 of the platform |
 
 ## The stream source
@@ -151,6 +152,7 @@ the contract of the registry.
 | `homelab_security_converter_streams` | None | The number of entries in the map |
 | `homelab_security_converter_last_cycle_timestamp_seconds` | None | The Unix time at which the last cycle ended |
 | `homelab_security_converter_stream_query_success` | `source`, `check`, `system` | 1 when Loki gave an answer in the last cycle, with a line or with none. 0 for an error or no answer |
+| `homelab_security_converter_files_skipped` | `source` (`prowler`, `api-check`) | The number of files that the converter skipped in its last cycle: the newest OCSF file of a system, or the result file, that does not fit ([A file that does not fit](#a-file-that-does-not-fit)) |
 | `homelab_security_converter_accepted_list_read` | None | 1 when the converter read the list of accepted findings in its last cycle, or found no list. 0 when it gave no entry of a list that is there ([A file that gives no entry](#a-file-that-gives-no-entry)) |
 | `homelab_security_converter_accepted_skipped_entries` | None | The number of entries of the list of accepted findings that the converter skipped in its last cycle ([An entry that the converter skips](#an-entry-that-the-converter-skips)) |
 
@@ -255,7 +257,8 @@ and no alert fires.
 ## The loop of the parts
 
 One loop runs the parts of the converter one after the other, each 5
-minutes: the stream source, then the list of accepted findings. A fault of
+minutes: the stream source, the list of accepted findings, then the files of
+results. A fault of
 one part does not stop the others: the part serves nothing in that cycle,
 and the log says the kind of the fault. Each part keeps the result of its last
 cycle only, and serves nothing that no cycle replaced in 10 minutes.
@@ -297,9 +300,47 @@ reads as late.
 
 This is the contract for the two jobs that write files for the converter:
 the Prowler job and the API checks job. Both run on homelab-wsl-02. The
-converter reads the files and serves `homelab_security_check_result` and the
-time of the last result. It also sends one line for each failed finding to
-the security stream `findings`.
+converter reads the files each 5 minutes, and serves
+`homelab_security_check_result` and the time of the last result:
+
+```text
+homelab_security_check_result{source="prowler",check="example_check_id",system="example-system",severity="high"} 2
+homelab_security_last_result_timestamp_seconds{source="prowler",system="example-system"} 1794550000.000
+```
+
+| Label | Value |
+| --- | --- |
+| `source` | `prowler` or `api-check`, the name of the source in `registry/sources.yaml` |
+| `check` | The check ID: a letter or a digit, then letters, digits and `_./:-`, 200 characters at most |
+| `system` | The name of the system in `registry/systems.yaml` |
+| `severity` | Of the result series only. The severity of the check, in lower case: `critical`, `high`, `medium`, `low`, `informational` or `unknown`. The rule of Trivy Operator gives the same values, so one alert for a new finding reads both |
+
+The value of the result series is the number of resources that fail the
+check on the system, and 0 when it passes. The time is the time of the newest
+whole file of the system. The rules of the registry read `source`, `check`
+and `system` only (`max by (system)`), so the label `severity` does not
+change the state of a control, and the board counts one series for each
+check and system. The converter gives each check one severity. A change of
+the severity of a check (a new release of Prowler, or an API job that adds
+`severity`) makes a new series, with no history of the day before.
+
+The ServiceMonitor drops the labels of the pod (`pod`, `instance`,
+`container`, `endpoint`), so each series of the converter has the labels of
+the contract, and `job`, `namespace` and `service`. A restart of the pod
+makes no new series, and an alert that compares a series with the day before
+finds it. No rule and no board reads the four labels, and one pod runs
+(`Recreate`), so two series can not meet.
+
+The converter reads a file again only when its size, its time or its inode
+changes. It reads an OCSF file one record at a time, and keeps a hash of 8
+bytes for each resource that fails, not its ID. So its memory does not grow
+with the size of a record: a test file of 167 MiB took 26 MiB of the process
+at its peak, in 0.3 seconds, and a test file at the limit of 200 000 records,
+each of them a fail, took 46 MiB. The limit of the pod is 128 MiB.
+
+The converter opens a file of results only when it is a regular file. It
+follows no link, and a FIFO or a directory in the place of a file is a file
+that does not fit, so no read waits.
 
 A file of results holds results, so it never goes to git.
 
@@ -342,10 +383,30 @@ new provider gets a directory of its name.
   file.
 - **The time of the name is the time of the last result** of the source
   `prowler` for that system. The converter reads the newest file of each
-  system. It reads no file whose name does not fit, whose system is not in
-  the registry, or whose time is more than 5 minutes in the future.
+  system. It reads no file in `tmp/`, no link, and no file whose name does
+  not fit, whose system is not a system of the type of the provider in the
+  registry (`aws-account` for `aws`), or whose time is more than 5 minutes in
+  the future. The log names such a file one time.
 - **The job deletes its files** after 14 days. The converter never writes
   to the volume.
+
+How the converter counts the records of one file:
+
+| Record | What it counts |
+| --- | --- |
+| `status_code` `FAIL`, and `status` not `Suppressed` | One resource that fails. The resource is the `uid` of the first item of `resources`, the ARN on AWS, or the `finding_info.uid` when it has none. Two records of one resource are one resource. Two resources with one name are two resources |
+| `status_code` `FAIL`, and `status` `Suppressed` | Nothing: the list of accepted findings muted it (`kubernetes/apps/security/prowler`). The check has a result |
+| `status_code` `PASS` | Nothing. The check has a result |
+| `status_code` `MANUAL`, or another one | Nothing. A check with no `PASS` and no `FAIL` record has no result series |
+
+- The check is `metadata.event_code`, the check ID of Prowler.
+- The severity of a check is the highest `severity` of its records, in lower
+  case. A value that is not an OCSF name is `unknown`.
+- A check of the scan list with no record in the file has no result series.
+  Prowler writes no record for a check that found no resource, and also none
+  for a check that failed to run, so the converter can not say that it
+  passed. A line of the registry whose checks all have no record shows "no
+  evidence" for the system.
 
 ### The result file of the API checks
 
@@ -377,10 +438,11 @@ One file, `api-check/results.json`. Each run writes
 | `version` | 1 |
 | `source` | `api-check`, the name of the source in `registry/sources.yaml` |
 | `time` | The Unix time, in seconds, at which the run ended |
-| `results` | One entry for each test and each system that the run did test |
+| `results` | One entry for each test and each system that the run did test. Two entries of one test and one system do not fit |
 | `check` | The check ID of the test, as in `registry/controls.yaml` |
 | `system` | The name of the system in `registry/systems.yaml` |
-| `failed` | The number of resources that fail the test. 0 is a pass. It is the value of the result series |
+| `failed` | The number of resources that fail the test, a whole number. 0 is a pass. It is the value of the result series |
+| `severity` | Optional. The severity of the test: `critical`, `high`, `medium`, `low`, `informational` or `unknown`, in lower case. With no `severity` it is `unknown`. The alert for a new finding fires for `high` and `critical` only |
 | `findings` | Optional. One object for each resource that fails, with `resource` (what fails) and `message` (why). The job can add fields. The converter sends each object as one line of the stream `findings`, and adds `source`, `check` and `system` |
 
 - **A test that did not run has no entry.** The job never writes 0 for a
@@ -389,3 +451,26 @@ One file, `api-check/results.json`. Each run writes
 - **`time` is the time of the last result** of each system that has one
   entry or more.
 - **No secret** is in the file: no token, and no answer of an API as it came.
+- **The list of accepted findings.** The job reads it, as each scanner does
+  (`../README.md`, "Accepted findings"): an accepted test counts no resource
+  that the list accepts, and lists no finding for it.
+- **A system that is not in the registry** has no result and no time. The
+  log says it one time.
+
+### A file that does not fit
+
+A file that the converter can not read, or that does not fit its contract,
+gives no result series and no time for its system. The converter does not
+read an older file in its place. So the rule for a late result fires for the
+system, after its `late_after`, and the other files and the other parts go on.
+`homelab_security_converter_files_skipped` counts each such file, and the log
+of the converter names the file and the reason, with no value of the file.
+
+| File | It does not fit when |
+| --- | --- |
+| The newest OCSF file of a system | It is not UTF-8, or not one JSON array of objects: a file that a run left half written, an empty file, a comma at the end, text after the array. A record has no `metadata.event_code` that is a check ID, or no `status_code` as text. A record is larger than 4 MiB, the file is larger than 256 MiB, or it has more than 200 000 records or 5 000 checks |
+| `api-check/results.json` | It is not JSON, `version` is not 1, `source` is not `api-check`, `time` is not a time up to 5 minutes in the future, or an entry does not have the form of the table above: a `check` that is not a check ID too. The file is larger than 16 MiB, or it has more than 5 000 results |
+| Each of them | It is not a regular file: a link, a FIFO, a directory |
+| The directory of a provider | It can not be read: it counts as one file of `prowler` that does not fit, and the other providers and the API checks go on |
+
+When the file of a system goes away, its results go away in the next cycle.
