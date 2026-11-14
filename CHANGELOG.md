@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.137.0 - 2026-11-14
+
+### Added
+
+* monitoring: the logs of some long-running pods of the agent platform go to Loki, on an allowlist (the pod label logs.home.arpa/ship=true): the run receiver and the sandbox gateway of the workflows trust domain, its sandbox supervisors, the backup, sandbox-start and init containers of the pilot agent pod, and the model bridge. A new Vector DaemonSet on homelab-wsl only (vector-agent-platform) reads them, drops command text and query strings from the gateway lines, keeps only known line types of the supervisors, and serves the gauges of the new alerts AgentInstructionFileChanged and ModelBridgeRateLimited. The new alert AgentInstructionCheckStale reads the result gauge of the aggregator. The shared Vector agent and the aggregator do not change.
+
 ## v2.136.0 - 2026-11-14
 
 ### Added
