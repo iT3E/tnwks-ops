@@ -390,7 +390,7 @@ the API checks job) reads it with `json.loads`, never with a YAML parser:
 | `check` | The check ID, as in `controls.yaml`. A check that no line names is also possible |
 | `system` | The `name` of the system in `systems.yaml` |
 | `reason` | Why the owner accepts the finding. Not empty, and not only space |
-| `until` | The end date, as `YYYY-MM-DD` and in no other form. A reader checks the form, then reads the day with `datetime.date.fromisoformat`. The finding is past its end date from the start of the next day, UTC |
+| `until` | The end date, exactly `YYYY-MM-DD` with ASCII digits, then read with `date.fromisoformat`. A reader skips an entry whose end has another form (a time, `20270131`, a week date). The finding is past its end date from the start of the next day, UTC |
 
 A reader skips and counts an item that is not an object, a key that is
 missing or is not one of the five, a value that is not a string, and an
