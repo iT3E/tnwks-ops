@@ -93,6 +93,8 @@ paths = [
   ".github/scripts/**",
   ".github/actionlint.yaml",
   ".github/zizmor.yml",
+  # Tested in actionlint.yaml (.github/scripts/test_privacy_terms.py).
+  "bin/privacy-terms",
 ]
 
 # Groups list which of their members changed, as a JSON array of objects for

@@ -1,0 +1,3 @@
+kind: Changed
+body: 'privacy: task privacy:edit copies the denylist to the PRIVACY_TERMS secret when the editor closes, if the list changed and still decrypts; an aborted or failed edit copies nothing. The copy goes to every repository of the account that already has the secret, found through the API (bin/privacy-terms), and names only public ones. task privacy:sync stays as the retry'
+time: 2026-11-14T01:34:50.000000000Z
