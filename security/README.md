@@ -388,7 +388,7 @@ Each object has exactly these five fields, and each value is a JSON string:
 | `check` | The check ID, as in `controls.yaml`. A check that no line names is also possible |
 | `system` | The `name` of the system in `systems.yaml` |
 | `reason` | Why the owner accepts the finding. An entry whose reason is empty, or only spaces, is skipped: it accepts nothing |
-| `until` | The end date, as `YYYY-MM-DD` (read with `date.fromisoformat`), with no time: a reader skips an entry whose end has a time. The finding is past its end date from the start of the next day, UTC |
+| `until` | The end date, exactly `YYYY-MM-DD` with ASCII digits, then read with `date.fromisoformat`. A reader skips an entry whose end has another form (a time, `20270131`, a week date). The finding is past its end date from the start of the next day, UTC |
 
 Each reader reads the list with `json.loads` on its UTF-8 text, never with
 a YAML parser:

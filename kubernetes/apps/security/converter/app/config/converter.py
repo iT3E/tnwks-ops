@@ -314,6 +314,10 @@ MAX_LIST_BYTES = 1024 * 1024
 # The form of a check ID of each tool: Prowler, Trivy (`k8s-cis-1.23/1.2.3`), Wazuh, the
 # API checks. A value of another form is no check, so it never reaches a label.
 CHECK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_./:-]{0,199}$")
+# The one form of an end date. date.fromisoformat also reads 20271231 and 2027-W05-1
+# (since Python 3.11). ASCII digits only (\d also takes other digits), and the whole
+# value (fullmatch). The Prowler run checks the same form.
+DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
 
 class Unreadable(ValueError):
@@ -348,7 +352,10 @@ def json_list(text: str) -> list:
 
 def end_of(until: str) -> int:
     """The Unix time at which an accepted finding ends: the start of the day after its
-    end date, UTC (security/README.md, "Accepted findings")."""
+    end date, UTC (security/README.md, "Accepted findings"). ValueError when until is
+    not a day of the form YYYY-MM-DD."""
+    if not DATE.fullmatch(until):
+        raise ValueError(f"not of the form YYYY-MM-DD: {until!r}")
     day = datetime.date.fromisoformat(until)
     return calendar.timegm((day + datetime.timedelta(days=1)).timetuple())
 
