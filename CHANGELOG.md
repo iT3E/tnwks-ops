@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.136.0 - 2026-11-14
+
+### Added
+
+* ai: alerts of the agent platform: a workload that is not ready, a failed last run and a stale run of its CronJobs (the providers job after 35 minutes, the daily checks after 26 hours), a drift of the GitHub App of the reviewer, an old run sandbox, a failed run, and a failed daily archive. The Vector aggregator serves the time of the newest result line of the platform, for the drift alert.
+
 ## v2.135.0 - 2026-11-14
 
 ### Added
