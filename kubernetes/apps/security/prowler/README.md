@@ -48,15 +48,25 @@ The claim `security-results` is in `../converter/app/pvc.yaml`.
    exceptions: the run always passes its own mutelist, so the default
    mutelist of Prowler is off too. The reason of an entry stays in the
    Secret. A muted finding is in the OCSF file with the status `Suppressed`.
-   The script reads it with `json.loads`, never with a YAML parser. An
-   entry that does not fit (not an object, a field missing, a key that is
-   not a field, a value that is not a string, a field empty, the reason too,
-   an end that is not `YYYY-MM-DD` or that `date.fromisoformat` refuses) is
-   skipped and counted, as the converter does: the log has its number and why, never a value of the list. So one bad entry
-   does not stop each run until the list is fixed. A list that can not be
-   read at all (not UTF-8, not JSON, nested too deep for the parser, a key
-   twice in one object, not an array) stops the run with code 2 and mutes nothing: the run can not know
-   what to mute.
+   - Prowler reads a key of its mutelist as a regex, so the key of a check
+     is `^<the check, escaped>$`: it mutes that check only, and not a longer
+     check that holds its name (`cloudtrail_multi_region_enabled` and
+     `cloudtrail_multi_region_enabled_logging_management_events`).
+   - A mute lasts until the next run. A run on the last day of an entry
+     mutes its check in the file, and the board reads that file until the
+     next run: up to a day after the end date. `SecurityAcceptedFindingExpired`
+     still fires at the end.
+   - The script reads the list with `json.loads`, never with a YAML parser.
+     An entry that does not fit (not an object, a field missing, a key that
+     is not a field, a value that is not a string, a field empty, the reason
+     too, a check that is not a check ID, an end that is not `YYYY-MM-DD` or
+     that `date.fromisoformat` refuses) is skipped and counted, as the
+     converter does: the log has its number and why, never a value of the
+     list. So one bad entry does not stop each run until the list is fixed.
+   - A list that can not be read at all (not UTF-8, not JSON, a number too
+     long or a nesting too deep for the parser, a key twice in one object,
+     not an array) stops the run with code 2 and mutes nothing: the run can
+     not know what to mute.
 2. **Prowler,** with `--checks-file`, the output format `json-ocsf`,
    `--no-banner` and `--ignore-exit-code-3` (a failed check is a result, not
    an error of the run).
