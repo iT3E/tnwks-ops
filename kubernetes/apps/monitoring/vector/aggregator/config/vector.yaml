@@ -4,8 +4,18 @@ api:
   enabled: true
   address: 0.0.0.0:8686
 
+# An internal metric stays for an hour after its last change, not the default
+# five minutes. A counter that changes rarely, such as the errors of one sink,
+# is then still there when a rule compares it with its value of minutes before.
+expire_metrics_secs: 3600
+
 # Sources
 sources:
+  # Vector's own metrics: the events and the errors of each component below,
+  # by component_id. Served by the prometheus sink at the end of this file.
+  internal_metrics:
+    type: internal_metrics
+
   # Pod logs from vector-agent (MS-01 only; see ../ks-agent.yaml).
   kubernetes_source:
     address: 0.0.0.0:6000
@@ -20,6 +30,15 @@ sources:
     type: syslog
     mode: udp
     address: 0.0.0.0:6001
+
+  # The API server audit log, from the audit reader on the control plane node
+  # (../../audit-reader), through the Service vector-aggregator-audit. A
+  # source of its own: its only sink waits for the store of the security
+  # streams, and a sink that waits holds its source. No other log is on it.
+  audit_source:
+    type: vector
+    address: 0.0.0.0:6010
+    version: "2"
 
 # Transformations
 transforms:
@@ -36,6 +55,22 @@ transforms:
       del(.kubernetes.pod_labels)
       del(.kubernetes.node_labels)
       del(.kubernetes.namespace_labels)
+
+  # The time of an audit line is the time of its event (stageTimestamp), not
+  # the time it got here: a line that waited on the node rests at its own
+  # time. The line itself goes on as the API server wrote it.
+  audit_time:
+    type: remap
+    inputs:
+      - audit_source
+    source: |
+      event, err = parse_json(.message)
+      if err == null {
+        ts, err = parse_timestamp(event.stageTimestamp, "%+")
+        if err == null {
+          .timestamp = ts
+        }
+      }
 
 # Sinks
 sinks:
@@ -66,3 +101,58 @@ sinks:
       job: routeros
       hostname: "{{ host }}"
       severity: "{{ severity }}"
+
+  # The security streams (../README.md). Both sinks write to the Loki that
+  # keeps a stream with the label security_stream for 90 days: the Loki of
+  # this cluster by default, and on a cluster that sets SECURITY_LOKI_ENDPOINT
+  # the TLS path to it (../../security-loki-proxy). The client certificate is
+  # for that path. A sink with a plain http address does not use it.
+
+  # The audit log. Acknowledgements go from Loki back to the reader, so the
+  # reader moves its position in the audit file only for a line that Loki
+  # took. When Loki is away, this sink waits, and the files wait on the node.
+  loki_security_audit:
+    type: loki
+    inputs:
+      - audit_time
+    endpoint: "${SECURITY_LOKI_ENDPOINT:=http://loki-gateway.monitoring.svc.cluster.local}"
+    tls: &security_loki_tls
+      ca_file: /etc/vector/security-loki-client/ca.crt
+      crt_file: /etc/vector/security-loki-client/tls.crt
+      key_file: /etc/vector/security-loki-client/tls.key
+    encoding:
+      codec: text
+    # Loki takes a line that is out of order, so the time of the event stays.
+    out_of_order_action: accept
+    acknowledgements:
+      enabled: true
+    labels:
+      security_stream: k8s-audit
+      k8s_cluster: "${CLUSTER_NAME}"
+
+  # A second copy of the router log. This sink never makes loki_routeros
+  # wait: when its buffer is full, it drops the newest event.
+  loki_security_routeros:
+    type: loki
+    inputs:
+      - routeros_syslog
+    endpoint: "${SECURITY_LOKI_ENDPOINT:=http://loki-gateway.monitoring.svc.cluster.local}"
+    tls: *security_loki_tls
+    encoding:
+      codec: json
+    out_of_order_action: rewrite_timestamp
+    buffer:
+      type: memory
+      max_events: 500
+      when_full: drop_newest
+    labels:
+      security_stream: routeros
+      k8s_cluster: "${CLUSTER_NAME}"
+
+  # The metrics port (9598), scraped by the PodMonitor next to the
+  # HelmRelease. It is a port of the pod only: no Service carries it.
+  prometheus:
+    type: prometheus_exporter
+    inputs:
+      - internal_metrics
+    address: 0.0.0.0:9598

@@ -99,7 +99,12 @@
               "required": ["cycle", "late_after"],
               "properties": {
                 "cycle": { "$ref": "#/$defs/cycle" },
-                "late_after": { "$ref": "#/$defs/duration" }
+                "late_after": { "$ref": "#/$defs/duration" },
+                "system_label": {
+                  "description": "The Loki label whose value is the name of the system, for a stream that Loki holds one time for each system. A stream with no such label is one stream for each system that has it as a check.",
+                  "type": "string",
+                  "pattern": "^[a-z_][a-z0-9_]*$"
+                }
               }
             }
           },

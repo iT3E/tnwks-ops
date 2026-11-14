@@ -16,16 +16,18 @@ result is a Prometheus series on the sites, and the board shows it.
 | `registry/controls.yaml` | One line for each safeguard, with its checks for each type of system |
 | `catalog/` | The check list of each tool, at the release that the registry follows |
 | `generate.py` | The generator. It checks the registry and writes the outputs below |
+| `converter/` | The converter: the service that serves the results of the sources with no metrics of their own. Its README has the stream source and the contract of the files of results |
 | `generated/` | The outputs of the generator that no cluster reads directly, and the tests of the rules |
 | `tests/` | The tests of the generator |
 
-Three parts are in other directories, by the conventions of the repository:
+Four parts are in other directories, by the conventions of the repository:
 
 | Path | What it is |
 | --- | --- |
 | `kubernetes/apps/monitoring/security-registry/` | The generated rules, and the Flux Kustomization that applies them on homelab-wsl-02 |
 | `observability/dashboards/boards/security.py` | The security board. It reads `generated/board.json` |
 | `kubernetes/apps/security/accepted-findings/` | The place of the encrypted list of accepted findings |
+| `kubernetes/apps/security/converter/` | The converter on homelab-wsl-02, with the copy of its code and its stream map |
 
 ## Names
 
@@ -70,7 +72,7 @@ file only.
 | `kind` | `results`: the source gives a result series for each check. `stream`: each check is a security stream, and its newest line is its result |
 | `cycle` | The time between two runs (`24h`, `15m`), or `continuous` |
 | `late_after` | The age at which the newest result of the source is late |
-| `checks` | For the kind `stream` only: each stream, with its own `cycle` and `late_after` |
+| `checks` | For the kind `stream` only: each stream, with its own `cycle` and `late_after`. `system_label` is optional: the Loki label whose value is the name of the system, for a stream that Loki holds one time for each system. A stream with none is one stream for each system that has it as a check |
 | `by_type` | Optional. A different `late_after` for one type of system |
 
 ### `controls.yaml`
@@ -190,6 +192,8 @@ and the state "No evidence" at the same time.
   late.
 - **A stream has a time, and no result series.** Its `check` is the value of
   the label `security_stream`, and its time is the time of its newest line.
+  The converter serves it ([`converter/README.md`](converter/README.md)): a
+  part that writes a stream sets the labels that the stream map names.
 - **Bring the series to site 2.** The generated rules run in the Prometheus
   of site 2 (`homelab-wsl-02`). A source that a Prometheus of site 1 scrapes
   adds its two series to the `peer-federate` scrape job of
@@ -216,7 +220,7 @@ does. Its value is the site whose Prometheus runs the rules. The label
 
 ## The generator
 
-`generate.py` reads the registry and writes five outputs. It uses the Python
+`generate.py` reads the registry and writes six outputs. It uses the Python
 standard library and PyYAML, from the pinned project of `observability/`.
 
 ```bash
@@ -232,6 +236,12 @@ uv run --project observability pytest security/tests -q
 | The Wazuh map | `generated/wazuh-map.json` | The safeguards of each host check: the CIS tags of the release in `catalog/wazuh.json`, carried to the same check IDs, with the lines of the registry. And the checks with no tag |
 | Board input | `generated/board.json` | The safeguards, the systems and the cycles that the board shows |
 | The list of gaps | `generated/gaps.json` | Each check of a tool that no line names. The quarterly review reads it |
+| The stream map | `kubernetes/apps/security/converter/app/config/streams.json` | Each security stream of each system that has it as a check, with its `late_after` and the Loki selector of its lines. The converter reads it |
+
+The generator also writes the copy of `converter/converter.py` that the pod
+of the converter runs, next to the stream map. Kustomize takes a file only
+from the directory of its app, so the tested file and the file that runs are
+two files, and `--check` holds them equal.
 
 Never edit an output. Change the registry, run the generator, and commit the
 outputs with the change. CI runs `generate.py --check` in the `contracts`
@@ -298,7 +308,8 @@ The tests of the rules are generated too (`generated/rule-tests.yaml`,
 `generated/rule-tests-every-source.yaml`), and `promtool test rules` runs
 them in CI. They prove that an absent result gives "no evidence" and never a
 pass, that a line is a pass only when each system with a check passes, and
-that a source with no time fires the alert. The second file tests
+that a source with no time fires the alert, and that a stream with a line
+for one cluster only is late for the other. The second file tests
 the rules of the registry with each source in `sources`, so the alert has a
 test before the first source runs.
 

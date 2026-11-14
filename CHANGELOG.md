@@ -3,6 +3,108 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.117.0 - 2026-11-14
+
+### Added
+
+* terraform: every repository of the GitHub root has archive_on_destroy, so a destroy that ever gets past prevent_destroy archives instead of deleting; the apply is one in-place update per repository that resends its current settings
+
+## v2.116.0 - 2026-11-14
+
+### Removed
+
+* terraform: the GitHub root's import blocks (imports.tf), now that the first apply has imported all 36 objects; docs/operations/github.md keeps how to adopt something that already exists on GitHub
+
+## v2.115.2 - 2026-11-14
+
+### Security
+
+* agents: the pilot denies the tool github_publish, so its outward paths rest on a written rule
+
+## v2.115.1 - 2026-11-13
+
+### Fixed
+
+* talos: the control plane patch list of each WSL cluster (controlplane_patches in talos_clusters) names its audit policy. A rebuild of homelab-wsl-02 gets the policy from the list. The patches of homelab-wsl are in the v1alpha1 form, which the pinned Talos refuses at create, so its rebuild needs them in the multi-document form first. A change under talos/ now runs CI: each file parses, and each YAML file of a cluster is in its lists or is no patch. A merge applies nothing to a running node; talos/README.md says how the policy reaches one
+
+## v2.115.0 - 2026-11-13
+
+### Added
+
+* monitoring: the audit reader, a small Vector DaemonSet on the control plane node that reads the audit log of the API server and sends it to the audit source of the aggregator, with acknowledgements. It runs as user 65534 with no capability and no ServiceAccount token, and it keeps its positions on the node. homelab-wsl-02 lists it, and the registry of the security platform lists the stream as a source of that cluster. `kubernetes/apps/monitoring/vector/README.md` has its properties
+
+## v2.114.1 - 2026-11-13
+
+### Fixed
+
+* terraform: the GitHub root's CI switch is TERRAFORM_GITHUB_ENABLED (GitHub refuses to set a variable named GITHUB_*, so the root could not be turned on), and task github:enable reads it through the API instead of gh variable get, which older gh releases lack
+
+## v2.114.0 - 2026-11-13
+
+### Added
+
+* terraform: the GitHub root's token (secrets.sops.yaml, encrypted for the CI age key) and the import blocks that adopt its tnwks-github-prod workspace in aws-init, both from task github:bootstrap
+
+## v2.113.0 - 2026-11-13
+
+### Added
+
+* terraform: the GitHub account as a root, environments/prod/github with modules/github, importing every repository of the account (private ones whose names are not public under neutral keys, with the names in SOPS) and the main ruleset, environments, Actions settings and variables of tnwks-ops as they are; its Terraform Cloud workspace, a CI entry off until GITHUB_TERRAFORM_ENABLED is true that masks the values of the root's SOPS files in its public log (mask_sops in .github/ci/domains.toml), task github:bootstrap and task github:enable to bring it up, break-glass tasks and docs/operations/github.md
+
+## v2.112.0 - 2026-11-13
+
+### Added
+
+* talos: the audit policy of the API server of homelab-wsl (`talos/wsl/patches/audit-policy.yaml`), with the rules of homelab-wsl-02 in the v1alpha1 form of that cluster (`cluster.apiServer.auditPolicy`). The file has the command that applies it to the running cluster and the way back; a merge applies nothing
+
+## v2.111.0 - 2026-11-13
+
+### Added
+
+* talos: the audit policy of the API server of homelab-wsl-02 (`talos/wsl-02/patches/audit-policy.yaml`, a `KubeAuditPolicyConfig`). It keeps each request on a Secret by each user, each command in a pod, each write, and each read of a person, and it does not keep the heartbeat writes and the reads of the components. The file has the command that applies it to the running cluster and the way back; a merge applies nothing. `security/tests/test_audit_policy.py` gives sample requests to the rules
+
+## v2.110.0 - 2026-11-13
+
+### Added
+
+* monitoring: the alert `SecurityAuditLinesRefused` (group `homelab.security`), with promtool fixtures: the sink of a Vector aggregator that writes the audit log to the Loki of the security streams dropped a request that Loki refused. It reads `vector_component_errors_total` of that sink only, and it fires at the first refused request, though the counter starts at 1
+
+## v2.109.0 - 2026-11-13
+
+### Added
+
+* monitoring: the Vector aggregator of each cluster writes two security streams to the Loki of homelab-wsl-02: the audit log of the API server, from a source of its own on port 6010 (the ClusterIP Service `vector-aggregator-audit`), at the time of each event and with acknowledgements, and a second copy of the router log. The stream labels are `security_stream` and `k8s_cluster`. homelab-wsl writes through the TLS path (`SECURITY_LOKI_ENDPOINT`). `kubernetes/apps/monitoring/vector/README.md` has the contract. The registry of the security platform lists the stream as a source of `sce-rtr01`, so the rule for a late result watches the router log
+
+## v2.108.0 - 2026-11-13
+
+### Added
+
+* monitoring: a path on which homelab-wsl writes to the Loki of homelab-wsl-02, which keeps the security streams: the global Service `security-loki`, a TLS proxy on homelab-wsl-02 that asks for a client certificate of the shared CA and passes only the push of log lines, the two certificates, and a network policy for the proxy. `kubernetes/apps/monitoring/security-loki-proxy/README.md` has the address for a sender on each site
+
+## v2.107.0 - 2026-11-13
+
+### Added
+
+* monitoring: the Vector aggregator of each cluster serves its own metrics (an `internal_metrics` source and a `prometheus_exporter` sink on port 9598 of the pod), and a PodMonitor scrapes them. The port is not on the LoadBalancer Service. `kubernetes/apps/monitoring/vector/README.md` lists the ports and the series
+
+## v2.106.0 - 2026-11-13
+
+### Added
+
+* security: the AWS sessions of the security platform in `kubernetes/apps/security/aws-credentials`. A CronJob in the form of the backups turns each of two IAM Roles Anywhere certificates into a 4-hour session, in `aws-security-audit-sts` for Prowler and `aws-security-trail-sts` for the trail copy job, with a network policy for what it reaches. `SecurityCertificateExpiring` fires 30 days before a certificate ends, from the end time that the refresher writes to a Lease, with promtool fixtures. homelab-wsl-02 lists the app once the owner has made the two certificates
+
+## v2.105.0 - 2026-11-13
+
+### Added
+
+* security: the converter runs on homelab-wsl-02, in the namespace `security` on the security node: the HelmRelease `security-converter` with a memory limit of 128 MiB and no service account token, a ServiceMonitor that the Prometheus of the site scrapes each minute, and a network policy that lets it reach the Loki gateway of the site and DNS, and lets Prometheus reach its metrics port
+
+## v2.104.0 - 2026-11-13
+
+### Added
+
+* security: the converter of the security platform (`security/converter`), with its stream source. Each 5 minutes it asks Loki for the time of the newest line of each security stream, for each system, and serves it as the time of the last result. With no line, an error or no answer it serves no time, so the rule for a late result reads the stream as late. The generator writes the stream map from the registry (`system_label` in `sources.yaml`), and `security/converter/README.md` has the contract of the files of results
+
 ## v2.103.0 - 2026-11-13
 
 ### Added

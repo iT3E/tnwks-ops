@@ -17,6 +17,8 @@ ci_changes = importlib.util.module_from_spec(spec)
 loader.exec_module(ci_changes)
 
 CONFIG = tomllib.loads((ROOT / ".github/ci/domains.toml").read_text())
+# The fields documented above [groups.terraform.*] in domains.toml.
+TERRAFORM_FIELDS = {"title", "root", "runner", "backend", "workspace", "lock", "tf_vars", "enabled_var", "mask_sops", "paths"}
 
 
 def on(files):
@@ -62,6 +64,14 @@ class Domains(unittest.TestCase):
         domains, _ = on(["kubernetes/apps/home-automation/home-assistant/app/config/automations.yaml"])
         self.assertEqual(domains, {"kubernetes", "observability", "home_assistant"})
 
+    def test_talos_patch_runs_ansible(self):
+        domains, _ = on(["talos/wsl/patches/talos-api-access.yaml"])
+        self.assertEqual(domains, {"ansible"})
+
+    def test_audit_policy_runs_its_rule_tests(self):
+        domains, _ = on(["talos/wsl-02/patches/audit-policy.yaml"])
+        self.assertEqual(domains, {"ansible", "observability"})
+
     def test_docs_only_runs_nothing(self):
         domains, groups = on(["docs/operations/ci.md", "README.md", ".changes/unreleased/x.yaml"])
         self.assertEqual(domains, set())
@@ -93,6 +103,42 @@ class Domains(unittest.TestCase):
             for field in ("title", "root", "runner", "backend"):
                 self.assertIn(field, spec, f"{name} has no {field}")
             self.assertIn(spec["backend"], ("local", "tfc-remote"), name)
+            self.assertLessEqual(set(spec), TERRAFORM_FIELDS, f"{name}: unknown field")
+
+    def test_enabled_var_is_a_settable_name(self):
+        """GitHub rejects a variable whose name starts with GITHUB_ (HTTP 422),
+        so a root gated on one could never be turned on."""
+        for name, spec in CONFIG["groups"]["terraform"].items():
+            var = spec.get("enabled_var")
+            if var is None:
+                continue
+            self.assertRegex(var, r"^[A-Z_][A-Z0-9_]*$", name)
+            self.assertFalse(var.startswith("GITHUB_"), f"{name}: {var} is a reserved name")
+
+    def test_mask_sops(self):
+        """terraform.yaml masks these before Terraform (.github/scripts/sops-mask.py)."""
+        for name, spec in CONFIG["groups"]["terraform"].items():
+            if "mask_sops" not in spec:
+                continue
+            files = spec["mask_sops"]
+            self.assertEqual(spec["backend"], "local", f"{name}: mask_sops runs only for local roots")
+            self.assertIsInstance(files, list, name)
+            self.assertTrue(files, f"{name}: empty mask_sops")
+            for f in files:
+                self.assertIsInstance(f, str, name)
+                self.assertTrue(f.endswith(".sops.yaml"), f"{name}: {f}")
+                self.assertNotIn("..", Path(f).parts, f"{name}: {f}")
+                self.assertFalse(f.startswith("/"), f"{name}: {f}")
+                # A change to the file plans the root.
+                full = f"infrastructure/terraform/environments/{spec['root']}/{f}"
+                self.assertTrue(ci_changes.matches([full], spec["paths"]), f"{name}: {f} not in its paths")
+            self.assertTrue(ci_changes.matches([".github/scripts/sops-mask.py"], spec["paths"]), name)
+
+    def test_github_masks_its_sops_files(self):
+        self.assertEqual(
+            set(CONFIG["groups"]["terraform"]["github"]["mask_sops"]),
+            {"repositories.sops.yaml", "secrets.sops.yaml"},
+        )
 
     def test_ignore_always_for_deploy(self):
         out = ci_changes.evaluate(CONFIG, [".github/workflows/ci.yaml"], ignore_always=True)

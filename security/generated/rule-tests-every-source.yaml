@@ -9,7 +9,8 @@ tests:
   external_labels:
     cluster: site
   input_series:
-  - series: homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-management"}
+  - &id020
+    series: homelab_security_last_result_timestamp_seconds{source="prowler",system="aws-management"}
     values: 0+60x3000
   - &id001
     series: homelab_security_last_result_timestamp_seconds{source="stream",system="aws-management",check="cloudtrail"}
@@ -171,5 +172,45 @@ tests:
       exp_annotations:
         summary: A security source is late for aws-management
         description: The newest result of stream for aws-management is older than its limit, or the source serves
+          no time. The board shows no evidence for it.
+        dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site
+- name: a stream with a line for one system only reads as late for the other system
+  interval: 1m
+  external_labels:
+    cluster: site
+  input_series:
+  - *id020
+  - *id001
+  - *id002
+  - *id003
+  - *id004
+  - *id005
+  - *id006
+  - *id007
+  - *id008
+  - *id010
+  - *id011
+  - *id012
+  - *id013
+  - *id014
+  - *id015
+  - *id016
+  - *id017
+  - *id018
+  - *id019
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: SecurityResultLate
+    exp_alerts: []
+  - eval_time: 30m
+    alertname: SecurityResultLate
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        source: stream
+        system: homelab-wsl-02
+      exp_annotations:
+        summary: A security source is late for homelab-wsl-02
+        description: The newest result of stream for homelab-wsl-02 is older than its limit, or the source serves
           no time. The board shows no evidence for it.
         dashboard_url: https://grafana.${INTERNAL_DOMAIN}/d/tnwks-security?var-cluster=site

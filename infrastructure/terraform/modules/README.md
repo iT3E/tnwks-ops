@@ -13,6 +13,7 @@ modules/
 │   └── security/        # organization trail, its bucket, read-only audit roles
 ├── tfc/                 # Terraform Cloud project, workspaces, variable set
 ├── cloudflare/          # one zone + its settings, WAF ruleset and DNS records
+├── github/              # the GitHub account's repositories, rulesets, environments
 └── healthchecks/        # healthchecks.io checks notifying one integration
 ```
 
@@ -24,6 +25,7 @@ modules/
 | `tfc/` | `environments/bootstrap/aws-init` | Terraform Cloud project, the workspaces the other environments run in, and the project variable set carrying AWS credentials |
 | `aws/identity/` | `environments/bootstrap/aws-identity` | AWS Organizations prod account, Identity Center users/groups/permission sets, KMS key backing SOPS |
 | `cloudflare/` | `environments/prod/cloudflare` | One Cloudflare zone plus zone settings, custom WAF ruleset and DNS records. Instantiated once per domain |
+| `github/` | `environments/prod/github` | GitHub repositories from one map, each with optional rulesets, deployment environments and branch policies, Actions permissions and variables, and Dependabot alerts |
 | `healthchecks/` | `environments/prod/healthchecks` | healthchecks.io heartbeat checks, all notifying one existing integration (looked up by kind) |
 
 ## Conventions

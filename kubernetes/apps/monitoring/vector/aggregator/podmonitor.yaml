@@ -1,0 +1,25 @@
+---
+# Vector's own metrics from the aggregator pod (vector_*, by component_id):
+# what each source takes in, what each sink sends, and its errors. The
+# PodMonitor reads the pod's port, so no Service carries the metrics.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: vector-aggregator
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vector-aggregator
+      app.kubernetes.io/instance: vector-aggregator
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      metricRelabelings:
+        # A Vector histogram has 26 buckets, which is nine series in ten, and
+        # no rule or board reads them. Its _sum and _count stay.
+        - sourceLabels: [__name__]
+          regex: vector_.+_bucket
+          action: drop
+        # Vector's `host` is the pod name, which `pod` already carries.
+        - regex: host
+          action: labeldrop

@@ -68,3 +68,49 @@ spec:
     algorithm: ECDSA
     size: 256
     rotationPolicy: Always
+---
+# The TLS proxy in front of the Loki that keeps the security streams
+# (../../security-loki-proxy). Its Service is security-loki.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: security-loki-server
+spec:
+  secretName: security-loki-server
+  duration: 2160h
+  renewBefore: 720h
+  issuerRef:
+    name: observability-ca
+    kind: Issuer
+  dnsNames:
+    - security-loki.monitoring.svc.cluster.local
+  usages:
+    - digital signature
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+---
+# What a sender of a security stream shows to that proxy: the Vector
+# aggregator of the other site. The key is PKCS#8, which Vector reads.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: security-loki-client
+spec:
+  secretName: security-loki-client
+  duration: 2160h
+  renewBefore: 720h
+  issuerRef:
+    name: observability-ca
+    kind: Issuer
+  commonName: security-stream-writer
+  usages:
+    - digital signature
+    - client auth
+  privateKey:
+    algorithm: ECDSA
+    encoding: PKCS8
+    size: 256
+    rotationPolicy: Always

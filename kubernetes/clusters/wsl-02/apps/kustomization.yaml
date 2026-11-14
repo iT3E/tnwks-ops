@@ -44,6 +44,9 @@ resources:
   - ../../../apps/monitoring/thanos-metrics/ks.yaml
   - ../../../apps/monitoring/thanos-metrics/archive-ks.yaml
   - ./observability-garage-ks.yaml
+  # The TLS proxy in front of this site's Loki, the store of the security
+  # streams: the path on which homelab-wsl writes them.
+  - ../../../apps/monitoring/security-loki-proxy/ks.yaml
   - ./alertmanager-ks.yaml
   - ../../../apps/monitoring/kube-prometheus-stack/ks.yaml
   - ../../../apps/monitoring/node-exporter/ks.yaml
@@ -56,6 +59,9 @@ resources:
   - ../../../apps/monitoring/loki/ks.yaml
   - ../../../apps/monitoring/vector/ks.yaml
   - ../../../apps/monitoring/vector/ks-agent.yaml
+  # The audit log of this cluster's API server, as the security stream
+  # "k8s-audit" (apps/monitoring/vector/README.md).
+  - ../../../apps/monitoring/vector/ks-audit-reader.yaml
   # Follows the UniFi controller (UNIFI_REPLICAS).
   - ../../../apps/monitoring/unpoller/ks.yaml
   # Certificates: cert-manager with the Let's Encrypt DNS-01 issuers, and the
@@ -121,6 +127,9 @@ resources:
   # The security platform's namespace (kubernetes/apps/security/README.md):
   # baseline Pod Security, deny by default. Its apps join one by one.
   - ../../../apps/security/namespace.yaml
+  # The converter (security/converter/README.md): the time of the newest line
+  # of each security stream in this site's Loki, as the time of the last result.
+  - ../../../apps/security/converter/ks.yaml
   # CI: the network-device Terraform runner (wg03 sidecar), so those
   # workflows run while homelab-wsl is down.
   - ../../../apps/tools/namespace.yaml
