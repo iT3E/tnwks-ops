@@ -3,8 +3,11 @@
 # (scripts/heartbeat_check.py): once a day, Tempo must have a completed
 # heartbeat run of each service in SERVICES in the last 26 hours. The
 # heartbeat of the pilot comes at about 01:40 UTC; this runs at 06:33, so a
-# missed one shows the same morning. A missing run fails the Job, and the
-# alerts in heartbeat-prometheusrule.yaml read the CronJob.
+# missed one shows the same morning. The script asks Tempo up to 3 times,
+# 60 seconds apart, and a pod that still fails gets one more try
+# (backoffLimit: 1), so one short break of Tempo or of the node does not
+# page for a day. A missing run fails the Job, and the alerts in
+# heartbeat-prometheusrule.yaml read the CronJob.
 # SERVICES names the agents that run now: add the service name
 # (diagnostics.otel.serviceName in its openclaw.json) when a trust domain
 # gets its agent, so a domain with no agent never alerts.
@@ -22,8 +25,10 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      backoffLimit: 0
-      activeDeadlineSeconds: 300
+      # Two pods at most, each up to about 4 minutes (3 tries of up to 30 s,
+      # 2 waits of 60 s), well inside the deadline.
+      backoffLimit: 1
+      activeDeadlineSeconds: 900
       template:
         metadata:
           labels:
@@ -49,6 +54,10 @@ spec:
                   value: openclaw-agents-pilot
                 - name: WINDOW_HOURS
                   value: "26"
+                - name: ATTEMPTS
+                  value: "3"
+                - name: WAIT_SECONDS
+                  value: "60"
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true

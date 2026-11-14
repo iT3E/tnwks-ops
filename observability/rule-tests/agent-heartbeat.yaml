@@ -57,6 +57,27 @@ tests:
         exp_alerts:
           - exp_labels: {severity: warning, namespace: monitoring, cronjob: agent-heartbeat-check}
 
+  - name: a first pod that fails and a retry that passes do not fire
+    interval: 1m
+    input_series:
+      # The Job started at 1m. Its first pod failed at 5m (no reason: the
+      # Job retries, backoffLimit 1), and the second pod passed at 10m.
+      - series: kube_job_status_start_time{namespace="monitoring", job_name="agent-heartbeat-check-4"}
+        values: 60x60
+      - series: kube_job_owner{namespace="monitoring", job_name="agent-heartbeat-check-4", owner_kind="CronJob", owner_name="agent-heartbeat-check"}
+        values: 1x60
+      - series: kube_job_status_failed{namespace="monitoring", job_name="agent-heartbeat-check-4", reason=""}
+        values: _x5 1x55
+      - series: kube_cronjob_status_last_successful_time{namespace="monitoring", cronjob="agent-heartbeat-check"}
+        values: _x10 600x50
+    alert_rule_test:
+      - alertname: AgentHeartbeatMissing
+        eval_time: 7m
+        exp_alerts: []
+      - alertname: AgentHeartbeatMissing
+        eval_time: 30m
+        exp_alerts: []
+
   - name: two kube-state-metrics pods in a rollout serve the same series
     interval: 1m
     input_series:
