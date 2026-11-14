@@ -132,7 +132,7 @@ The names and the labels stay. A new source maps to them.
 | `homelab:security_control_state` | The generated rules | `safeguard`, `system`, `system_type`, `k8s_cluster` | The state of one safeguard on one system |
 | `homelab:security_safeguard_state` | The generated rules | `safeguard`, `line`, `title`, `ig`, `function`, `k8s_cluster` | The state of one safeguard over the systems that have a check for it |
 | `homelab:security_safeguard_has_result` | The generated rules | `safeguard`, `ig`, `k8s_cluster` | 1 when one system or more has a fresh result for the safeguard, and 0 when none has |
-| `homelab_security_accepted_until_timestamp_seconds` | The reader of the list of accepted findings | `source`, `check`, `system` | The Unix time at which one accepted finding ends |
+| `homelab_security_accepted_until_timestamp_seconds` | The converter, from the list of accepted findings | `source`, `check`, `system` | The Unix time at which one accepted finding ends |
 
 The first two are the result series and the series with the time of the last
 result. The fourth is the control series.
@@ -184,8 +184,11 @@ and the state "No evidence" at the same time.
   `system` is the `name` of the system in `systems.yaml`. A result for a
   system that the registry does not name gives no line.
 - **Give one result series for each check and system.** Serve the newest
-  result until the next run. A source can add labels of its own, such as a
-  severity. The rules read only the three labels of the contract.
+  result until the next run. A source can add labels of its own. The rules
+  read only the three labels of the contract. A source with a severity for
+  each check gives it in the label `severity`, in lower case: `critical`,
+  `high`, `medium`, `low`, `informational` or `unknown`, one value for each
+  check and system. The alert for a new finding of high severity reads it.
 - **Give the time of the last result for each system.** It is the time at
   which the tool made the result, not the time of the scrape. A source that
   does not know the time serves no time. The rules then read the source as
@@ -237,7 +240,7 @@ uv run --project observability pytest security/tests -q
 | The Wazuh map | `generated/wazuh-map.json` | The safeguards of each host check: the CIS tags of the release in `catalog/wazuh.json`, carried to the same check IDs, with the lines of the registry. And the checks with no tag |
 | Board input | `generated/board.json` | The safeguards, the systems and the cycles that the board shows |
 | The list of gaps | `generated/gaps.json` | Each check of a tool that no line names. The quarterly review reads it |
-| The stream map | `kubernetes/apps/security/converter/app/config/streams.json` | Each security stream of each system that has it as a check, with its `late_after` and the Loki selector of its lines. The converter reads it |
+| The maps of the converter | `kubernetes/apps/security/converter/app/config/streams.json` and `registry.json` | Each security stream of each system that has it as a check, with its `late_after` and the Loki selector of its lines. And the names of the sources, the systems and the series, that the converter takes a value of a file against. The converter reads both |
 
 The generator also writes the copy of `converter/converter.py` that the pod
 of the converter runs, next to the stream map. Kustomize takes a file only
@@ -360,6 +363,8 @@ security stream `findings` in Loki has the text of each finding.
 | --- | --- | --- |
 | `SecurityResultLate` | The newest result of a source for a system is older than `late_after` of the source, or the source serves no time. The safeguards that rest on it show "No evidence" | Open the tab Sources of the board. Then look at the last run of the source: its Job or its pod in the namespace `security`, or the agent on the host. The alert ends when the source reports again |
 | `SecurityAcceptedFindingExpired` | An accepted finding of the system has passed its end date | The owner reads the line in the list. The owner sets a new end date with a reason, or removes the line and the cause of the finding |
+| `SecurityAcceptedListUnread` | The security converter gets no entry from the list of accepted findings, for 30 minutes. The board shows no accepted finding, and the rule of Trivy Operator mutes none | The log of the converter names the line and the kind of its form. Fix that line of the list (`converter/README.md`, "The form that the converter reads") |
+| `SecurityAcceptedEntriesSkipped` | Entries of the list do not fit, for one hour, so their findings show as fails | The log of the converter names each entry by its number, and why. Fix those entries (`converter/README.md`, "An entry that the converter skips") |
 
 ## Accepted findings
 
@@ -375,27 +380,26 @@ merges.
 | Secret | `security-accepted-findings`, in the namespace `security` of homelab-wsl-02 |
 | Key of the Secret | `accepted.json`: one JSON array, with one object for each accepted finding |
 
-Each object has exactly these five fields, and each value is a JSON string:
+Each object has these five keys and no other, and each value is a JSON
+string. Each reader of the list (the security converter, the Prowler job,
+the API checks job) reads it with `json.loads`, never with a YAML parser:
+
 
 | Field | Value |
 | --- | --- |
 | `source` | The `name` of the source in `sources.yaml` |
-| `check` | The check ID, as in `controls.yaml`. A check that no line names is also possible. A reader skips an entry whose check is not a check ID: a letter or a digit, then up to 199 of letters, digits and `_./:-` |
+| `check` | The check ID, as in `controls.yaml`. A check that no line names is also possible |
 | `system` | The `name` of the system in `systems.yaml` |
-| `reason` | Why the owner accepts the finding. An entry whose reason is empty, or only spaces, is skipped: it accepts nothing |
+| `reason` | Why the owner accepts the finding. Not empty, and not only space |
 | `until` | The end date, exactly `YYYY-MM-DD` with ASCII digits, then read with `date.fromisoformat`. A reader skips an entry whose end has another form (a time, `20270131`, a week date). The finding is past its end date from the start of the next day, UTC |
 
-Each reader reads the list with `json.loads` on its UTF-8 text, never with
-a YAML parser:
-
-- A text that `json.loads` refuses (also one nested too deep for the
-  parser), a key twice in one object, or a top level that is not an array:
-  the reader fails and mutes nothing.
-- An item that is not an object, a field that is missing, a key that is not
-  one of the five fields, a value that is not a string, an empty field, or
-  an end that is not `YYYY-MM-DD` or that `date.fromisoformat` refuses: the
-  reader skips that entry and counts it. Its log has the number of the entry
-  and why, never a value.
+A reader skips and counts an item that is not an object, a key that is
+missing or is not one of the five, a value that is not a string, and an
+entry whose value does not fit. A list that is not one JSON array (a comma
+at the end, a comment, a byte order mark, a key two times in one object)
+gives no entry at all: the converter then serves none, and a Prowler run
+fails and mutes nothing. `security/converter/README.md`, "The list of
+accepted findings", has each rule and the alerts.
 
 This is the form of the file before encryption. The values are invented:
 
@@ -426,14 +430,18 @@ is readable there.
 No cluster lists the Flux Kustomization before the list has its first file.
 To start the list, the owner does these steps in one pull request:
 
-1. Write the file in the form above, with the first accepted findings.
+1. Write the file in the form above, with the first accepted findings. The
+   converter reads the block form of the example only
+   ([`converter/README.md`](converter/README.md), "The form that the
+   converter reads").
 2. Encrypt it: `sops --encrypt --in-place` on the file.
 3. Name the file under `resources` in `app/kustomization.yaml`.
 4. Add `ks.yaml` to `kubernetes/clusters/wsl-02/apps/kustomization.yaml`,
    after the line of the namespace `security`.
 
-Each scanner reads the Secret as its list of exceptions. The part that reads
-the Secret for Prometheus serves one series for each entry:
+Each scanner reads the Secret as its list of exceptions. The converter reads
+the Secret for Prometheus ([`converter/README.md`](converter/README.md), "The
+list of accepted findings"), and serves one series for each entry:
 `homelab_security_accepted_until_timestamp_seconds`, with the labels
 `source`, `check` and `system`, and the Unix time of the end as its value.
 The alert and the board read this series, and nothing else of the list

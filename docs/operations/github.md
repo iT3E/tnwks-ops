@@ -7,7 +7,7 @@ of the infrastructure: `infrastructure/terraform/environments/prod/github`
 holds the values, `infrastructure/terraform/modules/github` the resources.
 
 This first phase only codifies what exists. Every value was read from the
-API and is imported as it was, including settings that differ between
+API and was imported as it was, including settings that differ between
 repositories for no reason. Making them consistent is a later change, one
 PR at a time, each with its own plan.
 
@@ -19,22 +19,59 @@ PR at a time, each with its own plan.
 | `github_repository_ruleset` | `tnwks-ops`: `main` | Deletion and force-push blocked, PRs with squash merges only and no approvals, the required checks `Build Success`, `betterleaks / betterleaks` and `privacy / privacy` from GitHub Actions. Admins and one GitHub App bypass it |
 | `github_repository_environment` | `tnwks-ops`: `external-contributions`, `openclaw-hooks`, `prod` | The owner as required reviewer of `external-contributions`; `openclaw-hooks` deploys from `main` only; `prod` from protected branches only |
 | `github_repository_environment_deployment_policy` | `tnwks-ops`: `openclaw-hooks` | The `main` branch pattern |
-| `github_actions_variable` | `tnwks-ops`: `RELEASE_APP_CLIENT_ID`, `UNIFI_TERRAFORM_ENABLED` | Values are public. Other variables stay by hand (below) |
+| `github_actions_variable` | `tnwks-ops`: `RELEASE_APP_CLIENT_ID`, `UNIFI_TERRAFORM_ENABLED` | Values are public. `TERRAFORM_GITHUB_ENABLED` stays by hand (below) |
+| `github_actions_environment_variable` | `tnwks-ops`, `openclaw-hooks`: `OPENCLAW_NOTIFY_ACCOUNT`, `OPENCLAW_NOTIFY_CHANNEL`, `OPENCLAW_NOTIFY_TO` | Values from `tnwks-ops.sops.yaml` (below) |
+| `github_repository_webhook` | `tnwks-ops`: `flux` | Flux's receiver: `push` events, form content type, URL from `tnwks-ops.sops.yaml`. Its secret isn't managed, and Terraform never updates the webhook (below) |
 | `github_actions_repository_permissions` | `tnwks-ops` | Actions on, all actions allowed |
 | `github_workflow_repository_permissions` | `tnwks-ops` | `GITHUB_TOKEN` read-only by default, can't approve PRs |
 | `github_repository_vulnerability_alerts` | `tnwks-ops` | Dependabot alerts on |
 
-The repositories come from one map in `main.tf`. Rulesets, environments,
-Actions settings, variables and Dependabot alerts are optional parts of
-each entry, so applying them to another repository is a data change. An
-entry lists only what differs from a new repository's defaults
-(`modules/github/variables.tf`).
+The repositories come from one map in `main.tf`. Rulesets, environments
+(with their variables), webhooks, Actions settings, variables and
+Dependabot alerts are optional parts of each entry, so applying them to
+another repository is a data change. An entry lists only what differs from
+a new repository's defaults (`modules/github/variables.tf`).
+
+### The webhook's secret
+
+GitHub never returns a webhook's secret: it reads back as `********`, and
+an import stores that in the state. The `flux` webhook's secret belongs to
+the Flux receiver in the cluster (`github-webhook-token-secret`), so this
+root doesn't hold it. The provider sends the whole configuration, secret
+included, on any update of a webhook, and GitHub removes or replaces the
+secret unless the update carries the same one. So the module ignores every
+argument an update would send (`ignore_changes` on `configuration`,
+`events` and `active`, in `modules/github/webhooks.tf`): Terraform adopts or
+creates a webhook and never updates it. It still plans a create if the
+webhook disappears (a new one without a secret, which the receiver would
+reject: set the secret on GitHub after such an apply).
+
+To change the webhook (events, URL, active), change it on GitHub and update
+the entry (and `tnwks-ops.sops.yaml` for the URL) to match; the plan shows
+no change either way. Webhooks of other repositories would get the same
+treatment.
 
 On this account's plan the API refuses rulesets, branch protection and
 security and analysis settings for private repositories ("Upgrade to GitHub
 Pro"), so those entries have none. The module rejects them.
 
-### Private repositories held in SOPS
+### Values held in SOPS
+
+Three files in the root hold values that stay out of this public repo:
+
+- `repositories.sops.yaml`: the names and descriptions of private
+  repositories (this section);
+- `tnwks-ops.sops.yaml`: the `flux` webhook's URL (its host is under the
+  cluster's `SECRET_DOMAIN`) and two of the `openclaw-hooks` environment's
+  variable values, which may identify a person (next section);
+- `unmasked.sops.yaml`: values too short to mask, today
+  `OPENCLAW_NOTIFY_ACCOUNT` (next section).
+
+The first two (and `secrets.sops.yaml`, the token) are masked in CI's log;
+`unmasked.sops.yaml` is not, on purpose (The mask, below). All of them are
+encrypted in git the same way.
+
+#### Private repositories
 
 A private repository is named in `main.tf` only if its name is already
 public elsewhere in this repo (outside the paths `.github/privacy-allow`
@@ -69,15 +106,90 @@ To add one:
    opens the decrypted file in your editor and encrypts it on save. Add
    `privateN` with `name` and, if the repository has one, `description`.
 2. Add `privateN` to `local.sops_repositories` in `main.tf` with its
-   settings. While the repository exists on GitHub and not in the state,
-   it also needs an import block (the `sops_repositories` one in
-   `imports.tf` covers every key).
+   settings. If the repository already exists on GitHub, it also needs an
+   import block (below).
 3. Check that the file is encrypted (`sops` metadata, every value
    `ENC[...]`) before `git add`, and run `task github:plan`.
 
 Refer to the repository only by its key in commit messages, PR titles and
 bodies, comments and reviews. The privacy checks don't know these names, so
 nothing stops one from being pasted there.
+
+#### tnwks-ops' webhook URL and environment variables
+
+`tnwks-ops.sops.yaml` and `unmasked.sops.yaml` follow the shape of the
+`tnwks-ops` entry; the names are in `main.tf` (`webhooks.flux`,
+`local.openclaw_hooks_variables`, which says which file each variable is
+in):
+
+```yaml
+# tnwks-ops.sops.yaml
+webhooks:
+  flux:
+    url: (redacted)
+environments:
+  openclaw-hooks:
+    variables:
+      OPENCLAW_NOTIFY_CHANNEL: (redacted)
+      OPENCLAW_NOTIFY_TO: (redacted)
+---
+# unmasked.sops.yaml
+environments:
+  openclaw-hooks:
+    variables:
+      OPENCLAW_NOTIFY_ACCOUNT: (redacted)
+```
+
+To change a value, `bin/sops infrastructure/terraform/environments/prod/github/<file>`
+from the repo root, then check it as in step 3 above and run
+`task github:plan`: a variable shows as an in-place update, which the apply
+sends to GitHub. A new variable needs its name in
+`local.openclaw_hooks_variables` and its value in one of the two files: in
+`tnwks-ops.sops.yaml` if it is at least 6 characters long (each line, for a
+multi-line value), else in `unmasked.sops.yaml`; CI's mask step fails on a
+shorter value in a masked file (The mask). sops leaves an empty string
+unencrypted, so an empty value doesn't go in either file. The root
+passes the values through `nonsensitive()`, as it does the repository
+names: GitHub returns them unmarked, so a marked value would plan as an
+update of each variable. Locally, `task github:plan` prints them when they
+change; CI prints no plan body. The webhook URL stays marked (the provider
+marks it sensitive itself), and changing it here changes nothing on GitHub
+(The webhook's secret, above).
+
+### Adopting something that already exists
+
+The first apply adopted everything the root lists with import blocks, and a
+later one the `flux` webhook and the `openclaw-hooks` variables; the blocks
+were removed after each. Anything added to `main.tf` later that already exists on
+GitHub (a repository, an environment, a variable, a ruleset) needs an import
+block in the root first, or the apply fails on "already exists". Put it in
+`environments/prod/github/imports.tf` and take the file out again in a later
+PR, once an apply has imported it. The plan should import it and change
+nothing; if it also shows an update, the values in `main.tf` differ from
+GitHub's.
+
+```hcl
+import {
+  to = module.github.github_repository.this["some-repo"]
+  id = "some-repo"
+}
+
+# A repository held in SOPS: the import ID is its name, and an import ID
+# can't be sensitive, so nonsensitive() here, and only here.
+import {
+  to = module.github.github_repository.this["private6"]
+  id = nonsensitive(data.sops_file.repositories.data["private6.name"])
+}
+```
+
+Other IDs: `<repo>:<ruleset id>` for a ruleset,
+`<repo>:<environment>` for an environment,
+`<repo>:<environment>:<policy id>` for a deployment policy,
+`<repo>:<variable>` for a variable,
+`<repo>:<environment>:<variable>` for an environment's variable,
+`<repo>/<hook id>` for a webhook, and the repository name for the
+Actions settings and Dependabot alerts. Terraform prints import IDs in its
+progress lines, which CI keeps out of the log (Public logs).
 
 ## What stays by hand, and why
 
@@ -100,8 +212,21 @@ Left alone on purpose:
 - **Runner scale sets.** ARC registers them.
 - **`TERRAFORM_GITHUB_ENABLED`.** It switches this root on in CI, so it
   can't be managed by the root it switches.
-- **Environment variables and all secrets** (Actions, environment,
-  Dependabot) and webhooks, for now (later phases).
+- **Secrets whose values only the owner holds**: `TF_API_TOKEN` (on the
+  repository and on `external-contributions`), `RELEASE_APP_PRIVATE_KEY`
+  and `OPENCLAW_HOOK_TOKEN`. Not even their existence is managed: a secret
+  resource that is later removed from the code deletes the secret, and CI
+  depends on each of them. Managing their values would mean copying them
+  into SOPS here.
+- **`PRIVACY_TERMS`** on every repository that has it. Terraform would put
+  the family denylist in Terraform Cloud's state and need the CI runner's
+  key as a recipient of `.github/privacy-terms.sops.yaml`. `task privacy:edit`
+  copies a changed list to each of them (`bin/privacy-terms`, AGENTS.md).
+- **Dependabot secrets**, and Actions or environment secrets of other
+  repositories.
+- **The `flux` webhook's secret.** It belongs to the Flux receiver in the
+  cluster; the webhook itself is adopted, but never updated (The webhook's
+  secret, above).
 
 Account-level, outside any repository:
 
@@ -114,16 +239,16 @@ Account-level, outside any repository:
 
 The root reads one value, `github_token`, from `secrets.sops.yaml` (template:
 `secrets.sops.yaml.example`). The `.sops.yaml` rule for this root includes
-the CI age key, so the self-hosted runner can decrypt it and
-`repositories.sops.yaml`. The token is (redacted) and never goes in a doc
-or a log.
+the CI age key, so the self-hosted runner can decrypt it and the other
+SOPS files of the root. The token is (redacted) and never goes in a doc or
+a log.
 
 The owner has to choose the token type. What this phase needs:
 
 | | Classic PAT | Fine-grained PAT |
 | --- | --- | --- |
-| Scopes or permissions | `repo` | Repository access: all repositories. Administration: read and write. Variables: read and write. Actions: read. Metadata: read |
-| Not needed | `workflow` (it pushes workflow files; this root writes no files), `delete_repo` | Environments (it covers environment secrets and variables, which this phase doesn't manage) |
+| Scopes or permissions | `repo` | Repository access: all repositories. Administration: read and write. Variables: read and write. Environments: read and write. Webhooks: read and write. Actions: read. Metadata: read |
+| Not needed | `workflow` (it pushes workflow files; this root writes no files), `delete_repo` | Secrets (this root manages none) |
 | Can it delete a repository? | No, without `delete_repo` | Yes: deleting a repository needs Administration write, which this root needs too |
 | Reach | Read and write to the code of every repository too | Only the permissions listed |
 
@@ -132,14 +257,19 @@ repository whatever the configuration says. A fine-grained PAT has a
 smaller reach otherwise. Either way, note the expiry and rotate before it.
 
 Confirmed in GitHub's REST docs: the classic `repo` scope for the Actions
-permissions, workflow permissions, Actions variables, environments and
-deployment branch policy endpoints; `delete_repo` for deleting a
-repository; and every fine-grained permission in the table, from GitHub's
-list of permissions per endpoint (environments and branch policies are read
-with Actions and written with Administration).
+permissions, workflow permissions, Actions variables, environment
+variables, environments and deployment branch policy endpoints; `delete_repo`
+for deleting a repository; and every fine-grained permission in the table,
+from GitHub's list of permissions per endpoint (environments and branch
+policies are read with Actions and written with Administration; environment
+variables need Environments, webhooks need Webhooks).
 
 Unconfirmed: the docs name no classic scope for updating a repository, its
-rulesets, topics or Dependabot alerts (`repo` is expected); and whether the
+rulesets, topics or Dependabot alerts (`repo` is expected), nor for the
+webhook endpoints themselves (they name `repo` or the `*:repo_hook` scopes
+only for a webhook's configuration endpoints; the root's token read the
+webhook in the plan that adopted it, and Terraform never writes to it unless
+it has to create one); and whether the
 provider calls anything at startup that needs more. The verification plan
 ran with a token holding `repo`, `workflow`, `read:org` and others, so it
 doesn't settle either. If the first plan fails on a permission, the error
@@ -160,7 +290,12 @@ prints:
 The plan body, Terraform's progress lines (which print each repository's
 ID, its name: `Refreshing state... [id=...]`) and the state never reach
 the log. Addresses use the neutral keys. On success, no name of a
-repository held in SOPS reaches a public log or the PR.
+repository held in SOPS reaches a public log or the PR. The values in
+`tnwks-ops.sops.yaml` and `unmasked.sops.yaml` are in no address or ID
+either: an environment variable's ID is `tnwks-ops:openclaw-hooks:<name>`,
+the webhook's its number. An API error about an environment variable is the
+request line and GitHub's message: the URL names the variable, and the value
+is only in the request body, which the error doesn't print.
 
 **On failure, one can, without the mask below.** With `-no-color`, Terraform prints an error's
 summary on the `Error:` line, and for an API error the provider's summary
@@ -178,18 +313,35 @@ provider crash) could show progress lines too.
 Before Terraform runs, `terraform.yaml`'s plan and apply jobs mask every
 value of the SOPS files that the root's entry in `.github/ci/domains.toml`
 lists in `mask_sops`. For this root that is `repositories.sops.yaml` (the
-names and descriptions) and `secrets.sops.yaml` (the token). The step
+names and descriptions), `secrets.sops.yaml` (the token) and
+`tnwks-ops.sops.yaml` (the webhook URL and two environment variables'
+values). The step
 ("Mask SOPS values") downloads a pinned sops release, checks its SHA-256,
 and runs `.github/scripts/sops-mask.py`, which decrypts each file with the
 runner's CI age key and prints `::add-mask::<line>` for each non-blank line
 of each string value, and nothing else. From then on the runner shows `***`
-for those strings anywhere in the job's log, and also for its encoded forms
-(JSON, URL, XML and base64 escapes).
+for those strings anywhere in the job's log, also inside longer words, and
+also for their encoded forms (JSON, URL, XML and base64 escapes). The runner
+masks a string of any length (actions/runner's `SecretMasker.AddValue` has
+no minimum).
+
+That is why a short value can't be masked safely. A value of a few
+characters occurs inside ordinary words, paths and IDs, so the log shows
+`***` in the middle of them, often next to the same text printed unmasked
+before the mask step, and the value can be read off. So `sops-mask.py`
+refuses a line shorter than 6 characters: the step fails,
+naming the file and key path. A value that short goes in
+`unmasked.sops.yaml`, which is not in `mask_sops`: CI decrypts it for
+Terraform but doesn't mask it, so it reaches the log only if Terraform
+prints it, which it doesn't on success (Public logs). 6 is a judgment, not a
+runner limit; a longer value that is a common word has the same problem, and
+no check can see that.
 
 It fails closed: if the download or checksum fails, a file is missing or
-doesn't decrypt, or no value comes out, the step fails and Terraform is
-skipped. Its errors name the file, never a value or sops's own output. It
-runs only for a root with `mask_sops` that is switched on (`enabled_var`).
+doesn't decrypt, no value comes out, or a value is too short, the step
+fails and Terraform is skipped. Its errors name the file (and, for a short
+value, its key path), never a value or sops's own output. It runs only for a
+root with `mask_sops` that is switched on (`enabled_var`).
 The workflow conformance check fails a `terraform.yaml` whose Terraform
 jobs lose the step or run it after Terraform, and `task github:enable`
 refuses to switch the root on until `main` has it.
@@ -204,15 +356,20 @@ What it can't do:
   plan summary, which has only addresses with neutral keys. Anything a later
   change sends elsewhere (an artifact, a comment with error text) is not
   masked.
-- **Nothing printed before it.** It runs after checkout and before
-  Terraform; the checkout prints no values.
+- **Nothing printed before it.** Masks aren't retroactive. It runs after
+  checkout and before Terraform; the checkout prints no values, only text
+  that a short value could occur in (above).
+- **Not `unmasked.sops.yaml`.** Its values are protected by nothing but
+  Terraform not printing them.
 - **New values need a commit.** A repository added to
-  `repositories.sops.yaml` is masked from the commit that adds it, because
-  the step reads the file from the same checkout.
-- **Proven only in CI.** Locally the script is tested against a stub sops
-  and run on the real `repositories.sops.yaml` with only its output lines
-  counted. That the runner masks the values in a real failed run can only
-  be seen there.
+  `repositories.sops.yaml`, or a value added to `tnwks-ops.sops.yaml`, is
+  masked from the commit that adds it, because the step reads the file from
+  the same checkout.
+- **Proven in CI only for what has happened.** Locally the script is tested
+  against a stub sops and run on the real files with only its output lines
+  counted. Real job logs show the runner masking values after the step,
+  inside longer words too; that it masks a value in a real `Error:` line
+  has not been seen yet.
 
 ## One-time bootstrap
 
@@ -269,7 +426,9 @@ each step without taking it.
    --repo iT3E/tnwks-ops -f roots=github`. The apply imports and changes
    nothing (step 1.3 checked that locally; CI's PR comment counts only
    changes, so it shows `0 to add, 0 to change, 0 to destroy, 0 to move`
-   for an imports-only plan). After it, `imports.tf` can go.
+   for an imports-only plan). It ran on 2026-11-13, imported all 36
+   objects and changed nothing, and the import blocks were removed after
+   it.
 
 What stays your decision: the token type and its expiry (a fine-grained
 token can delete repositories), confirming the workspace, reviewing the PR,
@@ -278,14 +437,57 @@ and when to turn CI on.
 ## Safety
 
 - **No deletes.** Every repository has `lifecycle { prevent_destroy = true }`,
-  so a plan that would destroy one fails. `archive_on_destroy = true`
-  (archive instead of delete, should the guard be lifted) is not set in
-  this phase; see "Later phases".
+  so a plan that would destroy one fails. Should the guard ever be lifted,
+  `archive_on_destroy = true` archives the repository instead of deleting
+  it. GitHub never reports that setting, so it lives only in Terraform's
+  state: an import can't fill it in, and a repository imported later plans
+  as an import plus an in-place update that records it. That update
+  resends the repository's settings as Terraform read them
+  (`PATCH /repos/{owner}/{repo}`; visibility and secret scanning only when
+  they change).
 - **No replacements.** No repository sets `template`, `fork` or `source_*`:
   on an existing repository they force a replacement, which is a delete.
 - **A token that can't delete repositories** (a classic PAT without
   `delete_repo`) is the last line, independent of the code.
 - **Public logs**: see above. No secret is managed here.
+- **No webhook updates.** Terraform never updates a webhook, so it can't
+  remove the `flux` webhook's secret (The webhook's secret, above).
+
+## Drift
+
+Everything this root manages can also be changed in GitHub's web UI, and
+such a change stays until the next plan of the root shows it. So the root
+has `drift = true` in `domains.toml`: every night at 13:15 UTC
+(05:15 Pacific) `terraform-drift.yaml` plans `main` for it on homelab-wsl's
+ops runner, applies nothing, and reports to Prometheus
+([`ci.md`](ci.md#terraform-drift) has the design).
+
+- **`TerraformDrift`** (`root="github"`) fires when the plan has changes,
+  or couldn't run. The run's job summary lists the changing addresses
+  (private repositories by key, `module.github.github_repository.this["private3"]`),
+  the job log the error. Either put the UI change into the code with a PR,
+  or undo it by applying `main` (dispatch Deploy with `roots=github`). Then
+  dispatch Terraform drift, or wait for the next night, to clear it.
+- **`TerraformDriftCheckStale`** fires when no result has arrived for 30
+  hours: the schedule, the runner, `TERRAFORM_GITHUB_ENABLED` (a switched-off
+  root isn't checked) or the Pushgateway.
+
+The check's job runs the same steps as a PR plan, under the same public-log
+rules: the mask first, then the action, which prints only counts and
+addresses; then one line of counts. It shares the root's `github-terraform`
+lock, so it never plans beside a PR plan or an apply. It reads the same
+state in Terraform Cloud and takes the state lock for the plan, as a PR
+plan does.
+
+It sees only what the root manages and compares. A change to anything under
+"What stays by hand", to the `flux` webhook's events, URL or active flag
+(ignored on purpose, see The webhook's secret; only a deleted webhook
+shows), or to the ruleset setting in the next section (the provider has no
+argument for it), never shows in the plan. An import block still in the
+root (Adopting something that already exists) plans nothing once its
+resource is in the state, so it doesn't read as drift until the PR that
+takes it out; if that resource has left the state, it plans an import,
+which does.
 
 ## Caveat: the ruleset's unattributed changes setting
 
@@ -310,13 +512,11 @@ small PRs.
 
 ## Later phases
 
-- `archive_on_destroy = true` on every repository, in its own PR after the
-  first apply. GitHub never reports the setting, so an import can't fill it
-  in: the plan shows it as one in-place update per repository, and the apply
-  sends each repository's current settings back unchanged
-  (`PATCH /repos/{owner}/{repo}`) while Terraform records the value in its
-  state.
-- Actions, environment and Dependabot secrets, and the webhook, from SOPS.
+- Secrets whose values Terraform could hold in SOPS here. The owner-held
+  secrets above stay by hand unless that changes, and never existence-only.
+- Updating the `flux` webhook from Terraform: only with its secret in this
+  root, from the same source as the Flux receiver's, so that an update
+  carries the same secret.
 - The account's SSH keys.
 - GitHub App installations and their repository access.
 - Applying the `tnwks-ops` standard (rulesets, squash only, branch

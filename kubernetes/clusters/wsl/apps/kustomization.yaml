@@ -59,6 +59,9 @@ resources:
   - ../../../apps/monitoring
   # Job pods' logs to Loki (VECTOR_AGENT_POD_SELECTOR in cluster-settings).
   - ../../../apps/monitoring/vector/ks-agent.yaml
+  # The audit log of this cluster's API server, as the security stream
+  # "k8s-audit" (apps/monitoring/vector/README.md).
+  - ../../../apps/monitoring/vector/ks-audit-reader.yaml
   - ../../../apps/monitoring/observability-pki/ks.yaml
   - ../../../apps/monitoring/observability-evidence/ks.yaml
   - ../../../apps/monitoring/observability-evidence/rules-ks.yaml
@@ -93,6 +96,10 @@ resources:
   - ../../../apps/tools/actions-runner-controller/runner/ks.yaml
   # Network-device Terraform runners for this repo (docs/network/ci.md).
   - ../../../apps/tools/actions-runner-controller/ops-runner/ks.yaml
+  # Where this site's ops runner reports the nightly Terraform drift check,
+  # for Prometheus (docs/operations/ci.md#terraform-drift). This site only,
+  # like the drift check's runner and its alerts.
+  - ../../../apps/monitoring/pushgateway/ks.yaml
   # Ansible runners for the Windows host and its WSL distro
   # (docs/operations/ansible.md).
   - ../../../apps/tools/actions-runner-controller/ansible-runner/ks.yaml

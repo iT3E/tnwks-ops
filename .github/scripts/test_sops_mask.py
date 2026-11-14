@@ -67,20 +67,20 @@ class SopsMask(unittest.TestCase):
 
     def test_every_string_value_one_line_each(self):
         f = self.file("a.sops.yaml", {
-            "private1.name": "alpha",
+            "private1.name": "alphabet",
             "private1.description": "first line\n  second line  \n\n",
-            "nested": {"list": ["beta", {"deep": "gamma"}], "n": 3, "b": True, "null": None},
+            "nested": {"list": ["betamax", {"deep": "gamma-ray"}], "n": 3, "b": True, "null": None},
             "empty": "",
         })
         rc, out, err = self.run_main(f)
         self.assertEqual(rc, 0)
         self.assertEqual(err, "")
         self.assertEqual(out.splitlines(), [
-            "::add-mask::alpha",
+            "::add-mask::alphabet",
             "::add-mask::first line",
             "::add-mask::second line",
-            "::add-mask::beta",
-            "::add-mask::gamma",
+            "::add-mask::betamax",
+            "::add-mask::gamma-ray",
         ])
 
     def test_percent_is_escaped_for_the_runner(self):
@@ -90,11 +90,37 @@ class SopsMask(unittest.TestCase):
         self.assertEqual(out, "::add-mask::50%250A off\n")
 
     def test_json_list_and_duplicates(self):
-        a = self.file("a.sops.yaml", {"k": "same", "j": "one"})
-        b = self.file("b.sops.yaml", {"k": "same", "j": "two"})
+        a = self.file("a.sops.yaml", {"k": "the-same", "j": "first-one"})
+        b = self.file("b.sops.yaml", {"k": "the-same", "j": "second-one"})
         rc, out, _ = self.run_main("--json", json.dumps([a, b]))
         self.assertEqual(rc, 0)
-        self.assertEqual(out.splitlines(), ["::add-mask::same", "::add-mask::one", "::add-mask::two"])
+        self.assertEqual(out.splitlines(), ["::add-mask::the-same", "::add-mask::first-one", "::add-mask::second-one"])
+
+    def test_shortest_masked_length(self):
+        f = self.file("a.sops.yaml", {"k": "x" * sops_mask.MIN_LENGTH})
+        rc, out, _ = self.run_main(f)
+        self.assertEqual(rc, 0)
+        self.assertEqual(out, f"::add-mask::{'x' * sops_mask.MIN_LENGTH}\n")
+
+    def test_short_value_fails_closed_naming_the_key_path(self):
+        # The runner would mask it inside every longer word that contains it.
+        short = "q" * (sops_mask.MIN_LENGTH - 1)
+        a = self.file("a.sops.yaml", {"k": "long enough"})
+        b = self.file("b.sops.yaml", {"env": {"vars": {"ACCOUNT": short}}, "ok": "long enough too"})
+        rc, out, err = self.run_main(a, b)
+        self.assertFailsClosed(rc, out, err, "b.sops.yaml", "env.vars.ACCOUNT", "shorter than")
+        self.assertNotIn(short, err)
+
+    def test_short_line_of_a_longer_value_fails(self):
+        # Each line is its own mask, so each line must be long enough.
+        f = self.file("a.sops.yaml", {"desc": "a long first line\n ab \n", "list": ["fine value"]})
+        self.assertFailsClosed(*self.run_main(f), "desc", "shorter than")
+
+    def test_short_value_in_a_list_names_its_index(self):
+        f = self.file("a.sops.yaml", {"list": ["fine value", "abc"]})
+        rc, out, err = self.run_main(f)
+        self.assertFailsClosed(rc, out, err, "list[1]")
+        self.assertNotIn("abc", err)
 
     def assertFailsClosed(self, rc, out, err, *expect):
         self.assertEqual(rc, 1)
@@ -105,12 +131,12 @@ class SopsMask(unittest.TestCase):
         self.assertNotIn("stub-secret", err)
 
     def test_decrypt_failure_never_echoes_sops_output(self):
-        a = self.file("a.sops.yaml", {"k": "fine"})
+        a = self.file("a.sops.yaml", {"k": "fine value"})
         b = self.file("b.sops.yaml", fail=True)
         self.assertFailsClosed(*self.run_main(a, b), "b.sops.yaml", "exit 128")
 
     def test_missing_sops(self):
-        f = self.file("a.sops.yaml", {"k": "v"})
+        f = self.file("a.sops.yaml", {"k": "a value"})
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             rc = sops_mask.main(["--sops", str(self.dir / "nope"), f])

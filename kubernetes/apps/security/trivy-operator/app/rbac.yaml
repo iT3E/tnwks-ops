@@ -1,0 +1,28 @@
+---
+# What ./helmrelease.yaml removes from the chart's ClusterRole, given only in
+# this namespace: the operator creates and deletes its scan jobs here and
+# reads their logs (the scan result) here.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: trivy-operator-scan-jobs
+rules:
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [create, delete]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: trivy-operator-scan-jobs
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: trivy-operator-scan-jobs
+subjects:
+  - kind: ServiceAccount
+    name: trivy-operator
+    namespace: security
