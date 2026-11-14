@@ -207,13 +207,16 @@ The converter skips an item of the array, and counts it in
   converter checks only that it is there.
 - The source or the system is not in the registry.
 - The check is not a check ID: a letter or a digit, then letters, digits and
-  `_./:-`, 200 characters at most. So no text of another form, and no lone
-  surrogate of a `\ud800` escape, reaches a label.
+  `_./:-`, 200 characters at most, matched as a whole (so no line feed at the
+  end). So no text of another form, and no lone surrogate of a `\ud800`
+  escape, reaches a label.
 - `until` is not a day of the form `YYYY-MM-DD`: it must match
   `[0-9]{4}-[0-9]{2}-[0-9]{2}` as a whole, in ASCII digits, and
   `datetime.date.fromisoformat` must read it.
   So `2027-02-30` is skipped, and so are `20271231` and `2027-W52-5`, which
-  `fromisoformat` reads since Python 3.11.
+  `fromisoformat` reads since Python 3.11. Each day that a Python date holds
+  is taken, `0001-01-01` to `9999-12-31`: the converter adds the next day in
+  seconds, so `9999-12-31` ends at the start of the year 10000.
 
 The other entries are served. A skipped entry has no series, so the board
 does not show it, and the rule of Trivy Operator does not mute it: the
@@ -234,6 +237,13 @@ the fault and its line (no text of the file), when the list:
   with no word, so the converter refuses the file, and the Prowler job does
   the same.
 - Can not be read, is not UTF-8, or is larger than 1 MiB.
+- Is in the key `accepted.yaml` of the Secret, and `accepted.json` is not
+  there. That is the key of the list before it was JSON, and no reader reads
+  it, so the converter does not take it for no list.
+
+A fault of the reader itself (an error that none of the rules above names)
+also sets the value to 0 and logs the kind of the error. So a fault never
+looks like no list.
 
 `SecurityAcceptedListUnread` fires when this lasts 30 minutes. With no list
 (the Secret does not exist) the converter serves no entry, the value is 1,

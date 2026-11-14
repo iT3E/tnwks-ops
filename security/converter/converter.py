@@ -279,9 +279,12 @@ class StreamSource(Loop):
 # string, and an entry has these five keys and no other.
 ACCEPTED_FIELDS = ("source", "check", "system", "until", "reason")
 MAX_LIST_BYTES = 1024 * 1024
+# The key of the list when it was YAML. A Secret that still has it is a list not read.
+OLD_KEY = "accepted.yaml"
 # The form of a check ID of each tool: Prowler, Trivy (`k8s-cis-1.23/1.2.3`), Wazuh, the
-# API checks. A value of another form is no check, so it never reaches a label.
-CHECK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_./:-]{0,199}$")
+# API checks. A value of another form is no check, so it never reaches a label. Use
+# fullmatch: `$` also matches before a line feed at the end.
+CHECK_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_./:-]{0,199}")
 # The one form of an end date. date.fromisoformat also reads 20271231 and 2027-W05-1
 # (since Python 3.11). ASCII digits only (\d also takes other digits), and the whole
 # value (fullmatch). The Prowler run checks the same form.
@@ -321,11 +324,12 @@ def json_list(text: str) -> list:
 def end_of(until: str) -> int:
     """The Unix time at which an accepted finding ends: the start of the day after its
     end date, UTC (security/README.md, "Accepted findings"). ValueError when until is
-    not a day of the form YYYY-MM-DD."""
+    not a day of the form YYYY-MM-DD. The day is added in seconds, not to the date: a
+    date has no day after 9999-12-31."""
     if not DATE.fullmatch(until):
         raise ValueError(f"not of the form YYYY-MM-DD: {until!r}")
     day = datetime.date.fromisoformat(until)
-    return calendar.timegm((day + datetime.timedelta(days=1)).timetuple())
+    return calendar.timegm(day.timetuple()) + 86400
 
 
 def why_not(entry: object, sources: set[str], systems: set[str]) -> str | None:
@@ -340,7 +344,7 @@ def why_not(entry: object, sources: set[str], systems: set[str]) -> str | None:
         return "a value is empty"
     if entry["source"] not in sources or entry["system"] not in systems:
         return "the source or the system is not in the registry"
-    if not CHECK_ID.match(entry["check"]):
+    if not CHECK_ID.fullmatch(entry["check"]):
         return "the check is not a check ID"
     try:
         end_of(entry["until"])
@@ -393,6 +397,10 @@ class AcceptedList(Loop):
             with self.path.open("rb") as file:
                 raw = file.read(MAX_LIST_BYTES + 1)
         except FileNotFoundError:
+            if self.path.with_name(OLD_KEY).exists():
+                # The key of the list before it was JSON: a list that no reader reads.
+                logger.warning("the list of accepted findings is in %s, not in %s", OLD_KEY, self.path.name)
+                return {}, 0, False
             return {}, 0, True
         except OSError as error:
             logger.warning("the list of accepted findings can not be read: %s", type(error).__name__)
@@ -412,7 +420,12 @@ class AcceptedList(Loop):
         return entries, skipped, True
 
     def step(self):
-        entries, skipped, read = self.read()
+        try:
+            entries, skipped, read = self.read()
+        except Exception as error:  # noqa: BLE001 - a fault of the reader is a list not read
+            # Never "no list": with read at 0, SecurityAcceptedListUnread fires.
+            logger.error("the reader of the list of accepted findings failed: %s", type(error).__name__)
+            entries, skipped, read = {}, 0, False
         with self.lock:
             self.result = entries, skipped, read, self.monotonic()
 
