@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.123.0 - 2026-11-14
+
+### Added
+
+* ci: a nightly drift check for the Terraform roots with drift = true in domains.toml, on for the github root. terraform-drift.yaml plans main in the root's lock group on homelab-wsl's ops runner and never applies; the result goes to a new Pushgateway on homelab-wsl, and TerraformDrift (changes, or a failed check) and TerraformDriftCheckStale (no result for 30h) alert on it. The conformance check now covers every workflow that runs actions/terraform: the mask first, the root's lock, plan mode for a drift job
+
 ## v2.122.0 - 2026-11-14
 
 ### Added
