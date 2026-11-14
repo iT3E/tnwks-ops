@@ -89,7 +89,8 @@ GH_STUB = textwrap.dedent(f"""\
     if args[:3] == ["secret", "set", "PRIVACY_TERMS"]:
         name = args[4].split("/")[1]
         if name in state.get("fail_set", []):
-            sys.stderr.write(f"failed to set secret PRIVACY_TERMS for iT3E/{{name}}\\n"); sys.exit(1)
+            # Worst case: a gh that quotes its stdin in the error.
+            sys.stderr.write(f"failed to set secret PRIVACY_TERMS for iT3E/{{name}}: {{stdin}}\\n"); sys.exit(1)
         sys.exit(0)
     sys.stderr.write(f"stub gh: unexpected {{args}}\\n"); sys.exit(2)
 """)
@@ -200,6 +201,9 @@ class PrivacyTerms(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertEqual(len(self.sets()), 4, "the others are still set")
         self.assertIn("FAILED on 1 public (tnwks-ops) and 1 private (not named)", out)
+        self.assertIn("  tnwks-ops: gh exit 1\n", out)
+        self.assertIn("  a private repository: gh exit 1\n", out)
+        self.assertNotIn("failed to set secret", out, "gh's stderr isn't printed")
         self.assertIn("task privacy:sync", out)
         self.assertNothingLeaks(out)
 

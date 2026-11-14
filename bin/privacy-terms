@@ -50,7 +50,11 @@ REPO = Path(__file__).resolve().parent.parent
 SOPS = REPO / "bin/sops"
 TERMS_FILE = ".github/privacy-terms.sops.yaml"
 OWNER = "iT3E"
-SECRET = "PRIVACY_TERMS"
+# The Actions secret that holds each repository's copy of the list. Messages
+# are built from constants like this one, counts, exit codes and the public
+# names GitHub returns (the login, public repositories): never from gh's or
+# sops's stderr, which can quote what they were given.
+COPY_NAME = "PRIVACY_TERMS"
 # sops 3.7: codes.FileHasNotBeenModified.
 SOPS_UNCHANGED = 200
 
@@ -135,19 +139,19 @@ def owned_repos() -> list[Repo]:
     return repos
 
 
-def has_secret(repo: Repo) -> bool:
-    r = gh(["api", f"repos/{OWNER}/{repo.name}/actions/secrets/{SECRET}", "--jq", ".name"])
-    if r.returncode == 0 and r.stdout.strip() == SECRET:
+def has_copy(repo: Repo) -> bool:
+    r = gh(["api", f"repos/{OWNER}/{repo.name}/actions/secrets/{COPY_NAME}", "--jq", ".name"])
+    if r.returncode == 0 and r.stdout.strip() == COPY_NAME:
         return True
     if r.returncode != 0 and "HTTP 404" in r.stderr:
         return False
     where = repo.name if not repo.private else "a private repository"
-    raise Stop(f"can't tell whether {where} has {SECRET} (gh exit {r.returncode}); nothing was set")
+    raise Stop(f"can't tell whether {where} has {COPY_NAME} (gh exit {r.returncode}); nothing was set")
 
 
 def targets() -> tuple[list[Repo], list[Repo]]:
     """Repositories with the secret: (to set, archived and skipped)."""
-    found = [r for r in owned_repos() if has_secret(r)]
+    found = [r for r in owned_repos() if has_copy(r)]
     return [r for r in found if not r.archived], [r for r in found if r.archived]
 
 
@@ -164,22 +168,22 @@ def sync(dry_run: bool) -> int:
     if archived:
         say(f"Archived, skipped: {describe(archived)}")
     if not todo:
-        raise Stop(f"no repository of {OWNER} has a {SECRET} secret: nothing to sync")
-    say(f"Repositories with a {SECRET} secret: {describe(todo)}")
+        raise Stop(f"no repository of {OWNER} has a {COPY_NAME} secret: nothing to sync")
+    say(f"Repositories with a {COPY_NAME} secret: {describe(todo)}")
     if dry_run:
-        say(f"--dry-run: would set {SECRET} on these {len(todo)} repositories (gh secret set, terms on stdin)")
+        say(f"--dry-run: would set {COPY_NAME} on these {len(todo)} repositories (gh secret set, terms on stdin)")
         return 0
     failed = []
     for repo in todo:
-        r = gh(["secret", "set", SECRET, "--repo", f"{OWNER}/{repo.name}"], stdin=raw)
+        r = gh(["secret", "set", COPY_NAME, "--repo", f"{OWNER}/{repo.name}"], stdin=raw)
         if r.returncode != 0:
             failed.append(repo)
-            if not repo.private:
-                # gh's message names the repository; a private one's stays unprinted.
-                last = (r.stderr.strip().splitlines() or ["?"])[-1]
-                say(f"  {repo.name}: gh exit {r.returncode}: {last}")
+            # Only the exit code: gh's stderr isn't printed (see COPY_NAME), and
+            # a private repository's name stays unprinted.
+            where = repo.name if not repo.private else "a private repository"
+            say(f"  {where}: gh exit {r.returncode}")
     done = [r for r in todo if r not in failed]
-    say(f"Set {SECRET} on {describe(done)}")
+    say(f"Set {COPY_NAME} on {describe(done)}")
     if failed:
         say(f"\nFAILED on {describe(failed)}: those still have the old list, and CI there checks against it.")
         say("Retry with `task privacy:sync` (it sets every repository again).")
