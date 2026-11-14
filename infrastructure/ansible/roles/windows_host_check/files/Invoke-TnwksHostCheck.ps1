@@ -262,7 +262,9 @@ function Write-TnwksTextfile([string]$Directory, [string]$Name, [string]$Text) {
     $partial = "$final.partial"
     [IO.File]::WriteAllText($partial, $Text, (New-Object Text.UTF8Encoding $false))
     if (Test-Path -LiteralPath $final) {
-        [IO.File]::Replace($partial, $final, $null)
+        # PowerShell passes $null to a .NET string as an empty string, which
+        # Replace refuses. [NullString]::Value is a real null: no backup file.
+        [IO.File]::Replace($partial, $final, [NullString]::Value)
     } else {
         [IO.File]::Move($partial, $final)
     }
