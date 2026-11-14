@@ -44,6 +44,10 @@ FIELDS = frozenset({"source", "check", "system", "reason", "until"})
 # (since Python 3.11): the form is checked first, so both readers take one form.
 # ASCII digits only (\d also takes other digits), and the whole value (fullmatch).
 DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+# The form of a check ID, as the converter reads it (fullmatch). Prowler reads a key
+# of its mutelist as a regex, so a check of "*", "." or "s3" would mute more than
+# one check: such an entry is skipped.
+CHECK = re.compile(r"[A-Za-z0-9][A-Za-z0-9_./:-]{0,199}")
 
 
 class UnreadableList(Exception):
@@ -69,6 +73,8 @@ def _why_skipped(entry: object) -> tuple[str | None, datetime.date | None]:
         return "a value is not a string", None
     if not all(entry[field].strip() for field in FIELDS):
         return "a field is empty", None
+    if not CHECK.fullmatch(entry["check"]):
+        return "the check is not a check ID", None
     if not DATE.fullmatch(entry["until"]):
         return "the end is not a date YYYY-MM-DD", None
     try:
@@ -90,19 +96,20 @@ def accepted_checks(path: Path, system: str, today: datetime.date) -> tuple[dict
     The converter reads the same list the same way: an item that does not fit
     (not an object, a field missing, a key that is not a field, a value that is not
     a string, a field empty, the reason too, as each accepted finding has a reason
-    (Design Doc 4.1.2), an end that is not YYYY-MM-DD or that date.fromisoformat
-    refuses) is skipped and
-    counted, and the log has its number and why, never a value of the list. One bad
+    (Design Doc 4.1.2), a check that is not a check ID, an end that is not
+    YYYY-MM-DD or that date.fromisoformat refuses) is skipped and counted, and the
+    log has its number and why, never a value of the list. One bad
     entry then does not stop each run until the list is fixed. A list that can not
-    be read at all (not UTF-8, not JSON, nested too deep for the parser, a key twice
-    in one object, not an array)
+    be read at all (not UTF-8, not JSON, a number too long or a nesting too deep for
+    the parser, a key twice in one object, not an array)
     raises UnreadableList: the run then fails and mutes nothing, as it can not know
     what to mute."""
     if not path.is_file():
         return {}, 0
     try:
         entries = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_no_duplicate_keys)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, RecursionError) as error:
+    # ValueError also covers a number of more than 4300 digits (the int limit).
+    except (OSError, ValueError, RecursionError) as error:
         # The type only: a parse error can quote the text, and the text can hold a reason.
         raise UnreadableList(type(error).__name__) from None
     if not isinstance(entries, list):
@@ -123,12 +130,30 @@ def accepted_checks(path: Path, system: str, today: datetime.date) -> tuple[dict
     return checks, skipped
 
 
+def mutelist_key(check: str) -> str:
+    """The key of one check in the mutelist, which matches that check only.
+
+    Prowler 5.49.0 (prowler/lib/mutelist/mutelist.py, is_muted_in_check and
+    is_item_matched) mutes a check when a key is "*", equals the check, or
+    re.search(key, check) finds it, after each "*" of the key becomes ".*". So a
+    bare check ID also mutes each longer check that holds it
+    (cloudtrail_multi_region_enabled and
+    cloudtrail_multi_region_enabled_logging_management_events). The key is the
+    escaped check between ^ and $: a check ID (CHECK) has no "*", and re.escape
+    adds none, so the key is a regex that matches the whole check and nothing
+    longer. The rename of a key that starts with "lambda" does not apply: the
+    key starts with "^"."""
+    return "^" + re.escape(check) + "$"
+
+
 def mutelist(checks: dict[str, str]) -> dict:
     """The mutelist of Prowler that mutes each accepted check on each resource of the run.
 
-    A run reads one system, so the account and the region are `*`."""
+    An entry names a check and a system, and nothing narrower. A run reads one
+    system (one account, or one Cloudflare account), so the account, the region
+    and the resource are `*`, and no tag is named (Prowler then takes `*`)."""
     return {"Mutelist": {"Accounts": {"*": {"Checks": {
-        check: {"Regions": ["*"], "Resources": ["*"], "Description": f"Accepted until {until}"}
+        mutelist_key(check): {"Regions": ["*"], "Resources": ["*"], "Description": f"Accepted until {until}"}
         for check, until in sorted(checks.items())}}} if checks else {}}}
 
 
@@ -235,7 +260,7 @@ def run(args: argparse.Namespace, now=lambda: datetime.datetime.now(UTC), call=s
 
 def parse(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--provider", required=True, help="aws, cloudflare or github")
+    parser.add_argument("--provider", required=True, help="aws or cloudflare")
     parser.add_argument("--system", required=True, help="the name of the system in security/registry/systems.yaml")
     parser.add_argument("--checks", type=Path, required=True, help="the --checks-file of the provider")
     parser.add_argument("--results", type=Path, default=Path("/results"), help="the root of the volume of results")

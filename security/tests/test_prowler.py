@@ -68,6 +68,13 @@ def test_a_bad_entry_is_skipped_and_counted_and_its_values_stay_out_of_the_log(r
         entry("check_week_date", "2027-W05-1"),
         entry("check_other_digits", "\u0662\u0660\u0662\u0667-01-31"),
         entry("check_newline", "2027-01-31\n"),
+        # Prowler reads a key of the mutelist as a regex: none of these is a check ID.
+        entry("*", "2027-01-31"),
+        entry(".", "2027-01-31"),
+        entry(".*", "2027-01-31"),
+        entry("x|.", "2027-01-31"),
+        entry("_check", "2027-01-31"),
+        entry("a" * 201, "2027-01-31"),
         entry("", "2027-01-31"),
         entry("check_blank_reason", "2027-01-31") | {"reason": "   "},
         {key: value for key, value in entry("check_no_reason", "2027-01-31").items() if key != "reason"},
@@ -93,6 +100,8 @@ def test_a_bad_entry_is_skipped_and_counted_and_its_values_stay_out_of_the_log(r
     "",
     # Nested too deep for the parser: RecursionError, not a crash.
     "[" * 100_000 + "]" * 100_000,
+    # A number longer than the int limit of Python (4300 digits): ValueError.
+    "[" + "1" * 5000 + "]",
 ])
 def test_a_list_that_can_not_be_read_stops_the_run_and_its_text_stays_out_of_the_log(run, tmp_path, capsys, text):
     """Not JSON (YAML is not read), not an array, nested too deep, or a key twice in one object."""
@@ -108,8 +117,8 @@ def test_a_list_that_can_not_be_read_stops_the_run_and_its_text_stays_out_of_the
 def test_the_mutelist_mutes_each_accepted_check_and_holds_no_reason(run):
     muted = run.mutelist({"check_b": "2027-01-31", "check_a": "2026-12-01"})
     checks = muted["Mutelist"]["Accounts"]["*"]["Checks"]
-    assert list(checks) == ["check_a", "check_b"]
-    assert checks["check_a"] == {"Regions": ["*"], "Resources": ["*"], "Description": "Accepted until 2026-12-01"}
+    assert list(checks) == ["^check_a$", "^check_b$"]
+    assert checks["^check_a$"] == {"Regions": ["*"], "Resources": ["*"], "Description": "Accepted until 2026-12-01"}
     assert "reason" not in json.dumps(muted).lower()
     # The run always passes its own list, so the default list of Prowler is off too.
     assert run.mutelist({}) == {"Mutelist": {"Accounts": {}}}
@@ -179,7 +188,7 @@ def test_the_mutelist_of_the_run_has_the_accepted_checks(run, tmp_path):
         seen.update(json.loads(Path(command[command.index("--mutelist-file") + 1]).read_text()))
         return 1
     run.run(args(run, tmp_path), now=lambda: NOW, call=call)
-    assert list(seen["Mutelist"]["Accounts"]["*"]["Checks"]) == ["check_open"]
+    assert list(seen["Mutelist"]["Accounts"]["*"]["Checks"]) == ["^check_open$"]
 
 
 @pytest.mark.parametrize("code,write,content", [
@@ -266,3 +275,42 @@ def test_the_claim_of_results_is_in_the_app_of_the_converter():
     assert claim["spec"]["accessModes"] == ["ReadWriteOnce"]
     assert claim["spec"]["resources"]["requests"]["storage"] == "1Gi"
     assert "./pvc.yaml" in yaml.safe_load((ROOT / "kubernetes/apps/security/converter/app/kustomization.yaml").read_text())["resources"]
+
+
+def prowler_matches(key, check):
+    """Whether Prowler 5.49.0 mutes `check` with the mutelist key `key`: a faithful copy
+    of prowler/lib/mutelist/mutelist.py, Mutelist.is_muted_in_check (lines 248 to 254:
+    the rename of "lambda" and check_match) and Mutelist.is_item_matched (lines 431 to
+    440, for a list of one item that is not a tag). The image has Prowler; the tests
+    do not. The real functions of the release gave the same answer for the two
+    pairs of AWS checks below."""
+    import re
+    key = re.sub("^lambda", "awslambda", key)
+    item = key.replace("*", ".*") if "*" in key else key
+    return "*" == key or check == key or bool(re.search(item, check))
+
+
+@pytest.mark.parametrize("accepted,other", [
+    ("cloudtrail_multi_region_enabled", "cloudtrail_multi_region_enabled_logging_management_events"),
+    ("ec2_securitygroup_allow_ingress_from_internet_to_any_port",
+     "ec2_securitygroup_allow_ingress_from_internet_to_any_port_from_ip"),
+    ("s3_bucket_public_access", "s3_bucket_public_access_block"),
+    ("k8s-cis-1.23/1.2.1", "k8s-cis-1.23/1.2.10"),
+    ("k8s-cis-1.23/1.2.1", "k8s-cis-1.23x1.2.1"),
+])
+def test_the_key_of_an_accepted_check_mutes_that_check_only(run, accepted, other):
+    key = next(iter(run.mutelist({accepted: "2027-01-31"})["Mutelist"]["Accounts"]["*"]["Checks"]))
+    assert prowler_matches(key, accepted)
+    assert not prowler_matches(key, other) and not prowler_matches(key, "x" + accepted)
+    # The bare check, as the key was before, mutes the longer check too.
+    assert prowler_matches(accepted, accepted + "_x")
+
+
+def test_each_check_of_the_scan_lists_is_a_check_id_that_mutes_only_itself(run):
+    checks = sorted({check for path in (APP / "config").glob("checks-*.json")
+                     for checks in json.loads(path.read_text()).values() for check in checks})
+    assert checks
+    for check in checks:
+        assert run.CHECK.fullmatch(check), check
+        key = run.mutelist_key(check)
+        assert [other for other in checks if prowler_matches(key, other)] == [check]
