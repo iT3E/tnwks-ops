@@ -1,0 +1,162 @@
+---
+# Check-mode safe: each task here changes something only in an apply, and the
+# handler that starts the check skips itself in check mode.
+
+- name: Host check is present
+  when: host_check_state == 'present'
+  block:
+    - name: Host check directory
+      ansible.windows.win_file:
+        path: "{{ host_check_dir }}"
+        state: directory
+      register: host_check_dir_result
+
+    # SYSTEM runs the script in this directory, so only SYSTEM and the
+    # Administrators may change it: no inherited rule, the owner is the
+    # Administrators group, Users may read. One Set-Acl, before the copy of
+    # the script, so the script never lands in an open directory. The files
+    # below it get the rules of the directory after the copy (the task after
+    # "Host check script").
+    - name: Only SYSTEM and the Administrators may change the host check directory
+      ansible.windows.win_powershell:
+        parameters:
+          Path: "{{ host_check_dir }}"
+        script: |
+          [CmdletBinding(SupportsShouldProcess)]
+          param([string]$Path)
+          $ErrorActionPreference = 'Stop'
+          $sid = [System.Security.Principal.SecurityIdentifier]
+          $admins = New-Object $sid 'S-1-5-32-544'
+          $want = @(
+              @('S-1-5-18', 'FullControl'),
+              @('S-1-5-32-544', 'FullControl'),
+              @('S-1-5-32-545', 'ReadAndExecute, Synchronize')
+          )
+          $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+          $none = [System.Security.AccessControl.PropagationFlags]::None
+          $allow = [System.Security.AccessControl.AccessControlType]::Allow
+          function Get-RuleKey($rules) {
+              @($rules | ForEach-Object {
+                  '{0}|{1}|{2}|{3}|{4}' -f $_.IdentityReference.Value, [int]$_.FileSystemRights,
+                      [int]$_.InheritanceFlags, [int]$_.PropagationFlags, $_.AccessControlType
+              } | Sort-Object) -join ';'
+          }
+          $acl = New-Object System.Security.AccessControl.DirectorySecurity
+          $acl.SetOwner($admins)
+          $acl.SetAccessRuleProtection($true, $false)
+          foreach ($item in $want) {
+              $rights = [System.Security.AccessControl.FileSystemRights]$item[1]
+              $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                  (New-Object $sid $item[0]), $rights, $inherit, $none, $allow)
+              $acl.AddAccessRule($rule)
+          }
+          $have = Get-Acl -LiteralPath $Path
+          $same = $have.AreAccessRulesProtected -and
+              $have.GetOwner($sid).Value -eq $admins.Value -and
+              (Get-RuleKey $have.GetAccessRules($true, $true, $sid)) -eq (Get-RuleKey $acl.GetAccessRules($true, $false, $sid))
+          $Ansible.Changed = -not $same
+          if (-not $same -and $PSCmdlet.ShouldProcess($Path, 'set the rules of the host check directory')) {
+              Set-Acl -LiteralPath $Path -AclObject $acl
+          }
+      # A check run does not make the directory, so it has no ACL to read yet.
+      when: not (ansible_check_mode and host_check_dir_result is changed)
+
+    - name: Host check script
+      ansible.windows.win_copy:
+        src: "{{ host_check_script }}"
+        dest: '{{ host_check_dir }}\{{ host_check_script }}'
+      notify: Run the host check
+
+    # After the copy: a new file is owned by the account that made it, and a
+    # moved file can keep the rules of where it came from. Each file or
+    # directory below gets the owner and the rules of the directory again,
+    # so one apply ends with nothing left to change.
+    - name: The files of the host check directory take its owner and rules
+      ansible.windows.win_powershell:
+        parameters:
+          Path: "{{ host_check_dir }}"
+        script: |
+          [CmdletBinding(SupportsShouldProcess)]
+          param([string]$Path)
+          $ErrorActionPreference = 'Stop'
+          $sid = [System.Security.Principal.SecurityIdentifier]
+          $admins = New-Object $sid 'S-1-5-32-544'
+          # What the directory passes down: who, which rights, allow.
+          function Get-RuleKey($rules) {
+              @($rules | ForEach-Object {
+                  '{0}|{1}|{2}' -f $_.IdentityReference.Value, [int]$_.FileSystemRights, $_.AccessControlType
+              } | Sort-Object) -join ';'
+          }
+          $parent = Get-RuleKey ((Get-Acl -LiteralPath $Path).GetAccessRules($true, $false, $sid))
+          $children = @(Get-ChildItem -LiteralPath $Path -Recurse -Force | Where-Object {
+              $child = Get-Acl -LiteralPath $_.FullName
+              $child.AreAccessRulesProtected -or $child.GetOwner($sid).Value -ne $admins.Value -or
+                  @($child.GetAccessRules($true, $false, $sid)).Count -gt 0 -or
+                  (Get-RuleKey $child.GetAccessRules($false, $true, $sid)) -ne $parent
+          })
+          $Ansible.Changed = $children.Count -gt 0
+          foreach ($child in $children) {
+              if ($PSCmdlet.ShouldProcess($child.FullName, 'take the owner and the rules of the host check directory')) {
+                  $kind = 'System.Security.AccessControl.FileSecurity'
+                  if ($child.PSIsContainer) { $kind = 'System.Security.AccessControl.DirectorySecurity' }
+                  $reset = New-Object $kind
+                  $reset.SetOwner($admins)
+                  $reset.SetAccessRuleProtection($false, $false)
+                  Set-Acl -LiteralPath $child.FullName -AclObject $reset
+              }
+          }
+      # A check run does not make the directory, so it has no file to read yet.
+      when: not (ansible_check_mode and host_check_dir_result is changed)
+
+    # The MSI of windows_exporter makes the textfile directory; the drift
+    # check writes there too.
+    - name: Textfile directory
+      ansible.windows.win_file:
+        path: "{{ host_check_textfile_dir }}"
+        state: directory
+
+    - name: Directory of the distro
+      ansible.windows.win_file:
+        path: "{{ host_check_distro_dir }}"
+        state: directory
+      register: host_check_distro_dir_result
+
+    # The distro writes its file through drvfs as the account that owns it.
+    # That account may change files in this directory only: the rest of the
+    # textfile directory keeps the rights it inherits from Program Files.
+    - name: The account of the distro may write its directory
+      ansible.windows.win_acl:
+        path: "{{ host_check_distro_dir }}"
+        user: "{{ host_check_distro_account }}"
+        rights: Modify
+        type: allow
+        state: present
+        inherit: ContainerInherit, ObjectInherit
+        propagation: None
+      # A check run does not make the directory, so it has no ACL to read yet.
+      when: not (ansible_check_mode and host_check_distro_dir_result is changed)
+
+    - name: Host check task (SYSTEM, every 6 hours and at boot)
+      tnwks_win_scheduled_task:
+        name: "{{ host_check_task }}"
+        xml: "{{ lookup('ansible.builtin.template', 'host-check.xml.j2') }}"
+      notify: Run the host check
+
+# The way back of the Design Doc (section 4.3): the role with the state
+# absent. The task goes first, so no run writes a file after its removal.
+- name: Host check is absent
+  when: host_check_state == 'absent'
+  block:
+    - name: No host check task
+      tnwks_win_scheduled_task:
+        name: "{{ host_check_task }}"
+        state: absent
+
+    - name: No host check files
+      ansible.windows.win_file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - '{{ host_check_textfile_dir }}\{{ host_check_file }}'
+        - "{{ host_check_distro_dir }}"
+        - "{{ host_check_dir }}"
