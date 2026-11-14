@@ -611,8 +611,10 @@ War Room, the default Telegram route of Alertmanager, with severity
 `warning`. Most read kube-state-metrics; `WorkflowAppDrift`,
 `AgentInstructionFileChanged`, `AgentInstructionCheckStale` and
 `ModelBridgeRateLimited` read lines of the logs, as gauges of Vector: the
-aggregator for `WorkflowAppDrift`, the platform agent for the other three
-([Logs](#logs)).
+aggregator for the `<check> result=` lines (`WorkflowAppDrift`,
+`AgentInstructionCheckStale`), the platform agent for the
+`instruction-check file=` lines and the bridge (`AgentInstructionFileChanged`,
+`ModelBridgeRateLimited`) ([Logs](#logs)).
 
 | Alert | Fires when | `for` | First step |
 | --- | --- | --- | --- |

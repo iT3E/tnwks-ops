@@ -150,8 +150,9 @@ stays the same on each cluster:
 
 - `homelab_agent_platform_result_timestamp_seconds{check="instruction-file"}`,
   the time of the newest `instruction-check` line of a backup container in a
-  namespace `agents-*`. The alerts `AgentInstructionFileChanged` and
-  `AgentInstructionCheckStale` read it.
+  namespace `agents-*`. The alert `AgentInstructionFileChanged` reads it.
+  (`AgentInstructionCheckStale` reads the aggregator's gauge of the
+  `instruction-check result=` line.)
 - `homelab_model_bridge_engine_error_timestamp_seconds{domain, kind}`, the
   time of the newest `engine_error` line of the model bridge. The alert
   `ModelBridgeRateLimited` reads it.
