@@ -77,13 +77,15 @@ locals {
         external-contributions = {
           reviewer_users = [local.owner_user_id]
         }
-        # Deployments from main only.
+        # Deployments from main only. Its variables' values come from
+        # tnwks-ops.sops.yaml.
         openclaw-hooks = {
           deployment_branch_policy = {
             protected_branches     = false
             custom_branch_policies = true
           }
           branch_patterns = ["main"]
+          variables       = local.openclaw_hooks_variables
         }
         # Terraform applies (terraform.yaml, apply): protected branches only.
         prod = {
@@ -91,6 +93,17 @@ locals {
             protected_branches     = true
             custom_branch_policies = false
           }
+        }
+      }
+
+      # Flux's notification receiver: a push reconciles the clusters without
+      # waiting for the interval. Its URL is under SECRET_DOMAIN, so it comes
+      # from tnwks-ops.sops.yaml. Its secret belongs to the receiver and is
+      # never in this root (modules/github/webhooks.tf).
+      webhooks = {
+        flux = {
+          url    = data.sops_file.tnwks_ops.data["webhooks.flux.url"]
+          events = ["push"]
         }
       }
 
@@ -278,6 +291,17 @@ locals {
       visibility = "private"
       has_wiki   = false
     }
+  }
+
+  # The openclaw-hooks environment's variables: names here, values in
+  # tnwks-ops.sops.yaml (they may identify a person). nonsensitive(), as for
+  # the repository names below: GitHub returns variable values unmarked, so
+  # marked values plan as an in-place update of each variable (sensitivity
+  # only, same value). What keeps them out of public CI logs is the action
+  # printing no plan body and the mask (docs/operations/github.md).
+  openclaw_hooks_variables = {
+    for name in ["OPENCLAW_NOTIFY_ACCOUNT", "OPENCLAW_NOTIFY_CHANNEL", "OPENCLAW_NOTIFY_TO"] :
+    name => nonsensitive(data.sops_file.tnwks_ops.data["environments.openclaw-hooks.variables.${name}"])
   }
 }
 
