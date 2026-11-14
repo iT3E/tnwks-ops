@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.118.0 - 2026-11-14
+
+### Added
+
+* terraform/github: the root adopts the Flux webhook of tnwks-ops and the three variables of its openclaw-hooks environment. The webhook URL and the variable values are in the new tnwks-ops.sops.yaml, which CI masks. Terraform never updates a webhook, so it cannot remove the secret of the Flux receiver. The secrets that only the owner holds stay by hand
+
 ## v2.117.0 - 2026-11-14
 
 ### Added
