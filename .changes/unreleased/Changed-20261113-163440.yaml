@@ -1,0 +1,3 @@
+kind: Changed
+body: 'talos: the patch lists of homelab-wsl name a multi-document set (patches/cluster.yaml, patches/controlplane.yaml, patches/audit-policy-multidoc.yaml), so a rebuild with the pinned Talos gets the same settings as the live node, the audit policy among them. The live node keeps its v1alpha1 files for its patch commands until its conversion, and a test holds the two forms equal, field by field. CI now has the pinned talosctl build and validate each Docker cluster''s machine configs from its lists, with throwaway secrets. A merge applies nothing to a running node'
+time: 2026-11-13T16:34:40-08:00

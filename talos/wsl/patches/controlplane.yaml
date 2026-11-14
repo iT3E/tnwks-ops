@@ -1,0 +1,18 @@
+# homelab-wsl: control plane only (Talos refuses these on workers), in the
+# multi-document form of patches/cluster.yaml. The live node has the same
+# settings in v1alpha1 form (cluster-config.yaml, patches/talos-api-access.yaml).
+#
+# Finished pods are deleted at once (cluster-config.yaml has the history).
+apiVersion: v1alpha1
+kind: KubeControllerManagerConfig
+extraArgs:
+  terminated-pod-gc-threshold: "1"
+---
+# tuppr (system-upgrade) drives the Talos API from inside the cluster
+# (patches/talos-api-access.yaml). Talos 1.14 has no document for it.
+machine:
+  features:
+    kubernetesTalosAPIAccess:
+      enabled: true
+      allowedRoles: [os:admin]
+      allowedKubernetesNamespaces: [system-upgrade]

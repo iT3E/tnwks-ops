@@ -305,8 +305,11 @@ and `task aws:ra-profile`; see
 
 ### Talos
 
-`talos/wsl/cluster-config.yaml` is a `--config-patch` consumed by
-`talosctl cluster create docker`. `talos/ms-01/{controlplane,worker}.yaml`
+`01-talos-bootstrap.yml` gives `talosctl cluster create docker` the patches
+that `talos_clusters` lists, in the multi-document form. `homelab-wsl`'s live
+node keeps its v1alpha1 files (`talos/wsl/cluster-config.yaml` and
+`talos/wsl/patches/`) for `talosctl patch mc` until its conversion
+(`talos/README.md`). `talos/ms-01/{controlplane,worker}.yaml`
 plus `talos/ms-01/patches/` are applied with `talosctl apply-config`.
 
 ## Conventions
