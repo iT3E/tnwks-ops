@@ -336,6 +336,24 @@ def test_only_system_and_the_administrators_may_change_the_directory_of_the_scri
     assert not defaults["host_check_distro_dir"].startswith(defaults["host_check_dir"])
 
 
+@needs_pwsh
+def test_the_powershell_of_the_tasks_and_handlers_parses():
+    """The scripts of win_powershell run only on a host: CI parses them, with no run."""
+    tasks = flat(yaml.safe_load((ROLE / "tasks/main.yml").read_text()))
+    handlers = yaml.safe_load((ROLE / "handlers/main.yml").read_text())
+    scripts = [task["ansible.windows.win_powershell"]["script"] for task in tasks + handlers
+               if "ansible.windows.win_powershell" in task]
+    assert len(scripts) == 2
+    for script in scripts:
+        encoded = base64.b64encode(script.encode()).decode()
+        result = pwsh(
+            "$text = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encoded + "'))\n"
+            "$errors = $null\n"
+            "[void][System.Management.Automation.Language.Parser]::ParseInput($text, [ref]$null, [ref]$errors)\n"
+            "[Console]::Out.Write($errors.Count)")
+        assert result.stdout.strip() == "0", script
+
+
 def test_the_way_back_removes_the_task_before_the_files():
     blocks = yaml.safe_load((ROLE / "tasks/main.yml").read_text())
     assert [block["when"] for block in blocks] == ["host_check_state == 'present'", "host_check_state == 'absent'"]
