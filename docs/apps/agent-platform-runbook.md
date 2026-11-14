@@ -788,9 +788,15 @@ the pod ran.
    volume on any node. The PV and the class have the reclaim policy
    `Delete`: a delete of the PVC deletes the PV, and the provisioner wipes
    its directory on the node.
-   - **A: the PV is there, and its node is up** (the data is broken): the
-     `pvcRef` form, into the volume that is there.
-   - **B: the PV is gone, and the node is up:** the populator form. The stop
+   Tell the cases apart by what the cluster shows, never by a guess. Take
+   the name of the PV from `spec.volumeName` of the PVC (step 1).
+   - **A: the PV is there, and its node is up** (the data is broken):
+     `kubectl get pv <volumeName>` shows the PV, and
+     `kubectl get node <node of the PV>` shows `Ready`. The `pvcRef` form,
+     into the volume that is there.
+   - **B: the PV is gone, and the node is up:** `kubectl get pv <volumeName>`
+     answers `NotFound`, and `kubectl -n agents-pilot get pvc agent-state`
+     shows `Lost`. The populator form. The stop
      pull request (step 3) takes `pvc.yaml` out of the `kustomization.yaml`
      of the directory, so Flux deletes the PVC through git: the
      Kustomization `agents-pilot-agent` has `prune: true`, and the PVC has
@@ -798,13 +804,25 @@ the pod ran.
      usual `kubernetes.io/pvc-protection` finalizer, which waits until no
      pod uses the volume). No hand delete: Flux would make the PVC again at
      once, with no `dataSourceRef`.
-   - **C: the node is gone for good:** as B, and the stop pull request also
+   - **C: the node is gone for good:** the PV is there, its node is
+     `NotReady` or missing in `kubectl get nodes`, and the owner says that
+     the node does not come back. As B, and the stop pull request also
      changes the `nodeSelector` of `deployment.yaml` to a node that is there.
-     Only for a node that does not come back. A node that is only down still
-     holds the data newer than the snapshot, and when it comes back the
-     provisioner wipes that directory for a deleted PVC. So wait for the
-     node, or first set the PV to `Retain` (owner approval:
-     `kubectl patch pv <pv> -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'`).
+     A node that is only down still holds the data newer than the snapshot,
+     so for it, wait for the node.
+
+   **Before any stop pull request that takes `pvc.yaml` out of
+   `kustomization.yaml`, set each PV that `kubectl get pv` still shows for
+   this claim to `Retain` (owner approval):
+   `kubectl patch pv <volumeName> -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'`.**
+   Then the prune of the PVC cannot wipe the directory, also when a case
+   was misread or a node comes back. A retained PV stays `Released`. Remove
+   it only after the restored agent passes step 7 (owner approval): set it
+   back to `Delete` with the same command, and the provisioner removes the
+   PV and its directory; for a node that is gone, `kubectl delete pv
+   <volumeName>` removes the object. This last part follows from how
+   Kubernetes and the provisioner treat a reclaim policy, and is not tested
+   on this cluster.
 3. **Stop the agent and the snapshots.** Owner approval. One pull request
    sets `replicas: 0` in `pilot/agent/app/deployment.yaml`, and
    `suspend: true` in the SnapshotSchedule `agent-state` of `backup.yaml`, so
@@ -813,7 +831,14 @@ the pod ran.
    `nodeSelector`. After the merge, wait until
    `kubectl -n agents-pilot get pods -l app.kubernetes.io/name=agent` shows
    no pod, and for B and C until `kubectl -n agents-pilot get pvc` shows no
-   `agent-state`.
+   `agent-state`. In C the PVC can stay `Terminating`: the old agent pod on
+   the dead node stays `Terminating` while its Node object exists, and the
+   `kubernetes.io/pvc-protection` finalizer holds the PVC for it. Then remove
+   the dead node (`kubectl delete node <node>`, owner approval) or force the
+   delete of the old pod
+   (`kubectl -n agents-pilot delete pod <pod> --grace-period=0 --force`,
+   owner approval). This follows from how Kubernetes treats a pod on a lost
+   node, and is not tested on this cluster.
 4. **Restore the snapshot.** Owner approval. A pull request adds a kopiur
    `Restore` to `pilot/agent/app/` (the form is in
    [`backups.md`](../operations/backups.md#a-pvc-kopiur)), with
@@ -854,6 +879,9 @@ the pod ran.
    `1/1`, then read `restore result=ok` in Loki
    (`{namespace="agents-pilot", app="agent-restore"}`). The script was tested
    locally (above). After a refused archive, a retry is `agent-restore-2`.
+   If the snapshot ran while a daily backup was in work, `daily/newest` can
+   take a part-written archive: the Job then fails with no change, and the
+   retry names the archive of the day before.
 6. **Start the agent and the snapshots.** Owner approval. A pull request
    removes the Restore and the Job, sets `replicas: 1`, and removes
    `suspend: true`. For B and C, keep `dataSourceRef` in `pvc.yaml`: the
