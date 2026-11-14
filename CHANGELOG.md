@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.121.0 - 2026-11-14
+
+### Changed
+
+* talos: the patch lists of homelab-wsl name a multi-document set (patches/cluster.yaml, patches/controlplane.yaml, patches/audit-policy-multidoc.yaml), so a rebuild with the pinned Talos gets the settings of the live node's patch files, the audit policy among them. The live node keeps its v1alpha1 files for its patch commands until its conversion, and a test holds the two forms equal, field by field. The defaults that Talos 1.14 generates and an older release did not are not compared. CI now has the pinned talosctl build and validate each Docker cluster's machine configs from its lists, with throwaway secrets. A merge applies nothing to a running node
+
 ## v2.120.0 - 2026-11-14
 
 ### Removed
