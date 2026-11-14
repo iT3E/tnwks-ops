@@ -1,5 +1,7 @@
 {
   "series": {
+    "result": "homelab_security_check_result",
+    "last_result": "homelab_security_last_result_timestamp_seconds",
     "accepted": "homelab_security_accepted_until_timestamp_seconds"
   },
   "sources": [
@@ -27,5 +29,17 @@
     "SW03",
     "unifi",
     "healthchecks"
-  ]
+  ],
+  "prowler": {
+    "aws": [
+      "aws-management",
+      "aws-prod"
+    ],
+    "cloudflare": [
+      "cloudflare"
+    ],
+    "github": [
+      "iT3E"
+    ]
+  }
 }

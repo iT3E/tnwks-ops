@@ -104,3 +104,12 @@ spec:
           - port: http
             interval: 1m
             scrapeTimeout: 10s
+            metricRelabelings:
+              # The series of the converter carry the labels of the contract
+              # only. The pod and its address change at each restart, and an
+              # alert that compares a series with the day before
+              # (SecurityFindingNew) matches on all labels. No rule or board
+              # reads these four. One pod runs (Recreate), so two series can
+              # not meet after the drop.
+              - regex: pod|instance|container|endpoint
+                action: labeldrop
