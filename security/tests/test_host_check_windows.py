@@ -329,6 +329,17 @@ def test_only_system_and_the_administrators_may_change_the_directory_of_the_scri
         ("S-1-5-18", "FullControl"), ("S-1-5-32-544", "FullControl"), ("S-1-5-32-545", "ReadAndExecute, Synchronize")]
     assert "$Ansible.Changed" in script
     assert "ansible_check_mode" in lock["when"]
+    assert "Get-ChildItem" not in script, "the files below are reset after the copy"
+    # A new file belongs to the account that made it, so the reset of the files comes
+    # after the copy: one apply leaves nothing for a second run or a check run.
+    files = next(task for task in tasks if task["name"] == "The files of the host check directory take its owner and rules")
+    assert names.index("Host check script") < names.index(files["name"])
+    reset = files["ansible.windows.win_powershell"]["script"]
+    assert "SupportsShouldProcess" in reset and "ShouldProcess(" in reset
+    assert "$reset.SetOwner($admins)" in reset and "SetAccessRuleProtection($false, $false)" in reset
+    assert "GetAccessRules($false, $true, $sid)" in reset, "inherited rules that do not come from the directory"
+    assert "$Ansible.Changed" in reset
+    assert "ansible_check_mode" in files["when"]
     for task in tasks:
         if "ansible.windows.win_acl" in task:
             assert task["ansible.windows.win_acl"]["path"] == "{{ host_check_distro_dir }}", task["name"]
@@ -343,7 +354,7 @@ def test_the_powershell_of_the_tasks_and_handlers_parses():
     handlers = yaml.safe_load((ROLE / "handlers/main.yml").read_text())
     scripts = [task["ansible.windows.win_powershell"]["script"] for task in tasks + handlers
                if "ansible.windows.win_powershell" in task]
-    assert len(scripts) == 2
+    assert len(scripts) == 3
     for script in scripts:
         encoded = base64.b64encode(script.encode()).decode()
         result = pwsh(
