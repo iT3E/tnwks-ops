@@ -20,11 +20,20 @@ the time at which it first saw each upgrade in its state file. The clock of
 a package starts at the first run that sees its upgrade.
 
 When one query fails, the file has no result and no time of the last result,
-so the rules of the registry read the source as late for this distro
-(SecurityResultLate), and never as a pass. Package lists older than
---lists-max-age-hours are a failed query too: a simulation on old lists
-can not see a new upgrade. The file goes to its place in one step, so
-windows_exporter never reads half a file.
+so the rules of the registry read the check as "no evidence" for this
+distro, and never as a pass. Old package lists are a failed query too: a
+simulation on old lists can not see a new upgrade. The age that counts is
+the one of the oldest list of the updates and the security fixes of the
+distribution (a Release file with the Origin Ubuntu or Debian and a Suite
+that ends in -updates or -security), so a fresh list of another source does
+not hide an old one. With no such list, the run has no result. A state file
+that is there and can not be read is a failed query, and the run then
+leaves it as it is, so it does not start the clock of each upgrade again.
+The file goes to its place in one step, so windows_exporter never reads
+half a file.
+
+The result carries the label severity: high, as Design Doc 0004, section
+4.1.4, alerts for updates pending for more than 14 days.
 
 The text of each series that the Windows host check also writes is the
 same as there: a series with two texts would stop the exporter from serving
@@ -46,6 +55,10 @@ import time
 from pathlib import Path
 
 SOURCE = "host-check"
+SEVERITY = {"updates-pending": "high"}
+# The lists whose age counts: the updates and the security fixes of the distribution.
+ORIGINS = frozenset({"Ubuntu", "Debian"})
+SUITES = ("-updates", "-security")
 
 HELP = {
     "homelab_security_check_result": (
@@ -62,7 +75,8 @@ HELP = {
         "The number of updates that the host can install and has not installed."
     ),
     "homelab_security_host_package_lists_timestamp_seconds": (
-        "The Unix time of the newest package list of the host, from the Date of its Release files."
+        "The Unix time of the oldest package list of the updates and the security fixes of the host,"
+        " from the Date of its Release file."
     ),
     "homelab_security_host_reboot_pending": (
         "Whether the host waits for a restart to finish an update: 1 yes, 0 no."
@@ -72,7 +86,7 @@ HELP = {
 # "Inst <package> [<installed version>] (<new version> ...)": an upgrade. A
 # line with no installed version is a new package that an upgrade pulls in.
 INST = re.compile(r"^Inst (\S+) \[")
-DATE = re.compile(r"^Date: (.+)$", re.MULTILINE)
+FIELD = re.compile(r"^(Origin|Suite|Date): (.+)$", re.MULTILINE)
 
 
 class QueryError(Exception):
@@ -98,25 +112,29 @@ def pending_packages(run=subprocess.run) -> list[str]:
 
 
 def lists_time(lists_dir: Path) -> float:
-    """The newest Date of the Release files of the package lists."""
-    newest = None
+    """The oldest Date of the Release files of the updates and the security fixes of the
+    distribution: Origin Ubuntu or Debian, and a Suite that ends in -updates or -security.
+    A list of another source, or of the base suite, does not count."""
+    oldest = None
     for path in sorted([*lists_dir.glob("*_InRelease"), *lists_dir.glob("*_Release")]):
         try:
             with path.open(encoding="utf-8", errors="replace") as handle:
                 head = handle.read(8192)
         except OSError:
             continue
-        match = DATE.search(head)
-        if not match:
+        fields = {}
+        for name, value in FIELD.findall(head):
+            fields.setdefault(name, value.strip())
+        if fields.get("Origin") not in ORIGINS or not fields.get("Suite", "").endswith(SUITES):
             continue
         try:
-            moment = email.utils.parsedate_to_datetime(match.group(1).strip()).timestamp()
+            moment = email.utils.parsedate_to_datetime(fields.get("Date", "")).timestamp()
         except (TypeError, ValueError):
-            continue
-        newest = moment if newest is None else max(newest, moment)
-    if newest is None:
-        raise QueryError(f"no Release file with a Date in {lists_dir}")
-    return newest
+            raise QueryError(f"{path.name} has no Date that can be read") from None
+        oldest = moment if oldest is None else min(oldest, moment)
+    if oldest is None:
+        raise QueryError(f"no Release file of the updates or the security fixes in {lists_dir}")
+    return oldest
 
 
 def read_state(path: Path) -> dict[str, float]:
@@ -210,7 +228,8 @@ def render(system: str, measured: dict, now: float) -> str:
 
     if not measured["failed"]:
         for check, value in measured["results"].items():
-            add("homelab_security_check_result", {"source": SOURCE, "check": check, "system": system}, value)
+            labels = {"source": SOURCE, "check": check, "system": system, "severity": SEVERITY[check]}
+            add("homelab_security_check_result", labels, value)
         add("homelab_security_last_result_timestamp_seconds", {"source": SOURCE, "system": system}, int(now))
     add("homelab_security_host_check_failed_queries", {"system": system}, len(measured["failed"]))
     for name, labels, value in measured["details"]:
@@ -247,7 +266,11 @@ def main(argv: list[str] | None = None) -> int:
         reboot=args.reboot_file.exists,
     )
     write_atomic(args.textfile_dir / args.file_name, render(args.system, measured, now))
-    write_atomic(args.state_file, json.dumps({"version": 1, "first_pending": measured["state"]}, indent=1) + "\n")
+    # A state file that is there and can not be read stays as it is: a new one would
+    # start the clock of each pending upgrade again. A missing one (the first run) is
+    # written.
+    if state is not None:
+        write_atomic(args.state_file, json.dumps({"version": 1, "first_pending": measured["state"]}, indent=1) + "\n")
     if measured["failed"]:
         print(f"host check of {args.system}: no result, these queries failed: {', '.join(measured['failed'])}")
         return 1

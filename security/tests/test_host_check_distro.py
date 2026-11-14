@@ -64,7 +64,7 @@ def run(state=None, packages=(), lists=NOW - 3600, reboot=False, **limits):
 def test_a_distro_with_no_pending_upgrade_gives_a_result_of_0_and_the_time():
     measured, families = run()
     assert textfile.series(families, RESULT) == {
-        (("check", "updates-pending"), ("source", "host-check"), ("system", SYSTEM)): 0.0}
+        (("check", "updates-pending"), ("severity", "high"), ("source", "host-check"), ("system", SYSTEM)): 0.0}
     assert textfile.value(families, LAST, source="host-check", system=SYSTEM) == NOW
     assert textfile.value(families, FAILED, system=SYSTEM) == 0
     assert textfile.value(families, "homelab_security_host_updates_pending", system=SYSTEM) == 0
@@ -75,7 +75,7 @@ def test_a_distro_with_no_pending_upgrade_gives_a_result_of_0_and_the_time():
 def test_an_upgrade_fails_the_check_only_after_it_waited_past_the_limit():
     state = {"old": NOW - 15 * DAY, "edge": NOW - 14 * DAY, "fresh": NOW - DAY}
     measured, families = run(state=state, packages=["old", "edge", "fresh", "new"], reboot=True)
-    assert textfile.value(families, RESULT, source="host-check", check="updates-pending", system=SYSTEM) == 1
+    assert textfile.value(families, RESULT, source="host-check", check="updates-pending", system=SYSTEM, severity="high") == 1
     assert textfile.value(families, "homelab_security_host_updates_pending", system=SYSTEM) == 4
     assert textfile.value(families, "homelab_security_host_reboot_pending", system=SYSTEM) == 1
     assert measured["state"] == {"old": NOW - 15 * DAY, "edge": NOW - 14 * DAY, "fresh": NOW - DAY, "new": NOW}
@@ -163,14 +163,63 @@ def test_an_apt_get_that_fails_is_a_failed_query(answer):
         check.pending_packages(run=fake_run)
 
 
-def test_the_age_of_the_lists_is_the_newest_date_of_their_release_files(tmp_path):
-    (tmp_path / "archive_dists_noble_InRelease").write_text(
-        "-----BEGIN PGP SIGNED MESSAGE-----\nHash: SHA512\n\nOrigin: Ubuntu\nDate: Thu, 25 Apr 2024 15:10:33 UTC\n")
-    (tmp_path / "security_dists_noble-security_InRelease").write_text(
-        "-----BEGIN PGP SIGNED MESSAGE-----\nHash: SHA512\n\nOrigin: Ubuntu\nDate: Fri, 13 Nov 2026 09:00:00 UTC\n")
-    (tmp_path / "other_Release").write_text("Origin: other\nDate: not a date\n")
-    (tmp_path / "archive_dists_noble_main_binary-amd64_Packages").write_text("Date: Sat, 14 Nov 2026 00:00:00 UTC\n")
-    assert check.lists_time(tmp_path) == NOW - 3 * 3600
+def release(directory, name, origin, suite, date):
+    (directory / name).write_text("-----BEGIN PGP SIGNED MESSAGE-----\nHash: SHA512\n\n"
+                                  f"Origin: {origin}\nLabel: {origin}\nSuite: {suite}\nDate: {date}\n")
+
+
+FRESH = "Fri, 13 Nov 2026 09:00:00 UTC"   # NOW - 3 h
+STALE = "Sun, 08 Nov 2026 12:00:00 UTC"   # NOW - 5 days
+
+
+def test_the_age_of_the_lists_is_the_oldest_date_of_the_updates_and_security_lists(tmp_path):
+    release(tmp_path, "archive_dists_noble-updates_InRelease", "Ubuntu", "noble-updates", FRESH)
+    release(tmp_path, "security_dists_noble-security_InRelease", "Ubuntu", "noble-security",
+            "Fri, 13 Nov 2026 06:00:00 UTC")
+    # The base suite does not change after its release, and a list of another source
+    # does not count: neither makes the age.
+    release(tmp_path, "archive_dists_noble_InRelease", "Ubuntu", "noble", "Thu, 25 Apr 2024 15:10:33 UTC")
+    release(tmp_path, "vendor_dists_stable_InRelease", "Vendor", "stable-security", "Mon, 01 Jan 2024 00:00:00 UTC")
+    (tmp_path / "archive_dists_noble_main_binary-amd64_Packages").write_text("Date: Mon, 01 Jan 2024 00:00:00 UTC\n")
+    assert check.lists_time(tmp_path) == NOW - 6 * 3600
+
+
+def test_a_fresh_list_of_another_source_does_not_hide_an_old_security_list(tmp_path):
+    release(tmp_path, "security_dists_noble-security_InRelease", "Ubuntu", "noble-security", STALE)
+    release(tmp_path, "archive_dists_noble-updates_InRelease", "Ubuntu", "noble-updates", FRESH)
+    release(tmp_path, "vendor_dists_stable_InRelease", "Vendor", "stable", FRESH)
+    newest = check.lists_time(tmp_path)
+    assert newest == NOW - 5 * DAY
+    _, families = run(lists=newest)
+    assert RESULT not in families and LAST not in families
+
+
+def test_old_lists_of_the_base_suite_and_of_another_source_do_not_fail_the_check(tmp_path):
+    release(tmp_path, "security_dists_noble-security_InRelease", "Ubuntu", "noble-security", FRESH)
+    release(tmp_path, "archive_dists_noble-updates_InRelease", "Ubuntu", "noble-updates", FRESH)
+    release(tmp_path, "archive_dists_noble_InRelease", "Ubuntu", "noble", STALE)
+    release(tmp_path, "vendor_dists_stable_InRelease", "Vendor", "stable-updates", STALE)
+    _, families = run(lists=check.lists_time(tmp_path))
+    assert textfile.value(families, RESULT, source="host-check", check="updates-pending", system=SYSTEM,
+                          severity="high") == 0
+
+
+def test_a_debian_security_list_counts(tmp_path):
+    release(tmp_path, "deb_dists_bookworm-security_InRelease", "Debian", "bookworm-security", STALE)
+    assert check.lists_time(tmp_path) == NOW - 5 * DAY
+
+
+def test_an_updates_list_with_a_date_that_can_not_be_read_is_a_failed_query(tmp_path):
+    release(tmp_path, "security_dists_noble-security_InRelease", "Ubuntu", "noble-security", "not a date")
+    with pytest.raises(check.QueryError):
+        check.lists_time(tmp_path)
+
+
+def test_only_lists_of_other_sources_is_a_failed_query(tmp_path):
+    release(tmp_path, "archive_dists_noble_InRelease", "Ubuntu", "noble", FRESH)
+    release(tmp_path, "vendor_dists_stable_InRelease", "Vendor", "stable-security", FRESH)
+    with pytest.raises(check.QueryError):
+        check.lists_time(tmp_path)
 
 
 def test_no_release_file_is_a_failed_query(tmp_path):
@@ -201,12 +250,12 @@ def fake_apt(tmp_path, stdout, code=0):
     return bin_dir
 
 
-def main(tmp_path, monkeypatch, code=0, lists_date="Fri, 13 Nov 2026 09:00:00 UTC", now=NOW):
+def main(tmp_path, monkeypatch, code=0, lists_date=FRESH, now=NOW):
     monkeypatch.setenv("PATH", f"{fake_apt(tmp_path, SIMULATION, code)}:/usr/bin:/bin")
     monkeypatch.setattr(check.time, "time", lambda: now)
     lists = tmp_path / "lists"
     lists.mkdir(exist_ok=True)
-    (lists / "x_InRelease").write_text(f"Date: {lists_date}\n")
+    release(lists, "security_dists_noble-security_InRelease", "Ubuntu", "noble-security", lists_date)
     out = tmp_path / "textfile"
     out.mkdir(exist_ok=True)
     rc = check.main(["--system", SYSTEM, "--textfile-dir", str(out), "--state-file", str(tmp_path / "state.json"),
@@ -221,14 +270,14 @@ def test_the_run_writes_the_whole_file_in_one_step_and_keeps_its_state(tmp_path,
     raw = (out / "tnwks_security_host_check_distro.prom").read_bytes()
     assert not raw.startswith(b"\xef\xbb\xbf") and b"\r" not in raw
     families = textfile.parse(raw.decode())
-    assert textfile.value(families, RESULT, source="host-check", check="updates-pending", system=SYSTEM) == 0
+    assert textfile.value(families, RESULT, source="host-check", check="updates-pending", system=SYSTEM, severity="high") == 0
     state = json.loads((tmp_path / "state.json").read_text())
     assert state == {"version": 1, "first_pending": {"libssl3t64": NOW, "openssl": NOW}}
 
     rc, out = main(tmp_path, monkeypatch, now=NOW + 15 * DAY, lists_date="Sat, 28 Nov 2026 09:00:00 UTC")
     assert rc == 0
     families = textfile.parse((out / "tnwks_security_host_check_distro.prom").read_text())
-    assert textfile.value(families, RESULT, source="host-check", check="updates-pending", system=SYSTEM) == 2
+    assert textfile.value(families, RESULT, source="host-check", check="updates-pending", system=SYSTEM, severity="high") == 2
     assert sorted(p.name for p in out.iterdir()) == ["tnwks_security_host_check_distro.prom"]
 
 
@@ -238,6 +287,25 @@ def test_a_run_with_a_failed_query_writes_no_result_and_exits_1(tmp_path, monkey
     families = textfile.parse((out / "tnwks_security_host_check_distro.prom").read_text())
     assert RESULT not in families and LAST not in families
     assert textfile.value(families, FAILED, system=SYSTEM) == 1
+
+
+def test_a_state_file_that_can_not_be_read_gives_no_result_and_stays_as_it_is(tmp_path, monkeypatch):
+    (tmp_path / "state.json").write_text("{not json")
+    before = (tmp_path / "state.json").stat()
+    rc, out = main(tmp_path, monkeypatch)
+    assert rc == 1
+    families = textfile.parse((out / "tnwks_security_host_check_distro.prom").read_text())
+    assert RESULT not in families and LAST not in families
+    assert (tmp_path / "state.json").read_text() == "{not json"
+    after = (tmp_path / "state.json").stat()
+    assert (after.st_ino, after.st_mtime_ns) == (before.st_ino, before.st_mtime_ns)
+
+
+def test_the_first_run_writes_the_state(tmp_path, monkeypatch):
+    assert not (tmp_path / "state.json").exists()
+    rc, _ = main(tmp_path, monkeypatch)
+    assert rc == 0
+    assert json.loads((tmp_path / "state.json").read_text())["version"] == 1
 
 
 def test_a_label_value_is_escaped():
@@ -258,6 +326,17 @@ def test_each_series_that_the_windows_host_also_writes_has_the_same_text():
                       "homelab_security_host_reboot_pending"}
     for name in shared:
         assert check.HELP[name] == windows[name], name
+
+
+def test_the_result_series_has_the_label_names_of_the_windows_host_check():
+    """windows_exporter needs the same label names for one family in two files."""
+    text = (WINDOWS / "files/Invoke-TnwksHostCheck.ps1").read_text()
+    line = next(row for row in text.splitlines() if "Add-Line 'homelab_security_check_result'" in row)
+    windows = re.findall(r"(\w+) = \$", line.split("[ordered]@{", 1)[1])
+    measured = check.measure(NOW, 14, 72, {}, packages=list, lists=lambda: NOW, reboot=lambda: False)
+    families = textfile.parse(check.render(SYSTEM, measured, NOW))
+    (labels,) = textfile.series(families, RESULT)
+    assert sorted(windows) == sorted(name for name, _ in labels) == ["check", "severity", "source", "system"]
 
 
 def test_the_file_name_is_not_a_name_of_the_windows_host():
@@ -342,11 +421,17 @@ def test_the_playbook_runs_the_role_and_the_script_runs_with_the_system_python()
     assert SCRIPT.read_text().startswith("#!/usr/bin/python3\n")
 
 
-def test_each_distro_of_the_inventory_lists_the_host_check_in_the_registry():
+def test_each_distro_of_the_inventory_is_a_system_with_the_check_of_the_host_check():
+    """A distro lists the source in `sources` only after its first result is on site 2,
+    in a follow-up pull request: before that, the rule for a late result would fire."""
     hosts = yaml.safe_load((ANSIBLE / "inventory/hosts.yml").read_text())
     distros = set(hosts["all"]["children"]["wsl_distros"]["hosts"])
     systems = yaml.safe_load((REGISTRY / "systems.yaml").read_text())
     of_type = {system["name"]: system for system in systems if system["type"] == "wsl-distro"}
     assert set(of_type) == distros
     for system in of_type.values():
-        assert "host-check" in system.get("sources", []), system["name"]
+        assert "host-check" not in system.get("sources", []), system["name"]
+    controls = yaml.safe_load((REGISTRY / "controls.yaml").read_text())
+    named = {item["check"] for line in controls for item in line["checks"].get("wsl-distro", [])
+             if item["source"] == "host-check"}
+    assert named == set(check.SEVERITY) == {"updates-pending"}

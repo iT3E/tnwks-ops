@@ -267,9 +267,15 @@ then read each line of the host as "No evidence", and
 `sources`. The run never writes 0 for a check
 that it could not do. A fact that no check reads (the newest install, a
 pending restart) only leaves out its own series when its query fails. In a
-distro, package lists older than 72 hours, or a state file that can not be
-read, are a failed query too: a simulation on old lists can not see a new
-upgrade.
+distro, old package lists are a failed query too, because a simulation on
+old lists can not see a new upgrade. The age is the one of the oldest
+Release file of the updates and the security fixes of the distribution
+(Origin Ubuntu or Debian, a Suite that ends in `-updates` or `-security`),
+and over 72 hours gives no result. A list of another source, or of the base
+suite, does not count, so a fresh one does not hide an old one. With no such
+Release file there is no result. A state file that is there and can not be
+read is a failed query too, and the run leaves it as it is, so the clock of
+each pending upgrade does not start again.
 
 SYSTEM runs the script from `C:\ProgramData\tnwks-host-check`. The role sets
 the rules of that directory on each run: no inherited rule, the
@@ -278,7 +284,7 @@ Users may read. A file below it with a rule of its own, or another owner,
 gets the rules of the directory again. The account of the WSL distro may
 write only its own directory of the textfile collector.
 
-**The first result, then the source.** A host lists `host-check` in
+**The first result, then the source.** A host or a distro lists `host-check` in
 `sources` of `systems.yaml` only after its first result is on the board of
 homelab-wsl-02, in a pull request of its own. Before that, the rule for a
 late result would fire at once. The results reach the lines of the registry
