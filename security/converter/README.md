@@ -209,9 +209,10 @@ The converter skips an item of the array, and counts it in
 - The check is not a check ID: a letter or a digit, then letters, digits and
   `_./:-`, 200 characters at most. So no text of another form, and no lone
   surrogate of a `\ud800` escape, reaches a label.
-- `until` is not a date that `datetime.date.fromisoformat` reads. The
-  Prowler job reads it with the same function. It reads `2027-12-31`, and
-  since Python 3.11 also `20271231` and `2027-W52-5`. Write `YYYY-MM-DD`.
+- `until` is not a day of the form `YYYY-MM-DD`: it must match
+  `^\d{4}-\d{2}-\d{2}$`, and `datetime.date.fromisoformat` must read it.
+  So `2027-02-30` is skipped, and so are `20271231` and `2027-W52-5`, which
+  `fromisoformat` reads since Python 3.11.
 
 The other entries are served. A skipped entry has no series, so the board
 does not show it, and the rule of Trivy Operator does not mute it: the
