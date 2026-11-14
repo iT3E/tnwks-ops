@@ -94,10 +94,15 @@ spec:
         type: emptyDir
         globalMounts:
           - path: /vector-data-dir
-      var-log:
+      # Only the pod logs, read-only. kubernetes_logs reads the files the
+      # kubelet keeps under /var/log/pods and nothing else on the host
+      # (src/sources/kubernetes_logs/path_helpers.rs, K8S_LOGS_DIR). The rest
+      # of /var/log stays out: on a control plane node it holds the audit
+      # log of the API server.
+      var-log-pods:
         type: hostPath
-        hostPath: /var/log
+        hostPath: /var/log/pods
         hostPathType: Directory
         globalMounts:
-          - path: /var/log
+          - path: /var/log/pods
             readOnly: true

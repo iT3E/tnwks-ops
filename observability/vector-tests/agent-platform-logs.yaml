@@ -264,6 +264,171 @@ tests:
       source: 'assert!(!contains(string!(.message), "SECRET"))
 
         '
+- name: 'gateway: stdin='
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: INFO exec stdin=SECRET
+      kubernetes.container_name: openshell-gateway
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'gateway: stdout='
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: INFO exec done stdout=SECRET words
+      kubernetes.container_name: openshell-gateway
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'gateway: stderr:'
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: 'WARN exec failed stderr: SECRET words'
+      kubernetes.container_name: openshell-gateway
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'gateway: input='
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: INFO tool input="SECRET"
+      kubernetes.container_name: openshell-gateway
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'gateway: output='
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: INFO tool output=SECRET
+      kubernetes.container_name: openshell-gateway
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'gateway: body='
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: INFO relay body={SECRET}
+      kubernetes.container_name: openshell-gateway
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'gateway: a key that ends in body'
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: INFO relay request_body=SECRET
+      kubernetes.container_name: openshell-gateway
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'gateway: a key that ends in input'
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: 'INFO relay user_input: SECRET'
+      kubernetes.container_name: openshell-gateway
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'gateway: a key in capitals that ends in output'
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: INFO relay TOOL_OUTPUT=SECRET
+      kubernetes.container_name: openshell-gateway
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'gateway: a key with a hyphen before preview'
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: INFO command-preview=SECRET
+      kubernetes.container_name: openshell-gateway
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'gateway: a JSON key that ends in preview'
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: 'INFO {"command_preview": "SECRET"}'
+      kubernetes.container_name: openshell-gateway
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
 - name: 'gateway: a query string in an op path'
   inputs:
   - insert_at: allowlist_redact
@@ -292,6 +457,21 @@ tests:
     conditions:
     - type: vrl
       source: 'assert_eq!(.message, "INFO exec COMMAND_PREVIEW=(dropped)")
+
+        '
+- name: 'gateway: the exact form of a dropped output'
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: 'WARN exec failed stderr: SECRET words'
+      kubernetes.container_name: openshell-gateway
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "WARN exec failed stderr:(dropped)")
 
         '
 - name: 'gateway: the exact form of [cmd:'
@@ -337,6 +517,51 @@ tests:
     conditions:
     - type: vrl
       source: 'assert_eq!(.message, "OCSF HTTP:GET [INFO] ALLOWED curl(42) -> GET https://api.example.com/a/b?(dropped) [policy:p engine:l7 op:/a/b?(dropped)]")
+
+        '
+- name: 'gateway: an error field ships by design'
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: WARN relay failed error="remote said SECRET"
+      kubernetes.container_name: openshell-gateway
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "WARN relay failed error=\"remote said SECRET\"")
+
+        '
+- name: 'gateway: a detail field ships by design'
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: INFO done detail=SECRET
+      kubernetes.container_name: openshell-gateway
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "INFO done detail=SECRET")
+
+        '
+- name: 'gateway: a length field is not an output field'
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: INFO exec stdin_len=0 stdout_len=12
+      kubernetes.container_name: openshell-gateway
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "INFO exec stdin_len=0 stdout_len=12")
 
         '
 - name: 'gateway: a line with no content stays as it is (1)'
@@ -429,6 +654,21 @@ tests:
       source: 'assert_eq!(.message, "{\"ts\":\"2026-11-14T09:00:00Z\",\"event\":\"engine_error\",\"model\":\"litellm/x\",\"note\":\"why?\",\"domain\":\"pilot\",\"kind\":\"rate_limit\"}")
 
         '
+- name: 'receiver: a preview field of another container ships by design'
+  inputs:
+  - insert_at: allowlist_redact
+    type: log
+    log_fields:
+      message: x command_preview=SECRET
+      kubernetes.container_name: run-receiver
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: allowlist_redact
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "x command_preview=SECRET")
+
+        '
 - name: 'receiver: a line passes unchanged'
   inputs:
   - insert_at: allowlist_redact
@@ -509,17 +749,47 @@ tests:
   - insert_at: supervisor_filter
     type: log
     log_fields:
-      message: 2026-11-14T05:00:00.000Z OCSF SSH:OPEN [INFO] ALLOWED 10.0.0.5:2222 [auth:mtls]
+      message: 2026-11-14T05:00:00.000Z OCSF SSH:OPEN [INFO] ALLOWED 10.42.0.1:48201 [auth:NSSH1]
       kubernetes.container_name: supervisor
       kubernetes.pod_namespace: agents-workflows
   outputs:
   - extract_from: supervisor_filter
     conditions:
     - type: vrl
-      source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF SSH:OPEN [INFO] ALLOWED 10.0.0.5:2222 [auth:mtls]")
+      source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF SSH:OPEN [INFO] ALLOWED 10.42.0.1:48201 [auth:NSSH1]")
 
         '
 - name: 'supervisor: a known line type passes (5)'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: 2026-11-14T05:00:00.000Z OCSF SSH:OPEN [INFO] ALLOWED 10.42.0.1:48201 [auth:Public Key]
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF SSH:OPEN [INFO] ALLOWED 10.42.0.1:48201 [auth:Public Key]")
+
+        '
+- name: 'supervisor: a known line type passes (6)'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: '2026-11-14T05:00:00.000Z OCSF CONFIG:APPROVED [INFO] auto-approved: no new prover findings [auto:true source:agent_authored prover_delta:empty resolved_from:sandbox version:v4 hash:sha256:cafe]'
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF CONFIG:APPROVED [INFO] auto-approved: no new prover findings [auto:true source:agent_authored prover_delta:empty resolved_from:sandbox version:v4 hash:sha256:cafe]")
+
+        '
+- name: 'supervisor: a known line type passes (7)'
   inputs:
   - insert_at: supervisor_filter
     type: log
@@ -534,7 +804,7 @@ tests:
       source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF NET:OPEN [INFO] openshell.agents-workflows.svc.cluster.local:8080")
 
         '
-- name: 'supervisor: a known line type passes (6)'
+- name: 'supervisor: a known line type passes (8)'
   inputs:
   - insert_at: supervisor_filter
     type: log
@@ -549,7 +819,7 @@ tests:
       source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF NET:LISTEN [INFO] 10.0.0.5:3128")
 
         '
-- name: 'supervisor: a known line type passes (7)'
+- name: 'supervisor: a known line type passes (9)'
   inputs:
   - insert_at: supervisor_filter
     type: log
@@ -564,7 +834,7 @@ tests:
       source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF NET:OPEN [INFO] ALLOWED git(77) -> api.github.com:443/tcp [policy:github engine:opa]")
 
         '
-- name: 'supervisor: a known line type passes (8)'
+- name: 'supervisor: a known line type passes (10)'
   inputs:
   - insert_at: supervisor_filter
     type: log
@@ -579,7 +849,7 @@ tests:
       source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF NET:REFUSE [MED] DENIED curl(78) -> example.com:443 [policy:default engine:opa] [reason:not_allowed]")
 
         '
-- name: 'supervisor: a known line type passes (9)'
+- name: 'supervisor: a known line type passes (11)'
   inputs:
   - insert_at: supervisor_filter
     type: log
@@ -594,7 +864,7 @@ tests:
       source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF HTTP:GET [INFO] ALLOWED gh(80) -> GET https://api.github.com/repos/o/r/pulls [policy:github engine:l7]")
 
         '
-- name: 'supervisor: a known line type passes (10)'
+- name: 'supervisor: a known line type passes (12)'
   inputs:
   - insert_at: supervisor_filter
     type: log
@@ -609,7 +879,7 @@ tests:
       source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF CONFIG:LOADED [INFO] Acknowledged initial policy revision as loaded [version:3] [hash:ab12cd34]")
 
         '
-- name: 'supervisor: a known line type passes (11)'
+- name: 'supervisor: a known line type passes (13)'
   inputs:
   - insert_at: supervisor_filter
     type: log
@@ -624,7 +894,7 @@ tests:
       source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF CONFIG:CONFIGURED [INFO] OPA runtime binary identity mode configured [source:proto require_binary_identity:true] [source:proto]")
 
         '
-- name: 'supervisor: a known line type passes (12)'
+- name: 'supervisor: a known line type passes (14)'
   inputs:
   - insert_at: supervisor_filter
     type: log
@@ -639,7 +909,7 @@ tests:
       source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF CONFIG:ENABLED [INFO] TLS termination enabled: provisioned CA loaded")
 
         '
-- name: 'supervisor: a known line type passes (13)'
+- name: 'supervisor: a known line type passes (15)'
   inputs:
   - insert_at: supervisor_filter
     type: log
@@ -654,7 +924,7 @@ tests:
       source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF EVENT [INFO] ssh relay open (channel_id=0a1b2c3d-1111-2222-3333-444455556666, target=unix:/run/openshell/ssh.sock)")
 
         '
-- name: 'supervisor: a known line type passes (14)'
+- name: 'supervisor: a known line type passes (16)'
   inputs:
   - insert_at: supervisor_filter
     type: log
@@ -669,7 +939,7 @@ tests:
       source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF EVENT [INFO] ssh relay closed (channel_id=0a1b2c3d-1111-2222-3333-444455556666, target=unix:/run/openshell/ssh.sock)")
 
         '
-- name: 'supervisor: a known line type passes (15)'
+- name: 'supervisor: a known line type passes (17)'
   inputs:
   - insert_at: supervisor_filter
     type: log
@@ -684,7 +954,7 @@ tests:
       source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF LIFECYCLE:START [INFO] openshell-sandbox success")
 
         '
-- name: 'supervisor: a known line type passes (16)'
+- name: 'supervisor: a known line type passes (18)'
   inputs:
   - insert_at: supervisor_filter
     type: log
@@ -699,7 +969,7 @@ tests:
       source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF PROC:LAUNCH [INFO] bash(42) [exit:0]")
 
         '
-- name: 'supervisor: a known line type passes (17)'
+- name: 'supervisor: a known line type passes (19)'
   inputs:
   - insert_at: supervisor_filter
     type: log
@@ -714,7 +984,7 @@ tests:
       source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z INFO openshell_core::grpc_client: renewed gateway and Sandbox Protocol credentials in-place")
 
         '
-- name: 'supervisor: a known line type passes (18)'
+- name: 'supervisor: a known line type passes (20)'
   inputs:
   - insert_at: supervisor_filter
     type: log
@@ -894,6 +1164,96 @@ tests:
       source: 'assert_eq!(.message, "(dropped: unknown line type)")
 
         '
+- name: 'supervisor: an SSH line with free words in its auth field becomes the marker'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: 2026-11-14T05:00:00.000Z OCSF SSH:OPEN [INFO] ALLOWED x [auth:SECRET words]
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "(dropped: unknown line type)")
+
+        '
+- name: 'supervisor: an SSH line with an unknown auth label becomes the marker'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: 2026-11-14T05:00:00.000Z OCSF SSH:OPEN [INFO] ALLOWED x [auth:SECRET]
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "(dropped: unknown line type)")
+
+        '
+- name: 'supervisor: a CONFIG line with a field it does not know becomes the marker'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: 2026-11-14T05:00:00.000Z OCSF CONFIG:LOADED [INFO] Loaded [token:SECRETghp123]
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "(dropped: unknown line type)")
+
+        '
+- name: 'supervisor: a CONFIG line with a rejection reason becomes the marker'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: 2026-11-14T05:00:00.000Z OCSF CONFIG:REJECTED [INFO] gateway rejected draft chunk chunk-1 [chunk_id:chunk-1 rejection_reason:SECRET actor:user:reviewer]
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "(dropped: unknown line type)")
+
+        '
+- name: 'supervisor: a LIFECYCLE line of another program becomes the marker'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: 2026-11-14T05:00:00.000Z OCSF LIFECYCLE:START [INFO] SECRET started
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "(dropped: unknown line type)")
+
+        '
+- name: 'supervisor: a line of no known type becomes the marker'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: 2026-11-14T05:00:00.000Z something SECRET
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "(dropped: unknown line type)")
+
+        '
 - name: 'supervisor: a JSON OCSF record becomes its marker'
   inputs:
   - insert_at: supervisor_filter
@@ -907,6 +1267,96 @@ tests:
     conditions:
     - type: vrl
       source: 'assert_eq!(.message, "(dropped: OCSF JSON record)")
+
+        '
+- name: 'supervisor: the path of an HTTP request ships by design'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: 2026-11-14T05:00:00.000Z OCSF HTTP:GET [INFO] ALLOWED curl(42) -> GET https://hooks.example.com/services/T0/B0/SECRETxyz [policy:p engine:opa]
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF HTTP:GET [INFO] ALLOWED curl(42) -> GET https://hooks.example.com/services/T0/B0/SECRETxyz [policy:p engine:opa]")
+
+        '
+- name: 'supervisor: an HTTP path with escaped words ships by design'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: 2026-11-14T05:00:00.000Z OCSF HTTP:GET [INFO] ALLOWED curl(42) -> GET https://api.example.com/search/SECRET%20private%20words [policy:p engine:opa]
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF HTTP:GET [INFO] ALLOWED curl(42) -> GET https://api.example.com/search/SECRET%20private%20words [policy:p engine:opa]")
+
+        '
+- name: 'supervisor: the host of a connection ships by design'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: 2026-11-14T05:00:00.000Z OCSF NET:OPEN [INFO] ALLOWED curl(42) -> SECRET-host.example.com:443
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF NET:OPEN [INFO] ALLOWED curl(42) -> SECRET-host.example.com:443")
+
+        '
+- name: 'supervisor: the short text of a CONFIG line ships by design'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: 2026-11-14T05:00:00.000Z OCSF CONFIG:LOADED [INFO] Loaded policy SECRET words here [hash:abc]
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF CONFIG:LOADED [INFO] Loaded policy SECRET words here [hash:abc]")
+
+        '
+- name: 'supervisor: the short text of a plain line ships by design'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: '2026-11-14T05:00:00.000Z INFO openshell_supervisor: the user said SECRET hello there'
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z INFO openshell_supervisor: the user said SECRET hello there")
+
+        '
+- name: 'supervisor: a command field in a CONFIG text is dropped'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: '2026-11-14T05:00:00.000Z OCSF CONFIG:LOADED [INFO] Loaded command: cat SECRET'
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert_eq!(.message, "2026-11-14T05:00:00.000Z OCSF CONFIG:LOADED [INFO] Loaded command:(dropped)")
 
         '
 - name: 'supervisor, gateway: a key in capitals'
@@ -1140,6 +1590,171 @@ tests:
     type: log
     log_fields:
       message: "GET\thttps://x.example/y?token=SECRET"
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'supervisor, gateway: stdin='
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: INFO exec stdin=SECRET
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'supervisor, gateway: stdout='
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: INFO exec done stdout=SECRET words
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'supervisor, gateway: stderr:'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: 'WARN exec failed stderr: SECRET words'
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'supervisor, gateway: input='
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: INFO tool input="SECRET"
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'supervisor, gateway: output='
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: INFO tool output=SECRET
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'supervisor, gateway: body='
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: INFO relay body={SECRET}
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'supervisor, gateway: a key that ends in body'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: INFO relay request_body=SECRET
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'supervisor, gateway: a key that ends in input'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: 'INFO relay user_input: SECRET'
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'supervisor, gateway: a key in capitals that ends in output'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: INFO relay TOOL_OUTPUT=SECRET
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'supervisor, gateway: a key with a hyphen before preview'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: INFO command-preview=SECRET
+      kubernetes.container_name: supervisor
+      kubernetes.pod_namespace: agents-workflows
+  outputs:
+  - extract_from: supervisor_filter
+    conditions:
+    - type: vrl
+      source: 'assert!(!contains(string!(.message), "SECRET"))
+
+        '
+- name: 'supervisor, gateway: a JSON key that ends in preview'
+  inputs:
+  - insert_at: supervisor_filter
+    type: log
+    log_fields:
+      message: 'INFO {"command_preview": "SECRET"}'
       kubernetes.container_name: supervisor
       kubernetes.pod_namespace: agents-workflows
   outputs:

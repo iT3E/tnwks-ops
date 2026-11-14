@@ -533,10 +533,12 @@ Before a line leaves the node, the platform agent changes it as follows (its
 tests are in `observability/vector-tests/agent-platform-logs.yaml`):
 
 - **The sandbox gateway** (`openshell-gateway`). The colour codes go. From
-  the first field that can hold the text of a command to the end of the line,
-  the line becomes `(dropped)`: a `[cmd:` context, or a key that ends in
-  `preview`, or `cmd`, `cmd_line`, `cmdline`, `command`, `args`, `argv` or
-  `env`, before `=` or `:`, in any case. The gateway logs the first 120 or
+  the first field that can hold a command, or its input or output, to the
+  end of the line, the line becomes `(dropped)`: a `[cmd:` context, or a key
+  that ends in `preview`, `stdin`, `stdout`, `stderr`, `input`, `output` or
+  `body`, or `cmd`, `cmd_line`, `cmdline`, `command`, `args`, `argv` or
+  `env`, before `=` or `:`, in any case. An `error=` or `detail=` field
+  ships: the gateway writes its own error text there. The gateway logs the first 120 or
   so characters of each command it relays to a sandbox (`command_preview=`),
   and Loki gets `command_preview=(dropped)`. The query string of each URL,
   path or host becomes `?(dropped)`. A JSON OCSF record (it holds
@@ -545,10 +547,18 @@ tests are in `observability/vector-tests/agent-platform-logs.yaml`):
 - **A sandbox supervisor** (`supervisor`). The same, and then the line
   stays only when it is a known line type of OpenShell 0.1.8 (SSH, NET,
   HTTP, CONFIG, an SSH relay EVENT, LIFECYCLE, PROC, or a plain log line of
-  the supervisor) and holds only the characters that type allows. Any other
-  line becomes `(dropped: unknown line type)`. A new release that logs a new
-  kind of line shows the marker, and a test of the new line moves it to the
-  list.
+  the supervisor) and holds only the characters and fields that type allows:
+  an SSH auth field is one of the labels of the format, a CONFIG field is
+  one the format writes (version, hash, source and the like, never
+  `rejection_reason`), and a LIFECYCLE line names an `openshell` program.
+  Any other line becomes `(dropped: unknown line type)`. A new release that
+  logs a new kind of line shows the marker, and a test of the new line
+  moves it to the list.
+
+  What still ships by design: the host and port of each connection out of
+  the sandbox; the method, host and path of each HTTP request (a token
+  inside a path ships; the query string does not); and the short text (up
+  to 120 characters) of a CONFIG line or a plain log line.
 - **Every other container** (the run receiver, the model bridge and the
   pilot's pod) ships its line as it is. Their lines are the program's own
   (below), and the bridge's JSON lines stay whole.
@@ -556,8 +566,8 @@ tests are in `observability/vector-tests/agent-platform-logs.yaml`):
 | Pod | What its log holds | About a day |
 | --- | --- | --- |
 | The run receiver (`agents-workflows`) | One line for each run made or found, and for each answer kept (`result kept (succeeded)`, `result kept (failed)`), and the errors of the cluster API. Never the token or the input of a run | Some KB |
-| The sandbox gateway of `agents-workflows` (`openshell-0`) | Each call to its API (method, request id, status), each sign-in (`OCSF AUTH:LOGON`, allowed or denied, with the address of the caller), the sandboxes it makes and removes, and each command it relays to a sandbox, by length only once the preview is dropped. No credential | 2 to 7 MB |
-| A sandbox supervisor of `agents-workflows` (`os-supervisor-*`) | The policy it loaded, each SSH session into the sandbox, and each connection out of it, by host and port (`OCSF NET:OPEN`), or by method, host and path for HTTP | Some KB for a run |
+| The sandbox gateway of `agents-workflows` (`openshell-0`) | Each call to its API (method, request id, status), each sign-in (`OCSF AUTH:LOGON`, allowed or denied, with the address of the caller), the sandboxes it makes and removes, and each command it relays to a sandbox, by length only once the preview is dropped. The text of an `error=` or `detail=` field ships. No credential | 2 to 7 MB |
+| A sandbox supervisor of `agents-workflows` (`os-supervisor-*`) | The policy it loaded, each SSH session into the sandbox, and each connection out of it, by host and port (`OCSF NET:OPEN`), or by method, host and path for HTTP. A token inside a path ships; a query string does not. The short text of a CONFIG or plain line ships. Any other line is the marker | Some KB for a run |
 | The agent pod of the pilot: the init containers and the `backup` and `sandbox-start` containers | `prepare`: nothing. `archive`: one `archive-state result=ok release=... name=... bytes=...` line, and an `archive-state removed=<file>` line for each old archive. `doctor`: the report of the product's doctor (what it changed in the config copy, the plugins and skills it found, warnings), with file and setting names. `backup`: the output of the product's backup command (the paths it took or skipped, the archive name, `Archive verification: passed`), `daily-backup result=ok\|failed day=...`, `daily-backup removed=<file>`, `instruction-check file=<name> change=new\|changed\|gone` and `instruction-check result=first\|ok ...`. `sandbox-start`: `sandbox-start name=<name> result=ok\|failed` | Some KB, most of it at a start of the pod |
 | The model bridge (`ai`) | One JSON line for each event: `call` (domain, model, status, time), `engine_error` (domain, kind), `engine_init`, `conversation_end`, `rebuild` and `listening`. A conversation is an id; no prompt and no answer | Some KB |
 

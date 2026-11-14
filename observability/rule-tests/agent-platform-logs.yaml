@@ -94,3 +94,35 @@ tests:
       - alertname: ModelBridgeRateLimited
         eval_time: 26m
         exp_alerts: []
+
+  # A restart of the platform log agent reads the backup log again from its
+  # start, so an old line comes back as a new sample with its old time.
+  - name: an old line read again does not hide a check that stopped
+    interval: 2m
+    input_series:
+      - series: kube_pod_container_state_started{namespace="agents-pilot", pod="agent-1", container="backup"}
+        values: 0x1700
+      # The check ran at 1h, then stopped. The same line is read again at 40h.
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="instruction-check", result="ok"}
+        values: _x30 3600 _x1169 3600 _x500
+    alert_rule_test:
+      - alertname: AgentInstructionCheckStale
+        eval_time: 52h
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-pilot}
+
+  - name: a check at 1h and again at 25h is late only at 51h
+    interval: 2m
+    input_series:
+      - series: kube_pod_container_state_started{namespace="agents-pilot", pod="agent-1", container="backup"}
+        values: 0x1700
+      - series: homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", app="agent", check="instruction-check", result="ok"}
+        values: _x30 3600 _x719 90000 _x900
+    alert_rule_test:
+      - alertname: AgentInstructionCheckStale
+        eval_time: 50h
+        exp_alerts: []
+      - alertname: AgentInstructionCheckStale
+        eval_time: 52h
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: agents-pilot}

@@ -227,11 +227,15 @@ spec:
           # agent pod ships its log (docs/apps/agent-platform.md, "Logs"). The
           # check runs once a day, and not again when a new container finds
           # the archive of the day there, so the rule waits until the backup
-          # container has run for 26 hours too.
+          # container has run for 26 hours too. The newest line must be less
+          # than 26 hours old by its own time, not only be in the last 26
+          # hours of samples: a restart of the platform log agent reads the
+          # backup log again from its start, and an old line comes back with
+          # its old time.
           expr: |
             (time() - max by (namespace) (kube_pod_container_state_started{namespace="agents-pilot", container="backup"})) > 26 * 3600
             unless on (namespace)
-            label_replace(max by (pod_namespace) (max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", check="instruction-check"}[26h])), "namespace", "$1", "pod_namespace", "(.+)")
+            label_replace(max by (pod_namespace) ((max_over_time(homelab_agent_platform_result_timestamp_seconds{pod_namespace="agents-pilot", check="instruction-check"}[26h]) > time() - 26 * 3600)), "namespace", "$1", "pod_namespace", "(.+)")
           for: 15m
           labels:
             severity: warning
