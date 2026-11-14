@@ -137,7 +137,7 @@ class Domains(unittest.TestCase):
     def test_github_masks_its_sops_files(self):
         self.assertEqual(
             set(CONFIG["groups"]["terraform"]["github"]["mask_sops"]),
-            {"repositories.sops.yaml", "secrets.sops.yaml"},
+            {"repositories.sops.yaml", "secrets.sops.yaml", "tnwks-ops.sops.yaml"},
         )
 
     def test_ignore_always_for_deploy(self):

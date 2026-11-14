@@ -152,8 +152,9 @@ runner = "tnwks-ops-runner"
 backend = "local"
 lock = "github-terraform"
 enabled_var = "TERRAFORM_GITHUB_ENABLED"
-# Private repositories' names and descriptions, and the token.
-mask_sops = ["repositories.sops.yaml", "secrets.sops.yaml"]
+# Private repositories' names and descriptions, the token, and tnwks-ops'
+# Flux webhook URL and openclaw-hooks variables.
+mask_sops = ["repositories.sops.yaml", "secrets.sops.yaml", "tnwks-ops.sops.yaml"]
 paths = [
   "infrastructure/terraform/environments/prod/github/**",
   "infrastructure/terraform/modules/github/**",
