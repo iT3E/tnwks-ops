@@ -421,16 +421,16 @@ def test_the_playbook_runs_the_role_and_the_script_runs_with_the_system_python()
     assert SCRIPT.read_text().startswith("#!/usr/bin/python3\n")
 
 
-def test_each_distro_of_the_inventory_is_a_system_with_the_check_of_the_host_check():
-    """A distro lists the source in `sources` only after its first result is on site 2,
-    in a follow-up pull request: before that, the rule for a late result would fire."""
+def test_each_distro_of_the_inventory_lists_the_host_check_in_the_registry():
+    """Each distro lists the source since its first result was on site 2, so the rule for a
+    late result watches it."""
     hosts = yaml.safe_load((ANSIBLE / "inventory/hosts.yml").read_text())
     distros = set(hosts["all"]["children"]["wsl_distros"]["hosts"])
     systems = yaml.safe_load((REGISTRY / "systems.yaml").read_text())
     of_type = {system["name"]: system for system in systems if system["type"] == "wsl-distro"}
     assert set(of_type) == distros
     for system in of_type.values():
-        assert "host-check" not in system.get("sources", []), system["name"]
+        assert "host-check" in system.get("sources", []), system["name"]
     controls = yaml.safe_load((REGISTRY / "controls.yaml").read_text())
     named = {item["check"] for line in controls for item in line["checks"].get("wsl-distro", [])
              if item["source"] == "host-check"}
