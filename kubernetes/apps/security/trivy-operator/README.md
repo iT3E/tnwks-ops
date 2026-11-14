@@ -206,8 +206,10 @@ roles of each cluster that lists the app: each ClusterRole of the chart, and
 each ClusterRole that a ClusterRoleBinding gives to the service account
 `trivy-operator`. Outside the reports, a rule with a write, or a rule that
 names `secrets` or `*`, fails it (the cluster-wide read of Secrets that
-`accessGlobalSecretsAndServiceAccount: false` keeps away). A log read fails
-it, and so does a binding to a ClusterRole that is not in the render. Run it
+`accessGlobalSecretsAndServiceAccount: false` keeps away). A rule of
+`nonResourceURLs` with a verb other than get, list or watch fails it. A log
+read fails it, and so does a binding to a ClusterRole that is not in the
+render. Run it
 in each pull request of a chart release (Tests, below); it is not yet a step
 of `.github/workflows/kubernetes.yaml`.
 
