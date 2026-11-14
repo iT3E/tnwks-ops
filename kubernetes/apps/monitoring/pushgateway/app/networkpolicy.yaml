@@ -1,0 +1,36 @@
+---
+# The Pushgateway takes pushes from this cluster's ops runner pods only
+# (terraform.yaml's drift job; ARC labels each runner pod with its scale set),
+# scrapes from this cluster's Prometheus, and the kubelet's probes, which come
+# from the host. Anything else could overwrite a result, so it can't connect.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: pushgateway
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus-pushgateway
+      app.kubernetes.io/instance: pushgateway
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: tools
+            app.kubernetes.io/component: runner
+            actions.github.com/scale-set-name: tnwks-ops-runner-${CLUSTER_NAME}
+            # Both WSL clusters are one Cilium Cluster Mesh: name this one.
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+        - matchLabels:
+            io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: prometheus
+            io.cilium.k8s.policy.cluster: ${CLUSTER_NAME}
+      toPorts:
+        - ports:
+            - port: "9091"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "9091"
+              protocol: TCP

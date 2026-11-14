@@ -450,6 +450,36 @@ and when to turn CI on.
 - **No webhook updates.** Terraform never updates a webhook, so it can't
   remove the `flux` webhook's secret (The webhook's secret, above).
 
+## Drift
+
+Everything this root manages can also be changed in GitHub's web UI, and
+such a change stays until the next plan of the root shows it. So the root
+has `drift = true` in `domains.toml`: every night at 13:15 UTC
+(05:15 Pacific) `terraform-drift.yaml` plans `main` for it on homelab-wsl's
+ops runner, applies nothing, and reports to Prometheus
+([`ci.md`](ci.md#terraform-drift) has the design).
+
+- **`TerraformDrift`** (`root="github"`) fires when the plan has changes,
+  or couldn't run. The run's job summary lists the changing addresses
+  (private repositories by key, `module.github.github_repository.this["private3"]`),
+  the job log the error. Either put the UI change into the code with a PR,
+  or undo it by applying `main` (dispatch Deploy with `roots=github`). Then
+  dispatch Terraform drift, or wait for the next night, to clear it.
+- **`TerraformDriftCheckStale`** fires when no result has arrived for 30
+  hours: the schedule, the runner, `TERRAFORM_GITHUB_ENABLED` (a switched-off
+  root isn't checked) or the Pushgateway.
+
+The check's job runs the same steps as a PR plan, under the same public-log
+rules: the mask first, then the action, which prints only counts and
+addresses; then one line of counts. It shares the root's `github-terraform`
+lock, so it never plans beside a PR plan or an apply. It reads the same
+state in Terraform Cloud and takes the state lock for the plan, as a PR
+plan does.
+
+It sees only what the root manages. A change to anything under "What stays
+by hand", or to the ruleset setting in the next section (the provider has no
+argument for it), never shows in the plan.
+
 ## Caveat: the ruleset's unattributed changes setting
 
 The live `main` ruleset's pull request rule has

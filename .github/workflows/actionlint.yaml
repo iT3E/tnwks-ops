@@ -51,9 +51,13 @@ jobs:
         uses: iT3E/github-workflows/actions/workflow-conformance@447a36cf89cd163004fcf7b574955c6c6deb2f92 # v1.9.2
 
       # This repo's own: ci.yaml covers every domain in .github/ci/domains.toml,
-      # and terraform.yaml masks SOPS values before Terraform runs.
+      # and each Terraform job masks SOPS values before Terraform runs and
+      # takes the root's lock; a drift job plans only, then reports.
       - name: ci.yaml covers the domains
         run: python3 .github/scripts/workflow-conformance.py
 
       - name: Test the SOPS mask script
         run: python3 -m unittest discover -s .github/scripts -p test_sops_mask.py
+
+      - name: Test the Terraform drift report
+        run: python3 -m unittest discover -s .github/scripts -p test_terraform_drift.py

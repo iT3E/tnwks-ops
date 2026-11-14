@@ -34,6 +34,7 @@ PR / merge to main
 | healthchecks.io | `terraform.yaml` (root `healthchecks`), `environments/prod/healthchecks` | Same runner, same flow. No tunnel or override: healthchecks.io is a public API. State in TFC workspace `tnwks-healthchecks-prod` |
 | Cloudflare | `terraform.yaml` (root `cloudflare`), `environments/prod/cloudflare` | Same as healthchecks.io: public API, shared action (`root` input). State in TFC workspace `tnwks-cloudflare-prod` |
 | GitHub | `terraform.yaml` (root `github`), `environments/prod/github` | Same as Cloudflare. State in TFC workspace `tnwks-github-prod`. Gated on the repository variable `TERRAFORM_GITHUB_ENABLED=true` ([`../operations/github.md`](../operations/github.md)) |
+| Drift check | `terraform-drift.yaml` → `terraform.yaml` (drift mode), `kubernetes/apps/monitoring/pushgateway` | Nightly plan of `main` for the roots with `drift = true` (GitHub today), never applied, on homelab-wsl's runner (`tnwks-ops-homelab-wsl`) in the root's `lock` group. The result goes to that site's Pushgateway for Prometheus ([`../operations/ci.md`](../operations/ci.md#terraform-drift)) |
 | EdgeOS devices | `edgeos-{plan,apply}.yaml`, `.github/actions/edgeos-sync`, `infrastructure/edgeos` | Same runner. wireproxy also forwards `127.0.0.1:8022` to the EP-R6's SSH, the one forward `vpn-ci` has (`CI_ZONE_RULES`); CI logs in with its own SSH key against a pinned host key |
 
 ## Security model

@@ -1,0 +1,68 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/helm.toolkit.fluxcd.io/helmrelease_v2.json
+# Holds the last result a CI job on the in-cluster ops runner pushed, for
+# Prometheus to scrape: the in-cluster counterpart of windows_exporter's
+# textfile directory, which the Ansible host drift check writes to. Today one
+# group per Terraform root with `drift = true` (job terraform_drift, label
+# root), from terraform.yaml's drift job; alerts in
+# kube-prometheus-stack/addons/alerts/terraform-drift.yaml.
+#
+# Nothing on disk: Prometheus keeps what it scraped, and the alerts read the
+# last value within a window, so a restart loses nothing they need.
+# networkpolicy.yaml limits who can push.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: pushgateway
+  namespace: monitoring
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: prometheus-pushgateway
+      version: 3.11.2
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+        namespace: flux-system
+      interval: 30m
+  maxHistory: 2
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  values:
+    fullnameOverride: pushgateway
+    automountServiceAccountToken: false
+    securityContext:
+      fsGroup: 65534
+      runAsUser: 65534
+      runAsGroup: 65534
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: ["ALL"]
+    resources:
+      requests:
+        cpu: 5m
+        memory: 16Mi
+      limits:
+        memory: 64Mi
+    serviceMonitor:
+      enabled: true
+      namespace: monitoring
+      interval: 1m
+      # The pushed job and root labels win over the target's.
+      honorLabels: true
+      # The pod's name changes when the pod is replaced; without it a root's
+      # series stays one series, so "the last value" means the last push.
+      metricRelabelings:
+        - action: labeldrop
+          regex: pod|instance
