@@ -15,6 +15,7 @@ these parts.
 | Trust domain of the workflow agents, and their run receiver | `agents-workflows` | `workflows/` |
 | Pilot of a personal agent, on test accounts | `agents-pilot` | `pilot/` |
 | Model bridge, next to the model gateway | `ai` | `../model-bridge/` |
+| Alert rules of the platform | `monitoring` | `monitoring/` |
 
 ## Trust domains
 
@@ -512,7 +513,8 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8080/runs -d '{}'
 Two CronJobs in each trust domain test the boundaries every day
 (`checks/app/`, shared by the trust domains; each `<name>/checks/ks.yaml`
 applies it to its namespace). A failed check fails its Job, and the Job
-pod's log goes to Loki.
+pod's log goes to Loki. `AgentPlatformCronJobFailed` and
+`AgentPlatformCheckStale` alert on them ([Alerts](#alerts)).
 
 | CronJob | Schedule | What must hold |
 | --- | --- | --- |
@@ -534,3 +536,47 @@ pod's log goes to Loki.
   on its own, so they can share a node. The probe logs `nodes` and
   `different_nodes` and doesn't fail on one node.
 - To run one now: `kubectl -n agents-<name> create job --from=cronjob/platform-check-isolation check-now`.
+
+## Alerts
+
+The rules are in `monitoring/app/prometheusrule.yaml` (the Flux
+Kustomization `agents-monitoring`, homelab-wsl only). Each alert goes to the
+War Room, the default Telegram route of Alertmanager, with severity
+`warning`. Each one reads kube-state-metrics, except `WorkflowAppDrift`.
+
+| Alert | Fires when | `for` | First step |
+| --- | --- | --- | --- |
+| `AgentPlatformWorkloadNotReady` | A Deployment or StatefulSet of a trust domain or of the sandbox controller, or the model gateway or the model bridge, has fewer ready pods than wanted | 10m | `kubectl -n <namespace> describe pod`: a failed `archive` or `doctor` init container, or a lock on the state volume. Revert the last image if it came with an update |
+| `AgentPlatformCronJobFailed` | The last run of a CronJob of a trust domain failed, and no run passed since: the providers job, the sweep, a daily check. It resolves at the next good run | none | Its log in Loki (below). A `result=failed` line of the providers job names the step |
+| `WorkflowProvidersStale` | No good run of `workflow-providers` in 35 minutes, or the CronJob is gone. A token of the reviewer lives one hour, so about 25 minutes are left | 5m | `kubectl -n agents-workflows get cronjob,jobs`, then the log of the last run |
+| `WorkflowAppDrift` | An `app-drift result=drift` line in the last 20 minutes: the App or its installation has more permissions than the list in git | none | The `detail=` of the line names each one. Set the App back, or change the list by a pull request |
+| `AgentPlatformCheckStale` | A daily check (`platform-check-isolation` or `platform-check-probe`) of a trust domain has not passed in 26 hours, or never passed once a run was due | 15m | The CronJob (suspended?) and its Jobs |
+| `AgentRunSandboxTooOld` | A run sandbox (`default--run-*`) in `agents-workflows` is older than 80 minutes: the run job and the sweep both failed to delete it | 10m | The CronJob `workflow-sweep`, then delete the sandbox through the gateway |
+| `AgentWorkflowRunFailed` | A run job failed, for 2 hours from its start | none | The annotation `workflow-agents/result` of the Job, and the run log in Loki. A 502 from the model gateway can be the limit of the Claude plan |
+| `AgentDailyArchiveFailed` | The `backup` container of an agent pod started again in the last 2 hours after an exit with an error: the daily archive failed. A restart of the node (reason `Unknown`) does not count | none | `kubectl -n <namespace> logs <pod> -c backup --previous` |
+
+- **Logs in Loki.** `{namespace="agents-workflows", app="workflow-providers"}`,
+  `{namespace="agents-workflows", app="workflow-run"}`, and
+  `{namespace="agents-<name>", app="platform-checks"}`. Only Job pods ship
+  logs on this cluster (`kubernetes/apps/monitoring/vector/README.md`).
+- **A failed Job.** The chart rule `KubeJobFailed` also fires for each
+  failed Job, and keeps firing while the Job is kept: a run job for 7 days,
+  a failed CronJob run until three newer runs fail. Read
+  `AgentPlatformCronJobFailed` for the state of now.
+- **The drift line.** The Vector aggregator turns each line of a pod in a
+  namespace `agents-*` that starts with `<check> result=<result>` into the
+  gauge `homelab_agent_platform_result_timestamp_seconds{pod_namespace, app,
+  check, result}`: the time of the newest such line. No other word of the
+  line becomes a label. Each sample carries the time of its line, so
+  Prometheus holds it for 5 minutes only: a rule reads it with
+  `max_over_time` over a window longer than the time between two lines
+  (20 minutes for the drift line, which comes every 15).
+- **The snapshots** of a state volume have the kopiur chart's rules,
+  which match each SnapshotPolicy, `agent-state` too: `KopiurLastBackupFailed`
+  and `KopiurBackupStale` (48 hours).
+- **Not alerted yet.** The scheduled turn of a personal agent (no turn in
+  26 hours), the age of the agent image against the upstream releases, the
+  changed instruction files and the `instruction-check` line of 26 hours,
+  the model errors of a trust domain (an `engine_error` of the model bridge),
+  and a Sandbox record with no pod. Each needs a part or a log that the
+  cluster does not have yet.

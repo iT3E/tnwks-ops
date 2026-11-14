@@ -1,0 +1,200 @@
+---
+# The alerts of the agent platform (docs/apps/agent-platform.md, "Alerts").
+# Each one reads kube-state-metrics, except WorkflowAppDrift, which reads the
+# time of the newest `app-drift result=drift` line that the Vector
+# aggregator serves (kubernetes/apps/monitoring/vector/aggregator).
+# Already covered elsewhere, so not here: a failed or late snapshot of a
+# state volume (the kopiur chart's rules, KopiurLastBackupFailed and
+# KopiurBackupStale, match each SnapshotPolicy), and a crash loop (the
+# chart rules of kube-prometheus-stack).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: agent-platform
+  namespace: monitoring
+spec:
+  groups:
+    - name: agent-platform
+      rules:
+        - alert: AgentPlatformWorkloadNotReady
+          # Fewer ready pods than wanted, for each Deployment and StatefulSet
+          # of a trust domain and of the sandbox controller, and for the model
+          # gateway and the model bridge in `ai`. A workload scaled to zero by a
+          # merge does not fire. 10m: a start of the agent pod (archive and
+          # doctor) takes about 2 minutes, a rollout of the bridge less.
+          expr: |
+            label_replace(
+              max by (namespace, deployment) (kube_deployment_spec_replicas{namespace=~"agents-.+|agent-sandbox-system"} or kube_deployment_spec_replicas{namespace="ai", deployment=~"litellm|model-bridge"})
+              - max by (namespace, deployment) (kube_deployment_status_replicas_ready{namespace=~"agents-.+|agent-sandbox-system"} or kube_deployment_status_replicas_ready{namespace="ai", deployment=~"litellm|model-bridge"}),
+              "workload", "$1", "deployment", "(.+)")
+            > 0
+            or
+            label_replace(
+              max by (namespace, statefulset) (kube_statefulset_replicas{namespace=~"agents-.+"})
+              - max by (namespace, statefulset) (kube_statefulset_status_replicas_ready{namespace=~"agents-.+"}),
+              "workload", "$1", "statefulset", "(.+)")
+            > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            summary: "{{ $labels.namespace }}/{{ $labels.workload }} has {{ $value }} pod(s) less ready than wanted."
+            description: "kubectl -n {{ $labels.namespace }} describe pod of {{ $labels.workload }}: an init container that failed (archive, doctor) or a lock on the state volume; revert the last image if it came with an update."
+
+        - alert: AgentPlatformCronJobFailed
+          # The newest failed Job of a CronJob in a trust domain started after
+          # the CronJob's last success: the last run failed and no run passed
+          # since. It resolves at the next good run. KubeJobFailed, the chart
+          # rule, keeps firing while the failed Job is kept
+          # (failedJobsHistoryLimit), also after a good run. Covers the
+          # providers job (its `workflow-providers result=failed` line comes
+          # with exit 1, scripts/providers.sh), the sweep and the daily checks.
+          # reason!="": kube-state-metrics also reports the failed pods of a
+          # Job that still retries (backoffLimit), with reason="". The max by
+          # on the right of each join keeps it one-to-one when two
+          # kube-state-metrics pods serve the same series in a rollout.
+          expr: |
+            max by (namespace, cronjob) (
+              kube_job_status_start_time{namespace=~"agents-.+"}
+              * on (namespace, job_name) group_left (cronjob)
+                max by (namespace, job_name, cronjob) (label_replace(kube_job_owner{namespace=~"agents-.+", owner_kind="CronJob"}, "cronjob", "$1", "owner_name", "(.+)"))
+              and on (namespace, job_name) (kube_job_status_failed{namespace=~"agents-.+", reason!=""} > 0)
+            )
+            > on (namespace, cronjob)
+            max by (namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace=~"agents-.+"})
+            or
+            max by (namespace, cronjob) (
+              kube_job_status_start_time{namespace=~"agents-.+"}
+              * on (namespace, job_name) group_left (cronjob)
+                max by (namespace, job_name, cronjob) (label_replace(kube_job_owner{namespace=~"agents-.+", owner_kind="CronJob"}, "cronjob", "$1", "owner_name", "(.+)"))
+              and on (namespace, job_name) (kube_job_status_failed{namespace=~"agents-.+", reason!=""} > 0)
+            )
+            unless on (namespace, cronjob)
+            kube_cronjob_status_last_successful_time{namespace=~"agents-.+"}
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            summary: "The last run of {{ $labels.namespace }}/{{ $labels.cronjob }} failed."
+            description: "Read its log in Loki: {namespace=\"{{ $labels.namespace }}\", app=~\"workflow-.+|platform-checks\"}; a result=failed line names the step. For the providers job, fix it within the hour: a run token lives one hour."
+
+        - alert: WorkflowProvidersStale
+          # A dead man's switch: no good run of the providers job in 35
+          # minutes (30m plus the `for`), so two runs in a row failed or did
+          # not run (suspended, the CronJob gone, an image that does not pull).
+          # The App token of the reviewer lives one hour from its last good
+          # run, so this leaves about 25 minutes before a review gets 401.
+          expr: |
+            (time() - max by (namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace="agents-workflows", cronjob="workflow-providers"})) > 30 * 60
+            or (
+              (time() - max by (namespace, cronjob) (kube_cronjob_created{namespace="agents-workflows", cronjob="workflow-providers"})) > 30 * 60
+              unless on (namespace, cronjob) kube_cronjob_status_last_successful_time{namespace="agents-workflows", cronjob="workflow-providers"}
+            )
+            or absent(kube_cronjob_created{namespace="agents-workflows", cronjob="workflow-providers"})
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            summary: "The providers job of agents-workflows has had no good run in 35 minutes."
+            description: "kubectl -n agents-workflows get cronjob,jobs; read the last run in Loki ({namespace=\"agents-workflows\", app=\"workflow-providers\"}); after a fix, run it now with create job --from=cronjob/workflow-providers."
+
+        - alert: WorkflowAppDrift
+          # The GitHub App of the reviewer, or its installation, has more
+          # permissions than the list in git. The providers job logs one
+          # `app-drift result=drift detail=<names>` line each run (every 15
+          # minutes) and still scopes each token, so this is not an outage.
+          # The value is the time of the newest such line. The aggregator
+          # serves each sample with the time of its line, so Prometheus holds
+          # a sample for 5 minutes only (the lookback): max_over_time bridges
+          # the 15 minutes between two lines. It resolves 20 minutes after the
+          # last one.
+          expr: |
+            time() - max by (pod_namespace, app) (max_over_time(homelab_agent_platform_result_timestamp_seconds{check="app-drift", result="drift"}[20m])) < 20 * 60
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            summary: "The GitHub App of the reviewer has more permissions than the list in git."
+            description: "The detail= of the app-drift line in Loki ({namespace=\"agents-workflows\", app=\"workflow-providers\"} |= \"app-drift\") names each extra one; set the App back in its settings, or change the list in app/providers.yaml by a pull request."
+
+        - alert: AgentPlatformCheckStale
+          # The daily isolation check (04:17) or probe (04:47) of a trust
+          # domain has not passed in 26 hours: a day plus room for a slow run.
+          # The second part is a check that never passed, once a run was due.
+          expr: |
+            (time() - max by (namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace=~"agents-.+", cronjob=~"platform-check-.+"})) > 26 * 3600
+            or (
+              (time() - max by (namespace, cronjob) (kube_cronjob_created{namespace=~"agents-.+", cronjob=~"platform-check-.+"})) > 26 * 3600
+              unless on (namespace, cronjob) kube_cronjob_status_last_successful_time{namespace=~"agents-.+", cronjob=~"platform-check-.+"}
+            )
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            summary: "{{ $labels.namespace }}/{{ $labels.cronjob }} has not passed in 26 hours."
+            description: "kubectl -n {{ $labels.namespace }} get cronjob {{ $labels.cronjob }} (suspended?) and its Jobs; the log of the last run is in Loki ({namespace=\"{{ $labels.namespace }}\", app=\"platform-checks\"})."
+
+        - alert: AgentRunSandboxTooOld
+          # A run sandbox of a workflow agent (Sandbox `default--run-*`) that
+          # is older than its limit. The run job deletes its own sandbox, and
+          # the sweep deletes one older than 1 hour every 15 minutes, so one
+          # older than 80 minutes (90 with the `for`) means both failed. A pod
+          # of the sandbox carries its age; the Sandbox record has no metric.
+          expr: |
+            max by (namespace, sandbox) (
+              (time() - kube_pod_created{namespace="agents-workflows"})
+              * on (namespace, pod) group_left (sandbox)
+                max by (namespace, pod, sandbox) (label_replace(kube_pod_owner{namespace="agents-workflows", owner_kind="Sandbox", owner_name=~"default--run-.+"}, "sandbox", "$1", "owner_name", "(.+)"))
+            ) > 80 * 60
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            summary: "The run sandbox {{ $labels.sandbox }} is {{ $value | humanizeDuration }} old."
+            description: "The sweep did not delete it: check the CronJob workflow-sweep in agents-workflows, then delete the sandbox through the sandbox gateway."
+
+        - alert: AgentWorkflowRunFailed
+          # A run job of a workflow agent that failed, for 2 hours from its
+          # start (a run lives 40 minutes at most). KubeJobFailed fires for the
+          # same Job for the 7 days that it stays. The caller tries again with
+          # a new key (at most 3 attempts), so one alert can come with a
+          # review that passed later.
+          expr: |
+            max by (namespace, job_name) (kube_job_status_failed{namespace="agents-workflows", job_name=~"run-.+", reason!=""} > 0)
+            and on (namespace, job_name)
+            (time() - kube_job_status_start_time{namespace="agents-workflows", job_name=~"run-.+"}) < 2 * 3600
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            summary: "The run {{ $labels.job_name }} of a workflow agent failed."
+            description: "Its answer is the annotation workflow-agents/result of the Job, and its log is in Loki ({namespace=\"agents-workflows\", app=\"workflow-run\"}); a 502 from the model gateway can be the limit of the Claude plan."
+
+        - alert: AgentDailyArchiveFailed
+          # The backup container of an agent pod ends when the daily archive of
+          # the product fails (config/scripts/daily-backup.sh, exit 1), so it
+          # restarts with the reason Error. A restart of the node restarts each
+          # container with the reason Unknown, and does not count. It fires for
+          # 2 hours after a restart.
+          expr: |
+            max by (namespace, pod) (increase(kube_pod_container_status_restarts_total{namespace=~"agents-.+", container="backup"}[2h])) > 0
+            and on (namespace, pod)
+            max by (namespace, pod) (kube_pod_container_status_last_terminated_reason{namespace=~"agents-.+", container="backup", reason="Error"}) == 1
+          labels:
+            severity: warning
+          annotations:
+            dashboard_url: "https://grafana.${INTERNAL_DOMAIN}/d/tnwks-apps?var-cluster={{ $externalLabels.cluster }}"
+            runbook_url: "https://github.com/iT3E/tnwks-ops/blob/main/docs/apps/agent-platform.md#alerts"
+            summary: "The daily archive of {{ $labels.namespace }}/{{ $labels.pod }} failed, and its backup container started again."
+            description: "kubectl -n {{ $labels.namespace }} logs {{ $labels.pod }} -c backup --previous shows the daily-backup line and the error of the backup command."

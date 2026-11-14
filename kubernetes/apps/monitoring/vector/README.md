@@ -132,6 +132,17 @@ transform or the sink in `vector.yaml`.
 | `vector_buffer_discarded_events_total` | The events that the buffer of a sink dropped because it was full |
 | `vector_http_client_responses_total` | The answers that a sink got, by HTTP `status` |
 
+The sink also serves one series that is not Vector's own:
+`homelab_agent_platform_result_timestamp_seconds{pod_namespace, app, check,
+result}`, the time of the newest result line of a pod in a namespace
+`agents-*` (a line that starts with `<check> result=<result>`). The
+transforms `agent_platform_results` and `agent_platform_result_metrics` make
+it, and the alert `WorkflowAppDrift` reads it
+(`docs/apps/agent-platform.md`, "Alerts"). Each sample carries the time of
+its line, so Prometheus holds it for 5 minutes, its lookback, and the sink
+drops the series a minute after its last line. A rule on it reads
+`max_over_time` over a window longer than the time between two lines.
+
 Two settings shape these series:
 
 - **A counter starts at its first event.** Vector makes the series of an

@@ -13,3 +13,5 @@ resources:
   - ./workflows
   # The pilot of a personal agent on test accounts, with the same parts.
   - ./pilot
+  # The alert rules of the platform.
+  - ./monitoring/ks.yaml
