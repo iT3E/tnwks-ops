@@ -18,7 +18,10 @@ loader.exec_module(ci_changes)
 
 CONFIG = tomllib.loads((ROOT / ".github/ci/domains.toml").read_text())
 # The fields documented above [groups.terraform.*] in domains.toml.
-TERRAFORM_FIELDS = {"title", "root", "runner", "backend", "workspace", "lock", "tf_vars", "enabled_var", "mask_sops", "paths"}
+TERRAFORM_FIELDS = {"title", "root", "runner", "backend", "workspace", "lock", "tf_vars", "enabled_var", "mask_sops", "drift", "paths"}
+# Labels homelab-wsl's ops runner carries: terraform.yaml's drift job runs
+# there, beside the Pushgateway it reports to.
+DRIFT_RUNNERS = {"tnwks-ops-runner", "tnwks-ops-homelab-wsl"}
 
 
 def on(files):
@@ -133,6 +136,26 @@ class Domains(unittest.TestCase):
                 full = f"infrastructure/terraform/environments/{spec['root']}/{f}"
                 self.assertTrue(ci_changes.matches([full], spec["paths"]), f"{name}: {f} not in its paths")
             self.assertTrue(ci_changes.matches([".github/scripts/sops-mask.py"], spec["paths"]), name)
+
+    def test_drift(self):
+        """terraform.yaml's drift job: the action (local backend), the root's
+        lock as its concurrency group, homelab-wsl's ops runner."""
+        for name, spec in CONFIG["groups"]["terraform"].items():
+            if "drift" not in spec:
+                continue
+            self.assertIs(spec["drift"], True, f"{name}: drift is true or left out")
+            self.assertEqual(spec["backend"], "local", f"{name}: drift runs only for local roots")
+            self.assertTrue(spec.get("lock"), f"{name}: drift needs a lock")
+            self.assertIn(spec["runner"], DRIFT_RUNNERS, f"{name}: homelab-wsl's ops runner can't stand in for {spec['runner']}")
+
+    def test_github_has_drift_on(self):
+        self.assertIs(CONFIG["groups"]["terraform"]["github"].get("drift"), True)
+
+    def test_drift_field_reaches_the_matrix(self):
+        out = ci_changes.evaluate(CONFIG, None)
+        drift = sorted(m["name"] for m in out["terraform"] if m.get("drift") is True)
+        self.assertIn("github", drift)
+        self.assertEqual(drift, sorted(n for n, s in CONFIG["groups"]["terraform"].items() if s.get("drift")))
 
     def test_github_masks_its_sops_files(self):
         self.assertEqual(
