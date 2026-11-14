@@ -164,8 +164,9 @@ ITEMS = {
     "an empty string as until": entry(until=""), "a number as check": entry(check=26001),
     "NaN": "NaN", "a key that is not a field": entry(note="An invented note."), "a nested array": [entry()],
     "not an object": "check_open", "a date that is no day": entry(until="2026-02-30"),
-    "a date with a time": entry(until="2027-01-31T10:00:00"), "a date of Python 3.11": entry(until="20271231"),
-    "a date of a week": entry(until="2027-W05-1"),
+    "a date with a time": entry(until="2027-01-31T10:00:00"), "a date without dashes": entry(until="20271231"),
+    "a date of a week": entry(until="2027-W05-1"), "a date with a line end": entry(until="2027-01-31\n"),
+    "a date of other digits": entry(until="\u0662\u0660\u0662\u0667-\u0660\u0661-\u0663\u0661"),
     "a source not in the registry": entry(source="not-a-source"),
     "a system not in the registry": entry(system="not-in-the-registry"),
     "a check that is not a check ID": entry(check="check open"),
@@ -175,8 +176,6 @@ ITEMS = {
 # and `prowler`, so only the check shows the difference in what is muted.
 CONVERTER_ACCEPTS_LESS = {"a source not in the registry", "a system not in the registry",
                           "a check that is not a check ID"}
-# Both read a date with `date.fromisoformat`, which takes these forms since Python 3.11.
-BOTH_ACCEPT = {"a date of Python 3.11", "a date of a week"}
 
 
 @pytest.mark.parametrize("name", ITEMS)
@@ -192,8 +191,6 @@ def test_the_run_and_the_converter_skip_the_same_items(run, tmp_path, name):
         assert run_skipped == 0 and skipped == 1
         if name == "a check that is not a check ID":
             assert any(found_converter[key] != found_run[key] for key in found_run)
-    elif name in BOTH_ACCEPT:
-        assert found_run == found_converter and run_skipped == skipped == 0
     else:
         assert found_run == found_converter and run_skipped == skipped == 1
 
