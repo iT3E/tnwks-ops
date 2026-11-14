@@ -242,6 +242,15 @@ patches:
                       match[]:
                         - 'cnpg_pg_stat_archiver_last_archived_wal_start_lsn'
                         - 'cnpg_pg_replication_in_recovery'
+                        # The two series of the security registry from the
+                        # host check (security/README.md, "What a source
+                        # must do"). homelab-wsl scrapes the textfile
+                        # collector of both Windows hosts, and each distro
+                        # writes to the directory of its host. The rules of
+                        # the registry run here only. Its own series, not a
+                        # copy of this site's.
+                        - 'homelab_security_check_result{source="host-check",source_site=""}'
+                        - 'homelab_security_last_result_timestamp_seconds{source="host-check",source_site=""}'
                     static_configs:
                       - targets:
                           - ${PEER_WINDOWS_HOST_ADDR}:9090
