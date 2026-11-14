@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.116.0 - 2026-11-14
+
+### Removed
+
+* terraform: the GitHub root's import blocks (imports.tf), now that the first apply has imported all 36 objects; docs/operations/github.md keeps how to adopt something that already exists on GitHub
+
 ## v2.115.2 - 2026-11-14
 
 ### Security
