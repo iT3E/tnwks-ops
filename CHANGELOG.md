@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.127.0 - 2026-11-14
+
+### Added
+
+* security: Trivy Operator 0.36.1 on homelab-wsl-02 (`kubernetes/apps/security/trivy-operator`), the source `trivy` of the security registry. It checks the workloads, the roles, the control plane pods, the controls of the CIS Kubernetes Benchmark that read the API server, and the images for vulnerabilities with a fix, one scan job at a time. The node collector is off, the images are pinned by digest, the version check and the usage data of Trivy are off, and a network policy names each registry host that a scan job can reach. The operator creates its scan jobs and reads their logs in `security` only, and a scan job runs as `nobody`
+
 ## v2.126.0 - 2026-11-14
 
 ### Added
