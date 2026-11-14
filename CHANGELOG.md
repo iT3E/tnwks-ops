@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.145.0 - 2026-11-14
+
+### Added
+
+* security: both Windows hosts and both WSL distros list `host-check` in their sources, now that each has its first result on homelab-wsl-02, so `SecurityResultLate` watches them
+
 ## v2.144.0 - 2026-11-14
 
 ### Added
