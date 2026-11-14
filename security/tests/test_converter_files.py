@@ -180,6 +180,7 @@ BAD = {
     "text after the array": prowler_text([record("a")]) + "x",
     "not UTF-8": b"[\xff]",
     "a check that is not a check ID": prowler_text([record("a b")]),
+    "a check that ends in a line feed": prowler_text([record("a\n")]),
     "a lone surrogate in a check": '[{"metadata": {"event_code": "a\\ud800"}, "status_code": "FAIL"}]',
 }
 
@@ -388,6 +389,7 @@ API_BAD = {
     "a count below 0": api({"check": "a", "system": "example-system", "failed": -1}),
     "no check": api({"system": "example-system", "failed": 0}),
     "a check that is not a check ID": api({"check": "a\nb", "system": "example-system", "failed": 0}),
+    "a check that ends in a line feed": api({"check": "a\n", "system": "example-system", "failed": 0}),
     "a lone surrogate in a check": api({"check": "a\ud800", "system": "example-system", "failed": 0}),
     "more results than the limit": api(*({"check": f"c{index}", "system": "example-system", "failed": 0}
                                          for index in range(converter.MAX_CHECKS + 1))),
@@ -442,4 +444,5 @@ def test_the_providers_of_the_converter_are_the_providers_of_the_scan_lists():
     for provider, systems in names["prowler"].items():
         assert systems, provider
         for system in systems:
-            assert converter.OCSF_NAME.match(f"{system}.20261113T051000Z.ocsf.json")["system"] == system
+            assert converter.OCSF_NAME.fullmatch(f"{system}.20261113T051000Z.ocsf.json")["system"] == system
+    assert converter.OCSF_NAME.fullmatch("account-one.20261113T051000Z.ocsf.json\n") is None
