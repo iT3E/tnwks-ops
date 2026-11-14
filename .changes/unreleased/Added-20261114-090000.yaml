@@ -1,0 +1,3 @@
+kind: Added
+body: 'ai: a daily check that Tempo has a completed heartbeat run of each personal agent in the last 26 hours (CronJob agent-heartbeat-check), with the alerts AgentHeartbeatMissing and AgentHeartbeatCheckStale.'
+time: 2026-11-14T09:00:00.000000+00:00

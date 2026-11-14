@@ -15,7 +15,7 @@ these parts.
 | Trust domain of the workflow agents, and their run receiver | `agents-workflows` | `workflows/` |
 | Pilot of a personal agent, on test accounts | `agents-pilot` | `pilot/` |
 | Model bridge, next to the model gateway | `ai` | `../model-bridge/` |
-| Alert rules of the platform | `monitoring` | `monitoring/` |
+| Alert rules of the platform, and the heartbeat check | `monitoring` | `monitoring/` |
 
 ## Trust domains
 
@@ -254,7 +254,9 @@ the sandbox plugin copies the workspace only.
 - **The scheduled turn** is the heartbeat of the product
   (`agents.defaults.heartbeat`): once a day, a turn in its own session with
   one shell command in a sandbox, and no message to a channel. Its traces go
-  to the collector (alloy, OTLP).
+  to the collector (alloy, OTLP). The CronJob `agent-heartbeat-check` in
+  `monitoring` asks Tempo each morning for a completed heartbeat in the last
+  26 hours ([Alerts](#alerts)).
 - **Secret** `agent-secret` (env vars of the pod):
 
   | Key | Value |
@@ -615,8 +617,9 @@ pod's log goes to Loki. `AgentPlatformCronJobFailed` and
 
 ## Alerts
 
-The rules are in `monitoring/app/prometheusrule.yaml` (the Flux
-Kustomization `agents-monitoring`, homelab-wsl only). Each alert goes to the
+The rules are in `monitoring/app/prometheusrule.yaml` and
+`monitoring/app/heartbeat-prometheusrule.yaml` (the Flux Kustomization
+`agents-monitoring`, homelab-wsl only). Each alert goes to the
 War Room, the default Telegram route of Alertmanager, with severity
 `warning`. Most read kube-state-metrics; `WorkflowAppDrift`,
 `AgentInstructionFileChanged`, `AgentInstructionCheckStale` and
@@ -632,6 +635,8 @@ aggregator for the `<check> result=` lines (`WorkflowAppDrift`,
 | `AgentPlatformCronJobFailed` | The last run of a CronJob of a trust domain failed, and no run passed since: the providers job, the sweep, a daily check. It resolves at the next good run | none | Its log in Loki (below). A `result=failed` line of the providers job names the step |
 | `WorkflowProvidersStale` | No good run of `workflow-providers` in 35 minutes, or the CronJob is gone. A token of the reviewer lives one hour, so about 25 minutes are left | 5m | `kubectl -n agents-workflows get cronjob,jobs`, then the log of the last run |
 | `WorkflowAppDrift` | An `app-drift result=drift` line in the last 20 minutes: the App or its installation has more permissions than the list in git | none | The `detail=` of the line names each one. Set the App back, or change the list by a pull request |
+| `AgentHeartbeatMissing` | The daily `agent-heartbeat-check` (06:33 UTC) found no completed heartbeat run of an agent in Tempo in the last 26 hours, or could not ask Tempo. It resolves at the next good run | none | Its log in Loki (`{namespace="monitoring", app="agent-heartbeat-check"}`): `result=missing` names the service, `result=error` is Tempo. Then the agent pod and its traces |
+| `AgentHeartbeatCheckStale` | The heartbeat check itself was not scheduled in 26 hours, or its CronJob is gone | 15m | `kubectl -n monitoring get cronjob agent-heartbeat-check` |
 | `AgentPlatformCheckStale` | A daily check (`platform-check-isolation` or `platform-check-probe`) of a trust domain has not passed in 26 hours, or never passed once a run was due | 15m | The CronJob (suspended?) and its Jobs |
 | `AgentRunSandboxTooOld` | A run sandbox (`default--run-*`) in `agents-workflows` is older than 80 minutes: the run job and the sweep both failed to delete it | 10m | The CronJob `workflow-sweep`, then delete the sandbox through the gateway |
 | `AgentWorkflowRunFailed` | A run job failed, for 2 hours from its start | none | The annotation `workflow-agents/result` of the Job, and the run log in Loki. A 502 from the model gateway can be the limit of the Claude plan |
@@ -670,7 +675,12 @@ aggregator for the `<check> result=` lines (`WorkflowAppDrift`,
 - **The snapshots** of a state volume have the kopiur chart's rules,
   which match each SnapshotPolicy, `agent-state` too: `KopiurLastBackupFailed`
   and `KopiurBackupStale` (48 hours).
-- **Not alerted yet.** The scheduled turn of a personal agent (no turn in
-  26 hours), the age of the agent image against the upstream releases (a
-  check of the agent image's repository), an `engine_error` of another kind
-  than `rate_limit`, and a Sandbox record with no pod.
+- **The heartbeat check** reads one span of each agent's heartbeat trace:
+  `openclaw.run` with `openclaw.trigger=heartbeat` and
+  `openclaw.outcome=completed`, for each service in its env `SERVICES`
+  (`openclaw-agents-pilot` now). Add a service when a trust domain gets its
+  agent; a domain with no agent is not in the list, so it never alerts.
+  `KubeJobFailed` also fires for a failed run of the check.
+- **Not alerted yet.** The age of the agent image against the upstream
+  releases (a check of the agent image's repository), an `engine_error` of
+  another kind than `rate_limit`, and a Sandbox record with no pod.
