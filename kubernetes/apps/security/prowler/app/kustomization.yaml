@@ -3,8 +3,12 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: security
 # Nothing of a provider runs before its credentials exist (../README.md, "To
-# start a provider"). The owner names the CronJob of a provider here, after
-# that step.
+# start a provider"). The owner names the files of a provider here, after
+# that step:
+#   - ./secret-cloudflare.sops.yaml
+#   - ./lease-cloudflare-token.yaml
+#   - ./cronjob-cloudflare.yaml
+# GitHub has no run: the API checks take its lines (../README.md, "GitHub").
 resources:
   - ./networkpolicy.yaml
   # The AWS session Secret aws-security-audit-sts exists (../../aws-credentials).
@@ -20,7 +24,6 @@ configMapGenerator:
     files:
       - ./config/checks-aws.json
       - ./config/checks-cloudflare.json
-      - ./config/checks-github.json
 generatorOptions:
   disableNameSuffixHash: true
   annotations:
