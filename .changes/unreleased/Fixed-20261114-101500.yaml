@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'monitoring: the platform log agent (vector-agent-platform) sends to the aggregator over plain HTTP. Its sink address had no scheme, which Vector 0.61 reads as https, so no line of the agent platform reached Loki. A container test now sends one event through each vector sink to the aggregator.'
+time: 2026-11-14T10:15:00.000000+00:00

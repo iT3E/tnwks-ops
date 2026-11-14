@@ -53,6 +53,7 @@ system.
 
 | What | Address |
 | --- | --- |
+| The pod-log source, for the platform agent | `http://vector-aggregator.monitoring.svc.cluster.local:6000` (the Vector protocol, version 2). The scheme is needed from Vector 0.61 on: with none, the sink speaks https, and every request fails to connect. Before 0.61 a missing scheme meant http, so the shared agent (0.34.1) works without one |
 | The audit source, for the audit reader of the same cluster | `http://vector-aggregator-audit.monitoring.svc.cluster.local:6010` (the Vector protocol, version 2) |
 | The Loki of the security streams, from homelab-wsl-02 | `http://loki-gateway.monitoring.svc.cluster.local` |
 | The same Loki, from homelab-wsl | `https://security-loki.monitoring.svc.cluster.local`, with the client certificate `security-loki-client` (`../security-loki-proxy/README.md`) |
