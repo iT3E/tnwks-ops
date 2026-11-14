@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.132.0 - 2026-11-14
+
+### Added
+
+* security: the converter mounts the volume `security-results` read-only at `/results`, so it reads the OCSF files of the Prowler runs and the result file of the API checks
+
 ## v2.131.0 - 2026-11-14
 
 ### Added
