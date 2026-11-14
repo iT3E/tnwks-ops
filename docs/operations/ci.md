@@ -93,7 +93,7 @@ job per root:
 | `lock` | Concurrency group a root's plans and applies share, for roots that must never overlap (one device, one state lock) |
 | `tf_vars` | `TF_VAR_<name>=<value>` lines, endpoint overrides that only hold on the runner. Never secrets |
 | `enabled_var` | A repository variable that must be `true` for the root to run |
-| `mask_sops` | SOPS files, relative to the root, whose every value is masked in the job's public log before Terraform runs (`.github/scripts/sops-mask.py`; fails closed). `local` only. See [`github.md`](github.md#the-mask) |
+| `mask_sops` | SOPS files, relative to the root, whose every value is masked in the job's public log from the mask step on, before Terraform runs (`.github/scripts/sops-mask.py`; fails closed). Every line of every value must be at least 6 characters: a shorter one would be masked inside other words and could be read off, so the step fails on it, and such a value goes in a SOPS file that isn't listed. `local` only. See [`github.md`](github.md#the-mask) |
 
 - **Plan.** `ci.yaml`'s `terraform` job, on a PR. A root's plan posts a
   sticky comment and gates Build Success: a plan that can't run (the

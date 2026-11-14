@@ -3,6 +3,26 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.120.0 - 2026-11-14
+
+### Removed
+
+* terraform: the GitHub root's import blocks for the Flux webhook and the openclaw-hooks variables (imports.tf), now that an apply has imported them; docs/operations/github.md keeps how to adopt something that already exists on GitHub
+
+### Security
+
+* ci: sops-mask.py refuses a value shorter than 6 characters, naming its file and key path. The runner masks a value of any length, also inside longer words, so a short value showed as *** in ordinary text and could be read off. The GitHub root keeps such a value in unmasked.sops.yaml, which CI decrypts but does not mask, and the docs state what the mask guarantees
+
+## v2.119.0 - 2026-11-14
+
+### Added
+
+* monitoring: homelab-wsl lists the audit reader, so the audit log of its API server is the security stream `k8s-audit` of that cluster in the Loki of homelab-wsl-02. The registry of the security platform lists the stream as a source of homelab-wsl
+
+### Changed
+
+* monitoring: the memory limit of the audit reader is 192 MiB on each cluster that lists it, up from 128 MiB. On homelab-wsl-02 the reader used 115.6 MiB at its peak while it sent its first backlog of about 880,000 lines
+
 ## v2.118.0 - 2026-11-14
 
 ### Added
