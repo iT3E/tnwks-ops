@@ -177,6 +177,79 @@ def test_the_newest_of_several_stable_releases_counts():
     assert published == datetime.datetime(2026, 11, 2, tzinfo=UTC)
 
 
+def releases_file(tmp_path):
+    return tmp_path / "results/api-check/routeros-releases.json"
+
+
+def seed(tmp_path, first_seen):
+    path = releases_file(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"version": 1, "first_seen": first_seen}))
+    return path
+
+
+def test_a_router_two_releases_behind_fails_while_the_newest_is_still_new(tmp_path, monkeypatch):
+    """The feed holds the newest release only: the list keeps the one before it."""
+    seed(tmp_path, {"7.90.2": (NOW - datetime.timedelta(days=30)).timestamp()})
+    code, document = run(tmp_path, monkeypatch, fake("7.90.1 (stable)", "7.90.3", age_days=2))
+    assert code == 0
+    entry = by_check(document)["routeros-firmware"]
+    assert entry["failed"] == 1
+    assert "7.90.2" in entry["findings"][0]["message"]
+    seen = json.loads(releases_file(tmp_path).read_text())["first_seen"]
+    assert set(seen) == {"7.90.2", "7.90.3"}
+
+
+def test_the_first_run_keeps_the_newest_release_with_its_date(tmp_path, monkeypatch):
+    assert not releases_file(tmp_path).exists()
+    code, document = run(tmp_path, monkeypatch, fake("7.90.1 (stable)", "7.90.2", age_days=3))
+    assert code == 0
+    assert by_check(document)["routeros-firmware"]["failed"] == 0
+    assert json.loads(releases_file(tmp_path).read_text()) == {
+        "version": 1, "first_seen": {"7.90.2": (NOW - datetime.timedelta(days=3)).timestamp()}}
+
+
+def test_a_date_in_the_future_counts_from_now(tmp_path, monkeypatch):
+    run(tmp_path, monkeypatch, fake("7.90.1 (stable)", "7.90.2", age_days=-2))
+    assert json.loads(releases_file(tmp_path).read_text())["first_seen"] == {"7.90.2": NOW.timestamp()}
+
+
+def test_a_release_seen_before_keeps_its_first_time(tmp_path, monkeypatch):
+    first = (NOW - datetime.timedelta(days=20)).timestamp()
+    seed(tmp_path, {"7.90.2": first})
+    _, document = run(tmp_path, monkeypatch, fake("7.90.1 (stable)", "7.90.2", age_days=1))
+    assert by_check(document)["routeros-firmware"]["failed"] == 1
+    assert json.loads(releases_file(tmp_path).read_text())["first_seen"] == {"7.90.2": first}
+
+
+@pytest.mark.parametrize("text", ["{not json", '{"version": 2, "first_seen": {}}', '{"version": 1}',
+                                  '{"version": 1, "first_seen": {"7.90.2": "x"}}',
+                                  '{"version": 1, "first_seen": {"stable": 1}}'])
+def test_a_list_of_releases_that_can_not_be_read_gives_no_result_and_stays_as_it_is(tmp_path, monkeypatch, text):
+    path = releases_file(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text(text)
+    before = path.stat()
+    code, document = run(tmp_path, monkeypatch, fake("7.90.1 (stable)", "7.90.2", age_days=30))
+    assert code == 1
+    assert document["results"] == []
+    assert path.read_text() == text
+    assert (path.stat().st_ino, path.stat().st_mtime_ns) == (before.st_ino, before.st_mtime_ns)
+
+
+def test_the_converter_reads_the_result_file_and_not_the_list_of_releases(tmp_path, monkeypatch):
+    seed(tmp_path, {"7.90.2": (NOW - datetime.timedelta(days=30)).timestamp()})
+    run(tmp_path, monkeypatch, fake("7.90.1 (stable)", "7.90.3", age_days=2))
+    registry = json.loads((ROOT / "kubernetes/apps/security/converter/app/config/registry.json").read_text())
+    part = converter.ResultFiles(tmp_path / "results", registry, clock=lambda: NOW.timestamp() + 60,
+                                 monotonic=lambda: 0.0)
+    part.step()
+    text = part.render().decode()
+    assert 'homelab_security_converter_files_skipped{source="api-check"} 0' in text
+    assert 'check="routeros-firmware"' in text and 'system="sce-rtr01"' in text
+    assert checks.RELEASES != converter.API_FILE.name
+
+
 # --- Terraform Cloud --------------------------------------------------------------------
 
 @pytest.mark.parametrize(("policy", "failed"), [("two_factor_mandatory", 0), ("password", 1)])
@@ -279,9 +352,11 @@ def test_the_file_fits_the_converter_and_is_readable_by_another_user(tmp_path, m
                   token="fake-token-value")
     assert code == 0
     directory = tmp_path / "results/api-check"
-    assert sorted(path.name for path in directory.iterdir()) == ["results.json"], "no .tmp is left"
+    assert sorted(path.name for path in directory.iterdir()) == ["results.json", "routeros-releases.json"], \
+        "no .tmp is left"
     assert stat.S_IMODE(directory.stat().st_mode) == 0o755
-    assert stat.S_IMODE((directory / "results.json").stat().st_mode) == 0o644
+    for name in ("results.json", "routeros-releases.json"):
+        assert stat.S_IMODE((directory / name).stat().st_mode) == 0o644
     with (directory / "results.json").open("rb") as file:
         moment, results = converter.read_api(file, NOW.timestamp())
     assert moment == NOW.timestamp()
@@ -300,7 +375,10 @@ def test_each_check_of_the_job_is_a_line_of_the_registry_for_its_system():
                     lines.setdefault((item["check"], system_type), []).append(control["id"])
     assert lines[("routeros-firmware", systems[checks.ROUTER]["type"])] == ["12.1"]
     assert lines[("tfc-mfa-required", systems[checks.TFC_ORGANIZATION]["type"])] == ["6.3", "6.5"]
-    assert "api-check" in systems[checks.ROUTER]["sources"]
+    # The router lists the source after the first result is on site 2, in a follow-up:
+    # before that the rule for a late result would fire. The results reach the line
+    # without it.
+    assert "api-check" not in systems[checks.ROUTER]["sources"]
 
 
 # --- The manifests ----------------------------------------------------------------------

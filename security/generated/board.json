@@ -445,8 +445,7 @@
       "site": "none",
       "domain": "infrastructure",
       "sources": [
-        "stream",
-        "api-check"
+        "stream"
       ]
     },
     {
@@ -587,11 +586,6 @@
       "system": "sce-rtr01",
       "late_after_seconds": 900,
       "check": "routeros"
-    },
-    {
-      "source": "api-check",
-      "system": "sce-rtr01",
-      "late_after_seconds": 129600
     }
   ]
 }

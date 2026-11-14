@@ -6,9 +6,13 @@ Python standard library only. Each test reads, and none changes a setting:
   routeros-firmware  sce-rtr01 (router). The version that the router runs, from
                      the series mktxp_system_uptime of the Prometheus of
                      homelab-wsl, where mktxp reads the router. The newest
-                     stable release, from the release feed of the vendor. It
-                     fails (1) when the router runs an older version than a
-                     stable release that came out more than 14 days ago.
+                     stable release, from the release feed of the vendor. The
+                     feed holds the newest release only, so the job keeps each
+                     newest release it saw, with its date, in
+                     api-check/routeros-releases.json. It fails (1) when the
+                     router runs an older version than a release of that list
+                     that came out more than 14 days ago. A list that is there
+                     and can not be read gives no result and stays as it is.
   tfc-mfa-required   tnwks-ops (terraform-cloud-organization). The
                      authentication policy of the organization. It fails (1)
                      when the policy is not two_factor_mandatory. It runs only
@@ -53,6 +57,9 @@ FEED = "https://cdn.mikrotik.com/routeros/latest-stable.rss"
 GRACE_DAYS = 14
 TFC_API = "https://app.terraform.io/api/v2"
 TFC_ORGANIZATION = "tnwks-ops"
+
+
+RELEASES = "routeros-releases.json"
 
 
 class QueryError(Exception):
@@ -208,10 +215,34 @@ def newest_release(get=http_get, feed: str = FEED) -> tuple[tuple[int, ...], dat
     return max(releases)
 
 
-def firmware(running: tuple[int, ...], newest: tuple[int, ...], published: datetime.datetime,
-             now: datetime.datetime, grace_days: int = GRACE_DAYS) -> int:
-    """1 when the router runs an older version than a release out for more than the grace."""
-    return int(running < newest and now - published > datetime.timedelta(days=grace_days))
+def read_releases(path: Path) -> dict[str, float]:
+    """{version: the time it came out} of each newest release the job saw. A missing file
+    is the first run. A file that is there and can not be read is a QueryError."""
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        seen = data["first_seen"]
+        if data.get("version") != 1 or not isinstance(seen, dict):
+            raise ValueError("not version 1")
+        out = {}
+        for version, moment in seen.items():
+            version_key(version)
+            if not isinstance(moment, (int, float)) or isinstance(moment, bool):
+                raise TypeError("a time is not a number")
+            out[version] = float(moment)
+        return out
+    except (OSError, ValueError, KeyError, TypeError, QueryError) as error:
+        raise QueryError(f"{path.name} can not be read: {type(error).__name__}") from None
+
+
+def firmware(running: tuple[int, ...], releases: dict[str, float], now: datetime.datetime,
+             grace_days: int = GRACE_DAYS) -> list[str]:
+    """The releases newer than the running version that came out more than the grace ago,
+    newest first. The router fails when the list is not empty."""
+    limit = now.timestamp() - grace_days * 86400
+    late = [version for version, moment in releases.items() if version_key(version) > running and moment < limit]
+    return sorted(late, key=version_key, reverse=True)
 
 
 def tfc_policy(token: str, organization: str = TFC_ORGANIZATION, get=http_get) -> str:
@@ -243,15 +274,21 @@ def tests(args: argparse.Namespace, now: datetime.datetime, get=http_get) -> tup
     missed: list[str] = []
 
     try:
-        running = running_version(args.prometheus, args.router, get)
+        path = args.results / SOURCE / RELEASES
+        releases = read_releases(path)
         newest, published = newest_release(get, args.feed)
-        failed = firmware(running, newest, published, now, args.grace_days)
-        entry = {"check": "routeros-firmware", "system": args.router, "failed": failed, "severity": "high"}
-        if failed:
+        if show(newest) not in releases:
+            # The date of the feed, or now if the feed gives a later one.
+            releases[show(newest)] = min(published.timestamp(), now.timestamp())
+            write_json(args.results, RELEASES, {"version": 1, "first_seen": releases})
+        running = running_version(args.prometheus, args.router, get)
+        late = firmware(running, releases, now, args.grace_days)
+        entry = {"check": "routeros-firmware", "system": args.router, "failed": int(bool(late)), "severity": "high"}
+        if late:
+            out = datetime.datetime.fromtimestamp(releases[late[0]], UTC).date().isoformat()
             entry["findings"] = [{
                 "resource": args.router,
-                "message": f"RouterOS {show(running)} runs. The stable release {show(newest)} came out on"
-                           f" {published.astimezone(UTC).date().isoformat()}.",
+                "message": f"RouterOS {show(running)} runs. The stable release {late[0]} came out on {out}.",
             }]
         results.append(entry)
     except QueryError as error:
@@ -290,14 +327,14 @@ def apply_accepted(results: list[dict], accepted: set[tuple[str, str]]) -> list[
     return out
 
 
-def write(results_dir: Path, document: dict) -> Path:
-    """api-check/results.json, through results.json.tmp: one move, so the converter never
-    reads half a file. Mode 0755 and 0644, so the converter (another user) reads it."""
+def write_json(results_dir: Path, name: str, document: dict) -> Path:
+    """api-check/<name>, through <name>.tmp: one move, so no reader sees half a file.
+    Mode 0755 and 0644, so the converter (another user) reads it."""
     directory = results_dir / SOURCE
     directory.mkdir(parents=True, exist_ok=True)
     directory.chmod(0o755)
-    final = directory / "results.json"
-    partial = directory / "results.json.tmp"
+    final = directory / name
+    partial = directory / f"{name}.tmp"
     partial.write_text(json.dumps(document, indent=1) + "\n", encoding="utf-8")
     partial.chmod(0o644)
     os.replace(partial, final)
@@ -314,7 +351,7 @@ def run(args: argparse.Namespace, now=lambda: datetime.datetime.now(UTC), get=ht
     results, missed = tests(args, started, get)
     results = apply_accepted(results, accepted)
     document = {"version": 1, "source": SOURCE, "time": int(now().timestamp()), "results": results}
-    final = write(args.results, document)
+    final = write_json(args.results, "results.json", document)
     print(f"wrote {final.relative_to(args.results)}: {len(results)} results, {len(accepted)} accepted tests,"
           f" {skipped} entries of the list skipped", flush=True)
     return 1 if missed else 0
