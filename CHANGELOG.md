@@ -3,6 +3,12 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.133.0 - 2026-11-14
+
+### Added
+
+* security: the result series of Trivy Operator (`observability/rules.py`): `homelab_security_check_result` for each control of `k8s-cis-1.23` that has an input on these clusters and for `image-vulnerabilities` (a fail stays, and a pass is no evidence, while a running image has had no report for an hour; the new alert `SecurityImagesNotScanned` fires after 36 hours of that), and the time of the last result from the compliance report through kube-state-metrics. An accepted finding of `trivy` gives 0 until its end, also while its series is gone for less than a day. The new alert `SecurityFindingNew` fires when a result of high or critical severity is above 0 and above each value of the day before, or was 0 one hour before, or had no value in the day before, with one value for each check from a recording rule. homelab-wsl-02 lists `stream` and `trivy` in its sources, and a test fails if a cluster runs an app of a source that its line does not list, so the late alert watches it
+
 ## v2.132.0 - 2026-11-14
 
 ### Added
