@@ -16,7 +16,20 @@
   "session": {"dmScope": "per-channel-peer"},
   "tools": {
     "elevated": {"enabled": false},
-    "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish"]
+    "deny": ["code_execution", "file_fetch", "file_write", "dir_list", "dir_fetch", "gateway", "github_publish"],
+    "sandbox": {"tools": {"alsoAllow": ["memory_search", "memory_get"]}}
+  },
+  "memory": {
+    "search": {
+      "provider": "openai-compatible",
+      "model": "agents-pilot-embeddings",
+      "remote": {
+        "baseUrl": "http://litellm-app.ai.svc.cluster.local:4000/v1",
+        "apiKey": {"source": "env", "provider": "default", "id": "LITELLM_API_KEY"}
+      },
+      "sources": ["memory"],
+      "rememberAcrossConversations": false
+    }
   },
   "agents": {
     "defaults": {

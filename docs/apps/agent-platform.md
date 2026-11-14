@@ -294,6 +294,34 @@ the sandbox plugin copies the workspace only.
   to the collector (alloy, OTLP). The CronJob `agent-heartbeat-check` in
   `monitoring` asks Tempo each morning for a completed heartbeat in the last
   26 hours ([Alerts](#alerts)).
+- **Memory search.** The agent searches its memory files (`MEMORY.md` and
+  `memory/*.md` in its workspace) with `memory_search`, and reads a part of
+  one with `memory_get` (`memory.search` in the config). The embeddings come
+  from the model gateway: provider `openai-compatible`, base URL
+  `http://litellm-app.ai.svc.cluster.local:4000/v1`, the key `agents-pilot`,
+  and the entry `agents-pilot-embeddings`, which runs on the Ollama of the
+  host ([litellm.md](litellm.md#the-entries)). So the text of the memory
+  goes to no vendor.
+  - The gateway process of the agent pod makes these calls, not a sandbox.
+    The network policy already lets the pod reach the model gateway on port
+    4000, so the search needs no new rule.
+  - The text sent is the memory files, in chunks, when they change, and the
+    query of each `memory_search`. Past conversations are not sent:
+    `sources` is `["memory"]` and `rememberAcrossConversations` is false.
+  - The index is in `state/agents/main/agent/openclaw-agent.sqlite` on the
+    volume `agent-state`, so the archives and the nightly copy hold it
+    ([State, archives and backups](#state-archives-and-backups)). It holds
+    the text of the chunks as well as their vectors.
+  - The product leaves the two tools out of a sandboxed session by default,
+    so `tools.sandbox.tools.alsoAllow` names them. It names the two tools
+    and not `group:memory`, because at this release that group also gives
+    `personal_instructions`.
+  - The traces hold no tool input or output: the config doesn't set
+    `diagnostics.otel.captureContent`.
+  - If the model gateway is down, a search finds nothing and the chat goes
+    on. The start of the pod doesn't need the model gateway.
+  - To check: `openclaw memory status` in the `agent` container shows the
+    provider, the model and the count of indexed files.
 - **Secret** `agent-secret` (env vars of the pod):
 
   | Key | Value |
