@@ -4,10 +4,16 @@
 ## and secrets.sops.yaml the token.
 ##
 ## The repositories of the iT3E account, as they were when this root was
-## added: every value below was read from the API and imported as is
-## (imports.tf). An entry lists only what differs from a new repository's
-## defaults (modules/github/variables.tf). Private repositories have no
+## added: every value below was read from the API and imported as is. An
+## entry lists only what differs from a new repository's defaults
+## (modules/github/variables.tf). Private repositories have no
 ## security_and_analysis or rulesets: the account's plan doesn't offer them.
+##
+## Anything added here that already exists on GitHub needs an import block
+## in this root first (in an imports.tf, removed once applied), or the apply
+## fails on "already exists". The import ID of a repository is its name; for
+## one held in SOPS, wrap the name in nonsensitive(), since an import ID
+## can't be sensitive (docs/operations/github.md).
 ##
 ## This root manages the ruleset and the prod environment that gate its own
 ## apply. A change that locks CI out is undone with `task github:apply`
