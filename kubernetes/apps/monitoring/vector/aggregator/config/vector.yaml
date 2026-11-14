@@ -193,13 +193,12 @@ sinks:
 
   # The metrics port (9598), scraped by the PodMonitor next to the
   # HelmRelease. It is a port of the pod only: no Service carries it.
-  # A series that gets no new value for flush_period_secs goes away. The
-  # default is 60 s; a result line comes every 15 minutes, so its series
-  # stays for one hour, as the internal metrics do (expire_metrics_secs).
+  # A result series carries the time of its line, so Prometheus holds each
+  # sample for 5 minutes (its lookback); a rule bridges the gap between two
+  # lines with max_over_time.
   prometheus:
     type: prometheus_exporter
     inputs:
       - internal_metrics
       - agent_platform_result_metrics
     address: 0.0.0.0:9598
-    flush_period_secs: 3600

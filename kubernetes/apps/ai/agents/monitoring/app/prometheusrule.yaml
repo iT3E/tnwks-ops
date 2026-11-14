@@ -51,12 +51,16 @@ spec:
           # (failedJobsHistoryLimit), also after a good run. Covers the
           # providers job (its `workflow-providers result=failed` line comes
           # with exit 1, scripts/providers.sh), the sweep and the daily checks.
+          # reason!="": kube-state-metrics also reports the failed pods of a
+          # Job that still retries (backoffLimit), with reason="". The max by
+          # on the right of each join keeps it one-to-one when two
+          # kube-state-metrics pods serve the same series in a rollout.
           expr: |
             max by (namespace, cronjob) (
               kube_job_status_start_time{namespace=~"agents-.+"}
               * on (namespace, job_name) group_left (cronjob)
-                label_replace(kube_job_owner{namespace=~"agents-.+", owner_kind="CronJob"}, "cronjob", "$1", "owner_name", "(.+)")
-              and on (namespace, job_name) (kube_job_status_failed{namespace=~"agents-.+"} > 0)
+                max by (namespace, job_name, cronjob) (label_replace(kube_job_owner{namespace=~"agents-.+", owner_kind="CronJob"}, "cronjob", "$1", "owner_name", "(.+)"))
+              and on (namespace, job_name) (kube_job_status_failed{namespace=~"agents-.+", reason!=""} > 0)
             )
             > on (namespace, cronjob)
             max by (namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace=~"agents-.+"})
@@ -64,8 +68,8 @@ spec:
             max by (namespace, cronjob) (
               kube_job_status_start_time{namespace=~"agents-.+"}
               * on (namespace, job_name) group_left (cronjob)
-                label_replace(kube_job_owner{namespace=~"agents-.+", owner_kind="CronJob"}, "cronjob", "$1", "owner_name", "(.+)")
-              and on (namespace, job_name) (kube_job_status_failed{namespace=~"agents-.+"} > 0)
+                max by (namespace, job_name, cronjob) (label_replace(kube_job_owner{namespace=~"agents-.+", owner_kind="CronJob"}, "cronjob", "$1", "owner_name", "(.+)"))
+              and on (namespace, job_name) (kube_job_status_failed{namespace=~"agents-.+", reason!=""} > 0)
             )
             unless on (namespace, cronjob)
             kube_cronjob_status_last_successful_time{namespace=~"agents-.+"}
@@ -104,10 +108,13 @@ spec:
           # permissions than the list in git. The providers job logs one
           # `app-drift result=drift detail=<names>` line each run (every 15
           # minutes) and still scopes each token, so this is not an outage.
-          # The series is the time of the newest such line; it resolves 20
-          # minutes after the last one.
+          # The value is the time of the newest such line. The aggregator
+          # serves each sample with the time of its line, so Prometheus holds
+          # a sample for 5 minutes only (the lookback): max_over_time bridges
+          # the 15 minutes between two lines. It resolves 20 minutes after the
+          # last one.
           expr: |
-            time() - max by (pod_namespace, app) (homelab_agent_platform_result_timestamp_seconds{check="app-drift", result="drift"}) < 20 * 60
+            time() - max by (pod_namespace, app) (max_over_time(homelab_agent_platform_result_timestamp_seconds{check="app-drift", result="drift"}[20m])) < 20 * 60
           labels:
             severity: warning
           annotations:
@@ -145,7 +152,7 @@ spec:
             max by (namespace, sandbox) (
               (time() - kube_pod_created{namespace="agents-workflows"})
               * on (namespace, pod) group_left (sandbox)
-                label_replace(kube_pod_owner{namespace="agents-workflows", owner_kind="Sandbox", owner_name=~"default--run-.+"}, "sandbox", "$1", "owner_name", "(.+)")
+                max by (namespace, pod, sandbox) (label_replace(kube_pod_owner{namespace="agents-workflows", owner_kind="Sandbox", owner_name=~"default--run-.+"}, "sandbox", "$1", "owner_name", "(.+)"))
             ) > 80 * 60
           for: 10m
           labels:
@@ -163,7 +170,7 @@ spec:
           # a new key (at most 3 attempts), so one alert can come with a
           # review that passed later.
           expr: |
-            max by (namespace, job_name) (kube_job_status_failed{namespace="agents-workflows", job_name=~"run-.+"} > 0)
+            max by (namespace, job_name) (kube_job_status_failed{namespace="agents-workflows", job_name=~"run-.+", reason!=""} > 0)
             and on (namespace, job_name)
             (time() - kube_job_status_start_time{namespace="agents-workflows", job_name=~"run-.+"}) < 2 * 3600
           labels:
@@ -176,10 +183,14 @@ spec:
 
         - alert: AgentDailyArchiveFailed
           # The backup container of an agent pod ends when the daily archive of
-          # the product fails (config/scripts/daily-backup.sh), so it restarts.
-          # It fires for 2 hours after a restart.
+          # the product fails (config/scripts/daily-backup.sh, exit 1), so it
+          # restarts with the reason Error. A restart of the node restarts each
+          # container with the reason Unknown, and does not count. It fires for
+          # 2 hours after a restart.
           expr: |
             max by (namespace, pod) (increase(kube_pod_container_status_restarts_total{namespace=~"agents-.+", container="backup"}[2h])) > 0
+            and on (namespace, pod)
+            max by (namespace, pod) (kube_pod_container_status_last_terminated_reason{namespace=~"agents-.+", container="backup", reason="Error"}) == 1
           labels:
             severity: warning
           annotations:

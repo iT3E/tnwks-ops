@@ -553,7 +553,7 @@ War Room, the default Telegram route of Alertmanager, with severity
 | `AgentPlatformCheckStale` | A daily check (`platform-check-isolation` or `platform-check-probe`) of a trust domain has not passed in 26 hours, or never passed once a run was due | 15m | The CronJob (suspended?) and its Jobs |
 | `AgentRunSandboxTooOld` | A run sandbox (`default--run-*`) in `agents-workflows` is older than 80 minutes: the run job and the sweep both failed to delete it | 10m | The CronJob `workflow-sweep`, then delete the sandbox through the gateway |
 | `AgentWorkflowRunFailed` | A run job failed, for 2 hours from its start | none | The annotation `workflow-agents/result` of the Job, and the run log in Loki. A 502 from the model gateway can be the limit of the Claude plan |
-| `AgentDailyArchiveFailed` | The `backup` container of an agent pod started again in the last 2 hours: the daily archive failed | none | `kubectl -n <namespace> logs <pod> -c backup --previous` |
+| `AgentDailyArchiveFailed` | The `backup` container of an agent pod started again in the last 2 hours after an exit with an error: the daily archive failed. A restart of the node (reason `Unknown`) does not count | none | `kubectl -n <namespace> logs <pod> -c backup --previous` |
 
 - **Logs in Loki.** `{namespace="agents-workflows", app="workflow-providers"}`,
   `{namespace="agents-workflows", app="workflow-run"}`, and
@@ -567,7 +567,10 @@ War Room, the default Telegram route of Alertmanager, with severity
   namespace `agents-*` that starts with `<check> result=<result>` into the
   gauge `homelab_agent_platform_result_timestamp_seconds{pod_namespace, app,
   check, result}`: the time of the newest such line. No other word of the
-  line becomes a label. A series goes away one hour after its last line.
+  line becomes a label. Each sample carries the time of its line, so
+  Prometheus holds it for 5 minutes only: a rule reads it with
+  `max_over_time` over a window longer than the time between two lines
+  (20 minutes for the drift line, which comes every 15).
 - **The snapshots** of a state volume have the kopiur chart's rules,
   which match each SnapshotPolicy, `agent-state` too: `KopiurLastBackupFailed`
   and `KopiurBackupStale` (48 hours).
