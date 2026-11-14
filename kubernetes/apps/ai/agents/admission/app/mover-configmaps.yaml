@@ -1,0 +1,63 @@
+---
+# The backup mover writes no ConfigMap in a trust domain of the agent
+# platform (docs/apps/agent-platform.md, "The backup mover and ConfigMaps").
+#
+# The mover roles of the backup operator (kopiur 0.10.20) give `get` and
+# `patch` on every ConfigMap of each namespace where a mover runs, with no
+# resourceNames. In an agent namespace that reaches the config and the
+# scripts of the agent pod, and Reloader starts the pod again on a change.
+#
+# At kopiur 0.10.20 a mover writes a ConfigMap for one thing only: the
+# result of a repository bootstrap or discovery run, into the ConfigMap that
+# has the name of its Job. Those runs go in the namespace of the credentials
+# of a ClusterRepository (kopiur-system here), or of a namespaced Repository.
+# A snapshot, restore, maintenance, verify or replication run writes no
+# ConfigMap. So in an agent namespace the rule refuses each ConfigMap write
+# of a mover, and needs no way to tell its own ConfigMap from another one.
+# A namespaced Repository in an agent namespace would need a change here.
+#
+# The rule matches the three mover ServiceAccounts that the operator makes
+# in a namespace. A workload-identity ServiceAccount of a SnapshotPolicy has
+# a name that the policy sets; none of the agent namespaces uses one.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: agents-backup-mover-configmaps
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        # A patch comes as UPDATE. The mover roles grant no create or
+        # delete, and the rule refuses them too.
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["configmaps"]
+  matchConditions:
+    - name: sent-by-a-backup-mover
+      expression: >-
+        request.userInfo.username in [
+          'system:serviceaccount:' + request.namespace + ':kopiur-mover',
+          'system:serviceaccount:' + request.namespace + ':kopiur-snapshot-replication-mover',
+          'system:serviceaccount:' + request.namespace + ':kopiur-stream-mover'
+        ]
+  validations:
+    - expression: "false"
+      message: >-
+        A backup mover writes no ConfigMap in a trust domain of the agent
+        platform (kubernetes/apps/ai/agents/admission).
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: agents-backup-mover-configmaps
+spec:
+  policyName: agents-backup-mover-configmaps
+  validationActions: ["Deny"]
+  matchResources:
+    # Each namespace of a trust domain (agents-main, agents-finance,
+    # agents-workflows, agents-pilot) carries this label.
+    namespaceSelector:
+      matchExpressions:
+        - key: agents.home.arpa/trust-domain
+          operator: Exists

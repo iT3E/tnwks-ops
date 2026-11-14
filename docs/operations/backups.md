@@ -141,6 +141,11 @@ cert CN homelab-wsl-backups  (Secret kopiur-system/aws-backup-certificate, SOPS)
   immediately.
 - A refresher outage leaves the last session valid for up to 4 hours. A
   failed run raises `KubeJobFailed`.
+- In the namespaces of the agent platform (label
+  `agents.home.arpa/trust-domain`) an admission rule refuses each ConfigMap
+  write of a mover, whose roles otherwise reach every ConfigMap there
+  (`docs/apps/agent-platform.md`, "The backup mover and ConfigMaps"). The
+  mover still gets the projected copy above.
 - **The certificate expires 2027-11-02.** Renew before then:
 
   ```bash
