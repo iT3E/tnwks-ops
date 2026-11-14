@@ -63,7 +63,8 @@ API server writes one line for each request, when its answer is complete.
 
 | Cluster | File | Form |
 | --- | --- | --- |
-| homelab-wsl | `talos/wsl/patches/audit-policy.yaml` | `cluster.apiServer.auditPolicy` of the v1alpha1 machine config. Talos refuses the document while the config has this field |
+| homelab-wsl, the live node | `talos/wsl/patches/audit-policy.yaml` | `cluster.apiServer.auditPolicy` of the v1alpha1 machine config. Talos refuses the document while the config has this field |
+| homelab-wsl, a new cluster | `talos/wsl/patches/audit-policy-multidoc.yaml` | The document `KubeAuditPolicyConfig` |
 | homelab-wsl-02 | `talos/wsl-02/patches/audit-policy.yaml` | The document `KubeAuditPolicyConfig` (the multi-document machine config of talosctl 1.14) |
 
 The rules are the same in each file. `security/tests/test_audit_policy.py`
@@ -85,20 +86,40 @@ the patch lists. A running cluster gets the policy only from
 `talosctl patch mc --mode=no-reboot`, the command at the top of its file,
 run by the owner or with the owner's word.
 
-A rebuilt cluster gets the patches in `controlplane_patches` of its entry in
-`talos_clusters` (`infrastructure/ansible/inventory/group_vars/all/talos.yml`).
+A rebuilt cluster gets the patches in `config_patches` and
+`controlplane_patches` of its entry in `talos_clusters`
+(`infrastructure/ansible/inventory/group_vars/all/talos.yml`).
 `01-talos-bootstrap.yml` creates a cluster only when the cluster has no
-control plane container. Each list has `patches/audit-policy.yaml`.
+control plane container. Each list is in the multi-document form, which the
+pinned Talos needs at create, and each `controlplane_patches` has the policy
+as a `KubeAuditPolicyConfig`.
 
-| Cluster | A rebuild |
-| --- | --- |
-| homelab-wsl-02 | Gets the policy from the list |
-| homelab-wsl | Its patches are in the v1alpha1 form, which the pinned Talos refuses at create (`talos/wsl-02/README.md`, "Patches need talosctl >= 1.14"). A rebuild needs them in the multi-document form first |
+**homelab-wsl has two sets.** Its live node has a v1alpha1 config, from an
+older talosctl, and Talos refuses the documents there. So the live node keeps
+its v1alpha1 files (`cluster-config.yaml`, `patches/kubelet-image-gc.yaml`,
+`patches/talos-api-access.yaml`, `patches/audit-policy.yaml`), with the
+`talosctl patch mc` commands in their headers. Its lists name the
+multi-document set (`patches/cluster.yaml`, `patches/controlplane.yaml`,
+`patches/audit-policy-multidoc.yaml`). A change to a setting goes into both
+sets: the tests below fail when the two differ. The tests compare the
+settings in the files. Talos 1.14 also generates defaults that the older
+release behind the live node did not, and nothing compares those. The
+conversion of the live node to the multi-document form ends the double set.
 
-**What CI checks.** A change under `talos/` runs the `ansible` domain:
-each file under `talos/` parses, each directory is a cluster of
-`talos_clusters`, and each YAML file of a cluster is in its lists or is no
-patch (`infrastructure/ansible/tests/test_talos_patches.py`). A change to an
-audit policy also runs the rule tests above. CI builds no machine config, so
-it does not see a patch that Talos refuses. Talos checks a patch at the dry
+**What CI checks.** A change under `talos/` runs the `ansible` domain
+(`.github/workflows/ansible.yaml`):
+
+- `infrastructure/ansible/tests/test_talos_patches.py`: each file under
+  `talos/` parses, each directory is a cluster of `talos_clusters`, and each
+  YAML file of a cluster is in its lists or is named as no patch or as a file
+  of the live node. For homelab-wsl, each field of the v1alpha1 files has
+  the same value in the multi-document set, and each setting of the set comes
+  from a v1alpha1 file.
+- The pinned `talosctl` (`talos/<target>/versions.yaml`) builds the machine
+  configs of each Docker cluster from its lists, with throwaway secrets, and
+  validates them for container mode. This is what `talosctl cluster create
+  docker` builds, without the Docker provisioner.
+
+A change to an audit policy also runs the rule tests above, on each policy
+file. CI does not check a live node's config: Talos checks a patch at the dry
 run of its apply.
