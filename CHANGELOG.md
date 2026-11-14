@@ -3,6 +3,42 @@
 Notable changes to this repository, newest first. Each PR adds a Changie
 fragment under `.changes/unreleased/`; merging to `main` releases them.
 
+## v2.131.0 - 2026-11-14
+
+### Added
+
+* security: Prowler 5.49.0 for the AWS accounts (`kubernetes/apps/security/prowler`): a CronJob each day for `aws-prod` and one for `aws-management`, with the scan list of the registry, an OCSF file for the converter on the new claim `security-results`, the accepted findings (now the JSON key `accepted.json` of the Secret) as its only mutelist, nothing sent to the vendor, and a network policy that names the AWS API domains. No run starts until the owner names the CronJobs in the app, after the AWS sessions exist. `security/generate.py` writes the scan list of each provider for the app
+
+## v2.130.0 - 2026-11-14
+
+### Added
+
+* security: the converter sends each finding that fails in the newest file of a system as one line of the security stream `findings` in the Loki of homelab-wsl-02 (labels `security_stream`, `source`, `system`; kept 90 days by the rule of the security streams). A line is a part of the OCSF record: what failed, where and why, with no data, tag or label of a resource. The lines of a file go one time, wait for the next cycle when Loki does not answer, and `homelab_security_converter_findings_pending` shows them. A batch is 1 MiB at most in bytes on the wire, a 413 waits too, and one stream does not stop the others
+
+## v2.129.1 - 2026-11-14
+
+### Fixed
+
+* security: Trivy Operator gets 512 MiB on each cluster (it was 256 MiB, too low for a burst of scans), a request of 256 MiB, and `GOMEMLIMIT` at 460 MiB. On homelab-wsl-02 the operator pod restarts once
+
+## v2.129.0 - 2026-11-14
+
+### Added
+
+* security: the converter reads the files of results: the newest OCSF file of each system that Prowler writes, and the result file of the API checks. It serves `homelab_security_check_result` (the number of resources that fail, with a lowercase `severity` label; a finding that the accepted list muted does not fail) and the time of the newest whole file of each system. A file that does not fit gives no result and no time for its system, so the late alert fires, and `homelab_security_converter_files_skipped` counts it. It reads an OCSF file one record at a time, opens only a regular file, and takes only a check ID as a check. The ServiceMonitor drops the labels of the pod, so a restart makes no new series. Nothing is read before the converter mounts the volume `security-results`
+
+## v2.128.0 - 2026-11-14
+
+### Added
+
+* security: the list of accepted findings is one JSON array (the key `accepted.json` of the Secret `security-accepted-findings`), with five string fields for each entry. The converter reads it with `json.loads` (the Secret mounted read-only and optional) and serves `homelab_security_accepted_until_timestamp_seconds` with `source`, `check` and `system` for each entry, so the board counts the accepted findings and `SecurityAcceptedFindingExpired` can fire. No reason leaves the Secret. A list that is not one JSON array, or has a key two times in an object, gives no entry, and `homelab_security_converter_accepted_list_read` says so; so does a list left in the old key `accepted.yaml`, and a fault of the reader itself. An entry with a missing or extra key, a value that is not a string, no reason, or an end date not of the form `YYYY-MM-DD` is skipped. The alerts `SecurityAcceptedListUnread` (no entry for 30 minutes) and `SecurityAcceptedEntriesSkipped` (skipped entries for one hour) make both loud. Its parts now run in one loop, and a fault of one part does not stop the others. `security/generate.py` writes the names of the registry for the converter (`registry.json`)
+
+## v2.127.0 - 2026-11-14
+
+### Added
+
+* security: Trivy Operator 0.36.1 on homelab-wsl-02 (`kubernetes/apps/security/trivy-operator`), the source `trivy` of the security registry. It checks the workloads, the roles, the control plane pods, the controls of the CIS Kubernetes Benchmark that read the API server, and the images for vulnerabilities with a fix, one scan job at a time. The node collector is off, the images are pinned by digest, the version check and the usage data of Trivy are off, and a network policy names each registry host that a scan job can reach. The operator creates its scan jobs and reads their logs in `security` only, and a scan job runs as `nobody`
+
 ## v2.126.0 - 2026-11-14
 
 ### Added

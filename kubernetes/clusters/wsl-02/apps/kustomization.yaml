@@ -136,6 +136,14 @@ resources:
   # The copy of the AWS trail (apps/security/trail-copy/README.md): the new
   # files of the trail bucket, to a volume and to this site's Loki.
   - ../../../apps/security/trail-copy/ks.yaml
+  # Trivy Operator (kubernetes/apps/security/trivy-operator/README.md): the
+  # checks of this cluster and of its images. Each cluster runs it with the
+  # same values.
+  - ../../../apps/security/trivy-operator/ks.yaml
+  # Prowler (kubernetes/apps/security/prowler/README.md): a CronJob for each
+  # cloud and SaaS account. A provider starts when the owner names its CronJob
+  # in the app, after its credentials exist.
+  - ../../../apps/security/prowler/ks.yaml
   # CI: the network-device Terraform runner (wg03 sidecar), so those
   # workflows run while homelab-wsl is down.
   - ../../../apps/tools/namespace.yaml
