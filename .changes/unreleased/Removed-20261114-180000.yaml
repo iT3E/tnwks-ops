@@ -1,0 +1,3 @@
+kind: Removed
+body: 'tools: the runner scale set of the agent image repo, which goes public; its jobs run on GitHub-hosted runners'
+time: 2026-11-14T18:00:00.000000000Z
